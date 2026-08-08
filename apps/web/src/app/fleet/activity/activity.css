@@ -14,27 +14,235 @@
   gap: 12px;
 }
 
-/* ── the scope line ───────────────────────────────────────────────────── */
+/* ── S1 · the header block ─────────────────────────────────────────────────
+   Rebuilt 2026-08-08 — SB.ACT.S1R, study Part 18.
 
-.sba-scope {
-  display: flex;
+   What was here before, measured on production at 1728px against the resolved
+   #f4f6f9 background: FOUR font sizes and FIVE greys inside 78 vertical pixels,
+   three of them below the WCAG AA floor — `as of 03:25:22` at 11.5px / 2.39:1
+   and "The newest is at the top." at 2.39:1 were the two least legible things
+   on a page whose entire job is to be trusted.
+
+   The rule that replaces them: ONE size for the whole block under the title,
+   with WEIGHT and COLOUR carrying the hierarchy, and a single 1px rule marking
+   where the page's identity ends and its data begins. A fifth font size would
+   not have fixed "four text sizes stacked with no rhythm"; fewer sizes do.
+
+   Every colour below is ≥ 4.5:1 on the surface it sits on. Re-measure with
+   getComputedStyle after any change — tsc cannot see a contrast failure and
+   neither can a screenshot. */
+
+/* The page-local root, set in this page's own page.tsx.
+
+   Scoped to `.sba-page` and deliberately NOT to `.acr-fleet`, which Workers and
+   Workflows also carry: a page-local stylesheet SURVIVES a client-side route
+   change, so an override hung on a shared class silently restyles a sibling's
+   page. That trap is recorded in the session-locks file by the Workflows
+   stream, which hit it first. */
+.sba-page .acr-head {
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  gap: 20px;
   flex-wrap: wrap;
+  /* The 18px gap moves onto .sba-head, below the rule. */
+  margin-bottom: 0;
 }
+
+/* #667485 in control-room.css measures 4.41:1 — under the 4.5 floor for 13px
+   text. That file is frozen shared ground another session owns, so the fix
+   lives here, under a root only this page carries. */
+.sba-page .acr-sub {
+  color: #55616f;
+}
+
+.sba-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e4e9ef;
+  /* + the 12px gap on .sba = the 16px step down to the failure band. */
+  margin-bottom: 4px;
+}
+
 .sba-scopetext {
   margin: 0;
   font-size: 13px;
-  color: #34404f;
   line-height: 1.5;
+  color: #4a5867;
 }
-.sba-scopetools {
-  display: flex;
+/* The counts are the anchor. Same size as the prose around them — the weight
+   and the darker ink do the work, and tabular figures stop "9" → "10" nudging
+   the sentence sideways on a poll. */
+.sba-n {
+  font-weight: 600;
+  color: #1c2530;
+  font-variant-numeric: tabular-nums;
+}
+.sba-scopeaside {
+  color: #4a5867;
+}
+/* The liveness sentence: secondary to the counts, still comfortably legible.
+   #6b7684 was the first choice and it measures 4.26:1 on this page's #f4f6f9 —
+   it passes against white and fails against the surface it actually sits on,
+   which is why every colour here is measured in place rather than on paper. */
+.sba-scopestate {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #606b79;
+}
+
+/* ── S1 · the freshness instrument ────────────────────────────────────────
+   A readout and a control sharing one border, because they are one instrument.
+   It lives in the title row's right slot — the half of `.acr-head` that its own
+   `justify-content: space-between` has always reserved and that no page could
+   reach until FleetPageShell grew an `aside`. */
+
+.sba-fresh {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: 30px;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.sba-freshread {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
 }
+.sba-freshdot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.sba-freshword {
+  font-weight: 550;
+}
+.sba-freshsep {
+  color: #b6c0cc;
+}
+.sba-freshage {
+  color: #5b6878;
+  font-variant-numeric: tabular-nums;
+}
+/* Only while live, where the number ticks every second: reserve the width so
+   "9s ago" → "10s ago" cannot shove Refresh sideways once a second. */
+.sba-fresh.s-live .sba-freshage {
+  min-width: 84px;
+}
+
+/* Every state changes SHAPE as well as colour — filled disc, spinning ring,
+   hollow ring, square — and every state carries a word. Nothing here is
+   signalled by colour alone. */
+.sba-fresh.s-live .sba-freshdot {
+  border-radius: 50%;
+  background: #1a9d6a;
+  animation: sba-pulse 2.4s ease-in-out infinite;
+}
+.sba-fresh.s-live .sba-freshword {
+  color: #14724d;
+}
+.sba-fresh.s-reading .sba-freshdot {
+  border-radius: 50%;
+  border: 2px solid #ccd5df;
+  border-top-color: #6b7684;
+  animation: acr-spin 0.9s linear infinite;
+}
+.sba-fresh.s-reading .sba-freshword {
+  color: #5b6878;
+}
+.sba-fresh.s-stale {
+  border-color: #ecd9ae;
+  background: #fffdf8;
+}
+.sba-fresh.s-stale .sba-freshdot {
+  border-radius: 50%;
+  border: 2px solid #b7822a;
+  background: transparent;
+}
+.sba-fresh.s-stale .sba-freshword {
+  color: #8a6320;
+}
+.sba-fresh.s-error {
+  border-color: #e6bcba;
+  background: #fdf6f6;
+}
+.sba-fresh.s-error .sba-freshdot {
+  border-radius: 2px;
+  background: #c0392f;
+}
+.sba-fresh.s-error .sba-freshword {
+  color: #9c2f2a;
+}
+
+.sba-freshbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4a5867;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid #e8edf3;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sba-freshbtn:hover {
+  background: #f1f4f8;
+  color: #1c2530;
+}
+.sba-freshbtn:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: -2px;
+}
+
+@keyframes sba-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(26, 157, 106, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(26, 157, 106, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sba-freshdot {
+    animation: none !important;
+  }
+}
+
+/* ── S1 · the two banners ─────────────────────────────────────────────────
+   A halt, or a failed read. Never both at once: GOV.UK's rule is one
+   notification banner per page, highest priority only, and a halted fleet
+   outranks a missed poll — which the instrument above reports anyway. */
+.sba-alert {
+  align-items: center;
+  margin-bottom: 0;
+}
+.sba-alerttext {
+  flex: 1;
+  min-width: 0;
+}
+.sba-alertlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-weight: 550;
+  color: #9c2f2a;
+  text-decoration: underline;
+}
+
 .sba-toggle {
   display: inline-flex;
   align-items: center;
@@ -48,27 +256,8 @@
   margin: 0;
   cursor: pointer;
 }
-.sba-asof {
-  font-size: 11.5px;
-  color: #98a2b0;
-  font-variant-numeric: tabular-nums;
-}
-.sba-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #4a5867;
-  background: #fff;
-  border: 1px solid #dfe5ec;
-  border-radius: 6px;
-  padding: 4px 9px;
-  cursor: pointer;
-}
-.sba-refresh:hover {
-  background: #f6f8fa;
-  color: #1c2530;
-}
+/* `.sba-asof` (11.5px / 2.39:1) and `.sba-refresh` were removed at S1R —
+   the freshness readout and its Refresh are one instrument now, above. */
 
 /* ── ACT.3 · the controls ─────────────────────────────────────────────── */
 
@@ -249,14 +438,8 @@
   padding: 8px 2px 0;
 }
 
-.sba-banner {
-  margin: 0;
-}
-.sba-banner a {
-  color: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-}
+/* `.sba-banner` was removed at S1R — both banners it dressed (the halt and the
+   read failure) moved into the header block as `.sba-alert`. */
 
 /* ── the "new events" pull, never a push ──────────────────────────────── */
 
@@ -468,7 +651,12 @@
   border: none;
   padding: 0;
   font: inherit;
-  color: #3b6fd4;
+  /* Was #3b6fd4 — 4.40:1 on this page's #f4f6f9, just under the AA floor.
+     S1's "Show them" is one of these, and shipping a header rebuilt for
+     legibility with a sub-AA link in it would be its own defect. Darkened to
+     5.40:1; every other use of the class (S2's "Show me", S4's empty states)
+     gets the same improvement. */
+  color: #2f61c0;
   cursor: pointer;
   text-decoration: underline;
 }

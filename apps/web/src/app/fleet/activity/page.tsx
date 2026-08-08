@@ -26,7 +26,6 @@
  * then fleet-pages.css for `.fleet-surface` and the shared acr-pg-* primitives,
  * then this page's own.
  */
-import { FleetPageShell } from '../_shell/FleetPageShell'
 import { ActivityClient } from './ActivityClient'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -38,13 +37,23 @@ import './activity.css'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * S1R — `FleetPageShell` moved INTO the client component.
+ *
+ * The header's right-hand slot now carries the freshness instrument, and
+ * freshness is client state (the last successful read, its age, the last
+ * error). A server component cannot pass it, so the client owns the shell and
+ * this file owns only the page's identity: the route, the stylesheets, and the
+ * `.sba-page` root that scopes Activity's page-local overrides so they cannot
+ * leak to a sibling fleet page across a client-side navigation.
+ *
+ * The title and the one-sentence purpose are unchanged and still verbatim from
+ * the stub — they moved file, not wording.
+ */
 export default function Page() {
   return (
-    <FleetPageShell
-      title="Activity"
-      sub="Everything the fleet has done, newest first — and every run that tried."
-    >
+    <div className="sba-page">
       <ActivityClient />
-    </FleetPageShell>
+    </div>
   )
 }

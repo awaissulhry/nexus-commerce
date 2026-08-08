@@ -53,6 +53,7 @@ import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { DataGrid, type Column } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
+import { FleetPageShell } from '../_shell/FleetPageShell'
 import { RunDetail } from '../_shared/RunDetail'
 import { ago, classifyFailure, DIAGNOSTIC_HINT, type FailureClass } from '../_shared/run-health'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
@@ -652,6 +653,168 @@ function HowActivityWorks() {
   )
 }
 
+/* ── S1 · the header instrument, and the words under the title ─────────── */
+
+/** HH:MM. Seconds are noise on a ten-second poll — they change on every read
+ *  and no decision turns on them. The shipped header printed `03:25:22`. */
+const clock = (d: Date) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
+/** "4s ago" / "3m ago" / "2h ago". Deliberately finer at the bottom end than
+ *  `_shared/run-health.ago()`, whose floor is "just now": this number is watched
+ *  ticking, so the seconds ARE the signal rather than noise. */
+function sinceShort(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000))
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+/** "a minute" / "43 minutes" / "32 hours" / "5 days".
+ *  A duration, never a day word: "yesterday" would have to agree with the
+ *  list's day headers, which group on the UTC day while this line prints a
+ *  local clock. Two adjacent things disagreeing about a date is exactly the
+ *  defect class this page exists to avoid, so the ambiguity is removed rather
+ *  than resolved. */
+function durationWords(ms: number): string {
+  const m = Math.max(0, Math.round(ms / 60_000))
+  if (m < 2) return 'a minute'
+  if (m < 60) return `${m} minutes`
+  const h = Math.round(m / 60)
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`
+  return `${Math.round(h / 24)} days`
+}
+
+/** "6 August" · "6–7 August" · "28 July – 6 August". */
+function dateRange(oldestIso: string, newestIso: string): string {
+  const a = new Date(oldestIso)
+  const b = new Date(newestIso)
+  if (a.toDateString() === b.toDateString()) return shortDay(oldestIso)
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear())
+    return `${a.getDate()}–${shortDay(newestIso)}`
+  return `${shortDay(oldestIso)} – ${shortDay(newestIso)}`
+}
+
+type FreshnessState = 'reading' | 'live' | 'stale' | 'error'
+
+/** Three missed polls. Under this the screen is current; over it, printing
+ *  "Live" would be a claim the page cannot support. */
+const STALE_AFTER_MS = 30_000
+
+const FRESHNESS_WORD: Record<FreshnessState, string> = {
+  reading: 'Reading…',
+  live: 'Live',
+  stale: 'Not updating',
+  error: 'Can’t read',
+}
+
+/**
+ * S1R — the freshness instrument, in the title row's right slot.
+ *
+ * It replaces `as of 03:25:22` in tiny grey beside an unrelated outline button.
+ * Three things about it are deliberate:
+ *
+ * 1. **The age ticks every second, and that is the feature.** A counter running
+ *    1s → 2s → … → 0s is the only VISIBLE proof that the page re-reads itself;
+ *    a wall-clock stamp is indistinguishable from a frozen wall-clock stamp,
+ *    which is why the shipped header made a live page look static and made the
+ *    manual button look like the only way to update it. Its own component with
+ *    its own interval, so the list does not re-render once a second.
+ *
+ * 2. **The state is derived from the AGE, never from a flag.** The poll is
+ *    genuinely held while the run drawer is open, so a flag-based "Live" would
+ *    become a lie the moment somebody reads a trace for a minute. An age cannot
+ *    lie: if the number says 90s, the screen is 90s old, whatever the reason.
+ *
+ * 3. **Shape, colour and a word all move together.** Filled disc / hollow ring
+ *    / square, plus the word — so no state is signalled by colour alone.
+ *
+ * The readout is a label and the button is a control; they share one border
+ * because they are one instrument. Pattern: Microsoft Fabric's Live-refresh
+ * ribbon (a NAMED state on the control, not a bare timestamp) and Grafana's
+ * refresh-button-plus-interval. No interval picker: ten seconds is a house
+ * decision, not a setting, and a control that is not enforced is not rendered.
+ */
+function Freshness({
+  asOf,
+  err,
+  busy,
+  onRefresh,
+}: {
+  asOf: Date | null
+  err: string | null
+  busy: boolean
+  onRefresh: () => void
+}) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // `asOf` is null until the first successful read, so the server and the first
+  // client render agree on 'reading' and nothing here can mismatch on hydration.
+  const ageMs = asOf ? Date.now() - asOf.getTime() : null
+  const state: FreshnessState =
+    err != null ? 'error' : ageMs == null ? 'reading' : ageMs <= STALE_AFTER_MS ? 'live' : 'stale'
+  const word = FRESHNESS_WORD[state]
+
+  const detail =
+    state === 'reading'
+      ? null
+      : state === 'live'
+        ? `updated ${sinceShort(ageMs!)}`
+        : asOf
+          ? `${state === 'error' ? 'last good read' : 'last read'} ${clock(asOf)}`
+          : 'nothing read yet'
+
+  const spoken = asOf
+    ? `${word}. Last successful read at ${clock(asOf)}. This page re-reads every 10 seconds while you are looking at it.`
+    : `${word}. This page re-reads every 10 seconds while you are looking at it.`
+
+  return (
+    <div className={`sba-fresh s-${state}`}>
+      <span className="sba-freshread" title={spoken}>
+        <span className="sba-freshdot" aria-hidden />
+        <span className="sba-freshword">{word}</span>
+        {detail ? (
+          <>
+            <span className="sba-freshsep" aria-hidden>
+              ·
+            </span>
+            {asOf ? (
+              <time className="sba-freshage" dateTime={asOf.toISOString()}>
+                {detail}
+              </time>
+            ) : (
+              <span className="sba-freshage">{detail}</span>
+            )}
+          </>
+        ) : null}
+        {/* The absolute time and the cadence reach a screen reader here and a
+            mouse through `title`. Primer's own revision to its RelativeTime
+            guidance is that `title` alone is inaccessible to keyboard and
+            screen-reader users. No aria-live: the age changes every second and
+            announcing it would be unusable. */}
+        <span className="sba-sr">{spoken}</span>
+      </span>
+      <button
+        type="button"
+        className="sba-freshbtn"
+        onClick={onRefresh}
+        aria-busy={busy}
+        // Never disabled: the poll is held while the drawer is open, and a
+        // disabled control waiting on a tick it cannot see is worse than a
+        // second press that the hook already de-duplicates.
+      >
+        <RefreshCw size={12} className={busy ? 'acr-spin' : undefined} aria-hidden /> Refresh
+      </button>
+    </div>
+  )
+}
+
 /* ── the page ──────────────────────────────────────────────────────────── */
 
 const PAGE = 50
@@ -684,6 +847,18 @@ export function ActivityClient() {
   const [state, setState] = useState<FleetStateRow | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  /** S1R — true only while a MANUAL refresh is in flight. A spinner on every
+   *  poll tick would be a flicker every ten seconds. */
+  const [manualBusy, setManualBusy] = useState(false)
+  /** S1R — how many workers exist and how many are switched on. It is the
+   *  *reason* the page is quiet, and without it "nothing new for 32 hours"
+   *  reads as a fault rather than as a fleet that is turned off. */
+  const [workers, setWorkers] = useState<{ enabled: number; total: number } | null>(null)
+  /** S1R — the size of the WHOLE history, unfiltered and self-test included.
+   *  Subtracting the page's unfiltered scope from it gives exactly what the
+   *  self-test toggle is hiding, which is the number "say what is missing"
+   *  owes the reader in the header rather than only in the footnote. */
+  const [historyTotal, setHistoryTotal] = useState<number | null>(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [exporting, setExporting] = useState(false)
   /**
@@ -826,14 +1001,68 @@ export function ActivityClient() {
     if (e.runId) return setDetail({ runId: e.runId })
   }, [])
 
+  /**
+   * S1R — the charter roster: seven rows, one of them the self-test. Read once
+   * per mount and on a manual refresh, NOT in the ten-second poll: each row
+   * carries a full `systemPrompt`, and a worker's on/off state is only ever
+   * changed on Controls or Workers — pages a reader has to navigate to, which
+   * remounts this one. Refresh covers the second-tab case.
+   *
+   * The diagnostic charter is excluded so the count matches this page's own
+   * default scope: six workers, which is also what the nightly sweep reports
+   * starting and skipping.
+   */
+  const loadWorkers = useCallback(async () => {
+    try {
+      const r = await fetch(`${backend}/api/agent/fleet/charters`, { cache: 'no-store' })
+      if (!r.ok) return
+      const d = (await r.json()) as { charters?: Array<{ enabled?: boolean; diagnostic?: boolean }> }
+      const real = (d.charters ?? []).filter((c) => !c.diagnostic)
+      setWorkers({ enabled: real.filter((c) => c.enabled).length, total: real.length })
+    } catch {
+      /* the state sentence simply omits the reason; it never invents one */
+    }
+  }, [backend])
+
+  useEffect(() => {
+    void loadWorkers()
+  }, [loadWorkers])
+
+  useEffect(() => {
+    let live = true
+    fetch(`${backend}/api/agent/fleet/timeline?limit=1`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: TimelinePage | null) => {
+        if (live && d) setHistoryTotal(d.total)
+      })
+      .catch(() => {
+        /* the hidden-count clause is omitted rather than guessed */
+      })
+    return () => {
+      live = false
+    }
+  }, [backend])
+
   /* Nothing shifts under someone reading a run. Throwing is how the hook is
      told "we did not read", so the `as of` stamp stays honest too. */
   const pollable = useCallback(async () => {
-    if (detail) throw new Error('skipped: a run is open')
-    await load()
+    try {
+      if (detail) throw new Error('skipped: a run is open')
+      await load()
+    } finally {
+      // Clears whether the read succeeded, failed, or was skipped for the
+      // drawer — a spinner with no path back to rest is its own defect.
+      setManualBusy(false)
+    }
   }, [load, detail])
 
   const { asOf, refresh } = useVisibilityPoll(pollable)
+
+  const manualRefresh = useCallback(() => {
+    setManualBusy(true)
+    void loadWorkers()
+    refresh()
+  }, [refresh, loadWorkers])
 
   /** Adopt the waiting page. The only way rows ever change under the reader. */
   const showIncoming = useCallback(() => {
@@ -946,9 +1175,11 @@ export function ActivityClient() {
     return () => clearTimeout(recheck)
   }, [events])
 
+  /** A run in flight is a run. The kind exists, its count is zero today, and
+   *  zero is exactly when an omission goes unnoticed. */
   const runCount = useMemo(() => {
     const c = shown?.countsByKind ?? {}
-    return (c['run.ok'] ?? 0) + (c['run.failed'] ?? 0)
+    return (c['run.ok'] ?? 0) + (c['run.failed'] ?? 0) + (c['run.running'] ?? 0)
   }, [shown])
 
   const newCount = incoming
@@ -969,7 +1200,9 @@ export function ActivityClient() {
    * you refine — the behaviour Sentry and GitHub facets have — and what you are
    * actually looking at is stated by the scope line and the footer instead.
    */
-  const [facets, setFacets] = useState<Pick<TimelinePage, 'actors' | 'countsByKind'> | null>(null)
+  const [facets, setFacets] = useState<
+    Pick<TimelinePage, 'actors' | 'countsByKind' | 'total'> | null
+  >(null)
   useEffect(() => {
     const p = new URLSearchParams({ limit: '1' })
     if (!includeSelfTest) p.set('includeSelfTest', '0')
@@ -977,7 +1210,12 @@ export function ActivityClient() {
     fetch(`${backend}/api/agent/fleet/timeline?${p.toString()}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: TimelinePage | null) => {
-        if (live && d) setFacets({ actors: d.actors, countsByKind: d.countsByKind })
+        // `total` here is this page's scope with the self-test toggle applied
+        // and NO other filter — which is what "filtered from N" must count
+        // against, and what the hidden-count clause subtracts from the whole
+        // history. Taking either from `shown` would compare a number with
+        // itself.
+        if (live && d) setFacets({ actors: d.actors, countsByKind: d.countsByKind, total: d.total })
       })
       .catch(() => {
         /* the list's own error banner covers a dead endpoint; chips just stay put */
@@ -1164,401 +1402,549 @@ export function ActivityClient() {
     [openDetail],
   )
 
-  /* ── the scope line ──────────────────────────────────────────────────── */
+  /* ── S1 · the scope line ─────────────────────────────────────────────── */
 
-  const scope = (() => {
-    if (!shown) return null
+  /** How much the self-test toggle is hiding, right now.
+   *
+   *  `historyTotal` is everything; `facets.total` is this page's scope with the
+   *  toggle applied and no other filter. The difference is exactly what the
+   *  toggle removed — which is the number the header owes the reader, because
+   *  *excluded, never concealed* applies to the COUNT and not only to the rows.
+   *  86 of 119 events are hidden by default and the shipped header said so
+   *  nowhere. */
+  const hiddenBySelfTest =
+    !includeSelfTest && historyTotal != null && facets != null
+      ? Math.max(0, historyTotal - facets.total)
+      : 0
+
+  /** The counts, as nodes rather than a string, so the numbers can carry the
+   *  weight and the prose can stay one size. Hierarchy from weight and colour,
+   *  not from a fourth font size. */
+  const num = (v: number) => <strong className="sba-n">{v.toLocaleString()}</strong>
+
+  const scopeCounts = (() => {
+    if (!shown || shown.total === 0) return null
     const total = shown.total
-    if (total === 0) return null
-    const oldest = events[events.length - 1]
     const haveAll = moreToLoad === null
+    const oldest = events[events.length - 1]
+    const newest = events[0]
     const noun = grain === 'runs' ? (total === 1 ? 'run' : 'runs') : total === 1 ? 'event' : 'events'
     // "5 events across 0 runs" is true and reads as nonsense — it happens the
     // moment a filter excludes every run event, e.g. a text search that only
     // matches findings. Say the clause only when there is something to say.
-    const bits: string[] = [
-      grain === 'runs' || runCount === 0
-        ? `${total.toLocaleString()} ${noun}`
-        : `${total.toLocaleString()} ${noun} across ${runCount} ${runCount === 1 ? 'run' : 'runs'}`,
-    ]
-    if (haveAll && oldest) bits.push(`all of it since ${shortDay(oldest.at)}`)
-    else bits.push(`newest ${events.length} shown`)
-    return bits.join(', ')
+    const withRuns = grain !== 'runs' && runCount > 0
+    return (
+      <>
+        {num(total)} {noun}
+        {withRuns ? (
+          <>
+            {' '}
+            across {num(runCount)} {runCount === 1 ? 'run' : 'runs'}
+          </>
+        ) : null}
+        {haveAll && oldest && newest ? <>, {dateRange(oldest.at, newest.at)}</> : null}
+        {!haveAll ? <>, newest {events.length} shown</> : null}.
+      </>
+    )
+  })()
+
+  /**
+   * The one clause that says what is NOT in the number beside it.
+   *
+   * Only in the unfiltered "Everything" grain, on purpose: in the Runs grain
+   * `shown.total` counts runs while the hidden count counts events of every
+   * kind, so "86 more are hidden" printed next to "14 runs" would invite the
+   * reading "86 more runs". A clause that is right in one grain and misleading
+   * in another is not rendered in the other.
+   */
+  const scopeAside = (() => {
+    if (!shown || grain === 'runs') return null
+    if (filterCount > 0) {
+      return facets ? <>Filtered from {facets.total.toLocaleString()}.</> : null
+    }
+    if (hiddenBySelfTest > 0) {
+      return (
+        <>
+          {num(hiddenBySelfTest)} more from the <Term k="selftest">self-test</Term> are hidden.{' '}
+          <button
+            type="button"
+            className="sba-inlinebtn"
+            onClick={() => setIncludeSelfTest(true)}
+          >
+            Show them
+          </button>
+        </>
+      )
+    }
+    return null
+  })()
+
+  /**
+   * The liveness half of S1's purpose, and the clause the original build lost:
+   * Part 3 specified "The fleet is switched off, so nothing new is arriving"
+   * and what shipped was "The newest is at the top." — a restatement of the
+   * subtitle, in the lowest contrast on the page, where the answer should have
+   * been.
+   *
+   * A duration rather than a next-fire time. `/agent/fleet/schedule` says the
+   * nightly sweep fires at 04:45Z, but with every worker off it skips all six —
+   * last night's did. "Next run in 3 hours" would be true and misleading, which
+   * is the failure mode Part 6 exists to prevent.
+   */
+  const stateSentence = (() => {
+    if (!shown || state?.halted) return null
+    const running = shown.countsByKind['run.running'] ?? 0
+    if (running > 0)
+      return `${running} ${running === 1 ? 'run is' : 'runs are'} happening right now.`
+    const newest = events[0]
+    // "Nothing new for 2 minutes" is a strange thing to say two minutes after
+    // something happened — it reads as a complaint about a page that is working.
+    // Under a quarter of an hour the same fact is news, so it is phrased as
+    // news. Caught by watching a sibling session run the bid tuner live.
+    const gapMs = newest ? Date.now() - new Date(newest.at).getTime() : 0
+    const lead = newest
+      ? gapMs < 15 * 60_000
+        ? `The last thing happened ${durationWords(gapMs)} ago`
+        : `Nothing new for ${durationWords(gapMs)}`
+      : null
+    const why = workers
+      ? workers.enabled === 0
+        ? 'no worker is switched on'
+        : `${workers.enabled} of ${workers.total} workers are switched on`
+      : null
+    if (lead && why) return `${lead} — ${why}.`
+    if (lead) return `${lead}.`
+    if (why) return `${why.charAt(0).toUpperCase()}${why.slice(1)}.`
+    return null
   })()
 
   return (
-    <div className="acr-fleet sba">
-      {/* The halt is a FACT here and a control on /fleet/controls. One click
-          apart, never two stop buttons. */}
-      {state?.halted ? (
-        <div className="acr-banner err sba-banner">
-          <Octagon size={14} aria-hidden />
-          <span>
-            <strong>The whole fleet is halted.</strong>{' '}
-            {state.haltReason ?? 'No reason was recorded.'} Nothing will run until it is
-            resumed. <Link href="/fleet/controls">Open Controls →</Link>
-          </span>
-        </div>
-      ) : null}
+    <FleetPageShell
+      title="Activity"
+      sub="Everything the fleet has done, newest first — and every run that tried."
+      aside={
+        <Freshness asOf={asOf} err={err} busy={manualBusy} onRefresh={manualRefresh} />
+      }
+    >
+      <div className="acr-fleet sba">
+        {/* S1 — identity is above the rule, data is below it. The rule is the
+            only new furniture on the page and it exists because five loose
+            lines of near-identical small text read as a wall: it says which two
+            belong to the page and which three belong to the data. */}
+        <section className="sba-head" aria-label="What this page is showing">
+          {/* The halt is a FACT here and a control on /fleet/controls. One click
+              apart, never two stop buttons. Placed immediately under the title
+              block — GOV.UK puts a notification banner directly before the page
+              heading, Atlassian reserves banners for system-level messages, and
+              a fleet-wide halt is exactly that. Only ONE banner ever shows: if
+              the fleet is halted AND the last read failed, the halt wins and the
+              read failure is carried by the freshness instrument. */}
+          {state?.halted ? (
+            <div className="acr-banner err sba-alert" role="alert">
+              <Octagon size={14} aria-hidden />
+              <span className="sba-alerttext">
+                <strong>The whole fleet is halted.</strong>{' '}
+                {state.haltReason ?? 'No reason was recorded.'}
+                {state.haltedBy ? ` Stopped by ${state.haltedBy}` : ''}
+                {state.haltedAt
+                  ? `${state.haltedBy ? '' : ' Stopped'} ${durationWords(
+                      Date.now() - new Date(state.haltedAt).getTime(),
+                    )} ago`
+                  : ''}
+                {state.haltedBy || state.haltedAt ? '.' : ''} Nothing will run until it is
+                resumed.
+              </span>
+              <Link className="sba-alertlink" href="/fleet/controls">
+                Open Controls <ArrowRight size={11} aria-hidden />
+              </Link>
+            </div>
+          ) : null}
 
-      <div className="sba-scope">
-        <p className="sba-scopetext">
+          {/* Rendered only when it has something to say. An always-present <p>
+              left a 19.5px blank line where the sentence should be whenever the
+              FIRST read failed — `shown` null, `loading` false, so every branch
+              was empty and the block silently grew a gap. Caught in a browser
+              with the API unreachable; tsc renders an empty paragraph happily. */}
           {loading && !shown ? (
-            'Reading the fleet’s history…'
-          ) : scope ? (
-            <>
-              {scope}.{' '}
-              {filterCount > 0 ? (
-                <span className="acr-pg-muted">Filtered — this is not the whole history.</span>
-              ) : state && !state.halted ? (
-                <span className="acr-pg-muted">
-                  {runCount === 0 ? 'Nothing has run yet.' : 'The newest is at the top.'}
-                </span>
-              ) : null}
-            </>
-          ) : null}
-        </p>
-        <div className="sba-scopetools">
-          <span className="sba-asof">
-            {asOf ? `as of ${asOf.toLocaleTimeString()}` : 'not read yet'}
-          </span>
-          <button type="button" className="sba-refresh" onClick={refresh}>
-            <RefreshCw size={12} aria-hidden /> Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* ── S2: what needs a look ────────────────────────────────────────── */}
-      <section className="sba-needs">
-        <h3>What needs a look</h3>
-        {tally.length === 0 ? (
-          <p className="sba-allclear">
-            <Check size={13} aria-hidden />
-            {failuresInScope
-              ? 'Nothing has failed in what you are looking at.'
-              : 'Failures are filtered out of this view.'}
-          </p>
-        ) : (
-          <div className="sba-tiles">
-            {tally.map((t) => (
-              <button
-                key={t.klass}
-                type="button"
-                className={`sba-tile${t.severe ? ' severe' : ' mild'}`}
-                aria-pressed={kinds.includes('run.failed')}
-                onClick={() => {
-                  // Clicking a tile IS the filter — the operator learns the
-                  // grammar by using the diagnosis, and the tile and the chip
-                  // are the same predicate so they cannot disagree.
-                  setGrain('all')
-                  setKinds((prev) => (prev.includes('run.failed') ? prev : [...prev, 'run.failed']))
-                }}
-              >
-                <span className="sba-tilen">{t.count}</span>
-                <span className="sba-tiletext">{tileSentence(t.label, t.count)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {/* The history, placed rather than hidden. Without this the operator
-            can see "nothing has failed" while the list below shows a bad
-            afternoon, and concludes the band is broken. */}
-        {/* Whenever the self-test is hidden, not only when the band is empty.
-            Its failures are exactly what this band would otherwise under-report,
-            and "excluded, never concealed" does not get a quiet exception when
-            there happens to be one real failure to show. */}
-        {!includeSelfTest ? (
-          <p className="sba-needsnote">
-            The self-test had a bad afternoon on 6 August — a run of failures in six minutes
-            when its model server restarted. It is fixed, and it was never your Amazon
-            account.{' '}
-            <button
-              type="button"
-              className="sba-inlinebtn"
-              onClick={() => setIncludeSelfTest(true)}
-            >
-              Show me
-            </button>
-          </p>
-        ) : null}
-      </section>
-
-      {/* ── S3: the controls ─────────────────────────────────────────────── */}
-      <div className="sba-toolbar">
-        <div className="sba-grain" role="group" aria-label="What to show">
-          <span className="sba-grainlabel">Show</span>
-          <button
-            type="button"
-            className={`sba-grainbtn${grain === 'all' ? ' on' : ''}`}
-            aria-pressed={grain === 'all'}
-            onClick={() => setGrain('all')}
-          >
-            Everything
-          </button>
-          <button
-            type="button"
-            className={`sba-grainbtn${grain === 'runs' ? ' on' : ''}`}
-            aria-pressed={grain === 'runs'}
-            onClick={() => setGrain('runs')}
-          >
-            Runs only
-          </button>
-        </div>
-
-        <div className="sba-chipset">
-          {actorChips.map((a) => (
-            <button
-              key={a.key}
-              type="button"
-              className={`acr-pg-chip${actors.includes(a.key) ? ' on' : ''}`}
-              aria-pressed={actors.includes(a.key)}
-              onClick={() => setActors((prev) => toggle(prev, a.key))}
-            >
-              {a.name}
-            </button>
-          ))}
-        </div>
-
-        {grain === 'all' ? (
-          <div className="sba-chipset">
-            {kindChips.map(([k, n]) => (
-              <button
-                key={k}
-                type="button"
-                className={`acr-pg-chip${kinds.includes(k as FleetEventKind) ? ' on' : ''}`}
-                aria-pressed={kinds.includes(k as FleetEventKind)}
-                onClick={() => setKinds((prev) => toggle(prev, k as FleetEventKind))}
-              >
-                {WHAT_LABEL[k] ?? k} <span className="sba-chipn">{n}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="sba-toolright">
-          <label className="sba-toggle" title={DIAGNOSTIC_HINT}>
-            <input
-              type="checkbox"
-              checked={includeSelfTest}
-              onChange={(e) => setIncludeSelfTest(e.target.checked)}
-            />
-            Include the <Term k="selftest">self-test</Term>
-          </label>
-          <label className="sba-searchwrap">
-            <Search size={12} aria-hidden />
-            <input
-              className="sba-search"
-              type="search"
-              placeholder="Search what happened…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              aria-label="Search the activity"
-            />
-          </label>
-          {anyNarrowing ? (
-            <button type="button" className="sba-clear" onClick={clearAll}>
-              <X size={11} aria-hidden /> Clear
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="sba-export"
-            onClick={exportCsv}
-            disabled={exporting || !shown?.total}
-          >
-            <Download size={12} aria-hidden />
-            {exporting
-              ? 'Preparing…'
-              : `Download ${shown?.total ?? 0} ${shown?.total === 1 ? 'row' : 'rows'} (CSV)`}
-          </button>
-        </div>
-      </div>
-
-      {err ? (
-        <div className="acr-banner err sba-banner">
-          <AlertTriangle size={14} aria-hidden />
-          <span>
-            <strong>Could not read the fleet’s history.</strong> {err}. The page is showing
-            the last good read; press Refresh to try again.
-          </span>
-        </div>
-      ) : null}
-
-      {newCount > 0 ? (
-        <button type="button" className="sba-new" onClick={showIncoming}>
-          {newCount} new {newCount === 1 ? 'event' : 'events'} since you looked — show{' '}
-          {newCount === 1 ? 'it' : 'them'}
-        </button>
-      ) : null}
-
-      {/* ── the list ─────────────────────────────────────────────────────── */}
-      {loading && !shown ? (
-        <section className="acr-card sba-list">
-          <div className="acr-pg-empty">
-            <strong>Reading the fleet’s history…</strong>
-            Every run, every finding and every decision, newest first.
-          </div>
-        </section>
-      ) : events.length === 0 ? (
-        <section className="acr-card sba-list">
-          {anyNarrowing ? (
-            /* Filters hid everything. Never a dead end — offer the way back. */
-            <div className="acr-pg-empty">
-              <strong>Nothing matches what you asked for.</strong>
-              {includeSelfTest ? null : (
+            <p className="sba-scopetext">Reading the fleet’s history…</p>
+          ) : scopeCounts ? (
+            <p className="sba-scopetext">
+              {scopeCounts}
+              {scopeAside ? <span className="sba-scopeaside"> {scopeAside}</span> : null}
+            </p>
+          ) : shown ? (
+            /* Zero events. The shipped line vanished entirely here too, leaving
+               a header with a freshness stamp and no sentence — a page that
+               says nothing reads as a page that broke. */
+            <p className="sba-scopetext">
+              {anyNarrowing ? (
                 <>
-                  The self-test is hidden, and it produced most of what is on record.{' '}
+                  Nothing matches what you asked for
+                  {facets ? <>, out of {facets.total.toLocaleString()}</> : null}.
+                </>
+              ) : !includeSelfTest && (historyTotal ?? 0) > 0 ? (
+                <>
+                  Nothing to show — all {num(historyTotal!)} events on record came from the{' '}
+                  <Term k="selftest">self-test</Term>.{' '}
                   <button
                     type="button"
                     className="sba-inlinebtn"
                     onClick={() => setIncludeSelfTest(true)}
                   >
-                    Include it
+                    Show them
                   </button>
-                  , or{' '}
                 </>
+              ) : (
+                <>Nothing on record yet.</>
               )}
-              <button type="button" className="sba-inlinebtn" onClick={clearAll}>
-                clear the filters
-              </button>{' '}
-              to see everything.
+            </p>
+          ) : null}
+
+          {stateSentence ? <p className="sba-scopestate">{stateSentence}</p> : null}
+
+          {/* A failed read belongs beside the freshness it invalidates, not
+              below the filter bar where it shipped. The instrument above already
+              says "Can't read"; this says what and points at the control that
+              retries rather than growing a second one. */}
+          {err && !state?.halted ? (
+            <div className="acr-banner err sba-alert" role="alert">
+              <AlertTriangle size={14} aria-hidden />
+              <span className="sba-alerttext">
+                <strong>Could not read the fleet’s history.</strong> {err}.{' '}
+                {asOf
+                  ? `This is the last good read, from ${clock(asOf)}. Press Refresh to try again.`
+                  : 'Nothing has been read yet. Press Refresh to try again.'}
+              </span>
             </div>
-          ) : !includeSelfTest ? (
-            <div className="acr-pg-empty">
-              <strong>Nothing here, because the self-test is hidden.</strong>
-              Every event on record was produced by the self-test, which checks that the fleet
-              itself works.{' '}
+          ) : null}
+        </section>
+
+        {/* ── S2: what needs a look ────────────────────────────────────────── */}
+        <section className="sba-needs">
+          <h3>What needs a look</h3>
+          {tally.length === 0 ? (
+            <p className="sba-allclear">
+              <Check size={13} aria-hidden />
+              {failuresInScope
+                ? 'Nothing has failed in what you are looking at.'
+                : 'Failures are filtered out of this view.'}
+            </p>
+          ) : (
+            <div className="sba-tiles">
+              {tally.map((t) => (
+                <button
+                  key={t.klass}
+                  type="button"
+                  className={`sba-tile${t.severe ? ' severe' : ' mild'}`}
+                  aria-pressed={kinds.includes('run.failed')}
+                  onClick={() => {
+                    // Clicking a tile IS the filter — the operator learns the
+                    // grammar by using the diagnosis, and the tile and the chip
+                    // are the same predicate so they cannot disagree.
+                    setGrain('all')
+                    setKinds((prev) => (prev.includes('run.failed') ? prev : [...prev, 'run.failed']))
+                  }}
+                >
+                  <span className="sba-tilen">{t.count}</span>
+                  <span className="sba-tiletext">{tileSentence(t.label, t.count)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* The history, placed rather than hidden. Without this the operator
+              can see "nothing has failed" while the list below shows a bad
+              afternoon, and concludes the band is broken. */}
+          {/* Whenever the self-test is hidden, not only when the band is empty.
+              Its failures are exactly what this band would otherwise under-report,
+              and "excluded, never concealed" does not get a quiet exception when
+              there happens to be one real failure to show. */}
+          {!includeSelfTest ? (
+            <p className="sba-needsnote">
+              The self-test had a bad afternoon on 6 August — a run of failures in six minutes
+              when its model server restarted. It is fixed, and it was never your Amazon
+              account.{' '}
               <button
                 type="button"
                 className="sba-inlinebtn"
                 onClick={() => setIncludeSelfTest(true)}
               >
-                Include it
-              </button>{' '}
-              to see them.
+                Show me
+              </button>
+            </p>
+          ) : null}
+        </section>
+
+        {/* ── S3: the controls ─────────────────────────────────────────────── */}
+        <div className="sba-toolbar">
+          <div className="sba-grain" role="group" aria-label="What to show">
+            <span className="sba-grainlabel">Show</span>
+            <button
+              type="button"
+              className={`sba-grainbtn${grain === 'all' ? ' on' : ''}`}
+              aria-pressed={grain === 'all'}
+              onClick={() => setGrain('all')}
+            >
+              Everything
+            </button>
+            <button
+              type="button"
+              className={`sba-grainbtn${grain === 'runs' ? ' on' : ''}`}
+              aria-pressed={grain === 'runs'}
+              onClick={() => setGrain('runs')}
+            >
+              Runs only
+            </button>
+          </div>
+
+          <div className="sba-chipset">
+            {actorChips.map((a) => (
+              <button
+                key={a.key}
+                type="button"
+                className={`acr-pg-chip${actors.includes(a.key) ? ' on' : ''}`}
+                aria-pressed={actors.includes(a.key)}
+                onClick={() => setActors((prev) => toggle(prev, a.key))}
+              >
+                {a.name}
+              </button>
+            ))}
+          </div>
+
+          {grain === 'all' ? (
+            <div className="sba-chipset">
+              {kindChips.map(([k, n]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`acr-pg-chip${kinds.includes(k as FleetEventKind) ? ' on' : ''}`}
+                  aria-pressed={kinds.includes(k as FleetEventKind)}
+                  onClick={() => setKinds((prev) => toggle(prev, k as FleetEventKind))}
+                >
+                  {WHAT_LABEL[k] ?? k} <span className="sba-chipn">{n}</span>
+                </button>
+              ))}
             </div>
-          ) : (
+          ) : null}
+
+          <div className="sba-toolright">
+            <label className="sba-toggle" title={DIAGNOSTIC_HINT}>
+              <input
+                type="checkbox"
+                checked={includeSelfTest}
+                onChange={(e) => setIncludeSelfTest(e.target.checked)}
+              />
+              Include the <Term k="selftest">self-test</Term>
+            </label>
+            <label className="sba-searchwrap">
+              <Search size={12} aria-hidden />
+              <input
+                className="sba-search"
+                type="search"
+                placeholder="Search what happened…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                aria-label="Search the activity"
+              />
+            </label>
+            {anyNarrowing ? (
+              <button type="button" className="sba-clear" onClick={clearAll}>
+                <X size={11} aria-hidden /> Clear
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="sba-export"
+              onClick={exportCsv}
+              disabled={exporting || !shown?.total}
+            >
+              <Download size={12} aria-hidden />
+              {exporting
+                ? 'Preparing…'
+                : `Download ${shown?.total ?? 0} ${shown?.total === 1 ? 'row' : 'rows'} (CSV)`}
+            </button>
+          </div>
+        </div>
+
+        {/* S1R — the read-failure banner moved UP into the header block, beside
+            the freshness instrument that reports the same failure. It is not
+            repeated here. */}
+
+        {newCount > 0 ? (
+          <button type="button" className="sba-new" onClick={showIncoming}>
+            {newCount} new {newCount === 1 ? 'event' : 'events'} since you looked — show{' '}
+            {newCount === 1 ? 'it' : 'them'}
+          </button>
+        ) : null}
+
+        {/* ── the list ─────────────────────────────────────────────────────── */}
+        {loading && !shown ? (
+          <section className="acr-card sba-list">
             <div className="acr-pg-empty">
-              <strong>Nothing has happened yet.</strong>
-              When a worker runs, every step it takes lands here — what it read, what it
-              decided, what it cost, and, if something went wrong, what in plain words.
+              <strong>Reading the fleet’s history…</strong>
+              Every run, every finding and every decision, newest first.
             </div>
-          )}
-        </section>
-      ) : grain === 'runs' ? (
-        <>
-          <div className="h10-ds-gridcard sba-gridcard">
-            <GridToolbar>
-              <span className="sba-gridcount">
-                {events.length} {events.length === 1 ? 'run' : 'runs'}
-                {shown && shown.total > events.length ? ` of ${shown.total}` : ''} · newest first
-              </span>
-            </GridToolbar>
-            <DataGrid
-              columns={runColumns}
-              rows={events}
-              rowKey={(e) => e.id}
-              initialSort={{ key: 'when', dir: 'desc' }}
-            />
-          </div>
-          <div className="sba-foot bare">
-            <span className="acr-pg-muted">
-              Showing {events.length} of {shown?.total ?? events.length}
-            </span>
-            {moreToLoad ? (
-              <button
-                type="button"
-                className="sba-more"
-                onClick={loadOlder}
-                disabled={loadingOlder}
-              >
-                {loadingOlder ? 'Loading…' : 'Show older'}
-              </button>
+          </section>
+        ) : events.length === 0 ? (
+          <section className="acr-card sba-list">
+            {anyNarrowing ? (
+              /* Filters hid everything. Never a dead end — offer the way back. */
+              <div className="acr-pg-empty">
+                <strong>Nothing matches what you asked for.</strong>
+                {includeSelfTest ? null : (
+                  <>
+                    The self-test is hidden, and it produced most of what is on record.{' '}
+                    <button
+                      type="button"
+                      className="sba-inlinebtn"
+                      onClick={() => setIncludeSelfTest(true)}
+                    >
+                      Include it
+                    </button>
+                    , or{' '}
+                  </>
+                )}
+                <button type="button" className="sba-inlinebtn" onClick={clearAll}>
+                  clear the filters
+                </button>{' '}
+                to see everything.
+              </div>
+            ) : !includeSelfTest ? (
+              <div className="acr-pg-empty">
+                <strong>Nothing here, because the self-test is hidden.</strong>
+                Every event on record was produced by the self-test, which checks that the fleet
+                itself works.{' '}
+                <button
+                  type="button"
+                  className="sba-inlinebtn"
+                  onClick={() => setIncludeSelfTest(true)}
+                >
+                  Include it
+                </button>{' '}
+                to see them.
+              </div>
             ) : (
-              <span className="acr-pg-muted">That is every run on record.</span>
+              <div className="acr-pg-empty">
+                <strong>Nothing has happened yet.</strong>
+                When a worker runs, every step it takes lands here — what it read, what it
+                decided, what it cost, and, if something went wrong, what in plain words.
+              </div>
             )}
-          </div>
-        </>
-      ) : (
-        <section className="acr-card sba-list">
-          {days.map((d) => (
-            <div className="sba-day" key={d.key}>
-              <h3 className="sba-dayhead">
-                <span>{dayLabel(d.key)}</span>
-                <span className="sba-daycount">
-                  {d.count} {d.count === 1 ? 'event' : 'events'}
+          </section>
+        ) : grain === 'runs' ? (
+          <>
+            <div className="h10-ds-gridcard sba-gridcard">
+              <GridToolbar>
+                <span className="sba-gridcount">
+                  {events.length} {events.length === 1 ? 'run' : 'runs'}
+                  {shown && shown.total > events.length ? ` of ${shown.total}` : ''} · newest first
                 </span>
-              </h3>
-              <ul className="sba-rows">
-                {d.rollups.map((g, i) => (
-                  <RollupRow key={`${g.key}-${i}`} group={g} onOpen={openDetail} />
-                ))}
-              </ul>
+              </GridToolbar>
+              <DataGrid
+                columns={runColumns}
+                rows={events}
+                rowKey={(e) => e.id}
+                initialSort={{ key: 'when', dir: 'desc' }}
+              />
             </div>
-          ))}
+            <div className="sba-foot bare">
+              <span className="acr-pg-muted">
+                Showing {events.length} of {shown?.total ?? events.length}
+              </span>
+              {moreToLoad ? (
+                <button
+                  type="button"
+                  className="sba-more"
+                  onClick={loadOlder}
+                  disabled={loadingOlder}
+                >
+                  {loadingOlder ? 'Loading…' : 'Show older'}
+                </button>
+              ) : (
+                <span className="acr-pg-muted">That is every run on record.</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <section className="acr-card sba-list">
+            {days.map((d) => (
+              <div className="sba-day" key={d.key}>
+                <h3 className="sba-dayhead">
+                  <span>{dayLabel(d.key)}</span>
+                  <span className="sba-daycount">
+                    {d.count} {d.count === 1 ? 'event' : 'events'}
+                  </span>
+                </h3>
+                <ul className="sba-rows">
+                  {d.rollups.map((g, i) => (
+                    <RollupRow key={`${g.key}-${i}`} group={g} onOpen={openDetail} />
+                  ))}
+                </ul>
+              </div>
+            ))}
 
-          <div className="sba-foot">
-            <span className="acr-pg-muted">
-              Showing {events.length} of {shown?.total ?? events.length}
-            </span>
-            {moreToLoad ? (
-              <button
-                type="button"
-                className="sba-more"
-                onClick={loadOlder}
-                disabled={loadingOlder}
-              >
-                {loadingOlder ? 'Loading…' : 'Show older'}
-              </button>
-            ) : (
-              <span className="acr-pg-muted">That is the whole history.</span>
-            )}
-          </div>
+            <div className="sba-foot">
+              <span className="acr-pg-muted">
+                Showing {events.length} of {shown?.total ?? events.length}
+              </span>
+              {moreToLoad ? (
+                <button
+                  type="button"
+                  className="sba-more"
+                  onClick={loadOlder}
+                  disabled={loadingOlder}
+                >
+                  {loadingOlder ? 'Loading…' : 'Show older'}
+                </button>
+              ) : (
+                <span className="acr-pg-muted">That is the whole history.</span>
+              )}
+            </div>
+          </section>
+        )}
+
+        {detail && 'runId' in detail ? (
+          <RunDetail runId={detail.runId} backend={backend} onClose={() => setDetail(null)} />
+        ) : null}
+        {detail && 'planId' in detail ? (
+          <PlanDrawer
+            plan={plans.find((p) => p.id === detail.planId) ?? null}
+            labels={planLabels}
+            onClose={() => setDetail(null)}
+          />
+        ) : null}
+
+        {/* S6 — say out loud what is missing, so a gap reads as a boundary
+            rather than a bug. Every sentence here is checked against the data. */}
+        <section className="sba-notshown">
+          <h3>What this page doesn’t show</h3>
+          <ul>
+            <li>
+              The rules engines that run your ads day to day are not here — this page is the
+              AI fleet only.{' '}
+              <Link href="/marketing/ads/rules-automation/control-room">
+                The Control Room has those <ArrowRight size={11} aria-hidden />
+              </Link>
+            </li>
+            <li>
+              {includeSelfTest
+                ? 'The self-test is currently included. It checks that the fleet itself works, so its findings are about the fleet, not about your Amazon account.'
+                : 'The self-test is hidden. It checks that the fleet itself works, so its findings are about the fleet, not about your Amazon account — tick the box above to see them.'}
+            </li>
+            <li>
+              Approval decisions taken before the fleet existed belong to the older Copilot
+              system, so they are not counted here.{' '}
+              <Link href="/fleet/approvals">
+                The Approvals page lists them under Decided <ArrowRight size={11} aria-hidden />
+              </Link>
+            </li>
+            <li>
+              Nothing is deleted on a schedule — there is no retention limit on any of this.
+            </li>
+          </ul>
         </section>
-      )}
 
-      {detail && 'runId' in detail ? (
-        <RunDetail runId={detail.runId} backend={backend} onClose={() => setDetail(null)} />
-      ) : null}
-      {detail && 'planId' in detail ? (
-        <PlanDrawer
-          plan={plans.find((p) => p.id === detail.planId) ?? null}
-          labels={planLabels}
-          onClose={() => setDetail(null)}
-        />
-      ) : null}
-
-      {/* S6 — say out loud what is missing, so a gap reads as a boundary
-          rather than a bug. Every sentence here is checked against the data. */}
-      <section className="sba-notshown">
-        <h3>What this page doesn’t show</h3>
-        <ul>
-          <li>
-            The rules engines that run your ads day to day are not here — this page is the
-            AI fleet only.{' '}
-            <Link href="/marketing/ads/rules-automation/control-room">
-              The Control Room has those <ArrowRight size={11} aria-hidden />
-            </Link>
-          </li>
-          <li>
-            {includeSelfTest
-              ? 'The self-test is currently included. It checks that the fleet itself works, so its findings are about the fleet, not about your Amazon account.'
-              : 'The self-test is hidden. It checks that the fleet itself works, so its findings are about the fleet, not about your Amazon account — tick the box above to see them.'}
-          </li>
-          <li>
-            Approval decisions taken before the fleet existed belong to the older Copilot
-            system, so they are not counted here.{' '}
-            <Link href="/fleet/approvals">
-              The Approvals page lists them under Decided <ArrowRight size={11} aria-hidden />
-            </Link>
-          </li>
-          <li>
-            Nothing is deleted on a schedule — there is no retention limit on any of this.
-          </li>
-        </ul>
-      </section>
-
-      <HowActivityWorks />
-    </div>
+        <HowActivityWorks />
+      </div>
+    </FleetPageShell>
   )
 }

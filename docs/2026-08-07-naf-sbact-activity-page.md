@@ -1278,3 +1278,692 @@ precedent) · `docs/2026-08-07-naf-sbw-workers-page.md` Part 5 (the boundary map
 this one answers) · `docs/2026-08-07-naf-sb-session-locks.md` (claims) ·
 `apps/api/scripts/_sba-activity-truth.mts` and
 `_sba-failure-attribution.mts` (every number in Part 1).
+
+---
+
+# PART 18 — S1 REBUILD: the header, the scope line, and the freshness row
+
+**Status: APPROVED by the operator 2026-08-08, and in build.** Two decisions
+taken on the study as written:
+
+1. **The rebuild is approved as specified, including the `FleetPageShell`
+   `aside` slot** — so the freshness instrument moves into the title row and
+   the 1187px of dead header space is used rather than worked around.
+2. **§18.7 answered: option (b)** — test runs get their own toggle, exactly like
+   the self-test, so hiding them removes them from **both** the count and the
+   rows. The toggle itself is an **S3 follow-up**, not part of this engagement;
+   S1's half — naming in the scope line whatever is currently hidden — ships
+   here. Accepted consequence: once the toggle exists the default headline
+   becomes **26 events across 7 runs**.
+
+Stream tag `SB.ACT.S1R`, opened 2026-08-08 against the operator's standing
+judgement on the shipped page: *"The UI is way off. It's very odd and
+imperfect."* That is about the look, not the data. Parts 1–17 stand: the spine
+is honest, the counts are the rows, and seventeen defects were found and fixed.
+This part does not re-litigate any of that. It rebuilds the top of the page.
+
+Scope: **S1 only** — the halt banner, `.sba-scope`, `.sba-scopetext`,
+`.sba-scopetools`, `.sba-asof`, `.sba-refresh`, and the `FleetPageShell` header
+those sit under. S2–S9 are untouched; §18.9 lists what I found in them and left.
+
+---
+
+## 18.0 — What S1 is FOR, in one sentence
+
+> **Say how much history is in front of you, whether anything is still
+> arriving, and how fresh this screen is — so an almost-empty page reads as a
+> two-day-old fleet rather than a broken page.**
+
+Everything below is judged against that sentence. The current S1 answers the
+first clause, half-answers the second, and does not answer the third at all.
+
+---
+
+## 18.1 — What is actually on screen today, measured
+
+Measured in a browser on live Vercel + Railway, 2026-08-08 03:26–03:31 CEST, at
+1728×962, against the resolved page background `#f4f6f9`. Every number is
+`getComputedStyle` / `getBoundingClientRect`, not a reading of the source.
+
+### The type and colour ladder
+
+| Element | Size / weight | Colour | Contrast |
+|---|---|---|---|
+| `.acr-head h1` — *Activity* | 20px / 650 | `#1c2530` | 14.30 ✓ |
+| `.acr-sub` — the purpose sentence | 13px / 400 | `#667485` | **4.41 ✗** |
+| `.sba-scopetext` — the counts | 13px / 400 | `#34404f` | 9.74 ✓ |
+| `.sba-scopetext .acr-pg-muted` — *"The newest is at the top."* | 13px / 400 | `#98a2b0` | **2.39 ✗** |
+| `.sba-asof` — *"as of 03:25:22"* | 11.5px / 400 | `#98a2b0` | **2.39 ✗** |
+| `.sba-refresh` | 12px / 400 | `#4a5867` on white | 7.28 ✓ |
+
+**Four sizes and five greys inside 78 vertical pixels**, and the three that fail
+WCAG AA are the three that carry state. The freshness stamp — the one element
+whose whole job is to tell you whether to trust the screen — is the least
+legible thing on it, at 11.5px and 2.39:1.
+
+The spacing is 4px (title→sub), 18px (sub→scope), 12px (scope→band). Nothing
+groups: the reader gets five near-identical lines and has to work out which
+two belong together. That is the "wall" in the operator's note, and it is not
+a matter of taste — it is measurable as *no size, weight, colour or spacing
+step large enough to signal a grouping*.
+
+### The structural finding: the header row is half empty by construction
+
+`.acr-head` is `display: flex; justify-content: space-between` and
+`FleetPageShell` gives it **exactly one child**. Measured: the row is **1614px
+wide and its only child is 427px**, so **1187px of the header row is dead
+space** — on all six fleet pages that use the shell. Meanwhile `as of` and
+**Refresh** sit on their *own* row 38px lower, jammed against the right margin,
+**1080px away from the sentence they belong to**.
+
+The CSS is not wrong. `.acr-refresh` in `control-room.css` is written to live in
+exactly that right slot, and the Control Room uses it. `FleetPageShell`
+dropped the slot and the pages grew a second row to replace it. That is the
+root cause of "Refresh is a small outline button floating at the right margin
+with no relationship to the thing it refreshes" — it *has* no relationship
+because the shell has nowhere to put it.
+
+### The sentence the build lost
+
+Part 3 specified the scope line as:
+
+> *119 events across 53 runs, all of it from 6–7 August. **The fleet is
+> switched off, so nothing new is arriving.***
+
+What shipped is `ActivityClient.tsx:1215`:
+
+```
+{runCount === 0 ? 'Nothing has run yet.' : 'The newest is at the top.'}
+```
+
+So the clause that answers *"is anything still happening?"* — the second of
+S1's three jobs — was replaced by a restatement of the subtitle, in the lowest
+contrast on the page. **"The newest is at the top." is not a leftover; it is
+the hole where the liveness answer should be.**
+
+### Three more, found in the browser
+
+1. **The freshness stamp is a bare wall clock with seconds.** `as of 03:25:22`
+   on a 10-second poll: the seconds are noise, there is no date, no age, and no
+   statement that the page re-reads at all. Nothing on the page distinguishes
+   *"read 4 seconds ago"* from *"read at 03:25 and never again"*.
+2. **Nothing says the page auto-refreshes.** One fleet page already solved
+   this — `workflows/[key]/RoutineClient.tsx:360` prints *"as of 03:25:22 ·
+   refreshes every 10s while you watch"*. Six others, Activity included, print
+   the stamp alone. The manual button next to a static-looking stamp implies
+   the page is static.
+3. **The halt banner has never been rendered.** `state.halted` is `false` and
+   has always been false (`/agent/fleet/state` today:
+   `{halted:false, haltedAt:null, haltReason:null, haltedBy:null,
+   dailyCeilingUSD:2, degraded:false}`). Its design is unverified, and it is
+   currently placed *below* the title — which both GOV.UK and Atlassian say is
+   the wrong place (§18.2).
+
+### Live ground truth, 2026-08-08 03:31 CEST
+
+Read straight off the deployed API with the operator's session:
+
+| | |
+|---|---|
+| Default view (self-test hidden) | **33 events across 14 runs** |
+| `countsByKind` | `run.ok 12 · run.failed 2 · finding.raised 17 · plan.drafted 1 · plan.critiqued 1` — sums to 33 ✓ |
+| With the self-test | **119 events**, `run.ok 27 · run.failed 26 · finding.raised 64 · plan.drafted 1 · plan.critiqued 1` — sums to 119 ✓ |
+| So the default view hides | **86 events, and says so nowhere in the header** |
+| Oldest in scope | `2026-08-06T12:15:40Z` |
+| Newest in scope | `2026-08-07T19:45:33Z` — **~32 hours ago** |
+| Fleet state | not halted, not degraded, ceiling $2 |
+| Charters | **7 of 7 `enabled:false`, all `autonomyLevel:'OFF'`** |
+| Scheduled jobs | `fleet-sweep` nightly `45 4 * * *` and `fleet-council` weekly, **both enabled** — last sweep summary `started=6 ok=0 failed=0 skipped=6` |
+
+That last pair is the most useful fact S1 has never printed: **the nightly
+sweep does fire, and skips all six workers because every one is switched off.**
+The page is not stalled and it is not broken — it is a fleet that is turned
+off, and nothing on screen says so.
+
+---
+
+## 18.2 — What the industry does with this exact strip
+
+Six primary sources read for anatomy rather than for principles.
+
+### A · The page header is a fixed anatomy, and ours violates its order
+
+[HashiCorp Helios][helios] specifies the order **breadcrumb → title → icon →
+badges → subtitle → description → metadata → actions**, with only the title
+required. Two of its rules land directly on us:
+
+- *"Don't use full sentences in the subtitle, use a description instead."*
+  Our `.acr-sub` **is** a full sentence, so in Helios terms it is a
+  *description*, not a subtitle. That is fine and it stays — but it means the
+  page has a description and no subtitle, and the counts line is trying to be
+  both.
+- Badges are *"for high-priority metadata like the status of the page and
+  metadata that is subject to change"*, **maximum three**. Status belongs
+  beside the title, not three lines below it in 11.5px grey.
+- *"Don't communicate information anywhere other than the top of the page"*
+  and, for metadata, no more than four key/value pairs.
+
+[GitHub Primer][primer] independently lands on the same split —
+`TitleArea` (LeadingVisual / Title / TrailingVisual) · `Description` ·
+`ContextArea` · `Actions` — and puts actions on the right of the title row.
+Both systems reserve a right-hand slot on the title line. **Ours exists in CSS
+and is unreachable in TSX.**
+
+**Steal:** the right-hand slot on the title row; status as a badge next to the
+title rather than a sentence below it; one description, not two.
+**Reject:** breadcrumbs (the rail already says where you are), icon tiles, a
+second action button. Helios's *"don't pair two primary actions"* is why
+Refresh stays the only control in the header.
+
+### B · Freshness: the settled pattern is *status + age + manual refresh, as one object*
+
+[Microsoft Fabric's Real-Time Dashboard][fabric] is the most explicit
+specification of this I found, and it is worth quoting because it answers the
+operator's "the button implies the page is static" exactly:
+
+- The refresh state is a **named state on a button**, not a timestamp:
+  **Live refresh (Enabled)** — tooltip *"Visuals update automatically as new
+  data comes in."*; **Live refresh (Paused)** — the button renders
+  **with a strike-through**, tooltip *"Visuals don't refresh automatically."*
+- *"Each visual displays its last refresh timestamp, so you can quickly assess
+  how current the data is. Hover over the timestamp to view additional details,
+  such as when the data was last refreshed and when the source was last
+  checked."*
+- *"To update the data manually, select the **Update** button on the visual at
+  any time."* — **manual refresh coexists with auto-refresh and neither
+  implies the other is broken**, because the auto state is named on screen.
+
+[Grafana][grafana] — the operator's named reference — makes the same object out
+of two parts: a refresh button with an interval dropdown attached to it, and
+crucially an explicit **Off** in the dropdown alongside 5s/10s/30s/1m/5m/…/1d
+and *Auto*. Grafana's default is **no auto-refresh**, so the picker is how you
+learn the page can refresh itself at all. Its lesson for us is not the picker —
+we have no interval to choose — it is that **the cadence is stated in the
+control, not left to be inferred.**
+
+[Vercel Runtime Logs][vercel] adds the cadence honestly in copy — live mode
+*"update[s] every ~5 seconds without clearing existing logs or manual
+refreshes"* — and [Datadog Live Tail][datadog] makes live a *mode* you can
+pause to inspect something. [Smashing's real-time dashboard survey][smashing]
+names the whole thing a **Data Freshness Indicator**: *"shows sync status,
+displays the last updated time, includes a manual refresh button"*, and for
+degraded reads recommends showing *"cached snapshots from the most recent
+successful load, labeled with timestamps such as 'Data as of 10:42 AM'"* — which
+is exactly our rule that *"as of" is the last **successful** read*.
+
+**Steal:** sync status + age + manual refresh as ONE bordered object; a named
+state (`Live` / `Not updating`) rather than a naked timestamp; the cadence
+stated; the last *successful* read.
+**Reject:** an interval picker (10s is a house decision, not a setting — *a
+control that is not enforced is not rendered*); a countdown to the next refresh
+(it makes the reader watch a clock instead of the data); auto-pause on
+interaction (Fabric does it; our poll already never re-sorts under the reader,
+which is the better fix and is already shipped).
+
+### C · Relative age beats an absolute stamp — with the absolute one kept
+
+[GitHub's `<relative-time>`][reltime] renders *"1 week ago"* over a machine
+`datetime`, and [Primer's own accessibility revision][primera11y] adds the
+correction worth having: *"The `title` attribute is inaccessible to screen
+reader and keyboard users"*, so a `no-title` variant exists for when you supply
+your own accessible label. [NN/g][nng] argues the other way for documents —
+relative times lose meaning once cached, so print the full date.
+
+Both are right about different things, and the resolution is not a compromise:
+**for a screen that is refreshing, the relative age is the live signal and the
+absolute time is the record.** A number that ticks 1s → 2s → 3s → back to 0s
+*is itself the proof that the page is auto-refreshing* — no tooltip, no
+sentence, no badge needed. That is the single strongest argument for the change,
+and it is why *"as of 03:25:22"* is the worst possible form: a wall clock is
+indistinguishable from a frozen wall clock.
+
+**Steal:** visible relative age, `<time dateTime>` for machines, the absolute
+time in an accessible name *and* the `title`.
+**Reject:** `title`-only (Primer's objection); seconds precision in the
+absolute form (noise at a 10s cadence).
+
+### D · Where a page-level status banner goes
+
+[GOV.UK][govuk] is unambiguous: *"position a notification banner immediately
+before the page `h1`"* (below breadcrumbs if any), same width as the page
+content, and *"avoid showing more than one notification banner on the same
+page… only show the highest priority"*. [Atlassian][atlassian] splits it:
+**banners** are *"only for critical system-level messaging"* and sit at the top
+of the screen shifting content down; **section messages** sit *above the
+affected area*.
+
+Our halt banner sits **below** the title today, which is neither. Two
+consequences, and they resolve in opposite directions:
+
+- **The halt is genuinely system-level** — it stops every worker on every page.
+  So it goes above the scope line, full content width, styled `acr-banner err`
+  (which exists), and it is the only red thing in the header.
+- **Only one banner at a time.** If the fleet is halted *and* the last read
+  failed, the halt wins and the read failure is expressed only in the freshness
+  state. GOV.UK's rule, adopted verbatim.
+
+**Steal:** placement, one-banner-max, content width.
+**Reject:** Atlassian's viewport-width app banner — this is a fleet fact on a
+fleet page, not an app outage, and the fleet rail is not ours to paint. And
+still, per Part 5: **a banner with a link, never a control.**
+
+### E · The "N results" line
+
+The convergent pattern is a scannable count directly above the thing it counts,
+which **updates as filters change** so the reader can see the effect of each
+filter ([UX Patterns][uxp]: *"Showing 47 results for 'carbon capture'"*).
+Sentry, GitHub and Datadog all keep it small, single-line, and immediately
+above the list rather than making it a headline number.
+
+**Steal:** one line, right above the content, updating with the filters, and —
+the part we currently fail — **naming what has been excluded**.
+**Reject:** a tile/KPI treatment of the count. This page has 33 events. A
+120px stat card reading "33" would be the editorialising Part 6 forbids, and
+Workato's failed-count-first dashboard is already answered by S2's band.
+
+### F · Hierarchy without a bigger font
+
+Both the Linear and Vercel teardowns land on the same mechanic: *hierarchy
+comes from spacing and type weight*, on a 4px scale, rather than from a wide
+size ladder ([Linear tokens][linear]). This is the direct answer to our four
+sizes: **the fix for "four text sizes with no rhythm" is fewer sizes, not
+different ones.** Below, the whole block under the title is 13px, and weight,
+colour and 4px-grid spacing do all the work.
+
+---
+
+## 18.3 — The proposal
+
+### 18.3.1 The shape
+
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ Activity                                   ┌──────────────────────┬─────────┐ │
+│ Everything the fleet has done, newest      │ ● Live · updated 4s  │ ⟳ Refresh│ │
+│ first — and every run that tried.          └──────────────────────┴─────────┘ │
+│ ───────────────────────────────────────────────────────────────────────────── │
+│ 33 events across 14 runs, 6–7 August.  86 more from the self-test are hidden.  │
+│ Nothing has happened since yesterday 21:45 — no worker is switched on.         │
+└───────────────────────────────────────────────────────────────────────────────┘
+   16px
+   WHAT NEEDS A LOOK … (S2, unchanged)
+```
+
+Three blocks, in the reading order Part 4 already argued for, but now *visibly*
+three blocks instead of five loose lines:
+
+1. **Identity** — who this page is. Static, never changes.
+2. **A 1px rule.** The only new furniture. It says *above is the page, below is
+   the data*, and it gives the freshness control something to be anchored to.
+3. **Scope + state** — how much, and is it moving.
+
+The freshness control moves **into the title row's right slot**, which is what
+kills the orphan-button problem: it is no longer floating next to nothing, it is
+the header's own instrument, on the same line as the page's name.
+
+### 18.3.2 Type, colour, spacing — exact
+
+**Two sizes, not four.** 20px for the title; **13px for everything else in the
+block**; 12px only *inside* the freshness control, which is visually separated
+by its own border and therefore allowed its own scale.
+
+| Element | Size / weight | Colour | Contrast | Control or label |
+|---|---|---|---|---|
+| `h1` *Activity* | 20 / 650, `-0.01em` | `#1c2530` | 14.3 | label |
+| Description (`.acr-sub`) | 13 / 400 | **`#55616f`** (was `#667485`) | **6.0** | label |
+| Scope counts — *33*, *14* | 13 / **600**, `tabular-nums` | `#1c2530` | 14.3 | label |
+| Scope prose | 13 / 400 | `#4a5867` | 7.0 | label |
+| Exclusion clause + its action | 13 / 400 | `#4a5867`; the action is a text button | 7.0 | **control** |
+| State sentence | 13 / 400 | `#6b7684` | 4.9 | label |
+| Freshness word | 12 / 550 | per state, all ≥ 4.5 | — | label |
+| Freshness age | 12 / 400, `tabular-nums` | `#5b6878` | 5.6 | label |
+| Refresh | 12 / 500 | `#4a5867` on `#fff` | 7.3 | **control** |
+
+Every value above 4.5:1. The three current AA failures all disappear, including
+`.acr-sub` — fixed **page-locally**, not in the shared sheet (§18.6).
+
+**Vertical rhythm**, 4px grid, top of block to top of S2:
+
+```
+h1                             30px line box
+  4
+description                    19.5px line box
+ 16
+──── 1px rule  #e4e9ef ────    full content width
+ 14
+scope line                     19.5px
+  6
+state sentence                 19.5px
+ 16
+S2 band
+```
+
+The freshness control is `align-self: center` against the two-line identity
+block, `flex-shrink: 0`, so a long title wraps and the instrument never does.
+
+### 18.3.3 The freshness control — the specification
+
+One rounded rectangle, `height 30px`, `radius 7px`, `1px #dfe5ec`, white,
+split by a `1px #e8edf3` divider into a **readout** and a **button**:
+
+```
+ ┌─────────────────────────────┬──────────────┐
+ │ ● Live · updated 4s ago     │  ⟳ Refresh   │
+ └─────────────────────────────┴──────────────┘
+   readout: label                 control
+```
+
+- **Readout** — `padding: 0 10px`; a 7px marker; the state word at 12/550; a
+  `·`; the age at 12/400 with `tabular-nums` and a `min-width` so the row does
+  not jitter as the number counts. Wrapped in
+  `<time dateTime={asOf.toISOString()}>` with
+  `title` **and** `aria-label` = *"Last successful read 03:25. This page
+  re-reads every 10 seconds while you are looking at it."* — the absolute time
+  reaches both a mouse and a screen reader, which is Primer's correction.
+- **Button** — `⟳ Refresh`, the word kept visible (the operator's standing
+  preference is visibility over minimalism, and a bare icon asks a non-engineer
+  to guess). Spins `.acr-spin` (already in `control-room.css`) **only** on a
+  manual press, never on a poll tick — a spinner every 10 seconds is noise.
+- **The age ticks every second.** Its own tiny component with its own 1s
+  interval, so the list does not re-render; the counter running 1s → 2s → … →
+  0s is the visible proof of auto-refresh, and it is the reason none of this
+  needs a sentence explaining that the page refreshes itself.
+
+**The state is derived from the age, never from a flag.** This is the part that
+makes it impossible for the indicator to lie:
+
+| Condition | Marker | Word | Age text |
+|---|---|---|---|
+| `asOf == null` | hollow ring, spinning | Reading… | — |
+| `err != null` | filled circle with `×` (red) | Can't read | `last good read 03:25` |
+| `age ≤ 30s` | filled circle (green), gentle 2s pulse | Live | `updated 4s ago` |
+| `age > 30s` | hollow ring (amber) | Not updating | `last read 03:25` |
+
+Marker **shape** changes with every state as well as colour, and every state
+carries a word — so the rule *state is never signalled by colour alone* holds
+three times over. `@media (prefers-reduced-motion: reduce)` drops the pulse.
+
+30s is three missed polls. The consequence worth naming: **the drawer holds the
+poll (`pollable` throws while a run is open), so after a minute reading a trace
+the indicator says "Not updating" — which is true.** No separate "Paused" state
+is needed, and deriving from age rather than from a `detail != null` flag means
+there is no second source of truth to drift.
+
+### 18.3.4 The scope line — the wording, and the arithmetic behind each clause
+
+```
+33 events across 14 runs, 6–7 August.  86 more from the self-test are hidden. [Show them]
+Nothing has happened since yesterday 21:45 — no worker is switched on.
+```
+
+| Clause | Source | Rule it serves |
+|---|---|---|
+| `33 events` | `shown.total` | counts and rows are ONE derivation — unchanged from today |
+| `across 14 runs` | `countsByKind['run.ok'+'run.failed'+'run.running']` | same response, same read |
+| `6–7 August` | oldest and newest loaded event | replaces *"all of it since 6 August"*, which reads as *up to now* |
+| `86 more … are hidden` + **Show them** | one extra `limit=1` read without `includeSelfTest=0`, minus `shown.total` | **say what is missing**; *excluded, never concealed*, applied to the count and not only to the rows |
+| `Nothing has happened since yesterday 21:45` | age of the newest event in scope | the liveness half of S1's purpose |
+| `no worker is switched on` | `/agent/fleet/charters`, count of `enabled` | the *reason*, so the page reads as off rather than broken |
+
+Two deliberate refusals in that table:
+
+- **The `run.running` kind is counted in "runs".** It is a run. Today the count
+  is zero and the branch is unexercised, which is exactly when this sort of
+  thing gets forgotten.
+- **No next-scheduled-run time.** `/agent/fleet/schedule` says `fleet-sweep`
+  fires tonight at 04:45Z — but with every worker off it will skip all six, as
+  last night's did (`started=6 ok=0 failed=0 skipped=6`). Printing *"next run
+  in 3 hours"* would be true and misleading, which is the failure mode Part 6
+  exists to prevent. When workers are switched on, the sentence becomes
+  *"3 of 7 workers are switched on."* and the next-fire time becomes worth
+  adding — at that point, not now.
+
+### 18.3.5 Data: no backend, two extra client reads
+
+| Read | When | Why |
+|---|---|---|
+| `/timeline?…` | in the 10s poll, as today | counts |
+| `/state` | in the 10s poll, as today | a halt is urgent |
+| `/timeline?limit=1` (no `includeSelfTest=0`) | once per mount, and on `includeSelfTest` change | the hidden-count clause |
+| `/charters` | once per mount, and on manual Refresh | the enabled count |
+
+`/charters` is deliberately **not** in the poll: it returns seven full charter
+rows including `systemPrompt`, and the on/off state is only ever changed on
+another page — which remounts this one. Manual Refresh covers the second-tab
+case. **No new endpoint. No spine change. No migration.**
+
+---
+
+## 18.4 — Every state S1 must render, designed now
+
+Seven, all specified before any of them is built. The freshness control is
+listed separately because it is orthogonal to all of them.
+
+| # | State | Scope block renders | Notes |
+|---|---|---|---|
+| 1 | **Loading** (first read) | `Reading the fleet's history…` at the scope line's exact size, colour and position | `.sba-scope { min-height: 46px }` so the S2 band does not jump when data lands. Skeleton over spinner, per Smashing. |
+| 2 | **Normal** | the two lines of §18.3.4 | the everyday case |
+| 3 | **Filtered** | `12 events across 4 runs, 6–7 August.` / `Filtered from 33 events.` | **no Clear button here** — S3 owns it and nothing is built twice. Says "filtered" only when `filterCount > 0`, never for a grain change (Part 16 defect 4, preserved). |
+| 4 | **Halted** | `acr-banner err` immediately below the rule, above the scope line: **The whole fleet is halted.** {reason} · Stopped by {who} at {when}. · **Open Controls →** | The counts still render below it — they are still true. The *state sentence* is suppressed: the banner is the state. **No stop or resume control**, per Part 5. |
+| 5 | **Error / failed refresh** | `acr-banner err`: **Could not read the fleet's history.** {message} · This is the last good read from 03:25. · **Try again** | Moves **up** from below the toolbar to directly under the scope block — a failure to read belongs beside the freshness it invalidates. Freshness reads `Can't read`. |
+| 6 | **Stale** (read succeeded, but ≥30s ago) | scope block unchanged | expressed only in the freshness control. No banner: a slow poll is not an error, and treating it as one is how alarms get ignored. |
+| 7 | **Zero events** | **(a)** no filters, self-test hidden, hidden count > 0 → `Nothing to show — all 119 events on record came from the self-test.` **[Show them]** · **(b)** no filters, nothing anywhere → `Nothing on record yet.` / `No worker is switched on.` · **(c)** filters on → `No events match. Filtered from 33.` | Today the whole line disappears at `total === 0`, leaving a header with a dangling freshness stamp and no explanation. |
+
+**Halt + error together:** the halt banner shows, the read error does not —
+GOV.UK's one-banner rule. The read failure is still visible in the freshness
+control, so nothing is concealed.
+
+**Verification of the unreachable states.** Halted, error and zero-events cannot
+be produced from real data without changing production. They will be verified by
+**intercepting the responses in the browser** (`fetch` shimmed in the page to
+return a halted `/state`, a 500, and an empty page) — read-only, nothing
+written, nothing enabled. The fleet stays off; agents are default-off by
+operator decision and this study does not propose changing that.
+
+---
+
+## 18.5 — What S1 is NOT changing
+
+The boundary, stated so review can hold me to it.
+
+- **Title and description wording** — verbatim from the stub, per Part 0. Only
+  the description's *colour* changes.
+- **S2** the failure band, **S3** the toolbar, **S4** the list, **S5** the
+  drawer, **S6** the footnote, **S7** the explainer — untouched. The band keeps
+  its own fetch and its own tiles.
+- **The self-test toggle stays in S3.** S1 *names* the hidden count and offers
+  one text button that flips the same state; it does not grow a second toggle.
+- **No new controls in the header** — no date range (Part 8, still rejected on
+  the data), no refresh-interval picker (10s is a house decision, and *a
+  control that is not enforced is not rendered*), no saved views, no sort.
+- **No approval count**, though two `approval.requested` events appeared and
+  vanished during this audit. `/fleet/approvals` owns the queue (Part 5).
+- **No percentage of anything.** Part 6 stands.
+- **No stop, resume, retry or run-now.** A record is read, not operated.
+- **`fleet-pages.css` stays frozen.** All new rules are `sba-*` in
+  `activity.css`.
+
+---
+
+## 18.6 — Buildability: two shared-file questions, one of them a real ask
+
+**1 · `apps/web/src/app/fleet/_shell/FleetPageShell.tsx` — an additive
+optional prop. This is a claim I need to take.**
+
+```tsx
+export function FleetPageShell({ title, sub, aside, children }: {
+  title: string; sub: ReactNode; aside?: ReactNode; children: ReactNode
+}) {
+  …
+      </div>
+      {aside ?? null}      // ← the right half of a flex row that has been dead on ten pages
+    </header>
+```
+
+Three lines, no prop renamed, no behaviour changed: the other five pages pass
+nothing and render byte-identically. It activates a slot `.acr-head`'s own CSS
+(`justify-content: space-between`) has always reserved. Per §3 of the locks
+doc — *"Claim, and say what changed. Additive props only."* — this is exactly
+the permitted shape, and the claim is registered there with this study.
+
+**2 · `.acr-sub`'s 4.41:1 is fixed page-locally, with no claim.** The value
+lives in `control-room.css`, another session's file, and the Workflows stream
+has already measured three more shared roles below AA and chosen to override
+locally rather than unfreeze a shared sheet. Same choice here — but note the
+trap they recorded: **a page-local sheet persists across a client-side route
+change**, so the override must be scoped to a page-unique root. `.acr-sub` sits
+*outside* `.sba`, so Activity's own `page.tsx` (mine) wraps the shell in
+`<div className="sba-page">` and `activity.css` carries
+`.sba-page .acr-sub { color: #55616f }`. Nothing leaks to another page, and no
+shared file is touched.
+
+**Gates this must clear**
+
+- **DS ratchet** — verified against `scripts/ds-conformance-guard.mjs`: it scans
+  `.tsx` only, and matches `fontSize`/hex **inside `style={{…}}`**. No inline
+  style objects; every colour and size in `activity.css`. No native `<select>`,
+  no `type="date"`. Comments are grepped raw, so none of those tokens appears in
+  a comment either.
+- **`p3-token-sweep.mjs --check`** — no bare `text-slate-400` /
+  `border-slate-200` / `border-slate-100`.
+- **Contrast** — re-measured in the browser after the build, at 1728px and at
+  200% zoom, with the same script that produced §18.1.
+- **`tsc --noEmit` in `apps/web` before leaving any new file on disk**, not
+  before committing — §5b of the locks doc, because the tree is shared.
+
+---
+
+## 18.7 — The open operator question, with the numbers
+
+**Test runs are half the fleet's business history and only a badge says so.**
+
+Measured on the live API, 2026-08-08:
+
+| | |
+|---|---|
+| Default view | **33 events across 14 runs** |
+| Of those 14 runs, `mode: 'preview'` (the Workflows test lane) | **7 — exactly half** |
+| Real runs | 7 (`ask` 5, `council` 2) |
+| Events those 7 test runs produced | **7 — one `run.ok` each, and nothing else** |
+| Findings owned by a test run | **0** (all 17 belong to `mode: 'ask'` runs) |
+| Plans / critiques owned by a test run | **0** (both belong to the 2 `council` runs) |
+| If test runs were hidden | **26 events across 7 runs** |
+
+Part 11 Q4 promised test runs would be *"excluded from headline counts"*. They
+are not: the headline says 14 runs, half of which were rehearsals that wrote
+nothing. A run that reports *"found 11 things"* and persisted none of them is
+counted in the same number as a run that did the work.
+
+Excluding them from the count while leaving them in the list would break the
+rule this page exists to keep — **counts and rows are the same derivation** — so
+the honest options are:
+
+- **(a) Leave it.** The count stays 14, the badge stays the only distinction.
+  Costs nothing, and the headline keeps overstating the fleet's real work by 2×.
+- **(b) Give test runs their own toggle, exactly like the self-test.** Hiding
+  them removes them from **both** the count and the rows; the scope line names
+  what is hidden and offers the way back, the same sentence the self-test gets.
+
+**My recommendation is (b), and the data makes it unusually cheap.** Those 7
+test runs own **no** findings, plans, approvals or critiques — hiding them
+removes exactly 7 events and orphans nothing, so there is no parent-without-
+children problem and no spine restructuring. The filter must be **server-side**
+(`?includeTestRuns=0` in `matchesFilters`, mirroring `includeDiagnostic`), for
+the same reason ACT.1 gave: filtering in the client would leave `total`,
+`countsByKind` and `actors` counting rows the page had already hidden. That is
+~10 lines in a file this stream owns, plus a test.
+
+**Where it would be built:** the *toggle* is an S3 control, so if you approve
+(b) it ships as a small S3 follow-up, not inside S1. **S1's half — naming what
+is hidden in the scope line — ships now either way**, because the self-test
+already hides 86 events and the header says nothing about them today.
+
+**One consequence to accept before saying yes:** approving (b) makes the
+headline **26 events across 7 runs**. That is the smaller, truer number, and it
+is the same trade you already accepted for the self-test at Part 11 Q3.
+
+---
+
+## 18.8 — Build order, if approved
+
+| Step | What | Gate |
+|---|---|---|
+| **S1.a** | `FleetPageShell` gains `aside`; Activity's `page.tsx` gains the `.sba-page` root; the freshness control moves into the title row | the other five shell pages render unchanged |
+| **S1.b** | The `<Freshness>` component — 1s ticker, four age-derived states, `<time>` + accessible absolute, manual-only spin | leave the tab, return, watch the state; open the drawer for a minute, watch it go to *Not updating* |
+| **S1.c** | The scope block — rule, two lines, counts at 600/tabular, the hidden-count clause and its **Show them** | counts still equal the rows; the clause matches `119 − 33` |
+| **S1.d** | The seven states, including the three that need a shimmed response | each one screenshotted |
+| **S1.e** | Prod verification on live Vercel + Railway; contrast and 200%-zoom re-measured | the §18.1 table re-run, every row ≥ 4.5 |
+
+`curl` is not a check for any of this (Part 17): the classes only exist after
+client render.
+
+---
+
+## 18.9 — Found while auditing S1, belongs to another section, LEFT ALONE
+
+**The filter chips are frozen at first paint, and were displaying four events
+that no longer existed.** Caught live at 03:31: the scope line read *33 events
+across 14 runs* while the chips read `Ran fine 14 · Run failed 2 · Noticed
+something 17 · **Asked permission 2** · Drafted a plan 1 · Plan reviewed 1` —
+**37**, including a whole category with zero rows. A sibling session created two
+fleet approvals and two runs at 03:24 and cleaned them up minutes later; the
+scope line followed the data down from 37 to 33, and the facets did not, because
+their `useEffect` depends only on `[backend, includeSelfTest]` and never re-runs
+on the poll (`ActivityClient.tsx:973-988`).
+
+So: **S1's count is honest and S3's chips are stale**, and for a few minutes the
+page disagreed with itself by four events across two elements 60px apart. That is
+the exact class of bug this page exists not to have — and it is S3's, so it is
+recorded here and not touched. It wants the facet read moved into the poll, or a
+cheap `total` comparison to invalidate it.
+
+Second, smaller: **the first fleet approval events in the fleet's history
+appeared during this audit** — `approval.requested` from `amazon-bid-tuner`,
+`high risk`, *needs a look*. §5 decision 8 of the locks doc records that the
+fleet *cannot* queue an approval at all. Whatever produced these, the Approvals
+stream will want to know the path was exercised on production at
+2026-08-08T03:24Z, and that the rows did not survive.
+
+---
+
+## 18.10 — Sources
+
+[helios]: https://helios.hashicorp.design/components/page-header
+[primer]: https://primer.style/components/page-header
+[primera11y]: https://github.com/primer/design/commit/f3524f71e053bf2d3ba61defe09703572d322ab4
+[reltime]: https://github.com/github/relative-time-element
+[fabric]: https://learn.microsoft.com/en-us/fabric/real-time-intelligence/dashboard-live-refresh
+[grafana]: https://grafana.com/docs/grafana/latest/dashboards/use-dashboards/
+[vercel]: https://vercel.com/changelog/improved-live-mode-in-runtime-logs
+[datadog]: https://docs.datadoghq.com/logs/explorer/live_tail/
+[smashing]: https://www.smashingmagazine.com/2025/09/ux-strategies-real-time-dashboards/
+[govuk]: https://design-system.service.gov.uk/components/notification-banner
+[atlassian]: https://atlassian.design/components/banner
+[nng]: https://www.nngroup.com/articles/113-design-guidelines-homepage-usability/
+[uxp]: https://uxpatterns.dev/patterns/advanced/search-results
+[linear]: https://designmd.cc/benchmarks/linear
+
+**Page header anatomy** ·
+[HashiCorp Helios — Page Header][helios] ·
+[GitHub Primer — PageHeader][primer] ·
+[Primer — RelativeTime a11y revision][primera11y] ·
+[Linear design tokens & type scale][linear]
+
+**Freshness, live and paused** ·
+[Microsoft Fabric — Live refresh in Real-Time Dashboard][fabric] ·
+[Grafana — use dashboards (refresh picker)][grafana] ·
+[Vercel — improved Live Mode in Runtime Logs][vercel] ·
+[Datadog — Live Tail][datadog] ·
+[Smashing Magazine — UX strategies for real-time dashboards][smashing]
+
+**Timestamps** ·
+[github/relative-time-element][reltime] · [NN/g — homepage usability, dating content][nng]
+
+**Status banners** ·
+[GOV.UK Design System — notification banner][govuk] ·
+[Atlassian Design System — Banner][atlassian]
+
+**Result counts** · [UX Patterns for Developers — search results][uxp]
+
+**In-repo, measured** · live Vercel + Railway at 1728×962, 2026-08-08 03:26–03:35 CEST ·
+`apps/api/scripts/_sba-closeout.mts` · `GET /api/agent/fleet/{timeline,state,charters,schedule}`
