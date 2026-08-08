@@ -163,8 +163,12 @@
   background: #f7faff;
 }
 .as-workerbtn:disabled { cursor: not-allowed; background: #fafbfc; }
-.as-workerbtn .nm { font-weight: 600; color: #1f2a37; font-size: 13px; }
-.as-workerbtn .ds { font-size: 11.5px; color: #8d97a6; line-height: 1.5; margin-top: 3px; }
+/* display:block is load-bearing, not cosmetic: these are <span>s, so without
+   it the name and the description render as one run-on line — "Negative
+   miner:Judges which zero-order spenders…". Same defect as the strip tiles,
+   and equally invisible to tsc, the DS ratchet and every test. */
+.as-workerbtn .nm { display: block; font-weight: 600; color: #1f2a37; font-size: 13px; }
+.as-workerbtn .ds { display: block; font-size: 11.5px; color: #8d97a6; line-height: 1.5; margin-top: 3px; }
 
 .as-kinds { display: flex; gap: 8px; flex-wrap: wrap; }
 .as-kind {
