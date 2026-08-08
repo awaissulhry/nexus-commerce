@@ -270,11 +270,11 @@ export function WorkflowsClient() {
         <span className="wf-listcount">
           {loaded ? (
             <>
-              <strong>{rows.length}</strong> routine{rows.length === 1 ? '' : 's'}
+              <span><strong>{rows.length}</strong> routine{rows.length === 1 ? '' : 's'}</span>
               <span className="sep" aria-hidden>·</span>
-              {rows.filter((r) => r.kind === 'builtin').length} built-in
+              <span>{rows.filter((r) => r.kind === 'builtin').length} built-in</span>
               <span className="sep" aria-hidden>·</span>
-              {rows.filter((r) => r.kind === 'custom').length} custom
+              <span>{rows.filter((r) => r.kind === 'custom').length} custom</span>
             </>
           ) : (
             <>Reading the fleet…</>

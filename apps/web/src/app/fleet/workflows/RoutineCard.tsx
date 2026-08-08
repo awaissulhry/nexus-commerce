@@ -87,7 +87,10 @@ function versionChip(p: RoutineCardProps): { label: string; neutral: boolean; hi
   }
   if (p.source === 'code') {
     return {
-      label: 'built-in wiring',
+      /* Not "built-in wiring" — it sits beside a "Built-in" badge and the pair
+         read as a stutter. "As shipped" says the same thing and says it to a
+         beginner: no revision has ever been published over this one. */
+      label: 'as shipped',
       neutral: true,
       hint: 'No revision published — this routine runs the wiring that ships in code. Reverting to it can never fail.',
     }
@@ -146,14 +149,17 @@ export function RoutineCard(props: RoutineCardProps) {
       <div className="wf-card-body">
         <div className="wf-lane wf-lane-what">
           <p className="wf-purpose">{purpose}</p>
-          <p className="wf-touch">
-            <Shield size={12} aria-hidden /> <span>{touch}</span>
-          </p>
         </div>
 
         <div className="wf-lane wf-lane-where">
           <span className={`acr-pg-statechip ${CHIP_CLASS[status.kind]}`}>{status.label}</span>
           <p className="wf-why">{status.why}</p>
+        </div>
+
+        <div className="wf-lane wf-lane-reach">
+          <p className="wf-touch">
+            <Shield size={12} aria-hidden /> <span>{touch}</span>
+          </p>
         </div>
 
         <div className="wf-lane wf-lane-rhythm">

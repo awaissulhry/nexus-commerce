@@ -82,8 +82,8 @@
 .wf-card:hover .wf-card-name { color: #2f5f9e; }
 
 .wf-kind {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 650;
   letter-spacing: 0.02em;
   color: #5f6a78;
   background: #eef2f7;
@@ -108,18 +108,27 @@
 }
 .wf-card-when .sep,
 .wf-lastline .sep,
-.wf-listcount .sep { color: #b3bdc9; }
+.wf-listcount .sep { color: #9aa5b2; }
 
 .wf-card-go { color: #9aa7b6; display: inline-flex; flex: none; }
 .wf-card:hover .wf-card-go { color: #3f6fb5; }
 
-/* ── card body: three lanes, two flexible and one FIXED ──────────────────
-   The 224px lane is fixed on purpose — a lane that cannot be resized by a
+/* ── card body: four lanes, three flexible and one FIXED ─────────────────
+   The 264px lane is fixed on purpose — a lane that cannot be resized by a
    sibling's content is what keeps the numerals in a column down the list and
-   what stops the "Last run" defect from ever recurring. */
+   what stops the "Last run" defect from ever recurring.
+
+   FOUR, not three, and the reason is measured. At three lanes on a 1614px
+   card the flexible lanes came out 777.6px and 518.4px while their prose
+   rendered at 441.6px and 315.4px — 336px and 203px of dead width inside the
+   lanes, which is the exact defect this section was opened to remove. Prose
+   has a reading measure and will not stretch to fill a lane, so the lanes
+   have to be cut to the prose. Splitting "what it may touch" into its own
+   lane makes every lane ≈ the width of the sentence it carries. */
 .wf-card-body {
   display: grid;
-  grid-template-columns: minmax(340px, 1.5fr) minmax(250px, 1fr) 224px;
+  grid-template-columns:
+    minmax(300px, 1.15fr) minmax(250px, 0.95fr) minmax(240px, 0.9fr) 264px;
   column-gap: 28px;
   align-items: start;
 }
@@ -130,7 +139,9 @@
   align-self: start;
   min-width: 0;
 }
-.wf-lane-rhythm { gap: 6px; }
+/* The rhythm lane always reserves its three slots, so a routine that has
+   never run does not make its card 36px shorter than its neighbours. */
+.wf-lane-rhythm { gap: 6px; min-height: 108px; }
 
 .wf-purpose,
 .wf-touch,
@@ -139,16 +150,18 @@
   font-size: 12.5px;
   line-height: 1.55;
   color: #5a6675;
+  max-width: 62ch;
 }
-.wf-purpose { max-width: 56ch; }
 .wf-touch {
-  max-width: 56ch;
   display: flex;
   align-items: flex-start;
   gap: 7px;
 }
 .wf-touch svg { color: #6f7c8c; flex: none; margin-top: 3px; }
-.wf-why { max-width: 40ch; }
+
+/* A flex column stretches its children across the cross axis, which turned
+   every status chip into a 518px bar. A chip is a pill; it sizes to its word. */
+.wf-lane > .acr-pg-statechip { align-self: flex-start; }
 
 .wf-lane-k {
   font-size: 10.5px;
@@ -222,8 +235,15 @@
   margin-bottom: 12px;
 }
 .wf-listhead-spacer { flex: 1 1 auto; }
-.wf-listcount { font-size: 12.5px; color: #5f6a78; }
-.wf-listcount strong { color: #26313f; font-weight: 650; font-size: 13px; }
+.wf-listcount {
+  font-size: 12.5px;
+  color: #5f6a78;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.wf-listcount > span { display: inline-flex; align-items: baseline; gap: 4px; }
+.wf-listcount strong { color: #26313f; font-weight: 650; font-size: 12.5px; }
 
 /* status-chip variants fleet-pages.css does not have (it ships halted/running).
    `off` darkened from #78828f (3.43:1 on its own background) to clear AA. */
@@ -275,7 +295,18 @@
    and all ten fleet pages inherit them. Measurements are posted in the locks
    doc so another stream can fix them centrally; this section overrides them
    for its own two surfaces rather than claim a frozen file. */
-.wf-page .acr-pg-intro { color: #5a6675; max-width: 96ch; margin-bottom: 16px; }
+/* ── the type scale (WF-S1R) ────────────────────────────────────────────
+   Was NINE sizes and FIVE weights — 14 distinct pairs for a list of four
+   things, six of the sizes inside a 3.5px band where a half-pixel step can
+   never read as hierarchy. This section's own scale is five sizes
+   (17 · 15 · 12.5 · 11.5 · 10.5) and three weights (400 · 650 · 700).
+   Two more sizes and one more weight still render, and all of them come from
+   components another stream owns: the glossary `Term` (13px) and its tooltip
+   (12px), and `.acr-btn` (12.5px/550). Noted in the locks doc, not forked. */
+.wf-page .acr-pg-intro { color: #5a6675; font-size: 12.5px; max-width: 96ch; margin-bottom: 16px; }
+.wf-page .acr-pg-statechip { font-size: 11.5px; }
+.wf-page .acr-pg-ok,
+.wf-page .acr-pg-warn { font-weight: 650; }
 .wf-page .acr-pg-stat .k,
 .wf-page .acr-pg-stat .sub,
 .wf-page .acr-pg-tbl th,
@@ -283,12 +314,21 @@
 .wf-page .acr-pg-capnote { color: #5f6a78; }
 .wf-page .acr-pg-empty { color: #5a6675; }
 
-@media (max-width: 1180px) {
+@media (max-width: 1420px) {
   .wf-card-body {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.95fr) 264px;
     row-gap: 16px;
   }
-  .wf-lane-rhythm { grid-column: 1 / -1; }
+  .wf-lane-reach { grid-column: 1 / 3; }
+  .wf-lane-rhythm { grid-row: 1 / 3; grid-column: 3; }
+}
+@media (max-width: 1020px) {
+  .wf-card-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    row-gap: 16px;
+  }
+  .wf-lane-reach { grid-column: auto; }
+  .wf-lane-rhythm { grid-row: auto; grid-column: 1 / -1; min-height: 0; }
 }
 @media (max-width: 900px) {
   .wf-factbar { flex-wrap: wrap; }
@@ -352,8 +392,8 @@
 }
 .wf-cardhead h3 {
   margin: 0;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 650;
   color: #26313f;
   display: inline-flex;
   align-items: center;
@@ -470,7 +510,7 @@
 .wf-versions { padding: 2px 2px 6px; }
 .wf-vrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wf-vbadge {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #2f6096;
@@ -485,7 +525,7 @@
    of four rows used to carry no version information at all. */
 .wf-vbadge.neutral {
   font-family: inherit;
-  font-weight: 600;
+  font-weight: 650;
   color: #5f6a78;
   background: #f2f5f8;
   border-color: #e2e7ee;
