@@ -2033,6 +2033,29 @@ Start, no Overdue chip (the ordering and the badge already carry it twice), and
 no partial-target marker — a row whose campaigns are *half* archived still runs,
 so reddening it would be a new lie replacing an old silence.
 
+**One acceptance criterion could not be met as written, and is recorded rather
+than quietly dropped.** §11.12 item 6 said the tooltip inventory would be
+"asserted by a vitest walking the rendered row". **There is no DOM-test
+infrastructure in this repo** — no `jsdom`, no `happy-dom`, no
+`@testing-library`, and no vitest environment configured for either app — so
+that test cannot exist without adding a whole stack, which is a shared change
+far outside this section. Verified by a probe of the deployed page instead,
+walking every rendered element and checking it or an ancestor for a `title`:
+
+| Element | Covered |
+|---|---|
+| state chip · target chip · delta · when · row menu | 20 / 20 each |
+| filter chip · its count | 7 / 7 each |
+| toolbar count · order line · as-of | 1 / 1 each |
+| column headers | 6 / 6 visible (the 7th is the visually-hidden *Actions* label) |
+| **due badge** | **4 / 20 — the gap the probe found** |
+
+Sixteen of twenty due badges were the `—` placeholder carrying nothing. It is
+the most common value in that column and it is not decoration: it says nobody
+set a deadline. Closed in `5b25e4bdf` — and it is the argument for the probe, since
+a test written against the same assumption that produced the omission would have
+passed.
+
 ---
 
 ## Sources

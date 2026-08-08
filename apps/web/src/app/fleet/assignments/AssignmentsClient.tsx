@@ -808,7 +808,19 @@ function TargetChip({ a, inline }: { a: AssignmentRow; inline?: boolean }) {
 }
 
 function DueBadge({ dueAt }: { dueAt: string | null }) {
-  if (!dueAt) return <span className="as-due none">—</span>
+  // The em-dash is the most common value in this column and it is not
+  // decoration — it says "nobody set a deadline", which is a fact about the
+  // job. The tooltip inventory this rebuild committed to covers every badge,
+  // and a probe of the deployed page found 16 of 20 carrying nothing.
+  if (!dueAt)
+    return (
+      <span
+        className="as-due none"
+        title="No deadline set. A deadline only colours the row and moves it up the list — it never starts anything and never stops anything."
+      >
+        —
+      </span>
+    )
   const d = new Date(dueAt)
   const days = Math.ceil((d.getTime() - Date.now()) / 86400_000)
   const cls = days < 0 ? 'over' : days <= 2 ? 'soon' : 'later'
