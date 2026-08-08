@@ -46,6 +46,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { FleetPageShell } from '../_shell/FleetPageShell'
+import { HowApprovalsWork } from './HowApprovalsWork'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
 import {
   PrecedentPanel,
@@ -164,63 +165,6 @@ function PageDescription() {
       Every card is a change one of your <Term k="worker">workers</Term> wants to make. It does
       not happen unless you say yes.
     </>
-  )
-}
-
-/* ── S1 · how this works, as a drawer rather than a wall of text ───────── */
-
-function HowThisWorks({ gate }: { gate: GateState | null }) {
-  const [open, setOpen] = useState(false)
-  const hours = gate?.expiry.hours ?? 24
-  return (
-    <div className="aq-how">
-      <button className="acr-fl-checkstoggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        How approvals work
-      </button>
-      {open ? (
-        <div className="aq-howbody">
-          <p>
-            <strong>Who is allowed to ask you.</strong> Only a worker whose dial is set to{' '}
-            <Term k="propose">PROPOSE</Term>. A worker at <Term k="observe">OBSERVE</Term> can
-            look and report but never ask, and one that is <Term k="off">OFF</Term> does not run
-            at all.
-          </p>
-          <p>
-            <strong>What was already refused before you saw it.</strong> Every proposal passes
-            the <Term k="critic">critic</Term> first — an adversarial reviewer whose job is to
-            find reasons to say no. Code-computed safety blocks are final; the critic can add a
-            block but never remove one. What reaches you has already survived that.
-          </p>
-          <p>
-            <strong>What happens the moment you say yes.</strong> Nothing, for twenty seconds.
-            Your decision is recorded immediately — attributable and durable — but the action
-            waits out the <Term k="undo-window">undo window</Term>, and one click takes it back.
-            Close the tab and it still runs; only the execution waits, never the decision.
-          </p>
-          <p>
-            <strong>What happens if you say nothing.</strong> The request expires {hours} hours
-            after it was asked, and expiry always means <em>refused</em> — never
-            approved-because-nobody-looked. The clock is swept every{' '}
-            {gate?.expiry.maintenanceSeconds ?? 30} seconds, and that sweep keeps running even
-            when the whole fleet is switched off, because turning the fleet off must not strand a
-            decision you already took.
-          </p>
-          <p>
-            <strong>Whose name goes on the record.</strong> Yours, from the moment you decide.
-            Decisions taken before this system existed carry no name and say so plainly rather
-            than inventing one.
-          </p>
-          <p>
-            <strong>What this page cannot do.</strong> It cannot change what a worker is allowed
-            to do — that is <Link href="/fleet/controls">Controls</Link>. It cannot re-run
-            anything, or show you the story around a decision — that is{' '}
-            <Link href="/fleet/activity">Activity</Link>. And it cannot yet let you amend a
-            proposal before approving it; today a number you disagree with has to be rejected.
-          </p>
-        </div>
-      ) : null}
-    </div>
   )
 }
 
@@ -806,9 +750,22 @@ export function ApprovalsClient() {
   )
 
   return (
-    <FleetPageShell title="Approvals" sub={<PageDescription />}>
-      <HowThisWorks gate={gate} />
-
+    <FleetPageShell
+      title="Approvals"
+      sub={<PageDescription />}
+      /* S1.b — the header's right-hand slot, which this page could not reach
+         while it hand-rolled its own header. Measured before the change: the
+         row was 1614px wide with a single 397px child, so 1217px of it — 75% —
+         was dead, while the teaching control sat in the page flow below,
+         costing a row forever. Helios and Primer both reserve this slot for
+         exactly one secondary control; this is it. */
+      aside={
+        <HowApprovalsWork
+          expiryHours={gate?.expiry.hours ?? null}
+          maintenanceSeconds={gate?.expiry.maintenanceSeconds ?? null}
+        />
+      }
+    >
       {err ? (
         <p className="acr-fl-empty aq-err" role="alert">
           <AlertTriangle size={13} aria-hidden /> {err}
