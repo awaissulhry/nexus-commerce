@@ -40,6 +40,11 @@ export interface RoutinePipelineProps {
   charters: CharterRow[]
   /** The newest orchestration of this routine, or null if it never ran. */
   lastGroup: RunGroup | null
+  /** Set when the ROUTINE itself cannot run — switched off, or the fleet is
+   *  halted. Distinct from a worker being off: those are step-level facts the
+   *  cards already carry, and D7 was about the picture not changing when the
+   *  routine's own state did. */
+  blockedReason?: string | null
 }
 
 /** What crosses INTO a level — the artifact named once, in the gutter, so a
@@ -58,7 +63,7 @@ function roleOf(s: StoryStep, c: CharterRow | undefined): { label: string; cls: 
   return { label: lvl, cls: `lvl-${lvl.toLowerCase()}` }
 }
 
-export function RoutinePipeline({ story, charters, lastGroup }: RoutinePipelineProps) {
+export function RoutinePipeline({ story, charters, lastGroup, blockedReason }: RoutinePipelineProps) {
   const byKey = new Map(charters.map((c) => [c.key, c]))
   /* The newest orchestration's rows, by worker. A step missing from this map
      simply did not run in that orchestration — which is a fact, not a gap. */
@@ -73,7 +78,11 @@ export function RoutinePipeline({ story, charters, lastGroup }: RoutinePipelineP
   const solo = levels.length === 1
 
   return (
-    <div className={`wf-pipe${solo ? ' is-solo' : ''}`}>
+    <>
+      {blockedReason ? (
+        <p className="wf-pipe-blocked" role="status">{blockedReason}</p>
+      ) : null}
+      <div className={`wf-pipe${solo ? ' is-solo' : ''}${blockedReason ? ' is-blocked' : ''}`}>
       {levels.map((steps, i) => {
         const artifact = i > 0 ? incomingArtifact(story, steps.map((s) => s.id)) : null
         return (
@@ -149,6 +158,7 @@ export function RoutinePipeline({ story, charters, lastGroup }: RoutinePipelineP
             </div>
         )
       })}
-    </div>
+      </div>
+    </>
   )
 }

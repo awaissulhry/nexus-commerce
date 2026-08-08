@@ -601,6 +601,17 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                 story={displayStory}
                 charters={charters}
                 lastGroup={groups[0] ?? null}
+                /* §10.5 promised the picture would change when the ROUTINE's
+                   own state does — the whole indictment of the old canvas.
+                   A worker being off is already on its card; this is the
+                   routine being off, which no card can say. */
+                blockedReason={
+                  status.kind === 'halted'
+                    ? 'The fleet is halted — none of these steps will run, scheduled or by hand.'
+                    : status.kind === 'off' && canToggle && vers && !vers.enabled
+                      ? 'This routine is switched off — none of these steps will run until you turn it back on.'
+                      : null
+                }
               />
             ) : (
               <div className="acr-pg-empty">

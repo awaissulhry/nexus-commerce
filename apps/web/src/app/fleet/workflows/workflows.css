@@ -560,6 +560,20 @@
    a council load where `fitView` had scaled the node sub to 5.00px. A grid
    fills its container by construction, has no zoom to freeze, and every row
    can carry what the step DID as well as what it is. */
+.wf-pipe-blocked {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8a5f0e;
+  background: #fdf4e3;
+  border: 1px solid #f3e3c2;
+  border-radius: 9px;
+  padding: 8px 12px;
+}
+/* The steps stay legible — they are still the truth about the wiring — but
+   they read as inert, because none of them will run. */
+.wf-pipe.is-blocked .wf-pipe-step { opacity: 0.62; }
+
 .wf-pipe {
   display: grid;
   grid-auto-flow: column;
