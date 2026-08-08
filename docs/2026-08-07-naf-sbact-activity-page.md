@@ -1174,8 +1174,45 @@ zero rows, and it cannot be backfilled) · S9 compare two runs (when one worker
 has ≥10 runs across ≥2 charter revisions) · DT.7 annotation (needs storage that
 does not exist) · the P2 backend items in Part 9.
 
-**The through-line, and the reason this page took the shape it did.** Sixteen
-defects were found on this page. **Not one was a type error.** They were a
+### Prod verification, 2026-08-08 — and the seventeenth defect
+
+Everything above was verified through a read-only stub against the production
+*database*. That is not the same as the deployed thing, so the page was then
+checked on **live Vercel + Railway**, with real RBAC (the API correctly 401s
+without a session).
+
+All seven phases confirmed live: list · grain switch · band · drawer ·
+explainer · footnote · teaser. Multi-select against the real API behaves
+identically (33 → 12 → 20). The drawer opens a real trace end to end. The
+teaching gate holds on prod: **49 controls, 0 unnamed, 0 keyboard-unreachable,
+`aria-pressed` throughout, and zero horizontal overflow at 200% zoom.**
+
+**ACT.4b — the defect the live page exposed.** The `Test run` badge this study
+promised had **never rendered**, and the reason was worse than the missing
+badge: `sourcePhrase` had no case for `mode === 'preview'`, so a run from WF.5's
+test lane fell through to its *trigger* and read *"from a person, by hand"* —
+byte-identical to a real hand-driven run. **Seven of the fleet's fourteen
+business runs are test runs.** Half the page was presenting a rehearsal as work
+that had happened.
+
+The badge missed it because it sniffed the source *sentence* for the word
+"test". No phrase contained it, so the check was always false — and it was the
+wrong check regardless: **prose is for reading; a badge keyed on wording breaks
+the day someone improves a phrase.** Fixed at the right level — the spine names
+the lane and carries `mode`, the badge reads the fact. On prod the page went
+from **0 test-run badges to 8**.
+
+Two things worth keeping from how this was found:
+
+- **A stub proves the logic, not the product.** Every earlier check passed. This
+  needed the deployed page.
+- **`curl` is not a deployment check for this page.** The markers only exist
+  after client render, so grepping the SSR HTML returns zero whether or not the
+  build shipped — a monitor built on it would have waited forever. The browser
+  is the only valid signal.
+
+**The through-line, and the reason this page took the shape it did.**
+Seventeen defects were found on this page. **Not one was a type error.** They were a
 paging button that did nothing, a filter that could not be used, a count printed
 twice, a badge on top of its neighbour, a sentence reading "0 runs", a scroll
 that never moved, a link to a deleted anchor, and a page contradicting itself
