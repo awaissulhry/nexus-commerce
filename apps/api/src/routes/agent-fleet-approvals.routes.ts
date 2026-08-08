@@ -260,6 +260,24 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
        */
       canAnythingArrive: !state?.halted && conditions.every((c) => c.met),
       conditions,
+      /**
+       * ⚠ DEPRECATED, and shipped as an incident fix rather than a design.
+       *
+       * S2.a replaced this with `conditions` and moved the client in the same
+       * commit — but the API and the web app deploy SEPARATELY, and the API is
+       * much faster. For four minutes the deployed (old) client called
+       * `gate.blockers.map()` against a response that no longer had the field,
+       * threw `TypeError: Cannot read properties of undefined`, and took the
+       * whole Approvals page down to an error boundary.
+       *
+       * The lesson is not "be careful": on a split deploy, a field may only be
+       * REMOVED one deploy after its last reader stops reading it. Adding
+       * `conditions` and deleting `blockers` in one commit is a breaking change
+       * dressed as an atomic one.
+       *
+       * Remove this at S2.b, once a client that never reads it has been live.
+       */
+      blockers: conditions.filter((c) => !c.met).map((c) => c.detail),
       workers,
       tools,
       arrival: {
