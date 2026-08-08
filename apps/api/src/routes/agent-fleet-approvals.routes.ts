@@ -429,6 +429,77 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  /**
+   * The rollup contracted with the Assignments stream (`SB.AS`), 2026-08-07.
+   *
+   * They asked for it so their lifecycle never counts `AgentApproval` itself —
+   * because "waiting on you" is not `status = 'pending'`, and two of the ways
+   * it is not are non-obvious enough that any second implementation would get
+   * them wrong:
+   *
+   *   · a PARKED row (`scheduled`) is approved and counting down — the
+   *     operator has answered it, so it is not waiting on them;
+   *   · a row returned by a FAILED execution is `pending` **with `decidedBy`
+   *     still set**, so counting pending naively strands an assignment in
+   *     "awaiting your approval" for something already answered.
+   *
+   * Both exclusions live INSIDE this function, not in a comment beside it,
+   * which is what they asked for and the right call.
+   *
+   * Keyed by assignment via `AgentRun.assignmentId` — their column, their
+   * migration. This route never reads `AgentAssignment`.
+   */
+  fastify.get<{ Querystring: { assignmentIds?: string } }>(
+    '/agent/fleet/approvals/rollup',
+    async (request, reply) => {
+      const ids = (request.query.assignmentIds ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (ids.length === 0) return { rollup: {} }
+      // Rejected over the cap, never truncated: a silently short answer is a
+      // wrong count on a queue that gates every write.
+      if (ids.length > 100) {
+        return reply
+          .code(400)
+          .send({ error: `at most 100 assignmentIds per call (received ${ids.length})` })
+      }
+
+      const runs = await prisma.agentRun.findMany({
+        where: { assignmentId: { in: ids } },
+        select: { id: true, assignmentId: true },
+      })
+      const assignmentOfRun = new Map(runs.map((r) => [r.id, r.assignmentId!]))
+
+      const rows = await prisma.agentApproval.findMany({
+        where: { agentRunId: { in: runs.map((r) => r.id) } },
+        select: { agentRunId: true, status: true, decidedBy: true },
+      })
+
+      const rollup: Record<
+        string,
+        { waiting: number; parked: number; returned: number; decided: number; expired: number }
+      > = {}
+      for (const id of ids) {
+        rollup[id] = { waiting: 0, parked: 0, returned: 0, decided: 0, expired: 0 }
+      }
+      for (const r of rows) {
+        const a = assignmentOfRun.get(r.agentRunId)
+        if (!a || !rollup[a]) continue
+        const bucket = rollup[a]!
+        if (r.status === 'scheduled') bucket.parked++
+        else if (r.status === 'expired') bucket.expired++
+        else if (r.status === 'pending') {
+          // The exclusion they asked for: `decidedBy` set on a pending row
+          // means it came BACK, not that it is waiting.
+          if (r.decidedBy) bucket.returned++
+          else bucket.waiting++
+        } else bucket.decided++
+      }
+      return { rollup }
+    },
+  )
+
   fastify.get('/agent/fleet/approvals/outside', async () => {
     const rows = await prisma.agentApproval.findMany({
       where: {

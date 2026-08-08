@@ -32,6 +32,8 @@ export interface InboxCounts {
 }
 
 export interface ApprovalRow extends CardApproval {
+  /** NAF.AQ — resolved through AgentRun so `?assignment=` can filter. */
+  assignmentId?: string | null
   decidedAt: string | null
   decidedBy: string | null
   reason: string | null

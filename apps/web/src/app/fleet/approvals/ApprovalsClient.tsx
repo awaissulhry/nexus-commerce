@@ -30,6 +30,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -553,6 +554,14 @@ function OutsideQueue({
 
 export function ApprovalsClient() {
   const backend = getBackendUrl()
+  /**
+   * Deep links, contracted with the Assignments stream and needed by any
+   * notification: `?assignment=<id>` lands the queue filtered to what one
+   * assignment produced, `?item=<id>` to a single request.
+   */
+  const params = useSearchParams()
+  const focusAssignment = params.get('assignment')
+  const focusItem = params.get('item')
 
   const [view, setView] = useState<InboxView>('waiting')
   const [approvals, setApprovals] = useState<ApprovalRow[]>([])
@@ -692,6 +701,44 @@ export function ApprovalsClient() {
     [gate],
   )
 
+  /**
+   * What the queue actually shows: the deep-link filter, then ORDER BY
+   * CONSEQUENCE rather than by arrival.
+   *
+   * Creation order is the wrong default and the study says so plainly — it puts
+   * a €2 bid nudge above a budget doubling. Ranked by what a wrong answer
+   * costs: irreversible first, then high risk, then euro exposure, and only
+   * then age as the tie-break.
+   */
+  const visible = useMemo(() => {
+    let rows = approvals
+    if (focusItem) rows = rows.filter((a) => a.id === focusItem)
+    if (focusAssignment) rows = rows.filter((a) => a.assignmentId === focusAssignment)
+    if (view !== 'waiting') return rows
+
+    const exposure = (a: ApprovalRow) => {
+      const p = (a.preview ?? {}) as Record<string, any>
+      if (typeof p.currentBidCents === 'number' && typeof p.proposedBidCents === 'number') {
+        return Math.abs(p.proposedBidCents - p.currentBidCents)
+      }
+      const ch = p.changes?.['base price']
+      if (ch && typeof ch.from === 'number' && typeof ch.to === 'number') {
+        return Math.abs(Math.round((ch.to - ch.from) * 100))
+      }
+      return 0
+    }
+    const irreversible = (a: ApprovalRow) =>
+      a.toolName === 'send-customer-message' || a.toolName === 'publish-listing' ? 1 : 0
+
+    return [...rows].sort(
+      (x, y) =>
+        irreversible(y) - irreversible(x) ||
+        (y.riskTier === 'high' ? 1 : 0) - (x.riskTier === 'high' ? 1 : 0) ||
+        exposure(y) - exposure(x) ||
+        new Date(x.requestedAt).getTime() - new Date(y.requestedAt).getTime(),
+    )
+  }, [approvals, view, focusItem, focusAssignment])
+
   const nameByKey = useMemo(() => new Map(charters.map((c) => [c.key, c.name])), [charters])
 
   // Names, never raw keys — and an honest fallback rather than "unknown".
@@ -746,7 +793,7 @@ export function ApprovalsClient() {
               <div key={i} className="dt-skeleton" style={{ height: h, marginBottom: 6 }} />
             ))}
           </div>
-        ) : approvals.length === 0 ? (
+        ) : visible.length === 0 ? (
           <p className="acr-fl-empty">
             {view === 'waiting' ? (
               <>
@@ -762,7 +809,7 @@ export function ApprovalsClient() {
           </p>
         ) : view === 'waiting' ? (
           <WaitingList
-            rows={approvals}
+            rows={visible}
             labels={labels}
             nameOf={nameOf}
             busy={busy}
@@ -785,12 +832,12 @@ export function ApprovalsClient() {
             onSnooze={snooze}
           />
         ) : (
-          <RecordList rows={approvals} nameOf={nameOf} />
+          <RecordList rows={visible} nameOf={nameOf} />
         )}
 
         <PrecedentPanel precedents={precedents} nameOf={nameOf} />
 
-        {view === 'waiting' && !loading && approvals.length === 0 && gate ? (
+        {view === 'waiting' && !loading && visible.length === 0 && gate ? (
           <p className="aq-emptywhy">
             <Info size={12} aria-hidden />
             {gate.canAnythingArrive

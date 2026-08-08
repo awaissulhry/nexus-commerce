@@ -122,7 +122,10 @@ export async function listInbox(view: InboxView, limit = 100) {
   })
   const runs = await prisma.agentRun.findMany({
     where: { id: { in: approvals.map((a) => a.agentRunId) } },
-    select: { id: true, agentKey: true, orchestrationId: true },
+    // NAF.AQ — `assignmentId` (SB.AS's column) so `?assignment=` can filter the
+    // queue. Resolved through the run, exactly as `charterKey` is: the approval
+    // itself stays free of both concepts.
+    select: { id: true, agentKey: true, orchestrationId: true, assignmentId: true },
   })
   const runById = new Map(runs.map((r) => [r.id, r]))
 
@@ -130,6 +133,7 @@ export async function listInbox(view: InboxView, limit = 100) {
     ...a,
     charterKey: runById.get(a.agentRunId)?.agentKey ?? null,
     orchestrationId: runById.get(a.agentRunId)?.orchestrationId ?? null,
+    assignmentId: runById.get(a.agentRunId)?.assignmentId ?? null,
     /**
      * False for the pre-fleet ACP approvals. The UI labels those rather than
      * hiding them — see the header note.

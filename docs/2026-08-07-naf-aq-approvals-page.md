@@ -1647,3 +1647,35 @@ and a snooze that does not move the number is not a snooze, it is a filter.
 It renders quiet and last in the action row: an escape, not a verb. Giving it
 button weight would put a third equal-looking choice beside approve and reject,
 when the entire point is that it is the option with no consequence.
+
+**3 · The rollup I promised another stream, and the deep links that came with
+it.** Contracted with `SB.AS` on 2026-08-07 and then not written — recorded here
+because an unkept cross-stream promise is worse than one never made: they built
+their side against it.
+
+`GET /agent/fleet/approvals/rollup?assignmentIds=…` →
+`{ waiting, parked, returned, decided, expired }` per assignment, keyed through
+**their** `AgentRun.assignmentId`. This route never reads `AgentAssignment`.
+
+The two exclusions they specifically asked to live *inside* the function rather
+than in a comment beside it, because any second implementation would get them
+wrong:
+
+- a **parked** row is approved and counting down — the operator has answered it,
+  so it is not waiting on them;
+- a row returned by a **failed execution** is `pending` *with `decidedBy` still
+  set*, so counting pending naively strands an assignment in "awaiting your
+  approval" for something already answered.
+
+≤100 ids, **rejected over the cap rather than truncated** — a silently short
+answer is a wrong count on a queue that gates every write.
+
+With it, the deep links: **`?assignment=<id>`** lands the queue filtered to what
+one assignment produced (their parameter, chosen over the single-card `?item=`
+because one assignment can produce many proposals), and **`?item=<id>`** for a
+notification landing on one.
+
+**4 · Ordering by consequence.** The queue was `requestedAt` ascending, which is
+the wrong default and the study says why: creation order puts a €2 bid nudge
+above a budget doubling. Now ranked by what a wrong answer costs — irreversible
+first, then high risk, then euro exposure, with age only as the tie-break.
