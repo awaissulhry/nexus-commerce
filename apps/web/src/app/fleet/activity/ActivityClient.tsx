@@ -65,6 +65,7 @@ import {
 import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { hiddenByScope, reconcilePoll, type FacetSnapshot } from './poll-view'
+import { dayKey, dayLabel, hhmm, shortDay } from './day-grouping'
 import { RunDetail } from '../_shared/RunDetail'
 import {
   ago,
@@ -155,13 +156,11 @@ const MARKER: Record<FleetEventKind, { icon: typeof Check; label: string }> = {
   'fleet.halted': { icon: Octagon, label: 'the fleet stopping' },
 }
 
-/** The state as a WORD. A clean run needs no badge — the tick says it. */
-const STATE_WORD: Record<FleetEventOutcome, string | null> = {
-  ok: null,
-  attention: 'needs a look',
-  bad: 'failed',
-  neutral: null,
-}
+/* `STATE_WORD` retired at S4R. It printed "failed" / "needs a look" as a third
+   copy of what the marker already says in SHAPE and in its screen-reader label,
+   in the 11.5px grey that measured 2.95:1 — so it added no signal for a sighted
+   reader and none at all for a screen reader. State is still never carried by
+   colour alone: `MARKER` gives every kind a distinct glyph and a spoken label. */
 
 /**
  * How a collapsed group reads. Only the client knows the count, so this one
@@ -184,26 +183,12 @@ function rollupSentence(first: FleetEvent, n: number): string {
   }
 }
 
-const hhmm = (iso: string) =>
-  new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-
-const dayKey = (iso: string) => new Date(iso).toISOString().slice(0, 10)
-
-function dayLabel(key: string): string {
-  const today = new Date().toISOString().slice(0, 10)
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-  if (key === today) return 'Today'
-  if (key === yesterday) return 'Yesterday'
-  return new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
-}
-
-/** "6 August" — for the scope line, where a weekday adds nothing. */
-const shortDay = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })
+/* `hhmm` / `dayKey` / `dayLabel` / `shortDay` moved to `day-grouping.ts` at S4R.
+   They were a UTC calendar date printed above a local clock — an event at
+   23:30Z filed under the 6th and rendered 01:30, which is the 7th where the
+   reader sits. The fix is arithmetic, so it lives beside a test rather than
+   inside a component: the fleet has never produced an event in the 22:00–24:00
+   UTC window, so no screenshot could ever have shown it. */
 
 /* ── grouping ──────────────────────────────────────────────────────────── */
 
@@ -296,12 +281,38 @@ function RowTitle({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent
   return event.href ? <Link href={event.href}>{event.title}</Link> : <>{event.title}</>
 }
 
+/**
+ * S4R — the row.
+ *
+ * The time LEADS. It was a 33px stub hard against the right edge at x=1634,
+ * which is the one place a reader cannot scan it: in a chronological list the
+ * eye runs DOWN the time column to find a moment, and every log surface built
+ * for that puts the clock in a fixed leading gutter. Tabular numerals so the
+ * column is a column, and a 24-hour clock so no row is eight characters wide.
+ *
+ * The meta line is now at most TWO facts. It was up to five optional fragments
+ * joined by `·` separators measured at **1.60:1** — the least legible element
+ * on the page, repeated on every row. What left it, and why:
+ *
+ *   the state word   the marker already carries it, in SHAPE and in
+ *                    screen-reader text, so a third copy in 11.5px grey bought
+ *                    nothing. It survives as the marker's label.
+ *   the risk tier    appears on approval rows only, and belongs in the drawer
+ *                    where the approval is explained rather than on the row.
+ *   the vintage      a genuine and rare fact (an upserted finding's row date is
+ *                    the FIRST sighting) — moved to the title's tooltip, so it
+ *                    is still reachable and no longer a fourth clause.
+ */
 function EventRow({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent) => void }) {
-  const word = STATE_WORD[event.outcome]
   const vintageDiffers =
     event.dataVintage != null && dayKey(event.dataVintage) !== dayKey(event.at)
+  const cost =
+    event.costUSD != null && event.costUSD > 0 ? `$${event.costUSD.toFixed(4)}` : null
   return (
     <li className="sba-row" id={`e-${event.id}`}>
+      <time className="sba-time" dateTime={event.at} title={new Date(event.at).toLocaleString()}>
+        {hhmm(event.at)}
+      </time>
       <Marker kind={event.kind} outcome={event.outcome} />
       <div className="sba-body">
         <span className="sba-title">
@@ -309,37 +320,21 @@ function EventRow({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent
           <Badges event={event} />
         </span>
         <span className="sba-meta">
-          <span>from {event.source}</span>
-          {event.riskTier ? (
+          <span
+            title={
+              vintageDiffers
+                ? `First seen this day; based on data from ${shortDay(event.dataVintage!)}. A finding is written down once and kept up to date, so it stays listed under the run that first spotted it.`
+                : undefined
+            }
+            className={vintageDiffers ? 'sba-vintage' : undefined}
+          >
+            from {event.source}
+            {vintageDiffers ? ' · first seen' : ''}
+          </span>
+          {cost ? (
             <>
-              <span className="sba-sep">·</span>
-              <span className={`sba-risk r-${event.riskTier}`}>{event.riskTier} risk</span>
-            </>
-          ) : null}
-          {word ? (
-            <>
-              <span className="sba-sep">·</span>
-              <span className={`sba-state o-${event.outcome}`}>
-                {event.outcome === 'attention' ? <AlertTriangle size={9} aria-hidden /> : null}
-                {word}
-              </span>
-            </>
-          ) : null}
-          {event.costUSD != null && event.costUSD > 0 ? (
-            <>
-              <span className="sba-sep">·</span>
-              <span>${event.costUSD.toFixed(4)}</span>
-            </>
-          ) : null}
-          {vintageDiffers ? (
-            <>
-              <span className="sba-sep">·</span>
-              {/* Findings are UPSERTED and have no updatedAt, so the row's date
-                  is the FIRST sighting while its content is the latest. Saying
-                  so is the difference between a record and a guess. */}
-              <span className="sba-vintage">
-                first seen this day · based on data from {shortDay(event.dataVintage!)}
-              </span>
+              <span className="sba-sep" aria-hidden />
+              <span>{cost}</span>
             </>
           ) : null}
         </span>
@@ -347,9 +342,6 @@ function EventRow({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent
           <p className={`sba-detail${event.outcome === 'bad' ? ' bad' : ''}`}>{event.detail}</p>
         ) : null}
       </div>
-      <time className="sba-time" dateTime={event.at} title={new Date(event.at).toLocaleString()}>
-        {hhmm(event.at)}
-      </time>
     </li>
   )
 }
@@ -362,6 +354,9 @@ function RollupRow({ group, onOpen }: { group: Rollup; onOpen: (e: FleetEvent) =
   return (
     <>
       <li className="sba-row">
+        <time className="sba-time" dateTime={first.at}>
+          {hhmm(first.at)}
+        </time>
         <Marker kind={first.kind} outcome={first.outcome} />
         <div className="sba-body">
           <span className="sba-title">
@@ -371,7 +366,7 @@ function RollupRow({ group, onOpen }: { group: Rollup; onOpen: (e: FleetEvent) =
           <span className="sba-meta">
             <span className="sba-count">{n}</span>
             <span>from {first.source}</span>
-            <span className="sba-sep">·</span>
+            <span className="sba-sep" aria-hidden />
             <button
               type="button"
               className="sba-rollupbtn"
@@ -380,11 +375,11 @@ function RollupRow({ group, onOpen }: { group: Rollup; onOpen: (e: FleetEvent) =
             >
               {open ? (
                 <>
-                  <ChevronDown size={11} aria-hidden /> collapse these
+                  <ChevronDown size={12} aria-hidden /> collapse these
                 </>
               ) : (
                 <>
-                  <ChevronRight size={11} aria-hidden /> show all {n}
+                  <ChevronRight size={12} aria-hidden /> show all {n}
                 </>
               )}
             </button>
@@ -393,9 +388,6 @@ function RollupRow({ group, onOpen }: { group: Rollup; onOpen: (e: FleetEvent) =
             <p className={`sba-detail${first.outcome === 'bad' ? ' bad' : ''}`}>{first.detail}</p>
           ) : null}
         </div>
-        <time className="sba-time" dateTime={first.at}>
-          {hhmm(first.at)}
-        </time>
       </li>
       {open ? group.events.map((e) => <EventRow key={e.id} event={e} onOpen={onOpen} />) : null}
     </>
@@ -1780,6 +1772,36 @@ export function ActivityClient() {
     }
   }, [backend, qs])
 
+  /**
+   * S4R — the footer states a number ONLY while paging.
+   *
+   * "Showing 26 of 26" is S1's sentence rewritten in the lowest-contrast text
+   * on the page. When everything is shown it says nothing S1 has not already
+   * said, so it says nothing; while a tail is loaded it holds the one fact S1
+   * cannot know, which is how much of the scope is actually on screen.
+   */
+  const ListFooter = ({ bare, allShownWord }: { bare?: boolean; allShownWord: string }) => (
+    <div className={`sba-foot${bare ? ' bare' : ''}`}>
+      {moreToLoad ? (
+        <>
+          <span className="acr-pg-muted">
+            Showing {events.length} of {shown?.total ?? events.length}
+          </span>
+          <button
+            type="button"
+            className="sba-more"
+            onClick={loadOlder}
+            disabled={loadingOlder}
+          >
+            {loadingOlder ? 'Loading…' : 'Show older'}
+          </button>
+        </>
+      ) : (
+        <span className="acr-pg-muted">{allShownWord}</span>
+      )}
+    </div>
+  )
+
   /* ── the runs grid ───────────────────────────────────────────────────── */
 
   const runColumns: Array<Column<FleetEvent>> = useMemo(
@@ -2427,13 +2449,12 @@ export function ActivityClient() {
           </section>
         ) : grain === 'runs' ? (
           <>
+            {/* S4R — the inner toolbar is GONE. It said "7 runs · newest first"
+                three rows above a footer saying "Showing 7 of 7" and below S1
+                saying "across 7 runs": one fact, three statements, ~500px apart.
+                S3's toolbar above already carries the controls, so the card
+                holds the grid and nothing else. */}
             <div className="h10-ds-gridcard sba-gridcard">
-              <GridToolbar>
-                <span className="sba-gridcount">
-                  {events.length} {events.length === 1 ? 'run' : 'runs'}
-                  {shown && shown.total > events.length ? ` of ${shown.total}` : ''} · newest first
-                </span>
-              </GridToolbar>
               <DataGrid
                 columns={runColumns}
                 rows={events}
@@ -2441,23 +2462,7 @@ export function ActivityClient() {
                 initialSort={{ key: 'when', dir: 'desc' }}
               />
             </div>
-            <div className="sba-foot bare">
-              <span className="acr-pg-muted">
-                Showing {events.length} of {shown?.total ?? events.length}
-              </span>
-              {moreToLoad ? (
-                <button
-                  type="button"
-                  className="sba-more"
-                  onClick={loadOlder}
-                  disabled={loadingOlder}
-                >
-                  {loadingOlder ? 'Loading…' : 'Show older'}
-                </button>
-              ) : (
-                <span className="acr-pg-muted">That is every run on record.</span>
-              )}
-            </div>
+            <ListFooter bare allShownWord="That is every run on record." />
           </>
         ) : (
           <section className="acr-card sba-list">
@@ -2477,23 +2482,7 @@ export function ActivityClient() {
               </div>
             ))}
 
-            <div className="sba-foot">
-              <span className="acr-pg-muted">
-                Showing {events.length} of {shown?.total ?? events.length}
-              </span>
-              {moreToLoad ? (
-                <button
-                  type="button"
-                  className="sba-more"
-                  onClick={loadOlder}
-                  disabled={loadingOlder}
-                >
-                  {loadingOlder ? 'Loading…' : 'Show older'}
-                </button>
-              ) : (
-                <span className="acr-pg-muted">That is the whole history.</span>
-              )}
-            </div>
+            <ListFooter allShownWord="That is the whole history." />
           </section>
         )}
 
