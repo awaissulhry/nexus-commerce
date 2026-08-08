@@ -295,6 +295,11 @@ export function MapCanvas({
       draggable: false,
       selectable: false,
       connectable: false,
+      /* A lane header is a caption, not a thing you can act on. Left
+         focusable it becomes a tab stop that announces nothing useful and
+         sits between the reader and the workers they are trying to reach —
+         confirmed on prod, where `lane-standalone` carried tabindex=0. */
+      focusable: false,
     }))
     /* Tab order follows the pipeline, not the render order React Flow would
        otherwise inherit from an arbitrary array. A keyboard user should walk

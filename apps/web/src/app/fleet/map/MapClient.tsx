@@ -96,7 +96,30 @@ export function MapClient() {
       throw new Error(String(r.status))
     }
     setErr(null)
-    setData((await r.json()) as FleetMapPayload)
+    const next = (await r.json()) as FleetMapPayload
+    /**
+     * Only re-render when something actually changed.
+     *
+     * This is not a micro-optimisation, it is a correctness fix. Every poll
+     * handed React Flow a brand-new node array, which it treats as nodes
+     * needing measurement — so it sets `visibility: hidden` on all of them,
+     * measures, and shows them again. Measured on prod: all eight nodes
+     * reporting `visibility: hidden` while plainly painted on screen, because
+     * the sample landed inside one of those windows.
+     *
+     * For a mouse that is an invisible flicker. For a keyboard user it is
+     * worse: a hidden element cannot hold focus, so every ten seconds their
+     * place in the graph is taken away from them.
+     *
+     * `asOf` changes on every read by definition, so it is excluded from the
+     * comparison — otherwise nothing would ever compare equal and the fix
+     * would do nothing.
+     */
+    setData((prev) => {
+      if (!prev) return next
+      const strip = (p: FleetMapPayload) => JSON.stringify({ ...p, asOf: '' })
+      return strip(prev) === strip(next) ? prev : next
+    })
   }, [backend, windowKey])
 
   const { asOf, refresh } = useVisibilityPoll(load)
