@@ -41,6 +41,16 @@ export function HowWorkflowsWork() {
             them the moment you create one, and nothing shows here before it is real.
           </p>
           <p>
+            <strong>How to read a routine.</strong> Under each name is the chain of{' '}
+            <Term k="step">steps</Term> the routine runs, left to right — usually workers,
+            sometimes deterministic code, sometimes you. A worker that is switched off is
+            still shown, <em>struck through</em>: it gets skipped and costs nothing, and the
+            dials on the Workers page are what decide that. On the right, the bars are the
+            last twelve runs, oldest first — the colour is how each one ended, the height is
+            how long it took next to the longest one shown. Twelve empty slots means it has
+            never run. The chip beside the name is its <Term k="revision">revision</Term>.
+          </p>
+          <p>
             <strong>What the status words mean.</strong> <em>On</em> — the next scheduled run will
             do real work. <em>Idle</em> — the clock ticks, but a worker the routine needs is
             switched off, so it will run and do nothing. <em>Off</em> — the fleet clock is off,

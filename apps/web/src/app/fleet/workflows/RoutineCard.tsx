@@ -23,7 +23,6 @@
 
 import Link from 'next/link'
 import { ArrowRight, Clock, Play, Shield } from 'lucide-react'
-import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import {
   CHIP_CLASS,
   agoTs,
@@ -205,9 +204,12 @@ export function RoutineCard(props: RoutineCardProps) {
         <span className={`wf-glyph k-${status.kind}`} aria-hidden>
           {scheduled ? <Clock size={15} /> : <Play size={15} />}
         </span>
-        <span className="wf-card-name">
-          {builtin?.termKey ? <Term k={builtin.termKey}>{name}</Term> : name}
-        </span>
+        {/* S1.d — no <Term> on the name any more. The whole card is a link
+            now, and a Term is a tabIndex={0} span, so it put a second focus
+            stop inside the link whose Enter key activates the link anyway.
+            The definition it carried is better served by the purpose sentence
+            directly below it and by the chain beside that. */}
+        <span className="wf-card-name">{name}</span>
         <span className="wf-kind" title={KIND_HINT[kind]}>
           {kind === 'builtin' ? 'Built-in' : 'Custom'}
         </span>

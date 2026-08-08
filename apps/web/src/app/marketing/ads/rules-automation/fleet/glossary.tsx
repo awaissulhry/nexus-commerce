@@ -191,6 +191,19 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
     title: 'Target',
     body: 'The one thing an assignment points at — a campaign, a marketplace, or your whole account. It narrows the evidence the worker reads before the worker ever sees it, so it genuinely binds rather than being a hint the worker could ignore. A target can only narrow a worker, never widen it past the limits set on its own page.',
   },
+  // NAF.WF-S1R — two terms, appended as one block. Both were already load-
+  // bearing words on this page and neither had a definition: "step" is used by
+  // the `gate` entry above and by the editor, and "revision" by `draft` and
+  // `publish`. The rebuilt routine list put both on screen — the chain of
+  // steps, and a version chip on every card — so the gap became visible.
+  step: {
+    title: 'Step',
+    body: 'One link in a routine: usually a worker doing its job, sometimes deterministic code (grading, report cards) and sometimes you. The chain on a routine reads left to right, and each step hands what it produced to the next. A worker that is switched off is still shown, struck through — it is skipped, and it costs nothing.',
+  },
+  revision: {
+    title: 'Revision',
+    body: 'One saved version of a routine’s wiring. Revisions are immutable and numbered, every one carries a note saying why, and every run records which revision produced it. A built-in that has never been edited says "as shipped" instead of a number, and going back to that can never fail.',
+  },
 }
 
 export function Term({ k, children }: { k: keyof typeof GLOSSARY & string; children: ReactNode }) {

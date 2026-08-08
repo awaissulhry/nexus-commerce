@@ -43,8 +43,6 @@ export interface BuiltinRoutine {
   mode: 'sweep' | 'council' | 'ask'
   /** Joins GET /agent/fleet/schedule; absent = manual, no clock. */
   scheduleKey?: 'fleet-sweep' | 'fleet-council'
-  /** Glossary key for the routine's name, when one exists. */
-  termKey?: 'sweep' | 'council'
   story: RoutineStory
 }
 
@@ -61,7 +59,6 @@ export const BUILTIN_ROUTINES: BuiltinRoutine[] = [
     touch: 'Findings only — it never touches Amazon.',
     mode: 'sweep',
     scheduleKey: 'fleet-sweep',
-    termKey: 'sweep',
     story: {
       sentence:
         'Every switched-on worker reads fresh evidence and reports findings; code grades them against the proven engines, recomputes each worker’s report card, and the auditor writes your morning brief.',
@@ -92,7 +89,6 @@ export const BUILTIN_ROUTINES: BuiltinRoutine[] = [
     touch: 'Anything that survives the critic queues for your approval — nothing acts on its own.',
     mode: 'council',
     scheduleKey: 'fleet-council',
-    termKey: 'council',
     story: {
       sentence:
         'Workers report, the director compiles one ranked plan, the critic tries to tear it apart, code re-checks every item — its blocks are final — and whatever survives waits for your yes in Approvals.',
