@@ -287,6 +287,10 @@ export function CreateAssignment({
       title="New assignment"
       subtitle="One worker, one thing to look at."
       width={560}
+      /* The Drawer portals to <body>, so it is OUTSIDE `.as-page` and none of
+         this page's overrides reach it. This class is that root — the same
+         lesson as Part 11's `.as-page`, one portal further out. */
+      className="as-drawer"
       footer={
         /**
          * S2.c — the commit bar.
@@ -361,7 +365,7 @@ export function CreateAssignment({
             </ul>
           )}
           {bulkResult.refused.length > 0 && (
-            <div className="as-refusal" style={{ marginTop: 10 }}>
+            <div className="as-refusal as-mt10">
               {bulkResult.refused.map((r) => (
                 <div key={r.target}>
                   <strong>{r.target}</strong> — {r.reason}
@@ -421,7 +425,7 @@ export function CreateAssignment({
               <p className="as-hint">No worker can be assigned right now.</p>
             )}
             {refused.length > 0 && (
-              <p className="as-hint" style={{ marginTop: 10 }}>
+              <p className="as-hint as-mt10">
                 {refused.length} other worker{refused.length === 1 ? '' : 's'} cannot be
                 assigned — most read your whole account every time, so a target
                 would narrow nothing.{' '}
@@ -507,7 +511,7 @@ export function CreateAssignment({
           {kind === 'CAMPAIGN' && <CampaignPicker picked={picked} onChange={setPicked} />}
           {kind === 'PORTFOLIO' && <PortfolioPicker picked={picked} onChange={setPicked} />}
           {kind === 'MARKETPLACE' && (
-            <div className="as-kinds" style={{ marginTop: 10 }}>
+            <div className="as-kinds as-mt10">
               {MARKETPLACES.map((m) => (
                 <button
                   key={m}
@@ -525,7 +529,7 @@ export function CreateAssignment({
           {/* NAF.SB.AS.6 — several targets: ask what they mean, never guess. */}
           {kind && picked.length > 1 && (
             <div className="as-bulk">
-              <span className="as-steplabel" style={{ marginBottom: 8 }}>
+              <span className="as-steplabel as-mb8">
                 You picked {picked.length}. What do you mean?
               </span>
               <div className="as-kinds">
@@ -553,7 +557,7 @@ export function CreateAssignment({
                 Either way nothing runs until you start it.
               </p>
               {picked.length > BULK_CAP && mode === 'each' && (
-                <p className="as-err" style={{ marginTop: 8 }}>
+                <p className="as-err as-mt8">
                   {picked.length} is more than the {BULK_CAP} this can make at
                   once. Remove some, or make one covering all of them.
                 </p>
@@ -719,34 +723,36 @@ function Preflight({
 
   if (!targetReady) {
     return (
-      <div className="as-preflight" style={{ marginTop: 12 }}>
+      <p className="as-preflightline waiting">
         Pick {kind === 'CAMPAIGN' ? 'a campaign' : kind === 'PORTFOLIO' ? 'a portfolio' : 'a marketplace'} and this
         will say exactly what {worker.name} will be allowed to look at.
-      </div>
+      </p>
     )
   }
   if (!pre) {
     return (
-      <div className="as-preflight" style={{ marginTop: 12 }}>
+      <p className="as-preflightline waiting">
         Checking what it will be allowed to look at…
-      </div>
+      </p>
     )
   }
 
   return (
-    <div className="as-preflight" style={{ marginTop: 12 }}>
-      {pre.ok ? <strong>{pre.headline}</strong> : <span className="as-danger">{pre.refusal}</span>}
+    <>
+      <p className={`as-preflightline${pre.ok ? '' : ' bad'}`}>
+        {pre.ok ? pre.headline : pre.refusal}
+      </p>
 
       {pre.fleetHalted && (
-        <p style={{ marginTop: 6 }}>
+        <p className="as-preflightnote">
           The fleet is halted right now, so this would stop before spending anything.
         </p>
       )}
 
       {pre.ok && (
-        <details style={{ marginTop: 7 }}>
-          <summary style={{ cursor: 'pointer' }}>What will it read?</summary>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.65 }}>
+        <details className="as-disclose">
+          <summary>What will it read?</summary>
+          <ul className="as-disclose-list">
             {pre.feeds.map((f) => (
               <li key={f.key}>
                 <strong>{f.label}</strong>
@@ -755,13 +761,13 @@ function Preflight({
             ))}
           </ul>
           {kind && (
-            <p style={{ marginTop: 7, lineHeight: 1.6 }}>
+            <p className="as-disclose-p">
               A narrowed run finds <strong>less</strong> than one over your whole
               account. That is the point of pointing it at something, not a
               fault.
             </p>
           )}
-          <p style={{ marginTop: 7, lineHeight: 1.6 }}>
+          <p className="as-disclose-p">
             It cannot spend more than{' '}
             <strong>${pre.ceilingUSD.toFixed(2)}</strong> today across every run
             of this worker, inside a fleet ceiling of $
@@ -771,8 +777,7 @@ function Preflight({
           {!measured && (
             <button
               type="button"
-              className="acr-pg-sortbtn"
-              style={{ marginTop: 8 }}
+              className="acr-btn as-measurebtn"
               onClick={measure}
               disabled={measuring}
             >
@@ -788,14 +793,14 @@ function Preflight({
 
           {measured && !measured.ok && <p className="as-danger">{measured.error}</p>}
           {measured?.ok && (
-            <div style={{ marginTop: 8 }}>
+            <div className="as-measured">
               <p>
                 <strong>
                   {measured.totalItems} thing{measured.totalItems === 1 ? '' : 's'} to look at
                 </strong>{' '}
                 right now.
               </p>
-              <ul style={{ margin: '4px 0 0', paddingLeft: 18, lineHeight: 1.65 }}>
+              <ul className="as-disclose-list">
                 {measured.feeds.map((f) => (
                   <li key={f.key}>
                     {f.label}: {f.items}
@@ -803,7 +808,7 @@ function Preflight({
                 ))}
               </ul>
               {measured.feeds.some((f) => f.caveats.length > 0) && (
-                <p style={{ marginTop: 6, lineHeight: 1.6 }}>
+                <p className="as-disclose-p">
                   {measured.feeds.flatMap((f) => f.caveats).slice(0, 2).join(' ')}
                 </p>
               )}
@@ -811,7 +816,7 @@ function Preflight({
           )}
         </details>
       )}
-    </div>
+    </>
   )
 }
 

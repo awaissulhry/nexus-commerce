@@ -512,16 +512,58 @@
   text-decoration: underline;
 }
 
-.as-preflight {
-  border: 1px solid #dbe6f5;
+/* ── S2.d · the pre-flight, flattened ─────────────────────────────────────
+   It used to be a panel with the disclosure nested INSIDE it, so reaching
+   "what will it read?" meant drawer → step → panel → details: four levels,
+   where NN/g measures usability falling off after two. The headline is now a
+   line in the form and the disclosure is its sibling. */
+.as-preflightline {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #1f3a63;
   background: #f6faff;
+  border: 1px solid #dbe6f5;
   border-radius: 9px;
   padding: 11px 13px;
-  font-size: 12px;
-  color: #35507a;
-  line-height: 1.6;
 }
-.as-preflight strong { color: #1f3a63; }
+.as-preflightline.waiting { font-weight: 400; color: #35507a; }
+.as-preflightline.bad {
+  color: #7a2430;
+  background: #fdf3f4;
+  border-color: #f3d7db;
+}
+.as-preflightnote {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #7a5a22;
+}
+
+.as-disclose { margin-top: 8px; font-size: 12px; color: #52627a; line-height: 1.6; }
+.as-disclose > summary { cursor: pointer; color: #1f5fd0; }
+.as-disclose-list { margin: 6px 0 0; padding-left: 18px; line-height: 1.65; }
+.as-disclose-p { margin-top: 7px; line-height: 1.6; }
+.as-disclose strong { color: #1f2a37; }
+.as-measurebtn { margin-top: 8px; }
+.as-measured { margin-top: 8px; }
+
+.as-mt8 { margin-top: 8px; }
+.as-mt10 { margin-top: 10px; }
+.as-mb8 { margin-bottom: 8px; }
+
+/* ── S2.d · what the portal put out of reach ──────────────────────────────
+   The Drawer renders into <body>, so `.as-page` never wraps it and every
+   override this page owns missed it. `.as-drawer` is that root.
+   Two DS roles measured below the floor inside it on prod: the drawer
+   subtitle at 3.10:1 and the DateField placeholder at 3.10:1. */
+.as-drawer .h10-ds-drawer-h .st { color: #5b6573; }
+.as-drawer input::placeholder,
+.as-drawer textarea::placeholder { color: #6b7480; }
+/* The worker descriptions were 2.82–2.95:1 — and they are the only text on
+   this screen that tells you which worker to pick. */
+.as-drawer .as-workerbtn .ds { color: #5b6573; }
 
 .as-err {
   font-size: 12px;
