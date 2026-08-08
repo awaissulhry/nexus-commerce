@@ -60,6 +60,16 @@ export function HowWorkflowsWork() {
             reason on the next line.
           </p>
           <p>
+            <strong>Reading a routine&rsquo;s own page.</strong> The pipeline is the routine in
+            stages, left to right: everything in one stage runs at the same time, and the chip
+            above each stage names what arrives from the one before it. Each{' '}
+            <Term k="step">step</Term> says what it is, whether it will run, and what it did on
+            the most recent run — how long it took, what it cost, what it found. A worker that is
+            switched off is struck through and says it was skipped, which costs nothing. Code
+            steps say &ldquo;always runs&rdquo; and carry no timing, because they are part of the
+            job rather than a worker with a run of its own.
+          </p>
+          <p>
             <strong>What a <Term k="trigger">trigger</Term> is.</strong> The thing that starts a
             routine — a clock, or you. Each row says when the next run comes, and if the clock
             fired but launched nothing, the row says that too, so &ldquo;why didn&rsquo;t it

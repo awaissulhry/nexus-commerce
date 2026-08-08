@@ -323,19 +323,31 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
 
   if (missing) {
     return (
-      <div className="acr">
+      <div className="acr wf-page">
         <header className="acr-head">
           <div>
             <h1>{routineKey}</h1>
             <p className="acr-sub">No routine by this name.</p>
           </div>
         </header>
-        <div className="acr-fleet wf-page">
-          <div className="acr-pg-empty">
+        <div className="acr-fleet">
+          {/* S2.d — a dead link used to answer with one sentence and 81% of an
+              empty viewport. The three built-ins are static code truth, so
+              naming them here costs no fetch and turns a dead end into the
+              place you were probably trying to reach. */}
+          <div className="acr-pg-empty wf-notfound">
             <strong>This workflow does not exist.</strong>
-            It may have been renamed, or the link is stale.{' '}
+            It may have been renamed, or the link is stale.
+            <div className="wf-notfound-list">
+              {BUILTIN_ROUTINES.map((r) => (
+                <Link key={r.key} className="wf-notfound-item" href={`/fleet/workflows/${r.key}`}>
+                  <span className="nm">{r.name}</span>
+                  <span className="ds">{r.purpose}</span>
+                </Link>
+              ))}
+            </div>
             <Link className="wf-back" href="/fleet/workflows">
-              <ArrowLeft size={13} /> All workflows
+              <ArrowLeft size={13} /> All workflows, including any you created
             </Link>
           </div>
         </div>
