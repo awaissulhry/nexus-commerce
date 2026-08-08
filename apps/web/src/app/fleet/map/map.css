@@ -249,6 +249,15 @@
 }
 
 .sbm-canvas {
+  /* `flex: 1 1 auto` is not decoration. The canvas used to be a direct grid
+     child, where it stretched for free; M.5 wrapped it in `.sbm-centre` (a
+     flex column, to make room for the Map/List switch) and without a grow
+     factor its height became auto — which is 0, because the React Flow root
+     inside it is absolutely positioned and contributes no layout height. The
+     result was a fully-populated graph clipped to nothing, on BOTH modes.
+     I shipped that and missed it because I verified the list view and not the
+     map. Measured on prod: 0px without this line, 740px with it. */
+  flex: 1 1 auto;
   min-height: 0; /* NOT calc(100vh - x): a mobile bar or a live banner would
                     push a hard height off the bottom of the viewport */
   border: 1px solid #e6ebf1;
