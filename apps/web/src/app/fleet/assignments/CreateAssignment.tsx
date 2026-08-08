@@ -62,6 +62,8 @@ interface CampaignOption {
 }
 
 const MARKETPLACES = ['IT', 'DE', 'FR', 'ES']
+/** Mirrors the server's BULK_CAP; the server refuses over it rather than truncating. */
+const BULK_CAP = 25
 
 export function CreateAssignment({
   onClose,
@@ -87,6 +89,19 @@ export function CreateAssignment({
   const [dueAt, setDueAt] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * NAF.SB.AS.6 — what several targets MEAN.
+   *
+   * The picker has always allowed more than one, and the drawer used to
+   * silently make a single assignment covering them all. Both readings are
+   * legitimate — "look at these three together" is one job, "look at each of
+   * these three" is three — so the operator is asked instead of guessed at.
+   */
+  const [mode, setMode] = useState<'together' | 'each'>('each')
+  const [bulkResult, setBulkResult] = useState<{
+    created: { id: string; target: string }[]
+    refused: { target: string; reason: string }[]
+  } | null>(null)
 
   useEffect(() => {
     void (async () => {
@@ -109,13 +124,43 @@ export function CreateAssignment({
     if (worker && !wantBackTouched) setWantBack(worker.description ?? '')
   }, [worker, wantBackTouched])
 
-  const canSubmit = !!workerKey && (!kind || picked.length > 0) && !saving
+  const overCap = !!kind && mode === 'each' && picked.length > BULK_CAP
+  const canSubmit = !!workerKey && (!kind || picked.length > 0) && !saving && !overCap
 
   const submit = useCallback(async () => {
     if (!workerKey) return
     setSaving(true)
     setError(null)
     try {
+      // Several targets, one per assignment — the AS.6 path.
+      if (kind && picked.length > 1 && mode === 'each') {
+        const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments/bulk`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            charterKey: workerKey,
+            targetKind: kind,
+            targets: picked.map((p) => ({ id: p.id, label: p.label })),
+            wantBack: wantBack.trim() || null,
+            dueAt: dueAt || null,
+          }),
+        })
+        const j = (await res.json()) as {
+          created?: { id: string; target: string }[]
+          refused?: { target: string; reason: string }[]
+          error?: string
+        }
+        if (!res.ok) {
+          setError(j.error ?? `create failed (${res.status})`)
+          return
+        }
+        // Stay open and show what actually happened per row. Closing on a
+        // partial success would hide the refusals.
+        setBulkResult({ created: j.created ?? [], refused: j.refused ?? [] })
+        return
+      }
+
       const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -140,7 +185,25 @@ export function CreateAssignment({
     } finally {
       setSaving(false)
     }
-  }, [workerKey, kind, picked, wantBack, dueAt, onCreated])
+  }, [workerKey, kind, picked, mode, wantBack, dueAt, onCreated])
+
+  const undoBulk = useCallback(async () => {
+    if (!bulkResult?.created.length) return
+    setSaving(true)
+    try {
+      await fetch(`${getBackendUrl()}/api/agent/fleet/assignments/bulk-delete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ids: bulkResult.created.map((c) => c.id) }),
+      })
+      onCreated()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [bulkResult, onCreated])
 
   return (
     <Drawer
@@ -151,9 +214,10 @@ export function CreateAssignment({
       width={560}
       footer={
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="acr-pg-sortbtn" onClick={onClose} disabled={saving}>
-            Cancel
+          <button className="acr-pg-sortbtn" onClick={bulkResult ? onCreated : onClose} disabled={saving}>
+            {bulkResult ? 'Close' : 'Cancel'}
           </button>
+          {!bulkResult && (
           <button
             className="acr-pg-sortbtn"
             onClick={submit}
@@ -165,13 +229,63 @@ export function CreateAssignment({
             }
           >
             {saving ? <Loader2 size={14} className="spin" /> : <Target size={14} />}
-            Create it
+            {kind && picked.length > 1 && mode === 'each'
+              ? `Create ${picked.length}`
+              : 'Create it'}
           </button>
+          )}
         </div>
       }
     >
+      {/* NAF.SB.AS.6 — what actually happened, per row. Shown INSTEAD of the
+          form, because closing on a partial success would hide the refusals. */}
+      {bulkResult && (
+        <div className="as-step">
+          <span className="as-steplabel">
+            {bulkResult.created.length} created
+            {bulkResult.refused.length > 0 && `, ${bulkResult.refused.length} refused`}
+          </span>
+          <p className="as-hint">
+            None of them has run. They will sit in your list until you start
+            them one at a time.
+          </p>
+          {bulkResult.created.length > 0 && (
+            <ul className="as-bulklist">
+              {bulkResult.created.map((c) => (
+                <li key={c.id}>{c.target}</li>
+              ))}
+            </ul>
+          )}
+          {bulkResult.refused.length > 0 && (
+            <div className="as-refusal" style={{ marginTop: 10 }}>
+              {bulkResult.refused.map((r) => (
+                <div key={r.target}>
+                  <strong>{r.target}</strong> — {r.reason}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="as-kinds" style={{ marginTop: 12 }}>
+            <button type="button" className="as-kind" onClick={onCreated}>
+              Done
+            </button>
+            {bulkResult.created.length > 0 && (
+              <button
+                type="button"
+                className="as-kind"
+                disabled={saving}
+                onClick={undoBulk}
+                title="Deletes the ones just created. Possible only because none of them has run."
+              >
+                Undo — delete {bulkResult.created.length}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 1 — the worker */}
-      <div className="as-step">
+      {!bulkResult && <div className="as-step">
         <span className="as-steplabel">1 · Which worker?</span>
         {workers === null ? (
           <p className="as-hint">Loading…</p>
@@ -212,10 +326,10 @@ export function CreateAssignment({
             )}
           </>
         )}
-      </div>
+      </div>}
 
       {/* 2 — the target */}
-      {worker && (
+      {worker && !bulkResult && (
         <div className="as-step">
           <span className="as-steplabel">2 · What should it look at?</span>
           <div className="as-kinds">
@@ -276,12 +390,51 @@ export function CreateAssignment({
             </div>
           )}
 
+          {/* NAF.SB.AS.6 — several targets: ask what they mean, never guess. */}
+          {kind && picked.length > 1 && (
+            <div className="as-bulk">
+              <span className="as-steplabel" style={{ marginBottom: 8 }}>
+                You picked {picked.length}. What do you mean?
+              </span>
+              <div className="as-kinds">
+                <button
+                  type="button"
+                  className="as-kind"
+                  aria-pressed={mode === 'each'}
+                  onClick={() => setMode('each')}
+                >
+                  {picked.length} separate assignments
+                </button>
+                <button
+                  type="button"
+                  className="as-kind"
+                  aria-pressed={mode === 'together'}
+                  onClick={() => setMode('together')}
+                >
+                  One covering all {picked.length}
+                </button>
+              </div>
+              <p className="as-hint">
+                {mode === 'each'
+                  ? `${picked.length} assignments, one per ${kind === 'CAMPAIGN' ? 'campaign' : kind === 'PORTFOLIO' ? 'portfolio' : 'marketplace'}, each started and read on its own.`
+                  : `One assignment that looks at all ${picked.length} together and reports once.`}{' '}
+                Either way nothing runs until you start it.
+              </p>
+              {picked.length > BULK_CAP && mode === 'each' && (
+                <p className="as-err" style={{ marginTop: 8 }}>
+                  {picked.length} is more than the {BULK_CAP} this can make at
+                  once. Remove some, or make one covering all of them.
+                </p>
+              )}
+            </div>
+          )}
+
           <Preflight worker={worker} kind={kind} picked={picked} />
         </div>
       )}
 
       {/* 3 — the brief */}
-      {worker && (
+      {worker && !bulkResult && (
         <div className="as-step">
           <label htmlFor="as-want">3 · What do you want back? (optional)</label>
           <textarea
@@ -303,7 +456,7 @@ export function CreateAssignment({
       )}
 
       {/* 4 — the deadline */}
-      {worker && (
+      {worker && !bulkResult && (
         <div className="as-step">
           <span className="as-steplabel">4 · By when? (optional)</span>
           <DateField

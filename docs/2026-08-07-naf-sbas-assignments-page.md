@@ -1206,6 +1206,44 @@ actually started — which spends real money on a fleet deliberately switched of
 so it is the operator's call, not mine. The mechanism is proven by test and by
 schema, not yet by a live row.
 
+### AS.6 — EXECUTED 2026-08-08, and it resolved an ambiguity the page was shipping
+
+**The inconsistency this found.** The campaign picker has been multi-select
+since AS.1, and the drawer quietly created **one assignment covering all of
+them**. That is a legitimate shape — *"look at these three together"* is one
+job — but so is *"look at each of these three"*, and the operator could not
+tell which they were getting. A page whose premise is *one worker, one thing*
+was silently making a fourth thing.
+
+So AS.6 is not a separate bulk surface: **the drawer asks what several targets
+mean.** Pick more than one and it offers *"N separate assignments"* (default)
+or *"One covering all N"*, with a sentence saying what each will do. That folds
+the study's AS-S6 into the flow it belongs to, and avoids the second entry
+point the boundary analysis warned about.
+
+**Shipped:** `POST /assignments/bulk` (concrete resolved ids, **never a
+filter** — a filter-derived selection is a query, not a set, and its count can
+drift between the preview the operator agreed to and the commit) ·
+`POST /assignments/bulk-delete` · the cap of **25**, stated in the UI and
+**refused server-side rather than truncated** · a results panel showing
+per-row created/refused **instead of** the form, because closing on a partial
+success would hide the refusals · an **Undo** that deletes exactly what was
+just made.
+
+**Every row goes through the same `createAssignment`** as a single one, so it
+inherits the identical refusals. A bulk path with its own validation is a bulk
+path that eventually disagrees with the single one.
+
+**Creating is not starting, and there is deliberately no bulk Start.** Every
+row lands `not_started`. Bulk creation is reversible by deletion; bulk spending
+is not, and making spending easy on a fleet the operator switched off is the
+one thing this page must never do.
+
+**Gates:** app boots with 2369 routes and 0 unmapped (a duplicate route path
+would refuse to boot), 385 API tests, 29 web tests, DS ratchet clean, both apps
+`tsc` clean. **Nothing was spent verifying it** — bulk create writes rows and
+calls no model.
+
 ---
 
 **One deliberate deviation from Part 3.4, stated rather than skipped.** The study

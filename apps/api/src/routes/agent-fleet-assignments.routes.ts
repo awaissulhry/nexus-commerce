@@ -18,6 +18,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import {
   createAssignment,
+  createAssignmentsBulk,
+  deleteAssignmentsBulk,
   deleteAssignment,
   getAssignment,
   listAssignableWorkers,
@@ -168,6 +170,45 @@ const agentFleetAssignmentRoutes: FastifyPluginAsync = async (fastify) => {
     if (!res.ok) return reply.code(400).send({ error: res.error })
     return { id: res.id }
   })
+
+  /**
+   * NAF.SB.AS.6 — one assignment per target, in one pass.
+   *
+   * Takes CONCRETE resolved ids, never a filter: a filter-derived selection is
+   * a query, not a set, and its count can drift between the preview the
+   * operator agreed to and the commit.
+   */
+  fastify.post<{
+    Body: {
+      charterKey?: string
+      targetKind?: 'CAMPAIGN' | 'MARKETPLACE' | 'PORTFOLIO'
+      targets?: { id: string; label?: string }[]
+      wantBack?: string | null
+      dueAt?: string | null
+    }
+  }>('/agent/fleet/assignments/bulk', async (req, reply) => {
+    const b = req.body ?? {}
+    if (!b.charterKey) return reply.code(400).send({ error: 'charterKey is required' })
+    if (!b.targetKind) return reply.code(400).send({ error: 'targetKind is required' })
+    const res = await createAssignmentsBulk({
+      charterKey: b.charterKey,
+      targetKind: b.targetKind,
+      targets: b.targets ?? [],
+      wantBack: b.wantBack ?? null,
+      dueAt: b.dueAt ?? null,
+      createdBy: req.authUser?.email ?? req.authUser?.id ?? null,
+    })
+    if (!res.ok) return reply.code(400).send({ error: res.error })
+    return res.result
+  })
+
+  /** Undo a bulk — only rows that have never run. */
+  fastify.post<{ Body: { ids?: string[] } }>(
+    '/agent/fleet/assignments/bulk-delete',
+    async (req) => {
+      return await deleteAssignmentsBulk(req.body?.ids ?? [])
+    },
+  )
 
   /** Idempotent: an assignment with a run already open returns that run. */
   fastify.post<{ Params: { id: string } }>(

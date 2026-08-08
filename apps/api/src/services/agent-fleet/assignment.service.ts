@@ -582,3 +582,87 @@ export async function listAssignablePortfolios(): Promise<
     }))
     .sort((a, b) => b.campaignCount - a.campaignCount)
 }
+
+/**
+ * NAF.SB.AS.6 — make many at once.
+ *
+ * ONE assignment per target, which is a different thing from one assignment
+ * covering many targets — and the create drawer now asks which the operator
+ * means rather than silently picking one. Both are legitimate: "look at these
+ * three campaigns together" is one job; "look at each of these three" is three.
+ *
+ * Creating is NOT starting. Every row lands `not_started`, so a mis-fired bulk
+ * costs nothing and is undone by deleting rows that have never run. There is
+ * deliberately no bulk Start: bulk creation is reversible, bulk spending is
+ * not, and spending on a fleet the operator switched off is the one thing this
+ * page must never make easy.
+ */
+export const BULK_CAP = 25
+
+export interface BulkTarget {
+  id: string
+  label?: string
+}
+
+export interface BulkResult {
+  created: { id: string; target: string }[]
+  refused: { target: string; reason: string }[]
+}
+
+export async function createAssignmentsBulk(input: {
+  charterKey: string
+  targetKind: TargetKind
+  targets: BulkTarget[]
+  wantBack?: string | null
+  dueAt?: string | null
+  createdBy?: string | null
+}): Promise<{ ok: boolean; error?: string; result?: BulkResult }> {
+  const targets = input.targets.filter((t) => t.id)
+  if (targets.length === 0) return { ok: false, error: 'no targets given' }
+  if (targets.length > BULK_CAP) {
+    // Refused, never truncated: silently creating 25 of 40 is a wrong answer
+    // that looks like a right one.
+    return {
+      ok: false,
+      error: `${targets.length} is more than the ${BULK_CAP} this can make at once. Narrow the selection and repeat.`,
+    }
+  }
+
+  const result: BulkResult = { created: [], refused: [] }
+  for (const t of targets) {
+    const label = t.label || t.id
+    // Every row goes through the SAME create — and therefore the same
+    // refusals — as a single assignment. A bulk path with its own validation
+    // is a bulk path that eventually disagrees with the single one.
+    const one = await createAssignment({
+      charterKey: input.charterKey,
+      targetKind: input.targetKind,
+      targetIds: [t.id],
+      targetLabels: [label],
+      wantBack: input.wantBack ?? null,
+      dueAt: input.dueAt ?? null,
+      createdBy: input.createdBy ?? null,
+    })
+    if (one.ok && one.id) result.created.push({ id: one.id, target: label })
+    else result.refused.push({ target: label, reason: one.error ?? 'refused' })
+  }
+  return { ok: true, result }
+}
+
+/**
+ * Undo a bulk. Only rows that have never run can go — once a run exists the
+ * runs are the record, and `deleteAssignment` refuses individually rather than
+ * this making a blanket exception.
+ */
+export async function deleteAssignmentsBulk(
+  ids: string[],
+): Promise<{ deleted: number; kept: { id: string; reason: string }[] }> {
+  const kept: { id: string; reason: string }[] = []
+  let deleted = 0
+  for (const id of ids.slice(0, BULK_CAP)) {
+    const r = await deleteAssignment(id)
+    if (r.ok) deleted++
+    else kept.push({ id, reason: r.error ?? 'kept' })
+  }
+  return { deleted, kept }
+}
