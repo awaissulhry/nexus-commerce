@@ -2675,3 +2675,372 @@ error.** The three from S2 that mattered most were a count that disagreed with
 the list it produced, a control state announced only to screen readers, and a
 green tick standing in for three different kinds of "I do not know" — none of
 which any compiler, test or `curl` could have seen.
+
+---
+
+# PART 21 — S3 REBUILD: the controls strip
+
+**Status: PHASE 0 SHIPPED (`f44c436af`, prod-verified). The rest is STUDY ONLY
+and needs operator approval.**
+
+Stream tag `SB.ACT.S3R`. Scope: **S3 only** — `.sba-toolbar`, the grain switch,
+the facet chips and their read, the self-test toggle, search, Clear, the export,
+and the URL-sync effect. S4–S7 are later units.
+
+---
+
+## 21.0 — What S3 is FOR, in one sentence
+
+> **Let the operator narrow an unscoped record to the question they actually
+> have — and say, at all times and in words, what has been narrowed away.**
+
+The second clause is the one this section keeps failing. Everything below is
+judged against it.
+
+---
+
+## 21.1 — The design system already ships this, and I did not check
+
+**`apps/web/src/design-system/patterns/FilterBar.tsx` exists**, is exported from
+the patterns index, and is used across `products`, `listings`, `fulfillment`,
+`marketing/reviews` and `bulk-operations`. Its own doc-comment states the intent
+in the first line:
+
+> *"FilterBar — the **ONE** declarative, config-driven filter bar for every grid
+> workspace… so feature pages own *configuration*, never the bar's UI."*
+
+The house rule recorded in memory is **DataGrid + GridToolbar + FilterBar**.
+Activity uses `DataGrid` and `GridToolbar` in the Runs grain and then hand-rolls
+`.sba-toolbar` for the filters. **That was my omission at ACT.3: I did not look.**
+
+What it already provides, against what S3 hand-rolled:
+
+| S3 needs | `FilterBar` has |
+|---|---|
+| worker facet, multi-select, with counts | `kind: 'multiselect'` — and `FilterBarOption.count`, *"rendered muted after the label"* |
+| event-kind facet, same | the same |
+| self-test scope toggle | `kind: 'toggle'` |
+| the §18.7 test-run toggle | a second `kind: 'toggle'` — **no new control class** |
+| Clear, disabled when inactive | `onClear` + `activeCount` |
+| a row above the fields | `presets` |
+| search | **no** — `GridToolbar`'s left slot, per its own doc |
+| export | **no** — `GridToolbar`'s `right` slot, *"e.g. Customise, Export, density"* |
+
+So the DS composition answers the IA question before the research does: **filters
+in a panel, list-scoped actions in the toolbar above the list.** Nothing has to
+be invented; the two DS pieces already draw the line this section is missing.
+
+**One risk, and it is already discharged elsewhere:** DS components on a fleet
+page render correctly because `.fleet-surface` carries the DS light pin, added by
+Workers at W.1 and recorded in the locks doc — *"it is what lets any DS component
+render on a fleet page without drawing dark cards on a light background."* The
+page already imports all four DS stylesheets (S1R kept them for `DataGrid`).
+
+---
+
+## 21.2 — What is on screen today, measured
+
+Live prod, 1728×906, against `#f4f6f9`.
+
+| | Measured |
+|---|---|
+| The strip | `1614 × 86px`, **17 controls in one wrapping row** |
+| Chips | **10**, consuming **1226px of 1614px — 76% of the row** at *six* workers |
+| Font sizes | 11.5px and 12px |
+| `.sba-grainlabel` — the word *Show* | 11.5px, **2.82:1 — fails AA** |
+| The Runs grain | toolbar **86px → 48px**, **5 chips vanish**, the list jumps **38px** up, unexplained |
+
+Three things follow.
+
+**1 · Five control classes share one row with no grouping.** A *lens* (grain), a
+*scope* decision (self-test), two *facets* (worker, kind), *free text*, and an
+*action* (export). §18.7 adds a second scope toggle. They differ in kind, not
+just in value, and the row says so nowhere.
+
+**2 · The chip row does not scale, and the number is not a guess.** 1226px at 10
+chips. The Workers roster is designed for 25+ workers (W.8 instances); at 25 the
+worker facet alone is ~2,700px — **two to three wrapped rows of chips before any
+kind chip is drawn.**
+
+**3 · A fifth WCAG failure** — `.sba-grainlabel` at 2.82:1, in the 11.5px size
+S1 and S2 both had to remove. That is now four sections in a row where the same
+two mistakes appear, which is an argument for the DS component rather than for
+more vigilance.
+
+---
+
+## 21.3 — What the industry does
+
+### A · Filters and facets are different things, and mixing them is the defect
+
+[NN/g][nng-ff] draws the line precisely: a **filter** "analyse[s] a given set of
+content to exclude items that don't meet certain criteria"; **faceted
+navigation** "provides multiple filters, one for each different aspect of the
+content" and is "composed of multiple filters that comprehensively describe a
+set of content". Its warning is the one S3 has walked into: facets' "extra power"
+adds complexity, and "a simple filter can often be easier to understand and
+faster to use."
+
+Applied to us: *worker* and *what happened* are **facets** — aspects of an event.
+*Hide the self-test* is **not**. It does not describe an aspect of the thing you
+are looking at; it decides **which population is on the table at all**. So does
+*hide test runs*. Putting a population decision in the same row, in the same
+visual weight, as an aspect filter is the central IA error, and it is why a
+sixth control felt like it had nowhere to go.
+
+**Steal:** the distinction, made visible. **Reject:** NN/g's e-commerce
+left-rail default — we have two facets, not twelve.
+
+### B · The correct facet-count semantics is neither of our two options
+
+This is the genuinely contested question, and the search literature settles it.
+[Solr][solr] and [Elasticsearch][es] converge on the rule:
+
+> **Within one facet, values act as an OR; across facets, they act as an AND.**
+
+and on the counting consequence:
+
+> *"By default, Elasticsearch executes its aggregations on the result set, which
+> means if you select France, the other country filters will have a count of
+> 0."*
+
+That is precisely the bug this page shipped and fixed (Part 16, defect 2: pick
+one worker and every other worker's chip vanishes). Their answer is not our
+answer either. The correct semantics is **"each facet counts under every filter
+EXCEPT its own"** — Solr does it by tagging and excluding, Elasticsearch by
+`post_filter`, which "applies filters AFTER aggregations are calculated".
+
+We use pure base scope: counts respond to the scope toggles and to nothing else.
+**Recommendation: keep base scope for now, and record the refinement with a
+trigger.** At six workers, "except-own" buys one thing — it stops a chip
+advertising 8 events that yields 0 rows once combined with another facet — and
+costs one extra read per facet. At 25 workers that dead end becomes common, and
+that is the moment to pay for it. Naming the end state matters more than
+building it today.
+
+**Steal:** OR-within / AND-across as the stated semantics, and the vocabulary to
+explain it. **Reject:** implementing except-own now.
+
+### C · How the good products show what is applied
+
+[Linear][linear] puts filters behind a button (`F`), renders them as an editable
+formula whose operators change with the selection — *"is either of"* when several
+values are chosen — and, decisively for us, *"the applied filters are also
+reflected in the browser URL. You can copy the browser address to share the
+filtered view."* It is explicit that only main filters go in the URL; view
+options do not.
+
+[Sentry][sentry-search] keeps **page filters** (project, environment, date) as
+fixed controls *above* a `key:value` query bar — two systems, deliberately
+separate, one for scope and one for expression.
+
+The e-commerce convention is unanimous and simpler: show active filters as
+**tags or chips with a remove ✕**, plus a **Clear all**.
+
+**Steal:** all three — filters behind a control, an always-visible applied
+summary with removable pills, everything in the URL. The pill is also where
+OR-within/AND-across can be *said* rather than documented: `Worker: Bid tuner or
+Plan critic ✕` beside `What happened: Run failed ✕` communicates the semantics
+with no formula editor. **Reject:** Linear's nested AND/OR groups — five
+populated kinds and six workers do not need a query language, and Part 8 already
+rejected a DSL on this data.
+
+### D · When a chip row stops working
+
+[Algolia][algolia] recommends a facet **dropdown** "when screen space is
+limited", notes it "increases facet visibility… while simplifying the screen",
+and shows the applied state on the trigger itself — a refined-state class, or
+the label rewritten to name the selection, or a count of active refinements.
+
+[Datadog][dd-facets] is the many-facets case: a left panel, facets "organized
+into meaningful themes", each qualitative facet showing "a top list of unique
+values, and a count of logs matching each of them" — plus the admission that the
+list becomes unwieldy, answered by letting users **hide facets they do not need**
+while keeping them findable through a facet search box.
+
+**Steal:** the dropdown-with-applied-state-on-the-trigger, which is exactly what
+the DS `MultiSelect` inside `FilterBar` is. **Reject:** a left rail and
+per-facet hiding — two facets do not need either.
+
+### E · What they leave out of the strip
+
+- **Sentry** puts no export in the filter row.
+- **Linear** puts no counts in the URL and no view options either.
+- **Datadog** puts no free-text search inside the facet panel; the query bar is
+  its own thing beside it.
+- **None** of them puts a lens/mode switch inside the filter panel — modes sit
+  with the content they reshape.
+
+That last one decides where the grain switch goes.
+
+---
+
+## 21.4 — The proposal
+
+### 21.4.1 Four classes, three places
+
+```
+  S1  header · scope sentence · freshness            ← says what is on the table
+  S2  what needs a look                               ← says whether to act
+ ┌──────────────────────────────────────────────────────────────────────────┐
+ │ Filters                                                   Hide ▾         │  ← DS FilterBar
+ │  Counting        [•] the self-test   [ ] test runs                       │     (collapsed by
+ │  Worker          [ Bid tuner, Plan critic        ▾ ]                     │      default)
+ │  What happened   [ All                           ▾ ]                     │
+ │                                              Clear                       │
+ └──────────────────────────────────────────────────────────────────────────┘
+  Worker: Bid tuner or Plan critic ✕   ·   Filtered from 33   ·   Clear all   ← applied pills
+ ┌──────────────────────────────────────────────────────────────────────────┐
+ │ [Everything|Runs only]  [🔎 search…]              [Download 9 rows (CSV)] │  ← DS GridToolbar
+ ├──────────────────────────────────────────────────────────────────────────┤
+ │ the list (S4)                                                            │
+ └──────────────────────────────────────────────────────────────────────────┘
+```
+
+| Class | Where | Why |
+|---|---|---|
+| **Scope** — self-test, test runs | a `Counting` group at the TOP of the FilterBar panel | it decides the population; it is not an aspect of a row. Grouped and labelled once, so §18.7's toggle is an entry, not a sixth control |
+| **Facets** — worker, what happened | `multiselect` dimensions with counts | OR within, AND across. Scales to 25 workers because a dropdown does |
+| **Applied state** | a pill row OUTSIDE the panel, always visible | the panel collapses; what is applied must not. NN/g's rule, Linear's model |
+| **Lens** — grain | `GridToolbar` left | a mode belongs with the content it reshapes, not in the filter panel |
+| **Free text** | `GridToolbar` left, after the grain | Sentry's separation: scope controls and expression are different systems |
+| **Action** — export | `GridToolbar` right | the DS's own documented slot |
+
+**The panel is collapsed by default** (`defaultOpen={false}`). Activity's primary
+act is reading, not filtering — Sentry and Linear both put filters behind a
+control — and the applied pills mean a collapsed panel never hides *what is
+applied*, only *the controls for changing it*.
+
+### 21.4.2 Type, colour, and what does not change
+
+Everything comes from DS tokens, which removes the class of defect that has now
+appeared in four consecutive sections. The one bespoke piece is the applied-pill
+row: **13px**, S1's ladder, no new size. `.sba-grainlabel`'s 11.5px / 2.82:1 dies
+with the hand-rolled strip.
+
+**Not changing:** the URL contract (every filter stays a link — DT.5); the
+export walking every page before writing and prefix-guarding `= + - @`; `actor`
+failing **closed** on an unknown key while `kind`/`outcome` fall back to no
+filter (deliberate, tested, asymmetric — §16); base-scope facet semantics
+(§21.3B); and the Phase 0 pairing.
+
+---
+
+## 21.5 — Where §18.7's test-run toggle lands, and the arithmetic it changes
+
+It becomes the **second `toggle` in the `Counting` group**. That is the whole
+point of grouping scope: a new population costs an entry, not a control class.
+
+**The numbers, verified** (`_sba-s2-band.mts`, `_sba-closeout.mts`):
+
+| | Today | With test runs hidden |
+|---|---|---|
+| S1 scope line | 33 events across 14 runs | **26 events across 7 runs** |
+| Hidden | 86 (self-test) | **93** — 86 self-test + **7** test runs |
+| Arithmetic | 33 + 86 = 119 ✓ | 26 + 93 = 119 ✓ |
+| S2's tally | 2 failures | **2 failures — unchanged** |
+
+**Two consequences, both in scope for the build because leaving them wrong would
+ship a known lie:**
+
+1. **S1's hidden clause must name two populations.** *"86 more from the
+   self-test are hidden"* becomes *"93 more are hidden — 86 from the self-test
+   and 7 test runs"*, with the way back. The clause is already derived from
+   `hiddenByScope`, so it generalises rather than being rewritten.
+2. **S2 is genuinely unaffected**, and that is a measured fact rather than an
+   assumption: **0 of the 26 not-ok runs have ever been a test run**, and both
+   current failures are `mode: 'ask'`. §19.5's rule — the band's scope follows
+   the page — holds without changing a number. S2's hidden-note, which today
+   names the self-test, generalises the same way S1's does.
+
+**Default state:** test runs **hidden**, matching the operator's §18.7 approval
+and the accepted consequence that the honest headline is the smaller one.
+
+---
+
+## 21.6 — Every state, designed now
+
+| # | State | What renders |
+|---|---|---|
+| 1 | **Nothing selected** | panel collapsed, header `Filters`; **no pill row**; toolbar shows grain + search + export. The quiet default |
+| 2 | **One facet value** | one pill `Worker: Bid tuner ✕` · `Filtered from 33` · `Clear all` |
+| 3 | **Several, across both facets** | one pill per facet, values joined by **or** inside it — `Worker: Bid tuner or Plan critic ✕` `What happened: Run failed ✕`. Separate pills read as AND. The semantics is stated by the punctuation, not by a legend |
+| 4 | **Scope toggles changed** | a scope pill in a distinct treatment — `Counting: + the self-test ✕` — because it *widens* rather than narrows. S1's sentence remains the primary narration |
+| 5 | **Runs grain** | the kind facet **stays**, showing only the three run kinds. Today it vanishes and the list jumps 38px for no stated reason; the facet is still meaningful in that grain, so the fix removes the jump *and* adds capability |
+| 6 | **A filter matching nothing** | S1 already says *"Nothing matches what you asked for, out of 33."* The pill row stays, so the operator can see and remove the cause. **Never a dead end** |
+| 7 | **The facet read failed** | counts are omitted from the options rather than shown as 0; the panel header says *"Counts unavailable — the filters still work."* A 0 that means "we could not ask" is the S2 mistake repeated |
+| 8 | **25 workers** | the `MultiSelect` scrolls and is searchable; the trigger names the selection or its count. No wrapped chip rows. This is the state that decides the whole design |
+
+---
+
+## 21.7 — The boundary
+
+**Against S2 above.** S2 writes exactly one filter value through one toggle and
+reads the filter state. It keeps doing so. When S2's toggle is on, S3's pill row
+shows `What happened: Run failed ✕` — the same fact, in the place that owns
+"what is applied", and removing it there clears S2's toggle. One state, two
+readouts, never two states.
+
+**Against S4 below.** S3 does not own the list, the rollups, the day headers or
+the "Show older" pager. It owns what the list is *asked for*. The row count in
+the footer stays S4's; **S3 adds no count of its own** — the `GridToolbar`
+`count` slot is deliberately left empty, because S1 already states the scope and
+a third number in the same viewport is how this page breaks.
+
+**Against everything else.** No date range (Part 8, still rejected on the data).
+No query DSL (Part 8). No saved views (DT.7, deferred — needs storage that does
+not exist). No per-facet hiding.
+
+---
+
+## 21.8 — Phase 0, shipped ahead of the design work
+
+`f44c436af`, prod-verified. §18.9 is closed: the facet chips and the scope line
+are now read in one tick and adopted in one moment, through a pure
+`reconcilePoll` whose only outcomes are *adopt this pair* and *hold this pair* —
+neither expressible on one half.
+
+The second failure direction is the one worth recording, because fixing only the
+cadence would have created it: arrivals are **held** behind the "N new events"
+button, so facets that refreshed eagerly would have counted rows the list was not
+showing. Measured with a new `STUB_DRIFT` mode that alternates the stream 33/32:
+**seven samples across both states, zero divergences**; while an event waited
+behind the banner the chips stayed at 32 with the list; pressing it moved both to
+33 in the same instant. On prod: scope 33 = chips 33, five worker chips intact,
+and **4 base-scope reads in the first ten seconds** where there had been one for
+the lifetime of the page.
+
+Base-scope semantics were deliberately **not** touched — the fix changed how
+often the facets are read, never what they ask for. Re-verified on prod: after
+selecting one worker all five chips remain and a second can still be added.
+
+11 vitest cases in `facets.vitest.test.ts` assert the pairing, including that a
+failed facet read travels as a pair rather than silently reusing the previous
+tick's counts.
+
+---
+
+## 21.9 — Sources
+
+[nng-ff]: https://www.nngroup.com/articles/filters-vs-facets/
+[solr]: https://solr.apache.org/guide/solr/latest/query-guide/faceting.html
+[es]: https://madewithlove.com/blog/faceted-search-using-elasticsearch/
+[linear]: https://linear.app/docs/filters
+[sentry-search]: https://docs.sentry.io/concepts/search/
+[algolia]: https://www.algolia.com/doc/guides/building-search-ui/ui-and-ux-patterns/facet-dropdown/js
+[dd-facets]: https://docs.datadoghq.com/logs/explorer/facets/
+
+**Filters vs facets** · [NN/g — Filters vs. Facets: Definitions][nng-ff]
+
+**Count semantics** · [Apache Solr — Faceting][solr] ·
+[Faceted search with Elasticsearch — the post_filter problem][es]
+
+**Applied state, URL, saved views** · [Linear — Filters][linear] ·
+[Sentry — Search and page filters][sentry-search]
+
+**When chips stop working** · [Algolia — facet dropdown pattern][algolia] ·
+[Datadog — the log facet panel][dd-facets]
+
+**In-repo** · `apps/web/src/design-system/patterns/FilterBar.tsx` ·
+`GridToolbar.tsx` · `FilterPanel.tsx` · live prod measurement at 1728×906,
+2026-08-08
