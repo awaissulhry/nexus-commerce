@@ -860,13 +860,31 @@
   max-width: 42ch;
   line-height: 1.5;
 }
+/* S3.b — a child must look like a child. The sub-row's name used to start at
+   exactly the group's x (137.0 both), so the only cue that these rows belonged
+   to the one above was a background step of roughly 1% luminance. */
 .wf-subrow td {
   background: #fbfcfe;
   border-bottom: 1px solid #eef1f5;
   font-size: 12px;
   color: #5a6675;
 }
-.wf-subname { font-weight: 600; color: #34404f; }
+.wf-subrow td:first-child {
+  padding-left: 28px;
+  position: relative;
+}
+.wf-subrow td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #dbe3ec;
+  border-radius: 1px;
+}
+.wf-subrow:last-of-type td:first-child::before { bottom: 50%; }
+.wf-subname { font-weight: 650; color: #34404f; }
 .wf-suboutcome {
   font-weight: 650;
   font-size: 11.5px;
