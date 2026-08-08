@@ -435,9 +435,15 @@
 
 /* ── the list ─────────────────────────────────────────────────────────── */
 
+/* S4R §22.3.3 — both grains wear the DS grid card. The Everything grain was
+   `.acr-card` (hard-coded #dfe5ec / 9px radius) while the Runs grain was
+   `.h10-ds-gridcard` (DS tokens): same data, same page, two different cards.
+   The empty states live inside it, so they supply their own padding. */
 .sba-list {
   padding: 0;
-  overflow: hidden;
+}
+.sba-list .acr-pg-empty {
+  padding: 22px 16px;
 }
 
 .sba-dayhead {

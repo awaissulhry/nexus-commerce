@@ -2395,14 +2395,14 @@ export function ActivityClient() {
 
         {/* ── the list ─────────────────────────────────────────────────────── */}
         {loading && !shown ? (
-          <section className="acr-card sba-list">
+          <section className="h10-ds-gridcard sba-list">
             <div className="acr-pg-empty">
               <strong>Reading the fleet’s history…</strong>
               Every run, every finding and every decision, newest first.
             </div>
           </section>
         ) : events.length === 0 ? (
-          <section className="acr-card sba-list">
+          <section className="h10-ds-gridcard sba-list">
             {anyNarrowing ? (
               /* Filters hid everything. Never a dead end — offer the way back. */
               <div className="acr-pg-empty">
@@ -2465,7 +2465,7 @@ export function ActivityClient() {
             <ListFooter bare allShownWord="That is every run on record." />
           </>
         ) : (
-          <section className="acr-card sba-list">
+          <section className="h10-ds-gridcard sba-list">
             {days.map((d) => (
               <div className="sba-day" key={d.key}>
                 <h3 className="sba-dayhead">
