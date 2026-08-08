@@ -565,6 +565,25 @@
    this screen that tells you which worker to pick. */
 .as-drawer .as-workerbtn .ds { color: #5b6573; }
 
+/* ⚠ A FLEET-WIDE DEFECT, fixed here only, and I introduced this instance.
+   S2.c gave the primary action the shared `.acr-btn.go` so it reads as the
+   primary action — and that class is **white on #1a9d6a = 3.46:1**, which the
+   Workflows stream measured independently and left alone on the grounds that a
+   different green on one page trades an accessibility defect for an
+   inconsistency defect.
+
+   Their reasoning is right about forking a palette and wrong about the trade
+   here: this is the button that commits the operator's work, #15804f is the
+   same green two steps darker, and it measures 4.96:1. The inconsistency is
+   invisible unless two fleet pages are side by side; the defect is not.
+
+   **This is a page-local instance of a shared problem** — same shape as the
+   `fleet-pages.css` contrast overrides in Part 11 — and the central fix in
+   `control-room.css:53` is recommended and recorded in the locks doc rather
+   than taken here. Third independent measurement of the same value. */
+.as-drawer .acr-btn.go { background: #15804f; }
+.as-drawer .acr-btn.go:hover:not(:disabled) { background: #116841; }
+
 .as-err {
   font-size: 12px;
   color: #a11d2b;
