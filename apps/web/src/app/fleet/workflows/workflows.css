@@ -797,12 +797,14 @@
    carries a word, so no outlier sizes anything. */
 .wf-runs { table-layout: fixed; width: 100%; }
 .wf-runs td { vertical-align: top; }
-.wf-runs col.wf-c-when { width: 130px; }
-.wf-runs col.wf-c-prov { width: 210px; }
-.wf-runs col.wf-c-out  { width: auto; }
-.wf-runs col.wf-c-num  { width: 118px; }
-.wf-runs col.wf-c-num  { width: 120px; }
-.wf-runs col.wf-c-exp  { width: 150px; }
+/* Percentages that sum to 100, so no column absorbs the slack. With
+   `width: auto` on the outcome column it took 722px — 45.9% of the table — to
+   hold a status word and one or two worker pills. */
+.wf-runs col.wf-c-when { width: 9%; }
+.wf-runs col.wf-c-prov { width: 14%; }
+.wf-runs col.wf-c-out  { width: 34%; }
+.wf-runs col.wf-c-num  { width: 9%; }
+.wf-runs col.wf-c-exp  { width: 16%; }
 
 .wf-outcell { display: inline-flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 
@@ -839,11 +841,15 @@
 /* The explanation gets its own line, so a three-line sentence stops setting
    the width of a column twelve rows deep. */
 .wf-whyrow td { border-bottom: 1px solid #eef1f5; padding-top: 0; }
+/* px, not ch: `92ch` computed to 336px here — about 3.65px per character — so
+   the honesty sentence rendered on three lines inside a 1442px cell, at 23% of
+   the width available to it. A `ch` is the advance of "0" in the *resolved*
+   font, and it is not a safe proxy for a measure when the font is not certain. */
 .wf-whytext {
   display: inline-block;
   font-size: 12px;
   line-height: 1.5;
-  max-width: 92ch;
+  max-width: 660px;
 }
 
 /* The worker count is the affordance's label, not a column that reads "1"
