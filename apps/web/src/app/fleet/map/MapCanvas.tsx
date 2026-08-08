@@ -50,6 +50,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { statusOf, type MapEdge, type MapNode } from './lib'
+import type { Overlay } from './overlays'
 
 const COL_W = 320
 const ROW_H = 116
@@ -70,6 +71,7 @@ interface WorkerNodeData {
   diagnostic: boolean
   dimmed: boolean
   selected: boolean
+  overlayClass: string
   [key: string]: unknown
 }
 
@@ -80,6 +82,11 @@ function WorkerNode({ data }: NodeProps) {
       className={[
         'sbm-node',
         `tone-${d.tone}`,
+        /* The overlay owns the ring. Status keeps its glyph and its word, so
+           switching to "what it cost" never costs the reader the ability to
+           see what a worker IS — colour is one channel of three, never the
+           carrier. */
+        d.overlayClass,
         d.neverRun ? 'is-neverrun' : '',
         d.dimmed ? 'is-dimmed' : '',
         d.selected ? 'is-selected' : '',
@@ -149,6 +156,7 @@ export function MapCanvas({
   nodes,
   edges,
   windowLabel,
+  overlay,
   dimmedKeys,
   selectedKey,
   selectedEdgeId,
@@ -158,6 +166,7 @@ export function MapCanvas({
   nodes: MapNode[]
   edges: MapEdge[]
   windowLabel: string
+  overlay: Overlay
   dimmedKeys: Set<string>
   selectedKey: string | null
   selectedEdgeId: string | null
@@ -245,13 +254,14 @@ export function MapCanvas({
           diagnostic: n.diagnostic,
           dimmed: dimmedKeys.has(n.key),
           selected: selectedKey === n.key,
+          overlayClass: overlay.bucketOf(n).className,
         } satisfies WorkerNodeData,
         draggable: false,
         connectable: false,
       })
     }
     return out
-  }, [nodes, positions, dimmedKeys, selectedKey])
+  }, [nodes, positions, dimmedKeys, selectedKey, overlay])
 
   const flowEdges: Edge[] = useMemo(
     () =>

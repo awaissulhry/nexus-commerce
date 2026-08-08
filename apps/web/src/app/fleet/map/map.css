@@ -218,14 +218,22 @@
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: 216px minmax(0, 1fr) 340px;
   gap: 12px;
+}
+@media (max-width: 1400px) {
+  .sbm-body {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .sbm-rail {
+    display: none;
+  }
 }
 @media (max-width: 1100px) {
   .sbm-body {
     grid-template-columns: minmax(0, 1fr);
   }
-  .sbm-rail {
+  .sbm-orail {
     display: none;
   }
 }
@@ -447,6 +455,160 @@
   stroke-dasharray: 4 4;
   stroke: #cbd5e0;
 }
+
+/* ── M4 · the overlay rail, and the tints it owns ──────────────────────── */
+
+.sbm-orail {
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 9px;
+  padding: 10px;
+}
+.sbm-orail-sec + .sbm-orail-sec {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f6;
+}
+.sbm-orail h3 {
+  margin: 0 0 7px;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa5b3;
+}
+.sbm-seg.vertical {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.sbm-seg.vertical button + button {
+  border-left: 0;
+  border-top: 1px solid #e6ebf1;
+}
+.sbm-seg.vertical button {
+  text-align: left;
+  padding: 6px 9px;
+}
+.sbm-orail-q {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #7d879a;
+}
+.sbm-orail-foot {
+  margin: 9px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #9aa5b3;
+}
+
+.sbm-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sbm-legend li {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  padding: 5px 0;
+}
+.sbm-legend .txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sbm-legend .lab {
+  font-size: 11px;
+  color: #364152;
+  line-height: 1.35;
+}
+.sbm-legend .note {
+  font-size: 10px;
+  color: #9aa5b3;
+  line-height: 1.4;
+}
+.sbm-swatch {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
+  border-radius: 3px;
+  background: #c3ccd8;
+  border: 1px solid rgba(28, 37, 48, 0.08);
+}
+
+.sbm-orail-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.sbm-orail-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #4a5666;
+  cursor: pointer;
+}
+
+/*
+ * The overlay tints. ONE class per bucket, used by both the legend swatch and
+ * the node ring, so a colour changed here changes both — the legend cannot
+ * drift from the graph because they are not two sources.
+ *
+ * `ov-nodata` is the hatch, and it is the point of the whole set: a worker
+ * with nothing to measure is not the bottom of the scale. An edge with no
+ * traffic is not a fast edge; a worker that never ran is not a cheap worker.
+ */
+.sbm-swatch.ov-nodata,
+.sbm-node.ov-nodata {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #eef2f6,
+    #eef2f6 3px,
+    #ffffff 3px,
+    #ffffff 6px
+  );
+}
+.sbm-node.ov-nodata {
+  border-left-color: #c3ccd8;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(200, 210, 222, 0.16),
+    rgba(200, 210, 222, 0.16) 4px,
+    #ffffff 4px,
+    #ffffff 8px
+  );
+}
+
+.sbm-swatch.ov-off { background: #b9c2ce; }
+.sbm-swatch.ov-observe { background: #6b8fc4; }
+.sbm-swatch.ov-propose { background: #b7791f; }
+.sbm-swatch.ov-auto { background: #2f855a; }
+.sbm-swatch.ov-good { background: #2f855a; }
+.sbm-swatch.ov-warn { background: #b7791f; }
+.sbm-swatch.ov-bad { background: #c53030; }
+.sbm-swatch.ov-cost0 { background: #dfe6ee; }
+.sbm-swatch.ov-cost1 { background: #b7cbe4; }
+.sbm-swatch.ov-cost2 { background: #6b8fc4; }
+.sbm-swatch.ov-cost3 { background: #2f5d94; }
+
+.sbm-node.ov-off { border-left-color: #b9c2ce; }
+.sbm-node.ov-observe { border-left-color: #6b8fc4; }
+.sbm-node.ov-propose { border-left-color: #b7791f; }
+.sbm-node.ov-auto { border-left-color: #2f855a; }
+.sbm-node.ov-good { border-left-color: #2f855a; }
+.sbm-node.ov-warn { border-left-color: #b7791f; }
+.sbm-node.ov-bad { border-left-color: #c53030; }
+.sbm-node.ov-cost0 { border-left-color: #dfe6ee; }
+.sbm-node.ov-cost1 { border-left-color: #b7cbe4; }
+.sbm-node.ov-cost2 { border-left-color: #6b8fc4; }
+.sbm-node.ov-cost3 { border-left-color: #2f5d94; }
 
 /* ── M3 · the inspector rail ───────────────────────────────────────────── */
 

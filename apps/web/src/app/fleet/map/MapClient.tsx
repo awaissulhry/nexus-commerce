@@ -21,6 +21,8 @@ import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
 import { InspectorRail } from './InspectorRail'
+import { OverlayRail } from './OverlayRail'
+import { overlayById } from './overlays'
 import {
   visibleCensus,
   filterSummary,
@@ -46,6 +48,9 @@ export function MapClient() {
    *  separate selection states would let the rail show a worker while the
    *  canvas highlights an edge. */
   const [selection, setSelection] = useState<{ kind: 'worker' | 'edge'; id: string } | null>(null)
+  const [overlayId, setOverlayId] = useState('autonomy')
+  const [tierFilter, setTierFilter] = useState<string | null>(null)
+  const [hideDiagnostic, setHideDiagnostic] = useState(false)
 
   const load = useCallback(async () => {
     const r = await fetch(`${backend}/api/agent/fleet/map?window=${windowKey}`, {
@@ -68,12 +73,18 @@ export function MapClient() {
   /* Filtering DIMS; it never removes and never re-lays-out. A node that jumps
      position when you press a chip destroys the spatial memory that is the
      only reason a map beats a list. */
+  const overlay = useMemo(() => overlayById(overlayId), [overlayId])
+
   const dimmed = useMemo(() => {
-    if (!activeChip) return new Set<string>()
-    const chip = CHIPS.find((c) => c.id === activeChip)
-    if (!chip) return new Set<string>()
-    return new Set(nodes.filter((n) => !chip.matches(n)).map((n) => n.key))
-  }, [activeChip, nodes])
+    const out = new Set<string>()
+    const chip = activeChip ? CHIPS.find((c) => c.id === activeChip) : null
+    for (const n of nodes) {
+      if (chip && !chip.matches(n)) out.add(n.key)
+      if (tierFilter && n.tier !== tierFilter) out.add(n.key)
+      if (hideDiagnostic && n.diagnostic) out.add(n.key)
+    }
+    return out
+  }, [activeChip, nodes, tierFilter, hideDiagnostic])
 
   const windowLabel = WINDOWS.find((w) => w.key === windowKey)?.label ?? windowKey
 
@@ -237,10 +248,20 @@ export function MapClient() {
         </div>
       ) : (
         <div className="sbm-body">
+          <OverlayRail
+            overlay={overlay}
+            onOverlay={setOverlayId}
+            nodes={nodes}
+            tierFilter={tierFilter}
+            onTierFilter={setTierFilter}
+            hideDiagnostic={hideDiagnostic}
+            onHideDiagnostic={setHideDiagnostic}
+          />
           <MapCanvas
             nodes={nodes}
             edges={data.edges}
             windowLabel={windowLabel}
+            overlay={overlay}
             dimmedKeys={dimmed}
             selectedKey={selection?.kind === 'worker' ? selection.id : null}
             selectedEdgeId={selection?.kind === 'edge' ? selection.id : null}
