@@ -2671,6 +2671,49 @@ first:
 So SC 1.4.13's *Dismissible* is now proven by a real key press, not a synthetic
 event, and the drawer's Esc is proven rather than inferred from the DS.
 
+### Reconciling S1R against the ORIGINAL AQ-S1 spec — two items, and one I glossed
+
+Part 12 scoped itself to the *presentation* of section 1 and never checked
+itself against AQ-S1's own contents list in Part 4. Doing that now, because a
+spec and a build that disagree silently are the exact class this document keeps
+finding in other people's work.
+
+| Part 4 said S1 contains | Shipped |
+|---|---|
+| `FleetPageShell` title and subtitle | ✅ S1.a |
+| A persistent two-line promise | ✅ as the page description — the operator approved the departure from "does not scroll away" (§12.9) |
+| The "How approvals work" drawer answering six questions | ✅ S1.b, all six, in the spec's own order |
+| `<Term>` tooltips on every piece of jargon | ✅ S1.c, audited in §12.5; and S1.d fixed the component itself |
+| **A `Cmd+K` palette printing every shortcut beside its action** | ❌ **not built** |
+| **Glossary debt: `reversibility-class`, `superseded`, `preview-only`** | `preview-only` landed in AQ.1. **The other two never did** |
+
+**The palette is a deferral, and it is on the record.** §12.9 lists it as
+explicitly not done, with the same argument AQ.4 used to defer the keyboard map:
+a palette over a queue with no rows has nothing to move around and cannot be
+verified by anyone. The operator approved the study containing that sentence. It
+belongs with AQ.5, where filters and the queue-shape strip give it something to
+act on. Open, not forgotten.
+
+**The glossary debt is mine, and the honest close is not to pay it.** §12.5.2
+concluded "Glossary changes required: none" — true of S1's own *copy*, and I
+never reconciled it against this list. Reconciled now: **neither word reaches
+the operator as jargon**, so a definition would have nothing to attach to.
+
+- `superseded` never renders raw. `ApprovalLists.tsx:72` maps it to *"You
+  changed the number"*, deliberately, with the reasoning in a comment — the AQ.8
+  record already explains why ("they did not say no; they said not that
+  number").
+- The reversibility classes render as plain English chips — *can be put back* /
+  *only compensated for* / *cannot be undone* — each carrying a full inline
+  sentence on the card (`ApprovalCard.tsx:80-89`).
+
+A `<Term>` exists to define a word the UI uses. Minting entries nothing links to
+would put two dead definitions into a shared, append-only file that ten pages
+import, and GitLab Pajamas ranks inline UI text **above** a tooltip precisely
+here. **So the debt is discharged by plain English rather than by two glossary
+terms, and this paragraph is the record of that decision** — which is what was
+missing, not the terms.
+
 ### Where the page stands
 
 S1 is done and S2–S10 are untouched, including the five findings in §12.7 — of
