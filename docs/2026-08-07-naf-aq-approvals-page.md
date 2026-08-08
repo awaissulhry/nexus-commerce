@@ -3350,6 +3350,7 @@ touch prod Neon), and needs no auth. Read-only, client-side, nothing persisted.
 | (e) outside pending | stub | one sentence at the foot pointing to S5; 426.1px |
 | (f) loading | intercept + SPA remount | skeleton at **363px**, the readout's exact height, `aria-busy` |
 | (f) read failed | intercept + SPA remount | renders the admission; **invents zero condition rows** |
+| **S2 ⇄ S3 collapse** | stub `counts.waiting: 1` | **362.8px readout → 19.5px one line**: *"1 of 3 conditions met — nothing NEW can reach this queue yet."* Restored to the readout when the count returned to 0. The contract settled in §13.4.4, proven |
 
 **One harness fact worth recording, because it silently defeats every state
 test:** the automation drives the tab offscreen, so `document.visibilityState`
@@ -3399,10 +3400,11 @@ work rather than someone else's.
 
 ### What is NOT done
 
-- **The S2 ⇄ S3 collapse is built but has never rendered**, because it needs a
-  row in the queue and the queue is structurally unreachable (§1.1). The code
-  path is `waiting > 0`; it is one line and it is unexercised. Named rather
-  than claimed.
+- ~~**The S2 ⇄ S3 collapse is built but has never rendered.**~~ **Now
+  exercised and verified** — see the row added to the state table above. It was
+  the last unverified line of S2, and closing it needed only the COUNT stubbed
+  (`approvals: []` with `counts.waiting: 1`), which hits the `waiting > 0`
+  branch without fabricating an approval row.
 - **`.aq-outnone` (S5) is still 4.24:1** — §13.8, left alone.
 - **S3–S10** untouched.
 
