@@ -2052,7 +2052,7 @@ walking every rendered element and checking it or an ancestor for a `title`:
 
 Sixteen of twenty due badges were the `—` placeholder carrying nothing. It is
 the most common value in that column and it is not decoration: it says nobody
-set a deadline. Closed in `5b25e4bdf` — and it is the argument for the probe, since
+set a deadline. Closed in `58094527b` — and it is the argument for the probe, since
 a test written against the same assumption that produced the omission would have
 passed.
 
