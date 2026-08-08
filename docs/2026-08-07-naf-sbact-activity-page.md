@@ -2042,3 +2042,587 @@ the origin, answers the preflight and sends
 Twenty-one defects have been found on this page. **Not one has been a type
 error.** Four more today: an empty paragraph, a sentence that reads as a
 complaint, and two colours that pass on paper and fail on the page.
+
+---
+
+# PART 19 — S2 REBUILD: "What needs a look"
+
+**Status: STUDY ONLY. Nothing is built. Needs operator approval.**
+
+Stream tag `SB.ACT.S2R`, opened 2026-08-08, inheriting the type scale, rhythm
+and page-local root that Part 18 established. Scope: **S2 only** — `.sba-needs`,
+`failureTally()`, `CLASS_ORDER`, `tileSentence()`, the band's own `failures`
+fetch, the tiles, the all-clear line and the self-test note. S1 is done; S3 and
+below are untouched, and §19.8 lists what I found there and left.
+
+**No shared file is touched and no claim is needed.** `run-health.ts` is the
+Workers stream's and S2 only *reads* `classifyFailure` — the blame wording is
+presentation and stays here. No backend, no new endpoint, no migration.
+
+---
+
+## 19.0 — What S2 is FOR, in one sentence
+
+> **Tell the operator whether anything needs them to do something — before they
+> read a single row — and when nothing does, say so plainly enough to be
+> believed.**
+
+The question it answers is **"do I need to act?"**, and the answer has to be
+trustworthy in *both* directions. A band that cries wolf gets ignored; a band
+that goes quiet when it simply could not find out is worse, because silence
+here means *all clear*.
+
+---
+
+## 19.1 — What is actually on screen today, measured
+
+Live Vercel + Railway, 2026-08-08, 1728×906, against the resolved `#f4f6f9`.
+Raw run data from `apps/api/scripts/_sba-s2-band.mts` (new, read-only) and
+`_sba-closeout.mts`.
+
+### The correctness defects — these are not cosmetic
+
+**1 · A tile that says 1 produces a list of 2. Measured, not inferred.**
+Clicking the tile reading *"**1** run produced an answer that did not match the
+format it promised"* leaves the scope line reading **"2 events across 2 runs"**
+above a list of two rows — *Bid tuner tried to run, and failed* and *Negative
+miner tried to run, and failed*. The tile's `onClick` writes the event kind
+`run.failed`, which is **class-agnostic**; the tile's count is **per class**.
+So the band's number and the list the band produces are two different
+derivations. **This is the exact bug the whole page exists not to have**, and it
+is sitting in the section whose job is to be believed.
+
+**2 · Every tile reports itself pressed when any one is clicked.** After the
+single click above, **both** tiles carry `aria-pressed="true"` — because the
+attribute is `kinds.includes('run.failed')`, one shared value. A screen reader
+is told two filters are applied when the operator applied one.
+
+**3 · That pressed state is invisible to everyone else.** There is no
+`[aria-pressed="true"]` rule anywhere in `activity.css`. The state is announced
+and never drawn — the inverse of the usual WCAG 1.4.1 failure, and just as
+broken: the control has a state the sighted operator cannot see at all.
+
+**4 · The band says "nothing has failed" when it has not yet asked, and when it
+failed to ask.** `failures` initialises to `[]`, so `tally.length === 0` and the
+green all-clear renders on first paint — verified during the S1 pass, where the
+very first screenshot of a still-loading page read *"✓ Nothing has failed in
+what you are looking at."* And the fetch's error path is
+`.catch(() => { /* the list's error banner covers a dead endpoint */ })`, which
+leaves `failures` empty — so **a failed check renders as an all-clear**. On a
+band whose silence means *all clear*, an un-asked question and a green tick are
+the same pixels.
+
+**5 · A green tick for "I don't know."** When failures are filtered out of
+scope the same `.sba-allclear` element renders — `color: #14764f`, with a
+`<Check>` icon — saying *"Failures are filtered out of this view."* That is a
+green success marker on a statement that no judgement was possible.
+
+### The staleness problem, which is the reason Part 6 exists
+
+| | |
+|---|---|
+| Business failures in scope | **2** |
+| When | `2026-08-06T12:15:40Z` and `2026-08-06T12:16:32Z` — **two days ago** |
+| Runs since the newest failure | **12** |
+| Failures among those 12 | **0** |
+
+The band today says *"what needs a look"* about a situation that stopped
+happening two days and twelve runs ago. Part 6 rule 1 is explicit —
+***"S2 answers 'is anything wrong now', not 'what has ever gone wrong'"*** — and
+predicted the band would read *"Nothing has failed in the fleet's last 14
+runs."* **The study and the shipped section disagree with each other**, and the
+shipped one is the one the operator is looking at.
+
+### The self-test note explains 21 of 24 failures and mis-attributes 3
+
+Measured (`_sba-s2-band.mts`): **24** self-test failures spanning **249
+minutes**, not one window —
+
+- **21 × `fetch failed`**, `08:44:49Z → 08:50:45Z` — **5m56s**, the model server
+  restarting. The study's "six-minute window" is correct *for these 21*.
+- **3 × `Anthropic API error 400 … "Your credit balance is too low to access the
+  Anthropic API"`**, at `04:50:15Z`, `08:56:37Z`, `08:59:19Z` — four hours
+  apart, and a **billing** fact, not a model-server restart.
+
+The note on screen — *"a run of failures in six minutes when its model server
+restarted"* — is one explanation covering 21 of 24, silently wrong about 3.
+And the window is `04:50–08:59Z`, i.e. **06:50–10:59 local: a morning**, not the
+*"bad afternoon"* both the note and the study call it.
+
+Worth recording while we are here: those three errors carry **distinct
+`request_id`s** (`req_011CdmDiDZC2…`, `req_011CdmDWHbwT2…`,
+`req_011Cdktigtn…`). A group-by on the message string renders three causes where
+there is one — the live proof of the never-group-on-the-string rule, which the
+current code correctly obeys.
+
+### The visual defects, with numbers
+
+| | Measured | Should be |
+|---|---|---|
+| `.sba-needs h3` — *WHAT NEEDS A LOOK* | 12px/600, **4.05:1** | ≥ 4.5:1 |
+| `.sba-needsnote` — the self-test note | 11.5px, **2.73:1** | ≥ 4.5:1 |
+| Font sizes S2 introduces | **18px** (tile number) and **11.5px** (note) | S1's ladder is 20 · 13 · 12 |
+| Tile boxes | **343×52** and **300×52** for two one-line facts; the first **wraps to two lines** because the number and the sentence share a 34ch line | — |
+| The band's ground | **none** — no border, no background, floating between S1's bordered instrument and the toolbar's card | — |
+| Heading treatment | 12px uppercase letterspaced grey — **shared with nothing else on the page** since S1 changed | — |
+
+So S2 undoes two of S1's three fixes: it puts back the 11.5px size S1 deleted
+and re-introduces a sub-AA grey, in the section that is supposed to be the most
+trustworthy thing above the fold.
+
+**And the all-clear replaces the tiles entirely**, so the section changes
+*shape* rather than *state* — the reader cannot tell "this is the same panel
+reporting good news" from "a different thing is here now".
+
+---
+
+## 19.2 — What the industry does
+
+### A · Alarm fatigue is a solved problem, and the solution is a rule about novelty
+
+[Google's SRE book][sre] is the canonical source and it is unusually blunt.
+Its five questions for any alert include the two that decide our design:
+
+> *"Will I ever be able to ignore this alert, knowing it's benign? When and why
+> will I be able to ignore this alert?"*
+
+> *"Does this alert definitely indicate that users are being negatively
+> affected?"*
+
+and its four principles include:
+
+> *"Every page should be actionable."* · *"Pages should be about a novel problem
+> or an event that hasn't been seen before."* · *"Pages with rote, algorithmic
+> responses should be a red flag."*
+
+Our band today fails *novelty* exactly: a contract break from 6 August, already
+understood, followed by twelve clean runs, is not a novel event. [incident.io's
+survey][io] puts the same rule in operational terms — *"A CPU alert that fires
+every night during a scheduled batch job is not an alert. It is scheduled
+noise"* — and gives a benchmark worth quoting in review: *"If your
+alert-to-actionable-incident conversion rate sits below 20%, you have a noise
+problem. Your target operating range is 30–50% actionable."* Two tiles, neither
+actionable, is 0%.
+
+**Steal:** the novelty test, applied to the *headline* rather than to what is
+listed. **Reject:** suppression. SRE can drop an alert; a record cannot drop a
+row (Part 0: *a record must be complete*). The resolution is in §19.3.
+
+### B · Age is a state, not a filter — Sentry
+
+[Sentry's issue states][sentry] are the closest working model: **New** (created
+in the last 7 days) → **Ongoing** (older than 7 days, *or* manually reviewed) →
+**Escalating** / **Regressed** / **Archived** / **Resolved**. Archiving moves an
+issue *"out of the issue stream and pause[s] alerts on it until the issue gets
+worse"*, and the **escalating** algorithm resurfaces it automatically when
+*"events in that issue significantly increase over a short period"*.
+
+The lesson is not the seven days. It is that **an issue that stopped happening
+changes state without being deleted, and comes back on its own if it recurs.**
+
+**Steal:** exactly that. **Reject:** the calendar. This fleet ran 51 of its 53
+runs because a human pressed a button, so "7 days old" says nothing;
+"12 runs have run since, all clean" says everything. Part 6 already uses that
+phrasing.
+
+### C · The all-clear persists, and it is the headline — Statuspage
+
+[Atlassian Statuspage][sp] computes a single top-level status from its
+components, and when everything is fine the page reads **"All Systems
+Operational"**: *"If all components have a status of 'Operational', top-level
+status will read 'All Systems Operational.'"* The status area is shown *during
+normal operation* — the all-clear is the product's most-viewed state, not an
+empty state.
+
+**This answers open question 2: the section stays.** A section that vanishes
+when things are fine can never be trusted to appear when they are not — the
+operator cannot distinguish "nothing is wrong" from "that thing is broken
+again". **Steal:** persistence, and one named status as the headline.
+**Reject:** the seven-value vocabulary; we have two severities.
+
+### D · "Wrong now" and "went wrong" are different surfaces — Datadog
+
+[Datadog][dd-list] keeps a **Triggered Monitors** page separate from the monitor
+list: *"This page only shows monitors with a triggered status (Alert, Warn, or
+No Data)"*, filtered on `group_status` and on `triggered` — *how long they have
+been triggered*. Duration is a first-class filter, because how long something
+has been wrong is the decision.
+
+Its [Monitor Summary widget][dd-sum] is the closest thing to our tiles, and two
+of its options are instructive: **`Hide empty Status Counts`** — *"only shows
+the Status Counts for statuses that have more than zero monitors"* — and a
+choice of applying colour to **text or background**. Both are deliberate
+decisions we currently make by accident.
+
+**Steal:** never render a zero-count class (we already don't); duration as part
+of the statement; colour on text rather than flooding a whole card.
+**Reject:** a second page. Activity is one list by operator decision (Part 3).
+
+### E · Summary-above-list earns its place only by answering a different question
+
+The convergent dashboard guidance is that a summary earns its space when it
+answers something the table below cannot at a glance, and that working memory
+handles 5–9 elements before cognitive load bites. Ours passes the test — *"is
+anything wrong?"* is not answerable by scanning 21 rows — but it currently pays
+for it in the wrong currency: **two 52px cards, 343px and 300px wide, for two
+one-line facts.** At this volume the summary is physically heavier than the
+thing it summarises.
+
+**Steal:** keep the summary, spend far less on it. **Reject:** KPI-tile
+treatment. A big number is for a metric you track over time; a count of two
+failures is a sentence.
+
+### F · Severity without colour — the normative rule
+
+[WCAG 1.4.1][wcag] requires that colour is never the only visual means of
+conveying information; the accepted techniques are *icons, text labels,
+patterns, shapes*. Today the tile classes carry `border-color` + `background`
+and the count and label carry the meaning — so 1.4.1 is *arguably* met by the
+words. But `aria-pressed` has **no** visual counterpart at all, which is a plain
+failure, and the severity difference between `severe` and `mild` is carried by
+two pale washes (`#fdf6f5` vs `#fffaf1`) that are nearly indistinguishable.
+
+**Steal:** shape per severity, plus the blame in words. **Reject:** relying on
+the tint difference. S1's four-state marker (filled disc / ring / square /
+spinner) is the in-house precedent and it works.
+
+### G · What these products deliberately leave out
+
+- **Statuspage** shows no history on the status line — incidents live below it.
+- **Datadog's summary widget** hides zero-count statuses rather than showing a
+  row of noughts.
+- **Sentry** does not show a percentage anywhere in the issue stream header.
+- **Google SRE** explicitly refuses to page for anything with a rote response.
+- None of them puts a **proportion** on a triage surface. Which is convergent
+  with Part 6's absolute rule, arrived at from the opposite direction: ratios
+  over a small, skewed population are not decision-grade. **S2 renders no
+  percentage, and the design below has nowhere to put one.**
+
+---
+
+## 19.3 — The proposal
+
+### 19.3.1 Form: one status panel, not a grid of tiles
+
+The band becomes **one bordered card with a stated status**, in the same idiom
+as S1's freshness instrument: a marker, a headline, a qualifying line, and —
+only when there is something to list — one line per failure class.
+
+**Today's real state** (2 settled failures, 12 clean runs since):
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ✓  Nothing is failing now                                                  │
+│    2 runs failed on 6 August, and the 12 runs since have all been clean.    │
+│                                                                            │
+│    ✕  1 run   produced an answer that did not match the format it promised │
+│               the worker itself · 6 August                                 │
+│    ⚠  1 run   stopped part-way at one of its own limits                    │
+│               a limit doing its job, nobody's fault · 6 August              │
+│                                                                            │
+│    [ Show these 2 runs ]                                                   │
+│    The self-test is hidden. It failed 24 times on 6 August — 21 in six      │
+│    minutes when its model server restarted, and 3 when the AI account was   │
+│    out of credit. Neither was ever about your Amazon account. Show me       │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Something actually failing now:**
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ✕  2 runs need a look                                                      │
+│    The newest run failed.                                                  │
+│    …rows…                                                                  │
+│    [ Show these 2 runs ]                                                   │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+Three things change character:
+
+1. **The headline is about NOW; the rows are about WHAT.** Green tick above a
+   red row is not a contradiction, it is the two questions answered separately
+   and reconciled by the line between them. Nothing is hidden, nothing is
+   filtered — the recency is a **qualifier**, never a predicate, so *counts and
+   rows stay one derivation*.
+2. **The rows stop being controls.** They are labels. This is what fixes
+   defect 1 honestly: a per-class filter does not exist server-side, so a
+   per-class control can only ever produce a list that disagrees with it.
+3. **There is exactly one control**, and it is labelled with the number it
+   actually produces: *"Show these 2 runs"* writes `run.failed` and yields 2
+   rows. Count and consequence match by construction.
+
+### 19.3.2 The recency rule, stated so it cannot drift
+
+> **Nothing is failing now** ⟺ **the newest run in scope succeeded.**
+
+Binary, derived from data already fetched, no threshold to tune and no calendar
+to argue with. The qualifying line then states the evidence: *"N runs failed on
+{date}, and the {M} runs since have all been clean."*
+
+`M` = runs in scope newer than the newest failure. Today M = 12, and the band's
+own fetch already returns what it needs; `M` comes from the same
+`countsByKind` the scope line uses.
+
+Rejected alternatives, both worse: a **7-day window** (meaningless on a fleet
+whose runs are 51/53 manual) and **hiding settled failures** (breaks Part 0's
+completeness rule and re-creates the disagreement in defect 1).
+
+### 19.3.3 Type, colour, spacing — inheriting S1
+
+**Two sizes, both already on the page: 13px and 12px.** The 18px number and the
+11.5px note both go. Hierarchy is weight and colour, as S1 established.
+
+| Element | Size / weight | Colour | Contrast on `#fff` card | Control or label |
+|---|---|---|---|---|
+| Headline | 13 / 600 | per state, all ≥ 4.5 | — | label |
+| Qualifying line | 13 / 400 | `#5b6878` | 5.6 | label |
+| Row count — *1 run* | 13 / 600, `tabular-nums` | `#1c2530` | 15.6 | label |
+| Row label | 13 / 400 | `#4a5867` | 7.3 | label |
+| Row meta — blame · date | 12 / 400 | `#606b79` | 5.3 | label |
+| The one action | 12 / 500 | `#2f61c0`, and pressed state below | 5.9 | **control** |
+| Self-test note | **13** / 400 (was 11.5) | `#606b79` | 5.3 | label + one inline control |
+
+Card: `1px #dfe5ec`, radius 8, `#fff`, padding `12px 14px`. In the severe state
+the border becomes `#e6bcba` and the ground `#fdf6f6` — the **card**, once,
+rather than each tile. Spacing on S1's 4px grid: 8px headline→qualifier, 12px
+qualifier→rows, 6px between rows, 12px rows→action.
+
+**Severity encoding, three signals deep:** shape (`✕` filled square / `⚠`
+triangle / `✓` disc), colour, and the **blame in words** on every row —
+*"the worker itself"*, *"a connection problem, not this worker"*, *"the AI
+account"*, *"a limit doing its job, nobody's fault"*. Derived from
+`classifyFailure().blame`, so it cannot drift from the classification.
+
+### 19.3.4 The one control, and how "applied" reads
+
+A single toggle, and it is a real toggle — pressing it again removes the filter,
+so the band is never a dead end that only S3's *Clear* can undo.
+
+| | Label | `aria-pressed` | Visual |
+|---|---|---|---|
+| not applied | `Show these 2 runs` | `false` | outline button |
+| applied | `✓ Showing only failed runs` | `true` | **filled**, darker ground, tick glyph, 1px inset ring |
+
+Pressed is carried by fill **and** a tick **and** the changed word — never by
+colour alone, and never (as today) by nothing at all.
+
+### 19.3.5 The heading goes
+
+`<h3>WHAT NEEDS A LOOK</h3>` in 12px uppercase 4.05:1 grey is an orphaned
+treatment and a redundant label: the headline sentence already says what the
+panel is. The `<section>` keeps an `aria-label`, which makes it a named region
+landmark — **more** navigable for a screen reader than a visually-tiny heading,
+not less. Statuspage's precedent: the status *is* the label.
+
+---
+
+## 19.4 — Every state, designed now
+
+| # | State | Marker | Headline | Under it |
+|---|---|---|---|---|
+| 1 | **Checking** (band's own first fetch in flight) | spinner ring | `Checking what needs a look…` | nothing. **Never the all-clear** — today this is a green tick over an unasked question |
+| 2 | **Nothing has ever failed in scope** | ✓ green disc | `Nothing has failed in what you are looking at.` | self-test note if hidden |
+| 3 | **Settled** — failures exist, newest run succeeded *(today)* | ✓ green disc | `Nothing is failing now` | `2 runs failed on 6 August, and the 12 runs since have all been clean.` + rows + action |
+| 4 | **Failing now, severe** | ✕ red square | `{N} runs need a look` | `The newest run failed.` + rows + action. Card border/ground go red |
+| 5 | **Failing now, only a limit** | ⚠ amber triangle | `One run stopped at its own limit` | `That limit worked — nothing is broken. Raise it, or accept the shorter answer.` Card amber. **Never red** |
+| 6 | **Failures filtered out of scope** | ○ neutral hollow ring | `Failures are hidden by your filters, so this cannot say.` | no tick, no green — this is *unknown*, not *fine* |
+| 7 | **The band's own check failed** | ! amber square | `Could not check what needs a look.` | `{error}. The list below is unaffected — press Refresh to try again.` Never renders as all-clear |
+| 8 | **Self-test hidden** (overlays 1–7) | — | — | the corrected note (24 failures · 21 in six minutes · 3 out of credit) + `Show me` |
+| 9 | **Self-test shown** | — | — | note absent; the band counts all 26 and the headline follows the same recency rule |
+
+States 1, 6 and 7 are the three the current band renders as a green tick.
+
+**Verification of the unreachable ones:** states 4, 5 and 7 cannot be produced
+from real data (nothing is failing now, and the API is healthy). They will be
+simulated **read-only in the stub**, as S1's were — `STUB_FAIL_BAND=1` for the
+band's fetch, and a mode that back-dates/forward-dates the newest run so
+"settled" flips to "failing now" without writing a byte. Nothing is written, no
+charter is enabled, production is untouched.
+
+---
+
+## 19.5 — Open question 1: does a failed TEST run need a look?
+
+**Measured:** `mode=preview` runs that have ever failed = **0 of 26**. Both
+current business failures are `mode=ask`. The case is entirely unexercised, so
+this is a rule to set before it fires rather than a bug to fix.
+
+**Recommendation — two clauses, both cheap:**
+
+1. **Scope follows the page.** If a test run is visible in the list, its failure
+   is counted in the band; when the §18.7 test-run toggle hides them, they leave
+   *both*. This needs no new rule and no new code — it falls out of the band
+   sharing the page's filters, and it keeps counts and rows identical by
+   construction.
+2. **A failing test run never turns the headline severe.** It appears as a row,
+   badged `test run`, and the headline's severity ignores it. A rehearsal that
+   wrote nothing is not a production problem, and Part 6's whole lesson is that
+   raising an alarm about something which was never about the operator's account
+   spends trust that the next alarm needs.
+
+So: **counted, listed, badged — never the reason the panel turns red.** One
+condition in the severity derivation, and a test alongside it, because zero
+occurrences is exactly when a rule gets forgotten.
+
+## 19.6 — Open question 2: does the section stay when nothing is wrong?
+
+**Yes, and it shrinks to one line.**
+
+Statuspage's all-clear is the most-viewed state of the product, not an empty
+state. The argument that decides it is not aesthetic: **a section that
+disappears when things are fine can never be trusted to appear when they are
+not.** The operator who sees nothing cannot distinguish *nothing is wrong* from
+*that panel is broken again* — and this page's entire currency is that its
+silence can be believed. The same reasoning is why the self-test note renders
+whenever the self-test is hidden rather than only when the band is empty
+(ACT.6's own correction).
+
+At zero it costs **one line**: marker, sentence, and the note if the self-test
+is hidden.
+
+---
+
+## 19.7 — The boundary
+
+**Against S1, above.** S1 says how much history there is and whether the page
+and the fleet are alive. S2 says whether any of it needs action. S2 counts
+**runs**, never events, so its number can never be mistaken for S1's. S2 renders
+no freshness of its own — one instrument per page.
+
+**Against S3, below.** S3 owns the chips, *Clear*, the search box, the grain
+switch and the self-test toggle. **S2 writes exactly one filter value
+(`run.failed`) through exactly one toggle, and reads the filter state to render
+that toggle.** It adds no chip, no second *Clear*, no date control, and it does
+not touch the frozen-facets bug (§18.9) — that is S3's and it stays S3's.
+
+**Against everything else.** No link to Workers or Controls: a failure *class*
+is not a worker, and a run detail is one click away in the list already. No
+retry, no re-run. No percentage, ever. No spend figure — `/fleet/cost` owns
+money.
+
+---
+
+## 19.8 — Found while auditing S2, belongs elsewhere, LEFT ALONE
+
+1. **`.acr-pg-chip` has no measured contrast audit.** S3's chips are next in
+   line and the Workflows stream has already published three sub-AA shared
+   roles; whoever takes S3 should re-measure rather than assume.
+2. **The frozen facet chips (§18.9) are still live.** Untouched, as instructed.
+3. **`AgentRun.status === 'running'` has still never occurred** (0 rows), so
+   both the spine's `run.running` kind and `classifyFailure`'s running guard
+   remain unexercised against real data. Worth one deliberate exercise the day
+   a worker is switched on.
+
+---
+
+## 19.9 — Sources
+
+[sre]: https://sre.google/sre-book/monitoring-distributed-systems/
+[io]: https://incident.io/blog/sre-alerting-best-practices
+[sentry]: https://docs.sentry.io/product/issues/states-triage/
+[sp]: https://support.atlassian.com/statuspage/docs/top-level-status-and-incident-impact-calculations/
+[dd-list]: https://docs.datadoghq.com/monitors/manage/
+[dd-sum]: https://docs.datadoghq.com/dashboards/widgets/monitor_summary/
+[wcag]: https://www.w3.org/TR/UNDERSTANDING-WCAG20/visual-audio-contrast-without-color.html
+
+**Alerting and alarm fatigue** ·
+[Google SRE — Monitoring Distributed Systems][sre] ·
+[incident.io — SRE alerting best practices][io]
+
+**Triage state models** ·
+[Sentry — issue states and triage][sentry] ·
+[Datadog — monitor list and Triggered Monitors][dd-list] ·
+[Datadog — Monitor Summary widget][dd-sum]
+
+**The all-clear** ·
+[Atlassian Statuspage — top-level status calculation][sp]
+
+**Severity without colour** ·
+[W3C — Understanding SC 1.4.1 Use of Color][wcag]
+
+**In-repo, measured** · `apps/api/scripts/_sba-s2-band.mts` (new, read-only) ·
+`_sba-closeout.mts` · live Vercel + Railway at 1728×906, 2026-08-08
+
+---
+
+## 19.10 — S2R execution record (2026-08-08)
+
+**Approved as written**, with the recommended recency rule. Built and verified
+against the production database through the read-only stub.
+
+| File | What |
+|---|---|
+| `ActivityClient.tsx` | `groupFailures` / `deriveBand` / `BandView` replace `failureTally`+`tileSentence`; the band's read became **runs, not failures, always with the self-test included**; the panel, its nine states and its one toggle |
+| `activity.css` | the whole S2 block rewritten; `.sba-tile*`, `.sba-allclear` and the `h3` rule deleted |
+| `apps/api/scripts/_sba-s2-band.mts` | **new**, read-only: the raw inputs `classifyFailure` reads, deliberately without classifying |
+| `apps/api/scripts/_sba-stub.mts` | `STUB_BAND=fail-severe\|fail-limit\|fail-test\|err` |
+
+### Measured before and after, on the same page
+
+| §19.1 defect | Before | After |
+|---|---|---|
+| Tile count vs the list it produces | tile said **1**, list showed **2** | button says *"Show these 2 runs"* → scope `2 events across 2 runs`, footer `Showing 2 of 2`, **2 rows** |
+| Pressed state | all tiles `aria-pressed=true` after one click, **drawn nowhere** | one toggle; `false→true`, background `#fff → rgb(47,97,192)`, word changes, tick appears; pressing again clears |
+| WCAG AA failures | **2** — 4.05:1 and **2.73:1** | **0**; worst **5.42** |
+| Font sizes | added 18px and 11.5px to S1's 20/13/12 | **13px and 12px only** |
+| Ground | none | one card, severity on the card once |
+| The stale alarm | 2 tiles about 6 August, 12 runs ago | *"Nothing is failing now — 2 runs failed on 6 August, and the 11 runs since have all been clean."* |
+| Height, nothing wrong | 120px of tiles | **46px**, one line |
+
+### All nine states seen in a browser
+
+`checking` (the SSR pass — verified in the hidden `#S:0` tree, which renders
+*"Checking what needs a look…"* with its spinner) · `clean` · `settled` ·
+`failing-severe` · `failing-limit` · `failing-test` · `out-of-scope` · `error` ·
+self-test hidden and shown. The four unreachable ones were simulated
+**read-only** by re-ordering rows already in the response on their way out of
+the stub — nothing written, no charter enabled, production untouched.
+
+Two that matter most, because they are the ones the old band got wrong:
+
+- **`error`** — *"Could not check what needs a look. timeline: 500. The list
+  below is unaffected."* The list underneath still rendered 33 events and 21
+  rows. **No green tick.**
+- **`out-of-scope`** — *"Failures are hidden by your filters, so this cannot
+  say"*, neutral grey. Previously a green success tick on a statement that no
+  judgement was possible.
+
+And **`failing-test`**, which is open question 1 made real: the panel goes
+**amber, not red**, the row is listed and badged `test run`, and the copy says
+nothing it decided was written.
+
+### Four things the browser found that `tsc` could not
+
+1. **"2 runs failed 6 August"** — missing its preposition.
+2. **The derived self-test breakdown was a run-on sentence.** Joining
+   `classifyFailure().label`s with "and" produced *"…21 could not reach the AI
+   provider — a connection problem, not this worker and 3 were refused…"*. The
+   note now names only the **count** and the date; pressing **Show me** puts all
+   24 into the rows above, classified per class. That is a better answer than
+   the one it replaced *and* than the one I first built: the old copy asserted a
+   single cause that is right about 21 and wrong about 3, and prose that stitches
+   five labels together will break again the next time one is reworded.
+3. **`provider-unreachable`'s label already carries its own blame**, so beside a
+   meta line naming the blame the row said it twice. Trimmed at the em-dash in
+   presentation only; if the label is ever rewritten without the clause it
+   no-ops rather than breaking.
+4. **The "12 runs since" in §19.1 is the UNSCOPED figure.** The probe counted
+   every fleet run after the newest business failure; the band counts runs *in
+   scope*, so with the self-test hidden it correctly reads **11**, and with the
+   self-test shown, 12. Both were verified on screen. A number quoted from a
+   probe is not automatically the number the page should print — the scope has
+   to match.
+
+### Gates
+
+`tsc --noEmit` clean on `apps/web` and `apps/api` · DS ratchet clean · P3 token
+guard clean · link targets clean · `<section aria-label="What needs a look">` is
+a named region landmark · **1 control, 0 unnamed, 0 keyboard-unreachable**, all
+icons `aria-hidden` · nothing escapes at a 652px content width · zero horizontal
+overflow.
+
+**The through-line, now at 25.** Twenty-five defects have been found on this
+page and **not one has been a type error.** Today's four: a missing preposition,
+a run-on sentence assembled from someone else's vocabulary, a blame stated
+twice, and a number quoted at the wrong scope.

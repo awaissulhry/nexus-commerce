@@ -39,7 +39,10 @@ import {
   ChevronRight,
   CircleDot,
   ClipboardList,
+  FlaskConical,
+  Gauge,
   Hand,
+  HelpCircle,
   Loader,
   Octagon,
   Download,
@@ -55,7 +58,13 @@ import { GridToolbar } from '@/design-system/patterns'
 import { PlanStory, type PlanLabels, type StoryPlan } from '@/app/marketing/ads/rules-automation/fleet/PlanStory'
 import { FleetPageShell } from '../_shell/FleetPageShell'
 import { RunDetail } from '../_shared/RunDetail'
-import { ago, classifyFailure, DIAGNOSTIC_HINT, type FailureClass } from '../_shared/run-health'
+import {
+  ago,
+  classifyFailure,
+  DIAGNOSTIC_HINT,
+  type Blame,
+  type FailureClass,
+} from '../_shared/run-health'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 
 /* ── the shape the spine returns (ACT.1) ───────────────────────────────── */
@@ -450,20 +459,67 @@ const CLASS_ORDER: FailureClass[] = [
   'limit', // amber, and last: a limit doing its job is not a defect
 ]
 
-function failureTally(events: FleetEvent[]): Array<{
+/**
+ * `classifyFailure().label` is written to follow a count — "3 of its runs
+ * <label>" — and ONE of the five carries its own blame clause after an em-dash:
+ * "could not reach the AI provider — a connection problem, not this worker".
+ * Beside a meta line that names the blame anyway, that row said it twice.
+ *
+ * Trimming at the em-dash is presentation, not re-classification: the class,
+ * the severity and the blame all still come from the one classifier. If the
+ * Workers stream ever rewrites a label without the clause, this no-ops and the
+ * row reads exactly as the label does — degrading to today's behaviour rather
+ * than to a wrong one.
+ */
+const shortLabel = (label: string) => label.split(' — ')[0]!
+
+/** Who to go and talk to, in words, on every row — so severity is carried by
+ *  language as well as by shape and colour. Derived from `Failure.blame`, so it
+ *  cannot drift away from the classification it describes. */
+const BLAME_PHRASE: Record<Blame, string> = {
+  worker: 'the worker itself',
+  infrastructure: 'a connection problem, not the worker',
+  billing: 'the AI account',
+  nobody: 'a limit doing its job, nobody’s fault',
+  unknown: 'no cause was recorded',
+}
+
+interface BandRow {
   klass: FailureClass
   label: string
-  count: number
+  blame: Blame
   severe: boolean
-}> {
-  const byClass = new Map<FailureClass, { label: string; count: number; severe: boolean }>()
-  for (const e of events) {
+  count: number
+  /** Newest and oldest occurrence, for "· 6 August" and the hidden-note range. */
+  newestAt: string
+  oldestAt: string
+  /** Any of these was a test-lane run. Badged, and never a reason to go red. */
+  hasTestRun: boolean
+}
+
+/**
+ * Group the failed runs by class, counted through `run-health.classifyFailure`
+ * — the SAME function the worker roster and the worker page call. The spine has
+ * its own `explainError`/`errorSignature` and the two disagree about whether a
+ * budget halt is a failure (it is not); this page refuses to be the third
+ * opinion, so it hands over the raw fields and asks the canonical classifier.
+ *
+ * Two traps closed by construction:
+ *  · a run still in flight is never counted — the spine emits `run.running` as
+ *    its own kind, so one cannot reach this function at all;
+ *  · nothing is ever grouped on the error STRING. Measured on production: the
+ *    three credit failures carry `request_id`s `req_011CdmDiDZC2…`,
+ *    `req_011CdmDWHbwT2…` and `req_011Cdktigtn…`, so a group-by on the message
+ *    renders three causes where there is one.
+ */
+function groupFailures(runs: FleetEvent[]): BandRow[] {
+  const byClass = new Map<FailureClass, BandRow>()
+  for (const e of runs) {
     if (e.kind !== 'run.failed') continue
     const f = classifyFailure({
-      // Always 'done' here, and tsc proves it: the spine emits `run.running`
-      // as its own kind, so a run in flight cannot reach this line. The guard
-      // lives one layer down instead of being repeated — which is the whole
-      // reason the kind was added rather than the check copied.
+      // Always 'done', and tsc proves it: `run.running` is its own kind, so a
+      // run in flight cannot reach this line. The guard lives one layer down
+      // rather than being copied — which is why the kind was added.
       status: 'done',
       ok: false,
       errorMessage: e.errorMessage,
@@ -472,21 +528,143 @@ function failureTally(events: FleetEvent[]): Array<{
     })
     if (!f) continue
     const cur = byClass.get(f.klass)
-    if (cur) cur.count++
-    else byClass.set(f.klass, { label: f.label, count: 1, severe: f.severe })
+    if (cur) {
+      cur.count++
+      if (e.at > cur.newestAt) cur.newestAt = e.at
+      if (e.at < cur.oldestAt) cur.oldestAt = e.at
+      cur.hasTestRun ||= e.mode === 'preview'
+    } else {
+      byClass.set(f.klass, {
+        klass: f.klass,
+        label: f.label,
+        blame: f.blame,
+        severe: f.severe,
+        count: 1,
+        newestAt: e.at,
+        oldestAt: e.at,
+        hasTestRun: e.mode === 'preview',
+      })
+    }
   }
-  return CLASS_ORDER.filter((k) => byClass.has(k)).map((k) => ({ klass: k, ...byClass.get(k)! }))
+  return CLASS_ORDER.filter((k) => byClass.has(k)).map((k) => byClass.get(k)!)
 }
 
 /**
- * The big number and this text are ONE sentence read together — "21" then
- * "runs could not reach the AI provider". An earlier version put the count in
- * both, so every tile read "21 21 runs could not…". `classifyFailure().label`
- * is already written to follow a count ("3 of its runs <label>"), so all this
- * owes it is the noun.
+ * What the band is saying right now. Seven values, and every one of them is a
+ * different sentence — the three the previous build rendered as an identical
+ * green tick are `checking`, `out-of-scope` and `error`.
  */
-function tileSentence(label: string, n: number): string {
-  return `${n === 1 ? 'run' : 'runs'} ${label}`
+type BandKind =
+  | 'checking'
+  | 'out-of-scope'
+  | 'error'
+  | 'clean'
+  | 'settled'
+  | 'failing-severe'
+  | 'failing-limit'
+  | 'failing-test'
+
+interface BandView {
+  kind: BandKind
+  rows: BandRow[]
+  total: number
+  /** Runs in scope newer than the newest failure. The evidence behind "settled". */
+  runsSince: number
+  /** The span the failures cover, already worded. */
+  when: string | null
+  /** The scope holds more runs than one page — say so rather than under-report. */
+  capped: boolean
+  /** What the self-test toggle is hiding, for the note. Empty when it is shown. */
+  hidden: { total: number; rows: BandRow[]; when: string | null }
+}
+
+/**
+ * THE RECENCY RULE, and it is the whole of Part 19:
+ *
+ *   Nothing is failing now  ⟺  the newest run in scope succeeded.
+ *
+ * Binary, derived from data already on hand, no threshold to tune and no
+ * calendar to argue with — which matters on a fleet that ran 51 of its 53 runs
+ * because a person pressed a button, where "7 days old" says nothing and
+ * "12 runs have run since, all clean" says everything.
+ *
+ * Recency is a QUALIFIER, never a predicate. Every failure in scope is still
+ * counted, still listed and still reachable through the one action; the rule
+ * only decides which sentence sits above them. That is what keeps the band's
+ * number and the list it produces a single derivation — Part 6's rule 1 asks
+ * "is anything wrong NOW", and the previous build answered "what has ever gone
+ * wrong" while claiming to answer the first.
+ *
+ * `runs` arrives newest-first and ALWAYS includes the self-test, so one read
+ * answers both the band's counts and the hidden-note's numbers. The band's own
+ * scope is re-derived here with `!diagnostic` — the identical predicate the
+ * server applies for `includeSelfTest=0`, so the count and the filtered list it
+ * offers cannot disagree.
+ */
+function deriveBand(
+  runs: FleetEvent[],
+  includeSelfTest: boolean,
+  capped: boolean,
+  span: (oldest: string, newest: string) => string,
+): BandView {
+  const inScope = includeSelfTest ? runs : runs.filter((r) => !r.diagnostic)
+  const rows = groupFailures(inScope)
+  const total = rows.reduce((n, r) => n + r.count, 0)
+
+  const hiddenRuns = includeSelfTest ? [] : runs.filter((r) => r.diagnostic)
+  const hiddenRows = groupFailures(hiddenRuns)
+  const hiddenTotal = hiddenRows.reduce((n, r) => n + r.count, 0)
+  const hidden = {
+    total: hiddenTotal,
+    rows: hiddenRows,
+    when: hiddenTotal
+      ? span(
+          hiddenRows.reduce((a, r) => (r.oldestAt < a ? r.oldestAt : a), hiddenRows[0]!.oldestAt),
+          hiddenRows.reduce((a, r) => (r.newestAt > a ? r.newestAt : a), hiddenRows[0]!.newestAt),
+        )
+      : null,
+  }
+
+  if (total === 0) {
+    return { kind: 'clean', rows, total, runsSince: 0, when: null, capped, hidden }
+  }
+
+  const newestFailureAt = rows.reduce(
+    (a, r) => (r.newestAt > a ? r.newestAt : a),
+    rows[0]!.newestAt,
+  )
+  const oldestFailureAt = rows.reduce(
+    (a, r) => (r.oldestAt < a ? r.oldestAt : a),
+    rows[0]!.oldestAt,
+  )
+  const when = span(oldestFailureAt, newestFailureAt)
+  const runsSince = inScope.filter((r) => r.at > newestFailureAt).length
+  const failingNow = inScope.length > 0 && inScope[0]!.kind === 'run.failed'
+
+  if (!failingNow) {
+    return { kind: 'settled', rows, total, runsSince, when, capped, hidden }
+  }
+
+  // A rehearsal that wrote nothing is not a production problem, and Part 6's
+  // lesson is that an alarm about something which was never about the
+  // operator's account spends the trust the next alarm needs. So a failing test
+  // run is counted, listed and badged — and never the reason this goes red.
+  // Measured: 0 of 26 not-ok runs have ever been a test run, which is exactly
+  // when a rule gets forgotten, so it is asserted rather than remembered.
+  const severeForHeadline = rows.some((r) => r.severe && !(r.hasTestRun && r.count === 1))
+  if (severeForHeadline) {
+    return { kind: 'failing-severe', rows, total, runsSince, when, capped, hidden }
+  }
+  const newestIsTest = inScope[0]!.mode === 'preview'
+  return {
+    kind: newestIsTest ? 'failing-test' : 'failing-limit',
+    rows,
+    total,
+    runsSince,
+    when,
+    capped,
+    hidden,
+  }
 }
 
 /* ── export ────────────────────────────────────────────────────────────── */
@@ -1226,38 +1404,95 @@ export function ActivityClient() {
   }, [backend, includeSelfTest])
 
   /**
-   * S2's tiles count the WHOLE filtered set, not the rows that happen to be
-   * loaded. Tallying `events` would have been a silent cap — with the self-test
-   * included only 50 of 119 events are on screen, so the band would have
-   * under-reported by more than half and looked authoritative doing it.
+   * S2 keeps its OWN read. Tallying the loaded rows would be a silent cap —
+   * with the self-test shown only 50 of 119 events are on screen, so the band
+   * would under-report by more than half while looking authoritative.
    *
-   * Its own fetch, therefore, narrowed to failures. It is cheap: 2 rows with
-   * the self-test hidden, 26 with it shown.
+   * S2R changes it from "the failures" to "the RUNS", and always with the
+   * self-test included. One read then answers three questions that used to need
+   * three: which failures are in scope, whether the newest run succeeded (the
+   * recency rule), and what the self-test toggle is hiding. The self-test scope
+   * is re-derived client-side with `!diagnostic` — the identical predicate the
+   * server applies for `includeSelfTest=0`, so the band's count and the list its
+   * action produces cannot disagree.
+   *
+   * `null` means NOT YET READ and is rendered as "Checking…", never as an
+   * all-clear. The previous build initialised to `[]` and swallowed its errors,
+   * so a band whose silence means *all clear* showed a green tick both before it
+   * had asked and when asking had failed.
    */
   const failuresInScope = effectiveKinds.length === 0 || effectiveKinds.includes('run.failed')
-  const [failures, setFailures] = useState<FleetEvent[]>([])
+  const [bandRuns, setBandRuns] = useState<{ runs: FleetEvent[]; capped: boolean } | null>(null)
+  const [bandErr, setBandErr] = useState<string | null>(null)
   useEffect(() => {
-    if (!failuresInScope) {
-      setFailures([])
-      return
-    }
-    const p = new URLSearchParams({ limit: '200', kind: 'run.failed' })
-    if (!includeSelfTest) p.set('includeSelfTest', '0')
+    if (!failuresInScope) return
+    const p = new URLSearchParams({ limit: '200', kind: RUN_KINDS.join(',') })
     if (actors.length) p.set('actor', actors.join(','))
     if (q.trim()) p.set('q', q.trim())
     let live = true
     fetch(`${backend}/api/agent/fleet/timeline?${p.toString()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: TimelinePage | null) => live && d && setFailures(d.events))
-      .catch(() => {
-        /* the list's error banner covers a dead endpoint */
+      .then((r) => {
+        if (!r.ok) throw new Error(`timeline: ${r.status}`)
+        return r.json()
+      })
+      .then((d: TimelinePage) => {
+        if (!live) return
+        setBandRuns({ runs: d.events, capped: d.nextCursor != null })
+        setBandErr(null)
+      })
+      .catch((e: unknown) => {
+        if (!live) return
+        // Say so. A check that could not run is not an all-clear.
+        setBandRuns(null)
+        setBandErr(e instanceof Error ? e.message : String(e))
       })
     return () => {
       live = false
     }
-  }, [backend, includeSelfTest, actors, q, failuresInScope])
+  }, [backend, actors, q, failuresInScope])
 
-  const tally = useMemo(() => failureTally(failures), [failures])
+  const band = useMemo<BandView>(() => {
+    if (!failuresInScope)
+      return {
+        kind: 'out-of-scope',
+        rows: [],
+        total: 0,
+        runsSince: 0,
+        when: null,
+        capped: false,
+        hidden: { total: 0, rows: [], when: null },
+      }
+    if (bandErr)
+      return {
+        kind: 'error',
+        rows: [],
+        total: 0,
+        runsSince: 0,
+        when: null,
+        capped: false,
+        hidden: { total: 0, rows: [], when: null },
+      }
+    if (!bandRuns)
+      return {
+        kind: 'checking',
+        rows: [],
+        total: 0,
+        runsSince: 0,
+        when: null,
+        capped: false,
+        hidden: { total: 0, rows: [], when: null },
+      }
+    return deriveBand(bandRuns.runs, includeSelfTest, bandRuns.capped, dateRange)
+  }, [failuresInScope, bandErr, bandRuns, includeSelfTest])
+
+  /** The band's one filter, and it is exactly the one its number describes.
+   *  SET, never appended: appending to an existing kind selection would produce
+   *  a list larger than the count on the button. */
+  const bandFilterOn = kinds.length === 1 && kinds[0] === 'run.failed' && grain === 'all'
+  const toggleBandFilter = useCallback(() => {
+    setGrain('all')
+    setKinds((prev) => (prev.length === 1 && prev[0] === 'run.failed' ? [] : ['run.failed']))
+  }, [])
 
   const actorChips = facets?.actors ?? []
   const kindChips = useMemo(() => {
@@ -1619,50 +1854,154 @@ export function ActivityClient() {
           ) : null}
         </section>
 
-        {/* ── S2: what needs a look ────────────────────────────────────────── */}
-        <section className="sba-needs">
-          <h3>What needs a look</h3>
-          {tally.length === 0 ? (
-            <p className="sba-allclear">
-              <Check size={13} aria-hidden />
-              {failuresInScope
-                ? 'Nothing has failed in what you are looking at.'
-                : 'Failures are filtered out of this view.'}
+        {/* ── S2: what needs a look ──────────────────────────────────────────
+            One panel with a stated status, in the same idiom as S1's freshness
+            instrument: a marker, a headline, a qualifying line, and — only when
+            there is something to list — one line per failure class.
+
+            The headline answers "is anything wrong NOW"; the rows answer "what".
+            A green tick above a red row is not a contradiction, it is the two
+            questions answered separately and reconciled by the line between
+            them. Nothing is hidden and nothing is filtered, so the band's number
+            and the list its action produces stay one derivation.
+
+            No <h3>: the headline sentence already names the panel, and the
+            12px uppercase 4.05:1 heading it replaces was a treatment shared with
+            nothing else on the page. The section keeps an accessible name, which
+            makes it a named region landmark — MORE navigable than a
+            visually-tiny heading, not less. */}
+        <section
+          className={`sba-needs s-${band.kind}`}
+          aria-label="What needs a look"
+        >
+          <p className="sba-needshead">
+            <span className="sba-needsicon" aria-hidden>
+              {band.kind === 'checking' ? (
+                <Loader size={14} className="acr-spin" />
+              ) : band.kind === 'error' ? (
+                <AlertTriangle size={14} />
+              ) : band.kind === 'out-of-scope' ? (
+                <HelpCircle size={14} />
+              ) : band.kind === 'failing-severe' ? (
+                <X size={14} />
+              ) : band.kind === 'failing-limit' ? (
+                <Gauge size={14} />
+              ) : band.kind === 'failing-test' ? (
+                <FlaskConical size={14} />
+              ) : (
+                <Check size={14} />
+              )}
+            </span>
+            <span className="sba-needsword">
+              {band.kind === 'checking'
+                ? 'Checking what needs a look…'
+                : band.kind === 'error'
+                  ? 'Could not check what needs a look'
+                  : band.kind === 'out-of-scope'
+                    ? 'Failures are hidden by your filters, so this cannot say'
+                    : band.kind === 'clean'
+                      ? 'Nothing has failed in what you are looking at'
+                      : band.kind === 'settled'
+                        ? 'Nothing is failing now'
+                        : band.kind === 'failing-severe'
+                          ? `${band.total} ${band.total === 1 ? 'run needs' : 'runs need'} a look`
+                          : band.kind === 'failing-test'
+                            ? 'The newest run was a test run, and it failed'
+                            : `${band.total} ${band.total === 1 ? 'run' : 'runs'} stopped at ${band.total === 1 ? 'its own limit' : 'their own limits'}`}
+            </span>
+          </p>
+
+          {/* The qualifying line — the evidence behind the headline. */}
+          {band.kind === 'error' ? (
+            <p className="sba-needssub">
+              {bandErr}. The list below is unaffected — press Refresh to try again.
             </p>
-          ) : (
-            <div className="sba-tiles">
-              {tally.map((t) => (
-                <button
-                  key={t.klass}
-                  type="button"
-                  className={`sba-tile${t.severe ? ' severe' : ' mild'}`}
-                  aria-pressed={kinds.includes('run.failed')}
-                  onClick={() => {
-                    // Clicking a tile IS the filter — the operator learns the
-                    // grammar by using the diagnosis, and the tile and the chip
-                    // are the same predicate so they cannot disagree.
-                    setGrain('all')
-                    setKinds((prev) => (prev.includes('run.failed') ? prev : [...prev, 'run.failed']))
-                  }}
-                >
-                  <span className="sba-tilen">{t.count}</span>
-                  <span className="sba-tiletext">{tileSentence(t.label, t.count)}</span>
-                </button>
+          ) : band.kind === 'settled' ? (
+            <p className="sba-needssub">
+              {band.total} {band.total === 1 ? 'run' : 'runs'} failed on {band.when}, and the{' '}
+              {band.runsSince} {band.runsSince === 1 ? 'run' : 'runs'} since{' '}
+              {band.runsSince === 1 ? 'has' : 'have'} all been clean.
+            </p>
+          ) : band.kind === 'failing-severe' ? (
+            <p className="sba-needssub">The newest run failed.</p>
+          ) : band.kind === 'failing-limit' ? (
+            <p className="sba-needssub">
+              That limit worked — nothing is broken. Raise it, or accept the shorter answer.
+            </p>
+          ) : band.kind === 'failing-test' ? (
+            <p className="sba-needssub">
+              Nothing it decided was written. A test run is a rehearsal from the Workflows
+              page, so this is not about your Amazon account.
+            </p>
+          ) : null}
+
+          {/* One line per class. Labels, not controls: a per-class filter does
+              not exist server-side, so a per-class control could only ever
+              produce a list that disagrees with the number on it — which is
+              exactly what the tiles did, measured on production. */}
+          {band.rows.length > 0 ? (
+            <ul className="sba-needsrows">
+              {band.rows.map((r) => (
+                <li key={r.klass} className={`sba-needsrow${r.severe ? ' severe' : ' mild'}`}>
+                  <span className="sba-rowicon" aria-hidden>
+                    {r.severe ? <X size={12} /> : <Gauge size={12} />}
+                  </span>
+                  <span className="sba-rowbody">
+                    <span className="sba-rowline">
+                      <strong className="sba-rowcount">
+                        {r.count} {r.count === 1 ? 'run' : 'runs'}
+                      </strong>{' '}
+                      {shortLabel(r.label)}
+                      {r.hasTestRun ? <span className="sba-badge test">test run</span> : null}
+                    </span>
+                    <span className="sba-rowmeta">
+                      {BLAME_PHRASE[r.blame]} · {shortDay(r.newestAt)}
+                    </span>
+                  </span>
+                </li>
               ))}
-            </div>
-          )}
-          {/* The history, placed rather than hidden. Without this the operator
-              can see "nothing has failed" while the list below shows a bad
-              afternoon, and concludes the band is broken. */}
-          {/* Whenever the self-test is hidden, not only when the band is empty.
-              Its failures are exactly what this band would otherwise under-report,
-              and "excluded, never concealed" does not get a quiet exception when
-              there happens to be one real failure to show. */}
-          {!includeSelfTest ? (
+            </ul>
+          ) : null}
+
+          {band.capped ? (
+            <p className="sba-needssub">
+              More runs match than fit one read, so this counts the newest 200.
+            </p>
+          ) : null}
+
+          {/* The one control, labelled with the number it actually produces, and
+              a real toggle so the band is never a dead end only S3's Clear can
+              undo. Pressed is carried by fill AND a tick AND the changed word. */}
+          {band.total > 0 ? (
+            <button
+              type="button"
+              className={`sba-needsbtn${bandFilterOn ? ' on' : ''}`}
+              aria-pressed={bandFilterOn}
+              onClick={toggleBandFilter}
+            >
+              {bandFilterOn ? (
+                <>
+                  <Check size={12} aria-hidden /> Showing only failed runs
+                </>
+              ) : (
+                <>
+                  Show {band.total === 1 ? 'this run' : `these ${band.total} runs`}
+                </>
+              )}
+            </button>
+          ) : null}
+
+          {/* Excluded, never concealed — and rendered whenever the self-test is
+              hidden, not only when the band is otherwise empty. The numbers are
+              DERIVED now: the previous copy hardcoded "a run of failures in six
+              minutes when its model server restarted", which explains 21 of the
+              24 and is silently wrong about the 3 that were the AI account
+              running out of credit. */}
+          {!includeSelfTest && band.hidden.total > 0 ? (
             <p className="sba-needsnote">
-              The self-test had a bad afternoon on 6 August — a run of failures in six minutes
-              when its model server restarted. It is fixed, and it was never your Amazon
-              account.{' '}
+              The <Term k="selftest">self-test</Term> is hidden. {band.hidden.total} of its runs
+              failed{band.hidden.when ? ` on ${band.hidden.when}` : ''} — the fleet testing
+              itself, never your Amazon account.{' '}
               <button
                 type="button"
                 className="sba-inlinebtn"
@@ -1670,6 +2009,13 @@ export function ActivityClient() {
               >
                 Show me
               </button>
+              {/* No cause is named here on purpose. The previous copy asserted
+                  ONE — "a run of failures in six minutes when its model server
+                  restarted" — which is true of 21 of the 24 and silently wrong
+                  about the 3 that were the AI account running out of credit.
+                  Pressing Show me puts all 24 into the rows above, classified
+                  correctly and per class, which is the honest way to explain
+                  them: excluded, never concealed, and never mis-explained. */}
             </p>
           ) : null}
         </section>

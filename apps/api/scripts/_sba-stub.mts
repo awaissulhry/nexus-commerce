@@ -30,6 +30,67 @@ const SIM = {
   halt: process.env.STUB_HALT === '1',
   fail: process.env.STUB_FAIL === '1',
   empty: process.env.STUB_EMPTY ?? '',
+  /**
+   * S2R — the "What needs a look" band.
+   *
+   * Its headline turns on ONE fact: did the newest run in scope fail? On
+   * production nothing has failed since 6 August and 12 runs have run clean
+   * since, so the band is permanently in its `settled` state and its three
+   * failing states are unreachable. Rather than reason about them, this
+   * back-dates nothing and forward-dates one existing failure so it becomes the
+   * newest run — a rearrangement of rows already in the response, in memory,
+   * on their way out of this process.
+   *
+   *   STUB_BAND=fail-severe  the contract break becomes the newest run
+   *   STUB_BAND=fail-limit   the token-limit halt becomes the newest run, and
+   *                          the severe ones are dropped, so the panel must go
+   *                          amber and blame nobody
+   *   STUB_BAND=fail-test    the newest run is a FAILING TEST RUN — the case
+   *                          that has never once occurred (0 of 26) and is
+   *                          therefore exactly the rule most likely to rot
+   *   STUB_BAND=err          the band's own read fails while the rest of the
+   *                          page keeps working, so "could not check" can be
+   *                          told apart from "nothing is wrong"
+   */
+  band: process.env.STUB_BAND ?? '',
+}
+
+/** The band asks for exactly this, and nothing else on the page does — so it is
+ *  a safe discriminator for simulating the band alone. */
+const BAND_KINDS = 'run.ok,run.failed,run.running'
+
+interface Timelineish {
+  events: Array<Record<string, unknown>>
+  nextCursor: string | null
+  total: number
+  countsByKind: Record<string, number>
+  actors: unknown[]
+}
+
+function simulateBand(page: Timelineish): Timelineish {
+  const mode = SIM.band
+  if (!mode || mode === 'err') return page
+  const events = page.events.map((e) => ({ ...e }))
+  const isFail = (e: Record<string, unknown>) => e.kind === 'run.failed'
+  // The token-limit halt is the only non-severe failure in the data; the
+  // classifier decides that from `haltedReason`, so this picks by the same
+  // field rather than by guessing at a class.
+  const isLimit = (e: Record<string, unknown>) => isFail(e) && e.haltedReason != null
+
+  let pick: Record<string, unknown> | undefined
+  let kept = events
+  if (mode === 'fail-limit') {
+    kept = events.filter((e) => !isFail(e) || isLimit(e))
+    pick = kept.find(isLimit)
+  } else {
+    pick = events.find((e) => isFail(e) && !isLimit(e))
+    if (mode === 'fail-test' && pick) pick.mode = 'preview'
+  }
+  if (!pick) return { ...page, events: kept }
+
+  pick.at = new Date().toISOString()
+  const reordered = [pick, ...kept.filter((e) => e !== pick)]
+  return { ...page, events: reordered, total: reordered.length }
 }
 
 async function handle(url: URL): Promise<unknown> {
@@ -56,10 +117,14 @@ async function handle(url: URL): Promise<unknown> {
   if (p.endsWith('/charters')) return { charters: await listCharters() }
 
   if (p.endsWith('/timeline')) {
+    const isBandRead = q.get('kind') === BAND_KINDS
+    if (isBandRead && SIM.band === 'err') {
+      throw new Error('simulated: the band could not check')
+    }
     const raw = q.get('includeSelfTest')
     const includeDiagnostic =
       raw === null ? undefined : !['0', 'false', 'no'].includes(raw.trim().toLowerCase())
-    return getFleetTimeline(
+    const page = (await getFleetTimeline(
       {
         q: q.get('q') ?? undefined,
         actors: q.get('actor')?.split(',').map((v) => v.trim()).filter(Boolean),
@@ -67,7 +132,8 @@ async function handle(url: URL): Promise<unknown> {
         includeDiagnostic,
       },
       { limit: Number(q.get('limit')) || 50, cursor: q.get('cursor') ?? undefined },
-    )
+    )) as unknown as Timelineish
+    return isBandRead ? simulateBand(page) : page
   }
   if (p.endsWith('/state')) {
     const real = await getFleetState()

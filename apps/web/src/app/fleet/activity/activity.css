@@ -1006,73 +1006,185 @@
   text-decoration: underline;
 }
 
-/* ── ACT.4 · what needs a look ────────────────────────────────────────── */
+/* ── S2 · what needs a look ────────────────────────────────────────────────
+   Rebuilt 2026-08-08 — SB.ACT.S2R, study Part 19.
 
-.sba-needs h3 {
-  margin: 0 0 7px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7a8d;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.sba-allclear {
+   What was here: four pale cards (343×52 and 300×52 for two one-line facts,
+   the first wrapping because the number and the sentence shared a 34ch line),
+   a 12px uppercase heading at 4.05:1, an 11.5px note at 2.73:1, and no ground
+   of its own — so the band floated between S1's bordered instrument and the
+   toolbar's card. It also reintroduced the two font sizes S1 had just removed.
+
+   Now: ONE card with a stated status, on S1's scale (13px and 12px only), with
+   the severity carried by shape, by colour AND by the blame in words, so no
+   state is signalled by colour alone.
+
+   Every colour below is ≥ 4.5:1 on the surface it actually sits on. The card is
+   white, the page is #f4f6f9, and S1 already found two colours that pass on one
+   and fail on the other — measure in place, always. */
+
+.sba-needs {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 13px;
-  color: #14764f;
-}
-.sba-tiles {
-  display: flex;
+  flex-direction: column;
   gap: 8px;
-  flex-wrap: wrap;
-}
-.sba-tile {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  text-align: left;
   background: #fff;
   border: 1px solid #dfe5ec;
   border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  max-width: 34ch;
+  padding: 12px 14px;
 }
-.sba-tile:hover {
-  background: #f8fafc;
-}
-/* Colour is never the only signal: the count and the sentence carry it, and
-   the sentence names the blame. `limit` is amber because a limit doing its job
-   is not a defect — mis-colouring it teaches distrust of a working guard. */
-.sba-tile.severe {
+/* The ground states the severity once, on the card, rather than on every tile.
+   Datadog's monitor summary makes exactly this a documented choice — colour on
+   the text or on the background, picked deliberately. */
+.sba-needs.s-failing-severe {
   border-color: #e6bcba;
-  background: #fdf6f5;
+  background: #fdf6f6;
 }
-.sba-tile.mild {
+.sba-needs.s-failing-limit,
+.sba-needs.s-failing-test,
+.sba-needs.s-error {
   border-color: #ecd9ae;
-  background: #fffaf1;
+  background: #fffdf8;
 }
-.sba-tilen {
-  font-size: 18px;
+
+.sba-needshead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c2530;
+}
+.sba-needsicon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+/* Shape differs per state (tick · cross · gauge · flask · question · spinner)
+   and so does the word, so colour is the third signal rather than the only one.
+   WCAG 1.4.1's accepted techniques are icons, text labels, patterns, shapes —
+   this uses three of the four. */
+.sba-needs.s-clean .sba-needsicon,
+.sba-needs.s-settled .sba-needsicon {
+  color: #14724d;
+}
+.sba-needs.s-failing-severe .sba-needsicon {
+  color: #9c2f2a;
+}
+.sba-needs.s-failing-limit .sba-needsicon,
+.sba-needs.s-failing-test .sba-needsicon,
+.sba-needs.s-error .sba-needsicon {
+  color: #8a6320;
+}
+.sba-needs.s-checking .sba-needsicon,
+.sba-needs.s-out-of-scope .sba-needsicon {
+  color: #5b6878;
+}
+/* Neither "checking" nor "cannot say" is good news, so neither gets the ink of
+   a headline that is. The previous build rendered a GREEN TICK for both. */
+.sba-needs.s-checking .sba-needsword,
+.sba-needs.s-out-of-scope .sba-needsword {
+  color: #4a5867;
+  font-weight: 500;
+}
+
+.sba-needssub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5b6878;
+}
+
+.sba-needsrows {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sba-needsrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.sba-rowicon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.sba-needsrow.severe .sba-rowicon {
+  color: #9c2f2a;
+}
+.sba-needsrow.mild .sba-rowicon {
+  color: #8a6320;
+}
+.sba-rowbody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.sba-rowline {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4a5867;
+}
+.sba-rowcount {
   font-weight: 600;
   color: #1c2530;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
 }
-.sba-tiletext {
+.sba-rowmeta {
   font-size: 12px;
-  color: #4a5867;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: #606b79;
 }
+
+/* The band's ONE control. A real toggle — pressing it again clears the filter,
+   so this is never a dead end that only S3's Clear can undo. */
+.sba-needsbtn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #2f61c0;
+  background: #fff;
+  border: 1px solid #c8d6ef;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.sba-needsbtn:hover {
+  background: #f4f7fd;
+  border-color: #9db6e4;
+}
+.sba-needsbtn:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 1px;
+}
+/* Applied: fill, an inset ring, a tick, and the word changes. The previous
+   build put aria-pressed on the tiles and drew NOTHING — a state announced to a
+   screen reader and invisible to everyone else. */
+.sba-needsbtn.on {
+  color: #fff;
+  background: #2f61c0;
+  border-color: #2f61c0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.sba-needsbtn.on:hover {
+  background: #2a57ae;
+  border-color: #2a57ae;
+}
+
 .sba-needsnote {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  color: #8d97a6;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #606b79;
   line-height: 1.55;
-  max-width: 92ch;
+  max-width: 96ch;
 }
 
 /* ── ACT.6 · how this page works ──────────────────────────────────────── */
