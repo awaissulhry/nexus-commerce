@@ -39,7 +39,7 @@
  * in the same commit that breaks it.
  */
 
-import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Activity, AlertTriangle, Check, HelpCircle, Power, PowerOff, ShieldAlert } from 'lucide-react'
 import { Def, DEFINITIONS } from './definitions'
 import {
@@ -112,27 +112,32 @@ export function CensusBand({
 
   /* Roving tabindex. The APG puts the threshold for a toolbar at "3 or more
      controls"; this section had five separate tab stops and would have had
-     eleven at full population, reached after 35 stops of app chrome. */
+     eleven at full population, reached after 35 stops of app chrome.
+
+     The remembered index is the LAST FOCUSED control, not the active filter —
+     tabbing away and back must land where you left, which is the half of the
+     pattern that is easy to skip and is the whole reason it is nicer than five
+     tab stops. It is clamped on every render because a poll can change which
+     lenses exist underneath it. */
   const bar = useRef<HTMLDivElement | null>(null)
+  const [focusIdx, setFocusIdx] = useState(0)
+  const rovingIndex = Math.min(focusIdx, Math.max(lenses.length - 1, 0))
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
-    if (!keys.includes(e.key)) return
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
     const items = Array.from(bar.current?.querySelectorAll<HTMLButtonElement>('.sbm-lens') ?? [])
     if (items.length === 0) return
-    const here = items.indexOf(document.activeElement as HTMLButtonElement)
+    const here = Math.max(items.indexOf(document.activeElement as HTMLButtonElement), 0)
     const next =
       e.key === 'Home'
         ? 0
         : e.key === 'End'
           ? items.length - 1
-          : (Math.max(here, 0) + (e.key === 'ArrowRight' ? 1 : items.length - 1)) % items.length
+          : (here + (e.key === 'ArrowRight' ? 1 : items.length - 1)) % items.length
     e.preventDefault()
+    setFocusIdx(next)
     items[next]?.focus()
   }
-  const rovingIndex = Math.max(
-    0,
-    lenses.findIndex((r) => r.chip.id === activeChip),
-  )
 
   return (
     <section className={`sbm-band tone-${v.tone}`} aria-label="Is anything wrong, and is anything on">
@@ -226,6 +231,7 @@ export function CensusBand({
                     aria-pressed={on}
                     tabIndex={i === rovingIndex ? 0 : -1}
                     {...described}
+                    onFocus={() => setFocusIdx(i)}
                     onClick={() => onChip(on ? null : r.chip.id)}
                   >
                     <span className="mark" aria-hidden>
