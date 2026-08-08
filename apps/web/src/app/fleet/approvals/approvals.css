@@ -58,8 +58,26 @@
   color: #55616f;
   line-height: 1.5;
   /* Nothing in S1 had a measure before; the promise ran at 171 characters per
-     line and the teaching drawer at 261. WCAG 1.4.8 caps at 80. */
-  max-width: 76ch;
+     line and the teaching drawer at 261. WCAG 1.4.8 caps at 80.
+     ⚠ S1.c — this was `76ch` and it bought **96** actual characters per line,
+     measured on prod. `ch` is the advance width of the digit "0", which here is
+     8.20px, while the average character in this sentence is 6.33px — so a `ch`
+     cap is ~30% looser than it reads. 58ch = 476px = **75** real characters,
+     inside both the WCAG ceiling and the 45–75 comfort band. If you change the
+     copy, re-measure with a canvas text measurement; do not trust the unit. */
+  max-width: 58ch;
+}
+
+/* The one glossary term in S1, and the reason it needs a page-local rule.
+   `.acr-term-tip` opens UPWARD (`bottom: calc(100% + 8px)`) and is 118px tall.
+   The description sits ~54px from the top of the page, so the tooltip opened at
+   `top: -50` — fifty pixels above the viewport, with half of it unreadable.
+   Here it always flips down, deterministically, because this element is always
+   near the top of the page. The general fix — flip on available space — belongs
+   with the shared component, at S1.d. */
+.aq-page .acr-sub .acr-term-tip {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 /* The load-bearing sentence gets WEIGHT, not a success colour: 14.3:1, darker
