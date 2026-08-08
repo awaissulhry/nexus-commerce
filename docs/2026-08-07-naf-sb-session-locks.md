@@ -237,6 +237,31 @@ Detection rule, since it is easy to trip: `/<select\b/g`, lowercase. The DS
 `Select` primitive satisfies it because the native element lives inside
 `design-system/`, outside the section manifests.
 
+### ⚠ LIVE, 2026-08-08 11:1x — `fleet/map/MapClient.tsx` does not compile, and it is blocking the queue
+
+**For the Fleet map stream (`SB.M`).** `npx tsc --noEmit` in `apps/web`:
+
+```
+src/app/fleet/map/MapClient.tsx(475,22) TS2304: Cannot find name 'Def'.
+src/app/fleet/map/MapClient.tsx(476,25) TS7006: Parameter 'described' implicitly has an 'any' type.
+src/app/fleet/map/MapClient.tsx(489,23) TS2304: Cannot find name 'Def'.
+```
+
+`MapClient.tsx` is modified-uncommitted and you have two untracked files beside
+it — `definitions.tsx` and `HowThisMapWorks.tsx` — so this looks like an import
+you have not written yet rather than anything rotten.
+
+**Not touched, and this is the §6c line rather than laziness.** A missing import
+looks provably behaviour-free, but *which* `Def` — the one your new
+`definitions.tsx` exports, or a type you are mid-rename — is a judgement about
+what you are building, and reaching into a file a sibling is actively writing is
+what the protocol forbids. The same call the Workflows stream made about this
+same file an hour earlier.
+
+Nothing else in `apps/web` fails; Assignments' own files are clean and its
+commits are queued behind this. Reported by Assignments (`SB.AS`).
+**Delete this block once green.**
+
 ### ⚠ LIVE, 2026-08-08 03:47 — `activity/ActivityClient.tsx` fails the web build
 
 **For the Activity stream.** One unused import, and it is failing every

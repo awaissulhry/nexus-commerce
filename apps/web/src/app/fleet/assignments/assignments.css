@@ -52,8 +52,14 @@
   /* The row is 49px because the actions menu button (26px) is the tallest cell
      content, while the title's own line box is 18px — so a naturally-sized
      anchor filled 40 of 49 and the click target measured 32.8% of the row
-     instead of the 40% this rebuild committed to. The min-height is that 9px,
-     stated rather than left to chance. */
+     instead of the 40% this rebuild committed to.
+
+     `content-box` is load-bearing and is why the first attempt at this did not
+     work: under the app's `border-box` default, `min-height: 27px` INCLUDES the
+     22px of padding, so it resolved to a 5px content box and changed nothing —
+     measured 33.4% on prod after shipping. Stated in content terms, 27px of
+     content plus 22px of padding is exactly the row. */
+  box-sizing: content-box;
   min-height: 27px;
 }
 .as-titlelink .nm {
@@ -185,7 +191,7 @@
   background: none;
   padding: 0;
   font: inherit;
-  color: #2f6feb;
+  color: #1f5fd0;
   cursor: pointer;
   text-decoration: underline;
 }
@@ -331,7 +337,11 @@
   border: none;
   padding: 0;
   font: inherit;
-  color: #2f6feb;
+  /* #2f6feb measures 4.56:1 on a white card and 4.22:1 on the page's own
+     #f4f6f9 — and the three text links this page owns all sit on the page
+     background, not the card. #1f5fd0 is 5.35:1 there and 5.82:1 on white, so
+     one value is correct in both places. */
+  color: #1f5fd0;
   cursor: pointer;
   text-decoration: underline;
 }
@@ -542,7 +552,7 @@
 }
 /* The claims this panel makes are checkable, so they link to the page that can
    check them. A promise with nowhere to verify it is just a promise. */
-.as-emptybody a { color: #2f6feb; text-decoration: underline; }
+.as-emptybody a { color: #1f5fd0; text-decoration: underline; }
 .as-emptybody a:hover { color: #1d4ed8; }
 
 /* ── AS.6 — several targets. */
