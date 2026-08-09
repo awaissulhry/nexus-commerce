@@ -136,9 +136,19 @@ function EntityCard({ data }: NodeProps) {
       ]
         .filter(Boolean)
         .join(' ')}
-      title={d.label}
     >
       <Handle type="target" position={Position.Left} className="sbm-handle" />
+      {/*
+        S2R — the native `title` is gone, from all 38 of these.
+        `definitions.tsx` on this page calls it "the exact mistake": unreachable
+        by keyboard, unreliable for screen readers, absent on touch. Here it was
+        worse than usual, because at the tiny tier the card rendered a dot and
+        the tooltip was the ONLY identification it had.
+
+        The name is always in the DOM now. Below the text tier it is
+        visually-hidden rather than absent, so a screen reader and a Ctrl-F
+        both still find it while the picture stays a picture.
+      */}
       {showText ? (
         <>
           <span className="sbm-ent-label">{d.label}</span>
@@ -150,7 +160,10 @@ function EntityCard({ data }: NodeProps) {
           ) : null}
         </>
       ) : (
-        <span className="sbm-ent-dot" aria-hidden />
+        <>
+          <span className="sbm-ent-dot" aria-hidden />
+          <span className="sr-only">{d.label}</span>
+        </>
       )}
       <Handle type="source" position={Position.Right} className="sbm-handle" />
     </div>

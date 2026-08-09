@@ -70,12 +70,14 @@
   letter-spacing: -0.01em;
   color: #1c2530;
 }
+/* S2R — was #667485 = 4.41:1 on this page's #f4f6f9. Section 1 measured it and
+   handed it here with the as-of stamp; both are the header's, not the band's. */
 .sbm-sub {
   margin: 4px 0 0;
   max-width: 78ch;
   font-size: 12.5px;
   line-height: 1.5;
-  color: #667485;
+  color: #55616f;
 }
 .sbm-sub a {
   color: #2b6cb0;
@@ -95,17 +97,29 @@
      ~44px, so the header reserves it. */
   padding-right: 48px;
 }
+/* was #8a95a3 = 2.81:1 — the worst text on the page after S1 closed the band */
 .sbm-asof {
   font-size: 11px;
-  color: #8a95a3;
+  color: #55616f;
   font-variant-numeric: tabular-nums;
 }
 
 /* the window switch — a radiogroup, not a native select (the ratchet bans one
-   and the other is one control instead of a menu you have to open) */
+   and the other is one control instead of a menu you have to open)
+ *
+ * ⚠ S2R — THE SELECTED STATE WAS INVISIBLE TO THE STANDARD. Measured on prod:
+ * unselected → selected was **1.11:1 on fill** (#fff → #eef4fb), **1.41:1 on
+ * text**, inside a container whose border was **1.25:1**. That is the identical
+ * 1.4.11 defect Section 1 measured on the census chip — living here on the two
+ * most consequential controls on the page, one of which decides which universe
+ * you are looking at and the other the denominator of every number.
+ *
+ * The fix is the one S1 already proved on `.sbm-lens.on`: an inverted fill that
+ * clears 3:1 by a mile, plus a weight step, so colour is not the only channel.
+ */
 .sbm-seg {
   display: inline-flex;
-  border: 1px solid #d7dee7;
+  border: 1px solid #78838f; /* was #d7dee7 = 1.25:1 */
   border-radius: 7px;
   overflow: hidden;
   background: #fff;
@@ -115,20 +129,33 @@
   background: transparent;
   padding: 5px 10px;
   font-size: 11.5px;
-  color: #5a6675;
+  color: #45505f;
   cursor: pointer;
 }
 .sbm-seg button + button {
-  border-left: 1px solid #e6ebf1;
+  border-left: 1px solid #cdd5df;
 }
 .sbm-seg button.on {
-  background: #eef4fb;
-  color: #1f4f8b;
-  font-weight: 600;
+  background: #1f4f8b;
+  color: #fff;
+  font-weight: 650;
 }
 .sbm-seg button:focus-visible {
-  outline: 2px solid #2b6cb0;
+  outline: 2px solid #1f4f8b;
   outline-offset: -2px;
+}
+
+/* The two switches change different ORDERS of thing — one picks the universe of
+   nodes, the other the denominator of every number — and they were pixel
+   identical, 10px apart. The window switch gets a visible label so it reads as
+   a qualifier rather than as a second subject control. */
+.sbm-seglabel {
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #55616f;
+  margin-right: -4px;
 }
 
 /* ── M1 · the census band (S1R) ────────────────────────────────────────────

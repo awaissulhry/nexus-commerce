@@ -234,6 +234,13 @@ export function MapClient() {
               </button>
             ))}
           </div>
+          {/* S2R — the two switches change different ORDERS of thing and were
+              pixel-identical 10px apart. This one qualifies every number on the
+              page; it now says so rather than relying on the reader inferring
+              it from position. */}
+          <span className="sbm-seglabel" aria-hidden>
+            Window
+          </span>
           <div className="sbm-seg" role="radiogroup" aria-label="Time window">
             {WINDOWS.map((w) => (
               <button
