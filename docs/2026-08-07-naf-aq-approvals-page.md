@@ -4387,3 +4387,431 @@ were cleaned. Restored on specificity, 5 classes to 4.
 measure · `1bfc4aedc` keep S4's example green.
 
 **S6 is complete.**
+
+---
+
+# Part 16 — S5 design study: "Waiting from outside the fleet"
+
+## 16.0 — What S5 is FOR, in one sentence
+
+**To make the handful of requests that can actually change something on Amazon
+impossible to mistake for the ninety-odd per cent that cannot — and to tell the
+truth about where they came from.**
+
+## 16.1 — The finding that reorganises this whole section
+
+The brief lists an ad-hoc red palette as defect 4. Measuring the page first
+turns that from a tidiness problem into the section's central design problem.
+
+Measured on prod, the S4 example card — the card whose own body text reads
+**"changes nothing on Amazon"**:
+
+```
+classes:          "aq-card r-high heavy"
+borderLeftColor:  rgb(197, 48, 48)     ← #c53030, 3px
+riskChip:         "high risk"
+```
+
+`ApprovalCard.tsx:538` sets the class from the **risk tier alone**:
+
+```ts
+<div className={`aq-card r-${approval.riskTier}${heavy ? ' heavy' : ''}`}>
+```
+
+and §1.2 established that **100% of fleet approvals are `riskTier: 'high'`**.
+So *every* card on this page already wears the danger colour, including the ones
+that are physically incapable of doing anything. S5 then wraps its rows in
+`border-left: 3px solid #c53030` — **the same 3px, the same hex** — inside a
+card whose children each already have it.
+
+> **The page's danger signal was spent before S5 got to use it.** S5's job is
+> not to add a louder red. It is to *stop spending red on the cards that cannot
+> act*, so that red means one thing.
+
+The card already computes the right concept and throws it away visually:
+
+```ts
+const needsAck = heavy && canExecute      // ← consequence. Correct.
+className={`aq-card r-${approval.riskTier}`}  // ← tier. Wrong axis.
+```
+
+`canExecute` is already a prop on every card, already true only for these rows,
+and already drives the ack tick. It simply never reaches the border.
+
+## 16.2 — What is on screen today, measured
+
+| | |
+|---|---|
+| Empty line offset | **1147px** inside a **962px** scroller — **185px below the first screen**, and the last element on the page |
+| Empty-line colour | `#55616f` on `#f4f6f9` = **5.83:1** — passes |
+| Origin line | `#6b7688` on card white = **4.59:1** passes; the same value on the canvas is **4.24:1** and would fail |
+| Red hexes in this block | `#c53030`, `#f0c9c9`, `#fdf7f7`, `#f0dcdc` |
+| `#c53030` call sites page-wide | **6** — `.aq-gateunknown`, `.aq-err`, `.aq-card.r-high`, `.aq-cameback.attempted`, `.aq-outside-card`, `.aq-outhead svg` |
+| Disclosure | full-width chevron `<button class="aq-outhead">`, the pattern S1 and S2 both retired |
+| `preview-only` | defined in `glossary.tsx:77`; `grep 'k="preview-only"'` → **0 hits** |
+
+**The provenance lie is in three places, not one.** The brief names
+`ApprovalsClient.tsx:856`. It is also at **:806** (the empty line — the state the
+operator will actually see) and at **:537**, inside *S2's readiness section*,
+which already says *"Separately, N requests from the older agent system are
+waiting"*.
+
+## 16.3 — Research
+
+### A · Environment separation — Stripe test vs live
+
+Stripe gives test mode a persistent orange chrome and live mode blue, with the
+toggle visible on every page, because *"if you change settings in the Dashboard
+while in test mode, you might also change them in live mode"* — the same UI
+with a different consequence. Two things transfer, and one does not.
+
+- **Transfers: persistent and structural beats a warning box.** The signal is
+  in the chrome, always, not in a banner you scroll past once.
+- **Transfers: one signal, one meaning.** Orange means exactly "not real"
+  everywhere in the product. This is the rule S5 currently breaks.
+- **Does not transfer: which side gets marked.** Stripe marks the *unreal* side
+  because a user's default assumption is "this is real". On `/fleet/approvals`
+  the page spends S1 and S6 establishing the opposite assumption — *"It does not
+  happen unless you say yes"*, *"changes nothing on Amazon"*. When the default
+  assumption is "inert", the deviation to mark is **the real one**.
+
+### B · Separate the section, or tag in place?
+
+The general rule from inbox design: **sections are a structural decision about
+handling and control; tags are for discovery within one handling model.** Split
+when the items are *handled differently*, tag when they are merely *sourced
+differently*.
+
+S5's rows differ in producer, endpoint, payload richness (no worker join, no
+track record, no resolved entity names), decision consequence, and the friction
+the decision requires. That is four differences in handling. **Keep the
+section** — and AQ-S5's original argument stands verbatim: putting two
+qualities of attribution under one count is how a queue starts lying.
+
+GitHub's fork-PR handling is the counter-example that proves the boundary: it
+does *not* move fork PRs to a separate list, it tags them in place and gates the
+dangerous capability (workflow approval for first-time contributors). The
+warning attaches to the **capability**, not the location. Our equivalent of that
+gate already exists and is already correct: `needsAck = heavy && canExecute`.
+So we do both, for different reasons — section for handling, gate for capability.
+
+### C · Naming a non-human origin
+
+The audit-logging consensus is blunt: *"a log line that says 'the automation
+user did it' is not reconstructible after an incident."* Name **what ran and
+when**, not the identifier. Rendering `<code>listing-quality-keeper</code>` is
+the identifier; "an agent from before the fleet" is a fabricated and false
+narrative. Both fail the same test.
+
+### D · Danger without alarm fatigue
+
+Applied, not redone — Part 2F and Pajamas' severity tiers. The operative line
+from that research for S5: a severity signal that is present on 100% of items
+carries **zero bits**. Today's red is exactly that. Reserving it restores its
+information content, which is the cheapest possible fix and requires no new
+colour.
+
+### E · Sections that are usually empty
+
+An always-empty section earns its space only when **its emptiness is itself
+information**. S5's emptiness qualifies — but only if it says the thing it does
+not currently say: that two named producers exist, what they would send, and
+that they are switched off. "Nothing is waiting" is not information. "Two
+scheduled checks could send requests here; both are off" is.
+
+### F · `dataviz`
+
+Loaded earlier this session. Its verdict here: a count of 0–3 rows is **not a
+chart and not a stat tile**. A tile is for a metric you track over time; this is
+a *setting-like state* with two meaningful values — none, or some. It belongs in
+a sentence. No meter, no tile, no chart in S5.
+
+## 16.4 — Verdict on each of the eight defects
+
+| # | Defect | Verdict |
+|---|---|---|
+| 1 | "an agent from before the fleet" | **Fix, in all three places** (:537, :806, :856). See 16.5 |
+| 2 | `<code>{originKey}</code>` on screen | **Fix.** Third door; S6 closed the other two |
+| 3 | Orphaned `preview-only` | **Fix by re-linking**, not by minting or deleting. See 16.6 |
+| 4 | Ad-hoc red palette | **Fix — and widen it.** The real defect is that red is *overloaded*, not that it is bespoke. See 16.1 / 16.8 |
+| 5 | Full-width chevron disclosure | **Fix — by deleting the disclosure entirely.** A section that is empty 99% of the time and critical 1% must not be collapsible: the only time it renders is the only time it must not be hidden. Its `useState(true)` default already admits this |
+| 6 | Renders the S6 card, which changed | **Fix.** The inversion is correct in *words* and invisible at a *glance* — 16.1 is the fix |
+| 7 | Empty state may belong to S2 | **Disagree, with a change.** Keep it in S5, and make it say what only it can say. See 16.7 |
+| 8 | No tooltip audit, not verified responsive | **Fix.** 16.9 and the build phases |
+
+## 16.5 — The provenance decision
+
+There are **three** producers, not one, and today all three render the same
+false sentence. Verified in the code and against prod data
+(`by agentKey: [["manual-action", 8], ["listing-quality-keeper", 8]]`):
+
+| `originKey` | What it actually is | What we will say |
+|---|---|---|
+| `manual-action` | **A person.** `approval-gate.service.ts:114` — the copilot's "Request approval" button. Not an agent at all | "Asked by **a person**, from the copilot" (and the name, when `run.userId` is set — it is null on all 18 today) |
+| `pricing-watchdog` | A **scheduled check** that watches prices; registered, 07:00 UTC daily, `enabled=false`, 0 runs ever | "Asked by the **price watchdog** — a scheduled check that runs outside the fleet" |
+| `listing-quality-keeper` | A **scheduled check** on listing quality; registered, no `AgentDefinition` row, 0 runs ever | "Asked by the **listing quality keeper** — a scheduled check that runs outside the fleet" |
+
+Calling `manual-action` "an agent from before the fleet" is wrong three times
+over: it is not an agent, it is not from before the fleet, and it erases the
+fact that **a human asked for this**.
+
+**The root cause, named:** the page treats *"not a charter"* as *"not part of
+the fleet"*. Those are different things. A charter is a governed fleet worker
+with a dial and a track record; these are simply producers that are not
+charters. "Outside the fleet" is true and sufficient. "From before the fleet"
+is an invention.
+
+Names come from a **map in the approvals page**, keyed by `originKey`, with an
+honest fallback for an unknown key ("a system we cannot name") — never the key
+itself, and never a fabricated worker.
+
+## 16.6 — Glossary reconciliation
+
+`preview-only` was minted in AQ.1, rendered as `<Term k="preview-only">` on the
+chip S2 later renamed to "describes only", and the wrapper was dropped with the
+rename. It is now a definition in a shared, append-only file that ten pages
+import, with nothing pointing at it.
+
+**Resolution: re-link it, do not rename and do not delete.**
+
+- Renaming means appending a second entry and orphaning the first — two dead
+  weights instead of one.
+- Deleting edits a shared append-only file that other pages may yet link.
+- Re-linking is free, and there is an obviously right place for it: **S5's own
+  contrast sentence**, where the distinction between "describes only" and "can
+  actually run" is the entire point. The term's body already reads *"All three
+  of the fleet's own actions are preview-only today"* — written for exactly
+  this comparison.
+
+**Updated Part 4 debt list** (supersedes §12.5.2's reconciliation, which covered
+only the other two):
+
+| Term | Status |
+|---|---|
+| `reversibility-class` | **Correctly never minted** — renders as plain-English chips (S1, §12.5.2) |
+| `superseded` | **Correctly never minted** — renders as "You changed the number" (S1, §12.5.2) |
+| `preview-only` | **Minted, orphaned by S2's rename, re-linked by S5.** Debt closed here |
+
+No new terms. S5 mints nothing.
+
+## 16.7 — How S5 relates to S2, now that S2 is a checklist
+
+**S5's empty state stays in S5.** Folding it into the readiness checklist would
+be a category error: S2's three conditions are *preconditions for the fleet to
+ask*, and S5's producers are **not behind that gate**. They are two crons with
+their own switch.
+
+That distinction exposes something sharper. S2's headline today reads:
+
+> "1 of 3 conditions met — nothing NEW can reach this queue yet."
+
+Scoped to the fleet, that is true. Read as written, it is **a claim about the
+whole page**, and it would become false the moment either cron is toggled on —
+which §1.2 establishes is a single Control Center switch, not a deploy. The
+claim is currently true for a reason S2 does not state and does not check.
+
+So the relationship is: **S2 owns the fleet's gate; S5 owns its own gate, and
+must state it.** That is what earns the empty line its space (16.3E), and it is
+strictly more honest than moving the line into a checklist that does not
+measure it.
+
+S2 keeps its one-line pointer at :537 (with the provenance fixed) because a
+populated S5 is exactly the kind of thing a readiness readout should mention.
+
+## 16.8 — Colour and token decisions, with measured contrast
+
+**The decision: red means "this can actually happen".** One meaning, page-wide.
+Not risk tier, which is high on everything and therefore says nothing.
+
+| Where | Today | Proposed | Measured |
+|---|---|---|---|
+| `.aq-card.r-high` left border | `#c53030` on every card | **removed**; border keyed to `canExecute` instead | — |
+| A card that can execute | (indistinguishable) | `3px solid var(--h10-danger)` `#e5484d` | **3.91:1** vs white — graphic, needs 3:1 ✓ |
+| Danger text / glyph | `#c53030` ad-hoc | `var(--h10-danger-strong)` `#c0392b` | **5.44:1** vs white ✓ (today's `#c53030` measures 5.47 — a visually identical swap) |
+| `.aq-outwhy` panel | `#fdf7f7` bg / `#f0dcdc` border | `var(--h10-danger-soft)` `#fde8e8` | body `#3a4658` on it = **8.14:1** ✓ |
+| "switched off" state in the empty line | — | `var(--h10-amber-text)` `#9a6700` | **4.50:1** on canvas `#f4f6f9` ✓ (exactly at the line — verified composited before shipping) |
+| `.aq-outside-card` border | `#f0c9c9` | `var(--h10-danger-soft)` | decorative |
+
+Four ad-hoc hexes retired to DS tokens. **`#c53030`'s other four call sites are
+out of scope for S5** — `.aq-err` and `.aq-gateunknown` are genuine error states
+and keep the danger colour; `.aq-cameback.attempted` likewise. Only
+`.aq-card.r-high` changes meaning, and that is the point of 16.1.
+
+All figures above are declared-colour computations against the resolved
+backdrop. **Every one will be re-measured composited on prod** before a phase is
+called done — the S4 session's finding invalidated a full round of "verified"
+numbers, and knowing the rule did not prevent it recurring.
+
+WCAG 1.4.1 is satisfied without the colour in all cases: the word
+("can actually run"), the ack tick, and the section heading each carry it
+independently.
+
+## 16.9 — Tooltip inventory
+
+| Term | Where | Status |
+|---|---|---|
+| `preview-only` | S5's contrast sentence | **re-linked here** |
+| `undo-window` | parked row, and the "why" paragraph | exists, keep |
+| `risk-tier` | inside the card (S6) | exists, unchanged |
+| `staleness` | inside the card (S6) | exists, unchanged |
+
+Four terms, four resolving definitions, zero minted. Every one will be verified
+to render *and* dismiss with a real Escape — noting that the S6 session's
+automation could not deliver Escape to the document, so this must be checked
+with a dispatched event **and** by hand.
+
+## 16.10 — The count triage (handed off, with a diagnosis)
+
+**Diagnosed.** `whereFor('waiting')` and the outside endpoint are *disjoint by
+construction*:
+
+```ts
+waiting: status IN (pending, scheduled) AND toolName IN  FLEET_TOOLS AND not snoozed
+outside: status IN (pending, scheduled) AND toolName NOT IN FLEET_TOOLS
+```
+
+So the badge is not wrong about *its own* definition — it is wrong about the
+word "Waiting for you", because rows the operator must decide are excluded from
+it. That is what the S6 session saw as 3-vs-5.
+
+**Two genuine bugs found while diagnosing, neither previously recorded:**
+
+1. **Parked rows are counted as waiting.** `whereFor('waiting')` includes
+   `status: 'scheduled'`. A parked row has already been decided and is counting
+   down; it is not waiting on anyone. The badge overcounts by the number of
+   parked rows — and the operator's own brief states the definition it violates.
+2. **The outside endpoint ignores `snoozedUntil`.** A snoozed outside row still
+   renders. The fleet queue hides it and the counts hide it; S5 shows it.
+
+**Recommendation: do NOT merge outside rows into `waiting`.** That would break
+the definition the operator gave, and `inboxCounts()` /
+`approval-inbox.service.ts` is a **shared service outside this stream's claimed
+paths** — the rail and other fleet pages read it. Instead:
+
+- S5 fixes what it owns: **its own list respects `snoozedUntil`** (bug 2).
+- The tabs get a truthful **second number** rather than a merged one, so
+  "Waiting for you 3" and "From outside 2" are both true and neither hides the
+  other.
+- **Bug 1 is handed to the owner of `approval-inbox.service.ts` in writing**, in
+  the locks file §6b cross-stream list, with the one-line fix
+  (`status: 'pending'` for the count, `['pending','scheduled']` for the list) and
+  the note that it changes a number three surfaces read. This stream will not
+  change a shared count unilaterally.
+
+## 16.11 — The proposed design
+
+### The shape
+
+```
+  ── when EMPTY (its normal state, and the one you will see) ──────────────
+
+  ⛉  Nothing is waiting from outside the fleet.
+     Two scheduled checks — the price watchdog and the listing quality
+     keeper — can send requests here. Both are switched off.  ⓘ off
+```
+One line, two sentences, no card, no border, no red. The second sentence is the
+part that is worth 185px of scroll: it names the producers and their state.
+
+```
+  ── when POPULATED ───────────────────────────────────────────────────────
+
+  ┃ 2 requests can actually change something on Amazon
+  ┃ Everything above only describes what it would do. These two can run.
+  ┃
+  ┃  ┌───────────────────────────────────────────────────────────────┐
+  ┃  │ Asked by the price watchdog — a scheduled check that runs      │
+  ┃  │ outside the fleet. No worker page, no track record.            │
+  ┃  ┃ ┌─────────────────────────────────────────────────────────┐   │
+  ┃  ┃ │ Price watchdog wants to change a price                   │   │
+  ┃  ┃ │ base price  €49.00 → €39.00                              │   │
+  ┃  ┃ │ on GALE-JKT-BLK-L                                        │   │
+  ┃  ┃ │ If this is wrong, you sell at the wrong price until it   │   │
+  ┃  ┃ │ is corrected — and any orders placed meanwhile stand.    │   │
+  ┃  ┃ │ ☐ I have read what this does.                            │   │
+  ┃  ┃ │ [ Apply — base price €49.00 → €39.00 ]  [ Reject ]       │   │
+  ┃  ┃ └─────────────────────────────────────────────────────────┘   │
+  ┃  └───────────────────────────────────────────────────────────────┘
+```
+`┃` = the danger border, now carried **only** by cards that can execute. The
+heading is a heading, not a button: no chevron, nothing collapsible.
+
+### Every state
+
+**(a) Empty** — as above. One line. Names both producers and says they are off.
+
+**(b) One waiting request** — heading reads *"1 request can actually change
+something on Amazon"*; one origin line; one card with the danger border, the
+consequence sentence and the ack tick.
+
+**(c) Several, different tools** — one origin line per row, because they may
+differ (a person, a watchdog). Rows are not grouped by producer: at this volume
+grouping adds a heading level and hides the fact that these are individually
+serious. Order is `requestedAt asc` — oldest first, matching the fleet queue.
+
+**(d) One parked, counting down** — keeps the existing green parked treatment
+(`#bbe5c8` / `#f3faf5`): it has been decided, and green-for-decided is already
+the page's vocabulary. It loses the danger border, because at that point the
+question is no longer "is this real" but "do you want it back". Wording:
+*"Approved — changing a price. Running in 14 seconds — the undo window.
+Nothing has happened yet."*
+
+**(e) Came back from a failed execution** — the only rows on the page where this
+is reachable. Reuses S6's `.aq-cameback.attempted` banner verbatim: *"You
+approved this, it was attempted, and it failed."* No new component. Verified in
+S6.d that it renders distinctly.
+
+**(f) Loading, and the fetch failing** — today there is **neither**; the section
+simply does not exist until the fetch resolves, so a failed fetch is
+indistinguishable from "nothing is waiting". For a section whose entire purpose
+is that these rows were once invisible, **silence on failure is the original bug
+wearing a new hat.** Loading: the empty line with *"Checking…"* in place of the
+second sentence. Failure: *"Could not check whether anything is waiting from
+outside the fleet."* with a retry — never the reassuring empty line.
+
+## 16.12 — What I am explicitly NOT doing
+
+- **Not merging outside rows into the waiting count** (16.10).
+- **Not changing `inboxCounts()` or `approval-inbox.service.ts`** — shared,
+  outside this stream's claim. Handed off in writing instead.
+- **Not touching `.aq-err`, `.aq-gateunknown` or `.aq-cameback.attempted`** —
+  their red is correct.
+- **Not minting any glossary term.**
+- **Not building a count tile, meter or chart** (16.3F).
+- **Not enabling either cron, writing `AgentDefinition`, or moving any dial.**
+  Every state above is produced by seeding inert rows whose previews touch no
+  real entity.
+- **Not redesigning the parked row** beyond dropping the danger border; the
+  duplicate `OutsideParked` / `ScheduledRow` implementation stays until AQ.3
+  merges them, as already recorded at `ApprovalsClient.tsx:716`.
+
+## 16.13 — Build order
+
+| Phase | What | Re-verifies |
+|---|---|---|
+| **S5.1** | Provenance: the origin map, all three call sites (:537, :806, :856), no `<code>`, no "before the fleet" | S2 |
+| **S5.2** | The danger border moves from `riskTier` to `canExecute`; four ad-hoc hexes → DS tokens | S4, S6 |
+| **S5.3** | The heading stops being a chevron button; `.aq-outwhy` folded into it | S6 |
+| **S5.4** | The empty line: names both producers and their state; `preview-only` re-linked | S2 |
+| **S5.5** | Loading and failure states; the list respects `snoozedUntil` | — |
+| **S5.6** | Every state seeded and measured — (a)–(f), nine widths, 200% zoom, keyboard, composited contrast; database back to exactly 18 | all |
+
+## 16.14 — Sources
+
+**Environment separation** — [Stripe · Testing / test mode][s-test], and the
+dashboard's persistent mode colouring ([overview][s-mode]).
+**Actor naming** — [Auditing and Logging AI Agent Activity][audit] ("name the
+run, not the bot").
+**Capability-gated warnings** — [GitHub · Securely using `pull_request_target`][gh]
+and first-time-contributor workflow approval.
+**Severity and alarm fatigue** — Part 2F of this document, and
+[GitLab Pajamas · Destructive actions][pajamas]. Applied, not repeated.
+**Counts and tiles** — the `dataviz` skill: a two-valued state is a sentence,
+not a tile.
+
+[s-test]: https://docs.stripe.com/test-mode
+[s-mode]: https://support.stripe.com/questions/stripe-issuing-test-mode-configurations-and-differences-vs-live-mode
+[audit]: https://www.loginradius.com/blog/engineering/auditing-and-logging-ai-agent-activity
+[gh]: https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+[pajamas]: https://design.gitlab.com/patterns/destructive-actions/
+
+**AWAITING OPERATOR APPROVAL — no UI code written.**
