@@ -4059,3 +4059,111 @@ must survive 200% zoom.
 
 **In-repo** · live prod measurement at 1728×906, 2026-08-09 ·
 `glossary.tsx:175` · Part 2 (the retention-banner rejection)
+
+---
+
+## 24.7 — Execution record
+
+**Shipped** `80d7bd382` (S6 + S7 + the page-wide sweep) and `e661ab092` (the
+arrow defect found on production, below). Verified on
+`https://nexus-commerce-three.vercel.app/fleet/activity` at 1728×906, 2026-08-09.
+
+### What was built
+
+S6 now derives its sentence from BOTH scope switches instead of asserting one
+population. All four states were exercised through the real switches on
+production, not reasoned about:
+
+| self-test | test runs | sentence rendered |
+|---|---|---|
+| off | off | *"**Two kinds** of run are left out of the counts above: the self-test …, and test runs from the Workflows page …"* |
+| on | off | *"**One kind** of run is left out …: test runs from the Workflows page …"* |
+| off | on | *"**One kind** of run is left out …: the self-test …"* |
+| on | on | *"Nothing is being left out — you are looking at everything on record."* |
+
+Switches were returned to their defaults afterwards. S6 prints **no count** —
+S1 states the numbers, and a number that appears twice is a number that can
+disagree — and it points AT the switches rather than growing a second copy of
+them. S7's fourth paragraph teaches both populations for the same reason;
+still five paragraphs.
+
+`glossary.tsx` ended *"Hidden by default; tick the box to see it"* and that
+tooltip renders on this page; there has been no box since S3R replaced the
+checkbox with a switch. Corrected to *"switch it on under Filters to see it"* —
+six words, the term unchanged, so the one-definition rule holds. Claimed,
+corrected, noted, released.
+
+### The page-wide sweep — the real point of this unit
+
+Every visible element of all seven sections, explainer open, measured against
+its OWN painted background rather than white:
+
+```
+measured: 129 elements   pageWideFailures: []   worst: 4.76:1 (.sba-rollupbtn)
+sizes: 20px ×1 · 13px ×73 · 12.5px ×2 · 12px ×53
+overflow: 1728/1728
+```
+
+Production matched local exactly. The two 12.5px are DS components' own control
+text (`.h10-ds-fpanel-toggle`, `.h10-ds-btn sm`) — the ladder governs the page's
+own text and DS components keep their internal scale. Stating "20/13/12 and
+nothing else" while two DS controls sit at 12.5 would be the kind of tidy claim
+this page exists not to make.
+
+Also fixed `.sba-freshsep`, S1's separator, at **1.81:1** — the page-wide sweep
+only happened at the end, so S4R's treatment of the same problem (a 3px
+`aria-hidden` graphic dot, rather than darkening a "·" until it reads like
+prose) had not reached it.
+
+### The defect this section shipped, and how it was caught
+
+Both S6 links rendered as **three line boxes each** on production — the text,
+then a full-width empty row, then the arrow orphaned underneath:
+
+```
+"The Control Room has those " → rects [ {t:369,l:652,w:174}, {t:387,l:92,w:755}, {t:398,w:0} ]
+```
+
+The cause is the preflight reset `img, svg, video, canvas, … { display: block }`.
+Inside an inline anchor that makes the trailing arrow a block box, and **a block
+child breaks the inline flow regardless of the parent** — the anchor's own
+`white-space: nowrap` was already there and could not help, which is exactly why
+the declaration looked like it had the case covered. Fixed at
+`.sba-notshown a svg { display: inline-block; vertical-align: -1px }`; a blanket
+`svg { display: inline }` would break every icon on the page that is correctly a
+block. Re-measured on prod: **1 line box each, arrow on the same row, zero
+broken inline icons page-wide.**
+
+Three things worth keeping from it:
+
+- **These are the only two inline-flow icons on the page.** Every other icon
+  sits in a flex row, where a block child is harmless. One section had it and
+  six did not.
+- **Neither sweep could see it.** It is not a colour and not a size, and the
+  orphaned arrow stays INSIDE its container, so the 200%-zoom escape check —
+  which compares each rect against the container's edges — passed it too. The
+  instrument that found it was counting `getClientRects()` on inline elements
+  containing an `svg`.
+- **A "not deployed" reading was wrong once.** The rule appeared absent from the
+  bundle because the polling probe grepped `/_next/static/css/…`, and Next 16
+  emits `/_next/static/chunks/….css`; it had been live for minutes. The probe
+  was broken, not the deploy. Checking the asset the page actually links is the
+  cheap version of that lesson.
+
+### Known boundary, stated rather than fixed
+
+Below ~500 CSS px the S3 toolbar's DS controls (`.h10-ds-btn sm`, the search
+field) escape their container. That is under half the 200%-zoom target, which
+passes clean at 700px, and it belongs to the controls strip rather than to S6 —
+recorded here, not silently widened into this unit.
+
+Trailing geometry at true bottom: last card 647, `main` 696 — a 48px band that
+is the page's own bottom padding, with nothing painting below it. The white
+beyond that lies outside `<main>` in the app shell at an outer scroll offset,
+and is not this page's to answer for.
+
+### With this, /fleet/activity is rebuilt end to end
+
+S1 header/scope/freshness · S2 the band · S3 the controls strip (+ Phase 0, the
+frozen-facet lie) · S4 the list · S5 the drawer · S6 the footnote · S7 the
+explainer. Seven sections, zero contrast failures, one type ladder.
