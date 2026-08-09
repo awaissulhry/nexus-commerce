@@ -137,6 +137,12 @@ interface CharterRow {
 
 const humanTool = (s: string) => s.replace(/-/g, ' ')
 
+/* Where a WORKER'S NAME is expected — the first two words of a card — a bare
+   de-hyphenated key reads as a database column, not as somebody who wants to
+   do something. Only the leading letter: "Listing quality keeper", matching
+   the charters' own house style ("Bid tuner", "Keyword harvester"). */
+const sentenceCase = (s: string) => s.replace(/^./, (c) => c.toUpperCase())
+
 function whenNext(iso: string | null): string {
   if (!iso) return 'not scheduled'
   const ms = new Date(iso).getTime() - Date.now()
@@ -869,7 +875,11 @@ function OutsideQueue({
                     trackRecord: null,
                   }}
                   labels={labels}
-                  workerName={a.originKey ? humanTool(a.originKey) : 'An agent we cannot identify'}
+                  workerName={
+                    a.originKey
+                      ? sentenceCase(humanTool(a.originKey))
+                      : 'An agent we cannot identify'
+                  }
                   busy={busy}
                   canExecute={a.canExecute}
                   onDecide={onDecide}
@@ -1111,14 +1121,12 @@ export function ApprovalsClient() {
   const nameOf = useCallback(
     (key: string | null) =>
       key
-        ? /* `nameByKey` only covers the seven CHARTERS. `listing-quality-keeper`
-             is a registered agent with its own cron and is not one of them, so
-             its cards opened with the lowercase machine key — "listing quality
-             keeper wants to change a price". The card's first words are a
-             worker's NAME; sentence-case the fallback so an unmapped agent
-             still reads as somebody rather than as a database column. */
-          (nameByKey.get(key) ??
-          key.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()))
+        ? /* `nameByKey` covers the seven CHARTERS and nothing else, so an
+             unmapped key would open a card with lowercase machine text where a
+             worker's name belongs. Sentence-cased for that reason. (The
+             lowercase name actually seen on prod came in by the OUTSIDE path
+             below, not through here — this is the same defect's other door.) */
+          (nameByKey.get(key) ?? sentenceCase(key.replace(/[_-]+/g, ' ')))
         : 'An agent we cannot identify',
     [nameByKey],
   )
