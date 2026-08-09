@@ -3324,6 +3324,88 @@ aside"* where a built-in runs its code default, instead of naming *"the built-in
 wiring"*. It is one line in `RoutineClient`'s dialog and you declined it once as
 not-a-defect. **Take it in S5.a's commit, or leave it?**
 
+### 13.8 · S5.a — EXECUTION RECORD (shipped and prod-verified 2026-08-09)
+
+Three commits: `90d236b72` (the swap), `fd28f0d82` (two defects prod showed),
+`45cbd8d0a` (the correction to that correction). Measured on
+`nexus-commerce-three.vercel.app` at **1728 × 962**, on both baselines.
+
+#### Exit criteria
+
+| Criterion | Before | After |
+|---|---|---|
+| `.wf-canvas` / `.react-flow` in the editor | 1 / 1 | **0 / 0** |
+| smallest text in the picture, 6 steps | **7.96px** at `fitView` zoom 0.7239 | **10.5px**, no zoom |
+| smallest text in the picture, 2 steps | 11px at zoom 1 | **10.5px** |
+| steps column share of the 1572px grid | **41.2%** (648.3) | **55.9%** (879.5 : 676.5) |
+| `RoutineCanvas.tsx` importers | 1 | **0** — file deleted |
+| false "never run" claims under a draft | — | **0** (`.wf-pipe-last` count 0) |
+
+The smallest text is now `.wf-pipe-levelk`, the stage label, at the scale's
+floor — not a node label the layout shrank.
+
+#### Two defects the exit criteria did not cover
+
+Every criterion above passed on the first commit, and the screenshot still had
+two things wrong in it. Both are recorded because *criteria pass and the page
+is still wrong* is the failure mode this method exists to catch.
+
+1. **`auto-fit` collapses empty tracks and stretches what is left.** A stage
+   holding one step took the full 676.5px, so *"Amazon Ads director · Compiles
+   one ranked plan"* rendered in a bordered box with its OFF pill **456px**
+   from its name — the dead width this section exists to remove, reintroduced
+   by the commit that removed it.
+2. **The picture ended 1397px above the bottom of the form.** I had asserted
+   in a commit message that the pipeline "is as tall as the routine". Measured:
+   **344.9px** against a step column of **1741.8px**. Shorter than the canvas
+   is not the same as right — by the third step card, the picture the cards
+   edit has scrolled away. `.wf-editpic` is `position: sticky` now.
+
+#### And a correction to the first correction
+
+Swapping to `auto-fill` fixed the one-step stage and broke the two-step one:
+the custom went from 334.3px cards **filling** the row to 220.2px cards beside
+a **220px hole** — and the two-step custom is the routine an operator actually
+authors. Neither mode is right alone. **Fit the tracks, cap the card.**
+
+| Stage | Cards | Trailing gap |
+|---|---|---|
+| council, 4 steps | 220.2 × 4 | **0** |
+| council, 1 step (×2) | 340 | 336.5 |
+| custom, 2 steps | 334.3 × 2 | **0** |
+
+#### Sticky, verified by scrolling
+
+`main.flex-1.overflow-auto`, scroll range 1958px:
+
+| scrollTop | picture top | in view |
+|---|---|---|
+| 0 | 511.7 (natural) | yes |
+| 700 | **12** (pinned) | yes |
+| 1400 | **12** (pinned) | yes |
+| 1957.5 (end) | −96.3 (leaving with its grid) | yes |
+
+#### A probe lesson, and it is the third this session
+
+`window.scrollBy(0, 1200)` moved nothing and `window.scrollY` stayed 0 — this
+app shell scrolls `main.flex-1.overflow-auto`, and `document.scrollingElement`
+is 962px tall and unscrollable. The first sticky probe therefore reported the
+picture unmoved, which reads exactly like a fix that did not work. **Find the
+scrolling element before measuring scroll.** Alongside §13.1's chip-not-row-text
+lesson: on this page the probe lies before the page does.
+
+#### Prod left as found
+
+Custom `rev 3`, Ready, Manual, never run. Council `v1` active serving 1 run,
+`rev 1` and `rev 2` superseded, **3 rows** — unchanged. Both editors discarded
+and every `naf-wf-draft-*` key cleared from the browser.
+
+#### Carried into S5.b
+
+`.wf-editpic` caps at `calc(100vh - 24px)` and scrolls internally; neither
+baseline reaches it (`scrollHeight === clientHeight`), so the internal scroll
+is **untested** and belongs in a later state check.
+
 ---
 
 ## Sources
