@@ -1039,12 +1039,49 @@ from before S3.j deployed — so the probe now asserts the build carries
 match its dot until I killed the transition: **the same artefact, third time,
 caught by the control instead of by shipping a wrong fix.**
 
-### Still open, and not this section's
+### S3.n — and the last open item turned out not to need the band at all
 
-- At 1100×800 the page header, census band and footer take **407px of an 800px
-  viewport**, leaving `.sbm-body` 392.7px to split between the rail and the
-  canvas. The canvas is no longer broken there, but it is cramped, and the cause
-  is above it. **Raised** — §M1's band and the header.
+The remaining complaint was that at 1100×800 the header, census band and footer
+take **407px of an 800px viewport**. I had raised it against §M1's band, on the
+assumption that the fix was to make the chrome smaller. Measured, it is not.
+
+| at 1100×800 | |
+|---|---|
+| header | 112.3px (identical at 1728 — it does not grow) |
+| teaching disclosure | 29.3px |
+| census band | 140.8px — **+51.3** over its 1728 height, from text wrapping |
+| footer | 37px — **+16.5** over 1728, same cause |
+| left for `.sbm-body` | **392.7px**, to split between the rail and the graph |
+
+Only 67.8px of that is width-induced wrapping. The other ~339px is what the page
+*is*. Three fixed panels and a graph do not fit in 800px, and no redistribution
+of the chrome makes them — recovering every wrapped pixel would still leave a
+220px graph.
+
+So the fix is not a smaller band; it is that **`height: 100dvh` is the wrong
+promise below 1100**. Above it the promise holds — at 1101×800 the canvas gets
+355.4px with no scrolling at all. Below, the page stops dividing a fixed height
+and becomes as tall as it needs:
+
+| | as shipped | after |
+|---|---|---|
+| canvas at 1100×800 | 152.5px | **400px** |
+| canvas at 1024×768 | 101.8px | **400px** |
+| canvas at 1101×800 | 355.4px | 355.4px — rule correctly does not apply |
+
+**Verified reachable**, because a taller page only helps if you can get to the
+bottom of it: the app shell's `main.flex-1.overflow-auto` picks up the overflow
+(scrollHeight 1068 vs clientHeight 800) and scrolling to the end brings the
+footer fully into view. Probing `document.scrollingElement` would have reported
+"no scroll" and been wrong — the page root never scrolls on this shell.
+
+The cost, stated: a wheel over the canvas pans the graph, so the ~250px of scroll
+has to be driven from the chrome around it. That is the standard bargain for an
+embedded canvas and the gesture is already written on screen.
+
+**Nothing is now open against another section.** The band was raised and then
+cleared by measurement rather than by editing it — which is the better outcome,
+because §M1 would have been changed for a problem it was not causing.
 - **New:** at ≤1100 the canvas measures **2px tall**, before and after this work,
   and the rail clips 16px at 1100 / 42px at 1024. **Both have the same cause and
   it is not the rail.** I first assumed the clipping was my own `max-height` and
