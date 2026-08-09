@@ -2147,12 +2147,40 @@
   color: #8a6d3b;
 }
 
+/*
+ * S4.b — THE WAY OUT STOPS SCROLLING AWAY.
+ *
+ * Measured on prod, in every state that has anything to read:
+ *
+ *   a worker (live)          115px hidden   exits visible: 0 of 51.5px
+ *   a worker (31 findings)   161px hidden   exits visible: 0 of 51.5px
+ *   a handoff, 5 drops       988px of content in a 529px box — 46.5% hidden,
+ *                            exits visible: 0 of 28.3px
+ *
+ * ...behind a macOS overlay scrollbar, which shows nothing until you already
+ * know to scroll. This rail's whole architecture is that it ENDS IN LINKS
+ * rather than growing tabs — Cloudscape puts it as "a split view should never
+ * replace details pages" — and links you can only reach by scrolling an
+ * invisible scrollbar are not an ending.
+ *
+ * `sticky`, not a restructure: the exits are rendered inside the panel
+ * fragments, so lifting them out of the scrolling body would mean every panel
+ * returning two things. Sticky pins them when the content overflows and leaves
+ * them in the flow when it does not, so a short panel gets no dead space.
+ *
+ * The negative side margins let the background span the body's 12px padding,
+ * so scrolling text passes underneath rather than beside.
+ */
 .sbm-rail-exits {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 14px;
-  padding-top: 10px;
+  margin: 14px -12px 0;
+  padding: 10px 12px 12px;
+  background: #fff;
   border-top: 1px solid #eef2f6;
 }
 .sbm-rail-exits a {
