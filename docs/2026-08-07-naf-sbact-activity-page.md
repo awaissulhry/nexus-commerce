@@ -4169,6 +4169,25 @@ at all. Checking the source said more than watching the screen did — but both
 were done, because "it does not read grain" and "nothing else re-renders it into
 a different shape" are two claims.
 
+### The DT.8 teaching gate, re-run
+
+ACT.6 passed this page through a controls gate and S67R changed both sections it
+covers, so it was re-run on prod rather than assumed to still hold:
+**34 controls, 0 unnamed, 0 keyboard-unreachable.** S6 owns three (two links and
+a `<Term>`); S7 owns the toggle plus twelve `<Term>`s.
+
+One control was flagged unreachable and was **not** a defect: the grain control
+is `role="radiogroup"` with `tabindex="0"` on the checked option and `-1` on the
+other — exactly one tab stop, arrow keys to move, which is the APG roving-tabindex
+pattern. The probe's rule ("tabindex < 0 means unreachable") is wrong for
+composite widgets.
+
+The same probe also mis-scoped `'.sba-notshown ' + SELECTOR_LIST`: **a descendant
+combinator binds only to the first term of a selector list**, so everything after
+the first comma was page-wide and S6 appeared to own the search box and the grain
+switch. Both are the standing lesson in this doc — a probe is an instrument, and
+an instrument that has not been checked is a source of findings, not of facts.
+
 ### Known boundary, stated rather than fixed
 
 Below ~500 CSS px the S3 toolbar's DS controls (`.h10-ds-btn sm`, the search
