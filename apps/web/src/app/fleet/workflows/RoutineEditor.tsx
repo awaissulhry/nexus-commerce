@@ -180,11 +180,21 @@ export function RoutineEditor({
        drop, so it is not overwritten underneath them. */
     if (pendingRestore) return
     try {
-      localStorage.setItem(draftKey(routineKey), JSON.stringify(draft))
+      /* The mirror holds a draft only while there IS one. Prod caught the
+         alternative: "Throw it away" removed the key, the effect then re-ran
+         and wrote the baseline straight back, so the button left a stored
+         copy behind. Harmless today — a stored baseline differs from the
+         baseline by nothing, so it is never offered — but a stored draft that
+         is not a draft is a trap for whoever changes that condition next. */
+      if (diffIsEmpty(computeDiff(baseline, draft))) {
+        localStorage.removeItem(draftKey(routineKey))
+      } else {
+        localStorage.setItem(draftKey(routineKey), JSON.stringify(draft))
+      }
     } catch {
       /* storage full — editing still works, only the mirror is lost */
     }
-  }, [draft, routineKey, pendingRestore])
+  }, [draft, baseline, routineKey, pendingRestore])
 
   /* Every edit goes through here, so touching the wiring while an offer is
      open counts as answering it: you chose what is on screen. Without this the
