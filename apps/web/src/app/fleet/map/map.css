@@ -1670,7 +1670,11 @@
        236.2px. Cap the controls, give the slack to the explanation. */
     grid-template-columns: 190px minmax(0, 1fr) 250px;
     gap: 0 14px;
-    max-height: 210px;
+    /* 210 was set before the track above was capped. Narrowing `Show` from
+       509.8px to 250px made its footnote wrap to three lines, so the rail's
+       content grew to 226px at 1100 and 252px at 1024 and the old cap clipped
+       it — 16px and 42px. Cap the height to what the content actually needs. */
+    max-height: 260px;
   }
   .sbm-orail-sec + .sbm-orail-sec {
     margin-top: 0;
