@@ -2,7 +2,7 @@
 
 /**
  * NAF.WF.3b — the editor: composition only, structured panels beside a live
- * canvas (operator decision D1 — no free-drag wiring). Each step is a card;
+ * picture (operator decision D1 — no free-drag wiring). Each step is a card;
  * its "hands … to" picker IS the edge editor; gates are three plain choices.
  * Drafts are inert, so edits apply with no ceremony — Publish is the one
  * consequential act and carries all of it: the categorized diff and the
@@ -14,6 +14,14 @@
  * The trigger unlocked with WF.4c: the clock re-arms from the stored
  * definition the moment a revision activates or reverts, so what this panel
  * publishes is what actually fires — no restart, no drift.
+ *
+ * WF-S5R / S5.a — the picture is `RoutinePipeline`, the same component the
+ * read view uses, in `composing` mode. It was the xyflow canvas until now,
+ * because S2R replaced the READ view and deliberately left `RoutineCanvas`
+ * alone for this file to keep importing. That left every number S2R had just
+ * removed sitting here: 8.7% node ink on the two-step custom, 14.3% on the
+ * six-step council, the latter at a `fitView` zoom of 0.7239 which put the
+ * node sub at 7.96px. `RoutineCanvas.tsx` had no other importer and is gone.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -21,8 +29,7 @@ import { AlertTriangle, FlaskConical, Plus, X } from 'lucide-react'
 import { Menu } from '@/design-system/components/Menu'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { classifyFailure } from '../_shared/run-health'
-import { RoutineCanvas } from './RoutineCanvas'
-import type { StepLive } from './RoutineCanvas'
+import { RoutinePipeline } from './RoutinePipeline'
 import {
   computeDiff,
   definitionToStory,
@@ -157,14 +164,6 @@ export function RoutineEditor({
     }
     return out
   }, [draft])
-
-  const liveByCharter = useMemo(() => {
-    const m = new Map<string, StepLive>()
-    for (const c of charters) {
-      m.set(c.key, { autonomyLevel: c.autonomyLevel, degraded: c.degraded, running: false })
-    }
-    return m
-  }, [charters])
 
   const setGate = (charterKey: string, gate: 'ask' | 'act' | 'inherit') =>
     setDraft((d) => ({
@@ -483,7 +482,12 @@ export function RoutineEditor({
         </div>
 
         <div>
-          <RoutineCanvas story={definitionToStory(draft, charters)} liveByCharter={liveByCharter} />
+          <RoutinePipeline
+            story={definitionToStory(draft, charters)}
+            charters={charters}
+            lastGroup={null}
+            composing
+          />
           <p className="wf-vnote">
             The wiring as drafted. Code steps — grading, report cards — and{' '}
             <Term k="approval">your approval</Term> still wrap every routine; they are not

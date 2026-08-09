@@ -3,9 +3,11 @@
 /**
  * NAF.WF-S2R / S2.c — the routine's pipeline, as a deterministic block.
  *
- * Replaces the xyflow canvas IN THIS ZONE. `RoutineCanvas.tsx` is untouched
- * and still serves `RoutineEditor` — a live canvas while you wire a draft is
- * a different job from a run report, and that call belongs to S5.
+ * Replaced the xyflow canvas here at S2.c, and in the EDITOR at S5.a — where
+ * the same measurements had survived untouched, because S2R left
+ * `RoutineCanvas.tsx` alone precisely so the editor could keep importing it.
+ * That component now has no importers and is deleted; see `composing` below
+ * for the two things a draft's picture must do differently.
  *
  * Why it changed, measured on prod (Part 10 §10.1 of the WF doc): the canvas
  * rendered 9.4% node ink on the sweep, 5.0% on the custom with 682px dead on
@@ -57,6 +59,22 @@ export interface RoutinePipelineProps {
    * from a feed that cannot answer.
    */
   historical?: boolean
+  /**
+   * S5.a — true when this draws a DRAFT being composed rather than a routine
+   * that runs. Two things follow, and both are corrections.
+   *
+   * It drops the last-run line entirely. Passing `lastGroup={null}` would
+   * print "never run" under every step, and that is a claim about the ROUTINE
+   * — which may have run a hundred times. It is this *wiring* that has not
+   * run, and the picture has no way to say so, so it says nothing.
+   *
+   * It also flows the stages DOWN instead of across. The editor gives the
+   * picture ~45% of its grid and a routine's stage count is unbounded, so
+   * flowing across divides ~690px by N. That is the same mistake the canvas
+   * made by another route: shrink the picture to fit the frame until the text
+   * stops being readable.
+   */
+  composing?: boolean
 }
 
 /** What crosses INTO a level — the artifact named once, in the gutter, so a
@@ -75,7 +93,14 @@ function roleOf(s: StoryStep, c: CharterRow | undefined): { label: string; cls: 
   return { label: lvl, cls: `lvl-${lvl.toLowerCase()}` }
 }
 
-export function RoutinePipeline({ story, charters, lastGroup, blockedReason, historical }: RoutinePipelineProps) {
+export function RoutinePipeline({
+  story,
+  charters,
+  lastGroup,
+  blockedReason,
+  historical,
+  composing,
+}: RoutinePipelineProps) {
   const byKey = new Map(charters.map((c) => [c.key, c]))
   /* The newest orchestration's rows, by worker. A step missing from this map
      simply did not run in that orchestration — which is a fact, not a gap. */
@@ -87,14 +112,16 @@ export function RoutinePipeline({ story, charters, lastGroup, blockedReason, his
   /* A routine with one stage runs its steps side by side, so it is drawn side
      by side. Stacking two cards in a full-width column is how the canvas ended
      up 87% empty. */
-  const solo = levels.length === 1
+  /* Composing never goes solo: its steps wrap into a grid at every stage
+     count, so the one-stage case needs no special layout. */
+  const solo = levels.length === 1 && !composing
 
   return (
     <>
       {blockedReason ? (
         <p className="wf-pipe-blocked" role="status">{blockedReason}</p>
       ) : null}
-      <div className={`wf-pipe${solo ? ' is-solo' : ''}${blockedReason ? ' is-blocked' : ''}`}>
+      <div className={`wf-pipe${solo ? ' is-solo' : ''}${composing ? ' is-composing' : ''}${blockedReason ? ' is-blocked' : ''}`}>
       {levels.map((steps, i) => {
         const artifact = i > 0 ? incomingArtifact(story, steps.map((s) => s.id)) : null
         return (
@@ -134,6 +161,7 @@ export function RoutinePipeline({ story, charters, lastGroup, blockedReason, his
                           settings unreadable — this shows the fail-safe posture, not your choice
                         </span>
                       ) : null}
+                      {composing ? null : (
                       <span className="wf-pipe-last">
                         {!isWorker ? (
                           <span className="muted">always runs · not separately timed</span>
@@ -171,6 +199,7 @@ export function RoutinePipeline({ story, charters, lastGroup, blockedReason, his
                           </span>
                         )}
                       </span>
+                      )}
                     </div>
                   )
                 })}
