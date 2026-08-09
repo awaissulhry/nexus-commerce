@@ -3346,13 +3346,24 @@ registers instead of three vocabularies.
 2. **19 explanations remain mouse-only.** All definitional; none needed to act.
    Closing this properly means a real tooltip component, which is a
    design-system change, not a page change.
-3. **NOTHING HAS EVER RUN.** Every state past *Not started* — on all three
-   surfaces — is proven by construction and synthetic payload, never by a row a
-   real run produced. `AgentFindingRun` holds zero rows. One assignment, started
-   once, costs about €0.01 and would exercise the scope narrowing, the run
-   stamping, the join's first row, and findings from real data. **It is the
-   operator's call and the only thing that would move this page from "proven by
-   construction" to "seen working."**
+3. **NOTHING HAS EVER RUN — and the operator has DECIDED, 2026-08-09: leave it
+   switched off.** Asked directly at the close of AS-S4R and answered *"No —
+   leave it switched off."* So this is no longer an open question waiting for a
+   moment; it is a settled position, and it should not be re-raised by a future
+   session as though nobody had considered it.
+
+   What that means concretely, stated so nobody mistakes it for an oversight:
+   every state past *Not started* — on all three surfaces — is proven by
+   construction, synthetic payload and unit test, never by a row a real run
+   produced. `AgentFindingRun` holds zero rows and will keep holding zero.
+   The scope narrowing, the run stamping and the join are proven by test and by
+   schema; the **rendering** of every state is proven by constructed payload
+   against the deployed page. That is the honest ceiling of what this page can
+   claim, and it is a deliberate ceiling rather than a gap.
+
+   **If that ever changes**, one assignment started once costs about €0.01 and
+   exercises the whole chain. The confirm states the ceiling before anything is
+   spent, which is exactly what AS-S3R built it to do.
 
 ---
 
