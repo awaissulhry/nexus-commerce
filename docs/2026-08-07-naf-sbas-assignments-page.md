@@ -3049,6 +3049,226 @@ a real run**, which remains the standing caveat and the operator's call.
 
 ---
 
+## PART 14 — NAF.SB.AS-S4R · The teaching layer and the seams
+
+**Status: AWAITING OPERATOR APPROVAL. No code written.**
+
+Not a fourth surface. The connective tissue between three surfaces that three
+sessions rebuilt independently, plus the structural fixes each of them solved
+locally.
+
+### 14.1 · PHASE 0 — the audit
+
+Measured on the deployed page with two real rows created and deleted (**prod
+ends at zero; nothing was started**), plus the constructed states from Parts 11
+and 13.
+
+#### The teaching drawer — nine findings
+
+**T1. It has one commit, and it belongs to another session.**
+`HowAssignmentsWork.tsx`'s entire history is `aaca58093` — the Activity
+stream's ACT.2, the accidental sweep logged in locks §6b. **This file has never
+been deliberately committed by the stream that owns it**, which is exactly how
+it stayed AS.1-era through three rebuilds.
+
+**T2. It contradicts the product.** It says *"any change to your account still
+goes through the approval queue"*, which implies things arrive there. Part 13's
+state band now says the opposite in plain words: *"an assignment cannot put
+anything there yet, so this one never will."* **The teaching layer and the
+surface disagree about the single most important fact on the page.**
+
+**T3. It names an action that no longer exists.** *"Nothing happens until you
+press **Start**."* The control is *Start it* / *Start again*, inside a fenced
+zone labelled "Running this costs money".
+
+**T4. A live typo, shipped since AS.1.** The rendered text reads **"waste
+themesare totals"**. `<em>themes</em>` is followed by a newline before "are",
+and JSX strips a newline-plus-indent at an element boundary entirely. Nobody saw
+it because nobody had opened the drawer. *(My first probe said it was fine —
+`/themes\s*are/` matches zero spaces. Corrected by reading the text nodes.)*
+
+**T5. The fourth instance of the root-class lesson, inside this page's own
+teaching layer.** Its `<Drawer>` gets **no `className`**, so Part 12's
+`.as-drawer` overrides never reach it — measured: the subtitle at **3.10:1**,
+the exact role Part 12 fixed one component away.
+
+**T6. Raw `<a href="/fleet/workflows">`** — a full page reload where every other
+cross-fleet link on this page is a `<Link>`.
+
+**T7. Its trigger is the bare-text `acr-pg-sortbtn` with inline styles** — the
+button style Part 13 removed from the detail page for being indistinguishable,
+and the inline-style debt Parts 12 and 13 drove to zero.
+
+**T8. 399 words describing a UI rebuilt three times.** Nothing about overdue,
+undo, Reopen, Delete, search, filters, or portfolio targets — all of which now
+exist.
+
+**T9. "guard" is undefined jargon in a headline position.** *"A guard stopped it
+on purpose"* is the Stopped state's sentence on **both** the chip tooltip and
+the page heading, and "guard" is in neither the glossary's 34 terms nor any
+sentence on any surface.
+
+#### The seams — five findings
+
+| # | Seam | Verdict |
+|---|---|---|
+| **S1** | **"Delete…" in the list menu, "Delete" on the detail page.** The ellipsis conventionally means *opens a dialog* — and since Part 13 **both** do. | One of them is wrong; they should match. |
+| **S2** | **Cost described with two different phrases**: *"What every assignment shown here has cost in model calls"* (list) vs *"The sum of every run this assignment has made"* (detail). | Polaris is explicit: *use a single noun, verb or phrase for a concept; identify and eliminate synonyms.* |
+| **S3** | **Cost printed at two precisions**: `$0.04` (list, 2dp) vs `$0.2871` (detail, 4dp) for the same quantity. | Pick one and say why. |
+| **S4** | **Currency is never explained anywhere.** Dollar totals sit above findings whose rationales are written in euro. | **This is mine and it is an unshipped promise**: §13.7's inventory contains the exact sentence *"in US dollars — model time is billed in USD even though your ads are in euro"* and I never built it. |
+| **S5** | `states.ts` carrying **`tip` (row register) and `pageWhy` (page register)** from one module. | **Correct, and it is the model for the rest of this section.** One vocabulary, two registers, one home. |
+
+#### The structure — two findings
+
+**X1. One page, four subtrees, four root classes — three of them invented
+separately.** `.as-page` (list) · `.as-drawer` (create drawer, because a portal
+escapes any ancestor) · `.as-detail` (detail route, which had none) · **and the
+teaching drawer, which still has none.** Four sessions, four independent
+discoveries of one rule.
+
+**X2. 25 of 40 explanations on the list are mouse-only.** Measured: the list
+carries **40 `title` attributes, 25 of them on non-focusable `<span>`s**; the
+detail page carries 7, four of them non-focusable. A native `title` is not
+rendered on keyboard focus or on touch by any major browser, so those
+explanations exist for one input device. The one surface that got this right is
+Part 13's confirm dialog: **0 `title` attributes, every word visible prose.**
+
+---
+
+### 14.2 · PHASE 1 — how products stay one product
+
+1. **Polaris states the rule this section exists to enforce:** *"Use a single
+   noun, verb, or phrase to describe a specific thing, action, or concept.
+   Avoid using multiple synonyms… identify and eliminate synonyms for key
+   concepts and actions."* S1, S2 and S3 are each a synonym that survived
+   because three people wrote them.
+2. **Design-system practice has a name for this and a way to measure it.**
+   *Drift* is the divergence between intended patterns and what ships, and the
+   recommended manual method is blunt: **pull up production and count the
+   elements that fall outside the system.** The tracked metrics are override
+   rate, variant sprawl and drift findings — countable, not asserted. That is
+   what §14.6's criteria do.
+3. **WCAG 1.4.13 governs hover/focus content: it must be dismissible,
+   hoverable and persistent.** Author-built tooltips must satisfy all three.
+   Native `title` satisfies none of them and is additionally not shown on
+   keyboard focus or touch — which is X2 measured rather than argued. *(I am
+   not claiming a 1.4.13 violation: the criterion is generally read as not
+   applying to UA-rendered `title`. The defensible claim is narrower and worse
+   — a quarter of this page's explanations reach one input device.)*
+4. **Contextual beats front-loaded, with a number:** reported **72% engagement
+   with contextual tips vs 19% with upfront tutorials**. A "how this works"
+   drawer is a *reference*, not the teaching. The teaching happens where the
+   confusion is — which is what Parts 11–13 have been quietly doing all along
+   (the commit bar, the pre-flight sentence, the state band).
+5. **Teaching without nagging** = tie help to what the operator is doing, never
+   to a timer or a visit count. Nothing on this page should ever appear
+   *because it is your first visit*.
+
+---
+
+### 14.3 · The teaching model
+
+**Three places, and a rule for choosing between them.**
+
+| Where | Carries | Rule |
+|---|---|---|
+| **In place** (visible prose beside the thing) | Anything that changes what the operator does next | If not knowing it would cause a wrong action, it is **visible**, never a tooltip |
+| **Tooltip** (`title`, or better) | Definitions, precision, provenance — *nice to know* | Never the only home of a fact needed to act |
+| **The drawer** | The model: what an assignment is, what binds, what cannot happen | Reference, read once or twice, never the teaching itself |
+
+**The drawer is rewritten against what exists, not replaced.** The research
+argues against front-loaded tours, and the drawer is not one — it is opened on
+demand from a link, which is the contextual pattern. What it must stop being is
+*stale*, *contradictory*, and *the only place several facts live*.
+
+**Rewrite scope:** kill the contradiction (T2), rename the action (T3), fix the
+typo (T4), give it `.as-drawer` (T5), `<Link>` (T6), a real button (T7), and add
+the six things that now exist and are unmentioned (T8). **Define "guard" or
+stop using it** (T9) — my recommendation is to stop using it: *"Something
+stopped it on purpose"* needs no glossary entry, and the fleet already has
+`ceiling`, `sweep` and `kill switch` for the specific cases.
+
+---
+
+### 14.4 · The root-class decision, and whether it belongs in the shell
+
+**The rule, now confirmed four times:** *a page-local override reaches exactly
+the subtree its root wraps — and a portal escapes every ancestor, so it always
+needs its own.*
+
+Two halves, and they need different answers:
+
+- **The page subtree.** All ten fleet pages render through `FleetPageShell`,
+  which emits `<div className="acr">` and no page identity. Every page that
+  wants a local override must invent a root — Assignments did it twice
+  (`.as-page`, `.as-detail`), and the other nine have the same exposure.
+  **Recommendation: one additive optional prop on the shell** (`rootClass`),
+  defaulted so all ten render byte-identically until a page opts in.
+  **Not taken unilaterally** — it lands on ten pages and this section is not
+  the shell's owner. Operator's call, and it is the only shared change here.
+- **Portals.** No shell change can help; a portalled Drawer is outside the
+  page's DOM entirely. **The rule goes in the locks doc as a rule**, and this
+  page's own teaching drawer gets `.as-drawer` as part of T5.
+
+---
+
+### 14.5 · The one cross-surface inventory
+
+Replacing three separate inventories. Every explanation on the page, its home,
+and its register.
+
+| Fact | Home | Register |
+|---|---|---|
+| What an assignment is | glossary `assignment` + drawer §1 + list intro | one definition, three depths |
+| What a target is / that it binds | glossary `target` + drawer §2 + drawer pre-flight sentence | ditto |
+| What each state means | `states.ts` — **`tip`** on chips, **`pageWhy`** on the page | one source, two registers |
+| Why a run stopped | `reasonSentence()` — visible on the detail band, tooltip in the run table | long form once, short form in cells |
+| What a run cost, and in what currency | **new, single sentence, both surfaces** (S4) | visible on detail, tooltip on list |
+| That nothing reaches Amazon | detail band (visible) + drawer §4 | visible where the action is |
+| That starting spends money | spend zone label + confirm body (both visible) | never a tooltip |
+| What each action does | list menu tooltips + detail button titles | **must match S1's single name** |
+| Overdue | badge + tooltip on both surfaces | consistent |
+| Findings, evidence vintage | detail page prose | visible |
+
+---
+
+### 14.6 · Acceptance criteria — measured
+
+| # | Criterion | Before | Target |
+|---|---|---|---|
+| 1 | Statements in the teaching drawer that contradict a surface | **1** (T2) | **0** |
+| 2 | Actions named in the drawer that do not exist | **1** (T3) | **0** |
+| 3 | Rendering defects in shipped copy | **1** (T4, "themesare") | **0** |
+| 4 | Subtrees of this page with no root class | **1** (teaching drawer) | **0** |
+| 5 | Text roles below 4.5:1 in the teaching drawer | **1** (3.10) | **0** |
+| 6 | Inline `style` attributes on this page (all four subtrees) | **2** (both in the teaching layer) | **0** |
+| 7 | Cross-fleet links that full-reload | **1** (T6) | **0** |
+| 8 | Synonyms for one concept across surfaces | **3** (S1, S2, S3) | **0** |
+| 9 | Currency stated | **nowhere** | **once per surface** |
+| 10 | Undefined jargon in a headline position | **1** ("guard") | **0** |
+| 11 | Features that exist and are untaught | **6** (T8) | **0** |
+| 12 | Explanations reachable only by mouse hover | **25 of 40** (list) | **≤ 10**, and none that is needed to act |
+
+---
+
+### 14.7 · Build order
+
+**S4.a — The teaching drawer, rewritten.** T2, T3, T4, T5, T6, T7, T8.
+**S4.b — The seams.** S1, S2, S3, S4 and the "guard" decision (T9).
+**S4.c — Mouse-only explanations.** Promote the ones needed to act into visible
+prose; leave the definitional ones as tooltips (X2, criterion 12).
+**S4.d — The shell root prop.** *Only if the operator approves §14.4.*
+
+---
+
+### 14.8 · Cross-session
+
+`app/fleet/assignments/**` only, except S4.d. The glossary is touched **only**
+if the operator wants "guard" minted — my recommendation is to remove the word
+instead, which needs no shared file at all.
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
@@ -3066,5 +3286,7 @@ a real run**, which remains the standing caveat and the operator's call.
 **Create-flow design (Part 12, AS-S2R)** — [Linear create issues](https://linear.app/docs/creating-issues) · [GitHub · assign an issue to Copilot](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/kick-off-a-task) · [Google Ads step 6 — review and publish](https://support.google.com/google-ads/answer/15864935) · [Google Ads campaign creation steps](https://support.google.com/google-ads/answer/15864533) · [**Red Hat / PatternFly — progressive form vs wizard**](https://medium.com/patternfly/comparing-web-forms-a-progressive-form-vs-a-wizard-110eefc584e7) · [**NN/g — progressive disclosure** (the two-level rule, and staged disclosure with interdependent steps)](https://www.nngroup.com/articles/progressive-disclosure/) · [Jira field-configuration overload](https://community.atlassian.com/forums/Jira-Cloud-Admins-discussions/Rethinking-Issue-View-Field-Configuration/td-p/2916049) · [W3C APG combobox patterns](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-autocomplete-list/) · [Combobox vs multiselect vs listbox at scale](https://smart-interface-design-patterns.com/articles/combobox-multiselect-listbox/) · [Baymard — inline form validation](https://baymard.com/blog/inline-form-validation) · [Amazon Ads campaign manager + bulk operations](https://advertising.amazon.com/library/news/introducing-improved-campaign-manager-features) · [overscroll-behavior and dialog scroll containment](https://css-tricks.com/prevent-a-page-from-scrolling-while-a-dialog-is-open/)
 
 **One-object detail design (Part 13, AS-S3R)** — [**NN/g — consequential options next to benign ones**, a top-10 application design mistake](https://www.nngroup.com/articles/proximity-consequential-options/) · [GitLab Pajamas — destructive actions](https://design.gitlab.com/patterns/destructive-actions/) · [Smashing — managing dangerous actions in UI](https://www.smashingmagazine.com/2024/09/how-manage-dangerous-actions-user-interfaces/) · [GitHub Actions — re-running workflows and navigating attempts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs) · [Vercel — troubleshooting a build (what the detail page leads with)](https://vercel.com/docs/deployments/troubleshoot-a-build) · [Stripe — payment records and attempt entries](https://docs.stripe.com/payments/payment-records) · [Sentry — issue details](https://docs.sentry.io/product/issues/issue-details/) · [Sentry — breadcrumbs as provenance](https://docs.sentry.io/product/issues/issue-details/breadcrumbs/) · [Temporal — event history (and why attempt counts are kept out of the UI)](https://docs.temporal.io/encyclopedia/event-history) · [Temporal — retry policies](https://docs.temporal.io/encyclopedia/retry-policies)
+
+**Teaching layer and consistency (Part 14, AS-S4R)** — [**Shopify Polaris — content**, one term per concept, eliminate synonyms](https://shopify.dev/docs/apps/design/content) · [Polaris fundamentals](https://polaris-react.shopify.com/content/fundamentals) · [Microsoft Writing Style Guide](https://learn.microsoft.com/en-us/style-guide/welcome/) · [**WCAG 1.4.13 Content on Hover or Focus** — dismissible, hoverable, persistent](https://www.w3.org/WAI/WCAG21/Understanding/content-on-hover-or-focus) · [Tooltips in the time of WCAG 2.1 (Sarah Higley)](https://sarahmhigley.com/writing/tooltips-in-wcag-21/) · [W3C APG tooltip pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tooltip/) · [Design-system drift and how it is measured](https://www.uxpin.com/studio/blog/design-drift/) · [Design system governance](https://www.uxpin.com/studio/blog/design-system-governance/) · [Progressive/contextual onboarding vs front-loaded tours](https://userpilot.com/blog/progressive-onboarding/)
 
 **In repo** — `docs/2026-08-07-naf-sb-fleet-pages.md` §7 · `docs/2026-08-07-naf-sbw-workers-page.md` · `docs/2026-08-07-naf-wf-workflows-page.md` · `docs/2026-08-07-naf-sb-session-locks.md` · `docs/AGENT_FLEET.md` Parts 4, 6, 7 · `apps/api/src/services/agent-fleet/agent-executor.ts` · `charter-registry.ts` · `orchestrator.ts` · `observations/scope-filter.ts` · `apps/api/src/services/agents/approval-gate.service.ts` · `apps/api/scripts/_sbas-assignment-truth.mts`
