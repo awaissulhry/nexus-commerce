@@ -17,7 +17,19 @@
 
 .acr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .acr-head h1 { font-size: 20px; font-weight: 650; color: #1c2530; margin: 0 0 4px; letter-spacing: -0.01em; }
-.acr-sub { font-size: 13px; color: #667485; margin: 0; }
+/* NAF.AQ-S4R — #667485 measures 4.41:1 on the fleet's #f4f6f9 surface, below
+   the 4.5 floor for 13px text, on the one-line purpose sentence every fleet
+   page carries. THREE pages had already worked around it locally (.sba-page,
+   .wf-page, .aq-page) and each independently chose a darker grey; fixing it
+   here is cheaper than a fourth copy and matches what they picked. #55616f is
+   5.83:1 on #f4f6f9 and 6.31:1 on white.
+
+   Unlike `.acr-btn.go`, there is no non-text use to protect: every #667485 in
+   this file is text. The other four (.acr-status-detail, the nav link at :125,
+   .acr-fs-cadence, .acr-dw-title p) fail for the same reason and are SMALLER,
+   so they fail harder — left for the Control Room's owner rather than changed
+   blind, and posted in the locks file. */
+.acr-sub { font-size: 13px; color: #55616f; margin: 0; }
 
 .acr-refresh {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
