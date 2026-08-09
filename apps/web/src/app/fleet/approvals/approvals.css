@@ -574,6 +574,35 @@
   margin: 0;
 }
 
+/* S4.c — the example must be READABLE, which `disabled` was quietly preventing.
+ *
+ * `.acr-btn:disabled` is `opacity: 0.55`, and every control in the example is
+ * disabled — so the primary button, which carries the most important sentence
+ * on the card ("Apply — bid €0.31 → €0.84"), rendered at an effective
+ * **1.45:1**. Unreadable, on the one card that exists to be read.
+ *
+ * This is the opacity trap I quoted a warning about in S4.b's own commit
+ * message and then shipped by a different route one commit later: opacity
+ * multiplies the contrast of everything beneath it.
+ *
+ * Full strength here. The controls stay inert STRUCTURALLY — the <fieldset
+ * disabled> refuses focus and clicks — so nothing is lost by letting them look
+ * like what they are. It is also the point: an example that does not look like
+ * the real card fails at the only job it has, which is to be recognised later. */
+.aq-example :disabled,
+.aq-example .acr-btn:disabled {
+  opacity: 1;
+}
+
+/* The three sub-AA greys inside the card, measured on prod: .aq-clock 4.24,
+   .aq-dfield 4.47, .aq-dfrom 4.24. All #6b7688; #55616f is 5.83 on the page
+   surface and is the value S1 settled for this role. */
+.aq-page .aq-clock,
+.aq-page .aq-dfield,
+.aq-page .aq-dfrom {
+  color: #55616f;
+}
+
 /* ── S5 · waiting from outside the fleet (AQ.2) ─────────────────────────── */
 
 /*

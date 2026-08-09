@@ -50,8 +50,18 @@
 .acr-btn:disabled { opacity: 0.55; cursor: default; }
 .acr-btn.stop { background: #fff; color: #b3352f; border-color: #e6bcba; }
 .acr-btn.stop:hover:not(:disabled) { background: #fdf2f2; border-color: #d99a97; }
-.acr-btn.go { background: #1a9d6a; color: #fff; }
-.acr-btn.go:hover:not(:disabled) { background: #16875b; }
+/* NAF.AQ-S4R — white on #1a9d6a measured **3.46:1**, below the 4.5 floor, on
+   the fleet's PRIMARY action button. Independently measured by the Workflows
+   stream (locks §2) and again here on the Approvals card, where the button that
+   fails is the one that spends money.
+
+   Only this declaration changes. Every other #1a9d6a in this file is a dot, a
+   bar, a border or an icon — non-text, which needs 3:1 under WCAG 1.4.11 and
+   passes — so the fleet's green identity is untouched and this is not a fork.
+   #15804f is 4.96:1, the value Workflows computed; the hover is darkened to
+   match rather than left lighter than the base. */
+.acr-btn.go { background: #15804f; color: #fff; }
+.acr-btn.go:hover:not(:disabled) { background: #116b42; }
 
 /* ── banners ─────────────────────────────────────────────────────────────── */
 .acr-banner {
