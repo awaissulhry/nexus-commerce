@@ -20,11 +20,50 @@
  * banner directly above.
  */
 
-import { Def } from './definitions'
+import type { KeyboardEvent } from 'react'
+
 import type { MapNode } from './lib'
 import { OVERLAYS, occupiedBucketIds, visibleBuckets, type Overlay } from './overlays'
 
 const TIERS = ['analyst', 'director', 'critic', 'auditor']
+
+/**
+ * S3R — the ARIA radiogroup contract, actually implemented.
+ *
+ * Both control groups in this rail declared a pattern and shipped none of it.
+ * `Colour by` announced `role="radiogroup"` with three `role="radio"` children
+ * and gave all three `tabIndex 0` — three tab stops where the pattern specifies
+ * one — with no key handler at all, so the arrow keys a screen reader promises
+ * on "radio button, 1 of 3" were dead. `Show` had the opposite fault: five
+ * mutually exclusive choices expressed as independent `aria-pressed` toggles,
+ * which describes a multi-select that does not exist.
+ *
+ * In a radiogroup an arrow key moves focus AND selects — that is the pattern,
+ * not a shortcut. The caller re-focuses because the DOM node that should hold
+ * focus is the one that just became checked.
+ */
+function rovingKeys(
+  e: KeyboardEvent<HTMLElement>,
+  count: number,
+  current: number,
+  select: (i: number) => void,
+) {
+  const k = e.key
+  if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'].includes(k)) return
+  e.preventDefault()
+  const next =
+    k === 'Home'
+      ? 0
+      : k === 'End'
+        ? count - 1
+        : k === 'ArrowDown' || k === 'ArrowRight'
+          ? (current + 1) % count
+          : (current - 1 + count) % count
+  select(next)
+  const group = e.currentTarget
+  const btns = group.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+  btns[next]?.focus()
+}
 
 export function OverlayRail({
   overlay,
@@ -52,13 +91,26 @@ export function OverlayRail({
     <aside className="sbm-orail" aria-label="Colour and filters">
       <div className="sbm-orail-sec">
         <h3>Colour by</h3>
-        <div className="sbm-seg vertical" role="radiogroup" aria-label="Colour the map by">
+        <div
+          className="sbm-seg vertical"
+          role="radiogroup"
+          aria-label="Colour the map by"
+          onKeyDown={(e) =>
+            rovingKeys(
+              e,
+              OVERLAYS.length,
+              OVERLAYS.findIndex((o) => o.id === overlay.id),
+              (i) => onOverlay(OVERLAYS[i].id),
+            )
+          }
+        >
           {OVERLAYS.map((o) => (
             <button
               key={o.id}
               type="button"
               role="radio"
               aria-checked={overlay.id === o.id}
+              tabIndex={overlay.id === o.id ? 0 : -1}
               className={overlay.id === o.id ? 'on' : ''}
               onClick={() => onOverlay(o.id)}
             >
@@ -106,29 +158,52 @@ export function OverlayRail({
       {tiers.length > 1 || hasDiagnostic ? (
         <div className="sbm-orail-sec">
           <h3>Show</h3>
-          <div className="sbm-orail-filters">
+          {/* S3R — one radiogroup, not five toggles, because the choice is
+              mutually exclusive. `every role` is the null option and belongs in
+              the same group as the roles it clears.
+
+              The per-chip `Def` tooltips are gone. They were 288px of content
+              inside a 194px clipping box — the rail is `overflow` on both axes,
+              so 94px of every one of them was unreachable — and they restated
+              "The rest stay on the map, dimmed", which the block already ends
+              with in permanent, readable text 40px below. A hover-only,
+              keyboard-hostile, clipped restatement of a visible sentence is not
+              worth repairing. */}
+          <div
+            className="sbm-orail-filters"
+            role="radiogroup"
+            aria-label="Show only one role"
+            onKeyDown={(e) =>
+              rovingKeys(
+                e,
+                tiers.length + 1,
+                tierFilter === null ? 0 : tiers.indexOf(tierFilter) + 1,
+                (i) => onTierFilter(i === 0 ? null : tiers[i - 1]),
+              )
+            }
+          >
             <button
               type="button"
+              role="radio"
+              aria-checked={tierFilter === null}
+              tabIndex={tierFilter === null ? 0 : -1}
               className={`sbm-chip ${tierFilter === null ? 'on' : ''}`}
-              aria-pressed={tierFilter === null}
               onClick={() => onTierFilter(null)}
             >
               every role
             </button>
             {tiers.map((t) => (
-              <Def key={t} k={`tier-${t}`} note={`Show only the ${t}s. The rest stay on the map, dimmed.`}>
-                {(described) => (
-                  <button
-                    type="button"
-                    className={`sbm-chip ${tierFilter === t ? 'on' : ''}`}
-                    aria-pressed={tierFilter === t}
-                    onClick={() => onTierFilter(tierFilter === t ? null : t)}
-                    {...described}
-                  >
-                    {t}
-                  </button>
-                )}
-              </Def>
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={tierFilter === t}
+                tabIndex={tierFilter === t ? 0 : -1}
+                className={`sbm-chip ${tierFilter === t ? 'on' : ''}`}
+                onClick={() => onTierFilter(tierFilter === t ? null : t)}
+              >
+                {t}
+              </button>
             ))}
           </div>
           {hasDiagnostic ? (

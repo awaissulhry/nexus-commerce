@@ -207,6 +207,16 @@
   outline: 2px solid #1f4f8b;
   outline-offset: -2px;
 }
+/*
+ * S3R — the ring was drawn INSIDE the box, in the same colour as the selected
+ * button's background: measured 1.00:1. In a radiogroup the selected option is
+ * exactly the one that holds focus, so the broken case was the common case —
+ * a 2.4.7 failure of the F78 kind, on all four segmented groups on this page.
+ * White on #1f4f8b is 8.24:1.
+ */
+.sbm-seg button.on:focus-visible {
+  outline-color: #ffffff;
+}
 
 /* The two switches change different ORDERS of thing — one picks the universe of
    nodes, the other the denominator of every number — and they were pixel
@@ -1441,7 +1451,19 @@
   display: grid;
   grid-template-rows: auto minmax(0, max-content) auto;
   align-content: start;
-  overflow: hidden;
+  /*
+   * `auto`, not `hidden`. Pinning guarantees both controls are visible whenever
+   * the rail is TALL ENOUGH to hold them, which after this change is every
+   * width from 1440 up. At 1280 it is not: the rail box is 234.3px there, and
+   * the two pinned blocks alone are 288.9px — because the dead
+   * `@media (max-width:1400px){.sbm-rail{display:none}}` never fired, so both
+   * rails share one 200px column (see the S3 study, C-S3.4; that rule is the
+   * inspector's, not this section's). `hidden` would make the difference
+   * unreachable; `auto` degrades it to a short scroll. No layout can show
+   * 289px of controls in 234px of box — only a bigger box can, which is what
+   * C-S3.4 and S3.h are for.
+   */
+  overflow-y: auto;
   background: #fff;
   border: 1px solid #e6ebf1;
   border-radius: 9px;
@@ -1580,14 +1602,28 @@
   flex-wrap: wrap;
   gap: 5px;
 }
+/* S3R — the only control on the page with no focus style of its own, and a
+   16.5px-high target (2.5.8 asks 24). The label already wraps the input, so
+   the row IS the target; it just had no height. */
 .sbm-orail-check {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   margin-top: 8px;
+  min-height: 24px;
   font-size: 11px;
   color: #4a5666;
   cursor: pointer;
+}
+.sbm-orail-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #1f4f8b; /* was the OS accent — the only control here not in the page's blue */
+}
+.sbm-orail-check input:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: 2px;
 }
 
 /*
