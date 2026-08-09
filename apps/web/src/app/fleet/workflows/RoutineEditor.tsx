@@ -32,8 +32,10 @@ import { classifyFailure } from '../_shared/run-health'
 import { RoutinePipeline } from './RoutinePipeline'
 import {
   computeDiff,
+  cronIsEvaluable,
   definitionToStory,
   diffIsEmpty,
+  nextCronFires,
   prettyCron,
   tierArtifact,
   topoCols,
@@ -41,6 +43,20 @@ import {
   type WfDefinition,
   type WfDiff,
 } from './lib'
+
+/**
+ * S5.b — the presets. Every builder that gets cron input right ships them,
+ * for the same reason: the operator's intent is nearly always one of a few
+ * shapes, and typing five fields by hand to reach one is where wrong
+ * expressions come from. Each is phrased by `prettyCron`, so this list can
+ * never describe a schedule differently from the line under the field.
+ */
+const CRON_PRESETS = ['0 3 * * *', '0 7 * * 1-5', '0 5 * * 1', '0 * * * *']
+
+const FIRE_FMT = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short', day: 'numeric', month: 'short',
+  hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false,
+})
 
 const GATE_COPY: Record<'inherit' | 'ask' | 'act', { label: string; hint: string }> = {
   inherit: { label: 'Inherit', hint: 'Today’s behaviour — the tool’s policy and the fleet floors decide.' },
@@ -156,6 +172,17 @@ export function RoutineEditor({
 
   const problems = useMemo(() => {
     const out: string[] = []
+    /* S5.b — the server refuses a schedule exactly when `nextCronFire`
+       returns null (`validateDefinition`), and this is that same rule via the
+       mirrored evaluator. Before this, three expressions the server refuses —
+       `not a cron`, `99 99 * * *` and empty — listed ZERO problems here with
+       Publish enabled, and the middle one previewed as "Nightly at 99:99
+       UTC". The sentence is the server's own, in the checklist's voice. */
+    if (draft.trigger.type === 'schedule' && !cronIsEvaluable(draft.trigger.cron)) {
+      out.push(
+        `The schedule "${draft.trigger.cron}" is not a cron expression this fleet can evaluate.`,
+      )
+    }
     if (draft.trigger.type === 'schedule' && draft.steps.length === 0) {
       out.push('A scheduled workflow needs at least one step — a clock that starts nothing teaches nothing.')
     }
@@ -377,20 +404,53 @@ export function RoutineEditor({
             {draft.trigger.type === 'schedule' ? (
               <>
                 <label className="wf-gatelabel" htmlFor="wf-cron-input">Schedule (cron, UTC)</label>
-                <input
-                  id="wf-cron-input"
-                  className="wf-croninput"
-                  value={draft.trigger.cron}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      trigger: { type: 'schedule', cron: e.target.value },
-                    }))
-                  }
-                />
-                <span className="wf-sub">
-                  {prettyCron(draft.trigger.cron)} · the clock re-arms the moment you publish
+                <div className="wf-cronrow">
+                  <input
+                    id="wf-cron-input"
+                    className={`wf-croninput${cronIsEvaluable(draft.trigger.cron) ? '' : ' is-bad'}`}
+                    value={draft.trigger.cron}
+                    aria-invalid={!cronIsEvaluable(draft.trigger.cron)}
+                    aria-describedby="wf-cron-means"
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        trigger: { type: 'schedule', cron: e.target.value },
+                      }))
+                    }
+                  />
+                  <Menu
+                    label="Common schedules"
+                    items={CRON_PRESETS.map((c) => ({
+                      id: c,
+                      label: prettyCron(c),
+                      onSelect: () =>
+                        setDraft((d) => ({ ...d, trigger: { type: 'schedule', cron: c } })),
+                    }))}
+                  />
+                </div>
+                <span
+                  id="wf-cron-means"
+                  className={`wf-sub${cronIsEvaluable(draft.trigger.cron) ? '' : ' wf-cronbad'}`}
+                >
+                  {prettyCron(draft.trigger.cron)}
+                  {cronIsEvaluable(draft.trigger.cron)
+                    ? ' · the clock re-arms the moment you publish'
+                    : ' — the checklist below says what the fleet will refuse'}
                 </span>
+                {/* The next fires are the safety net for anything the sentence
+                    above can only echo: a schedule the fleet CAN evaluate but
+                    cannot phrase still has to be checkable, and three real
+                    timestamps are how. The server stays the authority — these
+                    come from its own evaluator, mirrored. */}
+                {cronIsEvaluable(draft.trigger.cron) ? (
+                  <span className="wf-cronfires">
+                    Next three:{' '}
+                    {nextCronFires(draft.trigger.cron, 3)
+                      .map((d) => FIRE_FMT.format(d))
+                      .join(' · ')}{' '}
+                    UTC
+                  </span>
+                ) : null}
               </>
             ) : (
               <span className="wf-sub">

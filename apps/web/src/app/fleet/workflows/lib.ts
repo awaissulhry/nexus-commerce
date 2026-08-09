@@ -9,6 +9,7 @@
  */
 
 import { ago as agoIso } from '../_shared/run-health'
+import { nextCronFire } from './cron-eval'
 import type { BuiltinRoutine, RoutineStory } from './routines'
 import { CRITIC_KEY, DIRECTOR_KEY } from './routines'
 
@@ -117,21 +118,60 @@ export function fmtDuration(ms: number | null): string {
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-/** The two fleet crons in plain words; anything unrecognized stays as cron. */
+/** The one sentence a schedule the fleet cannot evaluate is allowed to say. */
+export const CRON_UNREADABLE = 'not a schedule this fleet can read'
+
+/**
+ * S5.b — is this an expression the fleet can actually evaluate? Delegates to
+ * the mirrored `nextCronFire`, which is the SAME rule `validateDefinition`
+ * applies server-side, so the client can never disagree with the save.
+ */
+export function cronIsEvaluable(expr: string): boolean {
+  return nextCronFire(expr, new Date()) !== null
+}
+
+/** The next `n` fire times, in order. Empty for anything unevaluable. */
+export function nextCronFires(expr: string, n: number, from: Date = new Date()): Date[] {
+  const out: Date[] = []
+  let cursor = from
+  for (let i = 0; i < n; i++) {
+    const next = nextCronFire(expr, cursor)
+    if (!next) break
+    out.push(next)
+    cursor = next
+  }
+  return out
+}
+
+/**
+ * The fleet's crons in plain words.
+ *
+ * S5.b — this used to check only that the minute and hour were INTEGERS, and
+ * never that they were in range, so `99 99 * * *` rendered on prod as
+ * "Nightly at 99:99 UTC": a confident sentence about an impossible schedule.
+ * That is worse than no preview at all. The whole value of a plain-English
+ * restatement is that a wrong expression READS wrong — this one read right.
+ *
+ * So validity is now decided by the same evaluator the server saves against,
+ * and anything it refuses gets one honest sentence instead of a fabricated
+ * time. Anything valid but beyond the phrasings below echoes as cron, which
+ * is not a claim about when it fires; the next-fire list beside it is.
+ */
 export function prettyCron(expr: string): string {
   // WF.4c — the schedule feed reports a stored manual trigger as 'manual'.
   if (expr === 'manual') return 'When you start it'
-  const f = expr.trim().split(/\s+/)
-  if (f.length !== 5) return expr
-  const [min, hr, dom, mon, dow] = f
+  if (!cronIsEvaluable(expr)) return CRON_UNREADABLE
+  const [min, hr, dom, mon, dow] = expr.trim().split(/\s+/)
   const m = Number(min)
   const h = Number(hr)
+  const everyDate = dom === '*' && mon === '*'
+  if (everyDate && min === '0' && hr === '*') return 'Every hour, on the hour'
   if (!Number.isInteger(m) || !Number.isInteger(h)) return `${expr} (UTC)`
   const hhmm = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} UTC`
-  if (dom === '*' && mon === '*' && dow === '*') return `Nightly at ${hhmm}`
-  if (dom === '*' && mon === '*' && /^[0-6]$/.test(dow ?? '')) {
-    return `${DAYS[Number(dow)]}s at ${hhmm}`
-  }
+  if (!everyDate) return `${expr} (UTC)`
+  if (dow === '*') return `Nightly at ${hhmm}`
+  if (/^[0-6]$/.test(dow ?? '')) return `${DAYS[Number(dow)]}s at ${hhmm}`
+  if (dow === '1-5') return `Weekdays at ${hhmm}`
   return `${expr} (UTC)`
 }
 
