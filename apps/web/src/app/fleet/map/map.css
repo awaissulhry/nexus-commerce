@@ -2328,9 +2328,77 @@
  * screen — but it is a real loss, not a free win. Selection still works and the
  * List view still carries the same facts in columns.
  */
-@media (max-width: 1400px) {
+/*
+ * S4.h — BELOW 1400 THE PANEL REFLOWS TO THE BOTTOM. IT NO LONGER DISAPPEARS.
+ *
+ * S3.i made `display: none` fire for the first time and stated the consequence
+ * rather than discovering it. S4's audit measured what that consequence is, and
+ * it is worse than "the rail is hidden": at 1280×800 with `?worker=` in the URL,
+ * the card is still painted SELECTED on the canvas, the URL still carries the
+ * selection, history has moved — and there is no detail anywhere. The page
+ * acknowledges the click and then shows nothing, which is worse than a control
+ * that is plainly absent.
+ *
+ * And half the selections have no fallback even in principle: a worker has
+ * `/fleet/workers/[key]`, **a handoff has no page anywhere**. The one thing this
+ * page uniquely shows is the one thing that cannot be sent somewhere else.
+ *
+ * So it reflows rather than hides — Cloudscape's split panel does exactly this
+ * and gives the reason in one sentence: "On small viewports the panel moves to
+ * the bottom of the screen. This allows for interaction with the content and
+ * the panel." You read a handoff AGAINST the graph; a drawer over the canvas
+ * would remove the context that makes the detail mean anything, which is the
+ * reversal Camunda shipped and this component's own header cites.
+ *
+ * ⚠ TWO BLOCKS, SCOPED APART ON PURPOSE. The 1100 query in §M2 sets
+ * `grid-template-rows: auto minmax(0,1fr)` — S3.k's fix for a canvas that
+ * measured 2px because its row had nothing to size to. A single `max-width:
+ * 1400px` block here would sit later in the file and silently beat it at every
+ * width below 1100. Fourth instance of that trap on this page; this time it was
+ * designed around rather than discovered.
+ */
+@media (min-width: 1101px) and (max-width: 1400px) {
+  .sbm-body,
+  .sbm-body.is-railcollapsed {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .sbm-body.is-list,
+  .sbm-body.is-list.is-railcollapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .sbm-rail {
-    display: none;
+    display: flex;
+    grid-column: 1 / -1;
+    max-height: 280px;
+  }
+}
+@media (max-width: 1100px) {
+  /* One column already; the rail is simply the last row. */
+  .sbm-body {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .sbm-body.is-list {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .sbm-rail {
+    display: flex;
+    max-height: 320px;
+  }
+}
+/* Collapsed, the strip lies down with the panel: a 44px-wide vertical tab makes
+   no sense on a full-width bar. */
+@media (max-width: 1400px) {
+  .sbm-rail.is-collapsed {
+    max-height: none;
+  }
+  .sbm-rail-expand {
+    flex-direction: row;
+    justify-content: center;
+    padding: 9px 0;
+  }
+  .sbm-rail-expand .lbl {
+    writing-mode: horizontal-tb;
   }
 }
 
