@@ -106,6 +106,27 @@ describe('overlays', () => {
     })
   }
 
+  it('a short label exists exactly where the tint is the only channel', () => {
+    // The armed autonomy rungs: `deriveStatus` prints "running" for all three,
+    // so without words the difference between "may look" and "may act on its
+    // own" is hue alone — measured 1.37:1 in greyscale.
+    const autonomy = overlayById('autonomy')
+    const withShort = autonomy.buckets.filter((b) => b.short).map((b) => b.id)
+    expect(withShort).toEqual(['observe', 'propose', 'auto'])
+
+    // Not on the buckets the status word already names, and not on the hatch,
+    // which is a texture rather than a colour.
+    for (const id of ['off', 'unreadable', 'not-set-up']) {
+      expect(autonomy.buckets.find((b) => b.id === id)!.short, id).toBeUndefined()
+    }
+
+    // Health and cost state their fact in words on the card already
+    // ("last run failed", "$0.11 spent"), so a second label would be noise.
+    for (const o of OVERLAYS.filter((x) => x.id !== 'autonomy')) {
+      for (const b of o.buckets) expect(b.short, `${o.id}/${b.id}`).toBeUndefined()
+    }
+  })
+
   it('no data is never the bottom of the scale', () => {
     const cost = overlayById('cost')
     const neverRan = FIXTURE.find((n) => n.key === 'never-run')!

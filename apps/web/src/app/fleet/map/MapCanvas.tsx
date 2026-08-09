@@ -72,6 +72,9 @@ interface WorkerNodeData {
   dimmed: boolean
   selected: boolean
   overlayClass: string
+  /** Set only where the tint is the sole carrier of meaning — see
+   *  `OverlayBucket.short`. Null on every health and cost bucket. */
+  overlayShort: string | null
   /** The topology, in a sentence, for a reader who cannot see the arrows. */
   wiring: string
   [key: string]: unknown
@@ -104,6 +107,12 @@ function WorkerNode({ data }: NodeProps) {
       <div className="sbm-node-status">
         <span className={`sbm-glyph g-${d.word}`} aria-hidden />
         <span className="sbm-node-word">{d.label}</span>
+        {/* S3R C-S3.1 — the second channel, where the tint is otherwise the only
+            one. `deriveStatus` has no autonomy term, so OBSERVE and AUTO both
+            print "running"; without this, "may look" vs "may act on its own" was
+            a blue-vs-green difference measuring 1.37:1 in greyscale and nothing
+            else. Only the armed rungs carry it — see `OverlayBucket.short`. */}
+        {d.overlayShort ? <span className="sbm-node-lvl">{d.overlayShort}</span> : null}
         <span className="sbm-node-tier">{d.tier}</span>
       </div>
       {/*
@@ -500,6 +509,7 @@ export function MapCanvas({
           dimmed: dimmedKeys.has(n.key),
           selected: selectedKey === n.key,
           overlayClass: overlay.bucketOf(n).className,
+          overlayShort: overlay.bucketOf(n).short ?? null,
         } satisfies WorkerNodeData,
         draggable: false,
         connectable: false,

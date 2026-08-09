@@ -38,6 +38,28 @@ export interface OverlayBucket {
   label: string
   /** One more sentence, for the reader who needs it. */
   note?: string
+  /**
+   * Two or three words for the CARD, set only where the tint is the sole
+   * carrier of this bucket's meaning.
+   *
+   * S3R measured the reason it exists. `deriveStatus`'s whole vocabulary is
+   * running / working / switched off / paused / not set up / needs attention /
+   * never run, ever / last run failed / stopped by a limit / waiting in
+   * Approvals — **not one of those words names an autonomy level**, so a worker
+   * at OBSERVE and a worker at AUTO both print *running*, and the difference
+   * that decides whether a robot may change a live Amazon account was carried
+   * by a blue-vs-green step measuring **1.37:1 in greyscale**. WCAG only credits
+   * lightness as a second channel at 3:1, and four rungs each 3:1 apart needs
+   * 27× of range — impossible while every rung also clears 3:1 on white. So the
+   * second channel has to be words.
+   *
+   * Deliberately absent from `off`, `unreadable` and `not-set-up`: the status
+   * word already says "switched off" / "paused" / "not set up", and the hatch is
+   * a texture rather than a colour. Absent from every health and cost bucket:
+   * there the card states the fact in words next to the tint already
+   * ("last run failed", "$0.11 spent").
+   */
+  short?: string
 }
 
 export interface Overlay {
@@ -81,18 +103,21 @@ const AUTONOMY_BUCKETS: OverlayBucket[] = [
     id: 'observe',
     className: 'ov-observe',
     label: 'May look, may not act',
+    short: 'may look',
     note: 'It can read and write findings. It cannot change anything on Amazon.',
   },
   {
     id: 'propose',
     className: 'ov-propose',
     label: 'May propose, you approve',
+    short: 'may propose',
     note: 'Its suggestions queue for your yes or no. Nothing reaches Amazon until you approve it.',
   },
   {
     id: 'auto',
     className: 'ov-auto',
     label: 'May act on its own',
+    short: 'may act',
     note: 'It acts inside every safety gate, and changes your Amazon account without asking first.',
   },
 ]

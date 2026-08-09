@@ -923,6 +923,35 @@
   color: #4a5666;
 }
 /* was #9aa5b3 = 2.50:1 */
+/*
+ * S3R C-S3.1 — the autonomy level, in words, on the card.
+ *
+ * It reads as a continuation of the status word rather than a separate badge,
+ * because it IS one: "Running · may propose". A pill here would compete with
+ * the self-test tag and the tier for the same 230px of row.
+ *
+ * `--ov` is on the card, so the dot is the bucket's own colour — which makes
+ * this redundant with the ring rather than a second, unrelated encoding. The
+ * words are what carry it; the dot only ties them to the legend.
+ */
+.sbm-node-lvl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #45505f; /* 8.18:1 on the card's white */
+  white-space: nowrap;
+}
+.sbm-node-lvl::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ov, #6b7684);
+}
+.sbm-node.is-dimmed .sbm-node-lvl {
+  color: #55616f;
+}
 .sbm-node-tier {
   margin-left: auto;
   font-size: 9.5px;
