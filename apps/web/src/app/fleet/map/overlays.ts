@@ -253,6 +253,27 @@ export function overlayById(id: string): Overlay {
  */
 export function visibleBuckets(overlay: Overlay, nodes: MapNode[]): OverlayBucket[] {
   if (overlay.id === 'autonomy') return overlay.buckets
-  const occupied = new Set(nodes.map((n) => overlay.bucketOf(n).id))
+  const occupied = occupiedBucketIds(overlay, nodes)
   return overlay.buckets.filter((b) => occupied.has(b.id))
+}
+
+/**
+ * Which buckets any node on this canvas is actually in.
+ *
+ * S3R. The autonomy exception above kept the unused rungs — rightly, a scale
+ * with holes stops being a scale — but it was implemented as *keep the rungs
+ * AND their paragraphs*, which is a much more expensive decision. Measured on
+ * prod: five of six legend rows described a colour that was nowhere on the
+ * canvas, and those five carried ~175px of the 210px of notes, on a rail whose
+ * bottom block was already off the screen.
+ *
+ * A note explains something you can see. When there is nothing to see, the note
+ * has no referent — so the rung keeps its swatch and its label, and says
+ * plainly that it is empty. Derived from the same `bucketOf` pass that paints
+ * the swatch, so it cannot disagree with the canvas, and it is a presence
+ * marker rather than a count: the census band above the canvas owns every
+ * number about the node population.
+ */
+export function occupiedBucketIds(overlay: Overlay, nodes: MapNode[]): Set<string> {
+  return new Set(nodes.map((n) => overlay.bucketOf(n).id))
 }

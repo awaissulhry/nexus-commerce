@@ -8,7 +8,7 @@
  * declared without the words that explain it.
  */
 import { describe, it, expect } from 'vitest'
-import { OVERLAYS, visibleBuckets, overlayById } from './overlays'
+import { OVERLAYS, occupiedBucketIds, visibleBuckets, overlayById } from './overlays'
 import type { MapNode } from './lib'
 
 function node(over: Partial<MapNode> & { key: string }): MapNode {
@@ -137,6 +137,39 @@ describe('overlays', () => {
       } as never,
     })
     expect(autonomy.bucketOf(paused).id).toBe('off')
+  })
+
+  it('occupancy is exactly the set of buckets some node is in', () => {
+    for (const o of OVERLAYS) {
+      const occupied = occupiedBucketIds(o, FIXTURE)
+      const expected = new Set(FIXTURE.map((n) => o.bucketOf(n).id))
+      expect(occupied, `${o.id}`).toEqual(expected)
+      // Nothing may be claimed occupied that no node is in — that would print
+      // "…" against a colour the canvas is not showing.
+      for (const id of occupied) {
+        expect(FIXTURE.some((n) => o.bucketOf(n).id === id), `${o.id}/${id}`).toBe(true)
+      }
+    }
+  })
+
+  it('a vacant rung is still a rung: swatch, label, and a marker instead of prose', () => {
+    const quiet = [node({ key: 'a' }), node({ key: 'b' })] // an all-off fleet, as prod is today
+    const autonomy = overlayById('autonomy')
+    const shown = visibleBuckets(autonomy, quiet)
+    const occupied = occupiedBucketIds(autonomy, quiet)
+
+    expect(occupied).toEqual(new Set(['off']))
+    expect(shown).toHaveLength(6) // the ladder keeps every rung
+
+    const vacant = shown.filter((b) => !occupied.has(b.id))
+    expect(vacant).toHaveLength(5)
+    for (const b of vacant) {
+      // The rung can still be drawn and named — only its sentence is withheld,
+      // because a note explains something on the canvas and there is nothing
+      // on the canvas to explain.
+      expect(b.className).toMatch(/^ov-/)
+      expect(b.label.length).toBeGreaterThan(3)
+    }
   })
 
   it('the autonomy ladder keeps its unused rungs; the others drop empty ones', () => {
