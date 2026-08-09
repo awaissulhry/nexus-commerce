@@ -164,6 +164,12 @@ export function AssignmentClient({ id }: { id: string }) {
   const everRan = a.runs.length > 0
   /** Open = not filed away. `open` is a reserved-ish word in JSX props here. */
   const open_ = a.state !== 'closed' && a.state !== 'cancelled'
+  /** Days past the deadline, or null. Overdue is a flag, never a state. */
+  const overdueDays = (() => {
+    if (!a.dueAt || !open_) return null
+    const d = Math.floor((Date.now() - new Date(a.dueAt).getTime()) / 86400_000)
+    return d > 0 ? d : null
+  })()
 
   return (
     /* S3.d — a root class this page alone wears. It had none, so every
@@ -175,23 +181,54 @@ export function AssignmentClient({ id }: { id: string }) {
         <ArrowLeft size={13} /> All assignments
       </Link>
 
-      {/* state + why */}
-      <div className="acr-pg-ctrlrow" style={{ marginBottom: 16 }}>
-        <span className={`as-chip ${def.tone}`} title={def.tip}>
-          <span className="as-dot" />
-          {def.label}
-        </span>
+      {/**
+        * S3.b — the page finally says what it is looking at.
+        *
+        * Measured on the first render: the assignment's own title appeared
+        * NOWHERE on its own page. The list shows it, Approvals renders it as
+        * provenance, the drawer derives it — and the object's page showed the
+        * shell's generic "Assignment" and left the operator to reassemble the
+        * name from a grid.
+        */}
+      <h2 className="as-detail-title">{a.title}</h2>
+
+      <div className="as-band">
+        <div className="as-bandhead">
+          <span className={`as-chip ${def.tone}`} title={def.tip}>
+            <span className="as-dot" />
+            {def.label}
+          </span>
+          {/* Overdue exists on the list — it colours the row and sorts it to
+              the top — and did not exist here at all: a deadline two days past
+              rendered in plain body colour. The object's own page was the one
+              surface that did not know. */}
+          {overdueDays !== null && (
+            <span
+              className="as-due over"
+              title={`This was due ${new Date(a.dueAt!).toLocaleDateString()}. A deadline colours this and moves it up the list — it never starts anything and never stops anything.`}
+            >
+              {overdueDays}d late
+            </span>
+          )}
+        </div>
         <p className="as-why">
-          {def.tip}
+          {def.pageWhy}
           {latest?.haltedReason && (
             <>
               {' '}
               <strong>{reasonSentence(latest.haltedReason)}</strong>
             </>
           )}
-          {a.state === 'failed' && latest && (
-            <> {failureSentence(latest)}</>
-          )}
+          {a.state === 'failed' && latest && <> {failureSentence(latest)}</>}
+        </p>
+        {/* The most important fact about this object used to be the last line
+            of small print at the bottom of the page. It is one quiet, legible
+            line here instead — not a panel, not a banner, and not repeated
+            three times further down. */}
+        <p className="as-bandfact">
+          Nothing this finds reaches Amazon on its own. Every change goes
+          through <Link href="/fleet/approvals">Approvals</Link> — and an
+          assignment cannot put anything there yet, so this one never will.
         </p>
       </div>
 
@@ -533,13 +570,6 @@ export function AssignmentClient({ id }: { id: string }) {
         </div>
       )}
 
-      <p className="as-caveat">
-        Assignments cannot produce approvals yet. Only the weekly council queues
-        actions for your decision, and it does not read assignment runs — so
-        this assignment will never put something in{' '}
-        <Link href="/fleet/approvals">Approvals</Link>. Said plainly rather than
-        shown as a panel that could only ever be empty.
-      </p>
     </div>
   )
 }

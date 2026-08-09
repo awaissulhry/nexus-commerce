@@ -30,6 +30,16 @@ export interface StateDef {
   label: string
   /** The tooltip — what it means and what to do about it. */
   tip: string
+  /**
+   * NAF.SB.AS-S3R — the same fact, said on a PAGE rather than about a row.
+   *
+   * `tip` was written for a chip in a list and the detail page reused it
+   * verbatim, so `Finished` greeted the operator with *"What it found … is on
+   * the row"* on a surface that has no rows. One vocabulary, two registers:
+   * the chip explains a state to someone scanning many, this explains it to
+   * someone standing on one.
+   */
+  pageWhy: string
   tone: 'neutral' | 'busy' | 'good' | 'warn' | 'bad'
   /** Open states are the default view; the rest are shown on request. */
   open: boolean
@@ -42,6 +52,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'not_started',
     label: 'Not started',
     tip: 'You made this and nothing has run yet. Nothing will start it but you — every worker in this fleet is switched off.',
+    pageWhy:
+      'You made this and nothing has run. Nothing will start it but you — every worker in this fleet is switched off.',
     tone: 'neutral',
     open: true,
     tile: true,
@@ -50,6 +62,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'running',
     label: 'Running',
     tip: 'A run is open right now. There is no way to stop a run once it has begun — it ends on its own, on a budget, or is closed after two hours if it stops reporting.',
+    pageWhy:
+      'A run is open right now. There is no way to stop it: it ends on its own, on a budget, or is closed after two hours if it stops reporting.',
     tone: 'busy',
     open: true,
     tile: true,
@@ -58,6 +72,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'finished',
     label: 'Finished',
     tip: 'It ran and came back. What it found — or that it found nothing — is on the row.',
+    pageWhy:
+      'It ran and came back. What it found — or that it found nothing — is below.',
     tone: 'good',
     open: true,
     tile: true,
@@ -66,6 +82,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'stopped',
     label: 'Stopped',
     tip: 'A guard stopped it on purpose — a budget, the fleet halt, the kill switch, or evidence too old to trust. The row names which one, and that is the thing to fix.',
+    pageWhy:
+      'A guard stopped it on purpose, before it could finish. The reason is below, and it is the thing to fix.',
     tone: 'warn',
     open: true,
     tile: true,
@@ -74,6 +92,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'failed',
     label: 'Failed',
     tip: 'It broke. The row says whose fault it was — the provider being unreachable is not the worker being wrong.',
+    pageWhy:
+      'It broke. What broke, and whose fault it was, is below — a provider being unreachable is not the worker being wrong.',
     tone: 'bad',
     open: true,
     tile: true,
@@ -82,6 +102,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'abandoned',
     label: 'Abandoned',
     tip: 'It stopped reporting and was closed after two hours. Nobody stopped it on purpose, and we cannot say what it spent — that cost is missing from the total, not counted as zero.',
+    pageWhy:
+      'It stopped reporting and was closed after two hours. Nobody stopped it on purpose, and what it spent cannot be known — that cost is missing from the total rather than counted as zero.',
     tone: 'bad',
     open: true,
     tile: true,
@@ -90,6 +112,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'closed',
     label: 'Closed',
     tip: 'You are done with it. Its runs and findings are kept. Reopen puts it back.',
+    pageWhy:
+      'You are done with it. Every attempt it made and everything it found are kept exactly as they were. Reopen puts it back.',
     tone: 'neutral',
     open: false,
     tile: false,
@@ -98,6 +122,8 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
     key: 'cancelled',
     label: 'Cancelled',
     tip: 'You called it off before it ran. Kept apart from Closed on purpose: closing something that ran and cancelling something that never did are different facts.',
+    pageWhy:
+      'You called it off before it ever ran. Kept apart from Closed on purpose: closing something that ran and cancelling something that never did are different facts.',
     tone: 'neutral',
     open: false,
     tile: false,
