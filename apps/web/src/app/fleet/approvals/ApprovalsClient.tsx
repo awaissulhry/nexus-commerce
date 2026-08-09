@@ -176,7 +176,7 @@ const NO_HISTORY = 'so there is no worker page and no track record for it'
 const OUTSIDE_ORIGINS: Record<string, Origin> = {
   'manual-action': {
     name: 'Someone using the copilot',
-    what: `a person asked for this from the copilot rather than a worker proposing it, ${NO_HISTORY}`,
+    what: `a person, not a worker — it came from the copilot, ${NO_HISTORY}`,
   },
   'pricing-watchdog': {
     name: 'The price watchdog',
@@ -191,7 +191,7 @@ function originOf(key: string | null): Origin {
   if (!key)
     return {
       name: 'Something we cannot identify',
-      what: 'nothing recorded what asked for this',
+      what: 'nothing on the run records which producer it was',
     }
   return (
     OUTSIDE_ORIGINS[key] ?? {
@@ -896,7 +896,12 @@ function OutsideQueue({
           <p className="aq-outwhy">
             These come from producers outside the fleet, not from a fleet worker. They were
             reaching{' '}
-            <strong>no screen at all</strong> until now — the queue above only shows the fleet&apos;s
+            {/* `{' '}` and not a plain space: the space after this closing tag was
+                being stripped, so the deployed page read "no screen at alluntil
+                now". Pre-existing, and invisible in the source — this paragraph
+                already uses the same idiom twice for the same reason. */}
+            <strong>no screen at all</strong>{' '}
+            until now — the queue above only shows the fleet&apos;s
             own three actions, while the clock that expires requests covers every action. So one of
             these could be created, seen by nobody, and thrown away after {expiryHours} hours.
             Deciding one here records your name, gives you the same twenty-second{' '}

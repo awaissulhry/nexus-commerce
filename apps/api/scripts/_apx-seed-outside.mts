@@ -148,8 +148,23 @@ await seed('(c) unknown producer · apply-content', 'some-other-system', {
 
 // ── the two remaining states ────────────────────────────────────────────────
 
-// (d) parked, counting down. `executeAfter` in the future; nothing commits it
-//     because nothing polls a row this script created.
+// (d) parked, counting down.
+//
+// ⚠ The first run of this script used a 20-second `executeAfter` — the real
+// undo window — and the approval-maintenance sweep picked the row up within
+// ~2 minutes and tried to COMMIT it. Nothing happened: `checkStaleness` ran
+// the tool's own dry-run, the seed SKU resolves to nothing, and the row was
+// refused and returned to `pending` carrying
+// `reason: 'not run — productId and numeric price are required'`. That is the
+// fail-closed guarantee in §1.2 working on a live row, and it is the reason
+// this file's safety argument is built on unresolvable entities rather than on
+// nobody noticing.
+//
+// It is still the wrong way to hold a state still for measurement, so the
+// window is now ten minutes. The countdown will therefore read a number no
+// operator ever sees (the real window is 20s) — that figure is a FIXTURE
+// ARTEFACT, not a finding. What is being verified here is the parked
+// treatment: the block, its wording, and the undo control.
 await seed('(d) parked · counting down', 'pricing-watchdog', {
   toolName: 'set-price',
   riskTier: 'high',
@@ -160,7 +175,7 @@ await seed('(d) parked · counting down', 'pricing-watchdog', {
     effect: 'Lowers the list price on one SKU.',
   },
   status: 'scheduled',
-  executeAfter: new Date(Date.now() + 20 * 1000),
+  executeAfter: new Date(Date.now() + 10 * 60 * 1000),
   decidedBy: 'awaissulhry',
   expiresAt: EXPIRES(),
 })
