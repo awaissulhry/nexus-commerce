@@ -44,7 +44,6 @@ import {
   Handle,
   Position,
   ReactFlow,
-  EdgeLabelRenderer,
   type Edge,
   type Node,
   type NodeProps,
@@ -189,29 +188,34 @@ function LaneNode({ data }: NodeProps) {
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
 
 /**
- * S2R — the edge labels, drawn from the layout instead of from the edge.
+ * The edge's word.
  *
- * ATTEMPT ONE deleted every edge. A custom `edgeTypes` component is handed
- * `sourceX/sourceY` computed from node measurements this canvas never gets, so
- * it rendered nothing and `.react-flow__edges` came back an empty div on prod.
- * That fix is reverted and this one does not go near edge rendering.
+ * A plan edge can never carry a volume: the critic does not author an artifact,
+ * it records a verdict on the plan in place. So it says what actually crossed —
+ * the verdict — rather than a fabricated count.
  *
- * `EdgeLabelRenderer` portals into a container that lives INSIDE the viewport
- * transform, so anything placed here is in graph coordinates and follows pan and
- * zoom for free — with no dependency on measurement, because this canvas already
- * knows where every node is. Rule 1 again: a canvas that owns its layout can
- * place things in it.
+ * ⚠ C15 IS OPEN AND TWO ATTEMPTS TO CLOSE IT BOTH REMOVED EVERY EDGE FROM THE
+ * GRAPH. Three analyst edges converge on the director and their labels sit at
+ * one x — measured `656.9 / 656.9 / 657.3`, two of them reading the same words.
  *
- * WHY 24% AND NOT THE MIDPOINT. Three analyst edges converge on the director,
- * and at the midpoint their labels stacked at one x — measured on prod, `x
- * 656.9 / 656.9 / 657.3`, two of them reading the same words. Placement is
- * NP-hard in general and trivially solvable here by not placing labels where the
- * lines meet: near the source, the edges are as far apart as they ever get.
+ *   · Attempt 1, a custom `edgeTypes` component placing the label along the
+ *     path: `.react-flow__edges` came back an EMPTY DIV on prod.
+ *   · Attempt 2, keeping the built-in edge and drawing labels through
+ *     `EdgeLabelRenderer` from our own layout: the labels rendered correctly and
+ *     **the edges vanished again**, the only change being that `label` moved off
+ *     the edge object.
+ *
+ * And attempt 2 would not have fixed it anyway: the three analysts stand in the
+ * SAME COLUMN, so anchoring a label near its source gives all three the same x —
+ * measured `699.7 / 699.7 / 700`. Source-anchoring cannot separate labels whose
+ * sources are already stacked.
+ *
+ * So this is not a placement problem and the next attempt should not be a
+ * placement tweak. The count belongs somewhere that is not the line: a badge on
+ * the target node, or the handoff panel in the inspector rail, which already
+ * prints the full breakdown. Written down here so the third attempt starts from
+ * the right question.
  */
-/** The edge's word, computed once and used by both the edge and its label.
- *  A plan edge can never carry a volume: the critic does not author an artifact,
- *  it records a verdict on the plan in place. So it says what actually crossed —
- *  the verdict — rather than a fabricated count. */
 function labelOf(e: MapEdge, windowLabel: string): string {
   if (e.artifact === 'plan') {
     const v = e.verdicts
@@ -223,25 +227,6 @@ function labelOf(e: MapEdge, windowLabel: string): string {
   return e.counts.crossed > 0 ? `${e.counts.crossed} carried` : `nothing carried in ${windowLabel}`
 }
 
-function EdgeLabels({
-  items,
-}: {
-  items: Array<{ id: string; x: number; y: number; label: string }>
-}) {
-  return (
-    <EdgeLabelRenderer>
-      {items.map((it) => (
-        <div
-          key={it.id}
-          className="sbm-edgelabel"
-          style={{ transform: `translate(-50%, -50%) translate(${it.x}px, ${it.y}px)` }}
-        >
-          {it.label}
-        </div>
-      ))}
-    </EdgeLabelRenderer>
-  )
-}
 
 
 /** The card and lane boxes, in graph coordinates. These are CSS constants
@@ -516,31 +501,6 @@ export function MapCanvas({
     return out
   }, [nodes, edges, positions, dimmedKeys, selectedKey, overlay])
 
-  const edgeLabels = useMemo(
-    () =>
-      edges
-        .map((e) => {
-          const s = positions.pos.get(e.from)
-          const t = positions.pos.get(e.to)
-          if (!s || !t) return null
-          /* From the source card's right edge to the target's left edge, a
-             quarter of the way along — beside the card the work came FROM. */
-          const sx = s.x + NODE_W
-          const sy = s.y + NODE_H / 2
-          const tx = t.x
-          const ty = t.y + NODE_H / 2
-          const k = 0.24
-          return {
-            id: e.id,
-            x: sx + (tx - sx) * k,
-            y: sy + (ty - sy) * k,
-            label: labelOf(e, windowLabel),
-          }
-        })
-        .filter((x): x is { id: string; x: number; y: number; label: string } => x != null),
-    [edges, positions, windowLabel],
-  )
-
   const flowEdges: Edge[] = useMemo(
     () =>
       edges.map((e) => {
@@ -562,10 +522,10 @@ export function MapCanvas({
              information lives on the edges. */
           interactionWidth: 22,
           animated: false,
-          /* No `label` here: xyflow places it at the path midpoint, which is
-             exactly where three edges converge. `EdgeLabels` draws it near the
-             source instead. */
-          data: { label: labelOf(e, windowLabel) },
+          label: labelOf(e, windowLabel),
+          labelShowBg: true,
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
         }
       }),
     [edges, windowLabel, selectedEdgeId],
@@ -656,7 +616,6 @@ export function MapCanvas({
         onEdgeClick={(_e, edge) => onSelectEdge(edge.id === selectedEdgeId ? null : edge.id)}
         onPaneClick={() => onSelect(null)}
       >
-        <EdgeLabels items={edgeLabels} />
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} className="sbm-bg" />
         <Controls showInteractive={false} />
       </ReactFlow>
