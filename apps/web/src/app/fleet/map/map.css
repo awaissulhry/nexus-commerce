@@ -710,9 +710,11 @@
   .sbm-body.is-list {
     grid-template-columns: minmax(0, 1fr);
   }
-  .sbm-rail {
-    display: none;
-  }
+  /* `.sbm-rail { display: none }` was here and had NEVER fired — `.sbm-rail`'s
+     base rule is ~1100 lines below at the same specificity, and the later rule
+     wins. Moved to the end of §M3, next to what it overrides. Deleted rather
+     than left in place, because a `display: none` that hides nothing is worse
+     than no rule at all: the next reader believes it. */
 }
 @media (max-width: 1100px) {
   .sbm-body {
@@ -2063,6 +2065,37 @@
 }
 .sbm-rail-exits a:hover {
   text-decoration: underline;
+}
+
+/*
+ * S3.i — THE INSPECTOR RAIL ACTUALLY DROPS BELOW 1400 NOW.
+ *
+ * `@media (max-width:1400px){.sbm-rail{display:none}}` has been in §M2 since M.3
+ * and has **never once fired**: it sits ~1100 lines above `.sbm-rail{display:flex}`
+ * at equal specificity, and the later rule wins. Third instance of that trap in
+ * this file.
+ *
+ * What it cost, measured at 1280×800 with the query forced on as a control:
+ *
+ *                       broken      as intended
+ *   overlay rail        234.3px  →  460.5px   (+226.2)
+ *   canvas              197.0px  →  423.3px   (+226.3)
+ *
+ * A 197px-tall graph is not a graph, and the overlay rail showing 232 of 820px
+ * is not a rail. Both were paying for a panel the stylesheet already said should
+ * not be there.
+ *
+ * ⚠ THE CONSEQUENCE, STATED RATHER THAN DISCOVERED: below 1400 there is now no
+ * inspector, so selecting a worker or an edge has nowhere to show its detail.
+ * That is what the rule always said should happen and it is the right trade at
+ * this width — 340px of detail panel does not fit beside a graph on a 1280
+ * screen — but it is a real loss, not a free win. Selection still works and the
+ * List view still carries the same facts in columns.
+ */
+@media (max-width: 1400px) {
+  .sbm-rail {
+    display: none;
+  }
 }
 
 /* a selected edge thickens, so the rail and the canvas agree */
