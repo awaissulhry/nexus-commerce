@@ -1663,7 +1663,12 @@
 @media (max-width: 1100px) {
   .sbm-orail {
     grid-template-rows: none;
-    grid-template-columns: 190px minmax(0, 1fr) auto;
+    /* ⚠ The third track was `auto` and took **509.8px of 986** at 1100 — an
+       `auto` grid track sizes to max-content, and `Show`'s widest child is the
+       "Filtering dims; it never removes…" sentence, which has no reason to be
+       one line. That left the legend — the content this rail exists for —
+       236.2px. Cap the controls, give the slack to the explanation. */
+    grid-template-columns: 190px minmax(0, 1fr) 250px;
     gap: 0 14px;
     max-height: 210px;
   }
