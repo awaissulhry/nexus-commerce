@@ -3510,6 +3510,155 @@ Council `v1` active serving 1 run, `rev 1`/`rev 2` superseded, **3 rows**,
 trigger *Mondays at 05:15 UTC*. Editor discarded, every `naf-wf-draft-*` key
 cleared. No revision created.
 
+### 13.10 · S5.c and S5.d — EXECUTION RECORD (shipped and prod-verified 2026-08-09)
+
+`239e75d5b` + `cd299dc5c` (S5.c), `804c855f7` + `bbca7a5d0` (S5.d). Measured on
+prod at 1728 × 962, editor zone = 327 elements.
+
+#### S5.c — the editor shows what it knew
+
+| Criterion | Before | After |
+|---|---|---|
+| raw `<input>` / `<textarea>` / `<select>` in the editor | 25 + 1 + 1 | **0** |
+| DS checkboxes / DS field | 0 / 0 | **25 / 1** |
+| cards stating BOTH hand-off directions | 0 of 6 | **6 of 6** |
+| gate rungs carrying the floor lock | 0 | **6 of 6 cards** |
+| a bad cron marks the trigger card | no | **yes** (card + field) |
+| cycle + cron errors listed together | — | **both**, 2 in the checklist |
+
+**A deviation from §13.3.4, taken deliberately.** The study proposed the lock
+only where a worker's tools carry an `alwaysAsk` floor. `alwaysAsk` is a
+per-TOOL flag on the server and `GET /agent/fleet/charters` — a **sibling
+stream's route** — does not expose it, so the client cannot know which workers
+are floored. The sentence is true of every worker, so it is stated for every
+worker rather than guessed per worker. **The field to ask for is recorded, not
+invented.**
+
+#### The defect prod found in S5.c
+
+Closing a real loop — director hands back to the miner that feeds it — marked
+**three** cards. Two were right. The third was the terminal **Plan critic**,
+which is not in the loop at all, and its card told it to *"remove one of its
+hand-offs"* when it has none.
+
+I had used the wrong set. Kahn's forward peel leaves behind the loop **and
+everything the loop starves**, because a step whose only feeder is stuck never
+reaches in-degree 0. That set is right for parking columns and wrong for
+assigning blame. The fix peels the other way too — drop anything with no
+successor still standing, until nothing moves; what survives has both a
+predecessor and a successor inside the set, which is exactly the steps on a
+cycle. Exercised on six graphs, not just the one prod showed:
+
+| graph | on-loop |
+|---|---|
+| council + director→miner (the prod case) | director, miner — **critic freed** |
+| the real council (no cycle) | — |
+| 3-cycle with two innocent steps downstream | a, b, c |
+| self-loop | a |
+| two disjoint cycles | all four |
+| empty | — |
+
+Re-verified on prod: **2 marked, critic clean**, and undoing the edge clears
+both marks and the checklist.
+
+#### S5.d — type, contrast, and the recovered draft
+
+| Criterion | Before | After |
+|---|---|---|
+| contrast failures in the editor zone | **13** (every `.acr-pg-rung`, 4.38:1) | **0** |
+| unselected rung ratio | 4.38:1 | **5.50:1** |
+| `.acr-pg-muted` (the tier suffix) | **16px** | **11.5px** |
+
+**Counting the scale found a defect looking had not.** `.acr-pg-muted` carries
+a colour and no size, so the tier suffix fell through to the **root 16px** and
+rendered *larger than the worker's own name* beside it at 12.5px — seven of
+them, on every step head, through four phases of this section.
+
+The rung override is `.wf-page .acr-pg-rung:not(.on)`, **not** bare: the
+selected rung is white on blue (5.00:1, fine) and a bare override would have
+EQUAL specificity to `.acr-pg-rung.on`, which falls through to source order —
+the exact trap that shipped twice in S3R reading as fixed in the source.
+
+#### The exit criterion that was wrong
+
+S5.d's criterion said **5 sizes / 3 weights**. Measured on prod, the **S1R list
+page — the reference it points at — is 7 sizes / 4 weights**: sizes
+`{17, 15, 12.5, 12, 11.5, 11, 10.5}`, weights `{700, 650, 550, 400}`. The 5×3
+figure came from a narrower scope than the page. **Chasing it in the editor
+would have made the editor differ from every other section rather than match
+it**, so the criterion is corrected here rather than reported as met.
+
+The editor now measures **7 sizes / 5 weights**, and the whole residue is one
+component:
+
+| role | owner | verdict |
+|---|---|---|
+| 15 / 12.5 / 12 / 11.5 / 11 / 10.5 · 700 / 650 / 550 / 400 | page scale | **subset of S1R's** |
+| **13px / 600** | `.h10-ds-btn` — the DS `Menu` trigger, ×2 | DS primitive, mandatory |
+
+#### The recovered draft is a choice
+
+| moment | behaviour |
+|---|---|
+| arriving with a stored draft | banner shown; **the wiring on screen is the LIVE one**; stored copy untouched; Publish disabled |
+| "Use that draft" | banner gone, gate flips to the stored value, Publish enabled |
+| "Throw it away" | banner gone, live wiring stands, Publish disabled |
+| editing while the offer is open | counts as answering — all **8** mutation sites route through one `edit()` helper |
+
+**And prod caught the storage half.** "Throw it away" removed the key, the
+mirror effect then re-ran and wrote the baseline straight back, so the button
+left a stored copy behind. Harmless — a stored baseline is never offered — but
+a stored draft that is not a draft is a trap for whoever changes that
+condition next. **The mirror now holds a draft only while there is one.**
+
+#### `DiffList` in BOTH consumers
+
+| consumer | result |
+|---|---|
+| **S5** Publish dialog | all four categories: `rem` step, `chg` gate, `rem` connection, `chg` trigger · note gates submit · **0 raw textarea**, 1 DS |
+| **S4R** Activate dialog (rev 2) | `chg` "trigger changed" · heading "Activate rev 2?" · cancelled clean |
+
+#### §13.4 state table
+
+| # | State | Discharged |
+|---|---|---|
+| 1 | Revision baseline (custom, 2 steps) | ✅ prod |
+| 2 | Code baseline (built-in, 6 steps) | ✅ prod |
+| 3 | Empty compose (`EMPTY_DEF`) | ⛔ needs a throwaway custom = a permanent row; **not taken** |
+| 4 | Cycle | ✅ prod, twice (and it found a defect) |
+| 5 | Scheduled with zero steps | ✅ code path unchanged since WF.3 |
+| 6 | Invalid cron × 3 | ✅ prod |
+| 7 | Valid cron + presets + next fires | ✅ prod, 4 valid shapes |
+| 8 | Tighten-only floor visible | ✅ prod (unconditional — see above) |
+| 9 | Restored draft, both choices | ✅ prod |
+| 10 | Save-as-draft dialog + diff | ✅ prod (same `DiffList`) |
+| 11 | Publish dialog + diff, every category | ✅ prod |
+| 12 | Note required | ✅ prod, both dialogs |
+| 13 | Server rejection path | ✅ code — the client now refuses everything the server does |
+| 14 | Discard restores | ✅ prod |
+| 15 | `DiffList` in S4R's dialogs | ✅ prod |
+
+**Row 3 is the one not discharged**, and deliberately: reaching the empty-compose
+state on prod requires creating a custom routine that would then exist forever
+in the operator's list. Recorded rather than faked.
+
+#### Prod left as found
+
+Council `v1` active serving 1 run, `rev 1`/`rev 2` superseded, 3 rows, *Mondays
+at 05:15 UTC*. Custom `rev 3`, Ready, manual, *When you start it*. Every
+`naf-wf-draft-*` key cleared. **No revision created, nothing published.**
+
+#### Carried out of S5R
+
+1. **Ask the Workers stream for an `alwaysAsk` floor per charter** on
+   `GET /agent/fleet/charters`, so the gate lock can be per-worker.
+2. **Move `cron-eval.ts` to `@nexus/shared`** — already a web dependency;
+   blocked only on editing `fleet-schedule.service.ts` mid-session.
+3. `.wf-editpic`'s internal scroll at `calc(100vh - 24px)` is **untested** —
+   neither baseline is tall enough to reach it.
+4. The fleet **cannot arm a schedule firing less often than every 8 days**
+   (§13.9). Raising `SCAN_LIMIT_MINUTES` is a server call, not this section's.
+
 ---
 
 ## Sources
