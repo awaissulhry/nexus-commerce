@@ -3819,3 +3819,80 @@ and history here are correct — only the title is wrong. This is the same
 disposition the locks file records for `aaca58093`, which contains AS.1's files
 under ACT.2's message: *"Content and history are correct and complete — only the
 attribution is wrong. Not rebased on purpose."*
+
+---
+
+## 14.12 — Closing S4: the contrast work the audit pulled in, and the page-wide result
+
+Auditing S4 exposed the decision card, because S4.b's worked example made that
+card render every day rather than only when a request exists. Three fixes came
+out of it, two of them on shared ground.
+
+| | Before | After |
+|---|---|---|
+| `.acr-btn.go` — **the fleet's primary button, 29 call sites** | **3.46:1** | **4.96:1** |
+| The example's Apply button, **composited through opacity** | **1.45:1** | **4.96:1** |
+| `.aq-editopen`, `.aq-snoozeopt` ×3 in the example | 2.32 / 2.87:1 | ≥ 4.5 |
+| `.acr-sub` — every fleet page's purpose sentence | **4.41:1** | **5.83:1** |
+| `.aq-clock`, `.aq-dfield`, `.aq-dfrom` | 4.24 / 4.47 / 4.24 | 5.83 |
+
+**Page-wide result, measured on the deployed build by compositing every text
+role through its own opacity: ZERO failures.** That is a stronger claim than
+this document could previously make, and §14.13 says why.
+
+**Neither shared fix was a fork.**
+
+- `.acr-btn.go`: only the one declaration carrying white text moved. Every other
+  `#1a9d6a` in `control-room.css` is a dot, bar, border or glyph — non-text,
+  which needs 3:1 under WCAG 1.4.11 and passes. The Workflows stream had
+  measured this and declined to fork, correctly; **separating the text use from
+  the graphic uses is what made a fork unnecessary.**
+- `.acr-sub`: no escape hatch was needed — every `#667485` in that file is text.
+  That makes it simpler, and it also means **four more failures sit in the same
+  file at smaller sizes**, left untouched and posted in the locks file because
+  they are Control Room surfaces this stream has not audited.
+
+---
+
+## 14.13 — The measurement error underneath several of these numbers
+
+`getComputedStyle` reports the **declared** colour, not what the eye receives.
+Every contrast number in Parts 12–14 before this section was read that way, so
+any role sitting under a reduced `opacity` was never actually measured.
+
+It surfaced when the example card's Apply button read 3.46:1 by that method and
+**1.45:1** once composited against its backdrop — `.acr-btn:disabled` is
+`opacity: 0.55`, and every control in the example is disabled.
+
+> **A contrast audit that reads computed colour will pass a control nobody can
+> read.** Composite the element's own opacity against the resolved backdrop
+> before comparing.
+
+Two consequences, both recorded rather than quietly fixed:
+
+1. **The fix for it only half-worked, and specificity is why.**
+   `.aq-example :disabled` (0,2,0) beat `.acr-btn:disabled` — that rule is in
+   `control-room.css`, which loads earlier — but **tied** with
+   `.aq-editopen:disabled` and `.aq-snoozeopt:disabled` in this page's own
+   file, declared further down, so source order handed those the 0.55. A fix
+   that works against another stylesheet and fails against your own is the kind
+   that survives review. It now sits at the end of the file with each control
+   named.
+2. **The opacity trap was quoted as a warning in S4.b's own commit message and
+   then shipped one commit later by a different route** — through an inherited
+   `:disabled` rule rather than an authored `opacity`. Knowing the rule did not
+   prevent it; measuring did.
+
+---
+
+## 14.14 — S4 is done
+
+Built, deployed and measured on production: the false sentence gone, the empty
+state merged and sourced from S2, a worked example that is inert and readable
+and looks like the real card, five type sizes down to two, no overflow at nine
+widths or 200% zoom, and **no text role on `/fleet/approvals` below its WCAG
+floor, including under opacity.**
+
+**Not done, and deliberately:** the one-time first-approval band (§14.5 — it
+cannot fire while the queue is unreachable), and AQ.5, AQ.7, AQ.9, AQ.10, all
+of which would render nothing until Phase F moves one of §1.1's three walls.
