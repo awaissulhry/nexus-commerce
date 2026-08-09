@@ -721,12 +721,20 @@
   border-radius: 6px;
   overflow: hidden;
 }
-.sbm-canvas .react-flow__edge-text {
+/* S2R — our own label element (see `LabelledEdge`), anchored near the source
+   end rather than at the midpoint where three edges converge. `pointer-events:
+   none` so it never steals the click from the 22px edge hit target under it. */
+.sbm-edgelabel {
+  position: absolute;
+  pointer-events: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #cdd5df;
   font-size: 10px;
-  fill: #5a6675;
-}
-.sbm-canvas .react-flow__edge-textbg {
-  fill: #ffffff;
+  font-weight: 550;
+  color: #45505f;
+  white-space: nowrap;
 }
 
 /* nodes */
@@ -959,14 +967,21 @@
   border: 0;
 }
 
-/* lanes — the label that keeps job furniture honest */
+/* lanes — the container that keeps job furniture honest.
+ *
+ * S2R: it was a 640px dashed top-border with two lines of text 46px above a row
+ * of cards it had no visual relationship to, which reads as debris rather than
+ * as a label for anything. Now it is a bounded region drawn BEHIND its members,
+ * sized from the same layout maths that places them, so the box cannot drift
+ * from what it contains — Airflow's TaskGroup, not a caption. */
 .sbm-lane {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 640px;
-  padding: 6px 0 0;
-  border-top: 1px dashed #d7dee7;
+  padding: 8px 14px;
+  background: #f2f5f9;
+  border: 1px solid #cdd5df;
+  border-radius: 10px;
 }
 .sbm-lane-title {
   font-size: 11px;
@@ -977,6 +992,7 @@
 .sbm-lane-note {
   font-size: 10.5px;
   color: #55616f;
+  max-width: 62ch;
 }
 
 /* edges: an edge that has never carried anything is dashed and says so. The

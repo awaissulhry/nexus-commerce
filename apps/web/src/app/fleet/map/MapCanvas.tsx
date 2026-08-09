@@ -44,7 +44,11 @@ import {
   Handle,
   Position,
   ReactFlow,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from '@xyflow/react'
@@ -159,12 +163,26 @@ function WorkerNode({ data }: NodeProps) {
 interface LaneNodeData {
   title: string
   note: string
+  w: number
+  h: number
   [key: string]: unknown
 }
+/**
+ * S2R — a CONTAINER, not a caption.
+ *
+ * It was a 640px dashed top-border with two lines of text sitting 46px above a
+ * row of cards it had no visual relationship to, which reads as debris rather
+ * than as a label for anything. Airflow's TaskGroup is the model: a bounded
+ * region with a header, drawn behind its members so the grouping is a fact
+ * about the picture instead of a note near it.
+ *
+ * It is sized from the same layout maths that places the cards, so the box can
+ * never drift from what it contains.
+ */
 function LaneNode({ data }: NodeProps) {
   const d = data as unknown as LaneNodeData
   return (
-    <div className="sbm-lane">
+    <div className="sbm-lane" style={{ width: d.w, height: d.h }}>
       <span className="sbm-lane-title">{d.title}</span>
       <span className="sbm-lane-note">{d.note}</span>
     </div>
@@ -173,14 +191,75 @@ function LaneNode({ data }: NodeProps) {
 
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
 
+/**
+ * S2R — THE LABEL SITS AT THE SOURCE END, NOT THE MIDPOINT.
+ *
+ * Three analyst edges converge on the director, and at the midpoint their
+ * labels stacked at ONE x — measured on prod, `x 656.9 / 656.9 / 657.3` with
+ * `y 447.6 / 504.6 / 561.5`. Three chips in a 114px column, **two of them
+ * reading the same words**, attached to lines that had already bundled. The
+ * comment this replaces records that the text was shortened once because it
+ * "collided with its neighbour and truncated mid-word" — which treated the
+ * symptom.
+ *
+ * Edge-label placement is NP-hard in general and trivially solvable here by not
+ * placing labels where the lines meet: at 22% along the path each label is still
+ * beside the card it came FROM, where the edges are as far apart as they ever
+ * get. Kiali's precedent for a measurement it cannot place legibly is to move it
+ * into the side panel; ours can stay on the canvas because it stops standing at
+ * the convergence.
+ *
+ * The label is `pointer-events: none` so it never steals the click from the
+ * 22px-wide edge hit target underneath it.
+ */
+function LabelledEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  data,
+}: EdgeProps) {
+  const [path] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  })
+  const t = 0.22
+  const lx = sourceX + (targetX - sourceX) * t
+  const ly = sourceY + (targetY - sourceY) * t
+  const label = typeof data?.label === 'string' ? data.label : ''
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div
+            className="sbm-edgelabel"
+            style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  )
+}
+
+const edgeTypes = { labelled: LabelledEdge }
+
 /** The card and lane boxes, in graph coordinates. These are CSS constants
  *  (`.sbm-node { width: 252px }`, `.sbm-lane { width: 640px }`) and are verified
  *  against the DOM on prod: `offsetWidth/offsetHeight` report 252×82 and 640×41.
  *  They live here because the frame has to be computable BEFORE first paint. */
 const NODE_W = 252
 const NODE_H = 82
-const LANE_W = 640
-const LANE_H = 41
 const FIT_PAD = 22
 
 /**
@@ -192,7 +271,7 @@ const FIT_PAD = 22
  */
 function frameFor(
   pos: Map<string, { x: number; y: number }>,
-  lanes: Array<{ y: number }>,
+  lanes: Array<{ x: number; y: number; w: number; h: number }>,
   box: { w: number; h: number },
 ): { x: number; y: number; zoom: number } {
   let minX = Infinity
@@ -206,10 +285,10 @@ function frameFor(
     maxY = Math.max(maxY, p.y + NODE_H)
   }
   for (const l of lanes) {
-    minX = Math.min(minX, 0)
+    minX = Math.min(minX, l.x)
     minY = Math.min(minY, l.y)
-    maxX = Math.max(maxX, LANE_W)
-    maxY = Math.max(maxY, l.y + LANE_H)
+    maxX = Math.max(maxX, l.x + l.w)
+    maxY = Math.max(maxY, l.y + l.h)
   }
   if (!Number.isFinite(minX) || box.w < 2 || box.h < 2) return { x: 0, y: 0, zoom: 1 }
   const w = Math.max(1, maxX - minX)
@@ -260,7 +339,15 @@ export function MapCanvas({
      cost. That is what makes a poll repaint rather than rearrange. */
   const positions = useMemo(() => {
     const pos = new Map<string, { x: number; y: number }>()
-    const lanes: Array<{ id: string; title: string; note: string; y: number }> = []
+    const lanes: Array<{
+      id: string
+      title: string
+      note: string
+      x: number
+      y: number
+      w: number
+      h: number
+    }> = []
 
     const ranked = nodes.filter((n) => n.lane === 'ranked').slice().sort((a, b) => a.key.localeCompare(b.key))
     const byRank = new Map<number, MapNode[]>()
@@ -294,7 +381,20 @@ export function MapCanvas({
     for (const [lane, title, note] of others) {
       const members = nodes.filter((n) => n.lane === lane).slice().sort((a, b) => a.key.localeCompare(b.key))
       if (members.length === 0) continue
-      lanes.push({ id: `lane-${lane}`, title, note, y })
+      const rows = Math.ceil(members.length / 4)
+      const across = Math.min(members.length, 4)
+      lanes.push({
+        id: `lane-${lane}`,
+        title,
+        note,
+        /* The box wraps its members with a 14px gutter, and is never narrower
+           than the sentence it has to carry — a container cut to its cards
+           would wrap that note to four lines. */
+        x: -14,
+        y,
+        w: Math.max(460, (across - 1) * COL_W + NODE_W + 28),
+        h: 46 + (rows - 1) * ROW_H + NODE_H + 14,
+      })
       members.forEach((n, i) => pos.set(n.key, { x: i * COL_W, y: y + 46 }))
       y += 46 + Math.ceil(members.length / 4) * ROW_H + LANE_GAP
     }
@@ -356,8 +456,12 @@ export function MapCanvas({
     const out: Node[] = positions.lanes.map((l) => ({
       id: l.id,
       type: 'lane',
-      position: { x: 0, y: l.y },
-      data: { title: l.title, note: l.note } satisfies LaneNodeData,
+      position: { x: l.x, y: l.y },
+      /* Behind its members. Lanes are pushed first so they render first, and
+         the explicit zIndex stops a later re-sort putting a container over the
+         cards it contains. */
+      zIndex: 0,
+      data: { title: l.title, note: l.note, w: l.w, h: l.h } satisfies LaneNodeData,
       draggable: false,
       selectable: false,
       connectable: false,
@@ -443,6 +547,8 @@ export function MapCanvas({
               : `nothing carried in ${windowLabel}`
         return {
           id: e.id,
+          type: 'labelled',
+          data: { label },
           source: e.from,
           target: e.to,
           className: [
@@ -459,10 +565,6 @@ export function MapCanvas({
              information lives on the edges. */
           interactionWidth: 22,
           animated: false,
-          label,
-          labelShowBg: true,
-          labelBgPadding: [6, 3] as [number, number],
-          labelBgBorderRadius: 4,
         }
       }),
     [edges, windowLabel, selectedEdgeId],
@@ -534,6 +636,7 @@ export function MapCanvas({
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         /* No `fitView` prop. Measured on prod: xyflow's own Fit View control is
            a no-op on this graph — it filters to nodes it has measured and it
            never measures ours — while its Zoom In control works, which is how
