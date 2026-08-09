@@ -217,6 +217,47 @@ function WorkerPanel({
           </>
         }
       />
+      {/*
+       * S4.e — two facts the endpoint has always returned and this panel threw
+       * away. Forced a worker with 4 approvals waiting and 3 plans authored:
+       * the panel said nothing about either.
+       *
+       * ⚠ RENDERED ONLY WHEN NON-ZERO, deliberately. No worker can queue an
+       * approval on this deployment — the proposal tools are preview-only — so
+       * `waiting` is a STRUCTURAL zero, and the census band already explains
+       * that once, in a sentence, at the top of the page. S1R's rule is that a
+       * count which can only ever be zero is a sentence and not a control;
+       * printing "Waiting for you: none" on all seven cards would repeat a
+       * structural zero seven times and imply it is a measurement.
+       */}
+      {node.approvals.waiting > 0 || node.approvals.scheduled > 0 ? (
+        <Row
+          k="Waiting for you"
+          v={
+            <>
+              <b>{node.approvals.waiting}</b> to approve
+              {node.approvals.scheduled > 0 ? (
+                <span className="sbm-dim"> · {node.approvals.scheduled} already scheduled</span>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
+      {node.plans.authoredWindow > 0 ? (
+        <Row
+          k="Plans written"
+          v={
+            <>
+              <b>{node.plans.authoredWindow}</b> in this window
+              <span className="sbm-dim">
+                {' '}
+                · {node.plans.verdictsWindow.pass} passed, {node.plans.verdictsWindow.revise} sent
+                back, {node.plans.verdictsWindow.block} blocked
+              </span>
+            </>
+          }
+        />
+      ) : null}
 
       <h4>How it is wired</h4>
       <Row
@@ -329,6 +370,27 @@ function EdgePanel({ edge, nodes }: { edge: MapEdge; nodes: MapNode[] }) {
           <Row k="Considered and dropped" v={edge.counts.dropped} />
           {edge.counts.conflicted > 0 ? <Row k="In conflict" v={edge.counts.conflicted} /> : null}
           <p className="sbm-rail-note">{edge.lineageNote}</p>
+
+          {/* S4.e — the panel printed "In conflict: 3" and held the array that
+              explains those three without rendering it. Showing a count whose
+              meaning you are carrying and not printing is the same defect class
+              as a legend that disagrees with its graph. */}
+          {edge.conflicts.length > 0 ? (
+            <>
+              <h4>Where two findings collided</h4>
+              <ul className="sbm-drops">
+                {edge.conflicts.map((c, i) => (
+                  <li key={`${c.kind ?? 'conflict'}-${i}`}>
+                    <b>{c.findingIds.length} findings</b>
+                    {c.kind ? ` · ${c.kind.replace(/_/g, ' ')}` : ''}
+                    <div className="sbm-dim">
+                      {c.resolution ?? 'No resolution was recorded for this one.'}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
 
           {/* The centrepiece. The director is required to account for every
               open finding it did not carry, in its own words — a fact no
