@@ -583,6 +583,122 @@
   color: #55616f;
 }
 
+/* ── S6.a · the reading order ────────────────────────────────────────────
+ *
+ * Measured before the change (study Part 15.1, on prod via S4's worked
+ * example, which renders the real component): ten blocks spanning a 1.8x
+ * visual-weight range — NN/g's "equal weight" failure, where nothing is a focus
+ * point so everything must be read. And inverted: the ENTITY line was the
+ * heaviest thing on the card, the "changes nothing on Amazon" notice second,
+ * and the DELTA — the decision — third. `aq-facts` was 212px of a 671px card
+ * (32%) while the delta got 43px (6.4%).
+ *
+ * The delta is now the only large type on the card. Nothing else competes. */
+
+.aq-deltas {
+  margin: 10px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+.aq-deltas li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  /* THE one large size. Three sizes total on this card (NN/g caps at three);
+     S6.c brings the rest into line. */
+  font-size: 17px;
+  font-weight: 600;
+  color: #1c2530;
+  line-height: 1.35;
+}
+.aq-deltas svg {
+  color: #6b7688;
+  flex: 0 0 auto;
+}
+.aq-dfield {
+  font-size: 13px;
+  font-weight: 400;
+  color: #55616f;
+}
+.aq-dfrom {
+  color: #55616f;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.aq-dto {
+  color: #1c2530;
+}
+.aq-dnew {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4a5867;
+  background: #eef1f5;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+/* (h) — an action that cannot describe itself takes the delta slot, at delta
+   size, because its silence is the most important fact on the card. */
+.aq-nodelta {
+  margin: 10px 0 2px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #1c2530;
+  max-width: 46ch;
+}
+
+/* 2 — what it acts on, beneath the number rather than above and heavier. */
+.aq-entity {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #55616f;
+  max-width: 58ch;
+}
+.aq-entity strong {
+  font-weight: 600;
+  color: #1c2530;
+}
+
+/* 3 — what it costs if wrong, and whether it can be undone. Promoted out of a
+   collapsed 212px <dl>; absorbs the 72px "changes nothing on Amazon" banner,
+   which was a consequence statement wearing banner chrome. No tint and no
+   border: it is the card's own voice, not an aside. */
+.aq-consequence {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4a5867;
+  max-width: 58ch;
+}
+.aq-consequence strong {
+  font-weight: 600;
+  color: #1c2530;
+}
+
+/* 5 — one disclosure, closed by default, holding only supporting detail. */
+.aq-why {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: #46536a;
+  cursor: pointer;
+}
+.aq-why:hover {
+  color: #1f6fde;
+}
+.aq-why:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 /* ── S5 · waiting from outside the fleet (AQ.2) ─────────────────────────── */
 
 /*

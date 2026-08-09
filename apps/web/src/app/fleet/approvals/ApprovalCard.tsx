@@ -36,10 +36,8 @@ import {
   ChevronRight,
   Clock,
   FileText,
-  History,
   Pencil,
   RotateCcw,
-  ShieldAlert,
   X,
 } from 'lucide-react'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
@@ -456,7 +454,9 @@ export function ApprovalCard({
   // is riskTier 'high', so a tier-only rule made 100% of cards heavy and the
   // ack gate blanket friction — precisely what AP.8 said it was avoiding.
   const heavy = rev !== 'restore' || approval.riskTier === 'high'
-  const [showDetail, setShowDetail] = useState(heavy)
+  // Default CLOSED: the facts that decide the decision are always visible now,
+  // so this holds only the supporting detail.
+  const [showWhy, setShowWhy] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState('')
   const [acked, setAcked] = useState(false)
@@ -540,80 +540,17 @@ export function ApprovalCard({
         <span className="aq-age">{ago(approval.requestedAt)}</span>
       </div>
 
-      {/* 1 — what it touches, by NAME */}
-      {d.entity ? (
-        <p className="aq-entity">
-          On <strong>{d.entity}</strong>
-          {d.marketplace ? ` · ${d.marketplace}` : ''}
-        </p>
-      ) : null}
-
-      {/* 2 — before → after */}
-      {d.deltas.length > 0 ? (
-        <ul className="aq-deltas">
-          {d.deltas.map((x, i) => (
-            <li key={i}>
-              <span className="aq-dfield">{x.field}</span>
-              {x.from != null ? (
-                <>
-                  <span className="aq-dfrom">{x.from}</span>
-                  <ArrowRight size={12} aria-hidden />
-                </>
-              ) : (
-                <span className="aq-dnew">new</span>
-              )}
-              <span className="aq-dto">{x.to}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {/* the worker's own sentence, kept — it reads better than any template */}
-      {typeof approval.preview?.effect === 'string' ? (
-        <p className="aq-effect">{approval.preview.effect as string}</p>
-      ) : d.deltas.length === 0 ? (
-        <p className="aq-effect">
-          This action did not describe itself — read the details below before deciding.
-        </p>
-      ) : null}
-
-      {/* the honest ceiling: a yes here changes nothing on Amazon today */}
-      {!canExecute ? (
-        <p className="aq-noexec">
-          <ShieldAlert size={12} aria-hidden />
-          <span>
-            Approving this records your decision and teaches the fleet, but{' '}
-            <strong>changes nothing on Amazon</strong> — this action has no way to run yet.
-          </span>
-        </p>
-      ) : null}
-
-      {/* AP.8 — the automation-bias countermeasure, kept verbatim in spirit */}
-      {approval.trackRecord && approval.trackRecord.total > 0 ? (
-        <p
-          className={`aq-record${
-            approval.trackRecord.rejected > approval.trackRecord.approved ? ' doubted' : ''
-          }`}
-        >
-          <History size={12} aria-hidden />
-          You have answered {approval.trackRecord.total} of these from this worker before —{' '}
-          {approval.trackRecord.approved} approved, {approval.trackRecord.rejected} rejected.
-          {approval.trackRecord.rejected > approval.trackRecord.approved
-            ? ' You have said no more often than yes.'
-            : ''}
-        </p>
-      ) : null}
-
       {/*
-        A request that came back. TWO different things can put it here and the
-        operator must be able to tell them apart:
-        · staleness (AP.6) — nothing was attempted; the world moved first.
-        · execution failure — it WAS attempted, against Amazon, and failed.
-        The shipped card only ever explained the first, so an execution failure
-        returned to the queue looking exactly like a brand-new request. That is
-        the defect catalogued in the study's §1.4 as #2 and left unfixed until
-        now.
+        S6.a (study Part 15) — THE READING ORDER.
+        1 the delta · 2 what it acts on · 3 what it costs if wrong · 4 the verbs
+        · 5 everything else. Measured before the change: ten blocks spanning a
+        1.8x visual-weight range, with the ENTITY heaviest, the "changes nothing
+        on Amazon" notice second, and the delta — the decision — only third.
+        `aq-facts` was 212px of a 671px card while the delta got 43px.
       */}
+
+      {/* A request that came back sits ABOVE the delta: it changes how the
+          number below should be read, so it cannot come after it. */}
       {comeback ? (
         <p className={`aq-cameback${comeback.attempted ? ' attempted' : ''}`}>
           <RotateCcw size={12} aria-hidden />
@@ -623,19 +560,91 @@ export function ApprovalCard({
         </p>
       ) : null}
 
-      {!heavy ? (
-        <button
-          className="acr-fl-checkstoggle"
-          aria-expanded={showDetail}
-          onClick={() => setShowDetail(!showDetail)}
-        >
-          {showDetail ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          {showDetail ? 'Hide the details' : 'Show what this means, and what it costs to be wrong'}
-        </button>
+      {/* 1 — THE DELTA. First, and the only large type on the card. */}
+      {d.deltas.length > 0 ? (
+        <ul className="aq-deltas">
+          {d.deltas.map((x, i) => (
+            <li key={i}>
+              <span className="aq-dfield">{x.field}</span>
+              {x.from != null ? (
+                <>
+                  <span className="aq-dfrom">{x.from}</span>
+                  <ArrowRight size={14} aria-hidden />
+                </>
+              ) : (
+                <span className="aq-dnew">new</span>
+              )}
+              <span className="aq-dto">{x.to}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        /* (h) the honest fallback — it takes the DELTA slot, at delta size,
+           because an action that cannot describe itself is the most important
+           fact on the card, not a footnote to it. */
+        <p className="aq-nodelta">
+          {typeof approval.preview?.effect === 'string'
+            ? (approval.preview.effect as string)
+            : 'This action did not describe itself.'}
+        </p>
+      )}
+
+      {/* 2 — what it acts on, beneath the number rather than above it */}
+      {d.entity ? (
+        <p className="aq-entity">
+          on <strong>{d.entity}</strong>
+          {d.marketplace ? ` · ${d.marketplace}` : ''}
+        </p>
       ) : null}
 
-      {showDetail ? (
+      {/*
+        3 — WHAT IT COSTS IF WRONG, and whether it can be undone.
+
+        Two of the three questions this card exists to answer, promoted out of a
+        collapsed 212px <dl> where they were the 2nd and 3rd items. The 72px
+        "changes nothing on Amazon" banner collapses INTO this slot rather than
+        competing with it: it IS a consequence statement. One slot, one voice,
+        whether the action can execute or not — which is also the ONLY place an
+        S5 card (one that can really reach Amazon) differs from a fleet one.
+      */}
+      <p className={`aq-consequence${!canExecute ? ' inert' : ''}`}>
+        {!canExecute ? (
+          <>
+            Approving records your decision and teaches the fleet — it{' '}
+            <strong>changes nothing on Amazon</strong>, because this action has no way to run
+            yet.
+          </>
+        ) : (
+          <>
+            {vocab.wrongCost} {REVERSIBILITY[rev].sentence}
+          </>
+        )}
+      </p>
+
+      {/*
+        5 — everything else, behind ONE control. Stripe Radar's "Show all
+        insights": a few named signals, the rest one click away rather than
+        fifteen blocks down. The dead `!heavy` toggle is gone — `heavy` was true
+        for every fleet tool, so the compact lane never rendered, and Pajamas'
+        lowest tier says the answer is NO friction rather than hidden content.
+      */}
+      <button
+        className="aq-why"
+        aria-expanded={showWhy}
+        onClick={() => setShowWhy(!showWhy)}
+      >
+        {showWhy ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        {showWhy ? 'Hide the detail' : 'Why this was proposed'}
+      </button>
+
+      {showWhy ? (
         <dl className="aq-facts">
+          {d.deltas.length > 0 && typeof approval.preview?.effect === 'string' ? (
+            <div>
+              <dt>What it does</dt>
+              <dd>{approval.preview.effect as string}</dd>
+            </div>
+          ) : null}
           {d.evidence.length > 0 ? (
             <div>
               <dt>What it is going on</dt>
@@ -651,14 +660,19 @@ export function ApprovalCard({
               </dd>
             </div>
           ) : null}
-          <div>
-            <dt>Can it be undone?</dt>
-            <dd>{REVERSIBILITY[rev].sentence}</dd>
-          </div>
-          <div>
-            <dt>If it turns out wrong</dt>
-            <dd>{vocab.wrongCost}</dd>
-          </div>
+          {approval.trackRecord && approval.trackRecord.total > 0 ? (
+            <div>
+              <dt>How this worker has fared with you</dt>
+              <dd>
+                You have answered {approval.trackRecord.total} of these before —{' '}
+                {approval.trackRecord.approved} approved, {approval.trackRecord.rejected}{' '}
+                rejected.
+                {approval.trackRecord.rejected > approval.trackRecord.approved
+                  ? ' You have said no more often than yes.'
+                  : ''}
+              </dd>
+            </div>
+          ) : null}
           {approval.expiresAt ? (
             <div>
               <dt>If you do nothing</dt>
