@@ -850,3 +850,38 @@ zoom-independent and was genuinely fixed; size is not. Both corrected in
 `185dd82aa`, with the limit written into the file — as the fleet grows the fit
 zooms further out and sizing stops winning, at which point **the word** is the
 channel that survives, which is why rule 2 insists there are three.
+
+### 13.7 · Closing pass — what shipped, and one number I made worse
+
+**Shipped and verified after 13.1:** the mode switch became tabs under the title
+(`The fleet` / `What they watch`), the window switch gained its `WINDOW` label,
+the scroll gesture is stated in the canvas chrome at 5.83:1, and entity labels
+break instead of clipping silently.
+
+**Two audit items closed by measurement rather than code.**
+`⌘/Ctrl + scroll` **already zoomed** — verified on prod before changing
+anything: plain wheel pans (`24,24 → 24,84`), ctrl+wheel zooms (`1.0 → 1.8`).
+D-S2.10's zoom half needed no code, only saying so. And the **selected card does
+paint its ring** — my DOM probes had contradicted each other because the node is
+`visibility: hidden` and React re-creates it around each click; a screenshot
+settled it in one shot. Neither was a defect.
+
+**⚠ H4 got worse, and the finding was weak to begin with.** Moving the mode
+switch out of the right block made that block narrower, so the header's dead gap
+went **317.4px (19.7%) → 450.6px (27.9%)**. I am not chasing it, because the
+measure was wrong: **a page header is not a data card.** Section 1's 65.9% was a
+defect because that card existed to hold content and held none across its middle.
+A title-left / controls-right header with space between them is what every
+console in the Part 2 survey does, and that space is breathing room. Recorded as
+a mis-specified criterion rather than quietly dropped — the same way S1R recorded
+two of its own.
+
+**Still open at the end of this engagement**, all with their reasons:
+
+| | why it is still open |
+|---|---|
+| **C15** converging edge labels | the fix deleted every edge (13.4); needs the measurement problem solved or a label drawn outside xyflow's edge layer |
+| **C6** off-screen indicator | 23 of 38 entity nodes are still outside the box. Deliberately not attempted: a live count is measurement-dependent, and that territory produced two regressions in one session |
+| **C20** entity zoom tier | a card can still render as an anonymous dot; the name is in the DOM for a screen reader but not on screen |
+| **C18** dashed never-carried edge | still unexercisable — all four edges have carried |
+| **1280 / 1440** | the harness cannot narrow the window below the display width, and `.sbm-body` has real breakpoints at 1400 and 1100 |
