@@ -3940,6 +3940,110 @@ naming the coordination, not built here.
    (ledger §4b item 2) — but this section is its producer, and every walk adds
    rows. Worth their attention now that it is 18.2%.
 
+### 14.7 · S6.a–S6.d — EXECUTION RECORD (shipped and prod-verified 2026-08-10)
+
+Seven commits: `d2cd509a7` (theatre), `2d4bf9edc` (money + truth),
+`52a4dfeac` (content), `459f77f18` (label), `e8ec0426f` + `ab3e06601`
+(two layout defects the verification walk found).
+
+**Live spend for the whole section: 2 walks, $0.0768** — $0.0415 auditing,
+$0.0353 verifying. Budget respected exactly.
+
+#### Exit criteria
+
+| Criterion | Before | After |
+|---|---|---|
+| results panel top at `scrollTop:0` | **1020.6px** (58.6 below a 962px fold) | **434.7px — in viewport** |
+| `role` / `aria-live` | none | **`status` / `polite`** |
+| in-viewport answer to "is it running?" | button greys out | **"Testing… step 1 of 2"** |
+| panel row order vs card order | **reversed** | **identical** |
+| running total while spending | **"$0.0000 spent"** | **"$0.0112 so far"** + "spending…" on the card |
+| estimate vs actual | never together | **"$0.0353 spent (estimated $0.0415)"** |
+| spend confirmable with no estimate | **yes** | **no** — "unknown", confirm disabled, retry offered |
+| OFF-workers guarantee | **stated nowhere** | named in the dialog, before the spend |
+| would-be findings | a count | **content**, capped, "showing 5 of 11" |
+| leaving with paid results | silent destruction | **warns, naming cost and findings** |
+| **zero writes after the rebuild** | — | **re-proven: Runs still "No runs yet."** |
+
+#### Two layout defects the verification walk found
+
+Both are the same lesson S5.a taught, arriving from new directions.
+
+1. **The cap was fighting the track.** `auto-fit` gave two tracks of 767px and
+   the cards were capped at 420, so each left 347px of its own track empty:
+   **45.5% of the panel dead.** "Fit the tracks, cap the card" was right for a
+   *pipeline* card holding thirty characters; this card holds a list. The card
+   now fills its track and the list obeys the page's other law — **a wide card
+   lays its facts in lanes**. Measured after: **0.5% dead, cards 98.3% filled.**
+2. **Three 237px lanes clipped five of eleven labels** — *"veste moto homme
+   homologué"* became *"veste moto homme homo…"*, removing the part that
+   identifies it. Measured across four combinations: 237px lanes clip ten
+   label/kind cells, 362.5px lanes clip none, wrapping clips none at either.
+   These strings come from a model, so they **wrap** rather than ellipsise —
+   content-independent — with a 300px lane keeping them to one line in practice.
+
+**A third exit criterion of mine was wrong in kind.** S6.a asked for "dead
+width < 15%" measured across the *panel*. A wrapping grid with two items in
+four tracks always leaves trailing space, and that is ordinary layout. What
+matters is whether a **card** is much wider than what it holds — which is what
+S5.a actually measured. Corrected here rather than reported as met.
+
+#### A defect caught by reading the API instead of a screenshot
+
+Checking the new `sample` field against the **previous** walk's rows — before
+spending anything — showed what the labels really are: a `SEARCH_TERM` finding
+has no `entityName`, so its id is `405139580483411:motorrad jacke herren`. In a
+card that ellipsises the end, that renders fifteen useless digits and hides the
+words. Now a numeric key joined to text is labelled by the text; other id
+shapes pass through, pinned by two tests.
+
+That same probe discharged **row 11 (TTL-expired)** for free: the registry entry
+had been swept hours earlier, so the response came entirely from the row
+fallback — `walking:false`, totals exact, sample present.
+
+#### §14.4 state table — 16 of 16
+
+| # | State | Discharged |
+|---|---|---|
+| 1 | Estimate loading | ✅ code — resolves <120ms on prod |
+| 2 | Estimate failed | ✅ prod, forced client-side: "unknown", confirm disabled, retry restores |
+| 3 | Confirm shown with estimate | ✅ prod |
+| 4 | Walking · pending | ✅ prod — both cards "waiting its turn…" |
+| 5 | Walking · running | ✅ prod — "working now…" + "spending…" |
+| 6 | Walking · done mid-walk | ✅ prod — harvester finished while the miner ran |
+| 7 | Finished, all done | ✅ prod |
+| 8 | Estimate-vs-actual line | ✅ prod |
+| 9 | Failed step | ✅ vitest |
+| 10 | Stopped / halted step | ✅ vitest |
+| 11 | TTL-expired entry | ✅ prod — row fallback, entry long swept |
+| 12 | Second-test refusal (409) | ✅ code |
+| 13 | Kill-switch refusal (503) | ✅ code |
+| 14 | Sample, truncated | ✅ prod — "showing 5 of 11" |
+| 15 | Discard warns | ✅ prod — names $0.0353 and 16 findings; "Stay here" preserves the panel |
+| 16 | **Zero writes re-proven** | ✅ **prod — "No runs yet." after both walks** |
+
+#### One verification limitation, stated
+
+The two layout fixes (`e8ec0426f`, `ab3e06601`) were measured by applying the
+**shipped rules** to the live rendered panel, because re-creating the panel on
+prod requires another walk and the budget was spent. The numbers above are from
+real content at the real width; what was not re-observed is the deployed
+stylesheet painting them. The rules are CSS-only and deploy-verified present.
+
+#### The service change, and what it did not do
+
+`sampleFindings` is pure, in the prisma-free layer beside `assembleTestStatus`,
+with **nine tests** — including that it never throws on nine malformed shapes,
+because a poll that dies on a weird finding takes the panel with it. The service
+select gained **one column**. No new write path; law L2 untouched. Fleet suite
+**44 files / 410 tests**.
+
+#### Prod left as found
+
+Custom `rev 3`, **Ready**, manual, *"never run"*, Runs *"No runs yet."*, every
+`naf-wf-draft-*` key cleared. Two preview run rows added by the walks — which is
+what a test is, and why §4b item 2 is this section's own externality.
+
 ---
 
 ## Sources
