@@ -4273,6 +4273,123 @@ when behaviour changes. Diligence is not a defence; a failing test is.
 3. **First-run vs hundredth-run treatment.** The card is collapsed by default,
    which is the cheap version of this and is probably right at N=1 operator.
 
+### 15.6 · S7.a–S7.d — EXECUTION RECORD (shipped and prod-verified 2026-08-10)
+
+Four commits: `e5647ecb2` (card per page), `f0c1f18bb` (terms on the nouns),
+`fba4b2543` (glossary truth + the drift test). **Zero spend.**
+
+#### Exit criteria
+
+| Criterion | Before | After |
+|---|---|---|
+| list card paragraphs / words | 13 / 1,775 | **6 / 657** |
+| detail card paragraphs / words | 13 / 1,775 | **11 / 1,417** |
+| paragraphs about the page you are NOT on | **7 of 13** on the list | **0** |
+| the S6 write-nothing guarantee | taught **twice** | **once** |
+| `<Term>` in place on the detail page | **1** | **12** |
+| in-place terms vs terms inside the card | 9 vs 14 | **12 vs 11 (inverted)** |
+| Q10 — what does this chip mean? | **ABSENT** | `handoff`, on the chip |
+| Q9 — why is this worker crossed out? | hover¹ + click | on screen **+** `off` on the pill |
+| `<Term>` inside a link | 0 | **0**, now enforced by a test |
+| terms keyboard-focusable | — | **12 of 12**, tooltip paints on focus |
+
+Verified by hovering the real tooltip on prod: the FINDINGS chip shows
+*"Handoff — One worker's findings being picked up by the next…"*.
+
+#### Three glossary corrections
+
+| term | was | now |
+|---|---|---|
+| `workflow` | *"and, **soon**, versionable and editable"* | names what shipped: editable, publishable as a numbered revision, roll-back-able |
+| `run` **(cross-stream — Activity's)** | *"One worker doing its job once"* — contradicting the sentence it sat inside | **original kept verbatim**, second grain named after it |
+| `draft` | one definition for three things | names all three: recorded revision · unsaved edit · the browser copy S5.d made a decision |
+
+#### The drift defence, and its alarm proved
+
+`glossary-wiring.vitest.test.ts` — a **lint, not a render test**, so it survives
+component changes. Every `<Term k>` key must resolve; every term minted for this
+page must still be used and still exist; no `<Term>` inside a link. **Each check
+was proved by breaking it**, not assumed:
+
+| broken | message |
+|---|---|
+| key renamed to `runz` | `no glossary entry for: runz` |
+| last use of `test` removed | `minted here but no longer used: test` |
+| `<Term>` wrapped in an `<a>` | `Term inside a link at: RunsSection.tsx:127` |
+
+All three re-arm on revert.
+
+#### S7.c — scoped down, and why
+
+The plan was to make every teaching tooltip keyboard-reachable. Building it
+surfaced a constraint the study had not seen: **`RoutineCard`'s entire body is
+inside a `<Link>`** (`RoutineCard.tsx:113–222`), so its kind chip, revision chip
+and struck-through step names cannot take a focus stop without recreating the
+`<Term>`-in-link defect S1R found and removed — a second focus stop whose Enter
+activates the link anyway.
+
+So the list page's three teaching tooltips remain `title` + the card. Making
+them reachable is a **layout** change (the chips would have to leave the link),
+which this charter excludes. **Recorded as a follow-up, owner S1R.** Everything
+outside a link was wired: 12 terms, all focusable.
+
+One observation, not introduced here: `.acr-term-tip` renders upward and can
+overlap content above it — visible when the FINDINGS chip's tooltip covers the
+fact bar. That positioning belongs to the shared component (19 files), so it is
+noted rather than forked.
+
+#### Prod left as found
+
+Council `v1` active, custom `rev 3` Ready/manual, cards closed, no revisions,
+**no spend**.
+
+---
+
+## PART 16 — THE ENGAGEMENT CLOSES
+
+**Sections 1–7 are rebuilt and prod-verified.** The page that existed on
+2026-08-07 has been audited, restudied against industry practice, rebuilt and
+re-measured on prod, section by section, with every study landed before its
+code and every record written after it.
+
+| Section | What it became | Headline defect it removed |
+|---|---|---|
+| **S1R** list | cards on a fixed lane grid | 7 of 12 text roles below AA, every one an honesty sentence |
+| **S2R** overview | a deterministic pipeline | the canvas was 79–95% empty and could render text at **5.00px** |
+| **S3R** runs | one grain per row, lanes | the outcome column was 44.2% of the table, filled 12.3% |
+| **S4R** versions | a real rollback | **every non-active revision was already re-activatable** — the UI just never offered it |
+| **S5R** editor | DS controls, errors on the card | the editor still rendered the canvas S2R had deleted everywhere else |
+| **S6R** test lane | the walk you can see | results landed **58.6px below the fold** with no live region |
+| **S7R** teaching | the card teaches its page | the best teaching on the page was in tooltips nobody could reach |
+
+**The recurring lesson, stated once:** every section from S4R onward found real
+defects only when asked a third time, and **three exit criteria of mine were
+wrong in kind** — S5.d's type scale (inherited from a narrower scope than the
+page), S6.a's dead width (measured across a panel where trailing grid space is
+ordinary), and S2R's "zone ≤ 60% of viewport". A criterion is a hypothesis.
+Measure the thing, then check the criterion was measuring it.
+
+### 16.1 · Carried forward, with owners
+
+| # | Item | Owner |
+|---|---|---|
+| 1 | **`alwaysAsk` floor per charter** on `GET /agent/fleet/charters` — would make S5.c's gate lock per-worker instead of unconditional | Workers |
+| 2 | **Preview rows on the shared runs route** (ledger §4b item 2) — 10 of 55 (18.2%) and **every test walk adds two**; this page is the producer | Workers |
+| 3 | **Test the ACTIVE wiring from the routine page** — needs S2R coordination; the overview zone is settled | WF, new charter |
+| 4 | **`cron-eval.ts` → `@nexus/shared`** — already a web dependency; blocked only on editing a sibling's `fleet-schedule.service.ts` | WF |
+| 5 | **`.wf-editpic` internal scroll** at `calc(100vh - 24px)` — untested; neither baseline is tall enough to reach it | WF |
+| 6 | **The list card's in-link tooltips** — S7.c; reachable only via a layout change | S1R |
+| 7 | **The 8-day scheduling floor — AN OPERATOR DECISION.** `nextCronFire` scans 8 days and stops, so the fleet **cannot arm any schedule that fires less often than every 8 days**: a monthly cron is refused by the server, correctly and unfixably at this setting. Raising `SCAN_LIMIT_MINUTES` is a one-line server change with a cost in scan time. **Stated here so it is decided rather than rediscovered.** | operator |
+
+### 16.2 · What remains for new charters
+
+- **WF.7 — dynamic capabilities**: branching, per-item fan-out, waits, event
+  triggers, retry branches, sub-workflows, evidence chaining. The mandate is in
+  Part 4; retry-from-failed-step was filed here twice (S3R, S6R) because the
+  fleet has no such write path and L2 forbids minting one.
+- **The assignment trigger contract** — proposed in locks §5 row 9, awaiting
+  SB.AS's countersignature. Neither side codes until it is settled.
+
 ---
 
 ## Sources
