@@ -481,7 +481,7 @@ export function RoutineEditor({
           ) : null}
         </div>
 
-        <div>
+        <div className="wf-editpic">
           <RoutinePipeline
             story={definitionToStory(draft, charters)}
             charters={charters}

@@ -634,12 +634,27 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
-/* auto-FIT, not auto-fill: a stage of two must not leave an empty third
-   track standing where the dead width used to be. */
+/* auto-FILL, not auto-fit. auto-fit collapses the empty tracks and stretches
+   what is left, so a stage holding ONE step got the full 676.5px while its
+   neighbours sat at 220.2px — a card of thirty characters with its pill flung
+   456px away, which is the dead width this section exists to remove, wearing
+   a different hat. Filled tracks keep every card the same width whatever a
+   stage happens to hold. */
 .wf-pipe.is-composing .wf-pipe-steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 8px;
+}
+
+/* The picture follows you down the form. Measured on prod: the pipeline is
+   344.9px tall against a step column of 1741.8px, so by the third step card
+   the thing the cards are editing had scrolled away — the canvas's 320px box
+   had the same problem and it is not fixed by being shorter. */
+.wf-editpic {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
 }
 
 /* The artifact rides the stage label, so no label can land on a card the way
