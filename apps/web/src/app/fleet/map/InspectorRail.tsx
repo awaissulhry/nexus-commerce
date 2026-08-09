@@ -534,14 +534,19 @@ export function RailShell({
           type="button"
           className="sbm-rail-expand"
           aria-expanded={false}
+          /* ⚠ `aria-label`, not a visible label plus an sr-only span. Verified on
+             prod that the first cut announced "Details Show details for Fleet
+             auditor" — the two concatenated, because both were inside the
+             button. The visible word stays for the eye and is hidden from the
+             name. */
+          aria-label={subject ? `Show details for ${subject}` : 'Show the details panel'}
           onClick={() => onCollapsed(false)}
         >
           <ChevronLeft size={13} aria-hidden />
-          <span className="lbl">Details</span>
-          {subject ? <span className="dot" aria-hidden /> : null}
-          <span className="sr-only">
-            {subject ? `Show details for ${subject}` : 'Show the details panel'}
+          <span className="lbl" aria-hidden>
+            Details
           </span>
+          {subject ? <span className="dot" aria-hidden /> : null}
         </button>
       </aside>
     )
