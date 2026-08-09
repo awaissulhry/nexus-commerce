@@ -45,7 +45,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Info,
   MinusCircle,
   ShieldCheck,
   Undo2,
@@ -536,6 +535,57 @@ function GateStateSection({
         ) : null}
       </section>
     </>
+  )
+}
+
+/* ── S4 · the empty state, which is this page ───────────────────────────── */
+
+/**
+ * NAF.AQ-S4R (study Part 14) — the queue's empty state.
+ *
+ * It replaces two elements that said different things about the same fact and
+ * were **separated by the entire precedent panel**: an `.acr-fl-empty` at the
+ * top of the card and an `.aq-emptywhy` orphaned below `<PrecedentPanel>`.
+ *
+ * The one that came first was FALSE. It read "Approvals appear here when a plan
+ * passes the critic", and Part 1.1 of the study proves a plan that passes the
+ * critic queues nothing — three independent structural walls. The locks file
+ * warns every stream about that exact sentence. It was on this page, written by
+ * this stream, above a line that contradicted it, on the section an operator
+ * reads every single day. NN/g's finding is the cost: an inaccurate status
+ * message makes a reader distrust the surface or abandon the task, which is
+ * precisely what S2 exists to prevent.
+ *
+ * The second clause is READ FROM S2's conditions rather than recomposed here.
+ * Two composers over one set of facts is the defect S2.a fixed at the API, and
+ * re-introducing it in the client would be the same mistake one layer up.
+ */
+function EmptyWaiting({ gate }: { gate: GateState | null }) {
+  const conditions = gate?.conditions ?? []
+  const met = conditions.filter((c) => c.met).length
+  const blocked = Boolean(gate) && !gate!.canAnythingArrive
+
+  return (
+    <div className="aq-empty">
+      <p className="aq-emptylede">
+        Nothing is waiting for you{blocked ? ', and nothing can arrive yet' : ''}.
+      </p>
+      {/* Silent when the gate could not be read: S2 already renders that, and a
+          second guess at it here would be a claim this component cannot back. */}
+      {gate ? (
+        <p className="aq-emptywhy">
+          {blocked ? (
+            <>
+              The {conditions.length} conditions above have to be true first —{' '}
+              {met === 0 ? 'none of them is' : met === 1 ? 'one of them is' : `${met} of them are`}
+              .
+            </>
+          ) : (
+            <>The fleet is running and has not asked for anything. That is the normal, quiet state.</>
+          )}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -1052,19 +1102,15 @@ export function ApprovalsClient() {
             ))}
           </div>
         ) : visible.length === 0 ? (
-          <p className="acr-fl-empty">
-            {view === 'waiting' ? (
-              <>
-                Nothing is waiting for you. <Term k="approval">Approvals</Term> appear here when a
-                plan passes the <Term k="critic">critic</Term> — and every yes or no you give
-                becomes <Term k="exemplar">precedent</Term> the workers read on their next run.
-              </>
-            ) : view === 'decided' ? (
-              <>No decision has been taken yet.</>
-            ) : (
-              <>Nothing has expired. A request that goes unanswered too long ends up here.</>
-            )}
-          </p>
+          view === 'waiting' ? (
+            <EmptyWaiting gate={gate} />
+          ) : (
+            <p className="aq-empty">
+              {view === 'decided'
+                ? 'No decision has been taken yet.'
+                : 'Nothing has expired. A request that goes unanswered too long ends up here.'}
+            </p>
+          )
         ) : view === 'waiting' ? (
           <WaitingList
             rows={visible}
@@ -1111,14 +1157,6 @@ export function ApprovalsClient() {
 
         <PrecedentPanel precedents={precedents} nameOf={nameOf} />
 
-        {view === 'waiting' && !loading && visible.length === 0 && gate ? (
-          <p className="aq-emptywhy">
-            <Info size={12} aria-hidden />
-            {gate.canAnythingArrive
-              ? 'The fleet is running and has not asked for anything. That is the normal, quiet state.'
-              : 'This is empty because nothing can arrive yet, not because the fleet looked and found nothing — see above.'}
-          </p>
-        ) : null}
       </section>
 
       <OutsideQueue

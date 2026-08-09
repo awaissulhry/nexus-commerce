@@ -459,19 +459,32 @@
   gap: 5px;
   align-items: center;
   font-variant-numeric: tabular-nums;
+  /* Inherited #7b8798 measured 3.65:1 — the joint-worst on the page, on the one
+     element whose whole job is to say whether to trust what is on screen. */
+  color: #55616f;
+}
+/* ── S4 · the empty state (S2R replaced the two elements this had) ────────
+ *
+ * Was an `.acr-fl-empty` at 12.5px / #7b8798 — **3.65:1**, the least legible
+ * text on the page and the most-read, because it has rendered every day since
+ * AQ.1 — plus an orphaned `.aq-emptywhy` BELOW the precedent panel saying
+ * something different about the same fact. One block now, at the page's own
+ * ladder: 13px, weight for hierarchy, every colour measured in place. */
+.aq-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4a5867;
+  max-width: 58ch; /* 75 real characters — see the note on .aq-conddetail */
+}
+.aq-emptylede {
+  margin: 0;
+  font-weight: 600;
+  color: #1c2530;
 }
 .aq-emptywhy {
-  display: flex;
-  gap: 7px;
-  align-items: flex-start;
-  margin: 10px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #6b7688;
-}
-.aq-emptywhy svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
+  margin: 3px 0 0;
+  color: #55616f; /* was #6b7688 at 4.59; 5.83 on white, matching S1's role */
 }
 .aq-err {
   border-left: 3px solid #c53030;
