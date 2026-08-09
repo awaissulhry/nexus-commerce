@@ -757,7 +757,7 @@
    "How it went" took 1132px of 1614 — 70% of the table — because it printed
    the long-form guard sentence. Fixed layout, declared widths, phrase in the
    cell and sentence in the tooltip. */
-.as-runs { table-layout: fixed; width: 100%; }
+.as-runs { table-layout: fixed; width: 100%; max-width: 880px; }
 .as-runs th, .as-runs td { overflow: hidden; }
 .as-runs .c-when { width: 132px; white-space: nowrap; }
 .as-runs .c-num { width: 104px; text-align: right; padding-right: 18px; }
@@ -766,6 +766,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Capped, and the reason is worth writing down: under `table-layout: fixed`
+   every column with no declared width splits the LEFTOVER, so pinning four
+   columns on a 1614px table handed the fifth 1170px — a wider column than the
+   1132px sentence-stuffed one this phase set out to fix, now holding two-word
+   phrases. Five short columns do not need the full content width. */
+
+/* Two roles that only exist once a run has happened, so the Not-started audit
+   never saw them: the shared `.acr-pg-tbl th` grey (2.73:1) and the finding's
+   kind label (2.39:1). Part 11 fixed the first under `.as-page`, which does
+   not reach this page — the same miss, a third time, and the argument for
+   measuring every state rather than the one that happens to be on screen. */
+.as-detail .acr-pg-tbl th { color: #5b6573; }
+.as-detail .as-fkind { color: #5b6573; }
 
 /* ── detail page ──────────────────────────────────────────────────────── */
 .as-brief {
