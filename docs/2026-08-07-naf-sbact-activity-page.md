@@ -3504,3 +3504,244 @@ this page and they belong to sections that have not been rebuilt.
 **Twenty-eight defects found on this page. Not one has been a type error** — and
 S4's headline defect could not have been found by looking either, which is the
 first time that has been true here.
+
+---
+
+# PART 23 — S5 REBUILD: the drawer
+
+**Status: STUDY ONLY. Nothing is built. Needs operator approval.**
+
+Stream tag `SB.ACT.S5R`. Scope: **S5 only** — `app/fleet/_shared/RunDetail.tsx`,
+the `PlanDrawer` wrapper in `ActivityClient.tsx`, and the `.sba-drawer*` rules.
+S6 and S7 are later units.
+
+---
+
+## 23.0 — What S5 is FOR, in one sentence
+
+> **Show, step by step, what one run actually did — and why it decided what it
+> decided — without ever offering to do it again.**
+
+The content already does this well. **This rebuild is almost entirely about the
+container**, and the container is the worst thing on the page.
+
+---
+
+## 23.1 — Part 11 Q8 was decided on a reason that no longer exists
+
+Q8 asked: hand-rolled drawer, or the DS? The operator approved *"follow the
+neighbours now, and fix the whole subtree as its own pass"*, on this stated
+reason:
+
+> *"A DS `Modal` at z-60 would render **below** an open fleet confirm."*
+
+**Three things have changed, and all three are in the DS component's own
+source.**
+
+1. **The `overlay` prop exists for exactly that problem.** Its doc-comment:
+   *"Drawers sit at z-61; the app's Modal/ConfirmDialog sits lower, so a
+   confirmation spawned from a drawer used to open BEHIND it… Anything a drawer
+   must confirm goes here instead — one surface, nothing hidden."*
+2. **The Assignments stream fixed the accessibility centrally at `AS-S2R/S2.e`**,
+   and recorded the measurement: *"a keyboard user needed **41 Tab presses** to
+   reach an open drawer… 63 focusable elements on the page, and the first one
+   inside the drawer was number 41."* Their reasoning is the argument against
+   hand-rolling, in the DS author's own words: *"All three are fixed here rather
+   than in one feature component, because **22 files render this** and a focus
+   trap written inside a feature is a focus trap that rots."*
+3. **This drawer renders no controls at all** (Part 3, S5's boundary). It never
+   needs a confirm, so Q8's reason does not apply to it even on its own terms.
+
+So the decision stands correctly as recorded and its premise has expired. This
+is the same lesson S3R paid for with `FilterBar`, arriving a second time:
+**check the design system, then check it again when the reason you skipped it
+was about a version of it that no longer ships.**
+
+---
+
+## 23.2 — What is on screen today, measured
+
+Live prod, 1728×906, drawer open on a real run.
+
+### It declares itself a modal dialog and behaves like none of one
+
+`RunDetail` carries `role="dialog" aria-modal="true" aria-label="What this run
+did"`. Against the [WAI-ARIA APG dialog pattern][apg]:
+
+| APG requirement | Ours |
+|---|---|
+| *"When a dialog opens, focus moves to an element inside the dialog"* | **No** — `document.activeElement` stays `BODY` |
+| Tab cycles within the dialog | **No trap.** **51 Tab presses** to reach the first control inside it |
+| *"When a dialog closes, focus returns to the element that invoked the dialog"* | **No** |
+| *"Windows under a modal dialog are inert"* | **No** — **55 of 59** focusables behind it stay reachable; no `inert` |
+| Escape closes | **Yes** — the only one it meets |
+
+**51 Tab presses is worse than the 41 that triggered the central fix.** Both
+drawers measure identically: the run trace and the plan story.
+
+Two more container defects:
+
+- **The page behind scrolls.** `document.body` is not locked and the drawer body
+  is `overscroll-behavior: auto`, so scrolling past the end of a 1,036px drawer
+  body chains into the list behind it.
+- The backdrop (`rgba(20,28,38,0.34)`) and the width (620px) are fine.
+
+### One error message is 31% of the drawer
+
+A single failed step's verbatim error is **1,366 characters**, rendered
+unwrapped at **322px tall — 31% of the drawer's 1,036px scroll height**. It
+reads `schema validation failed: narrative: Too big: expected string to have
+<=3000 characters; items.0.expectedEffect.metric: Invalid option: expected one
+of "acos"|"tacos"|"spend"…` and then repeats that enumeration for five items.
+
+The intent was right — Part 3 asks for *"the verbatim error on a failed step"*,
+because a truncated error is useless for support. The execution is a wall: the
+one thing in the drawer that most needs reading is buried in the one thing that
+least does.
+
+### Five font sizes and five contrast failures
+
+| | |
+|---|---|
+| Sizes inside the drawer | **11.5 · 12 · 12.5 · 13 · 14** — the worst ladder violation on the page against S1's 20/13/12 |
+| `.sba-dmeta` | **2.95:1** |
+| `.sba-stepmeta` | **2.95:1** |
+| a link in "What it read" | **2.95:1** |
+| `h4` section headings | **4.38:1** |
+| a step's label span | **4.38:1** |
+
+These are the last of the small type the S4 record listed as belonging to a
+later unit. This is that unit.
+
+---
+
+## 23.3 — What the normative sources say
+
+**[WAI-ARIA APG, dialog (modal)][apg]** is the whole of §23.2's first table and
+needs no paraphrase. The one clause worth pulling out is the last: *"Inert
+content outside an active dialog is typically visually obscured or dimmed so it
+is difficult to discern"* — we dim it and leave it fully operable, which is the
+worst combination: it **looks** unavailable and **is** available, so a keyboard
+user is told one thing and gets another.
+
+**Scroll chaining** has a settled CSS-only answer: `overscroll-behavior:
+contain` on the scrolling panel, [available across browsers since 2022][osb] and
+safe without fallbacks. **The DS drawer body does not set it** — verified in
+`components.css`: `.h10-ds-drawer-b` is `overflow-y: auto` and nothing else.
+
+**Steal:** the APG list verbatim as the acceptance criteria; `overscroll-behavior`
+in the DS rather than here. **Reject:** a `<dialog>` element rewrite — the DS
+component already satisfies the pattern in JS and 22 files depend on its current
+shape.
+
+---
+
+## 23.4 — The proposal
+
+### 23.4.1 Adopt the DS `Drawer` for both drawers
+
+`RunDetail` and `PlanDrawer` both render `<Drawer open onClose title width={620}>`
+and keep **every line of their current content**. What that deletes:
+
+- `.sba-drawerwrap` / `.sba-drawer` / `.sba-drawerhead` and their z-index
+- the hand-rolled Escape listener in `RunDetail` (the DS has one)
+- the hand-rolled backdrop-click close
+- `role`/`aria-modal`/`aria-label` — the DS supplies `aria-labelledby` from its
+  own title
+
+and what it buys, for free and centrally: focus in, focus trapped, focus
+returned, portalled to `<body>`, and every future fix to those 22 consumers.
+
+**One-line change proposed in the DS**, not here:
+
+```css
+.h10-ds-drawer-b { overscroll-behavior: contain; }   /* + this */
+```
+
+Additive, no API change, and it fixes scroll chaining for all 22 consumers
+rather than for this page. Written in the DS for the reason its own author gave
+about the focus trap. **This needs a claim on `design-system/styles/components.css`
+and a note in the locks file** — it is the only shared file S5 touches.
+
+### 23.4.2 The long error: verbatim, but not first
+
+```
+  Checked its own work against the contract                      ✕
+  schema validation failed: narrative: Too big: expected string
+  to have <=3000 characters; items.0.expectedEffect.metric: …
+  [ Show the whole message (1,366 characters) ]   [ Copy ]
+```
+
+- First **~240 characters**, wrapped, at 12px ≥ 4.5:1 — enough to name the
+  cause, which for this one is `narrative: Too big`.
+- **Show the whole message** expands in place and states the length, so the
+  reader chooses the wall rather than receiving it.
+- **Copy** puts the whole thing on the clipboard regardless of expansion — the
+  support case Part 3 was protecting is served by copying, not by scrolling.
+
+*"Verbatim"* is preserved: nothing is discarded, and the full text is one click
+or one copy away.
+
+### 23.4.3 The type ladder, last time
+
+Everything inside the drawer becomes **13px or 12px**, and the five sub-AA roles
+go to ≥ 4.5:1 measured against the drawer's own white — not the page's `#f4f6f9`,
+because S1 already caught a colour that passes on one and fails on the other.
+
+### 23.4.4 Unchanged
+
+The sections and their order (*Why it ran · Step by step · What it read · What it
+found · What it cost · the identifiers*), `PlanStory` imported and never copied,
+the legacy-JSON guard, every guarded array, the upsert explanation for runs whose
+findings live under an older run, and **no controls of any kind**.
+
+---
+
+## 23.5 — Every state
+
+| # | State | What renders |
+|---|---|---|
+| 1 | **Opening** | DS drawer slides in; focus lands inside it |
+| 2 | **Trace loading** | the existing skeleton line, at the new sizes |
+| 3 | **A run with steps** | the six sections |
+| 4 | **A run that died before the model ran** | one step, and the sections that have nothing say so — 17 of 53 runs |
+| 5 | **A failed step with a long error** | first 240 chars + *Show the whole message (N characters)* + *Copy* |
+| 6 | **A run reporting findings it does not own** | the upsert sentence — unchanged, 15 of 25 runs |
+| 7 | **A plan row** | `PlanStory` in the same DS drawer |
+| 8 | **Legacy JSON** | the guard says so and prints raw |
+| 9 | **The trace read fails** | says so; no half-rendered sections |
+| 10 | **Closing** | focus returns to the row that opened it |
+| 11 | **Keyboard only** | Tab cycles inside; Shift+Tab from the first wraps to the last; the page behind is unreachable |
+
+State 11 is the acceptance test, and it is currently the failing one.
+
+---
+
+## 23.6 — The boundary
+
+**Against S4 above.** A row opens the drawer; the drawer explains. S5 adds no
+row, no filter, no count.
+
+**Against the pages that own actions.** No retry, no re-run, no approve, no
+cancel — Part 0, and Part 8's specific argument that 21 of the 25 severe
+failures this fleet has had were *"could not reach the provider"*, which a retry
+cannot fix and only pays for twice.
+
+**Against Workers.** `RunDetail` lives in `_shared/` so the worker page can
+render the same drawer. Adopting the DS `Drawer` inside it is additive for that
+future consumer, not a new contract.
+
+---
+
+## 23.7 — Sources
+
+[apg]: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+[osb]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/overscroll-behavior
+
+**The dialog contract** · [W3C WAI-ARIA APG — Dialog (Modal) pattern][apg]
+
+**Scroll chaining** · [MDN — `overscroll-behavior`][osb]
+
+**In-repo** · `design-system/components/Drawer.tsx` (its own record of the
+41-Tab measurement and the `overlay` prop) · `design-system/styles/components.css`
+· live prod measurement at 1728×906
