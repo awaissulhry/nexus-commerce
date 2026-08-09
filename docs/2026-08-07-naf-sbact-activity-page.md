@@ -4190,15 +4190,60 @@ an instrument that has not been checked is a source of findings, not of facts.
 
 ### Known boundary, stated rather than fixed
 
-Below ~500 CSS px the S3 toolbar's DS controls (`.h10-ds-btn sm`, the search
-field) escape their container. That is under half the 200%-zoom target, which
-passes clean at 700px, and it belongs to the controls strip rather than to S6 —
-recorded here, not silently widened into this unit.
+~~Below ~500 CSS px the S3 toolbar's DS controls escape their container.~~
+**WITHDRAWN 2026-08-09 — the finding was an artifact of the instrument, not a
+defect of the page.**
+
+It was produced by constraining `.acr`'s `max-width` and re-measuring. **A
+container constraint cannot fire a media query**, which keys off the viewport —
+so every responsive rule the layout actually has was suppressed while the probe
+ran. There are three that matter, and all three were inert during the
+measurement:
+
+| rule | breakpoint |
+|---|---|
+| `.h10-ds-fpanel-grid` → 3 columns | `max-width: 1320px` |
+| `.h10-ds-fpanel-grid` → 2 columns | `max-width: 760px` |
+| `.sba-row` → 2-column grid | `max-width: 720px` |
+
+At a 480px *viewport* the last two apply and the layout the probe measured does
+not exist. The honest position is that narrow-viewport behaviour is **unverified
+here**, not that it is broken: the window on this machine is fullscreen and
+Chrome refused two resize attempts, and page-zoom shortcuts are unavailable to
+the tooling.
+
+What IS verified stands unchanged: at 700px — stricter than the 864px that 200%
+zoom produces on a 1728px viewport, which is the operator's stated target —
+nothing escapes, nothing clips, and both S6 links hold at one line box.
+
+**The lesson, which is the same one this section already learned twice:** an
+element-width probe is not a viewport. Reporting its output as a page defect
+would have sent someone to fix a layout that never renders.
 
 Trailing geometry at true bottom: last card 647, `main` 696 — a 48px band that
 is the page's own bottom padding, with nothing painting below it. The white
 beyond that lies outside `<main>` in the app shell at an outer scroll offset,
 and is not this page's to answer for.
+
+### A correction for SB.2: `TimelineStream.tsx` is not dead
+
+Every record of this engagement — this doc, the locks file and memory — says
+`TimelineStream.tsx` has been *"rendered by nothing"* since ACT.7 and that SB.2
+owns whether it goes. The first half is true and the conclusion people will draw
+from it is wrong:
+
+```
+apps/web/src/app/marketing/ads/rules-automation/fleet/FleetTab.tsx:45
+  import { type FleetTimelinePage } from './TimelineStream'
+```
+
+**The component is unrendered; the module is still imported.** Deleting the file
+breaks `FleetTab.tsx`, which is a different page's territory. Retiring it means
+rehoming `FleetTimelinePage` first — a small change, but a different one from
+"delete an orphan", and it lands somewhere this stream does not own.
+
+Recorded here so SB.2 inherits the fact rather than the summary. 541 lines, one
+commit in its history (`6ca387212`).
 
 ### With this, /fleet/activity is rebuilt end to end
 
