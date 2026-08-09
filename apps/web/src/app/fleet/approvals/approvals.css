@@ -812,6 +812,33 @@
   max-width: 58ch;
 }
 
+/* S5.5 — the failure state. Louder than "nothing is waiting" on purpose: the
+   two must never be mistaken for each other, and the reassuring one is the
+   one that would be believed. Danger colour, because a blind spot over the
+   only rows that can reach Amazon is the condition this section exists to end. */
+.aq-outfailed {
+  color: #3a4658;
+}
+.aq-outfailed > svg {
+  color: var(--h10-danger-strong);
+}
+.aq-outfailed strong {
+  color: #1c2530;
+}
+.aq-outretry {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: #1f6fde;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.aq-outretry:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 2px;
+}
+
 /* S5.2 — the four hexes invented for this block (#f0c9c9 / #c53030 / #fdf7f7 /
    #f0dcdc) retired to the design system's own danger ramp. #c53030's other
    call sites are deliberately untouched: .aq-err and .aq-gateunknown are real

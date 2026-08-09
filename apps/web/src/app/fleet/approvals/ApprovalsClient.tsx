@@ -856,6 +856,8 @@ function OutsideQueue({
   busy,
   expiryHours,
   producers,
+  state,
+  onRetry,
   onDecide,
   onUndo,
   onCommit,
@@ -868,6 +870,8 @@ function OutsideQueue({
   busy: boolean
   expiryHours: number
   producers?: Array<{ key: string; enabled: boolean }>
+  state: 'loading' | 'ok' | 'failed'
+  onRetry: () => void
   onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
   onUndo: (id: string) => void
   onCommit: (id: string) => void
@@ -890,6 +894,32 @@ function OutsideQueue({
    * an older API during a split deploy — the armed sentence is simply omitted
    * rather than guessed.
    */
+  /* Not looked yet, and could-not-look, are both distinct from nothing-there.
+     Neither may borrow the reassuring sentence. */
+  if (state === 'loading') {
+    return (
+      <p className="aq-outnone">
+        <Clock size={12} aria-hidden />
+        <span>Checking whether anything is waiting from outside the fleet…</span>
+      </p>
+    )
+  }
+  if (state === 'failed') {
+    return (
+      <p className="aq-outnone aq-outfailed">
+        <AlertTriangle size={12} aria-hidden />
+        <span>
+          <strong>Could not check whether anything is waiting from outside the fleet.</strong> These
+          are the only requests that can change something on Amazon, so this is not the same as
+          nothing being there.{' '}
+          <button className="aq-outretry" onClick={onRetry}>
+            Try again
+          </button>
+        </span>
+      </p>
+    )
+  }
+
   if (rows.length === 0) {
     const known = producers ?? []
     const armed = known.filter((p) => p.enabled)
@@ -1037,6 +1067,9 @@ export function ApprovalsClient() {
   const [charters, setCharters] = useState<CharterRow[]>([])
   const [gate, setGate] = useState<GateState | null>(null)
   const [outside, setOutside] = useState<OutsideRow[]>([])
+  /* null until the outside fetch has resolved once — "we have not looked yet"
+     is a different statement from "we looked and there is nothing". */
+  const [outsideOk, setOutsideOk] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   /**
    * What a bulk decision actually did. Both bulk endpoints have always
@@ -1078,8 +1111,26 @@ export function ApprovalsClient() {
     // The gate state is the page's reason to exist, but it must never be able
     // to take the queue down with it.
     if (g.ok) setGate((await g.json()) as GateState)
-    // AQ.2 — the only rows on this page that can reach Amazon.
-    if (o.ok) setOutside(((await o.json()) as { approvals: OutsideRow[] }).approvals)
+    /*
+     * AQ.2 — the only rows on this page that can reach Amazon.
+     *
+     * S5.5 — this endpoint needs its OWN outcome, and the two lines below are
+     * why. `if (o.ok)` leaves `outside` at its previous value on failure —
+     * `[]` on a first load — and `setErr(null)` then runs unconditionally, so
+     * a 500 here rendered "Nothing is waiting from outside the fleet" with no
+     * error anywhere on the page.
+     *
+     * For the one section that exists because these rows were invisible, a
+     * failure that looks exactly like "all clear" is the original bug wearing
+     * a new hat. It is tracked separately from `err`, which belongs to S2's
+     * readout and should not be repainted by this fetch.
+     */
+    if (o.ok) {
+      setOutside(((await o.json()) as { approvals: OutsideRow[] }).approvals)
+      setOutsideOk(true)
+    } else {
+      setOutsideOk(false)
+    }
     setErr(null)
     setLoading(false)
   }, [backend, view])
@@ -1400,6 +1451,8 @@ export function ApprovalsClient() {
         busy={busy}
         expiryHours={gate?.expiry.hours ?? 24}
         producers={gate?.outside.producers}
+        state={outsideOk === null ? 'loading' : outsideOk ? 'ok' : 'failed'}
+        onRetry={() => void refresh()}
         onDecide={(id, d, reason) => void decide(id, d, reason)}
         onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
         onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
