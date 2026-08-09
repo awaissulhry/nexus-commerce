@@ -25,8 +25,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, FlaskConical, Plus, X } from 'lucide-react'
+import { AlertTriangle, FlaskConical, Lock, Plus, X } from 'lucide-react'
 import { Menu } from '@/design-system/components/Menu'
+import { Checkbox, Input, Textarea } from '@/design-system/primitives'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { classifyFailure } from '../_shared/run-health'
 import { RoutinePipeline } from './RoutinePipeline'
@@ -35,6 +36,7 @@ import {
   cronIsEvaluable,
   definitionToStory,
   diffIsEmpty,
+  incomingFor,
   nextCronFires,
   prettyCron,
   tierArtifact,
@@ -63,6 +65,23 @@ const GATE_COPY: Record<'inherit' | 'ask' | 'act', { label: string; hint: string
   ask: { label: 'Ask first', hint: 'Every proposal from this step waits for you in Approvals.' },
   act: { label: 'May act', hint: 'The tool’s own policy decides; always-ask tools still ask — that floor cannot be loosened.' },
 }
+
+/**
+ * S5.c — the ladder tightens, it never loosens, and until now the three rungs
+ * rendered identically: the only trace of the limit was a `title` and a hint
+ * line, so a control whose limits are invisible taught the operator it had
+ * none. “May act” is the loosest rung this ladder reaches and it carries a
+ * lock to say so.
+ *
+ * The lock is UNCONDITIONAL on purpose. The study proposed marking it only
+ * where a worker’s tools carry an `alwaysAsk` floor — but `alwaysAsk` is a
+ * per-TOOL flag on the server and `GET /agent/fleet/charters` (a sibling
+ * stream’s route) does not expose it, so the client cannot know which workers
+ * are floored. The sentence is true of every worker, so it is stated for every
+ * worker rather than guessed per worker. Recorded in the WF doc as the field
+ * to ask for.
+ */
+const GATE_FLOOR = 'The loosest this ladder reaches. Tools that always ask — pricing, publishing, spend, customer messages — still queue for your approval; no gate can loosen that floor.'
 
 export function DiffList({ diff }: { diff: WfDiff }) {
   if (diffIsEmpty(diff)) return <p className="wf-vnote">No changes — the draft matches what is active.</p>
@@ -170,6 +189,10 @@ export function RoutineEditor({
   )
   const diff = useMemo(() => computeDiff(baseline, draft), [baseline, draft])
 
+  /* One peel, two answers: the checklist sentence below and the per-card
+     marks. They cannot disagree about which steps are in the loop. */
+  const topo = useMemo(() => topoCols(draft.steps, draft.edges), [draft])
+
   const problems = useMemo(() => {
     const out: string[] = []
     /* S5.b — the server refuses a schedule exactly when `nextCronFire`
@@ -186,11 +209,13 @@ export function RoutineEditor({
     if (draft.trigger.type === 'schedule' && draft.steps.length === 0) {
       out.push('A scheduled workflow needs at least one step — a clock that starts nothing teaches nothing.')
     }
-    if (topoCols(draft.steps, draft.edges).cyclic) {
+    if (topo.cyclic) {
       out.push('The connections form a loop. Work must flow one way — remove one of the circular hand-offs.')
     }
     return out
-  }, [draft])
+  }, [draft, topo])
+
+  const badCron = draft.trigger.type === 'schedule' && !cronIsEvaluable(draft.trigger.cron)
 
   const setGate = (charterKey: string, gate: 'ask' | 'act' | 'inherit') =>
     setDraft((d) => ({
@@ -365,7 +390,12 @@ export function RoutineEditor({
 
       <div className="wf-editgrid">
         <div className="wf-steps">
-          <div className="wf-stepcard">
+          {/* S5.c — the card that CAUSED the error wears it. Power Automate's
+              designer puts a failure both in a summary and on the card that
+              produced it; this editor had only the summary, at the bottom of a
+              1741.8px column, which is nowhere near the field you just typed
+              in. The checklist stays — it is the summary. */}
+          <div className={`wf-stepcard${badCron ? ' is-bad' : ''}`}>
             <div className="wf-stephead">
               <span>
                 <span className="nm"><Term k="trigger">Trigger</Term></span>
@@ -405,11 +435,12 @@ export function RoutineEditor({
               <>
                 <label className="wf-gatelabel" htmlFor="wf-cron-input">Schedule (cron, UTC)</label>
                 <div className="wf-cronrow">
-                  <input
+                  <Input
                     id="wf-cron-input"
-                    className={`wf-croninput${cronIsEvaluable(draft.trigger.cron) ? '' : ' is-bad'}`}
+                    fieldClassName={`wf-cronfield${badCron ? ' is-bad' : ''}`}
+                    className="wf-croninput"
                     value={draft.trigger.cron}
-                    aria-invalid={!cronIsEvaluable(draft.trigger.cron)}
+                    aria-invalid={badCron}
                     aria-describedby="wf-cron-means"
                     onChange={(e) =>
                       setDraft((d) => ({
@@ -430,10 +461,10 @@ export function RoutineEditor({
                 </div>
                 <span
                   id="wf-cron-means"
-                  className={`wf-sub${cronIsEvaluable(draft.trigger.cron) ? '' : ' wf-cronbad'}`}
+                  className={`wf-sub${badCron ? ' wf-cronbad' : ''}`}
                 >
                   {prettyCron(draft.trigger.cron)}
-                  {cronIsEvaluable(draft.trigger.cron)
+                  {!badCron
                     ? ' · the clock re-arms the moment you publish'
                     : /* Prod caught this: `0 3 1 * *` is well-formed cron and the
                          fleet still refuses it, because `nextCronFire` scans
@@ -449,7 +480,7 @@ export function RoutineEditor({
                     cannot phrase still has to be checkable, and three real
                     timestamps are how. The server stays the authority — these
                     come from its own evaluator, mirrored. */}
-                {cronIsEvaluable(draft.trigger.cron) ? (
+                {!badCron ? (
                   <span className="wf-cronfires">
                     Next three:{' '}
                     {nextCronFires(draft.trigger.cron, 3)
@@ -470,8 +501,10 @@ export function RoutineEditor({
             const c = byKey.get(s.charterKey)
             const artifact = tierArtifact(c?.tier)
             const targets = draft.steps.filter((t) => t.charterKey !== s.charterKey)
+            const inLoop = topo.cyclicKeys.has(s.charterKey)
+            const from = incomingFor(s.charterKey, draft.edges)
             return (
-              <div className="wf-stepcard" key={s.charterKey}>
+              <div className={`wf-stepcard${inLoop ? ' is-bad' : ''}`} key={s.charterKey}>
                 <div className="wf-stephead">
                   <span>
                     <span className="nm">{c?.name ?? s.charterKey}</span>
@@ -486,22 +519,34 @@ export function RoutineEditor({
                     <X size={13} />
                   </button>
                 </div>
+                {inLoop ? (
+                  <p className="wf-cardproblem" role="alert">
+                    <AlertTriangle size={13} aria-hidden /> This step is in the loop — work
+                    cannot flow back into it. Remove one of its hand-offs.
+                  </p>
+                ) : null}
                 <div className="wf-gate">
-                  <span className="wf-gatelabel"><Term k="gate">Gate</Term></span>
+                  <span className="wf-gatelabel">
+                    <Term k="gate">Gate</Term>
+                    <span className="wf-gatedir"> · tightens, never loosens</span>
+                  </span>
                   <div className="acr-pg-ladder">
                     {(['inherit', 'ask', 'act'] as const).map((g) => (
                       <button
                         key={g}
                         type="button"
-                        className={`acr-pg-rung ${s.gate === g ? 'on' : ''}`}
-                        title={GATE_COPY[g].hint}
+                        className={`acr-pg-rung ${s.gate === g ? 'on' : ''}${g === 'act' ? ' has-floor' : ''}`}
+                        title={g === 'act' ? GATE_FLOOR : GATE_COPY[g].hint}
                         onClick={() => setGate(s.charterKey, g)}
                       >
+                        {g === 'act' ? <Lock size={10} aria-hidden /> : null}
                         {GATE_COPY[g].label}
                       </button>
                     ))}
                   </div>
-                  <span className="wf-sub">{GATE_COPY[s.gate].hint}</span>
+                  <span className="wf-sub">
+                    {s.gate === 'act' ? GATE_FLOOR : GATE_COPY[s.gate].hint}
+                  </span>
                 </div>
                 {artifact && targets.length > 0 ? (
                   <div className="wf-handsto">
@@ -510,20 +555,29 @@ export function RoutineEditor({
                       const tc = byKey.get(t.charterKey)
                       const on = draft.edges.some((e) => e.from === s.charterKey && e.to === t.charterKey)
                       return (
-                        <label key={t.charterKey} className="wf-handopt">
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            onChange={() => toggleEdge(s.charterKey, t.charterKey, artifact)}
-                          />
-                          {tc?.name ?? t.charterKey}
-                        </label>
+                        <Checkbox
+                          key={t.charterKey}
+                          className="wf-handopt"
+                          checked={on}
+                          onChange={() => toggleEdge(s.charterKey, t.charterKey, artifact)}
+                          label={tc?.name ?? t.charterKey}
+                        />
                       )
                     })}
                   </div>
                 ) : artifact ? null : (
                   <span className="wf-sub">Terminal — its output is read by code, not handed on.</span>
                 )}
+                {/* S5.c — the other direction. A card only ever stated what it
+                    hands ON, so reading who feeds it meant opening every other
+                    card: at six steps, twenty-five checkboxes to hold in your
+                    head. Read-only by design — the pickers above are still the
+                    one place an edge is written. */}
+                <span className="wf-receives">
+                  {from.length > 0
+                    ? `Receives from ${from.map((k) => byKey.get(k)?.name ?? k).join(', ')}`
+                    : 'Receives nothing — it reads its own evidence'}
+                </span>
               </div>
             )
           })}
@@ -643,7 +697,7 @@ export function RoutineEditor({
             ) : (
               <p>A draft is recorded and inert. You can activate it later from Versions.</p>
             )}
-            <textarea
+            <Textarea
               className="wf-noteinput"
               placeholder="Why this change? (required — the change log IS the audit)"
               value={note}

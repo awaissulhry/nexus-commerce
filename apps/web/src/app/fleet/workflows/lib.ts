@@ -245,11 +245,17 @@ export interface WfDefinition {
 
 /** Kahn's by levels — the client mirror of the server's `topoLevels` law.
  *  Validated definitions cannot be cyclic; a mid-edit draft CAN, so leftover
- *  nodes are parked in a final column and `cyclic` says so. */
+ *  nodes are parked in a final column and `cyclic` says so.
+ *
+ *  S5.c — it also returns WHICH steps the peel could not reach. Those are
+ *  exactly the ones in the loop, and the editor marks them on their own cards
+ *  instead of only naming the problem in a checklist at the bottom of the
+ *  column. One peel answers both questions, so the summary and the cards can
+ *  never disagree about which steps are at fault. */
 export function topoCols(
   steps: WfStep[],
   edges: WfEdge[],
-): { cols: Map<string, number>; cyclic: boolean } {
+): { cols: Map<string, number>; cyclic: boolean; cyclicKeys: Set<string> } {
   const keys = new Set(steps.map((s) => s.charterKey))
   const indeg = new Map<string, number>()
   for (const k of keys) indeg.set(k, 0)
@@ -272,14 +278,22 @@ export function topoCols(
     frontier = next
     level++
   }
-  let cyclic = false
+  const cyclicKeys = new Set<string>()
   for (const k of keys) {
     if (!cols.has(k)) {
       cols.set(k, level)
-      cyclic = true
+      cyclicKeys.add(k)
     }
   }
-  return { cols, cyclic }
+  return { cols, cyclic: cyclicKeys.size > 0, cyclicKeys }
+}
+
+/** Who hands work TO this step. The editor's cards only ever stated the
+ *  outgoing direction, so the operator rebuilt the graph by reading every
+ *  other card; at six steps that is twenty-five checkboxes to hold in
+ *  your head. Derived from the same edges the pickers write. */
+export function incomingFor(charterKey: string, edges: WfEdge[]): string[] {
+  return edges.filter((e) => e.to === charterKey).map((e) => e.from)
 }
 
 const TIER_SUB: Record<string, string> = {

@@ -1112,6 +1112,40 @@
   color: #5a6675;
 }
 
+/* ── S5.c: the error rides the card that caused it ───────────────────────
+   The checklist stays as the summary; these are the marks that say WHICH
+   card. Power Automate's designer does both, and this editor had only the
+   summary — at the bottom of a step column measured at 1741.8px, which is
+   nowhere near the control you just touched. */
+.wf-stepcard.is-bad { border-color: #e3b9b6; background: #fefaf9; }
+.wf-cardproblem {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: #a3312c;
+}
+.wf-cardproblem svg { flex: none; margin-top: 2px; }
+
+/* The gate ladder tightens and never loosens, and three identical rungs said
+   nothing about that. The lock marks the loosest rung; the label states the
+   direction once per card, where the control is. */
+.wf-gatedir { font-weight: 600; letter-spacing: 0; text-transform: none; color: #6b7480; }
+.acr-pg-rung.has-floor { display: inline-flex; align-items: center; gap: 5px; }
+.acr-pg-rung.has-floor svg { flex: none; opacity: 0.75; }
+
+/* The incoming direction — read-only. The pickers above stay the one place an
+   edge is written. */
+.wf-receives {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #5f6a78;
+}
+
 .wf-problems {
   border: 1px solid #f3e3c2;
   background: #fdf4e3;
@@ -1145,9 +1179,18 @@
 
 /* S5.b — the field, its presets, its meaning and its next fires. An invalid
    expression borders red (the state of the art in every builder that gets
-   this right) AND says so in words, because colour alone is not a sentence. */
+   this right) AND says so in words, because colour alone is not a sentence.
+   S5.c — the field is the DS `Input`, so the WRAPPER owns the border and the
+   red state goes on the wrapper, not the control. */
 .wf-cronrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.wf-croninput.is-bad { border-color: #c2453f; background: #fdf6f5; }
+.wf-cronfield { width: 190px; }
+.wf-cronfield.is-bad { border-color: #c2453f; background: #fdf6f5; }
+.wf-cronfield > input.wf-croninput {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: #34404f;
+  padding: 6px 9px;
+}
 .wf-sub.wf-cronbad { color: #a3312c; font-weight: 600; }
 .wf-cronfires {
   display: block;
@@ -1155,16 +1198,6 @@
   line-height: 1.45;
   color: #5f6a78;
   font-variant-numeric: tabular-nums;
-}
-
-.wf-croninput {
-  width: 180px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-  color: #34404f;
-  border: 1px solid #dfe5ec;
-  border-radius: 7px;
-  padding: 6px 9px;
 }
 
 .wf-noteinput {
