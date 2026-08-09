@@ -4815,3 +4815,127 @@ not a tile.
 [pajamas]: https://design.gitlab.com/patterns/destructive-actions/
 
 **AWAITING OPERATOR APPROVAL — no UI code written.**
+
+---
+
+## 16.15 — S5 execution record
+
+Six phases, nine commits, every one verified on prod before the next. The
+database began and ended at exactly **18 approvals · 0 pending · 0 exemplars ·
+0 audit rows**, re-probed independently each time rather than trusted to the
+cleanup's own success message.
+
+### 16.15.1 What shipped
+
+| Phase | Commit | What |
+|---|---|---|
+| S5.1 | `1283239b6` | Provenance: an origin map, four call sites, no `<code>`, no "before the fleet" |
+| S5.1a/b | `d9710aadd` `b789584f3` | A stripped space and two rounds of my own repetition |
+| S5.2 | `559ee6182` | The danger signal moved from `riskTier` to `canExecute`; four hexes → DS tokens |
+| S5.3 | `85e0de7d0` | A heading, not a chevron; the tinted box folded away |
+| S5.4a/b | `825227568` `a8a94d854` | The API reports which producers are armed; the empty line says so |
+| S5.5a/b | `04abe86ac` `c66c4b9c8` | Snooze parity; loading and failure states |
+| S5.6a/b | `55dc83b70` `0c2e41be5` | The origin line's missing measure; one grammatical form in the map |
+
+### 16.15.2 The thesis, confirmed and then some
+
+16.1 predicted the danger signal was spent. Measured with the queue seeded, it
+was worse:
+
+```
+EXAMPLE  cls="aq-card r-high heavy"  bg=rgb(255,253,249)  borderLeft=rgb(197,48,48) 3px
+OUTSIDE  cls="aq-card r-high heavy"  bg=rgb(255,253,249)  borderLeft=rgb(197,48,48) 3px
+```
+
+The card reading *"changes nothing on Amazon"* and a `set-price` row that can
+reprice a live SKU were **byte-identical**. And the `apply-content` row — which
+can rewrite live listing content — is `riskTier: 'medium'`, so it rendered as
+the **calmest card on screen**. Risk tier and consequence were not weakly
+correlated; they pointed opposite ways. After S5.2:
+
+| | canRun | background | left border |
+|---|---|---|---|
+| example (cannot act) | `false` | white | 1px grey |
+| outside ×6 (can act) | `true` | cream | 3px `#e5484d` |
+
+### 16.15.3 Defects found that the study had not predicted
+
+- **The provenance lie was in four places**, not the one the brief named —
+  including `:537`, inside S2's readiness section.
+- **`manual-action` is a person**, not an agent: `requestApproval()` mints it
+  when someone presses "Request approval" in the copilot. 8 of prod's 18 rows.
+- **A parked row said "Approved — set price"** — a de-hyphenated tool key.
+- **"no screen at alluntil now"** — a stripped space in the paragraph that
+  explains why the section exists, pre-existing and invisible in the source.
+  The same paragraph already used the `{' '}` idiom twice for the same reason.
+- **The failure state actively reassured.** `if (o.ok) setOutside(...)` leaves
+  the rows at `[]` and the following `setErr(null)` runs unconditionally, so a
+  500 on this endpoint rendered "Nothing is waiting from outside the fleet"
+  with no error anywhere. For the section that exists *because* these rows were
+  invisible, that is the original silent terminal failure in a new hat.
+- **The origin line had no measure** — 325–334 real characters at 1920. S5.3
+  capped `.aq-outwhy` and this line, which S5.1 had just lengthened, lost any
+  cap at the same moment.
+
+### 16.15.4 Two I introduced and caught by measuring
+
+1. **"The listing quality keeper and *The* price watchdog."** The map stored
+   sentence-start names; S5.4's list needed them mid-sentence. I had rejected
+   call-site lower-casing in S5.1 as fragile and then recreated the problem
+   from the other end. The map now stores one form and derives the other.
+2. **Filtering the outside LIST by `snoozedUntil` without filtering the
+   COUNT** would have left S2 announcing "Separately, N requests are waiting"
+   for rows the list hides — the exact count-disagrees-with-list defect this
+   engagement was asked to triage, one handler away from where I diagnosed it.
+   Both got the clause.
+
+### 16.15.5 The safety net, exercised for real
+
+The first seed used a 20-second `executeAfter` — the real undo window — and the
+maintenance sweep **picked the row up and tried to commit it** within ~2
+minutes. Nothing happened: `checkStaleness` ran the tool's own dry-run, the
+seed SKU resolved to nothing, and the row was refused and returned to `pending`
+with `reason: 'not run — productId and numeric price are required'`.
+
+That is §1.2's fail-closed guarantee working on a live row, and it is why this
+file's safety argument rests on unresolvable entities rather than on nobody
+noticing. It also wrote an `AgentControlAudit` row (`action: 'stale_refused'`),
+taking that table from 0 to 1 — which the cleanup did not remove and would have
+reported success anyway. **Checking the end state rather than the cleanup's
+message caught it**, for the second time on this page. The cleanup now deletes
+audit rows by approval id and asserts audit and exemplar counts too.
+
+### 16.15.6 Measurements
+
+| Check | Result |
+|---|---|
+| Nine widths 900–1920 | no doc overflow, nothing spilling the section |
+| 200% zoom (viewports 756 and 640) | same |
+| Composited contrast, section | **0 failures** / 143 nodes (210 page-wide) |
+| Danger border as a graphic | **3.91:1** (needs 3:1) |
+| Prose at 1920 | origin lines **78/77/79**, `.aq-outwhy` **76** (limit 80) |
+| Mid-sentence capitals | 0 |
+| Keyboard: the ack gate | Apply unfocusable until ticked; checkbox names itself |
+| Failure state | renders on a stubbed 500, suppresses the empty line, retry recovers |
+| Parked state | renders; "Approved — change a price"; green, not danger |
+| `preview-only` | resolves; debt closed; nothing minted |
+| Database | 18 · 0 pending · 0 exemplars · 0 audit, before and after |
+
+### 16.15.7 Left undone, deliberately
+
+- **The shared count bug** (parked rows counted as waiting) is handed to the
+  owner of `approval-inbox.service.ts` in locks §6c-AQ. Three surfaces read
+  `inboxCounts()`; this stream will not change it unilaterally.
+- **The empty line sits 1147px into a 906px scroller** — below the fold, and
+  last on the page. That weakens 16.3E's claim that it earns its space: what it
+  now says is worth reading, and nobody scrolls to read it when nothing is
+  wrong. The honest fix is for S2's readiness block to speak when a producer is
+  **armed** — above the fold, where the §1.2 transition would actually be seen.
+  Not built here: it is S2's surface, and S5 had no mandate to add a condition
+  to somebody else's checklist. **Recommended as the first thing S3 or a future
+  S2 revision does.**
+- `.aq-editerr` and `.aq-cameback.attempted` keep their ad-hoc reds: they are
+  real errors and real failures, so the colour is already correct, and they
+  belong to S6/AQ.8.
+
+**S5 is complete.**
