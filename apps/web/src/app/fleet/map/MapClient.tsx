@@ -46,6 +46,7 @@ export function MapClient() {
    *  canvas highlights an edge. */
   const [selection, setSelection] = useState<{ kind: 'worker' | 'edge'; id: string } | null>(null)
   const [overlayId, setOverlayId] = useState('autonomy')
+  const [railCollapsed, setRailCollapsed] = useState(false)
   const [tierFilter, setTierFilter] = useState<string | null>(null)
   const [hideDiagnostic, setHideDiagnostic] = useState(false)
   const [view, setView] = useState<'map' | 'list'>('map')
@@ -574,7 +575,9 @@ export function MapClient() {
           <Link href="/fleet/workers">Go to Workers</Link>
         </div>
       ) : (
-        <div className={`sbm-body ${view === 'list' ? 'is-list' : ''}`}>
+        <div
+          className={`sbm-body ${view === 'list' ? 'is-list' : ''} ${railCollapsed ? 'is-railcollapsed' : ''}`}
+        >
           {/* The overlay rail explains the CANVAS's colours. In list view it
               would be a legend for tints the table does not use, while taking
               216px the adjacency columns need — so the table gets the width
@@ -653,6 +656,11 @@ export function MapClient() {
             selection={selection}
             onSelect={setSelection}
             onClose={() => setSelection(null)}
+            /* S4.g — the state lives here rather than in the rail so the BODY
+               can re-column: a collapsed rail is a 44px track, not a 340px one
+               with an empty panel in it. */
+            collapsed={railCollapsed}
+            onCollapsed={setRailCollapsed}
           />
         </div>
       )}

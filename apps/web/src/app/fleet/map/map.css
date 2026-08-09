@@ -701,6 +701,14 @@
 .sbm-body.is-list {
   grid-template-columns: minmax(0, 1fr) 340px;
 }
+/* S4.g — a collapsed rail is a 44px TRACK, not a 340px one with an empty panel
+   in it. The canvas takes the 296px back, which is the whole point. */
+.sbm-body.is-railcollapsed {
+  grid-template-columns: 216px minmax(0, 1fr) 44px;
+}
+.sbm-body.is-list.is-railcollapsed {
+  grid-template-columns: minmax(0, 1fr) 44px;
+}
 
 @media (max-width: 1400px) {
   .sbm-body,
@@ -1966,6 +1974,57 @@
 .sbm-rail-close:hover {
   background: #f1f4f8;
   color: #4a5666;
+}
+.sbm-rail-headbtns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/*
+ * S4.g — the collapsed strip.
+ *
+ * The rail took 340px unconditionally, the second-largest thing on the page,
+ * with no way to get it back for the tasks where the graph IS the work. The
+ * label runs vertically so a 44px track can still name itself; the dot says
+ * something is selected without relying on the reader noticing a chevron, and
+ * the button's accessible name says WHICH thing.
+ */
+.sbm-rail.is-collapsed {
+  align-items: stretch;
+  padding: 0;
+}
+.sbm-rail-expand {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: #55616f;
+}
+.sbm-rail-expand:hover {
+  background: #f7f9fc;
+}
+.sbm-rail-expand:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: -2px;
+}
+.sbm-rail-expand .lbl {
+  writing-mode: vertical-rl;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sbm-rail-expand .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2b6cb0;
 }
 .sbm-rail-body {
   flex: 1 1 auto;

@@ -31,7 +31,7 @@
  */
 
 import Link from 'next/link'
-import { ArrowRight, X } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ago } from '../_shared/run-health'
 import { statusOf, type MapEdge, type MapNode } from './lib'
@@ -494,12 +494,16 @@ export function InspectorRail({
   selection,
   onSelect,
   onClose,
+  collapsed,
+  onCollapsed,
 }: {
   nodes: MapNode[]
   edges: MapEdge[]
   selection: Selection | null
   onSelect: (sel: Selection | null) => void
   onClose: () => void
+  collapsed: boolean
+  onCollapsed: (v: boolean) => void
 }) {
   const node = selection?.kind === 'worker' ? nodes.find((n) => n.key === selection.id) : undefined
   const edge = selection?.kind === 'edge' ? edges.find((e) => e.id === selection.id) : undefined
@@ -521,15 +525,65 @@ export function InspectorRail({
         ? 'Not on this map'
         : 'The fleet at a glance'
 
+  /* What the collapsed strip announces, so the control is not a bare chevron to
+     anyone who cannot see the dot. */
+  const subject = node
+    ? node.name
+    : edge
+      ? `${nodes.find((n) => n.key === edge.from)?.name ?? edge.from} → ${nodes.find((n) => n.key === edge.to)?.name ?? edge.to}`
+      : null
+
+  /*
+   * S4.g — collapsed, this is a 44px strip and nothing else.
+   *
+   * The rail took 340px unconditionally — the second-largest thing on the page
+   * after the canvas — and there was no way to get it back for the tasks where
+   * the graph IS the work: tracing a chain, reading the lanes. Kiali's panel is
+   * collapsible and Cloudscape's has an explicit control, with the rule that
+   * matters here: "Once users close the details panel, it stays closed even if
+   * they change the resource selection." A reader who deliberately made the
+   * graph wide should not have it taken back by their next click.
+   */
+  if (collapsed) {
+    return (
+      <aside className="sbm-rail is-collapsed" aria-label="Details">
+        <button
+          type="button"
+          className="sbm-rail-expand"
+          aria-expanded={false}
+          onClick={() => onCollapsed(false)}
+        >
+          <ChevronLeft size={13} aria-hidden />
+          <span className="lbl">Details</span>
+          {subject ? <span className="dot" aria-hidden /> : null}
+          <span className="sr-only">
+            {subject ? `Show details for ${subject}` : 'Show the details panel'}
+          </span>
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside className="sbm-rail" aria-label="Details">
       <header className="sbm-rail-head">
         <h3>{title}</h3>
-        {selection ? (
-          <button type="button" className="sbm-rail-close" aria-label="Clear selection" onClick={onClose}>
-            <X size={13} aria-hidden />
+        <div className="sbm-rail-headbtns">
+          {selection ? (
+            <button type="button" className="sbm-rail-close" aria-label="Clear selection" onClick={onClose}>
+              <X size={13} aria-hidden />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="sbm-rail-close"
+            aria-expanded
+            aria-label="Collapse the details panel"
+            onClick={() => onCollapsed(true)}
+          >
+            <ChevronRight size={13} aria-hidden />
           </button>
-        ) : null}
+        </div>
       </header>
       {/*
        * S4.f — ONE live region for this panel, and it did not have one.
