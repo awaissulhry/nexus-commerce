@@ -1336,3 +1336,18 @@
   background: #eef1f4;
   color: #4a5563;
 }
+
+/*
+ * …but NOT in S4's example, which is a real <ApprovalCard> inside a
+ * <fieldset disabled>. Every control in it is disabled for structural reasons,
+ * not because anything is unmet, so the rule above would have painted its
+ * primary grey and broken the one job the example has — to look like the card
+ * the operator will meet later. Caught before it shipped only because the
+ * empty state does not render while seeded rows are in the queue.
+ *
+ * Wins on specificity (5 classes to 4), so it holds wherever it sits.
+ */
+.aq-example .aq-card .acr-btn.go:disabled {
+  background: #15804f;
+  color: #fff;
+}
