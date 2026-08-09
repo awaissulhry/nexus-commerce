@@ -970,6 +970,21 @@
   flex: 0 0 auto;
   margin-top: 2px;
 }
+/*
+ * The one prose block on the card that S6.a left without a measure: at a
+ * 1920px viewport its sentence ran to ~283 real characters while
+ * .aq-consequence beside it was capped at 58ch. Measured in characters, not
+ * in `ch` — `ch` is the width of "0" and has over-estimated this page's
+ * measure twice.
+ *
+ * Capped on the SPAN, not on the <p>: the banner is a coloured block and the
+ * house rule on this page is that a measure caps the prose and never the
+ * block, or the background shrinks to a stub beside the text.
+ */
+.aq-cameback > span {
+  display: block;
+  max-width: 58ch;
+}
 
 .aq-facts {
   margin: 10px 0 0;
