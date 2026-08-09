@@ -63,7 +63,8 @@ export function HowWorkflowsWork() {
             <strong>Reading a routine&rsquo;s own page.</strong> The pipeline is the routine in
             stages, left to right: everything in one stage runs at the same time, and the chip
             above each stage names what arrives from the one before it. Each{' '}
-            <Term k="step">step</Term> says what it is, whether it will run, and what it did on
+            <Term k="step">step</Term>{' '}
+            says what it is, whether it will run, and what it did on
             the most recent run — how long it took, what it cost, what it found. A worker that is
             switched off is struck through and says it was skipped, which costs nothing. Code
             steps say &ldquo;always runs&rdquo; and carry no timing, because they are part of the
@@ -94,7 +95,8 @@ export function HowWorkflowsWork() {
           </p>
           <p>
             <strong>Reading the versions.</strong> Every published change is a numbered{' '}
-            <Term k="revision">revision</Term> with a mandatory note saying why — that note is
+            <Term k="revision">revision</Term>{' '}
+            with a mandatory note saying why — that note is
             the change log. Each row says who wrote it, when, whether it is the wiring running
             now, how long it was active, and how many runs it served. &ldquo;What
             changed&rdquo; opens the diff against the revision before it. Any revision that is
