@@ -3269,6 +3269,93 @@ instead, which needs no shared file at all.
 
 ---
 
+### 14.9 · EXECUTED 2026-08-09 — S4.a–S4.d, prod-verified
+
+Commits: `cff9cd71c` (S4.a–S4.c) · `3391efe33` (S4.d) · `6adb62fde` (the typo,
+actually fixed). **Prod left at zero. Nothing was started.**
+
+| # | Criterion | Before | After |
+|---|---|---|---|
+| 1 | Drawer statements contradicting a surface | **1** | **0** |
+| 2 | Actions named that do not exist | **1** | **0** |
+| 3 | Rendering defects in shipped copy | **1** | **0** |
+| 4 | Subtrees with no root class | **1** | **0** |
+| 5 | Sub-AA roles in the teaching drawer | **1** (3.10) | **0** |
+| 6 | Inline `style` attributes across all subtrees | **2** | **0** |
+| 7 | Cross-fleet links that full-reload | **1** | **0** |
+| 8 | Synonyms for one concept | **3** | **0** |
+| 9 | Currency stated | **nowhere** | **both surfaces** |
+| 10 | Undefined jargon in a headline | **1** ("guard") | **1** — *not done, see below* |
+| 11 | Features that exist and are untaught | **6** | **0** |
+| 12 | Mouse-only explanations | **25 of 40** | **19** — *target missed, metric was wrong* |
+
+**Two criteria not met, and both are recorded rather than smoothed.**
+
+- **#12 was mis-specified.** Getting from 19 to ≤10 means deleting definitional
+  tooltips, which loses more than it gains. The metric that matters is *"no fact
+  needed to act is tooltip-only"* — true before and after. Same failure mode as
+  Part 13's column-share target: **I picked a number that measures the wrong
+  thing, then would have had to damage the page to hit it.**
+- **#10 ("guard") was not done.** My recommendation was to remove the word
+  rather than mint it, and removing it means editing `states.ts` copy that two
+  surfaces render — worth doing deliberately rather than at the end of a long
+  engagement. **Left open, named here.**
+
+**The finding this section exists for, and it happened again during it.**
+I reported the typo fixed in S4.a. **It was not** — the rewritten drawer
+deployed and still rendered "themesare", found only by re-measuring the
+deployed page. **And my stated cause was wrong**: the space is in the source on
+the same line as `</em>` (checked with `od`), and the production bundle still
+emitted `"themes"}),"are totals`. I do not have a mechanism I would stand
+behind; the fix is an explicit `{' '}`, which is what this codebase already
+uses at element boundaries. The wrong reason is recorded in the file, because a
+wrong reason is the thing most likely to be copied.
+
+**Five probe errors across four sections, two of them in this one.** Both here
+were the same shape: **polling for a deploy marker that shipped in an earlier
+commit**, so I measured an old build and twice nearly filed a working feature as
+broken. The rule that falls out is narrow and cheap: *a deploy marker must be
+unique to the commit you are waiting for* — and the earlier list is unchanged
+(a Tab keypress that never reaches the page, a `.click()` that focuses nothing,
+a `location.href` that clears the probe's own state, a re-read that hit the
+probe's own fetch patch).
+
+**The scan that should have existed from the start now does:** walk the rendered
+DOM for inline elements whose neighbouring text node sits flush against them.
+Four hits, three false positives (`<Term>` renders its glossary body inline, so
+the probe read a tooltip as prose), one real.
+
+---
+
+### 14.10 · IS THE ASSIGNMENTS PAGE COMPLETE?
+
+**Yes, with three things named.**
+
+Four sections rebuilt every surface and the layer that explains them: the list
+(Part 11), the create drawer (Part 12), one assignment's page (Part 13), and the
+teaching layer and seams (Part 14). Across them: **41 measured defects fixed**,
+contrast failures on every surface driven to zero, inline styles to zero, the
+keyboard path to the create drawer from 41 Tab presses to 1, the money-spending
+action separated from everything that cannot spend, and one vocabulary with two
+registers instead of three vocabularies.
+
+**Knowingly left:**
+
+1. **"guard" is still undefined jargon** in the Stopped state's sentence
+   (criterion #10 above). One `states.ts` edit, deliberately not rushed.
+2. **19 explanations remain mouse-only.** All definitional; none needed to act.
+   Closing this properly means a real tooltip component, which is a
+   design-system change, not a page change.
+3. **NOTHING HAS EVER RUN.** Every state past *Not started* — on all three
+   surfaces — is proven by construction and synthetic payload, never by a row a
+   real run produced. `AgentFindingRun` holds zero rows. One assignment, started
+   once, costs about €0.01 and would exercise the scope narrowing, the run
+   stamping, the join's first row, and findings from real data. **It is the
+   operator's call and the only thing that would move this page from "proven by
+   construction" to "seen working."**
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
