@@ -187,47 +187,6 @@ function LaneNode({ data }: NodeProps) {
 
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
 
-/**
- * The edge's word.
- *
- * A plan edge can never carry a volume: the critic does not author an artifact,
- * it records a verdict on the plan in place. So it says what actually crossed —
- * the verdict — rather than a fabricated count.
- *
- * ⚠ C15 IS OPEN AND TWO ATTEMPTS TO CLOSE IT BOTH REMOVED EVERY EDGE FROM THE
- * GRAPH. Three analyst edges converge on the director and their labels sit at
- * one x — measured `656.9 / 656.9 / 657.3`, two of them reading the same words.
- *
- *   · Attempt 1, a custom `edgeTypes` component placing the label along the
- *     path: `.react-flow__edges` came back an EMPTY DIV on prod.
- *   · Attempt 2, keeping the built-in edge and drawing labels through
- *     `EdgeLabelRenderer` from our own layout: the labels rendered correctly and
- *     **the edges vanished again**, the only change being that `label` moved off
- *     the edge object.
- *
- * And attempt 2 would not have fixed it anyway: the three analysts stand in the
- * SAME COLUMN, so anchoring a label near its source gives all three the same x —
- * measured `699.7 / 699.7 / 700`. Source-anchoring cannot separate labels whose
- * sources are already stacked.
- *
- * So this is not a placement problem and the next attempt should not be a
- * placement tweak. The count belongs somewhere that is not the line: a badge on
- * the target node, or the handoff panel in the inspector rail, which already
- * prints the full breakdown. Written down here so the third attempt starts from
- * the right question.
- */
-function labelOf(e: MapEdge, windowLabel: string): string {
-  if (e.artifact === 'plan') {
-    const v = e.verdicts
-    if (v && v.pass + v.revise + v.block > 0) {
-      return v.block > 0 ? 'blocked' : v.revise > 0 ? 'sent back' : 'passed'
-    }
-    return 'nothing reviewed yet'
-  }
-  return e.counts.crossed > 0 ? `${e.counts.crossed} carried` : `nothing carried in ${windowLabel}`
-}
-
-
 
 /** The card and lane boxes, in graph coordinates. These are CSS constants
  *  (`.sbm-node { width: 252px }`, `.sbm-lane { width: 640px }`) and are verified
@@ -504,6 +463,22 @@ export function MapCanvas({
   const flowEdges: Edge[] = useMemo(
     () =>
       edges.map((e) => {
+        // A plan edge can never carry a volume: the critic does not author an
+        // artifact, it records a verdict on the plan in place. So it says what
+        // actually crossed — the verdict — rather than a fabricated count.
+        // Kept short on purpose. Three analyst edges converge on the director,
+        // so their labels sit within a few pixels of each other; "4 carried ·
+        // 1 dropped" collided with its neighbour and truncated mid-word on
+        // prod. What the director DROPPED and why is the edge inspector's
+        // centrepiece (M.4), where there is room to print the reason it wrote.
+        const label =
+          e.artifact === 'plan'
+            ? e.verdicts && e.verdicts.pass + e.verdicts.revise + e.verdicts.block > 0
+              ? `${e.verdicts.block > 0 ? 'blocked' : e.verdicts.revise > 0 ? 'sent back' : 'passed'}`
+              : 'nothing reviewed yet'
+            : e.counts.crossed > 0
+              ? `${e.counts.crossed} carried`
+              : `nothing carried in ${windowLabel}`
         return {
           id: e.id,
           source: e.from,
@@ -522,7 +497,7 @@ export function MapCanvas({
              information lives on the edges. */
           interactionWidth: 22,
           animated: false,
-          label: labelOf(e, windowLabel),
+          label,
           labelShowBg: true,
           labelBgPadding: [6, 3] as [number, number],
           labelBgBorderRadius: 4,

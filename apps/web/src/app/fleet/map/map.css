@@ -53,8 +53,6 @@
   gap: 12px;
 }
 
-/* The right block is pinned to the top so the mode tabs can grow the left one
-   without dragging the window switch and Refresh down with them. */
 .sbm-head {
   display: flex;
   align-items: flex-start;
@@ -88,39 +86,6 @@
 .sbm-sub a:hover {
   text-decoration: underline;
 }
-/* S2R — the subject control: tabs under the title, not a twin of the window
-   switch. A tab strip says "this changes what you are looking at"; a segmented
-   pill in a row of controls says "this is one more setting". */
-.sbm-modetabs {
-  display: inline-flex;
-  gap: 2px;
-  margin-top: 10px;
-}
-.sbm-modetabs button {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  padding: 5px 2px;
-  margin-right: 18px;
-  font-size: 12.5px;
-  font-weight: 550;
-  color: #55616f;
-  cursor: pointer;
-}
-.sbm-modetabs button.on {
-  color: #1c2530;
-  font-weight: 680;
-  border-bottom-color: #1f4f8b;
-}
-.sbm-modetabs button:hover {
-  color: #1c2530;
-}
-.sbm-modetabs button:focus-visible {
-  outline: 2px solid #1f4f8b;
-  outline-offset: 2px;
-  border-radius: 3px;
-}
-
 .sbm-head-right {
   display: flex;
   align-items: center;
@@ -756,42 +721,20 @@
   border-radius: 6px;
   overflow: hidden;
 }
-/* S2R — the edge label, drawn from the LAYOUT rather than from the edge.
+/* ⚠ S2R — THE SOURCE-ANCHORED EDGE LABEL IS REVERTED, and this note is the
+ * receipt. A custom `edgeTypes` entry rendering the label at 22% along the path
+ * would have solved C15 (three labels sharing one x). Shipped, deployed, and
+ * measured: `.react-flow__edges` came back an EMPTY DIV — all four edges gone,
+ * so half the graph's information disappeared to fix a label collision.
  *
- * Attempt one was a custom `edgeTypes` component and it deleted every edge: a
- * custom edge is handed `sourceX/sourceY` computed from node measurements this
- * canvas never gets, so it rendered nothing. This one never touches edge
- * rendering — `EdgeLabelRenderer` portals into a container inside the viewport
- * transform, so a label placed in graph coordinates follows pan and zoom for
- * free and depends on no measurement at all.
+ * The cause is the same one that defeats `fitView` on this canvas: xyflow never
+ * measures these nodes, and a custom edge is handed `sourceX/sourceY` computed
+ * FROM those measurements, so it renders nothing. The built-in edge tolerates it
+ * and a custom one does not — which is why this looked safe in review and was
+ * not. Solving C15 needs the measurement problem solved first, or a label drawn
+ * outside xyflow's edge layer entirely.
  *
- * `pointer-events: none` so it can never steal the click from the 22px-wide
- * edge hit target underneath it. */
-/* S2R — the off-screen marker. Grafana's hidden-node idiom: state the count,
-   do not offer a "fit everything" that would render 38 anonymous dots. */
-.sbm-offscreen {
-  position: absolute;
-  z-index: 5;
-  right: 12px;
-  bottom: 12px;
-  margin: 0;
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid #78838f;
-  font-size: 10.5px;
-  color: #45505f;
-  box-shadow: 0 1px 3px rgba(28, 37, 48, 0.12);
-}
-.sbm-offscreen b {
-  font-weight: 700;
-  color: #1c2530;
-}
-
-/* xyflow's own edge label. See the C15 note on `labelOf` in MapCanvas.tsx:
-   two attempts to move it off the convergence both removed every edge from the
-   graph, and the second would not have separated them anyway — the three
-   analysts share a column, so a source-anchored label lands at the same x. */
+ * Restored to xyflow's own label. C15 stays open and is written up as such. */
 .sbm-canvas .react-flow__edge-text {
   font-size: 10px;
   fill: #45505f;
@@ -1209,15 +1152,6 @@
 
 /* ── M6 · entity mode ──────────────────────────────────────────────────── */
 
-/* S2R — the interaction hint. Pushed right so it reads as chrome rather than
-   as a caption on the view switch, and small enough not to compete with it. */
-.sbm-gesturehint {
-  margin-left: auto;
-  font-size: 10.5px;
-  color: #55616f;
-  white-space: nowrap;
-}
-
 .sbm-crumbs {
   font-size: 11.5px;
   color: #7d879a;
@@ -1261,10 +1195,6 @@
   border-radius: 50%;
   background: #c3ccd8;
 }
-/* S2R — a truncated name says so. It was clipping silently at the card edge
-   (`Exact_Gale_SV_LessThan_1k_Ke`), and with the native `title` removed there
-   was nothing left to tell the reader a name had been cut. The full name is in
-   the DOM for a screen reader and in the inspector rail for everyone else. */
 .sbm-ent-label {
   font-size: 12px;
   font-weight: 600;
@@ -1274,12 +1204,6 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  /* S2R — `-webkit-line-clamp` already ellipsises across LINES, but a single
-     unbroken campaign name (`Exact_Gale_SV_LessThan_1k_Key…`) overflows the
-     line instead of wrapping, and clipped silently at the card edge. With the
-     native `title` removed there was nothing left to tell the reader a name had
-     been cut, so it has to break. */
-  overflow-wrap: anywhere;
 }
 .sbm-ent-sub {
   font-size: 10px;
