@@ -756,26 +756,49 @@
   border-radius: 6px;
   overflow: hidden;
 }
-/* ⚠ S2R — THE SOURCE-ANCHORED EDGE LABEL IS REVERTED, and this note is the
- * receipt. A custom `edgeTypes` entry rendering the label at 22% along the path
- * would have solved C15 (three labels sharing one x). Shipped, deployed, and
- * measured: `.react-flow__edges` came back an EMPTY DIV — all four edges gone,
- * so half the graph's information disappeared to fix a label collision.
+/* S2R — the edge label, drawn from the LAYOUT rather than from the edge.
  *
- * The cause is the same one that defeats `fitView` on this canvas: xyflow never
- * measures these nodes, and a custom edge is handed `sourceX/sourceY` computed
- * FROM those measurements, so it renders nothing. The built-in edge tolerates it
- * and a custom one does not — which is why this looked safe in review and was
- * not. Solving C15 needs the measurement problem solved first, or a label drawn
- * outside xyflow's edge layer entirely.
+ * Attempt one was a custom `edgeTypes` component and it deleted every edge: a
+ * custom edge is handed `sourceX/sourceY` computed from node measurements this
+ * canvas never gets, so it rendered nothing. This one never touches edge
+ * rendering — `EdgeLabelRenderer` portals into a container inside the viewport
+ * transform, so a label placed in graph coordinates follows pan and zoom for
+ * free and depends on no measurement at all.
  *
- * Restored to xyflow's own label. C15 stays open and is written up as such. */
-.sbm-canvas .react-flow__edge-text {
-  font-size: 10px;
-  fill: #45505f;
+ * `pointer-events: none` so it can never steal the click from the 22px-wide
+ * edge hit target underneath it. */
+/* S2R — the off-screen marker. Grafana's hidden-node idiom: state the count,
+   do not offer a "fit everything" that would render 38 anonymous dots. */
+.sbm-offscreen {
+  position: absolute;
+  z-index: 5;
+  right: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #78838f;
+  font-size: 10.5px;
+  color: #45505f;
+  box-shadow: 0 1px 3px rgba(28, 37, 48, 0.12);
 }
-.sbm-canvas .react-flow__edge-textbg {
-  fill: #ffffff;
+.sbm-offscreen b {
+  font-weight: 700;
+  color: #1c2530;
+}
+
+.sbm-edgelabel {
+  position: absolute;
+  pointer-events: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid #cdd5df;
+  font-size: 10px;
+  font-weight: 550;
+  color: #45505f;
+  white-space: nowrap;
 }
 
 /* nodes */
