@@ -721,20 +721,26 @@
   border-radius: 6px;
   overflow: hidden;
 }
-/* S2R — our own label element (see `LabelledEdge`), anchored near the source
-   end rather than at the midpoint where three edges converge. `pointer-events:
-   none` so it never steals the click from the 22px edge hit target under it. */
-.sbm-edgelabel {
-  position: absolute;
-  pointer-events: none;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: #fff;
-  border: 1px solid #cdd5df;
+/* ⚠ S2R — THE SOURCE-ANCHORED EDGE LABEL IS REVERTED, and this note is the
+ * receipt. A custom `edgeTypes` entry rendering the label at 22% along the path
+ * would have solved C15 (three labels sharing one x). Shipped, deployed, and
+ * measured: `.react-flow__edges` came back an EMPTY DIV — all four edges gone,
+ * so half the graph's information disappeared to fix a label collision.
+ *
+ * The cause is the same one that defeats `fitView` on this canvas: xyflow never
+ * measures these nodes, and a custom edge is handed `sourceX/sourceY` computed
+ * FROM those measurements, so it renders nothing. The built-in edge tolerates it
+ * and a custom one does not — which is why this looked safe in review and was
+ * not. Solving C15 needs the measurement problem solved first, or a label drawn
+ * outside xyflow's edge layer entirely.
+ *
+ * Restored to xyflow's own label. C15 stays open and is written up as such. */
+.sbm-canvas .react-flow__edge-text {
   font-size: 10px;
-  font-weight: 550;
-  color: #45505f;
-  white-space: nowrap;
+  fill: #45505f;
+}
+.sbm-canvas .react-flow__edge-textbg {
+  fill: #ffffff;
 }
 
 /* nodes */

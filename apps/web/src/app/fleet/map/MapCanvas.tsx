@@ -44,11 +44,7 @@ import {
   Handle,
   Position,
   ReactFlow,
-  BaseEdge,
-  EdgeLabelRenderer,
-  getBezierPath,
   type Edge,
-  type EdgeProps,
   type Node,
   type NodeProps,
 } from '@xyflow/react'
@@ -191,68 +187,6 @@ function LaneNode({ data }: NodeProps) {
 
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
 
-/**
- * S2R — THE LABEL SITS AT THE SOURCE END, NOT THE MIDPOINT.
- *
- * Three analyst edges converge on the director, and at the midpoint their
- * labels stacked at ONE x — measured on prod, `x 656.9 / 656.9 / 657.3` with
- * `y 447.6 / 504.6 / 561.5`. Three chips in a 114px column, **two of them
- * reading the same words**, attached to lines that had already bundled. The
- * comment this replaces records that the text was shortened once because it
- * "collided with its neighbour and truncated mid-word" — which treated the
- * symptom.
- *
- * Edge-label placement is NP-hard in general and trivially solvable here by not
- * placing labels where the lines meet: at 22% along the path each label is still
- * beside the card it came FROM, where the edges are as far apart as they ever
- * get. Kiali's precedent for a measurement it cannot place legibly is to move it
- * into the side panel; ours can stay on the canvas because it stops standing at
- * the convergence.
- *
- * The label is `pointer-events: none` so it never steals the click from the
- * 22px-wide edge hit target underneath it.
- */
-function LabelledEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  markerEnd,
-  data,
-}: EdgeProps) {
-  const [path] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  })
-  const t = 0.22
-  const lx = sourceX + (targetX - sourceX) * t
-  const ly = sourceY + (targetY - sourceY) * t
-  const label = typeof data?.label === 'string' ? data.label : ''
-  return (
-    <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} />
-      {label ? (
-        <EdgeLabelRenderer>
-          <div
-            className="sbm-edgelabel"
-            style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}
-          >
-            {label}
-          </div>
-        </EdgeLabelRenderer>
-      ) : null}
-    </>
-  )
-}
-
-const edgeTypes = { labelled: LabelledEdge }
 
 /** The card and lane boxes, in graph coordinates. These are CSS constants
  *  (`.sbm-node { width: 252px }`, `.sbm-lane { width: 640px }`) and are verified
@@ -547,8 +481,6 @@ export function MapCanvas({
               : `nothing carried in ${windowLabel}`
         return {
           id: e.id,
-          type: 'labelled',
-          data: { label },
           source: e.from,
           target: e.to,
           className: [
@@ -565,6 +497,10 @@ export function MapCanvas({
              information lives on the edges. */
           interactionWidth: 22,
           animated: false,
+          label,
+          labelShowBg: true,
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
         }
       }),
     [edges, windowLabel, selectedEdgeId],
@@ -636,7 +572,6 @@ export function MapCanvas({
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
         /* No `fitView` prop. Measured on prod: xyflow's own Fit View control is
            a no-op on this graph — it filters to nodes it has measured and it
            never measures ours — while its Zoom In control works, which is how
