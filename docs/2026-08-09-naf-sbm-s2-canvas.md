@@ -885,3 +885,94 @@ two of its own.
 | **C20** entity zoom tier | a card can still render as an anonymous dot; the name is in the DOM for a screen reader but not on screen |
 | **C18** dashed never-carried edge | still unexercisable — all four edges have carried |
 | **1280 / 1440** | the harness cannot narrow the window below the display width, and `.sbm-body` has real breakpoints at 1400 and 1100 |
+
+---
+
+## PART 14 — ⚠ THE EDGES ARE MISSING ON PRODUCTION, and here is the mechanism
+
+**Status: open defect. Root cause identified and evidenced; the fix is designed,
+untested, and deliberately not shipped.**
+
+### 14.1 · The mechanism, from xyflow's own source and its own store
+
+`.react-flow__edges` renders as an empty `<div>` — 0 edges, while 8 nodes and 14
+handles render normally. Traced end to end:
+
+1. `useVisibleEdgeIds(onlyRenderVisibleElements)` — and `onlyRenderVisibleElements`
+   **defaults to `false`**, so it returns `s.edges.map(e => e.id)` with **no
+   filtering at all**. Not the culprit.
+2. Read from xyflow's own store in a live probe: `edges: 4`, `nodeLookup: 8`,
+   `width: 1032`, `height: 568`. **The store has every edge.**
+3. `EdgeWrapper` therefore renders 4 times, and each one hits:
+   ```js
+   if (edge.hidden || sourceX === null || … ) return null
+   ```
+   with the coordinates coming from `getEdgePosition()`, which opens with
+   ```js
+   if (!isNodeInitialized(sourceNode) || !isNodeInitialized(targetNode)) return null
+   ```
+4. And `isNodeInitialized` is:
+   ```js
+   !!(node.internals.handleBounds || node.handles?.length) &&
+   !!(node.measured.width || node.width || node.initialWidth)
+   ```
+5. The same probe reports, for a real worker node: **`measured: "{}"` and
+   `handleBounds: undefined`.**
+
+**So: xyflow never measures this canvas's nodes, so no edge can compute a
+position, so every edge renders `null`.** That is one root cause for *all four*
+xyflow defects on this page — the coin-toss `fitView`, the dead ResizeObserver
+refit, `useNodesInitialized` that never flips, and now the missing edges.
+
+### 14.2 · The designed fix, and why it is not shipped
+
+Both clauses of `isNodeInitialized` accept **declared** values. This canvas
+already computes its own layout (rule 1) and now computes its own frame, so it
+can declare its own geometry: `width`/`height` on each node satisfy the second
+clause, and a `handles` array satisfies the first —
+`getEdgePosition` falls back to `toHandleBounds(sourceNode.handles)` when
+`handleBounds` is absent. Nothing would then depend on when, or whether, the
+library measures anything.
+
+**It is written and not shipped, because I could not test it.** The local dev
+server — the only place a fix like this can be iterated in seconds rather than
+deploy cycles — has been failing to compile for reasons outside this stream:
+
+```
+./apps/web/src/app/globals.css
+Error: ENOENT: no such file or directory, stat
+'…/marketing/ads/rules-automation/control-room/FleetMapCanvas.tsx'
+  at resolveChangedFiles (tailwindcss/lib/lib/content.js:236)
+```
+
+That file is a **sibling stream's uncommitted deletion**, sitting in the shared
+working tree, and Tailwind's content scan stats it on every rebuild. Restoring it
+would be editing another stream's file state, which the protocol forbids. After
+that error started, every local reading was taken against a compile-error page —
+including a "pre-S2 also renders 0 edges" result that I therefore **withdraw**.
+
+### 14.3 · What is and is not established
+
+**Established:** the mechanism in 14.1, from the library source and its live
+store. The edges are missing on prod right now.
+
+**Not established:** whether my Section 2 work caused it. The evidence is
+genuinely ambiguous — node measurement is non-deterministic on this canvas (the
+fit was measured at `0.981873` on one load and the identity matrix on three
+others at the same URL), and edges depend on exactly that measurement. The
+4-edge readings I took early in the session may simply have been the lucky loads.
+**The one "4 edges restored" reading I leaned on for bisection was later proved
+to have been taken against a stale bundle**, which is what sent three subsequent
+diagnoses down the wrong path.
+
+### 14.4 · For whoever picks this up
+
+1. **Fix the dev environment first** — the Tailwind ENOENT above. Ask the
+   sibling stream to commit or restore their deletion; do not do it for them.
+2. **Then apply the declared-geometry fix** (14.2) and confirm locally in
+   seconds: `width`, `height` and `handles` on every node in `flowNodes`.
+3. **Verify by counting edges, not by looking.** `document.querySelectorAll(
+   '.react-flow__edge').length` should be 4. Nobody counted them for the whole
+   of Section 1 and most of Section 2, which is how this survived.
+4. Do not debug this through deploy cycles. It cost most of a session and three
+   wrong diagnoses.
