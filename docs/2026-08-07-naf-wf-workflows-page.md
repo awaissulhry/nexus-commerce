@@ -3065,7 +3065,270 @@ the same facts a fifth time.
 
 ---
 
+## PART 13 — NAF.WF-S5R · Section 5 restudied: the editor
+
+Opened 2026-08-08 after S1R–S4R. Scope is `RoutineEditor.tsx` and its zone.
+The test panel is S6's; `DiffList` is exported here and consumed by S4R's
+dialogs, so any change to it must be verified in **both** consumers.
+
+**Not relitigated:** D1 (structured panels + live canvas, no free-drag), drafts
+inert / publish consequential, gates tighten-only, trigger union
+`schedule | manual`, contract v1.
+
+### 13.1 · PHASE 0 — the audit, measured on prod
+
+Chrome, **1728 × 906**, 2026-08-08, on `morning-negatives-pass` (revision
+baseline, 2 steps) and `fleet-council` (code baseline, 6 steps). The editor
+writes nothing until Save/Publish, so every state below was reached and then
+discarded; **prod ends exactly as found** — the custom Ready/Manual/rev 3, the
+council v1 active, three revision rows, no new rows created.
+
+#### D1 · The editor still renders the pre-S2R canvas — the biggest finding, and it was predicted
+
+S2R replaced the read-view canvas with `RoutinePipeline` and **deliberately left
+`RoutineCanvas.tsx` alone because this file imports it**. Measured here:
+`usesOldCanvas: true`, `usesNewPipeline: false`.
+
+| Baseline | canvas | nodes | node ink | zoom | label | sub |
+|---|---|---|---|---|---|---|
+| custom (2 steps) | 907.7 × 320 | 2 | **8.7%** | 1.0 | 12.5px | 11px |
+| built-in (6 steps) | 907.7 × 320 | 6 | **14.3%** | **0.7239** | **9.05px** | **7.96px** |
+
+So the editor still carries every defect S2R measured and removed one section
+over: 85–91% empty, and text scaled below legibility by a `fitView` that runs
+once at mount.
+
+#### D2 · The empty canvas gets more width than the controls
+
+Editor grid 1572: **steps column 648.3 (41.2%)**, **canvas 907.7 (57.7%)**. The
+column where the operator actually works is the smaller one, and the larger one
+is 85–91% background.
+
+#### D3 · The cron preview fabricates, and the checklist does not mirror the server
+
+The single most error-prone input on the page. Typed directly into the field on
+prod:
+
+| cron typed | preview shown | problems listed | Publish |
+|---|---|---|---|
+| `not a cron` | *"not a cron · the clock re-arms…"* | **0** | **enabled** |
+| `99 99 * * *` | **"Nightly at 99:99 UTC"** | **0** | **enabled** |
+| `` (empty) | *"· the clock re-arms…"* | **0** | **enabled** |
+
+The server refuses all three — `nextCronFire()` returns falsy →
+*"the schedule … is not a cron expression this fleet can evaluate"*. The charter
+requires the client mirror to be in exact parity; **the cron is the one gap**,
+and it is the worst one to have.
+
+**"Nightly at 99:99 UTC" is worse than no preview.** `prettyCron` checks that
+the minute and hour are integers and never that they are in range, so an
+impossible schedule renders as a confident, plausible sentence. The whole value
+of a plain-English restatement — the research calls it the *"Means"* line — is
+that a wrong expression **reads wrong**. This one reads right.
+
+**Everything else IS in parity**, verified by triggering it:
+
+| Server refusal | Client |
+|---|---|
+| cycle | ✅ same sentence, Publish + Test disabled |
+| scheduled with zero steps | ✅ same sentence, both disabled |
+| duplicate worker | ✅ structurally impossible — the picker filters present steps |
+| unresolvable worker | ✅ structurally — the picker lists resolvable charters only |
+| edge naming an absent step | ✅ structurally — `removeStep` prunes edges |
+| invalid artifact | ✅ derived from tier |
+
+#### D4 · The controls the operator actually sets fail AA
+
+`.acr-pg-rung` — the trigger ladder (*On a clock* / *Manual*) and every gate
+ladder (*Inherit* / *Ask first* / *May act*) — measures **4.38:1** at 11px/700.
+Fourth audit running where the failing role is a load-bearing one. It lives in
+the frozen `fleet-pages.css`, so it is overridden under `.wf-page`, not edited.
+
+#### D5 · The editor never received the S1R type pass
+
+**8 sizes** (16 / 15 / 13 / 12.5 / 12 / 11.5 / 11 / 10.5) and **5 weights**
+(400 / 550 / 600 / 650 / 700), against the S1R scale of 5 × 3 that the list,
+overview, runs and versions now share. This is the last surface on the old
+scale.
+
+#### D6 · Tighten-only is enforced and invisible
+
+Three rungs render identically. Nothing on screen says *May act* cannot go below
+the `alwaysAsk` floor — the fact lives in a `title` attribute and a hint line.
+A control whose limits are invisible teaches the operator that it has none.
+
+#### D7 · Raw form controls, in the file the DS manifest already caught once
+
+**25 raw `<input type="checkbox">`** on the council draft (5 per step × 5 steps)
+and **1 raw `<input type="text">`** for the cron. WF.3's ratchet rejection in
+this very file was a raw `<select>`; the guard greps `/<select\b/`, so
+checkboxes pass it while being the same class of thing.
+
+#### D8 · The hand-off UX does not scale, and only shows one direction
+
+Each step lists a checkbox per *other* step: on the six-step council that is
+**25 checkboxes**, with "Hands findings to" repeated on every card. A step never
+shows what hands **to it**, so the operator reconstructs the graph by reading
+every card.
+
+#### D9 · Errors are checklist-only — never on the thing that caused them
+
+`problems` renders in one block at the bottom of the steps column. Power
+Automate's designer puts the error **both** in a summary and **on the card that
+caused it**; ours has only the summary, and for the cron neither.
+
+#### D10 · The restored draft is a whisper
+
+A recovered localStorage draft applies **automatically** and announces itself in
+one quiet line. Power Automate treats the same moment as an explicit banner plus
+a **Recover flow** command — the operator chooses. Ours decides for them, which
+is defensible but should be a decision, not a side-effect.
+
+#### A probe lesson worth recording
+
+`find(r => /active/.test(r.innerText))` matched the wrong row, because S4R added
+a button reading **"Make this active…"**. My probe reported the council on
+"rev 2 active" and it was on v1 the whole time. On this page, match the chip,
+never the row text.
+
+---
+
+### 13.2 · PHASE 1 — structured (non-canvas) editors, and the state of the art in schedule input
+
+D1 makes these the references; canvas products contribute only what transfers.
+
+| Product | Step card | Errors | Draft / publish | Notable |
+|---|---|---|---|---|
+| **Power Automate** | compact cards + a configuration pane; panel layout keeps cards small, inline layout expands them | **both**: a summary with a red X *and* the error **on the card that caused it**; an explicit **Flow checker** button | **Save draft** and **Publish** as separate toolbar buttons — our exact shape | **Undo/Redo**; per-card **notes**; on failed save it writes a copy to browser storage, shows a banner, and offers **Recover flow**; a test marks each card with a green check **and its seconds** |
+| **Windmill** | select a step → action editor (header · body · *Test this step*) | per-step test results beside the step | **autosave indicator**; a **Diff** button | isolated per-step testing |
+| **Zapier** | linear step panels — the closest cousin | in place, per step | draft vs published | — |
+| **Cron input, state of the art** | — | **invalid expressions border red**; field dropdowns prevent invalid values | — | **presets** (daily 3am, weekdays 9am…), **next N fire times**, and a plain-English *"Means"* line whose stated purpose is that *"if it doesn't say what you expected, your expression is wrong"* |
+
+**What this settles:**
+
+1. **Errors belong in two places at once.** Power Automate's summary-plus-card
+   is the pattern; we have summary only (D9), and for the cron, neither (D3).
+2. **The "Means" line only works if a wrong expression reads wrong.** Ours reads
+   right for `99 99 * * *`. That is the defect, not the absence of presets.
+3. **Presets and next-fires are the two cheap wins** — and we already own both
+   halves: `prettyCron` renders the sentence and `nextCronFire` is exported and
+   pure. The server stays authoritative.
+4. **A recovered draft is a moment, not a side-effect** (D10).
+5. **Nothing in the research argues for free-drag.** D1 stands; what the canvas
+   products contribute is selection sync and validation-on-the-picture, both of
+   which want a picture worth looking at (D1's canvas problem).
+
+**Judged for our N:** 7 workers, 2–6 steps, one trigger, one operator. Power
+Automate's Copilot, expression editor, pinning and dynamic content are all for a
+scale and a data model we do not have. What transfers is the *discipline*:
+compact cards, errors where they happen, and a publish ceremony that names its
+consequences.
+
+### 13.3 · THE PROPOSAL
+
+**13.3.1 · The canvas becomes the pipeline (D1, D2).** The editor renders
+`RoutinePipeline` — the component S2R built and proved — fed from
+`definitionToStory(draft, charters)` exactly as today. It gains what the read
+view has: legible text at any step count, no zoom, no dead field. `lastGroup` is
+`null` in the editor (a draft has no runs), so every step reads its wiring, not
+a run. **`RoutineCanvas.tsx` then has no consumers and is deleted in the same
+commit** — recorded here so the deletion is a decision, not a surprise.
+
+Freed width rebalances to **steps 55% / picture 45%**, reversing D2.
+
+**13.3.2 · The cron input tells the truth (D3).** Three changes, all using code
+we already own:
+
+- **A validity check in the client mirror**, using the same rule the server
+  uses. `nextCronFire` is server-side; the client gets a parity check that
+  refuses anything the server would refuse, and the checklist gains the
+  server's own sentence verbatim.
+- **`prettyCron` stops inventing.** Range-check the fields; anything it cannot
+  read renders as *"not a schedule this fleet can read"*, never a fabricated
+  time. This is a `lib.ts` change, so **its other consumers — the list card, the
+  status band, the schedule feed — must be re-verified on prod.**
+- **Presets and next fires.** A small set of DS `Menu` presets (nightly, weekday
+  mornings, Monday early, hourly) and the **next three fire times** under the
+  field. Both are derivable client-side; the server's `nextCronFire` remains
+  authoritative and the copy says so.
+
+**13.3.3 · Errors where they happen (D9).** Each step card and the trigger card
+carry their own error state, and the checklist stays as the summary — Power
+Automate's both-places pattern. A cycle marks the steps in it; an unresolvable
+cron marks the trigger card.
+
+**13.3.4 · Tighten-only, visible (D6).** The gate ladder shows the floor: when a
+worker's tools carry an `alwaysAsk` floor, *May act* renders with the same
+`blocked` treatment the autonomy ladder already ships (`.acr-pg-rung.blocked`,
+struck through), and the hint says which floor is holding. Nothing about
+enforcement changes — it becomes visible.
+
+**13.3.5 · Hand-offs that scale (D8).** Keep the picker idiom (D1). Each card
+shows **"hands to"** as today plus a read-only **"receives from"** line, so a
+step states both directions. At six steps the checkbox count is unchanged; what
+changes is that the operator no longer reconstructs the graph by hand.
+
+**13.3.6 · DS controls (D7).** The checkboxes become the DS checkbox primitive
+and the cron field the DS text input, following WF.3's `Menu` precedent.
+
+**13.3.7 · The restored draft becomes a choice (D10).** The banner offers
+**Use it** / **Discard it** rather than applying silently. Nothing else about
+the localStorage mirror changes.
+
+**13.3.8 · Type and contrast (D4, D5).** The S1R pass this section never got:
+5 sizes, 3 weights, and `.acr-pg-rung` overridden to clear AA under `.wf-page`.
+
+### 13.4 · State table, to be discharged before the last phase closes
+
+| # | State | How |
+|---|---|---|
+| 1 | Revision baseline (custom, 2 steps) | prod |
+| 2 | Code baseline (built-in, 6 steps) | prod |
+| 3 | Empty compose (`EMPTY_DEF`) | code — reaching it needs a throwaway custom, i.e. a permanent row |
+| 4 | Cycle | prod |
+| 5 | Scheduled with zero steps | prod |
+| 6 | Invalid cron × 3 (garbage, out-of-range, empty) | prod |
+| 7 | Valid cron + presets + next fires | prod |
+| 8 | Tighten-only floor visible | prod if a charter carries an `alwaysAsk` tool; else code |
+| 9 | Restored draft banner, both choices | prod (edit → navigate away → return) |
+| 10 | Save-as-draft dialog + diff, every category | prod |
+| 11 | Publish dialog + diff, every category | prod |
+| 12 | Note required (both dialogs) | prod |
+| 13 | Server rejection path | code |
+| 14 | Discard restores | prod |
+| 15 | `DiffList` in **S4R's** Activate and Restore dialogs | prod — both consumers |
+
+### 13.5 · Build phases
+
+| Phase | What | Exit criteria (independently verifiable) |
+|---|---|---|
+| **S5.a** | The picture: `RoutinePipeline` replaces `RoutineCanvas`; delete the dead component; rebalance to 55/45. | Editor renders `.wf-pipe`, **0** `.wf-canvas` · smallest text in the picture ≥ **10.5px** at 2 and 6 steps · steps column ≥ **55%** · `RoutineCanvas.tsx` has 0 importers |
+| **S5.b** | The cron tells the truth: parity check, `prettyCron` range-checked, presets, next-3 fires. | All three invalid crons: problem listed **and** Publish disabled · `prettyCron` returns the honest fallback for each · **re-verified in every other `prettyCron` consumer on prod** |
+| **S5.c** | Errors on the card + tighten-only visible + receives-from + DS controls. | Cycle marks its steps · bad cron marks the trigger card · **0** raw `<input>` in the editor · every card states both directions |
+| **S5.d** | Type/contrast pass, restored-draft choice, states + teaching. | 5 sizes / 3 weights · **0** contrast failures incl. `.acr-pg-rung` · every §13.4 row discharged · `DiffList` verified in both consumers |
+
+### 13.6 · Recorded, not built
+
+1. **Undo/Redo** (Power Automate). Real value at their scale; at 2–6 steps with
+   Discard one click away, it is furniture. Revisit if step counts grow.
+2. **Per-card notes** (Power Automate). Our note is per-*revision* and mandatory,
+   which is the audit trail; a second per-card note would compete with it.
+3. **The test panel is S6's.** Only the button's placement is touched here.
+4. **`RoutineCanvas.tsx` deletion** removes xyflow's last consumer on this page.
+   The dependency stays in the tree for the Fleet map and the Overview.
+
+### 13.7 · One question for the operator
+
+The S4R rider: the restore confirm says *"whatever is running now is set
+aside"* where a built-in runs its code default, instead of naming *"the built-in
+wiring"*. It is one line in `RoutineClient`'s dialog and you declined it once as
+not-a-defect. **Take it in S5.a's commit, or leave it?**
+
+---
+
 ## Sources
+
+**Part 13 (WF-S5R, structured-editor research, 2026-08-08)** — Power Automate [cloud flows designer](https://learn.microsoft.com/en-us/power-automate/flows-designer) (compact cards + configuration pane; **the error appears in a summary AND on the card that caused it**; separate **Save draft** / **Publish**; Undo/Redo; per-card notes; on a failed save it writes to browser storage, banners it, and offers **Recover flow**; a test marks each card with a green check and its seconds) · Windmill [flow editor components](https://www.windmill.dev/docs/flows/editor_components) (select a step → action editor with header/body/**Test this step**; autosave indicator; Diff button) · cron-input state of the art, surveyed across current builders (**presets**, **next N fire times**, invalid expressions **bordered red**, field dropdowns, and a plain-English "Means" line whose stated purpose is that *if it doesn't say what you expected, your expression is wrong*)
 
 **Part 12 (WF-S4R, version-history research, 2026-08-08)** — Grafana [dashboard version history](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/manage-version-history/) (select TWO versions then Compare; text diff + expandable raw JSON; **Restore appends a NEW version holding the old content** and a Notes column records "restored from vN") · Astronomer [Airflow DAG versioning](https://www.astronomer.io/docs/learn/airflow-dag-versioning) (**every run is bound to the version that existed when it started and the UI shows it**; graph and code tabs let you pick a version) · n8n [view change history](https://docs.n8n.io/build/manage-workflows/view-change-history) (View / Restore / Clone per version; restore = "replace your current workflow with the selected version"; retention 24h → 5d → full by plan) · Vellum [release tags](https://docs.vellum.ai/product/deployments/release-tags) (**floating tags you move** to point at an earlier deployment — the pointer model, as ours is)
 
