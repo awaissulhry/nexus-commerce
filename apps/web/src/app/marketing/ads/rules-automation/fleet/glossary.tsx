@@ -157,7 +157,7 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   // NAF.WF — minted for /fleet/workflows (locks-doc glossary protocol).
   workflow: {
     title: 'Workflow',
-    body: 'A named routine: which workers run, in what order, and what each hands to the next. The fleet map shows the whole fleet live; a workflow is one routine, readable on its own — and, soon, versionable and editable.',
+    body: 'A named routine: which workers run, in what order, and what each hands to the next. The fleet map shows the whole fleet live; a workflow is one routine, readable on its own — and one you can edit, publish as a numbered revision, and roll back.',
   },
   trigger: {
     title: 'Trigger',
@@ -169,7 +169,7 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   },
   draft: {
     title: 'Draft',
-    body: 'A recorded revision that is not active. Drafts are inert: saving one changes nothing anywhere. Activate it from Versions when you mean it.',
+    body: 'A recorded revision that is not active. Drafts are inert: saving one changes nothing anywhere. Activate it from Versions when you mean it. The editor uses the same word for the wiring you are changing before you save it, and keeps a copy in your browser \u2014 it offers that copy back next visit rather than loading it for you.',
   },
   publish: {
     title: 'Publish',
@@ -185,7 +185,7 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   },
   run: {
     title: 'Run',
-    body: 'One worker doing its job once: it reads prepared evidence, thinks, and writes down what it found. A run costs money and takes seconds to minutes. Everything else on this page — findings, plans, approvals — was produced by some run.',
+    body: 'One worker doing its job once: it reads prepared evidence, thinks, and writes down what it found. A run costs money and takes seconds to minutes. Everything else on this page — findings, plans, approvals — was produced by some run. On Workflows the word is also used for the whole routine going once, which is that routine\u2019s workers\u2019 runs grouped together.',
   },
   // NAF.SB.AS — exactly two terms minted for the Assignments page. "What you
   // want back" is deliberately NOT a term: it is a plain phrase and giving it
