@@ -888,10 +888,11 @@ two of its own.
 
 ---
 
-## PART 14 — ⚠ THE EDGES ARE MISSING ON PRODUCTION, and here is the mechanism
+## PART 14 — The edges: one bug wearing four masks
 
-**Status: open defect. Root cause identified and evidenced; the fix is designed,
-untested, and deliberately not shipped.**
+**Status: FIXED AND PROD-VERIFIED (`35c6a7c83`) — 4 edges, all four labels.
+Proven with a control before shipping. Sections 14.1–14.4 are the diagnosis as
+it stood while open; 14.5 is the fix and the proof.**
 
 ### 14.1 · The mechanism, from xyflow's own source and its own store
 
@@ -976,3 +977,49 @@ diagnoses down the wrong path.
    of Section 1 and most of Section 2, which is how this survived.
 4. Do not debug this through deploy cycles. It cost most of a session and three
    wrong diagnoses.
+
+### 14.5 · The fix, the control, and the three things that made it findable
+
+`isNodeInitialized` accepts **declared** values in both clauses, and
+`getEdgePosition` falls back to `toHandleBounds(node.handles)` when
+`handleBounds` is absent. This canvas already computes its own layout (rule 1)
+and, since S2.a4, its own frame — so it now declares its own **geometry** too:
+`width`, `height` and a `handles` array on every node. Nothing waits on the
+library to measure anything, and all four symptoms go at once.
+
+**The control, which is what the three failed attempts lacked.** Both versions
+built in an isolated `git worktree` at HEAD — so no sibling work-in-progress
+could reach the build — served with `next start`, and driven with the **same**
+synthetic payload injected through `fetch` (localhost cannot authenticate to the
+API):
+
+| build | nodes | edges |
+|---|---|---|
+| without the fix | 7 | **0** |
+| with the fix | 7 | **4** — `4 carried`, `4 carried`, `7 carried`, `blocked` |
+
+Then confirmed on production: **4 edges, 4 labels, 8 nodes.**
+
+**Three things found it, all of which should have come first:**
+
+1. **Read the library.** Ten minutes in `node_modules/@xyflow` answered what a
+   day of deploy-cycle guessing did not. `useVisibleEdgeIds` does no filtering;
+   `EdgeWrapper`'s early return and `isNodeInitialized` are four lines each.
+2. **Build in a worktree.** The shared tree could not build *at all* — `next
+   dev` dies on a Tailwind ENOENT for a file one sibling deleted without
+   committing, `next build` on another sibling's mid-edit `ApprovalCard.tsx`.
+   A worktree at HEAD sidesteps both without touching anyone's files.
+3. **Run a control.** Every "fix" before this one shipped without one, and three
+   were wrong — two reverts aimed at the edge *label*, which had changed in the
+   same commit and looked guilty, and one at `zIndex: 0`.
+
+### 14.6 · The rule this section leaves behind
+
+> **Count the edges. Do not look at them.**
+> `document.querySelectorAll('.react-flow__edge').length` should equal the
+> payload's `edges.length`.
+
+Nobody counted for the whole of Section 1 and most of Section 2. The graph can
+lose every line while looking like a graph — the nodes still render, the layout
+still looks deliberate, and a screenshot reads as fine. It is one expression in
+a probe, and it belongs in every canvas verification from here on.
