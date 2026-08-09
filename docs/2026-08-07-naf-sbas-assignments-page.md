@@ -3285,7 +3285,7 @@ actually fixed). **Prod left at zero. Nothing was started.**
 | 7 | Cross-fleet links that full-reload | **1** | **0** |
 | 8 | Synonyms for one concept | **3** | **0** |
 | 9 | Currency stated | **nowhere** | **both surfaces** |
-| 10 | Undefined jargon in a headline | **1** ("guard") | **1** — *not done, see below* |
+| 10 | Undefined jargon in a headline | **1** ("guard") | **0** — closed in `5cb714f1e` |
 | 11 | Features that exist and are untaught | **6** | **0** |
 | 12 | Mouse-only explanations | **25 of 40** | **19** — *target missed, metric was wrong* |
 
@@ -3296,10 +3296,13 @@ actually fixed). **Prod left at zero. Nothing was started.**
   needed to act is tooltip-only"* — true before and after. Same failure mode as
   Part 13's column-share target: **I picked a number that measures the wrong
   thing, then would have had to damage the page to hit it.**
-- **#10 ("guard") was not done.** My recommendation was to remove the word
-  rather than mint it, and removing it means editing `states.ts` copy that two
-  surfaces render — worth doing deliberately rather than at the end of a long
-  engagement. **Left open, named here.**
+- **#10 ("guard") was left open at first and then closed** in `5cb714f1e`. The
+  word was the headline noun for `stopped` on two surfaces and defined nowhere
+  — not in the glossary's 34 terms, not in a sentence. Dropping it cost nothing
+  because the sentence already enumerates what the guards are (a budget, the
+  fleet halt, the kill switch, stale evidence): it was a label for the list
+  that follows it. `GUARD_PREFIXES` keeps the term, because that is code naming
+  a code concept and the rule is about words on screen, not identifiers.
 
 **The finding this section exists for, and it happened again during it.**
 I reported the typo fixed in S4.a. **It was not** — the rewritten drawer
@@ -3341,12 +3344,10 @@ registers instead of three vocabularies.
 
 **Knowingly left:**
 
-1. **"guard" is still undefined jargon** in the Stopped state's sentence
-   (criterion #10 above). One `states.ts` edit, deliberately not rushed.
-2. **19 explanations remain mouse-only.** All definitional; none needed to act.
+1. **19 explanations remain mouse-only.** All definitional; none needed to act.
    Closing this properly means a real tooltip component, which is a
    design-system change, not a page change.
-3. **NOTHING HAS EVER RUN — and the operator has DECIDED, 2026-08-09: leave it
+2. **NOTHING HAS EVER RUN — and the operator has DECIDED, 2026-08-09: leave it
    switched off.** Asked directly at the close of AS-S4R and answered *"No —
    leave it switched off."* So this is no longer an open question waiting for a
    moment; it is a settled position, and it should not be re-raised by a future
