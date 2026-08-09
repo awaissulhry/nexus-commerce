@@ -1024,7 +1024,10 @@
   border: 1px solid #e6d6b8;
   border-radius: 6px;
   background: #fffaeb;
-  font-size: 12.5px;
+  /* 13px, not 12.5 — the card is allowed exactly three sizes (17 / 13 / 11.5)
+     and a fourth half-step buys nothing. Measured across five rendered card
+     shapes, this rule was the only offender the card itself owns. */
+  font-size: 13px;
   color: #1c2530;
   cursor: pointer;
 }
@@ -1286,4 +1289,35 @@
 .aq-example .aq-editopen:disabled,
 .aq-example .aq-snoozeopt:disabled {
   opacity: 1;
+}
+
+/*
+ * S6.d — the SAME trap, on a real card, found only by rendering the two
+ * ack-gated shapes.
+ *
+ * The primary is disabled until the operator ticks "I have read what this
+ * does". Shared `.acr-btn:disabled { opacity: .55 }` composites its label to
+ * 2.59:1 — measured against the painted backdrop, not read off the
+ * declaration. WCAG 1.4.3 exempts inactive controls, so this is not a
+ * conformance failure; it is a comprehension one. That label NAMES THE CHANGE
+ * ("Apply — base price €49.00 → €39.00"), and it is what the operator has to
+ * read in order to decide whether to tick the box that enables it. A primary
+ * you must read before you may click is not decorative.
+ *
+ * Not fixable by raising the opacity: white-on-#15804f needs ~0.93 to clear
+ * 4.5:1, which is indistinguishable from enabled. So the disabled primary
+ * stops using opacity at all and becomes solid and muted — 6.4:1, and it no
+ * longer reads as pressable.
+ *
+ * Scoped to this page's primary rather than fixed at source. The shared rule
+ * is not wrong everywhere: elsewhere a disabled button's label is "Save", and
+ * nobody needs to read it. Changing `.acr-btn:disabled` fleet-wide would
+ * restyle every disabled button on ten pages to fix a problem this page has
+ * because of what its label says. Recorded in the study as a latent issue for
+ * any other page that puts information in a disabled label.
+ */
+.aq-card .acr-btn.go:disabled {
+  opacity: 1;
+  background: #eef1f4;
+  color: #4a5563;
 }

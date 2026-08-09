@@ -1110,7 +1110,16 @@ export function ApprovalsClient() {
   // Names, never raw keys — and an honest fallback rather than "unknown".
   const nameOf = useCallback(
     (key: string | null) =>
-      key ? (nameByKey.get(key) ?? key.replace(/[_-]+/g, ' ')) : 'An agent we cannot identify',
+      key
+        ? /* `nameByKey` only covers the seven CHARTERS. `listing-quality-keeper`
+             is a registered agent with its own cron and is not one of them, so
+             its cards opened with the lowercase machine key — "listing quality
+             keeper wants to change a price". The card's first words are a
+             worker's NAME; sentence-case the fallback so an unmapped agent
+             still reads as somebody rather than as a database column. */
+          (nameByKey.get(key) ??
+          key.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()))
+        : 'An agent we cannot identify',
     [nameByKey],
   )
 

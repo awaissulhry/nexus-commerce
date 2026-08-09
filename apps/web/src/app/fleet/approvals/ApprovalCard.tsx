@@ -267,7 +267,15 @@ function describe(a: CardApproval, labels: FleetLabels): Described {
   if (changes && typeof changes === 'object' && !Array.isArray(changes)) {
     for (const [field, ch] of Object.entries(changes)) {
       if (ch && typeof ch === 'object' && ('from' in ch || 'to' in ch)) {
-        out.deltas.push({ field, from: plain(ch.from), to: plain(ch.to) })
+        /* A money field arrives as a BARE NUMBER — mutate.tools.ts writes
+           `'base price': { from: 49, to: 39 }` — and "49 → 39" reads as a
+           quantity or a percentage just as easily as a price. Measured on a
+           rendered card, not reasoned about. The card names the unit the tool
+           omitted; every other field keeps its value verbatim. */
+        const money = /price|cost|fee/i.test(field)
+        const fmt = (v: unknown) =>
+          money && typeof v === 'number' && Number.isFinite(v) ? `€${v.toFixed(2)}` : plain(v)
+        out.deltas.push({ field, from: fmt(ch.from), to: fmt(ch.to) })
       }
     }
   }
@@ -607,11 +615,13 @@ export function ApprovalCard({
           </p>
           {amendErr ? <p className="aq-editerr">{amendErr}</p> : null}
           <div className="aq-editactions">
-            {/* NOT `.acr-btn go`. Primer: never more than one primary in a
-                group — Apply below is the card's only primary, and this panel
-                previously rendered a second identical green button beside it. */}
+            {/* `.acr-btn go` — and still only ONE primary in the group, because
+                the verb row is not rendered while this panel is open. Primer's
+                rule is one primary per group, not one green button per card;
+                the earlier reading kept Apply green while it promised a number
+                the operator had just replaced, which is the worse failure. */}
             <button
-              className="acr-btn"
+              className="acr-btn go"
               disabled={busy || amending || !draftValid}
               onClick={async () => {
                 setAmending(true)
@@ -797,8 +807,16 @@ export function ApprovalCard({
       </label>
 
       {/* The verbs. When rejecting, the coded reasons REPLACE this row rather
-          than appearing beneath it, so there is never more than one action area. */}
-      {rejecting ? (
+          than appearing beneath it, so there is never more than one action area.
+
+          Editing replaces it for the same reason, and for a sharper one. Typing
+          a corrected number does not change what Apply promises: with "0.60" in
+          the box the primary still read "Apply — bid €0.31 → €0.84", so the one
+          obviously-clickable button applied the number the operator had just
+          overridden and threw the edit away. Found by typing into the deployed
+          card — nothing static could see it. Mid-edit the only ways forward are
+          "Use €X instead" and Cancel, and the edit-submit is now the primary. */}
+      {editing && editable && proposedNow != null ? null : rejecting ? (
         <div className="aq-reject">
           <p className="aq-rejectq">
             Why not? One click — this is what teaches the fleet.
