@@ -53,6 +53,8 @@
   gap: 12px;
 }
 
+/* The right block is pinned to the top so the mode tabs can grow the left one
+   without dragging the window switch and Refresh down with them. */
 .sbm-head {
   display: flex;
   align-items: flex-start;
@@ -86,6 +88,39 @@
 .sbm-sub a:hover {
   text-decoration: underline;
 }
+/* S2R — the subject control: tabs under the title, not a twin of the window
+   switch. A tab strip says "this changes what you are looking at"; a segmented
+   pill in a row of controls says "this is one more setting". */
+.sbm-modetabs {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 10px;
+}
+.sbm-modetabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  padding: 5px 2px;
+  margin-right: 18px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: #55616f;
+  cursor: pointer;
+}
+.sbm-modetabs button.on {
+  color: #1c2530;
+  font-weight: 680;
+  border-bottom-color: #1f4f8b;
+}
+.sbm-modetabs button:hover {
+  color: #1c2530;
+}
+.sbm-modetabs button:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 .sbm-head-right {
   display: flex;
   align-items: center;
@@ -1152,6 +1187,15 @@
 
 /* ── M6 · entity mode ──────────────────────────────────────────────────── */
 
+/* S2R — the interaction hint. Pushed right so it reads as chrome rather than
+   as a caption on the view switch, and small enough not to compete with it. */
+.sbm-gesturehint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #55616f;
+  white-space: nowrap;
+}
+
 .sbm-crumbs {
   font-size: 11.5px;
   color: #7d879a;
@@ -1195,6 +1239,10 @@
   border-radius: 50%;
   background: #c3ccd8;
 }
+/* S2R — a truncated name says so. It was clipping silently at the card edge
+   (`Exact_Gale_SV_LessThan_1k_Ke`), and with the native `title` removed there
+   was nothing left to tell the reader a name had been cut. The full name is in
+   the DOM for a screen reader and in the inspector rail for everyone else. */
 .sbm-ent-label {
   font-size: 12px;
   font-weight: 600;
@@ -1204,6 +1252,12 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* S2R — `-webkit-line-clamp` already ellipsises across LINES, but a single
+     unbroken campaign name (`Exact_Gale_SV_LessThan_1k_Key…`) overflows the
+     line instead of wrapping, and clipped silently at the card edge. With the
+     native `title` removed there was nothing left to tell the reader a name had
+     been cut, so it has to break. */
+  overflow-wrap: anywhere;
 }
 .sbm-ent-sub {
   font-size: 10px;
