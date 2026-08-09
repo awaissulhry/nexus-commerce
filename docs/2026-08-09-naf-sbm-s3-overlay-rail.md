@@ -1007,10 +1007,37 @@ Every item raised in Part 10 has now been taken or retired.
 |---|---|
 | **C-S3.4** *(S3.i)* | The `.sbm-rail` 1400px query fires for the first time. At 1280×800: overlay rail **234.3 → 460.5px**, canvas **197 → 423.3px**. Consequence stated rather than discovered — below 1400 there is now no inspector, which is what the rule always said. |
 | **C-S3.2** *(via S3.i)* | Follows from the above: `Show` no longer competes with a panel the stylesheet said should not be there. |
-| **C-S3.1** *(S3.j)* | `OverlayBucket.short` puts the level in words on the card — `may look` / `may propose` / `may act` — set **only** where the tint is the sole carrier, and asserted both ways in the test. |
+| **C-S3.1** *(S3.j)* | `OverlayBucket.short` puts the level in words on the card — `may look` / `may propose` / `may act` — set **only** where the tint is the sole carrier, and asserted both ways in the test. **Verified with a synthetic payload** (see below), because no worker on this fleet is armed. |
 | **≤1100 canvas 2px** *(S3.k)* | The row had nothing to size to: react-flow is absolutely positioned, so an `auto` row collapsed to the view switch. `2 → 77.3 → 152.5px` across the two fixes. |
 | **C-S3.3** *(S3.l)* | The table dims the rows the rail filtered out, via one additive `rowClassName` on the shared `DataGrid` (claimed and released). |
 | **C-S3.5 / C15** *(S3.m)* | **Retired, not built.** Measured first: no label overlap at any of five viewports. See Part 10. |
+
+### Verifying S3.j, on a fleet where nothing is armed
+
+Every worker here is OFF, so no card can render an autonomy token and the one
+change that fixes a WCAG failure was the one change prod could not show. Patched
+`fetch` to intercept `GET /api/agent/fleet/map` and flip three workers to
+OBSERVE / PROPOSE / AUTO — the real payload, two fields changed — then pressed
+Refresh. Measured:
+
+- three cards that **all print "Working"** rendered `may look`, `may propose`
+  and `may act`, at **8.18:1**; the four OFF cards rendered no token, as designed
+- each token's dot resolved to its own bucket colour — `#56729d` / `#744d14` /
+  `#17422d` — from the same `--ov` the ring reads
+- the status row **fits** on all seven cards; nothing overflowed
+- the legend flipped those three rungs from `none` to occupied-with-a-note by
+  itself, which is S3.c working on data it had never seen
+- and the harder layout case held: **4 occupied rungs with notes, `Colour by`
+  FULL, `Show` FULL, rail overflow 0**, the legend absorbing the extra by
+  scrolling 101px internally — exactly what S3.b's pinned structure was for, and
+  only testable with a fleet that has something switched on
+
+Two process notes from doing it. **The first attempt showed no token at all**,
+because `Refresh` refetches data but not code and the tab still held the bundle
+from before S3.j deployed — so the probe now asserts the build carries
+`.sbm-node-lvl` before trusting anything it renders. And the ring appeared not to
+match its dot until I killed the transition: **the same artefact, third time,
+caught by the control instead of by shipping a wrong fix.**
 
 ### Still open, and not this section's
 
