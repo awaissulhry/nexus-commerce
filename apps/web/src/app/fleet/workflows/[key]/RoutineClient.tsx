@@ -935,6 +935,24 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                 starting now. If its trigger is a clock, the clock re-arms this moment.
                 {builtin ? ' Revert stays one click.' : ''}
               </p>
+              {/* S4.b — the settled copy is accurate in both directions but
+                  names neither. A restore is the direction worth stating: it
+                  is the one where something already running gets set aside,
+                  and on a custom there is no revert to fall back on. Added,
+                  not rewritten. */}
+              {pendingAct.activatedAt ? (
+                <p>
+                  This one ran before, so this is a step back:{' '}
+                  {(() => {
+                    const cur = vers.revisions.find((x) => x.activatedAt && !x.supersededAt)
+                    return cur
+                      ? `rev ${cur.revision} is set aside and stops running.`
+                      : 'whatever is running now is set aside.'
+                  })()}{' '}
+                  Nothing is rewritten — the numbers stay put, so a run that stamped rev{' '}
+                  {pendingAct.revision} still means rev {pendingAct.revision}.
+                </p>
+              ) : null}
               {actErr ? <p className="acr-pg-warn">{actErr}</p> : null}
               <div className="acr-pg-confirmbtns">
                 <button className="acr-btn" onClick={() => setPendingAct(null)} disabled={actBusy}>
