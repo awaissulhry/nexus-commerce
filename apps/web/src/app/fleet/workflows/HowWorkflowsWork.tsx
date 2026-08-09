@@ -115,6 +115,20 @@ export function HowWorkflowsWork() {
             same moment, and every run stamps the revision that served it.
           </p>
           <p>
+            <strong>What the editor tells you while you work.</strong> The picture on the right is
+            the draft as you are wiring it, and it redraws as you type. Anything the fleet would
+            refuse is marked twice: once on the card that caused it, and once in the list at the
+            bottom — and while anything is listed, Publish, Save and Test are all closed. A step
+            card says both directions, what it hands on and what it receives, so you never have to
+            read every other card to see the shape. The gate ladder only ever tightens: &ldquo;May
+            act&rdquo; carries a lock because tools that always ask — pricing, publishing, spend,
+            customer messages — still queue for your approval whatever you set here. For a clock,
+            the line under the field says what the schedule means in words and the next three times
+            it will fire; if it cannot say, the schedule is one this fleet cannot run. And if you
+            leave mid-edit, the next visit offers you that draft back rather than loading it
+            behind your back — what you see on arrival is always the wiring that is live.
+          </p>
+          <p>
             <strong>Trying things safely.</strong> &ldquo;Test this draft&rdquo; runs a draft
             against real evidence with real models but writes nothing — you see what every step
             would have found and what it cost, with zero trace in Runs. A custom routine runs by

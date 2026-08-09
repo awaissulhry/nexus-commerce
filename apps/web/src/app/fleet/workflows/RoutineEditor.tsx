@@ -148,7 +148,12 @@ export function RoutineEditor({
   onDone: (changed: boolean) => void
 }) {
   const [draft, setDraft] = useState<WfDefinition>(baseline)
-  const [restored, setRestored] = useState(false)
+  /* S5.d — the stored draft is OFFERED, not applied. It used to load itself
+     and announce that in one quiet line; Power Automate treats the same moment
+     as a banner with an explicit Recover command, and it is right to: what is
+     on screen when you arrive should be what you published, unless you say
+     otherwise. */
+  const [pendingRestore, setPendingRestore] = useState<WfDefinition | null>(null)
   const [dialog, setDialog] = useState<'none' | 'save' | 'publish' | 'test'>('none')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -163,10 +168,7 @@ export function RoutineEditor({
       const stored = localStorage.getItem(draftKey(routineKey))
       if (stored) {
         const parsed = JSON.parse(stored) as WfDefinition
-        if (!diffIsEmpty(computeDiff(baseline, parsed))) {
-          setDraft(parsed)
-          setRestored(true)
-        }
+        if (!diffIsEmpty(computeDiff(baseline, parsed))) setPendingRestore(parsed)
       }
     } catch {
       /* a corrupt stored draft is silently ignored — baseline stands */
@@ -174,12 +176,24 @@ export function RoutineEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routineKey])
   useEffect(() => {
+    /* While an offer is open the stored draft is the operator's to keep or
+       drop, so it is not overwritten underneath them. */
+    if (pendingRestore) return
     try {
       localStorage.setItem(draftKey(routineKey), JSON.stringify(draft))
     } catch {
       /* storage full — editing still works, only the mirror is lost */
     }
-  }, [draft, routineKey])
+  }, [draft, routineKey, pendingRestore])
+
+  /* Every edit goes through here, so touching the wiring while an offer is
+     open counts as answering it: you chose what is on screen. Without this the
+     mirror would stay suspended and the new edits would be the ones lost —
+     the opposite of what the mirror is for. */
+  const edit = useCallback((fn: (d: WfDefinition) => WfDefinition) => {
+    setPendingRestore(null)
+    setDraft(fn)
+  }, [])
 
   const byKey = useMemo(() => new Map(charters.map((c) => [c.key, c])), [charters])
   const present = useMemo(() => new Set(draft.steps.map((s) => s.charterKey)), [draft])
@@ -218,13 +232,13 @@ export function RoutineEditor({
   const badCron = draft.trigger.type === 'schedule' && !cronIsEvaluable(draft.trigger.cron)
 
   const setGate = (charterKey: string, gate: 'ask' | 'act' | 'inherit') =>
-    setDraft((d) => ({
+    edit((d) => ({
       ...d,
       steps: d.steps.map((s) => (s.charterKey === charterKey ? { ...s, gate } : s)),
     }))
 
   const toggleEdge = (from: string, to: string, artifact: 'finding' | 'plan' | 'strategy') =>
-    setDraft((d) => {
+    edit((d) => {
       const exists = d.edges.some((e) => e.from === from && e.to === to)
       return {
         ...d,
@@ -235,10 +249,10 @@ export function RoutineEditor({
     })
 
   const addStep = (charterKey: string) =>
-    setDraft((d) => ({ ...d, steps: [...d.steps, { charterKey, gate: 'inherit' }] }))
+    edit((d) => ({ ...d, steps: [...d.steps, { charterKey, gate: 'inherit' }] }))
 
   const removeStep = (charterKey: string) =>
-    setDraft((d) => ({
+    edit((d) => ({
       ...d,
       steps: d.steps.filter((s) => s.charterKey !== charterKey),
       edges: d.edges.filter((e) => e.from !== charterKey && e.to !== charterKey),
@@ -382,10 +396,30 @@ export function RoutineEditor({
         clock re-arms if the trigger changed, and every run stamps the revision that ran it.
       </div>
 
-      {restored ? (
-        <p className="wf-vnote">
-          Restored an unsaved draft from this browser. Discard returns to the active wiring.
-        </p>
+      {pendingRestore ? (
+        <div className="wf-restore" role="status">
+          <span>
+            You left an unsaved draft of this routine in this browser. Nothing on screen has
+            changed yet — what you see is the wiring that is live.
+          </span>
+          <span className="wf-restoreacts">
+            <button
+              className="acr-btn"
+              onClick={() => { setDraft(pendingRestore); setPendingRestore(null) }}
+            >
+              Use that draft
+            </button>
+            <button
+              className="acr-btn"
+              onClick={() => {
+                try { localStorage.removeItem(draftKey(routineKey)) } catch { /* mirror only */ }
+                setPendingRestore(null)
+              }}
+            >
+              Throw it away
+            </button>
+          </span>
+        </div>
       ) : null}
 
       <div className="wf-editgrid">
@@ -408,7 +442,7 @@ export function RoutineEditor({
                   type="button"
                   className={`acr-pg-rung ${draft.trigger.type === 'schedule' ? 'on' : ''}`}
                   onClick={() =>
-                    setDraft((d) => ({
+                    edit((d) => ({
                       ...d,
                       trigger: {
                         type: 'schedule',
@@ -425,7 +459,7 @@ export function RoutineEditor({
                 <button
                   type="button"
                   className={`acr-pg-rung ${draft.trigger.type === 'manual' ? 'on' : ''}`}
-                  onClick={() => setDraft((d) => ({ ...d, trigger: { type: 'manual' } }))}
+                  onClick={() => edit((d) => ({ ...d, trigger: { type: 'manual' } }))}
                 >
                   Manual
                 </button>
@@ -443,7 +477,7 @@ export function RoutineEditor({
                     aria-invalid={badCron}
                     aria-describedby="wf-cron-means"
                     onChange={(e) =>
-                      setDraft((d) => ({
+                      edit((d) => ({
                         ...d,
                         trigger: { type: 'schedule', cron: e.target.value },
                       }))
@@ -455,7 +489,7 @@ export function RoutineEditor({
                       id: c,
                       label: prettyCron(c),
                       onSelect: () =>
-                        setDraft((d) => ({ ...d, trigger: { type: 'schedule', cron: c } })),
+                        edit((d) => ({ ...d, trigger: { type: 'schedule', cron: c } })),
                     }))}
                   />
                 </div>

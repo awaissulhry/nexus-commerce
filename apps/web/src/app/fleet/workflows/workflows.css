@@ -1074,6 +1074,11 @@
 }
 .wf-stephead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .wf-stephead .nm { font-weight: 650; color: #26313f; font-size: 12.5px; }
+/* S5.d — `.acr-pg-muted` carries a colour and no size, so the tier suffix fell
+   through to the ROOT 16px and rendered larger than the worker's own name
+   beside it at 12.5px. Seven of them, on every step head. Found by counting
+   the type scale, not by looking. */
+.wf-stephead .acr-pg-muted { font-size: 11.5px; }
 .wf-stepremove {
   background: none;
   border: 0;
@@ -1094,6 +1099,15 @@
   margin-bottom: 4px;
 }
 .wf-gate .acr-pg-ladder { max-width: 280px; }
+/* S5.d — the ladder rungs are the controls the operator actually operates and
+   they measured 4.38:1 at 11px/700. `.acr-pg-rung` lives in the FROZEN
+   `fleet-pages.css`, so it is overridden here, scoped to this page.
+   `:not(.on)` and not bare `.acr-pg-rung`: the selected rung is white on blue
+   (5.00:1, fine) and a bare override would have EQUAL specificity to
+   `.acr-pg-rung.on`, which falls through to source order — the exact trap that
+   shipped twice in S3R reading as fixed. #5f6a78 is already one of this
+   page's four greys: 5.51:1. */
+.wf-page .acr-pg-rung:not(.on) { color: #5f6a78; }
 
 .wf-handsto { display: flex; flex-direction: column; gap: 3px; }
 .wf-handopt {
@@ -1112,6 +1126,25 @@
   color: #5a6675;
 }
 
+/* S5.d — the recovered draft is a moment, not a side-effect. */
+.wf-restore {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid #d7e2f2;
+  background: #f4f8fd;
+  border-radius: 9px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #34404f;
+}
+.wf-restore > span:first-child { flex: 1 1 340px; min-width: 0; }
+.wf-restoreacts { display: flex; gap: 8px; flex: none; }
+
 /* ── S5.c: the error rides the card that caused it ───────────────────────
    The checklist stays as the summary; these are the marks that say WHICH
    card. Power Automate's designer does both, and this editor had only the
@@ -1123,9 +1156,9 @@
   align-items: flex-start;
   gap: 7px;
   margin: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.5;
-  font-weight: 600;
+  font-weight: 650;
   color: #a3312c;
 }
 .wf-cardproblem svg { flex: none; margin-top: 2px; }
@@ -1133,7 +1166,7 @@
 /* The gate ladder tightens and never loosens, and three identical rungs said
    nothing about that. The lock marks the loosest rung; the label states the
    direction once per card, where the control is. */
-.wf-gatedir { font-weight: 600; letter-spacing: 0; text-transform: none; color: #6b7480; }
+.wf-gatedir { font-weight: 650; letter-spacing: 0; text-transform: none; color: #6b7480; }
 .acr-pg-rung.has-floor { display: inline-flex; align-items: center; gap: 5px; }
 .acr-pg-rung.has-floor svg { flex: none; opacity: 0.75; }
 
@@ -1191,7 +1224,7 @@
   color: #34404f;
   padding: 6px 9px;
 }
-.wf-sub.wf-cronbad { color: #a3312c; font-weight: 600; }
+.wf-sub.wf-cronbad { color: #a3312c; font-weight: 650; }
 .wf-cronfires {
   display: block;
   font-size: 11.5px;
