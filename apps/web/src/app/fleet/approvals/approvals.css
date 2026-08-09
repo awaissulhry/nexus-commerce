@@ -909,6 +909,12 @@
   margin: 0 0 5px;
   font-size: 11.5px;
   color: #6b7688;
+  /* S5.6 — measured at 325-334 REAL characters at a 1920 viewport, four times
+     WCAG 1.4.8's ceiling. S5.3 gave `.aq-outwhy` a measure and this line, which
+     S5.1 had just rewritten, never got one: the sentence got longer and more
+     worth reading at the same moment it lost any cap. Counted in characters,
+     not in `ch` — `ch` has over-measured this page twice. */
+  max-width: 58ch;
 }
 /* The `<code>` chip that used to hold the raw agent key is gone with S5.1, and
    so is its rule — a style whose only element no longer exists is the kind of
