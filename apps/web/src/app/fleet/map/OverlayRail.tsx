@@ -65,11 +65,15 @@ export function OverlayRail({
             </button>
           ))}
         </div>
-        <p className="sbm-orail-q">{overlay.question}</p>
       </div>
 
+      {/* S3R — the overlay's question heads the legend rather than trailing the
+          picker. It is the one sentence that tells a first-time reader what the
+          colour channel is FOR, and it was the faintest important text in the
+          section (3.62:1) sitting under a generic "What the colours mean". A
+          legend title should be the meaningful one. */}
       <div className="sbm-orail-sec">
-        <h3>What the colours mean</h3>
+        <h3 className="sbm-orail-q">{overlay.question}</h3>
         <ul className="sbm-legend">
           {buckets.map((b) => (
             <li key={b.id}>

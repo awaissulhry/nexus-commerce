@@ -1422,13 +1422,20 @@
   padding-top: 12px;
   border-top: 1px solid #eef2f6;
 }
+/* S3R — every colour in this rail that was typed as an *aside* rather than as a
+   label was set to #9aa5b3 or #7d879a and never measured: three headings at
+   2.50:1, the overlay's question at 3.62:1, all six legend notes at 2.50:1 and
+   the filtering rule at 2.50:1 — 11 of the rail's 30 text nodes. They are not
+   decoration. The headings name the rail's three jobs, the notes ARE the
+   legend, and the footnote states the page's filtering law. Secondary is
+   carried by size and weight; it is not carried by 2.5:1. */
 .sbm-orail h3 {
   margin: 0 0 7px;
   font-size: 10.5px;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1; now 6.31:1 on the rail's white */
 }
 .sbm-seg.vertical {
   display: flex;
@@ -1443,17 +1450,34 @@
   text-align: left;
   padding: 6px 9px;
 }
-.sbm-orail-q {
-  margin: 8px 0 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: #7d879a;
+/*
+ * S3R — the question is now the legend's HEADING, not a footnote under the
+ * picker.
+ *
+ * A legend title should be meaningful rather than generic — "Population per
+ * Square Mile", not "Legend" or "Key" (US federal data design standard). We had
+ * a meaningful title already written and were printing it in the faintest text
+ * in the section (3.62:1), UNDER a generic one. Swapping their roles costs no
+ * height and hands the beginner the orienting sentence first.
+ *
+ * ⚠ `.sbm-orail h3` is (0,1,1) and `.sbm-orail-q` alone is (0,1,0), so the bare
+ * class LOSES to the group rule and the question would render uppercase and
+ * letter-spaced. It needs the element in the selector as well as being later.
+ */
+.sbm-orail h3.sbm-orail-q {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
+  color: #364152; /* was #7d879a = 3.62:1; now 10.32:1, matching the labels below it */
 }
 .sbm-orail-foot {
   margin: 9px 0 0;
   font-size: 10.5px;
   line-height: 1.45;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1 */
 }
 
 .sbm-legend {
@@ -1479,7 +1503,7 @@
 }
 .sbm-legend .note {
   font-size: 10px;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1, on the rail's only real content */
   line-height: 1.4;
 }
 .sbm-swatch {
