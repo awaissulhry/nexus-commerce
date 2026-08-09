@@ -195,11 +195,10 @@ export function AssignmentClient({ id }: { id: string }) {
   })()
 
   return (
-    /* S3.d — a root class this page alone wears. It had none, so every
-       page-local override Part 11 wrote under `.as-page` missed it entirely —
-       the same shape as `.as-page` failing to reach the portalled drawer in
-       Part 12, one component further out. */
-    <div className="as-detail">
+    /* The root moved to the shell at S4.d (`rootClass="as-detail"`), so this is
+       a fragment. It had no root at all before S3, which is why Part 11's
+       overrides silently missed this route. */
+    <>
       <Link className="as-backlink" href="/fleet/assignments">
         <ArrowLeft size={13} /> All assignments
       </Link>
@@ -648,7 +647,7 @@ export function AssignmentClient({ id }: { id: string }) {
         </div>
       )}
 
-    </div>
+    </>
   )
 }
 

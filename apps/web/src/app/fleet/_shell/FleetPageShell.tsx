@@ -9,6 +9,7 @@ export function FleetPageShell({
   title,
   sub,
   aside,
+  rootClass,
   children,
 }: {
   title: string
@@ -37,10 +38,31 @@ export function FleetPageShell({
    * loaded its data.
    */
   aside?: ReactNode
+  /**
+   * NAF.SB.AS-S4R / S4.d — a page identity on the shell's own root.
+   *
+   * **The problem this exists to end, recorded four times on one page.** A
+   * page-local override reaches exactly the subtree its root wraps, and this
+   * shell emitted `<div className="acr">` with no page identity — so every page
+   * wanting a local override had to invent its own root and wrap its own
+   * children. Assignments discovered that four separate times: `.as-page` for
+   * the list, `.as-detail` for the detail route (which had none, so Part 11's
+   * overrides silently missed it), and twice for drawers.
+   *
+   * **What this does NOT solve, and must not be mistaken for solving it:** a
+   * PORTAL escapes every ancestor, so a portalled Drawer or menu can never be
+   * reached by this or any other page-level class. Those still need a root of
+   * their own passed to the component. The rule in full: *a page-local override
+   * reaches exactly the subtree its root wraps, and a portal is never in it.*
+   *
+   * Additive and defaulted: the other pages pass nothing and render
+   * byte-identically — `acr` with no trailing space.
+   */
+  rootClass?: string
   children: ReactNode
 }) {
   return (
-    <div className="acr">
+    <div className={rootClass ? `acr ${rootClass}` : 'acr'}>
       <header className="acr-head">
         <div>
           <h1>{title}</h1>

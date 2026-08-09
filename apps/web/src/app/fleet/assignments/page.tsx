@@ -29,6 +29,7 @@ export default function Page() {
     <FleetPageShell
       title="Assignments"
       sub="Give one worker one job on one thing, and watch it through."
+      rootClass="as-page"
     >
       <AssignmentsClient />
     </FleetPageShell>

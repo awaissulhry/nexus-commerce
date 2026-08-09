@@ -478,15 +478,13 @@ export function AssignmentsClient() {
 
   if (error && !rows) {
     return (
-      <div className="as-page">
-        <div className="acr-pg-empty">
-          <AlertTriangle size={18} />
-          <p>Could not load assignments.</p>
-          <p className="acr-pg-muted">{error}</p>
-          <button className="acr-pg-sortbtn" onClick={refresh}>
-            Try again
-          </button>
-        </div>
+      <div className="acr-pg-empty">
+        <AlertTriangle size={18} />
+        <p>Could not load assignments.</p>
+        <p className="acr-pg-muted">{error}</p>
+        <button className="acr-pg-sortbtn" onClick={refresh}>
+          Try again
+        </button>
       </div>
     )
   }
@@ -494,7 +492,10 @@ export function AssignmentsClient() {
   const hasAny = (rows?.length ?? 0) > 0
 
   return (
-    <div className="as-page">
+    /* The root now lives on the shell (`rootClass="as-page"`), so this is a
+       plain fragment again — one wrapper div fewer and the class at the top
+       where the next person will find it. */
+    <>
       <p className="acr-pg-intro">
         An <Term k="assignment">assignment</Term> is one{' '}
         <Term k="worker">worker</Term> pointed at one{' '}
@@ -734,7 +735,7 @@ export function AssignmentsClient() {
           }}
         />
       )}
-    </div>
+    </>
   )
 }
 
