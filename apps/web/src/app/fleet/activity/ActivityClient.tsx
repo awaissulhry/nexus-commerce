@@ -53,7 +53,7 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, Drawer, type Column } from '@/design-system/components'
 import { FilterBar, GridToolbar, type FilterBarOption, type FilterDimension } from '@/design-system/patterns'
 import {
   Button,
@@ -736,42 +736,18 @@ function PlanDrawer({
   labels: PlanLabels
   onClose: () => void
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
+  /* S5R — the DS `Drawer` owns Escape, the focus trap, the portal and the
+     focus return. This copy declared `aria-modal` and honoured none of them. */
   return (
-    <div
-      className="sba-drawerwrap"
-      role="dialog"
-      aria-modal="true"
-      aria-label="The plan"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="sba-drawer">
-        <header className="sba-drawerhead">
-          <h3>The plan</h3>
-          <button className="acr-btn" onClick={onClose} aria-label="Close">
-            <X size={14} />
-          </button>
-        </header>
-        <div className="sba-drawerbody">
-          {plan ? (
-            <PlanStory plan={plan} labels={labels} />
-          ) : (
-            <p className="acr-pg-muted">
-              That plan is no longer on record — it may have been cleared since this event.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+    <Drawer open onClose={onClose} title="The plan" width={620} className="sba-drawer fleet-portal">
+      {plan ? (
+        <PlanStory plan={plan} labels={labels} />
+      ) : (
+        <p className="acr-pg-muted">
+          That plan is no longer on record — it may have been cleared since this event.
+        </p>
+      )}
+    </Drawer>
   )
 }
 

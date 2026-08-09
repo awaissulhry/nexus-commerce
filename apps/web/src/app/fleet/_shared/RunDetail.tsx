@@ -34,7 +34,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Check, Copy, X } from 'lucide-react'
+import { AlertTriangle, Check, Copy } from 'lucide-react'
+import { Drawer } from '@/design-system/components'
 
 /* ── the shape the trace endpoint returns (fleet-trace.service.ts) ─────── */
 
@@ -105,6 +106,56 @@ function fmtCost(usd: number): string {
   return usd > 0 ? `$${usd.toFixed(4)}` : '—'
 }
 
+/** How much of an error a reader can take before it stops being a message and
+ *  becomes a wall. Measured on production: one step's schema-validation error
+ *  is 1,366 characters, rendered 322px tall — 31% of the drawer's scroll
+ *  height, for one line of the six sections. */
+const ERROR_PREVIEW = 240
+
+/**
+ * A verbatim error, verbatim — but not first.
+ *
+ * Part 3 asks for "the verbatim error on a failed step", and it is right: a
+ * truncated error is useless to whoever has to fix it. It does not follow that
+ * the whole of it should be the first thing in the drawer. The cause is almost
+ * always in the opening clause (`narrative: Too big` here); the remaining 1,100
+ * characters are an enumeration of every enum value the validator knows.
+ *
+ * So: the opening, then the length, then the choice. Copy takes the WHOLE
+ * message whatever is on screen, because the support case this protects is
+ * served by pasting rather than by scrolling.
+ */
+function VerbatimError({ text, tone }: { text: string; tone: 'bad' | 'warn' }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const long = text.length > ERROR_PREVIEW
+  const shown = open || !long ? text : `${text.slice(0, ERROR_PREVIEW).trimEnd()}…`
+  return (
+    <div className={tone === 'bad' ? 'sba-dbad' : 'sba-dwarn'}>
+      <p className="sba-derrtext">{shown}</p>
+      {long ? (
+        <p className="sba-derractions">
+          <button type="button" className="sba-inlinebtn" onClick={() => setOpen(!open)}>
+            {open ? 'Show less' : `Show the whole message (${text.length.toLocaleString()} characters)`}
+          </button>
+          <button
+            type="button"
+            className="sba-inlinebtn"
+            onClick={() => {
+              void navigator.clipboard?.writeText(text)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 2000)
+            }}
+          >
+            {copied ? 'Copied' : 'Copy it'}
+          </button>
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+
 /** Why the run happened, as a sentence. Mirrors the spine's vocabulary. */
 function whyItRan(run: RunTrace['run']): string {
   const by = run.trigger === 'schedule' ? 'a schedule started it' : 'a person started it by hand'
@@ -143,7 +194,18 @@ export function RunDetail({
     fetch(`${backend}/api/agent/fleet/runs/${runId}/trace`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 404 ? 'That run is no longer on record.' : `trace: ${r.status}`)
-        return (await r.json()) as RunTrace
+        const body = (await r.json()) as Partial<RunTrace> | null
+        // S5R — guard the SHAPE, not only the arrays. This file's header has
+        // always said "an INCOMPLETE trace response has twice taken the worker
+        // page down through its error boundary, so every array here is guarded"
+        // — and then read `trace.run.trigger` without checking `run` existed.
+        // A 200 carrying the wrong object crashed the whole page through the
+        // error boundary, which is the same failure the arrays were guarded
+        // against, arriving through the one door nobody checked.
+        if (!body || typeof body !== 'object' || !body.run) {
+          throw new Error('That run came back in a shape this page cannot read.')
+        }
+        return body as RunTrace
       })
       .then((t) => live && setTrace(t))
       .catch((e: unknown) => live && setErr(e instanceof Error ? e.message : String(e)))
@@ -152,14 +214,12 @@ export function RunDetail({
     }
   }, [backend, runId])
 
-  /* Escape closes. A drawer you cannot dismiss from the keyboard is a trap. */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  /* Escape, the focus trap, the portal and the focus return belong to the DS
+     `Drawer` since S5R. The hand-rolled shell met exactly ONE of the five
+     WAI-ARIA APG requirements for the `role="dialog" aria-modal="true"` it
+     declared — Escape — and measured 51 Tab presses to reach from the top of
+     the page, against the 41 that made the Assignments stream fix the shared
+     component for all 22 of its consumers. */
 
   const copyDetails = useCallback(() => {
     if (!trace) return
@@ -191,24 +251,8 @@ export function RunDetail({
   )
 
   return (
-    <div
-      className="sba-drawerwrap"
-      role="dialog"
-      aria-modal="true"
-      aria-label="What this run did"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="sba-drawer">
-        <header className="sba-drawerhead">
-          <h3>What it did</h3>
-          <button className="acr-btn" onClick={onClose} aria-label="Close">
-            <X size={14} />
-          </button>
-        </header>
-
-        <div className="sba-drawerbody">
+    <Drawer open onClose={onClose} title="What it did" width={620} className="sba-drawer fleet-portal">
+      <>
           {err ? (
             <div className="acr-banner err">
               <AlertTriangle size={14} aria-hidden />
@@ -241,7 +285,7 @@ export function RunDetail({
                   </p>
                 ) : null}
                 {trace.run.errorMessage ? (
-                  <p className="sba-dbad">{trace.run.errorMessage}</p>
+                  <VerbatimError text={trace.run.errorMessage} tone="bad" />
                 ) : null}
               </section>
 
@@ -268,7 +312,9 @@ export function RunDetail({
                             ? ' · this is where the money went'
                             : ''}
                         </span>
-                        {s.errorMessage ? <p className="sba-dbad">{s.errorMessage}</p> : null}
+                        {s.errorMessage ? (
+                          <VerbatimError text={s.errorMessage} tone="bad" />
+                        ) : null}
                       </li>
                     ))}
                   </ol>
@@ -386,8 +432,7 @@ export function RunDetail({
               </section>
             </>
           )}
-        </div>
-      </div>
-    </div>
+      </>
+    </Drawer>
   )
 }

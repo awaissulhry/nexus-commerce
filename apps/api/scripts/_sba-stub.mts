@@ -12,6 +12,7 @@ import { createServer } from 'node:http'
 const { getFleetTimeline } = await import('../src/services/agent-fleet/fleet-timeline.service.js')
 const { getFleetState } = await import('../src/services/agent-fleet/fleet-state.service.js')
 const { listCharters } = await import('../src/services/agent-fleet/charter-registry.js')
+const { getRunTrace } = await import('../src/services/agent-fleet/fleet-trace.service.js')
 
 /**
  * S1R — state simulation, so the three header states that real data cannot
@@ -182,6 +183,14 @@ async function handle(url: URL): Promise<unknown> {
   }
 
   if (p.endsWith('/charters')) return { charters: await listCharters() }
+
+  /* S5R — the drawer's read. The stub never served it, so every previous
+     verification of this page happened with the drawer either unopened or
+     pointed at the real API. Opening it here returned the stub's own
+     `{ error: 'stub does not serve …' }` with a 200, which the drawer trusted
+     and crashed on — a genuine robustness gap, now guarded in RunDetail. */
+  const trace = /\/runs\/([^/]+)\/trace$/.exec(p)
+  if (trace) return (await getRunTrace(trace[1]!)) ?? { error: 'no such run' }
 
   if (p.endsWith('/timeline')) {
     const isBandRead = q.get('kind') === BAND_KINDS

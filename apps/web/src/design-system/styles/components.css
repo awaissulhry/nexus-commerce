@@ -306,6 +306,12 @@
 .h10-ds-drawer-b {
   flex: 1;
   overflow-y: auto;
+  /* NAF.SB.ACT.S5R — without this, scrolling past the end of a drawer chains
+     into the page behind it, so the thing you were reading slides away under a
+     panel you did not close. Fixed here rather than in one feature for the same
+     reason this component's focus trap is here: 22 files render it. Safe across
+     browsers since 2022. */
+  overscroll-behavior: contain;
   padding: 16px 18px;
   font-size: 13px;
   color: var(--text-secondary);

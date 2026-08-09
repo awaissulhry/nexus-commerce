@@ -16,10 +16,25 @@
    margin cancels AppShell's wrapper gutter (p-3 / md:p-6) so the fleet owns
    its own edges and the background reaches them; `main` starts at y=0 with
    no top bar, so 100dvh is exactly one viewport. */
-.fleet-surface {
-  margin: -12px;
-  min-height: 100dvh;
-  background: #f4f6f9;
+/* NAF.SB.ACT.S5R — `.fleet-portal` carries the SAME pin for anything that
+   renders OUTSIDE this subtree.
+
+   The pin below works by re-declaring custom properties on an ancestor, so it
+   only reaches descendants of `.fleet-surface`. A DS `Drawer` (and `Modal`,
+   and `Toast`) portals to `<body>` — outside it — where the app's `.dark`
+   block wins again. Measured when Activity's drawer adopted the DS component:
+   the panel rendered `rgb(24, 38, 59)` while the fleet's hard-coded content
+   colours stayed near-black, so the step labels were black on navy.
+
+   That is the identical failure this pin was written for at W.1, arriving
+   through the one door the pin cannot reach. Any fleet page that portals a DS
+   component needs `.fleet-portal` on it; the values are shared, not copied, so
+   the two can never drift.
+
+   `.fleet-surface`'s own geometry stays its own — a portal must not inherit a
+   full-viewport background. */
+.fleet-surface,
+.fleet-portal {
   color: #1c2530;
   color-scheme: light;
 
@@ -83,6 +98,12 @@
   --h10-border: var(--h10-grey-200);
   --h10-border-subtle: var(--h10-grey-150);
   --h10-border-strong: var(--h10-grey-300);
+}
+
+.fleet-surface {
+  margin: -12px;
+  min-height: 100dvh;
+  background: #f4f6f9;
 }
 @media (min-width: 768px) {
   .fleet-surface { margin: -24px; }
