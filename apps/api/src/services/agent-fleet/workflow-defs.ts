@@ -203,9 +203,15 @@ export function sampleFindings(output: unknown): TestFindingSample[] {
   for (const f of findings.slice(0, TEST_SAMPLE_CAP)) {
     if (!f || typeof f !== 'object') continue
     const r = f as Record<string, unknown>
-    const label = typeof r.entityName === 'string' && r.entityName
+    /* Prod, on the audit run's rows: a SEARCH_TERM finding has no entityName
+       and its id is `<adGroupId>:<term>` — "405139580483411:motorrad jacke
+       herren". Rendered in a card that ellipsises the END, that shows the
+       fifteen digits nobody can use and hides the words that identify it.
+       So when an id is a numeric key joined to text, the text is the label. */
+    const raw = typeof r.entityName === 'string' && r.entityName
       ? r.entityName
       : typeof r.entityId === 'string' ? r.entityId : '(unnamed)'
+    const label = /^\d+:.+/.test(raw) ? raw.slice(raw.indexOf(':') + 1) : raw
     out.push({
       label,
       kind: typeof r.kind === 'string' ? r.kind : '',

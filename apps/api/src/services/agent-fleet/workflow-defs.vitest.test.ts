@@ -225,6 +225,21 @@ describe('would-be findings sample (WF-S6.d)', () => {
     expect(sampleFindings(previewOutput(50))).toHaveLength(TEST_SAMPLE_CAP)
   })
 
+  it('takes the readable half of a `<numericId>:<term>` entity id', () => {
+    // The shape prod actually produced for SEARCH_TERM findings.
+    const out = { preview: true, data: { findings: [
+      finding({ entityName: undefined, entityId: '405139580483411:motorrad jacke herren' }),
+    ] } }
+    expect(sampleFindings(out)[0]!.label).toBe('motorrad jacke herren')
+  })
+
+  it('leaves an id that is not that shape alone', () => {
+    for (const [id, want] of [['kw-42', 'kw-42'], ['12345', '12345'], ['a:b', 'a:b'], ['9:', '9:']]) {
+      const out = { preview: true, data: { findings: [finding({ entityName: undefined, entityId: id })] } }
+      expect(sampleFindings(out)[0]!.label).toBe(want)
+    }
+  })
+
   it('falls back to the entity id when a finding has no name', () => {
     const out = { preview: true, data: { findings: [finding({ entityName: undefined, entityId: 'kw-42' })] } }
     expect(sampleFindings(out)[0]!.label).toBe('kw-42')
