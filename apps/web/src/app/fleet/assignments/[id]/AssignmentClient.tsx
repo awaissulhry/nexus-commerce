@@ -13,7 +13,7 @@
  *    a filter is a sign the reader wanted Activity.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Play, Check, X, RotateCcw, Trash2, Loader2 } from 'lucide-react'
@@ -81,6 +81,7 @@ export function AssignmentClient({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmStart, setConfirmStart] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -138,6 +139,7 @@ export function AssignmentClient({ id }: { id: string }) {
       } finally {
         setBusy(null)
         setConfirmStart(false)
+        setConfirmDelete(false)
       }
     },
     [id, load, router],
@@ -160,10 +162,16 @@ export function AssignmentClient({ id }: { id: string }) {
   const latest = a.runs[0] ?? null
   const running = a.state === 'running'
   const everRan = a.runs.length > 0
+  /** Open = not filed away. `open` is a reserved-ish word in JSX props here. */
+  const open_ = a.state !== 'closed' && a.state !== 'cancelled'
 
   return (
-    <>
-      <Link className="acr-pg-sortbtn" href="/fleet/assignments" style={{ marginBottom: 14 }}>
+    /* S3.d — a root class this page alone wears. It had none, so every
+       page-local override Part 11 wrote under `.as-page` missed it entirely —
+       the same shape as `.as-page` failing to reach the portalled drawer in
+       Part 12, one component further out. */
+    <div className="as-detail">
+      <Link className="as-backlink" href="/fleet/assignments">
         <ArrowLeft size={13} /> All assignments
       </Link>
 
@@ -248,50 +256,104 @@ export function AssignmentClient({ id }: { id: string }) {
         )}
       </div>
 
-      {/* actions */}
-      <div className="as-actions" style={{ marginBottom: 20 }}>
-        {a.state !== 'closed' && a.state !== 'cancelled' && (
-          <button
-            className="acr-pg-sortbtn"
-            disabled={running || !!busy}
-            onClick={() => setConfirmStart(true)}
-            title={
-              running
-                ? 'A run is already open. There is no way to stop it — it ends on its own or on a budget.'
-                : 'Runs this worker now. This calls a model, which is real spend.'
-            }
-          >
-            {busy === '/start' ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
-            {everRan ? 'Start again' : 'Start it'}
-          </button>
+      {/**
+        * S3.a — THREE TIERS, and only one of them spends.
+        *
+        * Everything here used to be `acr-pg-sortbtn`: transparent, borderless,
+        * 16px. Measured on the first render of this page, *Start it* sat 85px
+        * from *Delete* with nothing to tell them apart — and NN/g names
+        * consequential options next to benign ones a top-ten application design
+        * mistake. The one that calls a model and spends real money looked
+        * exactly like the one that files the job away.
+        *
+        * The rule this encodes: **an action's appearance here is a statement
+        * about its consequence, not about its importance.**
+        */}
+      <div className="as-actbar">
+        {open_ && (
+          <div className="as-spendzone">
+            <span className="as-spendlabel">Running this costs money</span>
+            <button
+              className="acr-btn go"
+              disabled={running || !!busy}
+              onClick={() => setConfirmStart(true)}
+              title={
+                running
+                  ? 'A run is already open. There is no way to stop it — it ends on its own, on a budget, or is closed after two hours.'
+                  : 'Runs this worker now. This calls a model, which is real spend.'
+              }
+            >
+              {busy === '/start' ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
+              {everRan ? 'Start again' : 'Start it'}
+            </button>
+            <span className="as-spendnote">
+              {running
+                ? 'A run is open. It ends on its own, on a budget, or is closed after two hours.'
+                : a.worker
+                  ? `Up to $${a.worker.dailyBudgetUSD.toFixed(2)} today, across every run of this worker.`
+                  : 'It calls a model, which is real spend.'}
+            </span>
+          </div>
         )}
-        {a.state !== 'closed' && a.state !== 'cancelled' && everRan && (
-          <button className="acr-pg-sortbtn" disabled={!!busy} onClick={() => act('/close')}>
-            <Check size={13} /> Close
-          </button>
-        )}
-        {a.state !== 'closed' && a.state !== 'cancelled' && !everRan && (
-          <button className="acr-pg-sortbtn" disabled={!!busy} onClick={() => act('/cancel')}>
-            <X size={13} /> Cancel
-          </button>
-        )}
-        {(a.state === 'closed' || a.state === 'cancelled') && (
-          <button className="acr-pg-sortbtn" disabled={!!busy} onClick={() => act('/reopen')}>
-            <RotateCcw size={13} /> Reopen
-          </button>
-        )}
+
+        <div className="as-actgroup">
+          {open_ && everRan && (
+            <button
+              className="acr-btn"
+              disabled={!!busy || running}
+              onClick={() => act('/close')}
+              /* S3.e — the list's row menu disables Close during a run with
+                 this sentence; this page used to offer it. Two surfaces
+                 disagreeing about one action on one object is worse than
+                 either answer. */
+              title={
+                running
+                  ? 'A run is open right now. Wait for it to come back — closing it would not stop it.'
+                  : 'Done with it. Its runs and findings are kept, and Reopen puts it back.'
+              }
+            >
+              <Check size={13} /> Close
+            </button>
+          )}
+          {open_ && !everRan && (
+            <button
+              className="acr-btn"
+              disabled={!!busy}
+              onClick={() => act('/cancel')}
+              title="You called it off before it ran. Kept apart from Closed on purpose, and reversible."
+            >
+              <X size={13} /> Cancel
+            </button>
+          )}
+          {!open_ && (
+            <button
+              className="acr-btn"
+              disabled={!!busy}
+              onClick={() => act('/reopen')}
+              title="Puts it back among the open assignments, exactly as it was."
+            >
+              <RotateCcw size={13} /> Reopen
+            </button>
+          )}
+        </div>
+
         {!everRan && (
-          <button
-            className="acr-pg-sortbtn"
-            disabled={!!busy}
-            onClick={() => act('', undefined, 'DELETE')}
-            title="Deletes it outright. Only possible because it has never run — once it has, its runs are the record and Close is the right ending."
-          >
-            <Trash2 size={13} /> Delete
-          </button>
+          <div className="as-actdanger">
+            <button
+              className="acr-btn stop"
+              disabled={!!busy}
+              onClick={() => setConfirmDelete(true)}
+              title="Removes it outright. Only possible because it has never run — once it has, its runs are the record and Close is the right ending."
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
         )}
-        <span style={{ flex: 1 }} />
-        <span className="acr-pg-muted">{asOf ? `as of ${asOf.toLocaleTimeString()}` : ''}</span>
+
+        <span className="as-actspacer" />
+        <span className="as-asofdetail" title="The time of the last successful read. This page re-reads itself about every 10 seconds while the tab is visible.">
+          {asOf ? `as of ${asOf.toLocaleTimeString()}` : ''}
+        </span>
       </div>
 
       {toast && (
@@ -304,38 +366,82 @@ export function AssignmentClient({ id }: { id: string }) {
       )}
       {error && <div className="as-err" style={{ marginBottom: 16 }}>{error}</div>}
 
+      {/**
+        * S3.a — a confirm that actually interrupts.
+        *
+        * This used to be `.acr-pg-confirm` WITHOUT `.acr-pg-confirmwrap` — the
+        * white card with the half that makes it a confirmation removed. On the
+        * live page that measured as: no overlay, no `role="dialog"`, focus
+        * never leaving `BODY`, **254px of content shoved down** when it opened,
+        * and the page behind fully clickable — you could press Delete while
+        * "spend money?" was on screen.
+        *
+        * `.acr-pg-confirmwrap` is the fleet's own pattern (Workflows ×4, the
+        * shared autonomy dial ×2) and its stylesheet comment states the rule:
+        * *"a change that starts spending should interrupt, and should survive a
+        * page blur."* It is `position: fixed`, so it also costs zero reflow.
+        *
+        * Focus lands on the SAFE option, and Escape takes it. The research is
+        * blunt about both: the safe path is the default, and focus must never
+        * land on the consequential action.
+        */}
       {confirmStart && a.worker && (
-        <div className="acr-pg-confirm" style={{ marginBottom: 18 }}>
+        <ConfirmPanel
+          titleId="as-confirm-start"
+          heading={`Run ${a.worker.name} now?`}
+          onCancel={() => setConfirmStart(false)}
+          cancelLabel="Not now"
+          confirmLabel={everRan ? 'Start again' : 'Start it'}
+          confirmIcon={<Play size={13} />}
+          confirmTone="go"
+          busy={!!busy}
+          onConfirm={() => act('/start')}
+        >
           <p>
-            Run <strong>{a.worker.name}</strong> on{' '}
+            It will look at{' '}
             <strong>
               {a.targetKind
                 ? a.targetLabels.join(', ') || a.targetIds.join(', ')
                 : 'your whole account'}
             </strong>{' '}
-            now?
+            and nothing else.
           </p>
-          <p className="acr-pg-muted" style={{ lineHeight: 1.6 }}>
-            This calls a model, which is real spend even though nothing is
-            written to Amazon. It cannot spend more than{' '}
+          <p>
+            This calls a model, which is <strong>real spend</strong> even though
+            nothing is written to Amazon. It cannot spend more than{' '}
             <strong>${a.worker.dailyBudgetUSD.toFixed(2)}</strong> today, across
             every run of this worker. Starting twice does nothing — if a run is
             already open you will be taken to it.
           </p>
-          <p className="acr-pg-muted" style={{ lineHeight: 1.6 }}>
+          <p>
             This worker is <strong>{a.worker.autonomyLevel}</strong> and can only
             look and report. Nothing it finds reaches Amazon without passing
             through <Link href="/fleet/approvals">Approvals</Link>.
           </p>
-          <div className="acr-pg-confirmbtns">
-            <button className="acr-pg-sortbtn" onClick={() => setConfirmStart(false)}>
-              Not now
-            </button>
-            <button className="acr-pg-sortbtn" onClick={() => act('/start')} disabled={!!busy}>
-              {busy ? <Loader2 size={13} className="spin" /> : <Play size={13} />} Start it
-            </button>
-          </div>
-        </div>
+        </ConfirmPanel>
+      )}
+
+      {confirmDelete && (
+        <ConfirmPanel
+          titleId="as-confirm-delete"
+          heading="Delete this assignment?"
+          onCancel={() => setConfirmDelete(false)}
+          cancelLabel="Keep it"
+          confirmLabel="Delete"
+          confirmIcon={<Trash2 size={13} />}
+          confirmTone="stop"
+          busy={!!busy}
+          onConfirm={() => act('', undefined, 'DELETE')}
+        >
+          <p>
+            <strong>{a.title}</strong>
+          </p>
+          <p>
+            It has never run, so there is nothing to lose but the row itself.
+            Once an assignment has run, its attempts are the record and Close is
+            the right ending instead.
+          </p>
+        </ConfirmPanel>
       )}
 
       {/* every attempt */}
@@ -434,7 +540,69 @@ export function AssignmentClient({ id }: { id: string }) {
         <Link href="/fleet/approvals">Approvals</Link>. Said plainly rather than
         shown as a panel that could only ever be empty.
       </p>
-    </>
+    </div>
+  )
+}
+
+/**
+ * The fleet's confirm, used properly: overlay, dialog role, focus on the safe
+ * option, Escape to leave, and no reflow because the wrapper is `fixed`.
+ */
+function ConfirmPanel({
+  titleId,
+  heading,
+  children,
+  onCancel,
+  onConfirm,
+  cancelLabel,
+  confirmLabel,
+  confirmIcon,
+  confirmTone,
+  busy,
+}: {
+  titleId: string
+  heading: string
+  children: ReactNode
+  onCancel: () => void
+  onConfirm: () => void
+  cancelLabel: string
+  confirmLabel: string
+  confirmIcon: ReactNode
+  confirmTone: 'go' | 'stop'
+  busy: boolean
+}) {
+  const safe = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    safe.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onCancel])
+  return (
+    <div
+      className="acr-pg-confirmwrap"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel()
+      }}
+    >
+      <div className="acr-pg-confirm as-confirm">
+        <h4 id={titleId}>{heading}</h4>
+        {children}
+        <div className="acr-pg-confirmbtns">
+          <button ref={safe} className="acr-btn" onClick={onCancel} disabled={busy}>
+            {cancelLabel}
+          </button>
+          <button className={`acr-btn ${confirmTone}`} onClick={onConfirm} disabled={busy}>
+            {busy ? <Loader2 size={13} className="spin" /> : confirmIcon} {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
