@@ -2454,7 +2454,23 @@
  * That is the standard bargain for an embedded canvas, and the gesture is
  * already written on screen.
  */
-@media (max-width: 1100px) {
+/*
+ * S4.h2 — the scrolling page now starts at 1400, not 1100, because that is
+ * where the rail becomes a bottom panel.
+ *
+ * S3.n set this at 1100 when the rail below 1400 was simply absent. Now it
+ * reflows, and measured on prod the 280px it takes comes straight out of the
+ * canvas while the page is still a fixed 100dvh:
+ *
+ *   1399×900   canvas 202px      1280×800   canvas 102px
+ *
+ * 102px is worse than the 394px the canvas had when the panel was hidden, which
+ * would make the reflow a bad trade rather than a fix. The rule is simply the
+ * one S3.n found, applied at the width it actually belongs to: **whenever the
+ * rail is a bottom panel, the page stops dividing a fixed height.** Above 1400
+ * the rail is a column and everything fits, so nothing changes there.
+ */
+@media (max-width: 1400px) {
   .sbm-page {
     height: auto;
     min-height: 100dvh;
