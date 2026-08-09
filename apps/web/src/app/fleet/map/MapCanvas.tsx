@@ -44,6 +44,8 @@ import {
   Handle,
   Position,
   ReactFlow,
+  useNodesInitialized,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -155,6 +157,67 @@ function LaneNode({ data }: NodeProps) {
 }
 
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
+
+/**
+ * S2R — the fit, moved to the only honest moment there is.
+ *
+ * WHAT WAS THERE BEFORE, and why it had to go. `fitView` was called from
+ * `onInit` and again from a ResizeObserver on the wrapper. Measured on prod:
+ * the same URL at the same viewport fitted at `matrix(0.981873, …, 78.08, 45)`
+ * on one load and landed on the **identity matrix** on three others — sampled
+ * every 100ms for four seconds and never moving. Driving the container through
+ * 1034 → 620 → 1200 → 1034px did not move it either, so the observer written
+ * specifically to cure that race was not curing anything.
+ *
+ * THE FIX IS DOCUMENTED AND WAS ALREADY IN THIS FOLDER. React Flow's
+ * `useNodesInitialized` "tells you whether all the nodes in a flow have been
+ * measured and given a width and height", and `EntityCanvas.tsx` has framed its
+ * graph that way since M.6 with a comment explaining why. The worker canvas was
+ * written first and never got it. One page, two canvases, one of them right.
+ *
+ * Two details that matter:
+ *   · `fitView` comes from `useReactFlow()`, not from an instance captured at
+ *     `onInit` — a hook cannot go stale, a captured ref can, and "is the ref
+ *     stale?" was a question I could not answer from outside the component.
+ *   · the ResizeObserver stays, but is ARMED ONLY ONCE NODES ARE MEASURED.
+ *     That is the whole difference: a refit before measurement is a no-op, and
+ *     a no-op on the one event that was ever going to fix the frame is exactly
+ *     how this shipped looking correct.
+ */
+function FitToContent({
+  hostRef,
+  sig,
+}: {
+  hostRef: React.RefObject<HTMLDivElement | null>
+  sig: string
+}) {
+  const ready = useNodesInitialized()
+  const { fitView } = useReactFlow()
+  const fit = useCallback(() => {
+    void fitView({ padding: 0.14, maxZoom: 1.35, duration: 0 })
+  }, [fitView])
+
+  useEffect(() => {
+    if (ready) fit()
+  }, [ready, sig, fit])
+
+  useEffect(() => {
+    const el = hostRef.current
+    if (!ready || !el || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(fit)
+    })
+    ro.observe(el)
+    return () => {
+      cancelAnimationFrame(frame)
+      ro.disconnect()
+    }
+  }, [ready, hostRef, fit])
+
+  return null
+}
 
 /** Stable across mounts: the same fleet always draws the same picture. */
 function topologyHash(nodes: MapNode[], edges: MapEdge[]): string {
@@ -402,37 +465,7 @@ export function MapCanvas({
     [edges, windowLabel, selectedEdgeId],
   )
 
-  /**
-   * fitView runs once, at mount, against whatever the container measured at
-   * that instant — and this canvas is a grid cell that settles slightly later,
-   * so the first fit was computed against the wrong box and left the furniture
-   * lane below the fold. `Fleet auditor` is exactly the node that lane exists
-   * to make visible, so a fit that clips it defeats the section.
-   *
-   * A ResizeObserver refits whenever the box genuinely changes size, which
-   * covers the settle-after-mount race, a window resize, and the rails
-   * appearing or disappearing at the responsive breakpoints. It is debounced
-   * to a frame so a drag-resize does not refit per pixel.
-   */
-  const fitRef = useRef<{ fitView: (o?: object) => void } | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
-  const refit = useCallback(() => {
-    fitRef.current?.fitView({ padding: 0.14, maxZoom: 1.35, duration: 0 })
-  }, [])
-  useEffect(() => {
-    const el = wrapRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    let frame = 0
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(refit)
-    })
-    ro.observe(el)
-    return () => {
-      cancelAnimationFrame(frame)
-      ro.disconnect()
-    }
-  }, [refit])
 
   return (
     <div
@@ -444,10 +477,6 @@ export function MapCanvas({
     >
       <ReactFlow
         key={hash}
-        onInit={(inst) => {
-          fitRef.current = inst as unknown as { fitView: (o?: object) => void }
-          refit()
-        }}
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
@@ -471,6 +500,7 @@ export function MapCanvas({
         onEdgeClick={(_e, edge) => onSelectEdge(edge.id === selectedEdgeId ? null : edge.id)}
         onPaneClick={() => onSelect(null)}
       >
+        <FitToContent hostRef={wrapRef} sig={hash} />
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} className="sbm-bg" />
         <Controls showInteractive={false} />
       </ReactFlow>

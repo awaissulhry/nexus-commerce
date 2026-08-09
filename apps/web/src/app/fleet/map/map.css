@@ -17,10 +17,38 @@
 
 /* ── the page: one viewport, canvas takes what is left ─────────────────── */
 
+/*
+ * S2R — `height`, not `min-height`, and it is the single most load-bearing word
+ * in this file.
+ *
+ * THE BUG IT FIXES. With `min-height: 100dvh` the flex column has no DEFINITE
+ * height to distribute, so `.sbm-body`'s `flex: 1 1 auto` resolves against its
+ * content and its `min-height: 0` has nothing to shrink into. Measured on prod
+ * at 1728×906: the page rendered **1078.4px into a 906px viewport**, so the
+ * canvas ended 119.9px below the fold. Everything downstream followed —
+ * `fleet-auditor` sat at y 866.5 (the one worker the standalone lane exists to
+ * reveal) and the zoom controls at y 931.9, both unreachable, and no amount of
+ * fitting a graph INTO that box could put anything on screen.
+ *
+ * WHY BOTH RAILS SURVIVE IT, checked before changing anything: `.sbm-orail` is
+ * already `min-height: 0; overflow-y: auto`, and `.sbm-rail` is `min-height: 0;
+ * overflow: hidden` with `.sbm-rail-body` scrolling inside it. They were built
+ * for a bounded row from the start; the row was the part that was missing. I
+ * raised this as a boundary crossing into section M4 and it turned out not to be
+ * one — nothing in either rail is touched.
+ *
+ * THE LIMIT, stated rather than discovered later: `100dvh` is correct only while
+ * this page's root sits at viewport top, which it does — measured, `.sbm-page`
+ * top = 0 and its scroll host `main.flex-1.overflow-auto` is exactly 906px. If
+ * the shell ever puts chrome ABOVE `main`, this overshoots by that chrome's
+ * height. It would then need a definite height chain down from `main`, NOT a
+ * `calc(100vh - …)`, which is the brittle arithmetic the parent study warns off.
+ */
 .sbm-page {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   padding: 20px 24px 20px;
   gap: 12px;
 }
