@@ -861,12 +861,12 @@
   font-size: 11.5px;
   color: #6b7688;
 }
-.aq-outorigin code {
-  padding: 1px 4px;
-  border: 1px solid #e2e8f0;
-  border-radius: 3px;
-  background: #f4f6f9;
-  font-size: 11px;
+/* The `<code>` chip that used to hold the raw agent key is gone with S5.1, and
+   so is its rule — a style whose only element no longer exists is the kind of
+   thing that survives three sessions and then gets re-used by accident. */
+.aq-outorigin strong {
+  color: #1c2530;
+  font-weight: 650;
 }
 
 .aq-outparked {

@@ -143,6 +143,66 @@ const humanTool = (s: string) => s.replace(/-/g, ' ')
    the charters' own house style ("Bid tuner", "Keyword harvester"). */
 const sentenceCase = (s: string) => s.replace(/^./, (c) => c.toUpperCase())
 
+/**
+ * S5.1 — who actually asked, said truthfully.
+ *
+ * The page shipped one sentence for all of these: *"an agent from before the
+ * fleet"*. It is wrong about every one of them, and about `manual-action` it is
+ * wrong three times over — that key is minted by `requestApproval()`
+ * (`approval-gate.service.ts:114`) when **a person** presses "Request approval"
+ * in the copilot. Not an agent, not from before the fleet, and the phrasing
+ * erased the one fact worth knowing: a human asked for this.
+ *
+ * The other two are live registered crons — `pricing-watchdog` runs 07:00 UTC
+ * daily, `listing-quality-keeper` on its own schedule. Both are switched off
+ * today (§1.2) and one Control Center toggle from minting real rows. "Legacy"
+ * is the opposite of true.
+ *
+ * The root confusion, named so it does not come back: the page was treating
+ * *"not a charter"* as *"not part of the fleet"*. A charter is a governed
+ * worker with a dial and a track record. These are producers that are not
+ * charters. **"Outside the fleet" is true and sufficient; "from before the
+ * fleet" was an invention.**
+ *
+ * `what` completes the sentence "Asked by NAME — …", and every branch ends by
+ * saying what is missing, because that is the honest part of the old copy and
+ * the reason these rows are thinner than a fleet worker's.
+ */
+interface Origin {
+  name: string
+  what: string
+}
+const NO_HISTORY = 'so there is no worker page and no track record for it'
+const OUTSIDE_ORIGINS: Record<string, Origin> = {
+  'manual-action': {
+    name: 'Someone using the copilot',
+    what: `a person asked for this from the copilot rather than a worker proposing it, ${NO_HISTORY}`,
+  },
+  'pricing-watchdog': {
+    name: 'The price watchdog',
+    what: `a scheduled check that watches your prices and runs outside the fleet, ${NO_HISTORY}`,
+  },
+  'listing-quality-keeper': {
+    name: 'The listing quality keeper',
+    what: `a scheduled check that watches listing quality and runs outside the fleet, ${NO_HISTORY}`,
+  },
+}
+function originOf(key: string | null): Origin {
+  if (!key)
+    return {
+      name: 'Something we cannot identify',
+      what: 'nothing recorded what asked for this',
+    }
+  return (
+    OUTSIDE_ORIGINS[key] ?? {
+      /* Never the raw key. FX.1's rule for this section is names, not IDs, and
+         S6 already closed two other doors onto the same defect. */
+      name: sentenceCase(humanTool(key)),
+      what: `a system that runs outside the fleet, ${NO_HISTORY}`,
+    }
+  )
+}
+
 function whenNext(iso: string | null): string {
   if (!iso) return 'not scheduled'
   const ms = new Date(iso).getTime() - Date.now()
@@ -535,7 +595,7 @@ function GateStateSection({
         {gate.outside.pending > 0 ? (
           <p className="aq-gate-foot">
             Separately, {gate.outside.pending} request{gate.outside.pending === 1 ? '' : 's'} from
-            the older agent system {gate.outside.pending === 1 ? 'is' : 'are'} waiting — those can
+            outside the fleet {gate.outside.pending === 1 ? 'is' : 'are'} waiting — those can
             genuinely change something, and they are listed at the foot of this page.
           </p>
         ) : null}
@@ -752,7 +812,10 @@ function OutsideParked({
   return (
     <div className="aq-outparked">
       <span className="aq-outparkedbody">
-        <strong>Approved — {humanTool(row.toolName)}</strong>
+        {/* FX.1 again: `humanTool` here de-hyphenated the TOOL KEY, so a parked
+            row read "Approved — set price". `toolCardFor` is the vocabulary the
+            rest of this page already decides with. */}
+        <strong>Approved — {toolCardFor(row.toolName).shortAsk}</strong>
         <span>
           {left > 0 ? (
             <>
@@ -803,8 +866,8 @@ function OutsideQueue({
     return (
       <p className="aq-outnone">
         <ShieldCheck size={12} aria-hidden />
-        Nothing is waiting from outside the fleet either. Requests from the older agent system
-        would appear here — they are the only ones that can change something on Amazon today.
+        Nothing is waiting from outside the fleet either. Requests from outside the fleet would
+        appear here — they are the only ones that can change something on Amazon today.
       </p>
     )
   }
@@ -831,7 +894,8 @@ function OutsideQueue({
       {open ? (
         <div className="aq-outbody">
           <p className="aq-outwhy">
-            These come from the older agent system, not from a fleet worker. They were reaching{' '}
+            These come from producers outside the fleet, not from a fleet worker. They were
+            reaching{' '}
             <strong>no screen at all</strong> until now — the queue above only shows the fleet&apos;s
             own three actions, while the clock that expires requests covers every action. So one of
             these could be created, seen by nobody, and thrown away after {expiryHours} hours.
@@ -850,15 +914,12 @@ function OutsideQueue({
               />
             ) : (
               <div key={a.id} className="aq-outrow">
+                {/* The name leads the sentence, so its capital is correct by
+                    construction rather than by lower-casing a display string
+                    and hoping nothing in it was a proper noun. */}
                 <p className="aq-outorigin">
-                  {a.originKey ? (
-                    <>
-                      Asked by <code>{a.originKey}</code> — an agent from before the fleet, so
-                      there is no worker page and no track record for it.
-                    </>
-                  ) : (
-                    <>The agent that asked for this cannot be identified.</>
-                  )}
+                  <strong>{originOf(a.originKey).name}</strong> asked for this —{' '}
+                  {originOf(a.originKey).what}.
                 </p>
                 <ApprovalCard
                   approval={{
@@ -875,11 +936,9 @@ function OutsideQueue({
                     trackRecord: null,
                   }}
                   labels={labels}
-                  workerName={
-                    a.originKey
-                      ? sentenceCase(humanTool(a.originKey))
-                      : 'An agent we cannot identify'
-                  }
+                  /* One source for the name, so the origin line above the card
+                     and the card's own first words can never disagree. */
+                  workerName={originOf(a.originKey).name}
                   busy={busy}
                   canExecute={a.canExecute}
                   onDecide={onDecide}
