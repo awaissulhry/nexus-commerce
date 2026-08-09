@@ -278,14 +278,37 @@ export function topoCols(
     frontier = next
     level++
   }
-  const cyclicKeys = new Set<string>()
+  /* What the forward peel could not reach: the loop AND everything downstream
+     of it, since a step whose only feeder is stuck never reaches in-degree 0.
+     Parked in a final column, exactly as before. */
+  const unreached = new Set<string>()
   for (const k of keys) {
     if (!cols.has(k)) {
       cols.set(k, level)
-      cyclicKeys.add(k)
+      unreached.add(k)
     }
   }
-  return { cols, cyclic: cyclicKeys.size > 0, cyclicKeys }
+
+  /* Prod caught this: marking every unreached step told the terminal critic
+     it was "in the loop" and to remove one of its hand-offs — it has none,
+     and it was merely downstream of two steps that were. So peel the other
+     way as well: drop anything with no successor still standing, until
+     nothing moves. What survives has both a predecessor and a successor
+     inside the set, which is exactly the steps ON a cycle. The innocent
+     downstream steps are not accused; removing the loop frees them. */
+  const cyclicKeys = new Set(unreached)
+  for (;;) {
+    let changed = false
+    for (const k of [...cyclicKeys]) {
+      if (!edges.some((e) => e.from === k && cyclicKeys.has(e.to))) {
+        cyclicKeys.delete(k)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+
+  return { cols, cyclic: unreached.size > 0, cyclicKeys }
 }
 
 /** Who hands work TO this step. The editor's cards only ever stated the
