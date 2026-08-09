@@ -1207,7 +1207,7 @@
    in the one zone no section had ever audited. */
 .wf-teststeps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 8px;
   margin-top: 4px;
 }
@@ -1216,7 +1216,6 @@
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-  max-width: 420px;
   padding: 9px 12px;
   border: 1px solid #e0e6ee;
   border-left: 3px solid #c3ccd8;
@@ -1246,11 +1245,25 @@
 .wf-linkbtn:hover { color: #24507f; }
 
 /* S6.d — what a step WOULD have reported, not just how many. */
-.wf-testfinds { list-style: none; margin: 5px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+/* S6.a correction, measured on prod: capping the card at 420px inside a 767px
+   track left 45.5% of the panel dead — the cap fighting the track. S5.a's
+   "fit the tracks, cap the card" was the right rule for a PIPELINE card
+   holding thirty characters; this card holds a list. So the card fills its
+   track and the list obeys the other law this page already has: a wide card
+   lays its facts in lanes. At 767px the findings run three across; at 380px
+   they stack. */
+.wf-testfinds {
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 3px 14px;
+}
 .wf-testfinds li { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; line-height: 1.45; min-width: 0; }
 .wf-findlabel { color: #34404f; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-findkind { color: #5f6a78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wf-findmore { color: #5f6a78; font-style: italic; }
+.wf-findmore { color: #5f6a78; font-style: italic; grid-column: 1 / -1; }
 .wf-sev {
   flex: none;
   font-size: 10.5px;
