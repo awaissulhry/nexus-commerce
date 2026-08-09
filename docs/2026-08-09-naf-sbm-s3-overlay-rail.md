@@ -1012,6 +1012,46 @@ Every item raised in Part 10 has now been taken or retired.
 | **C-S3.3** *(S3.l)* | The table dims the rows the rail filtered out, via one additive `rowClassName` on the shared `DataGrid` (claimed and released). |
 | **C-S3.5 / C15** *(S3.m)* | **Retired, not built.** Measured first: no label overlap at any of five viewports. See Part 10. |
 
+### Closing the three claims that were argued rather than measured
+
+Asked whether the section was done, I re-read my own exit criteria against what
+had actually been observed on production, and found three gaps. All three were
+*true* — but by construction or by arithmetic, not by measurement, which is a
+weaker thing than this document claims for them.
+
+1. **Four bucket colours had never rendered on prod.** `ov-warn`, `ov-bad`,
+   `ov-cost0` and `ov-cost1` require a failed run, a limit-stopped run, and
+   costs in two specific bands — none of which exist on a fleet that is switched
+   off. Their contrast came from the solver, not the browser.
+2. **Swatch↔ring agreement was verified for 5 of 12 buckets**, and asserted for
+   the rest from the fact that both now read one `var(--ov)`.
+3. **The checkbox target was never actually measured** — the probe that returned
+   it was redacted by the harness, and I did not re-run it.
+
+Closed with a payload that occupies **every bucket in all three overlays** (a
+degraded worker, an unprovisioned one, three autonomy rungs, a failure, a limit,
+a clean run, and costs at 0 / 0.005 / 0.05 / 0.5), transitions disabled:
+
+| bucket | on `#fff` | on canvas | swatch = ring |
+|---|---|---|---|
+| `ov-off` | 3.19 | **3.10** | ✓ |
+| `ov-cost0` | 3.18 | **3.10** | ✓ |
+| `ov-warn` | 3.64 | 3.55 | ✓ |
+| `ov-nodata` | 3.88 | 3.78 | ✓ |
+| `ov-good` | 4.54 | 4.42 | ✓ |
+| `ov-observe` · `ov-cost1` | 4.90 | 4.77 | ✓ |
+| `ov-bad` | 5.47 | 5.33 | ✓ |
+| `ov-cost2` | 7.45 | 7.26 | ✓ |
+| `ov-propose` | 7.46 | 7.27 | ✓ |
+| `ov-auto` | 11.33 | 11.04 | ✓ |
+| `ov-cost3` | 11.40 | 11.10 | ✓ |
+
+**12 of 12 rendered, 12 of 12 agree, worst 3.10:1 against the canvas.** And the
+checkbox target measures **194 × 24px** with `accent-color: rgb(31, 79, 139)`.
+
+The section's claims are now measured rather than reasoned, which is the standard
+this document set for itself in Part 1.
+
 ### Verifying S3.j, on a fleet where nothing is armed
 
 Every worker here is OFF, so no card can render an autonomy token and the one
