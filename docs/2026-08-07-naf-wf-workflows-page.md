@@ -3659,9 +3659,292 @@ at 05:15 UTC*. Custom `rev 3`, Ready, manual, *When you start it*. Every
 4. The fleet **cannot arm a schedule firing less often than every 8 days**
    (§13.9). Raising `SCAN_LIMIT_MINUTES` is a server call, not this section's.
 
+## PART 14 — NAF.WF-S6R · Section 6 restudied: the test lane
+
+Opened 2026-08-09 after S5R. Scope is the test zone inside `RoutineEditor.tsx`,
+the three test routes, `workflow-test.service.ts`, `assembleTestStatus` in the
+pure layer, and `lib.ts`'s test types. **Live-spend budget: 2 walks. One spent
+in this audit ($0.0415); one reserved for post-build verification.**
+
+**Not relitigated:** preview writes nothing to the board, the walk is serial,
+one active test per workflow, the estimate comes first, `assembleTestStatus` is
+the reducer of truth, failure sentences come from `classifyFailure`.
+
+### 14.1 · PHASE 0 — the audit, measured on prod
+
+Chrome, **1728 × 962**, on `morning-negatives-pass` (2 analysts, both switched
+OFF). **One real walk: estimated $0.0414, actual $0.0415, 20 would-be findings,
+~43s wall clock.** The custom ends the session exactly as found.
+
+#### First, three facts about the machine that the UI is built on
+
+Established by reading the code and confirmed against the live API — they set
+up most of what follows.
+
+1. **A preview DOES write `AgentRun` rows.** "Nothing written" is precise about
+   the *blackboard* — no findings, no proposals — and the rows are real,
+   permanent, and stamped `mode: 'preview'`. My walk added two.
+2. **The would-be findings' CONTENT is already persisted**, in
+   `AgentRun.output = { preview: true, data }` (`agent-executor.ts`, the
+   preview branch). Nothing new has to be written to show it.
+3. **The registry TTL is not what expires.** `TESTS` holds only the step order
+   and the walking flag for 30 minutes; `getWorkflowTestStatus` falls back to
+   the rows when the entry is gone. What actually ends the results is the
+   **component**: `testId` is React state.
+
+#### D1 · The results land off-screen, and nothing says they arrived
+
+The headline. Measured with the finished panel on screen:
+
+| | |
+|---|---|
+| panel top | **1020.6px** · viewport **962px** → **58.6px below the fold** |
+| page scroll at that moment | `scrollTop: 0` — it never moved |
+| distance from the Test button to the results | **648px** |
+| `role` / `aria-live` on the panel | **none** |
+
+So: confirm a spend, wait 43 seconds, and the screen does not change. On the
+six-step council the editor grid measured **1741.8px** (S5.a), which puts the
+panel roughly **1150px** below the fold.
+
+#### D2 · Nothing in the viewport says a test is running
+
+The only in-viewport signal is the Test button greying out. No label change, no
+spinner, no elapsed time, no "step 1 of 2", no indication that the fleet is
+mid-walk.
+
+#### D3 · The legend reports `$0.0000` while money is being spent
+
+Frames captured 1.6s apart:
+
+| t | legend | rows |
+|---|---|---|
+| 4s–16s | *testing… · **$0.0000 spent** · 0 would-be findings* | harvester "working now…", miner "waiting its turn…" |
+| 18s | testing… · $0.0116 spent · 5 would-be findings | harvester done, miner "working now…" |
+| ~43s | finished · $0.0415 spent · 20 would-be findings | both done |
+
+Cost only exists when a step's row is written at completion, so the running
+total reads **zero for the first 40% of the walk** — in the one ceremony whose
+entire justification is spend.
+
+#### D4 · The estimate and the actual never appear together
+
+**Estimated $0.0414, actual $0.0415 — 0.24% off.** That is an excellent number
+and the operator never sees it, because the dialog carrying the estimate is
+dismissed before the total exists.
+
+#### D5 · You can confirm a spend with no estimate on screen
+
+`Run the test` is disabled by `busy` alone. If `/test-estimate` fails, the
+`catch` leaves `testEstimate` null and the dialog reads **"estimating…"
+forever** with the confirm button live. A permanent "estimating…" is not
+honest, it is stuck — and it is a hole in a spend control.
+
+#### D6 · Real money buys results that Discard destroys without warning
+
+Verified on prod: panel present → **Discard** → panel gone, and the confirm
+path says nothing about a test. Publish unmounts the editor the same way.
+
+#### D7 · The panel's row order contradicts the editor's card order
+
+The panel walked **Keyword harvester → Negative miner**; the step cards list
+**Negative miner → Keyword harvester**. Cause: `topoLevels` sorts each level
+alphabetically (`levels.push([...current].sort())`) while the cards keep
+`draft.steps` order. Two orders for two steps, on one screen.
+
+#### D8 · The picture says "at the same time"; the test walks one at a time
+
+`RoutinePipeline` renders both analysts under **AT THE SAME TIME**;
+`startWorkflowTest` is **serial by design** (concurrency 1, so cost stays
+legible and the fleet ceiling is never burst). Both are correct. Nothing on
+screen reconciles them.
+
+#### D9 · 72.5% dead width
+
+Panel **1572px** wide; row content spans x=126 → 557.6, i.e. **432px**. The
+S1R/S2R dead-width defect, in the one zone no section ever audited.
+
+#### D10 · Of the three guarantees, one is unstated — and it is the surprising one
+
+The footer covers writes. **Nothing anywhere says a test runs workers that are
+switched OFF** — and on this routine both cards carry **OFF** pills while the
+test ran them both and spent $0.0415. The screen contains a visible
+contradiction and no explanation. `agent-executor.ts` is explicit
+(`if (effectivelyOff && !opts.ignoreEnabled && !opts.preview)`); the UI is
+silent.
+
+#### D11 · "Would-be findings" is a number with no content
+
+Twenty findings were produced, and are sitting in `AgentRun.output.data`. The
+operator sees `20`.
+
+#### D12 · Ephemerality is unstated and mis-modelled
+
+Nothing says how long results last or where they went. The honest model is
+above (fact 3): the rows are permanent, the *view* dies with the component.
+
+#### One cross-stream fact this section owns
+
+Ledger §4b item 2 (preview rows on the shared runs route) is **this section's
+own externality**: measured today, preview rows are **10 of 55 fetched
+(18.2%)**, up from 8 of 53 (15.1%) on 2026-08-08 — **my two test rows are the
+increase.** Every test walk permanently enlarges a shared, capped feed. Item 1
+(`.acr-btn.go`) is **CLOSED** — Approvals fixed it to `#15804f` on 2026-08-09.
+
+#### What is already right, and is not to be broken
+
+- **Zero writes, re-proven on prod**: after the walk, the routine's Runs
+  section still reads *"No runs yet."*
+- The estimate dialog: **0 contrast failures**, 2 sizes / 3 weights, targets
+  2423px² and 3468px².
+- The results panel: **0 contrast failures**, 4 sizes / 2 weights, all inside
+  the page scale.
+- The copy that exists is careful — *"Hand-offs are not simulated yet"* and
+  *"nothing was written to the board"* are both exactly true.
+
+#### States code-verified rather than bought
+
+| State | Verdict |
+|---|---|
+| estimate error | `catch` → null → "estimating…" persists, confirm stays live (**D5**) |
+| second test while walking | route returns **409** with the running `testId`; the client shows the message but ignores the id |
+| TTL expiry mid-view | entry swept → `walking:false`, steps fall back to row order — no crash |
+| fleet kill switch | route returns **503**, surfaced as `serverErr` |
+| failed / stopped step | `assembleTestStatus` maps `haltedReason` → `stopped`, `!ok` → `failed`; `testStepSentence` already routes both through `classifyFailure` |
+
+### 14.2 · PHASE 1 — how the industry tests, and what it costs
+
+| Product | Entry & confirm | Cost shown | Per-step progress | What of the OUTPUT | Side effects |
+|---|---|---|---|---|---|
+| **Zapier** | per-step "Test step" | — | per step, inline | **the actual payload** ("Data out" tab) | **testing is LIVE and may change your app** — stated plainly |
+| **n8n** | Execute Workflow / Execute step (partial) | — | inline on the canvas | node output, with **data pinning** to avoid re-hitting systems | docs are **silent** on side effects |
+| **Power Automate** | Test pane | — | **green check / red ×** per action, expandable to inputs+outputs | inputs, outputs, messages per step | real run |
+| **Camunda Play** | Play | — | token walk-through | instance variables and path | **isolated: a temporary cluster** |
+| **LangSmith** | playground | **token cost + latency per step** | per node | inputs/outputs per node | observability, not execution |
+| **Windmill** | "Test this step" / test flow | — | results beside the step | step result | real run |
+
+**Four isolation models, and ours is its own.** Zapier tests by *doing it for
+real and warning you*. Camunda tests on a *throwaway cluster*. n8n lets you
+*pin data* so you stop hitting the system. We run the real reads and the real
+model in the real place, and refuse only the writes. **Nobody else spends real
+money to guarantee nothing happened** — which is precisely why our guarantees
+have to be taught rather than assumed. Zapier's users learn "a test is real";
+ours must learn the opposite, against that instinct.
+
+**What this settles:**
+
+1. **Content, not counts** (D11). Zapier shows the payload; Power Automate
+   expands to inputs and outputs; LangSmith shows per-step cost. We show a
+   number. Ours is the only product where the output is *the entire point* —
+   the fleet's proposals are the product — and we are the only one hiding it.
+2. **Per-step state deserves a glyph and a clock** (D2, D3). Power Automate's
+   check/× per action and LangSmith's per-step latency+cost are the pattern.
+3. **Cost display is our differentiator to get right** (D3, D4). Only LangSmith
+   shows money at all, and only after the fact. We have an estimate *and* an
+   actual and show neither together.
+4. **Nothing in the research argues for durable test history** — Camunda throws
+   the cluster away, n8n keeps manual runs out of the production list. Our
+   ephemerality is normal; it just has to be *said* (D12).
+
+### 14.3 · THE PROPOSAL
+
+**14.3.1 · Bring the theatre into the room (D1, D2, D9).** The test panel moves
+**above** the editor grid, immediately under the action row, so it appears
+where the button that started it is. It gains `role="status"` and an
+`aria-live="polite"` region for the step transitions. The Test button becomes a
+live control while walking — *"Testing… step 2 of 2"* — so the in-viewport
+answer to "is anything happening" is yes. The panel lays its rows in the same
+lane grid the rest of the page uses, cutting the 72.5% dead width.
+
+**14.3.2 · The money is legible while it is being spent (D3, D4, D5).** The
+running total counts **committed + in-flight**: a step that is mid-call shows
+*"spending…"* rather than contributing `$0.0000`. When the walk finishes the
+panel states **estimate vs actual** on one line — the 0.24% number is a trust
+asset and should be visible. `Run the test` is **disabled until an estimate
+exists**, and a failed estimate says so and offers a retry instead of
+"estimating…" forever.
+
+**14.3.3 · The three guarantees, taught where they bite (D10).** The estimate
+dialog gains the missing one: **this runs workers that are switched off**, said
+before the spend, because that is the fact most likely to surprise. The panel
+footer keeps the writes guarantee and gains the ephemerality one (D12).
+
+**14.3.4 · One order, and the parallelism reconciled (D7, D8).** The panel
+follows the **card order**, and the walk explains itself: a stage the picture
+draws as *at the same time* is tested **one at a time, on purpose** — a
+sentence, once, in the panel header.
+
+**14.3.5 · Would-be findings, with content — boundary question (a): YES.**
+The evidence is decisive: the content is **already persisted** in
+`AgentRun.output.data`, so showing it is a **read**, not a write, and L2 is
+untouched. The payload is sized honestly: **up to 5 per step, title and
+severity only**, with *"showing 5 of 15"* when truncated. One additive field on
+the status contract — `sample: Array<{ title, severity }>` per step — assembled
+by `assembleTestStatus`, which stays pure (it gains the row's `output`, which
+it already receives rows for) and keeps its vitest. The TTL story stays
+straight because the sample comes from the same rows the status already reads:
+if the rows are there, so is the sample.
+
+**14.3.6 · Ephemerality said out loud, and Discard warns (D6, D12).** The panel
+says what it is: *results live with this editing session; the run rows behind
+them are kept*. **Discard and Publish warn when a finished test is on screen**
+— you paid for it.
+
+**14.3.7 · A `test` glossary term.** The glossary has `draft`, `run`,
+`finding`, `preview-only` — **no `test`**. One term, claimed per §3.
+
+**Boundary question (b) — entry point: NOT BUILT, recorded.** Testing the
+**active** wiring without opening the editor is a real gap and the research
+supports it. It belongs to S2R's overview zone, so it is filed as a follow-up
+naming the coordination, not built here.
+
+### 14.4 · State table, to be discharged before the last phase closes
+
+| # | State | How |
+|---|---|---|
+| 1 | Estimate loading | code — resolves in <120ms on prod |
+| 2 | Estimate failed | code + forced client-side |
+| 3 | Confirm shown with estimate | prod |
+| 4 | Walking · pending step | prod (walk 2) |
+| 5 | Walking · running step | prod (walk 2) |
+| 6 | Walking · done step mid-walk | prod (walk 2) |
+| 7 | Finished, all done | prod (walk 2) |
+| 8 | Estimate-vs-actual line | prod (walk 2) |
+| 9 | Failed step | code — `assembleTestStatus` vitest |
+| 10 | Stopped / halted step | code — vitest |
+| 11 | TTL-expired entry | code — row fallback |
+| 12 | Second-test refusal (409) | code + client |
+| 13 | Kill-switch refusal (503) | code |
+| 14 | Would-be sample, truncated | prod (walk 2 — 15 findings truncates) |
+| 15 | Discard warns with results on screen | prod |
+| 16 | Zero-writes re-proven after rebuild | **prod, mandatory** |
+
+### 14.5 · Build phases
+
+| Phase | What | Exit criteria |
+|---|---|---|
+| **S6.a** | Panel above the grid; `aria-live`; live Test button; lane layout. | Panel top **in viewport** at `scrollTop:0` on both baselines · `role`/`aria-live` present · button states "step N of M" while walking · dead width **< 15%** |
+| **S6.b** | Money: in-flight total, estimate vs actual, confirm gated on an estimate, estimate error + retry. | Total never reads `$0.0000` while a step runs · estimate and actual on one line at finish · confirm disabled with no estimate · forced estimate failure shows an error, not "estimating…" |
+| **S6.c** | Truth: OFF-workers guarantee in the dialog, one order, serial-vs-parallel sentence, ephemerality, Discard warning. | Dialog names all three guarantees · panel order **== card order** · Discard with results warns · `test` term live |
+| **S6.d** | Content: the `sample` field + its display, type/contrast pass, states + teaching. | Sample renders with truncation copy · `assembleTestStatus` pure + vitest green · **0 contrast failures** · type inside the page scale · every §14.4 row discharged · **zero-writes re-proven on prod** |
+
+### 14.6 · Recorded, not built
+
+1. **Test the ACTIVE wiring from the routine page** — boundary (b). Needs S2R
+   coordination; the overview zone is settled.
+2. **Data pinning** (n8n). The fleet's evidence is the live board; pinning
+   would mean a fixture store and is WF.7-adjacent.
+3. **Durable test history.** Refused by L2 as a write path, and the research
+   does not ask for it.
+4. **A `mode: 'preview'` filter on the shared runs route** stays Workers'
+   (ledger §4b item 2) — but this section is its producer, and every walk adds
+   rows. Worth their attention now that it is 18.2%.
+
 ---
 
 ## Sources
+
+**Part 14 (WF-S6R, test/dry-run-lane research, 2026-08-09)** — [Zapier: Test Zap steps](https://help.zapier.com/hc/en-us/articles/18811411817741-Test-Zap-steps) (**testing is LIVE and may change your app**, stated plainly; the "Data out" tab shows the actual payload) · [n8n: types of executions](https://docs.n8n.io/build/understand-workflows/understand-executions/types-of-executions/) (manual runs display inline in the editor, production runs live in a separate Executions tab; docs are **silent** on side effects) and [data pinning](https://docs.n8n.io/build/work-with-data/pin-and-mock-data) (pin a node's output so testing stops re-hitting the system) · [Power Automate: testing flows](https://learn.microsoft.com/en-us/power-automate/desktop-flows/test-desktop-flows) (green check / red × per action, expandable to inputs, outputs and messages) · [Camunda 8 Play](https://docs.camunda.io/docs/next/components/hub/workspace/modeler/validation/play-your-process/) (**isolation by throwaway cluster** — a temporary Zeebe cluster spun up for the test) · LangSmith (per-step **token cost and latency**, unified cost view) · Windmill (test a step in isolation, results beside it). **The synthesis: four isolation models, and ours is its own** — Zapier does it for real and warns you, Camunda throws a cluster away, n8n pins the data, and we run real reads and a real model in the real place and refuse only the writes. Nobody else spends real money to guarantee nothing happened.
 
 **Part 13 (WF-S5R, structured-editor research, 2026-08-08)** — Power Automate [cloud flows designer](https://learn.microsoft.com/en-us/power-automate/flows-designer) (compact cards + configuration pane; **the error appears in a summary AND on the card that caused it**; separate **Save draft** / **Publish**; Undo/Redo; per-card notes; on a failed save it writes to browser storage, banners it, and offers **Recover flow**; a test marks each card with a green check and its seconds) · Windmill [flow editor components](https://www.windmill.dev/docs/flows/editor_components) (select a step → action editor with header/body/**Test this step**; autosave indicator; Diff button) · cron-input state of the art, surveyed across current builders (**presets**, **next N fire times**, invalid expressions **bordered red**, field dropdowns, and a plain-English "Means" line whose stated purpose is that *if it doesn't say what you expected, your expression is wrong*)
 
