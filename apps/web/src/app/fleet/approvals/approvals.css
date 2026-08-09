@@ -574,26 +574,6 @@
   margin: 0;
 }
 
-/* S4.c — the example must be READABLE, which `disabled` was quietly preventing.
- *
- * `.acr-btn:disabled` is `opacity: 0.55`, and every control in the example is
- * disabled — so the primary button, which carries the most important sentence
- * on the card ("Apply — bid €0.31 → €0.84"), rendered at an effective
- * **1.45:1**. Unreadable, on the one card that exists to be read.
- *
- * This is the opacity trap I quoted a warning about in S4.b's own commit
- * message and then shipped by a different route one commit later: opacity
- * multiplies the contrast of everything beneath it.
- *
- * Full strength here. The controls stay inert STRUCTURALLY — the <fieldset
- * disabled> refuses focus and clicks — so nothing is lost by letting them look
- * like what they are. It is also the point: an example that does not look like
- * the real card fails at the only job it has, which is to be recognised later. */
-.aq-example :disabled,
-.aq-example .acr-btn:disabled {
-  opacity: 1;
-}
-
 /* The three sub-AA greys inside the card, measured on prod: .aq-clock 4.24,
    .aq-dfield 4.47, .aq-dfrom 4.24. All #6b7688; #55616f is 5.83 on the page
    surface and is the value S1 settled for this role. */
@@ -1223,4 +1203,35 @@
   font-size: 11.5px;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── S4.c · the example must be READABLE, and `disabled` was preventing it ──
+ *
+ * `.acr-btn:disabled` is `opacity: 0.55`, and every control in the example is
+ * disabled — so "Apply — bid €0.31 → €0.84", the most important sentence on the
+ * card, rendered at an effective **1.45:1**. Unreadable, on the one card that
+ * exists to be read. That is the opacity trap S4.b's own commit message quoted
+ * a warning about, shipped one commit later by a different route.
+ *
+ * ⚠ THE FIRST FIX ONLY HALF-WORKED, AND THE REASON IS SPECIFICITY + SOURCE
+ * ORDER. `.aq-example :disabled` (0,2,0) beat `.acr-btn:disabled` because that
+ * lives in control-room.css, which loads EARLIER — but it tied with
+ * `.aq-editopen:disabled` and `.aq-snoozeopt:disabled` in THIS file, which are
+ * declared further down, so those won and stayed at 2.32:1 and 2.87:1. Only
+ * compositing the opacity by hand showed it; `getComputedStyle` reports the
+ * declared colour, not what the eye receives.
+ *
+ * So this block sits at the END of the file and names each control explicitly:
+ * source order and specificity both on our side. A NEW `aq-*:disabled` rule
+ * added below this point would reopen the hole — add it here too.
+ *
+ * The controls stay inert STRUCTURALLY: the <fieldset disabled> refuses focus
+ * and clicks, so nothing is lost by letting them look like what they are. It is
+ * also the point — an example that does not look like the real card fails at
+ * the only job it has, which is to be recognised later. */
+.aq-example :disabled,
+.aq-example .acr-btn:disabled,
+.aq-example .aq-editopen:disabled,
+.aq-example .aq-snoozeopt:disabled {
+  opacity: 1;
 }
