@@ -4939,3 +4939,61 @@ audit rows by approval id and asserts audit and exemplar counts too.
   belong to S6/AQ.8.
 
 **S5 is complete.**
+
+---
+
+## Part 17 — S7 audit: the four answers, after S6 and S5
+
+The brief called S7 "largely absorbed by S6's rebuild of the verb row; worth a
+short audit rather than its own session". This is that audit. **Read-only — no
+code written.**
+
+### 17.1 Against the AQ-S7 spec
+
+| Spec item | Status | Evidence |
+|---|---|---|
+| **Approve** parks rather than fires | **Shipped** | `decideFleetApproval` writes `status: 'scheduled'`, `executeAfter = now + UNDO_WINDOW_MS`. The twenty-second undo covers the executable rows too — checked because S5 made that question real |
+| Approve carries an optional note | **Shipped** | `ApprovalCard.tsx:876` sends `note.trim() \|\| undefined`; the route accepts a reason on approve and requires one only on reject |
+| **Edit-then-approve**, typed and bounded | **Shipped** (AQ.8 + S6.b) | Bounds rendered ("Between €x and €y"), `draftValid` gates the client, and the server re-runs the tool's own handler rather than a copied rule |
+| Supersedes, never mutates | **Shipped** | The amend route mints a new row; the original is expired |
+| **Reject** with coded reasons + free text | **Shipped** (S6.b) | Codes replace the verb row; the note is appended to the code |
+| Symmetric friction | **Shipped** | One click each side |
+| Buttons state the consequence | **Shipped** | "Apply — base price €49.00 → €39.00" |
+| **Ask** — a question back to the worker | **NOT BUILT** | No verb, no route |
+| **Snooze on new evidence** | **PARTIAL** | Clock only: 2 hours / 6 hours / tomorrow morning |
+| Dispositions on digits `1`/`2`/`3` | **NOT BUILT** | No key handler anywhere on the page |
+
+### 17.2 Recommendation on the three gaps: build none of them now
+
+**Ask — defer, and say why.** A question needs someone to answer it. All seven
+charters are OFF by operator decision, and the two outside producers are crons
+that do not read. Shipping a channel whose replies nobody can send is shipping
+dark, which this operator's standing preference forbids. It becomes worth
+building the moment a worker can respond, not before.
+
+**Snooze on new evidence — defer.** It needs a change detector per tool
+(has the bid moved, has the price moved, has coverage changed), which is a
+backend of its own and overlaps `checkStaleness`. The clock covers the common
+case and "Check this is still true" already answers *has anything moved?* on
+demand. Worth doing as part of a staleness engagement, not as a bullet here.
+
+**Digit shortcuts — decline, and revisit deliberately.** The spec's "every
+letter stays safe" was written before S5 established that some rows on this
+page can reach Amazon and before S6 added the read-and-understood gate. A
+single keystroke that approves is exactly the affordance those two phases
+existed to remove: an operator clearing a queue with `1 1 1` is the rubber
+stamp the whole page is designed against, and one of those rows can now change
+a real price. If speed is wanted later, the safe shape is a shortcut that
+**moves focus** to the primary rather than one that fires it.
+
+### 17.3 One thing S7 should own that the spec does not mention
+
+`needsAck = heavy && canExecute` is currently the only friction that scales
+with consequence, and it is binary. AQ-S6's own text asked for depth driven by
+**reversibility class × euros at risk**. Nothing on the page reads euros. That
+is not an S7 gap so much as an unfinished S6 idea, and it is recorded here
+rather than lost: today a €2 price change and a €2,000 one get identical
+friction.
+
+**Verdict: S7 needs no build. Two deferrals with conditions, one decline with a
+reason, and one inherited idea recorded.**
