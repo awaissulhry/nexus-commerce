@@ -176,7 +176,7 @@ const NO_HISTORY = 'so there is no worker page and no track record for it'
 const OUTSIDE_ORIGINS: Record<string, Origin> = {
   'manual-action': {
     name: 'Someone using the copilot',
-    what: `a person, not a worker — it came from the copilot, ${NO_HISTORY}`,
+    what: `a person rather than a worker, ${NO_HISTORY}`,
   },
   'pricing-watchdog': {
     name: 'The price watchdog',
