@@ -49,11 +49,25 @@ export function ListView({
   edges,
   selectedKey,
   onSelect,
+  dimmedKeys,
 }: {
   nodes: MapNode[]
   edges: MapEdge[]
   selectedKey: string | null
   onSelect: (key: string | null) => void
+  /**
+   * S3R C-S3.3 — the table honours the rail's filter.
+   *
+   * It did not, and the state persisted anyway: set "analyst" on the map (3 of 7
+   * cards dimmed), switch to List, and all seven rows came back undimmed while
+   * the rail — and with it the only control that could clear the filter — was
+   * not rendered at all. Switch back and the three dim again. The operator had
+   * a filter armed, invisible, and unmentioned.
+   *
+   * *Filtering dims; it never removes* is a law of this page, and the table is
+   * part of the page, so the rows stay, in order, and recede.
+   */
+  dimmedKeys: Set<string>
 }) {
   const nameOf = (k: string) => nodes.find((n) => n.key === k)?.name ?? k
   const feedsIt = (k: string) => edges.filter((e) => e.to === k).map((e) => nameOf(e.from))
@@ -176,9 +190,14 @@ export function ListView({
   return (
     <div className="sbm-listwrapper">
       <DataGrid
+        className="sbm-listgrid"
         columns={columns}
         rows={nodes}
         rowKey={(n) => n.key}
+        // `is-dimmed`, matching the canvas card — NOT `sbm-listdim`, which is
+        // already this table's muted-cell colour on seven cells. Third name
+        // collision caught on this page; the first two shipped.
+        rowClassName={(n) => (dimmedKeys.has(n.key) ? 'is-dimmed' : undefined)}
         initialSort={{ key: 'status', dir: 'asc' }}
         emptyState="No workers to list yet."
       />

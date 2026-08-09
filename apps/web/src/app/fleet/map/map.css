@@ -1474,6 +1474,25 @@
 .sbm-listdim {
   color: #9aa5b3;
 }
+/*
+ * S3R C-S3.3 — the table dims the rows the rail filtered out.
+ *
+ * Same law and same treatment as the canvas card: the row stays, in order, and
+ * recedes — it is never removed, because the page's claim is that filtering
+ * changes emphasis, not population. And it recedes to #55616f (6.06:1 here),
+ * not to unreadability: S2R measured what "just drop the opacity" does to a
+ * dimmed card, and 1.78:1 is not dimmed, it is deleted.
+ *
+ * The status colours grey out with everything else, exactly as the card's glyph
+ * does under `filter: grayscale(1)`. The words still say "last run failed".
+ */
+.sbm-listgrid tbody tr.is-dimmed {
+  background: #f7f9fb;
+}
+.sbm-listgrid tbody tr.is-dimmed td,
+.sbm-listgrid tbody tr.is-dimmed .sbm-listname .nm {
+  color: #55616f;
+}
 .sbm-listfoot {
   margin: 8px 6px 4px;
   font-size: 11px;

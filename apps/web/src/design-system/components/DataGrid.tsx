@@ -56,6 +56,19 @@ export interface DataGridProps<T> {
    */
   sort?: { key: string; dir: 'asc' | 'desc' } | null
   onSortChange?: (next: { key: string; dir: 'asc' | 'desc' }) => void
+  /**
+   * Per-row class (NAF.SB.M-S3 — additive, opt-in).
+   *
+   * For pages whose law is *filtering dims, it never removes*: the row stays in
+   * the table, in order, and recedes. Returning nothing (every existing
+   * consumer) changes nothing. It composes with the built-in `sel` class rather
+   * than replacing it.
+   *
+   * Deliberately a class and not a style, so the page owns what "dimmed" means
+   * — a table that greys a row to unreadability has removed it in every sense
+   * that matters to the reader.
+   */
+  rowClassName?: (row: T) => string | undefined
   /** cap height + scroll (sticky header/footer stay pinned) */
   maxHeight?: number | string
   className?: string
@@ -82,6 +95,7 @@ export function DataGrid<T>({
   initialSort,
   sort: controlledSort,
   onSortChange,
+  rowClassName,
   maxHeight,
   className,
 }: DataGridProps<T>) {
@@ -223,7 +237,7 @@ export function DataGrid<T>({
               const k = rowKey(row)
               const isSel = !!selected?.has(k)
               return (
-                <tr key={k} className={isSel ? 'sel' : undefined}>
+                <tr key={k} className={[isSel ? 'sel' : '', rowClassName?.(row) ?? ''].filter(Boolean).join(' ') || undefined}>
                   {selectable && (
                     <td className="ck sticky" style={{ left: 0 }}>
                       {rowSelectable && !rowSelectable(row) ? (

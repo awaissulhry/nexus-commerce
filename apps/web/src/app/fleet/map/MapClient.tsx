@@ -640,6 +640,10 @@ export function MapClient() {
                 edges={data.edges}
                 selectedKey={selection?.kind === 'worker' ? selection.id : null}
                 onSelect={(k) => setSelection(k ? { kind: 'worker', id: k } : null)}
+                /* The same `dimmed` the canvas gets. The table used to ignore
+                   it while the state persisted and its control disappeared
+                   with the rail — see ListView's own note. */
+                dimmedKeys={dimmed}
               />
             )}
           </div>
