@@ -150,7 +150,10 @@ export function HowWorkflowsWork({ page }: { page: 'list' | 'detail' }) {
       price; when it finishes, the panel puts what it predicted beside what it actually
       cost. The walk is one step at a time, so a stage the picture draws as
       &ldquo;at the same time&rdquo; is still tested in sequence — that keeps the cost
-      legible. Three things are always true and worth knowing before your first one: it
+      legible. Findings hand off inside the test: a step that reads the board sees what
+      the steps before it would have written, so testing a routine tests the routine and
+      not each worker alone. Plans do not hand off, because a preview never writes one —
+      a critic still reads the last real plan. Three things are always true and worth knowing before your first one: it
       spends real money, it writes <em>nothing</em> — no findings, no proposals, no row in
       Runs — and it runs workers that are <em>switched off</em>, because the point is to see
       what the wiring would do. The results live with your editing session; leaving the

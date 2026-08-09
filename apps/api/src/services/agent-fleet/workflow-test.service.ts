@@ -4,9 +4,15 @@
  * serialized over a definition's steps (concurrency 1, deliberately: cost
  * stays legible and the fleet ceiling is never burst by a test).
  *
- * Hand-offs are NOT simulated (study WF.5 truth #1): law L7 makes steps
- * communicate through persisted artifacts, and preview persists nothing —
- * each step reads the board as it is today. The UI says so.
+ * WF7.a — FINDINGS hand off, PLANS do not, and the difference is law rather
+ * than laziness. Law L7 makes steps communicate through persisted artifacts
+ * and preview persists nothing, so chaining is done as an OVERLAY: each
+ * step's would-be findings are carried in memory and merged into the next
+ * step's evidence at read time (`overlayPreviewFindings`), never stored. That
+ * covers analyst → director, because a director reads `open-findings`.
+ * A critic reads `pending-plan`, and a preview director's plan is not
+ * persisted either, so director → critic is still unchained: a critic
+ * previews against the last REAL plan. The UI says exactly this.
  *
  * The walk is async; status is assembled from the run rows (preview runs
  * persist output + findingCount), with a small in-process registry carrying
@@ -19,6 +25,7 @@ import { randomUUID } from 'node:crypto'
 import prisma from '../../db.js'
 import { executeCharter } from './agent-executor.js'
 import { topoLevels } from './fleet-graph.js'
+import type { PreviewOverlayFinding } from './observations/open-findings.observation.js'
 import {
   assembleTestStatus,
   defToGraph,
@@ -84,18 +91,30 @@ export async function startWorkflowTest(
   TESTS.set(testId, entry)
 
   void (async () => {
+    /* WF7.a — the walk carries forward what each step WOULD have written, so
+       a later step previews against the routine's own output instead of only
+       against today's board. Held in memory for the walk and discarded with
+       it: nothing here is ever persisted, which is what keeps the zero-writes
+       guarantee structural rather than promised. */
+    const overlay: PreviewOverlayFinding[] = []
     try {
       for (const stepKey of steps) {
         // Serial on purpose. A step failure never stops the rest — a test
         // exists to show the whole picture, and the executor's own gates
         // (kill switch, halt, budgets) still bind each preview.
-        await executeCharter(stepKey, {
+        const r = await executeCharter(stepKey, {
           trigger: 'manual',
           mode: 'ask',
           preview: true,
           orchestrationId: testId,
           workflowKey,
+          previewOverlay: overlay.length > 0 ? [...overlay] : undefined,
         }).catch(() => null)
+        for (const f of r?.previewFindings ?? []) {
+          if (f && typeof f === 'object') {
+            overlay.push({ charterKey: stepKey, finding: f as Record<string, unknown> })
+          }
+        }
       }
     } finally {
       entry.walking = false

@@ -832,8 +832,9 @@ export function RoutineEditor({
             <h4>Test this draft?</h4>
             <p>
               Every step runs in preview against today&rsquo;s board: real evidence, real model,{' '}
-              <strong>nothing written</strong>. Hand-offs are not simulated yet — each worker is
-              tested on its own. Estimated cost:{' '}
+              <strong>nothing written</strong>. Findings hand off inside the test, so a step
+              that reads the board sees what earlier steps here would have written; a critic
+              still reads the last real plan. Estimated cost:{' '}
               <strong>
                 {estimateErr
                   ? 'unknown'

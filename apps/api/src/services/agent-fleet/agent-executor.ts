@@ -15,6 +15,7 @@
  * plausible-looking ones.
  */
 import { Prisma } from '@nexus/database'
+import type { PreviewOverlayFinding } from './observations/open-findings.observation.js'
 import {
   OUTPUT_SCHEMAS,
   type AnalystOutputT,
@@ -77,6 +78,15 @@ export interface ExecuteOptions {
    * constraint that does not bind here does not bind at all.
    */
   assignmentTarget?: AssignmentTarget
+  /**
+   * WF7.a — would-be findings produced by EARLIER steps of the same preview
+   * walk, merged into this step's evidence at read time so a test of a
+   * routine tests the routine rather than each worker alone.
+   *
+   * Preview-only by construction: `workflow-test.service` is the only caller,
+   * and `getObservation` never stores the overlaid payload.
+   */
+  previewOverlay?: PreviewOverlayFinding[]
 }
 
 export interface ExecuteResult {
@@ -383,6 +393,8 @@ export async function executeCharter(
             assignmentMarketplace ?? singleMarketplace(charter.scopeMarketplaces),
         },
         assignmentNarrow,
+        // WF7.a — only a preview walk ever supplies this.
+        opts.preview ? opts.previewOverlay : undefined,
       )
       observations.push(obs)
       await step({

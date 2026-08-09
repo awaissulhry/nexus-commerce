@@ -104,3 +104,70 @@ export const openFindingsBuilder: ObservationBuilder = {
     }
   },
 }
+
+/**
+ * NAF.WF7.a — the test lane's evidence overlay.
+ *
+ * WF.5 shipped the preview walk with an admitted hole: "hand-offs are not
+ * simulated yet — each worker is tested on its own", so a council test proved
+ * nothing about the council. The director previewed against today's board
+ * rather than against what the analysts had just produced.
+ *
+ * This merges a walk's would-be findings into the director's evidence. Two
+ * things make it safe, and both are constraints rather than choices:
+ *
+ *  1. It is applied at READ time, after `getObservation` has stored the row —
+ *     the same seam `applyNarrow` uses, and for the same reason. Applied
+ *     before the write, a preview would poison a 60-minute cache that REAL
+ *     runs read, which is the worst possible way to break the zero-writes
+ *     guarantee: silently, and for someone else.
+ *  2. A would-be finding has no `findingId`, and the director's plan items
+ *     cite one. Inventing a real-looking id would make a preview plan
+ *     reference rows that do not exist, so the id is explicitly synthetic and
+ *     the caveat says what it is.
+ */
+export interface PreviewOverlayFinding {
+  charterKey: string
+  finding: Record<string, unknown>
+}
+
+export function overlayPreviewFindings(
+  payload: unknown,
+  overlay: PreviewOverlayFinding[] | undefined,
+): unknown {
+  if (!overlay || overlay.length === 0) return payload
+  if (!payload || typeof payload !== 'object') return payload
+  const p = payload as Record<string, unknown>
+  const existing = Array.isArray(p.findings) ? p.findings : []
+
+  const added = overlay.map((o, i) => {
+    const f = o.finding ?? {}
+    return {
+      findingId: `preview:${o.charterKey}:${i}`,
+      charter: o.charterKey,
+      kind: typeof f.kind === 'string' ? f.kind : '',
+      entityType: typeof f.entityType === 'string' ? f.entityType : '',
+      entityId: typeof f.entityId === 'string' ? f.entityId : '',
+      entityName: typeof f.entityName === 'string' ? f.entityName : null,
+      severity: typeof f.severity === 'string' ? f.severity : 'info',
+      confidence: typeof f.confidence === 'number' ? f.confidence : 0,
+      observation: f.observation ?? {},
+      rationale: typeof f.rationale === 'string' ? f.rationale : '',
+      engineAgrees: null,
+      engineDisagreement: null,
+      wouldBe: true,
+    }
+  })
+
+  const counts = (p.counts ?? {}) as Record<string, unknown>
+  const caveats = Array.isArray(p.caveats) ? [...p.caveats] : []
+  return {
+    ...p,
+    counts: { ...counts, wouldBe: added.length },
+    caveats: [
+      ...caveats,
+      `${added.length} of the findings below are marked wouldBe: they were produced by earlier steps of THIS TEST and are not on the board. Their findingId begins "preview:" and cannot be cited outside this test.`,
+    ],
+    findings: [...added, ...existing],
+  }
+}

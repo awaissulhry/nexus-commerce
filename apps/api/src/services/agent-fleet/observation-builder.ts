@@ -12,6 +12,7 @@
  * the freshest-first read tolerates.
  */
 import prisma from '../../db.js'
+import { overlayPreviewFindings, type PreviewOverlayFinding } from './observations/open-findings.observation.js'
 import { bidProposalsBuilder } from './observations/bid-proposals.observation.js'
 import { cronHealthBuilder } from './observations/cron-health.observation.js'
 import { fleetHealthBuilder } from './observations/fleet-health.observation.js'
@@ -190,6 +191,11 @@ export async function getObservation(
   key: string,
   scope: ObservationScope = {},
   narrow?: ObservationNarrow,
+  /** WF7.a — the test lane's would-be findings from earlier steps of the same
+   *  preview walk. Applied at READ time only, exactly like `narrow`: it must
+   *  never reach the stored row, or a preview would poison a 60-minute cache
+   *  that real runs read. */
+  previewOverlay?: PreviewOverlayFinding[],
 ): Promise<ObservationResult> {
   const builder = BUILDERS[key]
   if (!builder) throw new Error(`unknown observation builder: ${key}`)
@@ -218,7 +224,10 @@ export async function getObservation(
     return {
       id: existing.id,
       key,
-      payload: await applyNarrow(builder, existing.payload, narrow),
+      payload: overlayPreviewFindings(
+        await applyNarrow(builder, existing.payload, narrow),
+        key === 'open-findings' ? previewOverlay : undefined,
+      ),
       dataVintage: existing.dataVintage,
       computedAt: existing.computedAt,
       cached: true,
@@ -240,8 +249,12 @@ export async function getObservation(
     id: row.id,
     key,
     // The row stored above is the ACCOUNT-wide payload — shared, and cited
-    // by evidenceRefs. What the caller reads is the narrowed view of it.
-    payload: await applyNarrow(builder, payload, narrow),
+    // by evidenceRefs. What the caller reads is the narrowed view of it —
+    // and, in a test walk, the overlaid view. Neither is ever stored.
+    payload: overlayPreviewFindings(
+      await applyNarrow(builder, payload, narrow),
+      key === 'open-findings' ? previewOverlay : undefined,
+    ),
     dataVintage,
     computedAt: row.computedAt,
     cached: false,
