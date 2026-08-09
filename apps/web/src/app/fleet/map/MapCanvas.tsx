@@ -187,6 +187,38 @@ function LaneNode({ data }: NodeProps) {
 
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
 
+/**
+ * ⚠ DECLARED GEOMETRY — the cure for every xyflow defect on this page.
+ *
+ * xyflow never measures this canvas's nodes. Probed in its own store: a worker
+ * node reports `measured: {}` and `internals.handleBounds: undefined`. That
+ * makes `isNodeInitialized()` false —
+ *
+ *     !!(node.internals.handleBounds || node.handles?.length) &&
+ *     !!(node.measured.width || node.width || node.initialWidth)
+ *
+ * — so `getEdgePosition()` returns null, and `EdgeWrapper` hits
+ * `if (sourceX === null) return null` for EVERY edge. The store held all four
+ * edges the whole time and nothing filtered them; they simply could not compute
+ * a position. The same unmeasured state is why `fitView` was a coin toss, why
+ * the ResizeObserver refit never fired, and why `useNodesInitialized` never
+ * flipped. Four symptoms, one cause.
+ *
+ * Both clauses accept DECLARED values, and `getEdgePosition` falls back to
+ * `toHandleBounds(node.handles)` when `handleBounds` is absent. This canvas
+ * computes its own layout (rule 1) and its own frame, so it declares its own
+ * geometry too — and then nothing waits on the library to measure anything.
+ *
+ * These must match what the components actually render: a target handle on the
+ * left edge and a source on the right, both at mid-height.
+ */
+function handlesFor(nodeId: string, w: number, h: number) {
+  return [
+    { id: null, nodeId, type: 'target' as const, position: Position.Left, x: 0, y: h / 2, width: 5, height: 5 },
+    { id: null, nodeId, type: 'source' as const, position: Position.Right, x: w, y: h / 2, width: 5, height: 5 },
+  ]
+}
+
 
 /** The card and lane boxes, in graph coordinates. These are CSS constants
  *  (`.sbm-node { width: 252px }`, `.sbm-lane { width: 640px }`) and are verified
@@ -391,6 +423,9 @@ export function MapCanvas({
       id: l.id,
       type: 'lane',
       position: { x: l.x, y: l.y },
+      width: l.w,
+      height: l.h,
+      handles: handlesFor(l.id, l.w, l.h),
       /*
        * ⚠ NO EXPLICIT `zIndex` HERE, and that is the fix for a live defect.
        *
@@ -435,6 +470,9 @@ export function MapCanvas({
         id: n.key,
         type: 'worker',
         position: p,
+        width: NODE_W,
+        height: NODE_H,
+        handles: handlesFor(n.key, NODE_W, NODE_H),
         data: {
           wiring: [
           `${n.name}.`,
