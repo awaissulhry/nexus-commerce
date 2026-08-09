@@ -242,7 +242,15 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
     // Waiting view filters to three, so those rows are invisible and mortal.
     const outsidePending = await prisma.agentApproval.groupBy({
       by: ['toolName'],
-      where: { status: { in: ['pending', 'scheduled'] }, toolName: { notIn: FLEET_TOOLS } },
+      where: {
+        status: { in: ['pending', 'scheduled'] },
+        toolName: { notIn: FLEET_TOOLS },
+        /* S5.5 — the same snooze clause the list uses two handlers down. This
+           number is rendered by S2 as "Separately, N requests are waiting", so
+           if it counted rows the list hides, S2 would send the operator to
+           look for something that is not there. */
+        OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }],
+      },
       _count: true,
     })
 
@@ -615,6 +623,20 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         status: { in: ['pending', 'scheduled'] },
         toolName: { notIn: FLEET_TOOLS },
+        /**
+         * S5.5 — snoozing has to mean the same thing on both sides of this
+         * page.
+         *
+         * `whereFor('waiting')` hides a snoozed row and the tab counts hide it
+         * too, deliberately: "if the badge counted what the queue hides, the
+         * first thing the operator would learn is that the badge lies". This
+         * endpoint filtered on status and tool only, so a snoozed row stayed
+         * on screen here — and snoozing it again was the only thing the
+         * operator could do about it.
+         *
+         * Same clause, same idiom, same reason.
+         */
+        OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }],
       },
       orderBy: { requestedAt: 'asc' },
       take: 100,
