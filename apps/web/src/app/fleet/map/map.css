@@ -1670,10 +1670,14 @@
        236.2px. Cap the controls, give the slack to the explanation. */
     grid-template-columns: 190px minmax(0, 1fr) 250px;
     gap: 0 14px;
-    /* 210 was set before the track above was capped. Narrowing `Show` from
-       509.8px to 250px made its footnote wrap to three lines, so the rail's
-       content grew to 226px at 1100 and 252px at 1024 and the old cap clipped
-       it — 16px and 42px. Cap the height to what the content actually needs. */
+    /* A guard, not a fix, and the difference is worth writing down because I got
+       it wrong once. The rail clips 16px at 1100 and 42px at 1024; I assumed the
+       cap was doing it and raised it 210 → 260. **Measured after deploying: the
+       clipping is identical.** The cap is never reached — the parent grid hands
+       this row only 174.7px at 1100 — so the constraint is `.sbm-body`'s height
+       distribution, which is the same cause as the canvas measuring **2px tall**
+       at these widths. That belongs to the canvas owner and is raised (S3 study,
+       Part 12), not worked around here. */
     max-height: 260px;
   }
   .sbm-orail-sec + .sbm-orail-sec {

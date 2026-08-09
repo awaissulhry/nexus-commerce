@@ -981,6 +981,17 @@ was merged; the paragraph is struck through in place rather than quietly edited.
   outside the rail. **Raised.**
 - **C-S3.5** — whether the rail should carry Section 2's converging-edge count.
   Recommended *no*, with the node badge as the better home. **Operator's call.**
-- **New:** at ≤1100 the canvas measures **2px tall**, before and after this work.
-  The page is unusable at that width for a reason that has nothing to do with the
-  rail. **Raised** — the canvas is S2R's.
+- **New:** at ≤1100 the canvas measures **2px tall**, before and after this work,
+  and the rail clips 16px at 1100 / 42px at 1024. **Both have the same cause and
+  it is not the rail.** I first assumed the clipping was my own `max-height` and
+  raised it 210 → 260; measured after deploying, **the clipping is identical**,
+  because the cap is never reached — the parent grid hands the rail's row only
+  174.7px at 1100. The constraint is `.sbm-body`'s height distribution in its
+  one-column form, which is also what flattens the canvas. **Raised** — the
+  canvas and the body grid are S2R's. The cap stays as a guard, with the wrong
+  theory corrected in place rather than deleted.
+
+  This is the second time in one section that a fix shipped on an unverified
+  theory (the first was the three transition-artefact "mismatches"). Both were
+  caught by the same habit: measure the thing you claim to have fixed, on prod,
+  after it deploys.
