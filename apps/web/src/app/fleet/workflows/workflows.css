@@ -995,6 +995,28 @@
    its text; only the columns are shared. */
 .wf-vrow > .wf-vbadge { justify-self: start; }
 
+/* S4.d — what a revision changed, inline under its own row. */
+.wf-vdiff {
+  grid-column: 2 / -1;
+  margin: 8px 0 2px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #eef1f6;
+  border-radius: 9px;
+}
+.wf-vdiff-k {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5f6a78;
+  margin-bottom: 7px;
+}
+.wf-vdiff .wf-difflist { margin-bottom: 0; }
+.wf-vactions { gap: 8px; }
+.wf-vdiffbtn { white-space: nowrap; }
+
 .wf-vauthor,
 .wf-vwhen {
   font-size: 11.5px;

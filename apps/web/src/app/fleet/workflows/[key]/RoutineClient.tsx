@@ -137,6 +137,7 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
   /* S3.c — which run the pipeline is drawing. null = the newest, which is what
      S2R shipped and what the page returns to when the selection is cleared. */
   const [selectedRun, setSelectedRun] = useState<string | null>(null)
+  const [openDiff, setOpenDiff] = useState<string | null>(null)
 
   /* WF.6b — Run-now for a published custom. A REAL run: findings write to
      the board; OFF workers still skip; the fleet gates bind. */
@@ -260,6 +261,31 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
     () => groupRuns(runs, builtin ? builtin.mode : { workflowKey: routineKey }),
     [runs, builtin, routineKey],
   )
+
+  /* S4.c — how many runs each revision actually served. S3R stamps every run
+     row with `wiring rev N`; this is where those chips resolve.
+     `groups` is already preview-free on both branches of `groupRuns` (built-ins
+     select by mode, and 'preview' is not one; customs exclude it explicitly),
+     so the test lane can never appear in a revision's tally. A group with no
+     stamp ran the code path and is counted against the built-in row. */
+  const CODE_PATH = '__code__'
+  const runsByRevision = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const g of groups) {
+      const key = g.rows.find((r) => r.workflowRevisionId)?.workflowRevisionId ?? CODE_PATH
+      m.set(key, (m.get(key) ?? 0) + 1)
+    }
+    return m
+  }, [groups])
+
+  /* The count is over the FETCHED window, so when the feed returns its cap the
+     sentence says so rather than implying a lifetime total. */
+  const servedSentence = (n: number) =>
+    n === 0
+      ? 'no runs under this wiring'
+      : runs.length >= 100
+        ? `served ${n} of the newest 100 runs`
+        : `served ${n} run${n === 1 ? '' : 's'}`
 
   const shownGroup = groups.find((g) => g.id === selectedRun) ?? groups[0] ?? null
   /* Historical only when the operator picked something that is NOT the newest
@@ -687,6 +713,13 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                 {vers.revisions.map((r) => {
                   const isActive = Boolean(r.activatedAt && !r.supersededAt)
                   const isDraft = !r.activatedAt && !r.supersededAt
+                  /* S4.d — what THIS revision changed, against the one before
+                     it by number. Not Grafana's select-two-and-compare: at
+                     three rows a selection model costs two clicks and a mental
+                     mode to answer a question each row can answer alone.
+                     rev 1 has no predecessor, so it shows what it introduced. */
+                  const prev = vers.revisions.find((x) => x.revision === r.revision - 1)
+                  const isOpen = openDiff === r.id
                   return (
                     <div className={`wf-vrow${isActive ? ' is-active' : ''}`} key={r.id}>
                       <span className="wf-vbadge">rev {r.revision}</span>
@@ -714,6 +747,11 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                         ) : (
                           <span className="acr-pg-statechip wf-chip-off">superseded</span>
                         )}
+                        <span className="wf-sub">
+                          {isDraft
+                            ? 'never ran — it has never been active'
+                            : servedSentence(runsByRevision.get(r.id) ?? 0)}
+                        </span>
                       </span>
                       <span className="wf-vactions">
                         {isActive && builtin ? (
@@ -741,11 +779,34 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                             {isDraft ? 'Activate…' : 'Make this active…'}
                           </button>
                         ) : null}
+                        <button
+                          className="acr-btn ghost wf-vdiffbtn"
+                          aria-expanded={isOpen}
+                          onClick={() => setOpenDiff(isOpen ? null : r.id)}
+                        >
+                          {isOpen ? 'Hide' : 'What changed'}
+                        </button>
                       </span>
+                      {isOpen ? (
+                        <div className="wf-vdiff">
+                          <span className="wf-vdiff-k">
+                            {prev
+                              ? `what rev ${r.revision} changed, against rev ${prev.revision}`
+                              : `what rev ${r.revision} introduced`}
+                          </span>
+                          <DiffList diff={computeDiff(prev ? prev.definition : EMPTY_DEF, r.definition)} />
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })}
               </>
+            ) : null}
+            {builtin && (!vers || vers.revisions.length === 0) ? (
+              <p className="wf-vnote">
+                No changes have ever been published — this routine runs the wiring that ships
+                in code.
+              </p>
             ) : null}
             {builtin ? (
               /* A peer row on the same grid — it genuinely has fewer facts, so
@@ -767,6 +828,11 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                   ) : (
                     <span className="acr-pg-statechip wf-chip-off">set aside</span>
                   )}
+                  {/* Runs that carry no revision stamp ran the code path — so
+                      the built-in closes the same loop the revisions do. */}
+                  <span className="wf-sub">
+                    {servedSentence(runsByRevision.get(CODE_PATH) ?? 0)}
+                  </span>
                 </span>
                 <span className="wf-vactions" />
               </div>

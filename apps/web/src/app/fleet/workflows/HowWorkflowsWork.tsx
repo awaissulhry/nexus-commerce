@@ -93,6 +93,16 @@ export function HowWorkflowsWork() {
             can reach Amazon any other way.
           </p>
           <p>
+            <strong>Reading the versions.</strong> Every published change is a numbered{' '}
+            <Term k="revision">revision</Term> with a mandatory note saying why — that note is
+            the change log. Each row says who wrote it, when, whether it is the wiring running
+            now, how long it was active, and how many runs it served. &ldquo;What
+            changed&rdquo; opens the diff against the revision before it. Any revision that is
+            not the live one can be made live again: the wiring you pick becomes active, what is
+            running now is set aside, and nothing is rewritten — the numbers never move, so a run
+            that stamped rev 2 still means rev 2.
+          </p>
+          <p>
             <strong>Editing and versions.</strong> "Edit the wiring" on a routine&rsquo;s page
             opens a <Term k="draft">draft</Term>: add or remove workers, choose each step&rsquo;s{' '}
             <Term k="gate">gate</Term>, and connect who hands what to whom. Drafts are inert —{' '}
