@@ -4061,9 +4061,223 @@ Custom `rev 3`, **Ready**, manual, *"never run"*, Runs *"No runs yet."*, every
 `naf-wf-draft-*` key cleared. Two preview run rows added by the walks — which is
 what a test is, and why §4b item 2 is this section's own externality.
 
+## PART 15 — NAF.WF-S7R · Section 7: the teaching layer, read as one text
+
+Opened 2026-08-10, after all six zones were rebuilt. S7 was defined as a
+*condition of done*, not a phase; this makes it real. **Zero spend** — nothing
+below required a test walk.
+
+**Not relitigated:** no tour library, no overlays; teaching stays as the
+collapsible card, `<Term>` tooltips, and sentences in place; the card
+summarises what a sentence in place already says rather than duplicating it.
+
+### 15.1 · PHASE 0 — the cold-reader audit, on prod
+
+Both pages at 1728 × 962. Prod ends as found: council `v1`, custom `rev 3`,
+card closed, no revisions, no spend.
+
+#### F1 · The page's real teaching layer is 49 tooltips nobody can reach by keyboard
+
+| | list page | detail page |
+|---|---|---|
+| `title` attributes inside `.wf-page` | **49** (35 unique) | 11 (8 unique) |
+| of those, on a focusable element | **0** | 3 |
+| `<Term>` usages in place | **2** | **1** |
+
+And the copy in them is *good*: *"Fleet self-test is switched OFF, so this step
+is skipped and costs nothing. The Workers page decides."* · *"Grading —
+deterministic code, not judgment. It always runs."* · *"Each bar is one run,
+oldest on the left…"*. **The best teaching on this page lives in the one
+mechanism a keyboard user cannot open, a touch user never sees, and no glossary
+governs.** NN/g is explicit: *"Tooltips that appear only on mouse hover are
+inaccessible for users that rely on keyboards"*, and tooltips must not carry
+information vital to completing a task.
+
+#### F2 · Two tooltip systems, one governed and one not
+
+`<Term>` is glossary-backed, styled, `tabIndex={0}`, focus- and Escape-aware —
+**23 usages page-wide**. `title` is **60 strings across both pages**, governed
+by nothing, listed nowhere, and free to drift independently of the glossary
+that defines the same words.
+
+#### F3 · The card is 1,775 words and identical on both pages
+
+| | |
+|---|---|
+| paragraphs | **13** |
+| words | **1,775** (~8 minutes) |
+| rendered height | **1,366px = 1.42 screens** |
+| `<Term>` usages inside it | **14 of the page's 23** |
+| paragraphs about the *other* page | **7 of 13** on the list · 4 of 13 on the detail |
+
+Longest paragraphs: *How to read a routine* 209w, *What a test costs* 199w,
+*What the editor tells you* 189w. NN/g's overlay research is the evidence
+against this shape: short-term memory *"fades in about 20 seconds"*, users
+dismiss text-heavy help, and hints work *"one-by-one, at the right moment"*.
+An eight-minute essay behind a **Read it** button is the opposite, and it is
+carrying most of the page's teaching.
+
+#### F4 · The card's own header says "six honest paragraphs". There are thirteen.
+
+Drift, in the file whose job is to prevent it.
+
+#### F5 · The `workflow` glossary entry is stale
+
+> *"…a workflow is one routine, readable on its own — **and, soon, versionable
+> and editable**."*
+
+Versioning shipped in WF.2–WF.4 and was rebuilt in S4R; editing shipped in
+WF.3 and was rebuilt in S5R. "Soon" describes last month's fleet.
+
+#### F6 · `run` means one thing in the glossary and another on this page
+
+Glossary (Activity's term): *"**One worker** doing its job once."* This page:
+*"One line per <Term k=run>run</Term> **of the whole routine**"* — the Runs
+section groups by `orchestrationId`. **The tooltip contradicts the sentence
+it is inside.** Cross-page term; an edit is cross-stream.
+
+#### F7 · `draft` carries two senses on one screen
+
+Glossary: *"A **recorded revision** that is not active."* The editor header
+says *"Editing — a draft"* about an **unsaved** edit, and S5.d's banner offers
+*"Use that draft"* about a **browser-stored** one. Three different things, one
+word, one tooltip.
+
+#### F8 · An OFF pill beside a line that shows what it cost
+
+On the council: Director renders **OFF** and, on the same card,
+*"ok · 2m 47s · $0.1944"*. The reconciliation — the pill is today's dial, the
+line is the last run's reality — is in card paragraph 5, one click away. On
+screen and on hover: **absent**.
+
+#### F9 · The six rebuilt zones barely teach in place
+
+`RoutineCard`, `RunsSection`, `RoutinePipeline`, `RunBars`: **zero** `<Term>`.
+The whole detail page carries **one** (`approval`). Undefined and unhoverable
+on screen: the artifact chips (**FINDINGS / PLAN / VERDICT / SURVIVORS**), the
+stage labels (**AT THE SAME TIME**, **THEN**), the state chips
+(**superseded / active / served 1 run**), the autonomy pills.
+
+#### F10 · The S6 seam duplicates itself
+
+*"Trying things safely"* (WF.6-era) and *"What a test costs, and what it
+touches"* (S6R) are adjacent paragraphs teaching the same write-nothing
+guarantee in different words. Six independent teaching passes, exactly as
+predicted.
+
+#### The scorecard
+
+`on screen` · `hover` · `click` (the card) · **ABSENT**
+
+| # | Question a cold reader asks | List | Detail |
+|---|---|---|---|
+| 1 | What is a workflow? How is it different from the map, or a worker? | **on screen** + hover | click |
+| 2 | Why didn't it run? | **on screen** | **on screen** |
+| 3 | What will it cost? | **on screen** | **on screen** |
+| 4 | What can it touch — what protects me? | **on screen** + hover | **on screen** |
+| 5 | What happens if I publish this? | — | **on screen** (dialog) |
+| 6 | Can I undo it? | click | hover¹ + click |
+| 7 | Did my test change anything? | — | **on screen** (S6.c) |
+| 8 | Where did my test results go? | — | **on screen** (S6.c) |
+| 9 | **Why is this worker crossed out?** | hover¹ + click | hover¹ |
+| 10 | **What does this chip mean?** | hover¹ (kind/version) · **ABSENT** (artifact chips) | **ABSENT** |
+
+¹ *`title` only — not keyboard-reachable, invisible on touch.*
+
+**Two ABSENT, and every "hover" on the page is an inaccessible one.** The
+questions the six rebuilds answered best — cost, refusal, consequence, test
+guarantees — are the ones now answered on screen. The ones nobody owned,
+because they belong to no single zone, are the ones left.
+
+#### Three inventories
+
+**(a) Every `<Term>`, is its copy still true?** 10 of 12 keys used are true.
+`workflow` is **stale** (F5); `run` **conflicts** with this page's usage (F6);
+`draft` is **ambiguous** (F7).
+
+**(b) Orphans.** None. Every term this page minted (`workflow` `trigger` `gate`
+`draft` `publish` `step` `revision` `test`) is still used.
+
+**(c) Every claim in the card against the six records.** 13 paragraphs: 9 true,
+**1 stale** (the header's "six paragraphs"), **1 duplicated** (F10), and
+**2 holes** — nothing teaches S3R's *run-selection re-colours the pipeline*
+where the runs are (it is in paragraph 6, on a page that also has paragraph 5
+describing the pipeline), and nothing teaches S4R's *served N runs* except
+inside the versions paragraph.
+
+### 15.2 · PHASE 1 — where teaching lives, and how it stays true
+
+| Source | What it settles |
+|---|---|
+| **NN/g, instructional overlays** | recall *"fades in about 20 seconds"*; successive hints make a product *"appear overly complicated"*; deliver *"one-by-one, at the right moment"*, contextually — the case against a 1,775-word card carrying the load |
+| **NN/g, tooltip guidelines** | tooltips are *microcontent*; **must support mouse AND keyboard**; **never** carry information vital to task completion |
+| **GitHub hovercards / Wikipedia previews** | one scoped fact per hover, on the noun itself, where it appears |
+| **Stripe** | expandable explanation *beside the consequence*, at the moment of decision — which is what our publish/test dialogs already do |
+| **Linear** | empty states as the teaching surface — ours already do this well (*"No runs yet. When this routine runs, every execution lands here…"*) |
+| **Documentation drift (industry)** | universal; the only durable answers are a **single source of truth for copy** and **mechanical detection** — not diligence |
+
+**Judged for our reader** — one operator, daily, who must not be condescended
+to on visit fifty nor lost on visit one: the card is the *reference*, not the
+teacher. The teacher is the noun on screen. That inverts today's ratio, where
+14 of 23 term usages are inside the card.
+
+### 15.3 · THE PROPOSAL
+
+**15.3.1 · The card teaches its own page (F3, F10).** Split by page: the list
+card keeps what the list shows, the detail card what the detail shows, with a
+short shared preamble. Cut the S6 duplication, retire the stale header, and
+bring the total down — the target is *no paragraph about a page you are not
+on*, not a word count for its own sake.
+
+**15.3.2 · Teach on the noun (F9, F1).** Wire `<Term>` into the rebuilt zones
+where a load-bearing concept is on screen and undefined: the artifact chips,
+the state chips, the run rows, the autonomy pills. This is the ratio inversion:
+concepts get defined where they appear.
+
+**15.3.3 · Every teaching tooltip becomes reachable (F1, F2).** A `title` that
+carries teaching becomes either a `<Term>` (when it is a glossary concept) or a
+DS `Tooltip` on a focusable trigger (when it is per-instance, like *"Fleet
+self-test is switched OFF…"*). Per-run data tooltips on the bars stay as they
+are — they are data, not teaching. **This is the one proposal that touches more
+than words**, and it is an accessibility fix to the teaching layer itself.
+
+**15.3.4 · Three glossary corrections (F5, F6, F7).** `workflow`: delete
+"soon", state what shipped. `run`: **cross-stream** — it is Activity's term
+and the fix is additive precision, naming both grains (one worker's run; a
+routine's run is the group of them). `draft`: name the two senses. Claimed with
+diffs, per §3.
+
+**15.3.5 · The drift defence, written down and mechanical.** A vitest that
+parses `fleet/workflows/**` for `<Term k="…">` and asserts every key resolves
+in `GLOSSARY`, and that every term this page minted is still referenced — so a
+renamed key or an orphan fails a test instead of shipping. Plus a recorded
+short-fragment grep list in this doc for the phrases that must be re-checked
+when behaviour changes. Diligence is not a defence; a failing test is.
+
+### 15.4 · Build phases
+
+| Phase | What | Exit criteria |
+|---|---|---|
+| **S7.a** | Card per page; kill the duplication; retire the stale header. | List card: **0** paragraphs about the detail page, and vice versa · S6 guarantee stated **once** · header comment matches the file · every claim traceable to a record |
+| **S7.b** | `<Term>` on the nouns in the six zones; the missing terms minted. | Scorecard Q9/Q10 **not ABSENT** · in-place term usages **> card term usages** · 0 `<Term>` inside a link |
+| **S7.c** | Teaching tooltips become keyboard-reachable. | **0** keyboard-unreachable teaching `title`s on either page · per-run data tooltips untouched |
+| **S7.d** | Glossary truth + the drift test. | 3 entries corrected, cross-stream diffs stated · vitest fails on an unknown key and on an orphan · scorecard **re-run on prod: zero ABSENT** |
+
+### 15.5 · Recorded, not built
+
+1. **F8 needs no new mechanism** — the OFF-pill/cost collision is teachable in
+   place at S7.b; if it still reads wrong after a term, it is S2R's design
+   question, not a wording one.
+2. **A docs link out of the product.** Nothing in the fleet has one; adding a
+   destination is an engagement, not a sentence.
+3. **First-run vs hundredth-run treatment.** The card is collapsed by default,
+   which is the cheap version of this and is probably right at N=1 operator.
+
 ---
 
 ## Sources
+
+**Part 15 (WF-S7R, in-product teaching research, 2026-08-10)** — NN/g [tooltip guidelines](https://www.nngroup.com/articles/tooltip-guidelines/) (tooltips are *microcontent*; **must support mouse AND keyboard** — *“tooltips that appear only on mouse hover are inaccessible for users that rely on keyboards”*; never carry information vital to task completion) · NN/g [instructional overlays and coach marks](https://www.nngroup.com/articles/mobile-instructional-overlay/) (recall *“fades in about 20 seconds”*; successive hints make a product *“appear overly complicated and daunting”*; deliver hints *“one-by-one, at the right moment”* — the evidence against a long card carrying the teaching, and for teaching on the noun) · GitHub hovercards and Wikipedia page previews (one scoped fact, on the noun, where it appears) · Stripe (expandable explanation beside the consequence — what our publish/test dialogs already do) · Linear (empty states as the teaching surface) · documentation-drift practice ([Document360](https://document360.com/blog/documentation-drift/), [UX Content Collective](https://uxcontent.com/ux-copy-single-source-truth/): the durable answers are a single source of truth for copy and **mechanical detection**, not diligence).
 
 **Part 14 (WF-S6R, test/dry-run-lane research, 2026-08-09)** — [Zapier: Test Zap steps](https://help.zapier.com/hc/en-us/articles/18811411817741-Test-Zap-steps) (**testing is LIVE and may change your app**, stated plainly; the "Data out" tab shows the actual payload) · [n8n: types of executions](https://docs.n8n.io/build/understand-workflows/understand-executions/types-of-executions/) (manual runs display inline in the editor, production runs live in a separate Executions tab; docs are **silent** on side effects) and [data pinning](https://docs.n8n.io/build/work-with-data/pin-and-mock-data) (pin a node's output so testing stops re-hitting the system) · [Power Automate: testing flows](https://learn.microsoft.com/en-us/power-automate/desktop-flows/test-desktop-flows) (green check / red × per action, expandable to inputs, outputs and messages) · [Camunda 8 Play](https://docs.camunda.io/docs/next/components/hub/workspace/modeler/validation/play-your-process/) (**isolation by throwaway cluster** — a temporary Zeebe cluster spun up for the test) · LangSmith (per-step **token cost and latency**, unified cost view) · Windmill (test a step in isolation, results beside it). **The synthesis: four isolation models, and ours is its own** — Zapier does it for real and warns you, Camunda throws a cluster away, n8n pins the data, and we run real reads and a real model in the real place and refuse only the writes. Nobody else spends real money to guarantee nothing happened.
 
