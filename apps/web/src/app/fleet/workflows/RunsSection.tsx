@@ -11,6 +11,7 @@
  */
 
 import { Fragment, useState } from 'react'
+import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { classifyFailure } from '../_shared/run-health'
@@ -123,7 +124,7 @@ export function RunsSection({
   return (
     <section className="acr-card">
       <header className="wf-cardhead">
-        <h3>Runs</h3>
+        <h3><Term k="run">Runs</Term></h3>
         <span className="wf-legend">
           {groups.length === 0
             ? null

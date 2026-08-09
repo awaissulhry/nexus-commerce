@@ -34,6 +34,7 @@
  */
 
 import { ArrowRight } from 'lucide-react'
+import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { fmtDuration, type CharterRow, type RunGroup, type RunRow } from './lib'
 import type { RoutineStory, StoryStep } from './routines'
 
@@ -86,6 +87,11 @@ function incomingArtifact(story: RoutineStory, levelStepIds: string[]): string |
   return null
 }
 
+/** Autonomy words that already have a glossary entry. */
+const AUTONOMY_TERM: Record<string, 'off' | 'observe' | 'propose' | 'auto' | undefined> = {
+  OFF: 'off', OBSERVE: 'observe', PROPOSE: 'propose', AUTO: 'auto',
+}
+
 function roleOf(s: StoryStep, c: CharterRow | undefined): { label: string; cls: string } {
   if (s.kind === 'gate') return { label: 'you decide', cls: 'k-gate' }
   if (s.kind === 'code') return { label: 'code', cls: 'k-code' }
@@ -133,7 +139,15 @@ export function RoutinePipeline({
               <span className="wf-pipe-levelk">
                 {i > 0 ? <ArrowRight size={11} className="wf-pipe-arrow" aria-hidden /> : null}
                 {steps.length > 1 ? 'at the same time' : i === 0 ? 'first' : 'then'}
-                {artifact ? <span className="wf-pipe-artifact">{artifact}</span> : null}
+                {/* S7.b — FINDINGS / PLAN / VERDICT / SURVIVORS were the one
+                    thing on this page defined nowhere: not a Term, not a
+                    title, and only one clause of the teaching card. `handoff`
+                    already says exactly what this chip means. */}
+                {artifact ? (
+                  <Term k="handoff">
+                    <span className="wf-pipe-artifact">{artifact}</span>
+                  </Term>
+                ) : null}
               </span>
               <div className="wf-pipe-steps">
                 {steps.map((s) => {
@@ -151,7 +165,16 @@ export function RoutinePipeline({
                         <span className="nm">{s.label}</span>
                         {/* A worker's dial is today's; for a past run it is
                             unknown, so it is not shown rather than guessed. */}
-                        {historical && isWorker ? null : (
+                        {historical && isWorker ? null : isWorker && AUTONOMY_TERM[role.label] ? (
+                          /* S7.b — the OFF pill sits beside a line saying what
+                             that worker cost on the last run, which reads as a
+                             contradiction until you know the pill is TODAY'S
+                             dial and the line is history. The dial's own word
+                             now carries its definition. */
+                          <Term k={AUTONOMY_TERM[role.label]!}>
+                            <span className={`wf-pipe-role ${role.cls}`}>{role.label}</span>
+                          </Term>
+                        ) : (
                           <span className={`wf-pipe-role ${role.cls}`}>{role.label}</span>
                         )}
                       </span>
