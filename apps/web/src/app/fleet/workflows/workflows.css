@@ -1257,12 +1257,17 @@
   margin: 5px 0 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 3px 14px;
 }
-.wf-testfinds li { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; line-height: 1.45; min-width: 0; }
-.wf-findlabel { color: #34404f; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wf-findkind { color: #5f6a78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* These strings come from a model, so they WRAP rather than ellipsise: at
+   237px lanes, five of eleven labels clipped — "veste moto homme homologué"
+   became "veste moto homme homo…". A width that happens to fit today's
+   findings is not a layout. Wrapping is content-independent; the 300px lane
+   is what keeps it to one line in practice. */
+.wf-testfinds li { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; min-width: 0; }
+.wf-findlabel { color: #34404f; font-weight: 650; min-width: 0; }
+.wf-findkind { color: #5f6a78; min-width: 0; }
 .wf-findmore { color: #5f6a78; font-style: italic; grid-column: 1 / -1; }
 .wf-sev {
   flex: none;
