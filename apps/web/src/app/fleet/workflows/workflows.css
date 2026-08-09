@@ -1233,6 +1233,30 @@
 .wf-teststep.is-stopped { border-left-color: #b8860b; }
 .wf-teststep.is-pending { background: #fbfcfe; }
 
+/* A retry that lives inside a sentence — not a button pretending to be one. */
+.wf-linkbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #2f6096;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.wf-linkbtn:hover { color: #24507f; }
+
+/* The OFF-workers guarantee, said before the spend rather than nowhere. */
+.wf-testoff {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border: 1px solid #f3e3c2;
+  background: #fdf8ee;
+  border-radius: 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #7a5405;
+}
+
 .wf-nameinput { width: 100%; font-family: inherit; margin-bottom: 6px; }
 
 /* S5.b — the field, its presets, its meaning and its next fires. An invalid

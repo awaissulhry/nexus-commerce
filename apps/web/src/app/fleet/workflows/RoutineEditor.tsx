@@ -154,11 +154,16 @@ export function RoutineEditor({
      on screen when you arrive should be what you published, unless you say
      otherwise. */
   const [pendingRestore, setPendingRestore] = useState<WfDefinition | null>(null)
-  const [dialog, setDialog] = useState<'none' | 'save' | 'publish' | 'test'>('none')
+  const [dialog, setDialog] = useState<'none' | 'save' | 'publish' | 'test' | 'leave'>('none')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [serverErr, setServerErr] = useState<string | null>(null)
   const [testEstimate, setTestEstimate] = useState<number | null>(null)
+  /* S6.b — a failed estimate used to be indistinguishable from a slow one:
+     the catch left the value null and the dialog read "estimating…" forever
+     with the confirm button live. That is a hole in the one control whose
+     whole job is stating the cost BEFORE the spend. */
+  const [estimateErr, setEstimateErr] = useState<string | null>(null)
   const [test, setTest] = useState<{ id: string } | null>(null)
   const [testStatus, setTestStatus] = useState<TestStatus | null>(null)
 
@@ -262,6 +267,15 @@ export function RoutineEditor({
     return { at: Math.max(1, done), of: testStatus.steps.length }
   }, [testStatus])
 
+  /* Workers this draft names that today's dials would skip. */
+  const offStepCount = useMemo(
+    () => draft.steps.filter((st) => {
+      const c = byKey.get(st.charterKey)
+      return c ? !c.enabled || c.autonomyLevel === 'OFF' : false
+    }).length,
+    [draft, byKey],
+  )
+
   const badCron = draft.trigger.type === 'schedule' && !cronIsEvaluable(draft.trigger.cron)
 
   const setGate = (charterKey: string, gate: 'ask' | 'act' | 'inherit') =>
@@ -298,6 +312,15 @@ export function RoutineEditor({
     onDone(false)
   }
 
+  /* S6.c — leaving destroys results you paid for, and said nothing. The test
+     lives in component state, so Discard and Publish both end it; the spend
+     is already gone either way, but it should be a decision. */
+  const hasPaidResults = Boolean(testStatus && !testStatus.walking && testStatus.totals.costUSD > 0)
+  const askBeforeLeaving = () => {
+    if (hasPaidResults) { setDialog('leave'); return }
+    discard()
+  }
+
   /* WF.5 — poll a live test every 3s until every step is terminal. */
   useEffect(() => {
     if (!test) return
@@ -321,18 +344,26 @@ export function RoutineEditor({
     return () => { stop = true; clearInterval(id) }
   }, [test, backend, routineKey])
 
-  const openTestDialog = async () => {
-    setServerErr(null)
+  const fetchEstimate = useCallback(async () => {
+    setEstimateErr(null)
     setTestEstimate(null)
-    setDialog('test')
     try {
       const keys = draft.steps.map((s) => s.charterKey).join(',')
       const r = await fetch(
         `${backend}/api/agent/fleet/workflows/${routineKey}/test-estimate?steps=${encodeURIComponent(keys)}`,
         { cache: 'no-store' },
       )
-      if (r.ok) setTestEstimate(((await r.json()) as { estimatedCostUSD: number }).estimatedCostUSD)
-    } catch { /* the dialog says "estimating…" honestly */ }
+      if (!r.ok) throw new Error(`the estimate could not be fetched (${r.status})`)
+      setTestEstimate(((await r.json()) as { estimatedCostUSD: number }).estimatedCostUSD)
+    } catch (e) {
+      setEstimateErr(e instanceof Error ? e.message : String(e))
+    }
+  }, [backend, routineKey, draft])
+
+  const openTestDialog = async () => {
+    setServerErr(null)
+    setDialog('test')
+    await fetchEstimate()
   }
 
   const startTest = async () => {
@@ -397,7 +428,7 @@ export function RoutineEditor({
       <header className="wf-cardhead">
         <h3>Editing — a draft</h3>
         <div className="wf-editactions">
-          <button className="acr-btn" onClick={discard} disabled={busy}>Discard</button>
+          <button className="acr-btn" onClick={askBeforeLeaving} disabled={busy}>Discard</button>
           <button
             className="acr-btn"
             disabled={busy || problems.length > 0 || draft.steps.length === 0 || testStatus?.walking === true}
@@ -465,10 +496,20 @@ export function RoutineEditor({
         <section className="wf-testpanel" role="status" aria-live="polite">
           <header className="wf-cardhead">
             <h3><FlaskConical size={15} /> Test run</h3>
+            {/* S6.b — "spent" was a lie while walking: a step's cost only
+                exists when its row is written, so the legend read "$0.0000
+                spent" through the first 40% of the measured walk. It says
+                "so far" until the walk ends, and then it says what it
+                predicted next to what it cost — 0.24% apart on the audit
+                walk, which is a number worth showing. */}
             <span className="wf-legend">
               {testStatus.walking ? 'testing…' : 'finished'} · $
-              {testStatus.totals.costUSD.toFixed(4)} spent ·{' '}
-              {testStatus.totals.findings} would-be finding
+              {testStatus.totals.costUSD.toFixed(4)}{' '}
+              {testStatus.walking ? 'so far' : 'spent'}
+              {!testStatus.walking && testEstimate != null
+                ? ` (estimated $${testEstimate.toFixed(4)})`
+                : ''}{' '}
+              · {testStatus.totals.findings} would-be finding
               {testStatus.totals.findings === 1 ? '' : 's'}
             </span>
           </header>
@@ -503,7 +544,8 @@ export function RoutineEditor({
           </div>
           <p className="wf-vnote">
             Nothing above was written to the board, and no proposal was queued — the model spend
-            is the only real thing a test does.
+            is the only real thing a test does. These results live with this editing session:
+            leave the editor and they are gone, and nothing about a test ever reaches Runs.
           </p>
         </section>
       ) : null}
@@ -737,6 +779,26 @@ export function RoutineEditor({
         </div>
       </div>
 
+      {dialog === 'leave' ? (
+        <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
+          <div className="acr-pg-confirm">
+            <h4>Discard the draft — and this test?</h4>
+            <p>
+              The test you ran cost{' '}
+              <strong>${testStatus?.totals.costUSD.toFixed(4)}</strong> and found{' '}
+              <strong>{testStatus?.totals.findings}</strong> would-be finding
+              {testStatus?.totals.findings === 1 ? '' : 's'}. Leaving the editor ends it — the
+              spend is already made and cannot be recovered, and nothing about a test is kept in
+              Runs.
+            </p>
+            <div className="acr-pg-confirmbtns">
+              <button className="acr-btn" onClick={() => setDialog('none')}>Stay here</button>
+              <button className="acr-btn primary" onClick={discard}>Discard anyway</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {dialog === 'test' ? (
         <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
           <div className="acr-pg-confirm">
@@ -746,16 +808,50 @@ export function RoutineEditor({
               <strong>nothing written</strong>. Hand-offs are not simulated yet — each worker is
               tested on its own. Estimated cost:{' '}
               <strong>
-                {testEstimate != null ? `$${testEstimate.toFixed(4)}` : 'estimating…'}
+                {estimateErr
+                  ? 'unknown'
+                  : testEstimate != null
+                    ? `$${testEstimate.toFixed(4)}`
+                    : 'estimating…'}
               </strong>{' '}
               — model spend is real.
             </p>
+            {/* S6.c — the guarantee most likely to surprise, and it was stated
+                NOWHERE. On the audit routine both worker cards showed OFF while
+                the test ran them both and spent $0.0415: the screen contained a
+                contradiction and no explanation. `agent-executor` is explicit
+                (`effectivelyOff && !opts.preview`); the UI was silent. */}
+            {offStepCount > 0 ? (
+              <p className="wf-testoff">
+                <strong>
+                  {offStepCount === draft.steps.length
+                    ? offStepCount === 1
+                      ? 'This worker is switched off, and the test will still run it.'
+                      : 'These workers are switched off, and the test will still run them.'
+                    : `${offStepCount} of these workers ${offStepCount === 1 ? 'is' : 'are'} switched off, and the test will still run ${offStepCount === 1 ? 'it' : 'them'}.`}
+                </strong>{' '}
+                A test shows what the wiring <em>would</em> do — the dials decide what actually
+                executes, so an off worker is skipped by a real run and tested by this one.
+              </p>
+            ) : null}
+            {estimateErr ? (
+              <p className="acr-pg-warn">
+                {estimateErr} — and a spend is not offered without a price.{' '}
+                <button className="wf-linkbtn" onClick={() => void fetchEstimate()}>
+                  Try again
+                </button>
+              </p>
+            ) : null}
             {serverErr ? <p className="acr-pg-warn">{serverErr}</p> : null}
             <div className="acr-pg-confirmbtns">
               <button className="acr-btn" onClick={() => setDialog('none')} disabled={busy}>
                 Cancel
               </button>
-              <button className="acr-btn primary" disabled={busy} onClick={() => void startTest()}>
+              <button
+                className="acr-btn primary"
+                disabled={busy || testEstimate == null}
+                onClick={() => void startTest()}
+              >
                 {busy ? 'Starting…' : 'Run the test'}
               </button>
             </div>
