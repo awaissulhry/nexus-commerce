@@ -3476,3 +3476,237 @@ It was caught by sanity-checking the probe's MECHANISM rather than trusting its
 answer: confirming it could find the stylesheet at all, and printing the rule it
 found. That printout is what revealed the change had been live for some time.
 S2.e was then measured properly and is verified in §13.12.
+
+---
+
+# PART 14 — S4 DESIGN STUDY: the list, and the empty state that is this page
+
+**Status: AWAITING OPERATOR APPROVAL.** No code written. Stream tag `SB.AQ-S4R`.
+
+Scope: **AQ-S4 only** — the queue card, its heading, the view tabs, the empty
+states, and the `.aq-emptywhy` line. S1, S2, S3 and S5–S10 are untouched.
+
+---
+
+## 14.0 — What S4 is FOR, in one sentence
+
+> **Be the screen an operator opens every morning for the next several weeks and
+> come away correctly informed — which today means an empty queue that teaches
+> instead of apologising, and never claims something that is not true.**
+
+The study's own words for this section are *"the empty state IS this page for
+weeks"*. That is not a hedge — it is the design constraint. **S4 has been
+rendered as an empty list every single day since AQ.1, and it will be until
+Phase F.** So the empty state is not a fallback: it is the primary state, and
+it should be designed first.
+
+---
+
+## 14.1 — What is on screen today, measured
+
+Live prod, 1728×906, `getComputedStyle` / `getBoundingClientRect`.
+
+### 14.1.1 The headline defect: the page contradicts itself, 57px apart
+
+Two sentences render inside the same card, 57 pixels apart:
+
+> **"Nothing is waiting for you. Approvals appear here when a plan passes the
+> critic — and every yes or no you give becomes precedent the workers read on
+> their next run."**
+>
+> **"This is empty because nothing can arrive yet, not because the fleet looked
+> and found nothing — see above."**
+
+**The first sentence is false, and this document proves it in Part 1.1.** A plan
+that *passes* the critic queues nothing: `runOrQueueTool` creates no row for a
+tool with no `execute()`, six of seven charters cap below PROPOSE, and
+`executeCharter` never reaches the queueing path at all. The locks file
+(§5 row 8) warns every stream about this exact sentence in these words: *"any
+page that says or implies 'approvals appear here when a plan passes the critic'
+is currently false."*
+
+It is on the Approvals page itself, written by this stream, directly above a
+line that contradicts it.
+
+[NN/g][nng] is blunt about the cost: inaccurate status messages are
+*"particularly harmful"* — users *"either develop distrust or abandon tasks"*.
+The whole reason S2 exists is to tell a blocked queue from a quiet one, and S4
+undoes it in the sentence a reader hits first.
+
+### 14.1.2 The rest, measured
+
+| Element | Size / weight | Colour | Contrast |
+|---|---|---|---|
+| `.acr-cardhead h3` — *Waiting for you* | 16 / **400** | `#1c2530` | 15.48 ✓ |
+| `.aq-asof` — the freshness stamp | 11.5 / 400 | `#7b8798` | **3.65 ✗** |
+| `.acr-fl-empty` — **the empty state** | 12.5 / 400 | `#7b8798` | **3.65 ✗** |
+| `.aq-emptywhy` | 12 / 400 | `#6b7688` | 4.59 ✓ |
+
+- **The two worst-contrast elements on the page are the freshness stamp and the
+  empty state** — and the empty state is the single most-read piece of text on
+  this page, at **3.65:1**.
+- **Seven size/weight pairs inside one card** — 10/700, 11.5/400, 12/400,
+  12.5/400, 12.5/550, 12.5/650, 16/400. S1 went to two and S2 to two; S4 still
+  has the wall both of them removed.
+- **The heading is 16px/400** — a heading with no weight, and the only 16px on
+  the page.
+- **One empty state where the approved spec calls for three.** There is no
+  "the fleet ran and found nothing" and no "your filter hides N".
+- The card is 220.5px at `top: 520`.
+
+---
+
+## 14.2 — Research, and the one thing it changes
+
+Two lenses only; the rest of what S4 needs was already settled by S1's and S2's
+research (Pajamas' help hierarchy, Polaris' empty-state tone, the status-colour
+rules).
+
+### A · An empty state is an onboarding surface, not a failure message
+
+[NN/g][nng] separates empty states by cause — unfilled container, *unconfigured
+feature*, no search results — and says each needs different content: a system
+status confirmation, a feature explanation, or a path to the task. Ours is the
+**unconfigured** kind, and it is being written as the unfilled kind.
+
+[Shopify][shopifyempty] (from S1's research) adds the tone rule and explicitly
+covers persistence: an empty state exists to say *"what will appear here"*, and
+is a legitimate long-term state for *"prompting feature activation or
+configuration"*.
+
+### B · Show a worked example rather than a blank space
+
+The convergent finding across the onboarding literature is that **users who
+start from something real outperform users who start from a blank workspace**,
+and that the best products treat the empty state as their primary onboarding
+surface rather than as an error. The approved AQ-S4 spec already calls for *"a
+worked sample card, visibly inert"* — the research supports it, and for a queue
+that **cannot** fill for months it is worth more here than in a product where
+real data arrives on day two.
+
+**What this changes:** the sample card moves from a nice-to-have at the bottom
+of the spec to **the centre of the design**. An operator who has never seen an
+approval should be able to read one — clearly labelled as an example, not
+decidable — before their first real one arrives. That is the only way the first
+real decision is not also the first time they have seen the interface.
+
+---
+
+## 14.3 — The framing
+
+> **S4's default state is "configured but dormant", and it should read as a
+> demonstration, not an apology.**
+
+Three consequences:
+
+1. **The false sentence goes.** What replaces it is the true one S2 already
+   computes, and S4 should not re-derive it — that would be a second composer
+   over one set of facts, which is precisely the defect S2.a fixed.
+2. **The `.aq-emptywhy` line and the empty state merge.** They are two halves of
+   one statement rendered 57px apart, one of them wrong.
+3. **The sample card becomes the body of the empty state**, not a footnote to
+   it.
+
+---
+
+## 14.4 — The proposal
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Waiting for you                                         ● Live · updated 4s  │
+│ ┌ Waiting 0 ─┬─ Decided 18 ─┬─ Ran out of time 0 ─┐                          │
+│                                                                              │
+│   Nothing is waiting for you, and nothing can arrive yet.                     │
+│   The three conditions above have to be true first — one of them is.          │
+│                                                                              │
+│   ┌────────────────────────────────────────────────────────── EXAMPLE ─────┐ │
+│   │  This is what a request will look like. It is not real and cannot be   │ │
+│   │  decided.                                                              │ │
+│   │                                                                        │ │
+│   │  Bid tuner wants to change a keyword's bid                             │ │
+│   │  On "casco integrale" (EXACT) in AIREON-IT-Generic · IT                │ │
+│   │  €0.31 → €0.84  (+171%)          can be put back · 24h to answer       │ │
+│   │  [ Apply — bid €0.31 → €0.84 ]  [ Why not? ]        (both inert)       │ │
+│   └────────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**The empty sentence is one sentence, not two**, and its second clause is
+**passed down from S2's own `conditions`** rather than recomposed — the same
+single-source rule S2.a established.
+
+**The example card is the real `ApprovalCard`**, rendered from a constant
+fixture with every control disabled and an `EXAMPLE` marker on the frame. Not a
+screenshot, not a mock-up: the actual component, so it cannot drift from what a
+real card looks like. Fixed data, no fetch, nothing seeded — the fixture that
+AQ.3's prod verification used is already committed in `_apx-seed-card.mts` and
+its shape is known-good.
+
+### The states
+
+| State | Renders |
+|---|---|
+| **Waiting, nothing can arrive** *(today, and for months)* | the sentence + the example card |
+| **Waiting, fleet on, nothing found** | the sentence, second clause becomes *"the fleet ran and found nothing"*; example card **hidden** — it has done its job once real runs exist |
+| **Waiting, rows present** | the list; no empty state, no example |
+| **Decided / Ran out of time, empty** | one line each, unchanged |
+| **Loading** | skeleton rows at the list's real height |
+| **Read failed** | the existing error banner, unchanged (S5's `.aq-err`) |
+
+### Type and colour
+
+Continuing the ladder S1 and S2 set: **13px throughout, 11.5px only inside
+chips**; the heading gains weight rather than size (13/600, not 16/400); every
+value measured in place. `.aq-asof` and `.acr-fl-empty` at 3.65:1 both move to
+`#55616f` (5.83:1 on white — the value S1 settled).
+
+---
+
+## 14.5 — Verdict on the approved AQ-S4 spec, bullet by bullet
+
+| Spec bullet | Verdict |
+|---|---|
+| Grouped by worker under the real name | **Already built** (AQ.3), unchanged |
+| Ordered by consequence, not `createdAt` | **Already built** (2026-08-08), unchanged |
+| Row carries money + target so most decisions need no opening | **Already built** (AQ.3) |
+| **Three distinct empty states** | **FIX** — there is one, and its first sentence is false |
+| **A worked sample card, visibly inert** | **BUILD, and promote it to the centre** (§14.2 B) |
+| A one-time band above the first genuine approval | **DEFER, and say why.** It can never fire while the queue is unreachable, and a surface that cannot render is one nobody can verify. Ship it deleted, not empty — the rule the Assignments stream established and this document has followed for AQ.5/.7/.9/.10 |
+| Deep-link anchor per item, `?assignment=` | **Already built** (2026-08-08) |
+
+**Most of AQ-S4 is already shipped.** What is left is the empty state — which is
+the part that is on screen every day.
+
+---
+
+## 14.6 — What I am explicitly NOT doing
+
+- **S1, S2, S3, S5–S10.** No new endpoint, no API change, no migration.
+- **No glossary edits**, no claim on any shared file.
+- **Not the first-approval band** (§14.5), and not AQ.5's filters — the study's
+  reasoning that filters over an empty table teach a concept and give nothing
+  still holds.
+- **Not re-deriving S2's conditions.** The empty sentence's second clause comes
+  from the `conditions` S2 already fetches; S4 composes nothing about the gate.
+
+---
+
+## 14.7 — Build order
+
+| Phase | What |
+|---|---|
+| **S4.a** | The empty state: the false sentence removed, the two lines merged into one, the second clause sourced from S2's conditions, and the two 3.65:1 colours fixed |
+| **S4.b** | The example card — the real `ApprovalCard` from a fixture, inert, marked, and hidden once the fleet has run |
+| **S4.c** | The type ladder (7 pairs → 2) and the heading's weight; measured close-out at nine widths, 200% zoom, keyboard |
+
+---
+
+## 14.8 — Sources
+
+[NN/g · Empty-state interface design][nng] · [Shopify · Empty state pattern][shopifyempty] ·
+onboarding/sample-data convergence (see §14.2 B) · and, unchanged from Parts 12
+and 13: Pajamas' contextual-help hierarchy, the status-colour conventions, and
+the `dataviz` skill's rule that status colours ship with an icon and a label.
+
+[nng]: https://www.nngroup.com/articles/empty-state-interface-design/
+[shopifyempty]: https://shopify.dev/docs/api/app-home/patterns/compositions/empty-state
