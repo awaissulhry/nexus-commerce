@@ -257,20 +257,36 @@ function FitToContent({
     )
   }, [hostRef, setViewport])
 
-  /* Two frames after the sig changes: one for React to commit the nodes, one
-     for the browser to lay them out. Without the second, `offsetWidth` is read
-     before the card has a box and the fit is computed against zero. */
+  /*
+   * Retry until the node DOM exists, then fit once.
+   *
+   * Two animation frames were not enough, and that is the whole reason the
+   * first cut of this shipped still stuck at the identity matrix: xyflow
+   * renders its node elements on its own schedule, so `querySelectorAll` came
+   * back empty, `fit()` returned early, and — with `sig` unchanged and the
+   * container never resizing — nothing ever asked again. A fit that runs once
+   * at a moment you do not control is the same bug in a new place, which is
+   * exactly what the previous two attempts were.
+   *
+   * Bounded at ~1s so a genuinely empty graph costs 60 idle frames and not a
+   * permanent rAF loop.
+   */
   useEffect(() => {
-    let a = 0
-    let b = 0
-    a = requestAnimationFrame(() => {
-      b = requestAnimationFrame(fit)
-    })
-    return () => {
-      cancelAnimationFrame(a)
-      cancelAnimationFrame(b)
+    let frame = 0
+    let tries = 0
+    const attempt = () => {
+      const host = hostRef.current
+      const ready = host != null && host.querySelector('.react-flow__node[data-id]') != null
+      if (ready) {
+        fit()
+        return
+      }
+      if (tries++ > 60) return
+      frame = requestAnimationFrame(attempt)
     }
-  }, [sig, fit])
+    frame = requestAnimationFrame(attempt)
+    return () => cancelAnimationFrame(frame)
+  }, [sig, fit, hostRef])
 
   useEffect(() => {
     const el = hostRef.current
