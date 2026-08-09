@@ -51,7 +51,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { statusOf, type MapEdge, type MapNode } from './lib'
+import { statusOf, usd, type MapEdge, type MapNode } from './lib'
 import type { Overlay } from './overlays'
 
 const COL_W = 320
@@ -108,20 +108,37 @@ function WorkerNode({ data }: NodeProps) {
         <span className="sbm-node-word">{d.label}</span>
         <span className="sbm-node-tier">{d.tier}</span>
       </div>
+      {/*
+        S2R — the SAME THREE SLOTS on every card, always, in the same order.
+
+        Before, the row was conditional: a card showed one, two or three facts
+        depending on its data, so the third item on one card was the second item
+        on the next and a column of cards could not be read down. Grafana's node
+        model is a fixed main-stat / secondary-stat set for exactly this reason.
+
+        A slot with nothing in it prints an en dash rather than collapsing —
+        "this worker has no findings" and "this card is showing you something
+        else here" are different facts.
+
+        Money is 2dp, matching the census band one row above. It was `toFixed(4)`
+        here and `$0.00 of $2.00` there — two precisions for money on one page,
+        which is the defect Section 1 had just finished removing.
+      */}
       <div className="sbm-node-facts">
-        {d.neverRun ? (
-          <span className="sbm-fact muted">not yet run</span>
-        ) : (
-          <span className="sbm-fact">{d.runsLifetime} runs</span>
-        )}
-        {d.open > 0 ? (
-          <span className="sbm-fact">
-            {d.open} open{d.openExpired > 0 ? ` · ${d.openExpired} expired` : ''}
-          </span>
-        ) : null}
-        {d.costWindow > 0 ? (
-          <span className="sbm-fact">${d.costWindow.toFixed(4)}</span>
-        ) : null}
+        <span className={`sbm-fact ${d.neverRun ? 'is-empty' : ''}`}>
+          <b>{d.neverRun ? '—' : d.runsLifetime}</b> {d.neverRun ? 'not yet run' : 'runs'}
+        </span>
+        <span className={`sbm-fact ${d.open === 0 ? 'is-empty' : ''}`}>
+          <b>{d.open === 0 ? '—' : d.open}</b> open
+          {d.openExpired > 0 ? <i> · {d.openExpired} stale</i> : null}
+        </span>
+        {/* A worker that never ran gets a dash, NOT `$0.00`. "Ran and cost
+            nothing" and "was never measured" are different facts, and printing
+            the cheaper-looking one is the exact error the parent study names
+            for the cost overlay. */}
+        <span className={`sbm-fact ${d.neverRun ? 'is-empty' : ''}`}>
+          <b>{d.neverRun ? '—' : usd(d.costWindow)}</b> spent
+        </span>
       </div>
       {/*
         The wiring, for a screen reader. An edge is information a sighted

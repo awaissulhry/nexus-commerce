@@ -707,14 +707,47 @@
   width: 252px;
   padding: 9px 11px;
   background: #fff;
-  border: 1px solid #dde4ec;
-  border-left: 3px solid #c3ccd8; /* the ring: status, redundantly with the word */
+  /* was #dde4ec = 1.28:1; 1.4.11 wants 3:1 for a control's own boundary */
+  border: 1px solid #aab4c0;
+  border-left: 3px solid #6b7684; /* the ring: status, redundantly with the word */
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(28, 37, 48, 0.06);
   cursor: pointer;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
 }
+/* S2R — there was NO hover state anywhere on this canvas. Every card and every
+   line is clickable and `cursor: pointer` was the entire affordance. */
+.sbm-node:hover {
+  border-color: #6b7684;
+  box-shadow: 0 2px 8px rgba(28, 37, 48, 0.13);
+}
+/*
+ * ⚠ S2R — DIMMING USED TO DELETE. At `opacity: 0.28` the worker's NAME measured
+ * **1.78:1** (from 15.48), the status word 1.55, the facts 1.42. This page's law
+ * is *filtering dims; it never removes* — kept in the DOM and broken in the eye,
+ * because a card you cannot read is a card that is gone.
+ *
+ * So the card is dimmed in LAYERS rather than with one opacity: the chrome and
+ * the evidence recede, and the NAME is held at a contrast that still clears AA.
+ * The point of dimming is to say *not this one* while leaving *this one* — still
+ * identifiable.
+ */
 .sbm-node.is-dimmed {
-  opacity: 0.28;
+  opacity: 1;
+  background: #f7f9fb;
+  border-color: #e6ebf1;
+  box-shadow: none;
+}
+.sbm-node.is-dimmed .sbm-node-name {
+  color: #55616f; /* 6.31:1 on the dimmed card — was 1.78:1 */
+}
+.sbm-node.is-dimmed .sbm-node-status,
+.sbm-node.is-dimmed .sbm-node-facts,
+.sbm-node.is-dimmed .sbm-tag-diag {
+  opacity: 0.45;
+}
+.sbm-node.is-dimmed .sbm-glyph {
+  filter: grayscale(1);
 }
 .sbm-node.is-selected {
   border-color: #2b6cb0;
@@ -738,12 +771,14 @@
   font-weight: 620;
   color: #1c2530;
 }
+/* was #7d879a on #f1f4f8 = 3.28:1 */
 .sbm-tag-diag {
   font-size: 9.5px;
+  font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #7d879a;
-  background: #f1f4f8;
+  color: #4a5666;
+  background: #eef1f5;
   border-radius: 3px;
   padding: 1px 4px;
 }
@@ -758,49 +793,117 @@
   font-weight: 600;
   color: #4a5666;
 }
+/* was #9aa5b3 = 2.50:1 */
 .sbm-node-tier {
   margin-left: auto;
-  font-size: 10px;
-  color: #9aa5b3;
+  font-size: 9.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5a6675;
 }
+/* S2R — three fixed slots, ranked inside each one. The row was an
+   undifferentiated run of 10.5px grey (`3 runs  5 open  $0.1090`) with no
+   hierarchy and a conditional slot set, so a column of cards could not be read
+   down. The number leads; the noun follows it, smaller. */
 .sbm-node-facts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: baseline;
+  gap: 10px;
   margin-top: 5px;
 }
 .sbm-fact {
-  font-size: 10.5px;
-  color: #667485;
+  font-size: 10px;
+  color: #55616f;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.sbm-fact.muted {
-  color: #9aa5b3;
-  font-style: italic;
+.sbm-fact b {
+  font-size: 11.5px;
+  font-weight: 680;
+  color: #1c2530;
+}
+.sbm-fact i {
+  font-style: normal;
+  color: #8a5a1a;
+}
+/* An empty slot is a dash, not a gap: "no findings" and "this card is showing
+   you something else here" are different facts. #6b7684 = 4.83:1 on the card,
+   where the old `.muted` was #9aa5b3 = 2.47:1 — and it carried "not yet run",
+   the single most informative string this canvas can print. */
+.sbm-fact.is-empty,
+.sbm-fact.is-empty b {
+  color: #6b7684;
+  font-weight: 500;
 }
 
 /* The glyph is the second channel. Shape differs per status, so the map still
    reads in greyscale and for a colour-blind operator — colour alone is a
-   WCAG 1.4.1 Level A failure, not a nicety. */
+   WCAG 1.4.1 Level A failure, not a nicety.
+ *
+ * ⚠ S2R — IT WAS NOT ACTUALLY A CHANNEL. Measured on prod: 8.8 × 8.8px, resting
+ * fill #b9c2ce, **1.8:1 against the card**. WCAG 1.4.11 asks 3:1 of any non-text
+ * mark carrying information, and a shape you cannot resolve at 8.8px is not a
+ * shape. So the rule this whole canvas is built on — ring AND glyph AND word,
+ * colour never the carrier — was true in the DOM and false on screen.
+ *
+ * 11px, every fill ≥3:1 against #fff, and the two hollow forms get a solid
+ * casing so their OUTLINE carries the shape rather than their fill. */
 .sbm-glyph {
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   flex: none;
   display: inline-block;
-  background: #c3ccd8;
+  background: #6b7684;
 }
-.sbm-glyph.g-off { border-radius: 2px; background: #b9c2ce; }              /* square, grey */
-.sbm-glyph.g-working { border-radius: 50%; background: #2f855a; }          /* circle, green */
-.sbm-glyph.g-running { border-radius: 50%; background: #2b6cb0; }          /* circle, blue */
-.sbm-glyph.g-paused { border-radius: 1px; background: #b7791f; }           /* bar, amber */
+.sbm-glyph.g-off { border-radius: 2px; background: #6b7684; }             /* square, grey  4.83:1 */
+.sbm-glyph.g-working { border-radius: 50%; background: #15804f; }         /* circle, green 4.96:1 */
+.sbm-glyph.g-running { border-radius: 50%; background: #1f6fde; }         /* circle, blue  4.35:1 */
+.sbm-glyph.g-paused {                                                     /* bar, amber    4.79:1 */
+  border-radius: 1px;
+  background: #8a5a1a;
+  height: 5px;
+  align-self: center;
+}
 .sbm-glyph.g-attention {
-  background: #c53030;
-  clip-path: polygon(50% 0, 100% 100%, 0 100%); /* triangle, red */
+  background: #b3261e;                                                    /* triangle, red 5.93:1 */
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 .sbm-glyph.g-not-set-up {
   background: transparent;
-  border: 1.5px dashed #9aa5b3; /* hollow, neutral */
+  border: 2px dashed #6b7684; /* hollow, neutral */
   border-radius: 50%;
+}
+
+/*
+ * ⚠ S2R — THE FOCUS RING, and the reason there wasn't one.
+ *
+ * Measured with a real Tab on prod: `:focus-visible` matched and the node had
+ * `outline-style: none`, `box-shadow: none`. A keyboard user walking this graph
+ * had NO indication of where they were — which silently undid the whole
+ * arrow-key traversal this canvas was built for.
+ *
+ * The cause is xyflow's own stylesheet, verbatim:
+ *
+ *     .react-flow__node.selectable:focus,
+ *     .react-flow__node.selectable:focus-visible { outline: none; }
+ *
+ * It removes the outline and hands the job to a `box-shadow` rule scoped to
+ * `.react-flow__node-input`, `-default`, `-output` and `-group` — its four
+ * BUILT-IN types. Any custom `nodeTypes` entry inherits the removal and none of
+ * the replacement. That is WCAG failure **F78** against **SC 2.4.7 Focus
+ * Visible (AA)**, and it lands on every custom canvas in this repo, not just
+ * this one.
+ *
+ * The type class makes this more specific than xyflow's rule, so no
+ * `!important` is needed — unlike the sizing overrides above, which lose to
+ * xyflow's INLINE styles and genuinely do.
+ */
+.sbm-canvas .react-flow__node-worker:focus-visible,
+.sbm-canvas .react-flow__node-entity:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: 3px;
+  border-radius: 9px;
 }
 
 /* the ring, by tone — always alongside the glyph and the word */
@@ -831,23 +934,43 @@
   font-weight: 650;
   color: #5a6675;
 }
+/* was #8a95a3 = 2.96:1 */
 .sbm-lane-note {
   font-size: 10.5px;
-  color: #8a95a3;
+  color: #55616f;
 }
 
 /* edges: an edge that has never carried anything is dashed and says so. The
-   stroke reads LIFETIME, so a 24-hour window cannot un-solid a working edge. */
+   stroke reads LIFETIME, so a 24-hour window cannot un-solid a working edge.
+ *
+ * S2R — the strokes were #7f9dc0 / #cbd5e0 on #fbfcfe, measuring 2.73:1 and
+ * 1.24:1, both under 1.4.11's 3:1 for a graphic that carries meaning. And an
+ * edge announced nothing: `interactionWidth: 22` gives a 22px hit target that
+ * had no hover feedback at all, so the affordance was built and never surfaced.
+ */
 .sbm-canvas .react-flow__edge.sbm-edge .react-flow__edge-path {
-  stroke: #b9c6d6;
+  stroke: #8a94a3;
   stroke-width: 1.4;
+  transition: stroke-width 0.12s ease, stroke 0.12s ease;
 }
 .sbm-canvas .react-flow__edge.has-crossed .react-flow__edge-path {
-  stroke: #7f9dc0;
+  stroke: #5b7fa8;
 }
 .sbm-canvas .react-flow__edge.never-crossed .react-flow__edge-path {
   stroke-dasharray: 4 4;
-  stroke: #cbd5e0;
+  stroke: #8a94a3;
+}
+.sbm-canvas .react-flow__edge.sbm-edge:hover .react-flow__edge-path,
+.sbm-canvas .react-flow__edge.sbm-edge:focus-visible .react-flow__edge-path {
+  stroke: #1f4f8b;
+  stroke-width: 2.6;
+}
+.sbm-canvas .react-flow__edge.sbm-edge.is-selected .react-flow__edge-path {
+  stroke: #1f4f8b;
+  stroke-width: 2.6;
+}
+.sbm-canvas .react-flow__edge.sbm-edge:hover {
+  cursor: pointer;
 }
 
 /* ── M8 · the teaching layer ───────────────────────────────────────────── */
