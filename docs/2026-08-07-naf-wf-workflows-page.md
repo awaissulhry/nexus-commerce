@@ -3406,6 +3406,110 @@ and every `naf-wf-draft-*` key cleared from the browser.
 baseline reaches it (`scrollHeight === clientHeight`), so the internal scroll
 is **untested** and belongs in a later state check.
 
+### 13.9 · S5.b — EXECUTION RECORD (shipped and prod-verified 2026-08-09)
+
+Two commits: `25c70868f` (the cron tells the truth), `9a282435e` (a state
+prod found that the plan had not). Measured on
+`nexus-commerce-three.vercel.app` at 1728 × 962.
+
+#### The defect, and the shape of the fix
+
+`prettyCron` checked that the minute and hour were **integers** and never that
+they were **in range**, so `99 99 * * *` rendered as *"Nightly at 99:99 UTC"* —
+a confident sentence about an impossible schedule, with zero problems listed
+and Publish enabled. The research names why that is worse than no preview: the
+whole value of a plain-English restatement is that a wrong expression **reads
+wrong**. This one read right.
+
+Validity is now decided by the same function the *save* is decided by.
+`validateDefinition` refuses a schedule exactly when `nextCronFire` returns
+null, so the client calls `nextCronFire`. Nothing is re-derived — re-deriving
+the rule is what produced the defect.
+
+#### Exit criteria, walked on prod
+
+| typed | means line | next fires | field | problems | Publish |
+|---|---|---|---|---|---|
+| `not a cron` | not a schedule this fleet can read | — | **red** | 1 | **disabled** |
+| `99 99 * * *` | not a schedule this fleet can read | — | **red** | 1 | **disabled** |
+| *(empty)* | not a schedule this fleet can read | — | **red** | 1 | **disabled** |
+| `0 3 * * *` | Nightly at 03:00 UTC | Mon 10 · Tue 11 · Wed 12 Aug | ok | 0 | enabled |
+| `0 7 * * 1-5` | Weekdays at 07:00 UTC | Mon 10 · Tue 11 · Wed 12 Aug | ok | 0 | enabled |
+| `0 * * * *` | Every hour, on the hour | 15:00 · 16:00 · 17:00 | ok | 0 | enabled |
+| `*/15 * * * *` | `*/15 * * * * (UTC)` | 15:00 · 15:15 · 15:30 | ok | 0 | enabled |
+
+The last row is the design, not a gap: an expression the sentence cannot
+phrase gets **no claim** about when it fires, and three real timestamps
+underneath do the work.
+
+Save and Test disable with Publish — the gate was already there; the cron
+simply never reached it before.
+
+#### The shared-consumer check, which is the criterion that mattered
+
+`prettyCron` lives in `lib.ts` and three other surfaces read it. Re-verified on
+prod rather than assumed:
+
+| surface | reads |
+|---|---|
+| list cards (×4) | Nightly at 04:45 UTC · Mondays at 05:15 UTC · When you start it ×2 |
+| detail status band | Mondays at 05:15 UTC |
+| NEXT RUN fact cell | in 14h 14m · Mondays at 05:15 UTC |
+
+`not a schedule this fleet can read` appears **nowhere** it should not.
+
+#### The state prod found that the plan had not
+
+`0 3 1 * *` — the 1st of every month — **is refused**, and the refusal is
+correct: `nextCronFire` scans **8 days** and stops, the 1st of next month is 23
+days out, so it returns null and `validateDefinition` refuses the save for
+exactly that reason.
+
+**The fleet cannot arm any schedule that fires less often than every 8 days.**
+That is a constraint of the evaluator, not of the expression, and it was not
+written down anywhere before this phase. The parity is exact — but *"not a
+schedule this fleet can read"* reads as *"you typed it wrong"*, which is the
+wrong idea to plant about well-formed cron. The line now names the limit.
+
+The checklist keeps the server's sentence **verbatim**, and `prettyCron` keeps
+the short form, because the list card and status band render it too and a
+schedule feed has no room for a clause. Distinguishing the two failure causes
+properly would mean the mirror reporting *why* it returned null — forking it
+from the server file for a copy-edit. Not taken.
+
+#### The mirror, and its alarm
+
+The web app cannot import from `apps/api`, so `cron-eval.ts` is copied to
+`apps/web/src/app/fleet/workflows/cron-eval.ts` and
+`cron-eval-mirror.vitest.test.ts` fails the moment the copy stops being one. It
+compares the **code**, not the file — the two headers say different things on
+purpose. **The alarm was proved, not assumed:** changing `SCAN_LIMIT_MINUTES`
+from 8 to 9 days in the copy fails the test; reverting passes it. Fleet suite
+**44 files / 401 tests**.
+
+`@nexus/shared` is the better home and is **already a web dependency**. Not
+taken here: the move edits `fleet-schedule.service.ts` (a sibling stream's
+file) and adds an export path to the shared package's build graph, mid-session,
+during parallel work. **Recorded as the follow-up.**
+
+#### Contrast and type
+
+| role | size / weight | ratio |
+|---|---|---|
+| means line, refused state | 11.5px / 600 | **6.92:1** |
+| checklist problem | 12.5px / 400 | **4.77:1** |
+
+Presets read exactly as the field's own line does, because the menu labels
+each one through `prettyCron`: *Nightly at 03:00 UTC · Weekdays at 07:00 UTC ·
+Mondays at 05:00 UTC · Every hour, on the hour*. The menu can never describe a
+schedule differently from the sentence under the field.
+
+#### Prod left as found
+
+Council `v1` active serving 1 run, `rev 1`/`rev 2` superseded, **3 rows**,
+trigger *Mondays at 05:15 UTC*. Editor discarded, every `naf-wf-draft-*` key
+cleared. No revision created.
+
 ---
 
 ## Sources
