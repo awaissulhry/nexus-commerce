@@ -135,6 +135,18 @@ export function HowWorkflowsWork() {
             hand (&ldquo;Run now&rdquo;) or on its own clock the moment you publish a schedule —
             and its off switch stops both until you turn it back on.
           </p>
+          <p>
+            <strong>What a <Term k="test">test</Term> costs, and what it touches.</strong> You are
+            told the estimated spend before it starts and never asked to confirm one without a
+            price; when it finishes, the panel puts what it predicted beside what it actually
+            cost. The walk is one step at a time, so a stage the picture draws as
+            &ldquo;at the same time&rdquo; is still tested in sequence — that keeps the cost
+            legible. Three things are always true and worth knowing before your first one: it
+            spends real money, it writes <em>nothing</em> — no findings, no proposals, no row in
+            Runs — and it runs workers that are <em>switched off</em>, because the point is to see
+            what the wiring would do. The results live with your editing session; leaving the
+            editor ends them, and it will ask first.
+          </p>
         </div>
       ) : null}
     </section>

@@ -1245,6 +1245,26 @@
 }
 .wf-linkbtn:hover { color: #24507f; }
 
+/* S6.d — what a step WOULD have reported, not just how many. */
+.wf-testfinds { list-style: none; margin: 5px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.wf-testfinds li { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; line-height: 1.45; min-width: 0; }
+.wf-findlabel { color: #34404f; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-findkind { color: #5f6a78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-findmore { color: #5f6a78; font-style: italic; }
+.wf-sev {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+}
+.wf-sev.sev-critical, .wf-sev.sev-high { background: #fdeceb; color: #8f2b26; border-color: #f4d2d0; }
+.wf-sev.sev-medium { background: #fdf4e3; color: #7a5405; border-color: #f3e3c2; }
+.wf-sev.sev-low, .wf-sev.sev-info { background: #eef2f7; color: #4a5563; border-color: #e2e7ee; }
+
 /* The OFF-workers guarantee, said before the spend rather than nowhere. */
 .wf-testoff {
   margin: 0 0 10px;

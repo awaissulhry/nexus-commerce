@@ -67,6 +67,13 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   // most load-bearing fact on that page: the fleet's three actions describe
   // what they would do and stop there, so an approval on one cannot be
   // created and could not reach Amazon if it were.
+  // NAF.WF-S6R — the glossary had `preview-only` (about an ACTION that cannot
+  // write yet) but nothing for the test lane, which is a different idea: a
+  // real, paid walk that deliberately refuses to write.
+  test: {
+    title: 'Test',
+    body: 'A trial walk of a draft: every step runs for real against today’s evidence, with real model spend, and nothing is written — no findings on the board, no proposals queued, no trace in Runs. It runs workers that are switched OFF too, because a test shows what the wiring WOULD do while the dials decide what actually executes. The results live with your editing session.',
+  },
   'preview-only': {
     title: 'Preview only',
     body: 'An action that can describe what it would do but cannot actually do it — the part that writes to Amazon has not been built yet. All three of the fleet’s own actions are preview-only today, so approving one records your decision and teaches the fleet, and changes nothing on Amazon.',

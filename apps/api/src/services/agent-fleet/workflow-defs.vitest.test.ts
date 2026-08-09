@@ -10,6 +10,8 @@ import {
   BUILTIN_WORKFLOWS,
   MODE_WORKFLOW_KEY,
   assembleTestStatus,
+  sampleFindings,
+  TEST_SAMPLE_CAP,
   builtinByKey,
   chainOf,
   defToGraph,
@@ -199,5 +201,62 @@ describe('chainOf — a picture, not a plan', () => {
 
   it('an empty definition yields an empty chain, never a throw', () => {
     expect(chainOf({ v: 1, trigger: { type: 'manual' }, steps: [], edges: [] })).toEqual([])
+  })
+})
+
+describe('would-be findings sample (WF-S6.d)', () => {
+  const finding = (over = {}) => ({
+    entityName: 'Aireon jacket', entityId: 'e1', kind: 'wasted_spend',
+    severity: 'high', ...over,
+  })
+  const previewOutput = (n) => ({
+    preview: true,
+    data: { findings: Array.from({ length: n }, (_, i) => finding({ entityId: `e${i}` })), scanned: n },
+  })
+
+  it('reads the would-be findings a preview persisted — no new write path', () => {
+    expect(sampleFindings(previewOutput(2))).toEqual([
+      { label: 'Aireon jacket', kind: 'wasted_spend', severity: 'high' },
+      { label: 'Aireon jacket', kind: 'wasted_spend', severity: 'high' },
+    ])
+  })
+
+  it('caps the sample so a six-step council cannot turn a poll into a payload', () => {
+    expect(sampleFindings(previewOutput(50))).toHaveLength(TEST_SAMPLE_CAP)
+  })
+
+  it('falls back to the entity id when a finding has no name', () => {
+    const out = { preview: true, data: { findings: [finding({ entityName: undefined, entityId: 'kw-42' })] } }
+    expect(sampleFindings(out)[0]!.label).toBe('kw-42')
+  })
+
+  it('never throws on shapes a model can produce — it reads JSON off a row', () => {
+    for (const bad of [null, undefined, 0, 'x', {}, { data: null }, { data: {} },
+                       { data: { findings: 'nope' } }, { data: { findings: [null, 1, 'x'] } }]) {
+      expect(() => sampleFindings(bad)).not.toThrow()
+    }
+    expect(sampleFindings({ data: { findings: [null, 1] } })).toEqual([])
+  })
+
+  it('a non-analyst tier stores one artifact and yields no findings', () => {
+    expect(sampleFindings({ preview: true, data: { plan: [], rationale: 'x' } })).toEqual([])
+  })
+
+  it('assembleTestStatus carries the sample, and pending steps carry none', () => {
+    const rows = [{ agentKey: 'a', status: 'done', ok: true, findingCount: 9,
+      costUSD: '0.5', output: previewOutput(9) }]
+    const [done, pending] = assembleTestStatus(['a', 'b'], rows)
+    expect(done!.findingCount).toBe(9)
+    expect(done!.sample).toHaveLength(TEST_SAMPLE_CAP)
+    expect(pending!.status).toBe('pending')
+    expect(pending!.sample).toEqual([])
+  })
+
+  it('the COUNT stays exact even though the sample is capped', () => {
+    const rows = [{ agentKey: 'a', status: 'done', ok: true, findingCount: 15,
+      costUSD: '0.1', output: previewOutput(15) }]
+    const [s] = assembleTestStatus(['a'], rows)
+    expect(s!.findingCount).toBe(15)
+    expect(s!.sample.length).toBeLessThan(s!.findingCount)
   })
 })

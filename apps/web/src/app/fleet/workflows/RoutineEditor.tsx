@@ -103,6 +103,11 @@ function draftKey(routineKey: string): string {
   return `naf-wf-draft-${routineKey}`
 }
 
+interface TestFindingSample {
+  label: string
+  kind: string
+  severity: string
+}
 interface TestStepRow {
   charterKey: string
   status: 'pending' | 'running' | 'done' | 'failed' | 'stopped'
@@ -110,6 +115,8 @@ interface TestStepRow {
   costUSD: number
   errorMessage: string | null
   haltedReason: string | null
+  /** S6.d — up to five of what this step WOULD have reported. */
+  sample?: TestFindingSample[]
 }
 interface TestStatus {
   testId: string
@@ -495,7 +502,7 @@ export function RoutineEditor({
       {test && testStatus ? (
         <section className="wf-testpanel" role="status" aria-live="polite">
           <header className="wf-cardhead">
-            <h3><FlaskConical size={15} /> Test run</h3>
+            <h3><FlaskConical size={15} /> <Term k="test">Test run</Term></h3>
             {/* S6.b — "spent" was a lie while walking: a step's cost only
                 exists when its row is written, so the legend read "$0.0000
                 spent" through the first 40% of the measured walk. It says
@@ -538,6 +545,26 @@ export function RoutineEditor({
                   <span className="wf-sub">
                     {s.costUSD > 0 ? `$${s.costUSD.toFixed(4)}` : s.status === 'running' ? 'spending…' : ''}
                   </span>
+                  {/* S6.d — the count was the whole of it. A test exists to
+                      show what the fleet WOULD do, and the fleet's output is
+                      the product; we were the only surface hiding it while
+                      the content sat on the run row already. */}
+                  {s.sample && s.sample.length > 0 ? (
+                    <ul className="wf-testfinds">
+                      {s.sample.map((f, i) => (
+                        <li key={`${f.label}-${i}`}>
+                          <span className={`wf-sev sev-${f.severity || 'info'}`}>{f.severity}</span>
+                          <span className="wf-findlabel">{f.label}</span>
+                          {f.kind ? <span className="wf-findkind">{f.kind.replace(/_/g, ' ')}</span> : null}
+                        </li>
+                      ))}
+                      {s.findingCount > s.sample.length ? (
+                        <li className="wf-findmore">
+                          showing {s.sample.length} of {s.findingCount}
+                        </li>
+                      ) : null}
+                    </ul>
+                  ) : null}
                 </div>
               )
             })}

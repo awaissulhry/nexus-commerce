@@ -172,7 +172,49 @@ export interface TestRunRowLike {
   costUSD: string | number | { toString(): string }
   errorMessage?: string | null
   haltedReason?: string | null
+  /** S6.d — a preview run persists `{ preview: true, data }` here, so the
+   *  would-be findings are ALREADY on the row. Reading them is a read, not a
+   *  new write path; law L2 is untouched. */
+  output?: unknown
 }
+/** One would-be finding, reduced to what a test panel can honestly show. */
+export interface TestFindingSample {
+  label: string
+  kind: string
+  severity: string
+}
+
+/** How many of a step's would-be findings travel with the status. The count
+ *  is always exact; the sample is capped so a six-step council cannot turn a
+ *  poll into a payload. */
+export const TEST_SAMPLE_CAP = 5
+
+/**
+ * S6.d — pull the would-be findings out of a preview run's persisted output.
+ * Analyst charters store `{ findings: [...] }`; other tiers store their single
+ * artifact, which has no findings array and yields nothing. Total defensive:
+ * this reads model-shaped JSON off a row and must never throw a poll.
+ */
+export function sampleFindings(output: unknown): TestFindingSample[] {
+  const data = (output as { data?: unknown } | null)?.data
+  const findings = (data as { findings?: unknown } | null)?.findings
+  if (!Array.isArray(findings)) return []
+  const out: TestFindingSample[] = []
+  for (const f of findings.slice(0, TEST_SAMPLE_CAP)) {
+    if (!f || typeof f !== 'object') continue
+    const r = f as Record<string, unknown>
+    const label = typeof r.entityName === 'string' && r.entityName
+      ? r.entityName
+      : typeof r.entityId === 'string' ? r.entityId : '(unnamed)'
+    out.push({
+      label,
+      kind: typeof r.kind === 'string' ? r.kind : '',
+      severity: typeof r.severity === 'string' ? r.severity : '',
+    })
+  }
+  return out
+}
+
 export interface TestStepStatus {
   charterKey: string
   status: 'pending' | 'running' | 'done' | 'failed' | 'stopped'
@@ -180,6 +222,8 @@ export interface TestStepStatus {
   costUSD: number
   errorMessage: string | null
   haltedReason: string | null
+  /** Up to TEST_SAMPLE_CAP of what this step WOULD have reported. */
+  sample: TestFindingSample[]
 }
 
 /** One row per planned step, in walk order, whatever the DB has so far.
@@ -191,7 +235,7 @@ export function assembleTestStatus(
   return steps.map((charterKey) => {
     const row = rows.find((r) => r.agentKey === charterKey)
     if (!row) {
-      return { charterKey, status: 'pending' as const, findingCount: 0, costUSD: 0, errorMessage: null, haltedReason: null }
+      return { charterKey, status: 'pending' as const, findingCount: 0, costUSD: 0, errorMessage: null, haltedReason: null, sample: [] }
     }
     const base = {
       charterKey,
@@ -199,6 +243,7 @@ export function assembleTestStatus(
       costUSD: Number(row.costUSD || 0),
       errorMessage: row.errorMessage ?? null,
       haltedReason: row.haltedReason ?? null,
+      sample: sampleFindings(row.output),
     }
     if (row.status === 'running') return { ...base, status: 'running' as const }
     if (row.haltedReason) return { ...base, status: 'stopped' as const }

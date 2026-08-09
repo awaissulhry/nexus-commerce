@@ -126,6 +126,8 @@ export async function getWorkflowTestStatus(testId: string): Promise<WorkflowTes
       costUSD: true,
       errorMessage: true,
       haltedReason: true,
+      // S6.d — the preview's persisted output carries the would-be findings.
+      output: true,
     },
   })
   if (!entry && rows.length === 0) return null
