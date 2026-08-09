@@ -600,22 +600,28 @@ const EXAMPLE_LABELS: FleetLabels = {
   },
 }
 
-const EXAMPLE_APPROVAL = {
-  id: 'example',
-  toolName: 'set-target-bid',
-  charterKey: 'amazon-bid-tuner',
-  riskTier: 'high',
-  status: 'pending',
-  args: { targetId: 'example-target', proposedBidCents: 84 },
-  preview: {
+function exampleApproval() {
+  return {
+    id: 'example',
+    toolName: 'set-target-bid',
+    charterKey: 'amazon-bid-tuner',
+    riskTier: 'high',
+    status: 'pending',
+    args: { targetId: 'example-target', proposedBidCents: 84 },
+    preview: {
     currentBidCents: 31,
     proposedBidCents: 84,
     effect: 'Raises what you pay per click on one keyword.',
-  },
-  requestedAt: new Date(0).toISOString(),
-  expiresAt: null,
-  reason: null,
-  trackRecord: null,
+    },
+    /* Relative, not fixed. `new Date(0)` rendered "20674d ago" on the example
+     card, which undoes the credibility the example exists to build; a hardcoded
+     date would drift into the same problem more slowly. Minute granularity, so
+     the server and client renders produce the same string. */
+    requestedAt: new Date(Date.now() - 6 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 18 * 3_600_000).toISOString(),
+    reason: null,
+    trackRecord: null,
+    }
 }
 
 function ExampleCard() {
@@ -625,9 +631,14 @@ function ExampleCard() {
         <span className="aq-examplechip">Example</span>
         This is what a request will look like. It is not real, and nothing here can be decided.
       </p>
-      <div className="aq-examplebody">
+      {/* A <fieldset disabled> rather than trusting `busy`: `busy` disables the
+          BUTTONS, and prod showed one <input> still live inside a card whose
+          own caption says nothing here can be decided. A fieldset disables
+          every form control it contains, including ones added later, and
+          leaves the text readable — which `inert` would not. */}
+      <fieldset disabled className="aq-examplebody">
         <ApprovalCard
-          approval={EXAMPLE_APPROVAL}
+          approval={exampleApproval()}
           labels={EXAMPLE_LABELS}
           workerName="Bid tuner"
           /* Inert by construction: `busy` disables every control on the card. */
@@ -638,7 +649,7 @@ function ExampleCard() {
           onAmend={async () => ({ ok: false })}
           onSnooze={() => {}}
         />
-      </div>
+      </fieldset>
     </div>
   )
 }
