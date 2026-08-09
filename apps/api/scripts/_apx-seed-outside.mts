@@ -43,9 +43,32 @@ if (mode === 'clean') {
     select: { id: true },
   })
   const ids = runs.map((r) => r.id)
+
+  /*
+   * Audit rows FIRST, and only the ones that point at a row this script made.
+   *
+   * A seeded row can acquire an audit entry without anyone touching the page:
+   * the maintenance sweep reached the parked seed, ran the tool's dry-run,
+   * refused it, and wrote `action: 'stale_refused'` naming the approval. The
+   * baseline for this table is 0, so a cleanup that removed only approvals and
+   * runs would leave the database one row dirtier than it found it — and the
+   * end-state assertion below is the only thing that would ever have said so.
+   */
+  const seeded = await prisma.agentApproval.findMany({
+    where: { agentRunId: { in: ids } },
+    select: { id: true },
+  })
+  let audits = 0
+  for (const a of seeded) {
+    const r = await prisma.agentControlAudit.deleteMany({
+      where: { toValue: { path: ['approvalId'], equals: a.id } },
+    })
+    audits += r.count
+  }
+
   const aps = await prisma.agentApproval.deleteMany({ where: { agentRunId: { in: ids } } })
   const rr = await prisma.agentRun.deleteMany({ where: { id: { in: ids } } })
-  console.log(`deleted approvals=${aps.count} runs=${rr.count}`)
+  console.log(`deleted approvals=${aps.count} runs=${rr.count} auditRows=${audits}`)
   // Assert the END STATE, never this script's own success message — the
   // cleanup on this page has been over-narrow twice.
   const left = await prisma.agentApproval.count()
@@ -53,8 +76,13 @@ if (mode === 'clean') {
   const pending = await prisma.agentApproval.count({
     where: { status: { in: ['pending', 'scheduled'] } },
   })
-  console.log(`AgentApproval rows: ${left} (must be 18) · pending: ${pending} (must be 0) · seed runs: ${stray} (must be 0)`)
-  if (left !== 18 || stray > 0 || pending > 0) {
+  const auditLeft = await prisma.agentControlAudit.count()
+  const exemplars = await prisma.agentExemplar.count()
+  console.log(
+    `AgentApproval: ${left} (must be 18) · pending: ${pending} (0) · seed runs: ${stray} (0) · ` +
+      `AgentControlAudit: ${auditLeft} (0) · AgentExemplar: ${exemplars} (0)`,
+  )
+  if (left !== 18 || stray > 0 || pending > 0 || auditLeft > 0 || exemplars > 0) {
     console.error('⚠ NOT CLEAN')
     process.exitCode = 1
   }
