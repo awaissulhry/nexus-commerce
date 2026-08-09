@@ -966,8 +966,50 @@
 .wf-sublink:hover { text-decoration: underline; }
 
 /* ── S4 interim: versions ────────────────────────────────────────────── */
+/* ── WF-S4R / S4.a — the version grid ────────────────────────────────────
+   Was a flex row, so every element's x was a function of the length of
+   everything before it: the author and date stair-stepped 67.6px down three
+   rows, and on a reverted built-in the "active" chip landed at x=321.4 while
+   the revision rows' chips sat at 860.8 and 870.4. The single thing this
+   section is scanned for — which wiring is live — had no fixed place.
+
+   Percentages summing to 100, so no column absorbs the slack (the S3R
+   lesson) and the state column is at one x on every row including the
+   built-in's. */
 .wf-versions { padding: 2px 2px 6px; }
-.wf-vrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wf-vrow {
+  display: grid;
+  grid-template-columns: 7% 34% 14% 17% 11% 17%;
+  align-items: baseline;
+  column-gap: 0;
+  padding: 7px 0;
+  border-bottom: 1px solid #f0f3f7;
+}
+.wf-vrow:last-of-type { border-bottom: 0; }
+.wf-vrow.is-active { background: #f7fbf9; }
+/* The built-in has fewer facts, so its description spans the columns it has
+   nothing to put in — the state column stays where it is. */
+.wf-vrow.is-builtin .wf-vname { grid-column: 2 / 5; }
+
+.wf-vauthor,
+.wf-vwhen {
+  font-size: 11.5px;
+  color: #5f6a78;
+  min-width: 0;
+  padding-right: 10px;
+}
+.wf-vwhen { font-variant-numeric: tabular-nums; }
+.wf-vwhen .wf-sub,
+.wf-vname .wf-sub { margin-top: 2px; }
+.wf-vstate { min-width: 0; }
+.wf-vactions { display: flex; justify-content: flex-end; }
+.wf-vbadge.neutral {
+  font-family: inherit;
+  font-weight: 650;
+  color: #5f6a78;
+  background: #f2f5f8;
+  border-color: #e2e7ee;
+}
 .wf-vbadge {
   font-size: 11.5px;
   font-weight: 700;
@@ -989,7 +1031,7 @@
   background: #f2f5f8;
   border-color: #e2e7ee;
 }
-.wf-vname { font-size: 12.5px; font-weight: 650; color: #26313f; }
+.wf-vname { font-size: 12.5px; font-weight: 650; color: #26313f; min-width: 0; padding-right: 14px; }
 .wf-vnote {
   margin: 9px 0 0;
   font-size: 12px;

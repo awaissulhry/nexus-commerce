@@ -679,48 +679,83 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                     aside until you revert (one click below; it cannot fail).
                   </p>
                 ) : null}
-                {vers.revisions.map((r) => (
-                  <div className="wf-vrow" key={r.id}>
-                    <span className="wf-vbadge">rev {r.revision}</span>
-                    <span className="wf-vname">{r.note}</span>
-                    <span className="wf-sub">
-                      {r.author ?? 'unattributed'} · {agoTs(new Date(r.createdAt).getTime())}
-                    </span>
-                    {r.activatedAt && !r.supersededAt ? (
-                      <>
-                        <span className="acr-pg-statechip running">active</span>
-                        {builtin ? (
-                          <button className="acr-btn" onClick={() => void revert()}>
+                {/* S4.a — a grid, so the state chip has ONE x on every row.
+                    As a flex row it landed anywhere across 549.6px: on a
+                    reverted built-in the "active" marker sat at 321.4 while the
+                    revision rows' chips sat at 860.8 and 870.4, and the one
+                    thing this section is scanned for had no fixed place. */}
+                {vers.revisions.map((r) => {
+                  const isActive = Boolean(r.activatedAt && !r.supersededAt)
+                  const isDraft = !r.activatedAt && !r.supersededAt
+                  return (
+                    <div className={`wf-vrow${isActive ? ' is-active' : ''}`} key={r.id}>
+                      <span className="wf-vbadge">rev {r.revision}</span>
+                      <span className="wf-vname">{r.note}</span>
+                      <span className="wf-vauthor">{r.author ?? 'unattributed'}</span>
+                      <span className="wf-vwhen">
+                        {agoTs(new Date(r.createdAt).getTime())}
+                        {/* The pointer's own history, from the two timestamps
+                            the row has always carried and never shown. */}
+                        <span className="wf-sub">
+                          {isActive
+                            ? `active since ${agoTs(new Date(r.activatedAt!).getTime())}`
+                            : r.supersededAt && r.activatedAt
+                              ? `was active ${agoTs(new Date(r.activatedAt).getTime())} → ${agoTs(new Date(r.supersededAt).getTime())}`
+                              : r.supersededAt
+                                ? 'set aside without ever running'
+                                : 'never activated'}
+                        </span>
+                      </span>
+                      <span className="wf-vstate">
+                        {isActive ? (
+                          <span className="acr-pg-statechip running">active</span>
+                        ) : isDraft ? (
+                          <span className="acr-pg-statechip wf-chip-ready">draft</span>
+                        ) : (
+                          <span className="acr-pg-statechip wf-chip-off">superseded</span>
+                        )}
+                      </span>
+                      <span className="wf-vactions">
+                        {isActive && builtin ? (
+                          <button className="acr-btn ghost" onClick={() => void revert()}>
                             Revert to built-in
                           </button>
+                        ) : isDraft ? (
+                          <button
+                            className="acr-btn ghost"
+                            onClick={() => { setActErr(null); setPendingAct(r) }}
+                          >
+                            Activate…
+                          </button>
                         ) : null}
-                      </>
-                    ) : r.supersededAt ? (
-                      <span className="acr-pg-statechip wf-chip-off">superseded</span>
-                    ) : (
-                      <>
-                        <span className="acr-pg-statechip wf-chip-ready">draft</span>
-                        <button
-                          className="acr-btn"
-                          onClick={() => { setActErr(null); setPendingAct(r) }}
-                        >
-                          Activate…
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      </span>
+                    </div>
+                  )
+                })}
               </>
             ) : null}
             {builtin ? (
-              <div className="wf-vrow">
-                <span className="wf-vbadge">v1</span>
-                <span className="wf-vname">Built-in — defined in code</span>
-                {!vers || vers.source !== 'revision' ? (
-                  <span className="acr-pg-statechip running">active</span>
-                ) : (
-                  <span className="wf-sub">the fallback every revert returns to</span>
-                )}
+              /* A peer row on the same grid — it genuinely has fewer facts, so
+                 its description spans the columns it has nothing to put in,
+                 and its state chip still lands in the state column. */
+              <div className={`wf-vrow is-builtin${!vers || vers.source !== 'revision' ? ' is-active' : ''}`}>
+                <span className="wf-vbadge neutral">v1</span>
+                <span className="wf-vname">
+                  Built-in — defined in code
+                  <span className="wf-sub">
+                    {!vers || vers.source !== 'revision'
+                      ? 'the wiring that ships with the fleet'
+                      : 'the fallback every revert returns to'}
+                  </span>
+                </span>
+                <span className="wf-vstate">
+                  {!vers || vers.source !== 'revision' ? (
+                    <span className="acr-pg-statechip running">active</span>
+                  ) : (
+                    <span className="acr-pg-statechip wf-chip-off">set aside</span>
+                  )}
+                </span>
+                <span className="wf-vactions" />
               </div>
             ) : vers && vers.revisions.length === 0 ? (
               <p className="wf-vnote">
