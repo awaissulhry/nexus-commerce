@@ -634,17 +634,22 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
-/* auto-FILL, not auto-fit. auto-fit collapses the empty tracks and stretches
-   what is left, so a stage holding ONE step got the full 676.5px while its
-   neighbours sat at 220.2px — a card of thirty characters with its pill flung
-   456px away, which is the dead width this section exists to remove, wearing
-   a different hat. Filled tracks keep every card the same width whatever a
-   stage happens to hold. */
+/* auto-FIT plus a cap, which is neither of the two obvious answers.
+   Measured in the 676.5px picture column: auto-fit collapses empty tracks and
+   stretches what is left, so a stage of ONE got the whole 676.5px — thirty
+   characters in a bordered box with its pill flung 456px away, the very dead
+   width this section removes, wearing a different hat. auto-fill fixes that
+   and breaks the other case: a stage of TWO went from 334.3px cards filling
+   the row to 220.2px cards beside a 220px hole, and the two-step custom is
+   the routine an operator actually authors. Fit the tracks, cap the card:
+   4 steps → 220.2 each, 2 → 334.3 each, both gapless; 1 → 340 instead
+   of 676.5. */
 .wf-pipe.is-composing .wf-pipe-steps {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 8px;
 }
+.wf-pipe.is-composing .wf-pipe-step { max-width: 340px; }
 
 /* The picture follows you down the form. Measured on prod: the pipeline is
    344.9px tall against a step column of 1741.8px, so by the third step card
