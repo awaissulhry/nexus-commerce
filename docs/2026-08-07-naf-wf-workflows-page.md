@@ -2983,6 +2983,65 @@ absence (D10).
    clear the ledger without re-deriving anything — and future section studies
    cite that block instead of repeating the findings.
 
+### 12.7 · S4.a–S4.d SHIPPED + PROD-VERIFIED 2026-08-08 — WF-S4R COMPLETE
+
+| Commit | Phase |
+|---|---|
+| `c880e7e79` → `2d0d5c2a1` | **S4.a** the grid |
+| `2b6eb8a46` | **S4.b** rollback |
+| `61bc9f748` | **S4.c / S4.d** served-runs, per-row diff, teaching |
+
+| Test | Before | After |
+|---|---|---|
+| State-chip x across rows | **549.6px spread** | **0** on every routine |
+| Author x across rows | 67.6px spread | **0** |
+| Dead right | 768.5px = **47.6%** | **2px = 0.1%** |
+| Rev badge box vs its text | 109.8 vs 34.6 | **52.6 vs 34.6** (padding only) |
+| Rollback available | draft only | **every non-active revision** |
+| Pointer history | carried, unshown | *"active since 26m ago"* · *"was active 27m ago → 26m ago"* |
+| Runs per revision | absent | **"served 43 runs" / "no runs under this wiring"** |
+| Contrast · sizes · weights · `<Term>` in links | 0 · 4 · 3 · 0 | **0 · 4 · 3 · 0** |
+
+**The rollback round trip, exercised on prod and restored.** Activating rev 2
+from a superseded row moved the pointer, rewrote both rows' time stories, and
+**re-armed the clock** — the status band flipped to **On**, *"Mondays at 05:30
+UTC · next in 18h 54m"*, exactly what the confirm promised. Re-activating rev 3
+returned it to Ready/manual with Run-now back. The routine ends where the
+charter requires: **manual, enabled, rev 3 active**. The trail records the
+excursion honestly — rev 2 reads *"was active 27m ago → 26m ago"* — which is
+the audit trail doing its job on itself.
+
+**§12.4's state table, discharged:**
+
+| # | State | Result |
+|---|---|---|
+| 1 | Built-in, no revisions | `on-demand-check` — v1 active, **"served 43 runs"**, never-edited sentence present |
+| 2 | Built-in, revisions all superseded | `fleet-council` — both offer "Make this active…", v1 active **"served 1 run"** |
+| 3 | Built-in, revision active | code — v1 renders **"set aside"** |
+| 4 | Custom, revisions, one active | `morning-negatives-pass` |
+| 5 | Custom, no revisions | code — "it is honestly nothing" |
+| 6 | Draft | code — the branch renders the draft chip + Activate |
+| 7 | Rollback to a superseded revision | **prod, round-tripped and restored** |
+| 8 | Revert-to-built-in built-ins only | structural — no button rendered on a custom |
+| 9 | Served count with the cap reached | code — `runs.length >= 100`; 53 today |
+| 10 | Served count = 0 | prod — "no runs under this wiring" |
+| 11 | Diff on rev 1 | prod — **"WHAT REV 1 INTRODUCED"** + its six steps |
+| 12 | 404 | unchanged from S2R |
+
+**One defect prod caught, and it is worth generalising: a grid stretches its
+items too.** The rev badge rendered as a 109.8px bar around 34.6px of text —
+the S1R 518px-chip defect reappearing one container type over. **Both container
+types this page uses default to stretch**, so introducing either means checking
+what it does to the small things inside it.
+
+**The cross-stream ledger is consolidated and one item is closed.** Re-verified
+on 2026-08-08 rather than carried forward: `.acr-btn.go` is still 3.46:1 and
+the runs route still serves preview rows (8 of 53, 15.1%) — but
+**`approval-inbox.vitest.test.ts` is now green, 19/19.** Approvals fixed it. The
+two open items now live in one block in the locks doc (§4b) with file, line and
+the tested one-line fix each, so future studies cite it instead of re-deriving
+the same facts a fifth time.
+
 ---
 
 ## Sources
