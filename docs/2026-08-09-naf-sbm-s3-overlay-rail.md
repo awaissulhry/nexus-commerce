@@ -621,16 +621,22 @@ instead. See D-S3.6.
 
 Two consequences to state plainly:
 
-- `ov-off` `#b9c2ce` → a grey around **`#828d9b`** (3.38:1 on white, 3.31:1 on
+- `ov-off` `#b9c2ce` → a grey around **`#8a9199`** (3.19:1 on white, 3.10:1 on
   canvas), still the lightest and most recessive rung.
-- The cost ramp cannot hold four steps under this rule. `free` and `low` — *"Ran,
-  and cost nothing"* and *"Under a cent"* — **share one class**, which the model
-  already permits and already does (autonomy's `unreadable` and `not-set-up` both
-  use `ov-nodata`). Three cost steps plus the hatch, with real separation, beats
-  four steps where the bottom two are invisible and 1.32:1 apart.
+- ~~The cost ramp cannot hold four steps under this rule.~~ **Corrected during
+  S3.e — this was wrong.** It conflated the impossible 3:1 *separation* with the
+  1.5 one. Four steps at ~1.5× apart run 3.18 → 4.90 → 7.45 → 11.40, all clearing
+  3:1 on both backgrounds. So no bucket is merged and `free` keeps its own
+  colour; the paragraph that proposed sharing a class is withdrawn.
 
 Exact hex values are derived and verified by measurement in the build phase, not
 asserted here.
+
+**Health is deliberately excluded from the re-spacing.** `good` 4.54, `warn`
+3.64 and `bad` 5.47 already clear 3:1, and green-vs-red is 1.20:1 in greyscale —
+but on the card the health bucket is fully redundant with the status word
+(*"last run failed"*), so colour is not the only channel and 1.4.1 is satisfied.
+Darkening a red that already says "error" in words buys nothing.
 
 **This changes the canvas's appearance.** The `ov-*` tints live in this
 section's block of `map.css` and are this section's to set, but the ring is

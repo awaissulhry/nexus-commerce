@@ -1594,7 +1594,11 @@
      is only reachable by the entity legend's `rel-*` swatches, which set their
      own colour. */
   background-color: var(--ov, #c3ccd8);
-  border: 1px solid rgba(28, 37, 48, 0.08);
+  /* The edge is the bucket's own colour, so every swatch has a boundary that
+     clears 3:1 by construction. On a solid swatch it vanishes into the fill; on
+     the hatched one it is what makes an 11px square of 50%-coverage stripes
+     read as a definite object. Was rgba(28,37,48,0.08) = 1.19:1. */
+  border: 1px solid var(--ov, rgba(28, 37, 48, 0.08));
 }
 
 .sbm-orail-filters {
@@ -1659,25 +1663,83 @@
  * wherever it sat in the file, so the list of pairs stays — but it carries no
  * colours now, only the plumbing.
  */
+/*
+ * S3R — THE TINTS CLEAR 1.4.11, AND THE LADDERS ARE READABLE WITHOUT HUE.
+ *
+ * Four of the twelve were below the 3:1 a graphical object needs — and one of
+ * them, `ov-off`, is the bucket every worker on this fleet currently occupies,
+ * so the whole canvas was painted in a 1.75:1 ring. Measured before → after,
+ * against the rail's #fff and the canvas's #fbfcfe:
+ *
+ *   ov-off      1.80 / 1.75  →  3.19 / 3.10
+ *   ov-cost0    1.26 / 1.23  →  3.18 / 3.10
+ *   ov-cost1    1.66 / 1.61  →  4.90 / 4.77
+ *   ov-nodata   1.62 /   —   →  3.35 / 3.27 (hatch ink), 3.88 / 3.78 (edge)
+ *
+ * The second half matters more. WCAG credits a lightness difference as a
+ * SECOND channel only at 3:1, and the ordered rungs were carried by hue alone:
+ * `observe` vs `propose` measured 1.10:1 in greyscale — the two rungs that
+ * decide whether a robot may touch a live Amazon account. Four rungs each 3:1
+ * apart needs 27× of range and cannot coexist with all four clearing 3:1 on
+ * white; that is arithmetic, not preference. So each ordered ramp is spaced at
+ * ~1.5× instead, which makes it RANKABLE in greyscale, and the identification
+ * problem is handed to a word on the card (S3 study, C-S3.1 — the card is
+ * S2R's file, so it is raised, not taken here).
+ *
+ *   autonomy  off 3.19 → observe 4.90 → propose 7.46 → auto 11.33  (1.54/1.52/1.52)
+ *   cost      3.18 → 4.90 → 7.45 → 11.40                           (1.54/1.52/1.53)
+ *
+ * HEALTH IS DELIBERATELY UNCHANGED. good 4.54, warn 3.64, bad 5.47 already
+ * clear 3:1, and green-vs-red is 1.20:1 in greyscale — but on the card the
+ * health bucket is fully redundant with the status word ("last run failed"),
+ * so colour is not the only channel there and 1.4.1 is satisfied. Darkening a
+ * red that already says "error" in words would buy nothing.
+ *
+ * The study said the cost ramp could not hold four steps under this rule. That
+ * was wrong — it conflated the impossible 3:1 separation with the 1.5 one. Four
+ * steps fit, so no bucket has been merged and `free` keeps its own colour.
+ */
 .ov-nodata {
-  --ov: #c3ccd8;
-  --ov-hatch: repeating-linear-gradient(45deg, #eef2f6, #eef2f6 3px, #ffffff 3px, #ffffff 6px);
+  --ov: #7c828a;
+  /* ⚠ ONE ink, TWO strengths, and the difference is not drift. The swatch is
+     11px and the hatch IS its identity, so it needs the full 3.35:1. The card's
+     hatch is a full-bleed background BEHIND TEXT, so the same ink at full
+     strength would wreck the card's own contrast. Both are derived from this
+     one triplet, so the colour still cannot diverge — only its weight, on
+     purpose, for a stated reason. */
+  --ov-hatch-rgb: 134 141 150;
+  --ov-hatch: repeating-linear-gradient(
+    45deg,
+    rgb(var(--ov-hatch-rgb)),
+    rgb(var(--ov-hatch-rgb)) 3px,
+    #ffffff 3px,
+    #ffffff 6px
+  );
+  --ov-hatch-soft: repeating-linear-gradient(
+    45deg,
+    rgb(var(--ov-hatch-rgb) / 0.16),
+    rgb(var(--ov-hatch-rgb) / 0.16) 4px,
+    #ffffff 4px,
+    #ffffff 8px
+  );
 }
-.ov-off { --ov: #b9c2ce; }
-.ov-observe { --ov: #6b8fc4; }
-.ov-propose { --ov: #b7791f; }
-.ov-auto { --ov: #2f855a; }
+.ov-off { --ov: #8a9199; }
+.ov-observe { --ov: #56729d; }
+.ov-propose { --ov: #744d14; }
+.ov-auto { --ov: #17422d; }
 .ov-good { --ov: #2f855a; }
 .ov-warn { --ov: #b7791f; }
 .ov-bad { --ov: #c53030; }
-.ov-cost0 { --ov: #dfe6ee; }
-.ov-cost1 { --ov: #b7cbe4; }
-.ov-cost2 { --ov: #6b8fc4; }
-.ov-cost3 { --ov: #2f5d94; }
+.ov-cost0 { --ov: #6d92c8; }
+.ov-cost1 { --ov: #56729d; }
+.ov-cost2 { --ov: #415676; }
+.ov-cost3 { --ov: #1e3b5e; }
 
-.sbm-swatch.ov-nodata,
-.sbm-node.ov-nodata {
+.sbm-swatch.ov-nodata {
   background-image: var(--ov-hatch);
+}
+.sbm-node.ov-nodata {
+  background-image: var(--ov-hatch-soft);
 }
 
 .sbm-node.ov-nodata,
