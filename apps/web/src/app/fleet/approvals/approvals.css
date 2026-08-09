@@ -928,74 +928,33 @@
 .aq-cardhead {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 12px;
   align-items: baseline;
+  justify-content: space-between;
   line-height: 1.45;
 }
+.aq-who {
+  font-size: 13px;
+  color: #4a5867;
+}
 .aq-cardhead strong {
-  font-weight: 650;
-}
-.aq-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  align-items: center;
-}
-.aq-age {
-  margin-left: auto;
-  font-size: 11.5px;
-  color: #6b7688;
-  white-space: nowrap;
-}
-
-.aq-risk,
-.aq-rev,
-.aq-clock {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10.5px;
   font-weight: 600;
+  color: #1c2530;
+}
+/* Risk, the clock and the age: metadata, one size down, out of the delta's way.
+   The ONLY state colour left on this card is danger, and only where something
+   is genuinely wrong — an expiring request, or a failed execution. */
+.aq-meta {
+  font-size: 11.5px;
+  color: #55616f;
   white-space: nowrap;
-}
-.aq-risk {
-  border: 1px solid #e2e8f0;
-  background: #f4f6f9;
-  color: #3a4658;
-}
-.aq-risk.r-high {
-  border-color: #f0c9c9;
-  background: #fdf5f5;
-  color: #9b2c2c;
-}
-/* Reversibility is a WORD first; the colour only reinforces it. */
-.aq-rev.v-restore {
-  border: 1px solid #bbe5c8;
-  background: #eefaf1;
-  color: #276749;
-}
-.aq-rev.v-compensate {
-  border: 1px solid #e6d6b8;
-  background: #fffaeb;
-  color: #92400e;
-}
-.aq-rev.v-never {
-  border: 1px solid #f0c9c9;
-  background: #fdf5f5;
-  color: #9b2c2c;
-}
-.aq-clock {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  border: 1px solid #e2e8f0;
-  background: #f4f6f9;
-  color: #6b7688;
 }
 .aq-clock.urgent {
-  border-color: #f0c9c9;
-  background: #fdf5f5;
   color: #9b2c2c;
+  font-weight: 600;
 }
+
+/* Reversibility is a WORD first; the colour only reinforces it. */
 
 /* what it touches, by name */
 
@@ -1014,7 +973,7 @@
 
 .aq-facts {
   margin: 10px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .aq-facts > div {
   padding: 6px 0;

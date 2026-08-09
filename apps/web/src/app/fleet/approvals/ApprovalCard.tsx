@@ -73,18 +73,22 @@ export interface CardApproval {
  */
 type Reversibility = 'restore' | 'compensate' | 'never'
 
-const REVERSIBILITY: Record<Reversibility, { chip: string; sentence: string }> = {
+/*
+ * S6.c — the `chip` field is gone. S6.a promoted the reversibility SENTENCE
+ * into the always-visible consequence line, which left the chip saying the same
+ * thing more briefly a few pixels away. Two statements of one fact is exactly
+ * what this map was created to prevent, so the shorter one went rather than
+ * being restyled.
+ */
+const REVERSIBILITY: Record<Reversibility, { sentence: string }> = {
   restore: {
-    chip: 'can be put back',
     sentence: 'We can put this back the way it was — the previous value is recorded.',
   },
   compensate: {
-    chip: 'only compensated for',
     sentence:
       'This cannot be undone, only compensated for. The change can be reversed going forward, but whatever it already did — money spent, a listing seen — has happened.',
   },
   never: {
-    chip: 'cannot be undone',
     sentence: 'This cannot be taken back once it runs, by any means.',
   },
 }
@@ -524,20 +528,34 @@ export function ApprovalCard({
 
   return (
     <div className={`aq-card r-${approval.riskTier}${heavy ? ' heavy' : ''}`}>
+      {/*
+        S6.c — the context row. Was three CHIPS (risk · reversibility · clock)
+        at one size and one weight, mixing a policy tier, a consequence class
+        and a deadline, plus eight colour combinations between them. That is the
+        defect S2 had with its four tiles: three semantics, one visual weight.
+
+        They are words now, one size down, out of the way of the delta.
+
+        The REVERSIBILITY chip is DELETED rather than restyled: S6.a promoted
+        the reversibility sentence into the always-visible consequence line, so
+        the chip had become a second, shorter statement of the same fact — and
+        two places that can drift is what `reversibilityOf` exists to prevent.
+      */}
       <div className="aq-cardhead">
-        <strong>{workerName}</strong> {vocab.wants}
-        <span className="aq-chips">
-          <Term k="risk-tier">
-            <span className={`aq-risk r-${approval.riskTier}`}>{approval.riskTier} risk</span>
-          </Term>
-          <span className={`aq-rev v-${rev}`}>{REVERSIBILITY[rev].chip}</span>
-          {left ? (
-            <span className={`aq-clock${left.urgent ? ' urgent' : ''}`}>
-              <Clock size={11} aria-hidden /> {left.text}
-            </span>
-          ) : null}
+        <span className="aq-who">
+          <strong>{workerName}</strong> {vocab.wants}
         </span>
-        <span className="aq-age">{ago(approval.requestedAt)}</span>
+        <span className="aq-meta">
+          <Term k="risk-tier">{approval.riskTier} risk</Term>
+          {left ? (
+            <>
+              {' · '}
+              <span className={left.urgent ? 'aq-clock urgent' : undefined}>{left.text}</span>
+            </>
+          ) : null}
+          {' · '}
+          {ago(approval.requestedAt)}
+        </span>
       </div>
 
       {/*
