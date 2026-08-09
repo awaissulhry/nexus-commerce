@@ -876,6 +876,35 @@ selection to be read.
 
 **Presented, not taken — this is the operator's call.**
 
+**RESOLVED 2026-08-10, and the answer is that there is nothing to move.** Before
+building anything I measured the labels I was proposing to relocate. On prod, at
+five viewports from 1920 down to 1100:
+
+| | |
+|---|---|
+| edges drawn / labels rendered | **4 / 4** at every width |
+| pairwise label overlap | **none**, at every width |
+| truncated labels | **0** |
+| smallest vertical gap between any two labels | **13.8px** |
+| the three converging labels | x ≈ 698 for all three, **37.6px apart vertically** |
+| canvas zoom | 0.643, identical at all five widths |
+
+The three analyst labels do share an x — that part of C15 was correctly
+observed — but they sit in a clean vertical stack, because the analysts occupy
+different rows. **Sharing an x is not a collision.** What made C15 look like one
+was the old label text: S2R measured `4 carried · 1 dropped` colliding and
+truncating mid-word, and S2R's own fix — shortening the label to `4 carried` and
+moving what was dropped into the edge inspector, where there is room to print the
+reason — removed the overlap. The finding outlived the defect.
+
+So the badge is not built, and it should not be: it would move a per-edge
+measurement onto a node, away from the edge it describes, onto a surface whose
+own rule forbids carrying counts. **C15 is closed as not reproducible**, with the
+numbers above rather than an opinion.
+
+*(The stable 0.643 zoom across five widths is a free confirmation of S2R's
+deterministic framing — the coin-toss `fitView` really is gone.)*
+
 ---
 
 ## PART 11 — Build order
@@ -970,17 +999,25 @@ not hold four steps and proposed merging two buckets. It had conflated the
 impossible 3:1 separation with the achievable 1.5 one. Four steps fit; nothing
 was merged; the paragraph is struck through in place rather than quietly edited.
 
-### Still open
+### Closed after the section, on the operator's go-ahead (S3.i–S3.m)
 
-- **C-S3.1** — under `autonomy`, colour is still the only channel. The fix is one
-  token on the node card; `MapCanvas.tsx` is S2R's. **Raised.**
-- **C-S3.2 / C-S3.4** — at 1280 the rail box is 234.3px against 288.9px of pinned
-  controls, so `Show` reaches 80.1 of 181.9 and the rest scrolls. No layout fixes
-  that; only the dead `.sbm-rail` media query does. **Raised.**
-- **C-S3.3** — the tier filter is armed and inert in List view. Both fixes land
-  outside the rail. **Raised.**
-- **C-S3.5** — whether the rail should carry Section 2's converging-edge count.
-  Recommended *no*, with the node badge as the better home. **Operator's call.**
+Every item raised in Part 10 has now been taken or retired.
+
+| | what happened |
+|---|---|
+| **C-S3.4** *(S3.i)* | The `.sbm-rail` 1400px query fires for the first time. At 1280×800: overlay rail **234.3 → 460.5px**, canvas **197 → 423.3px**. Consequence stated rather than discovered — below 1400 there is now no inspector, which is what the rule always said. |
+| **C-S3.2** *(via S3.i)* | Follows from the above: `Show` no longer competes with a panel the stylesheet said should not be there. |
+| **C-S3.1** *(S3.j)* | `OverlayBucket.short` puts the level in words on the card — `may look` / `may propose` / `may act` — set **only** where the tint is the sole carrier, and asserted both ways in the test. |
+| **≤1100 canvas 2px** *(S3.k)* | The row had nothing to size to: react-flow is absolutely positioned, so an `auto` row collapsed to the view switch. `2 → 77.3 → 152.5px` across the two fixes. |
+| **C-S3.3** *(S3.l)* | The table dims the rows the rail filtered out, via one additive `rowClassName` on the shared `DataGrid` (claimed and released). |
+| **C-S3.5 / C15** *(S3.m)* | **Retired, not built.** Measured first: no label overlap at any of five viewports. See Part 10. |
+
+### Still open, and not this section's
+
+- At 1100×800 the page header, census band and footer take **407px of an 800px
+  viewport**, leaving `.sbm-body` 392.7px to split between the rail and the
+  canvas. The canvas is no longer broken there, but it is cramped, and the cause
+  is above it. **Raised** — §M1's band and the header.
 - **New:** at ≤1100 the canvas measures **2px tall**, before and after this work,
   and the rail clips 16px at 1100 / 42px at 1024. **Both have the same cause and
   it is not the rail.** I first assumed the clipping was my own `max-height` and
