@@ -796,10 +796,15 @@ function HowActivityWorks() {
             the top says which.
           </p>
           <p>
-            <strong>The <Term k="selftest">self-test</Term> is hidden by default.</strong> It
-            checks that the fleet itself works, so its findings are about our scheduled jobs
-            rather than your account. It has produced most of the history on record, so counting
-            it in would make every number on this page mostly about the fleet testing itself.
+            {/* S67R — TWO populations are hidden now, and an explainer that
+                taught one of them was teaching the page as it used to be. */}
+            <strong>Two kinds of run are hidden by default.</strong> The{' '}
+            <Term k="selftest">self-test</Term> checks that the fleet itself works, so its
+            findings are about our scheduled jobs rather than your account. A{' '}
+            <strong>test run</strong> is a rehearsal from the Workflows page: it read real
+            evidence and used a real model, but nothing it decided was written. Between them
+            they are most of the history on record, so counting them in would make every number
+            on this page mostly about the fleet exercising itself.
           </p>
           <p>
             <strong>Nothing here is deleted on a schedule.</strong> This page keeps everything the
@@ -941,9 +946,7 @@ function Freshness({
         <span className="sba-freshword">{word}</span>
         {detail ? (
           <>
-            <span className="sba-freshsep" aria-hidden>
-              ·
-            </span>
+            <span className="sba-freshsep" aria-hidden />
             {asOf ? (
               <time className="sba-freshage" dateTime={asOf.toISOString()}>
                 {detail}
@@ -2474,8 +2477,17 @@ export function ActivityClient() {
         ) : null}
 
         {/* S6 — say out loud what is missing, so a gap reads as a boundary
-            rather than a bug. Every sentence here is checked against the data. */}
-        <section className="sba-notshown">
+            rather than a bug.
+
+            S67R — it now names BOTH hidden populations. S3R added the test lane
+            as a second scope switch and this section, whose entire job is to
+            name what is left out, went on naming one of them. That is a
+            truthfulness defect in the one place on the page that promises a
+            silence here is deliberate.
+
+            It still prints NO count. S1 states the numbers, and a number that
+            appears twice is a number that can disagree. */}
+        <section className="sba-notshown" aria-label="What this page doesn’t show">
           <h3>What this page doesn’t show</h3>
           <ul>
             <li>
@@ -2486,9 +2498,33 @@ export function ActivityClient() {
               </Link>
             </li>
             <li>
-              {includeSelfTest
-                ? 'The self-test is currently included. It checks that the fleet itself works, so its findings are about the fleet, not about your Amazon account.'
-                : 'The self-test is hidden. It checks that the fleet itself works, so its findings are about the fleet, not about your Amazon account — tick the box above to see them.'}
+              {includeSelfTest && includeTestRuns ? (
+                <>Nothing is being left out — you are looking at everything on record.</>
+              ) : (
+                <>
+                  {!includeSelfTest && !includeTestRuns
+                    ? 'Two kinds of run are left out of the counts above: '
+                    : 'One kind of run is left out of the counts above: '}
+                  {!includeSelfTest ? (
+                    <>
+                      the <Term k="selftest">self-test</Term>, which checks that the fleet itself
+                      works, so its findings are about our own scheduled jobs rather than your
+                      Amazon account
+                    </>
+                  ) : null}
+                  {!includeSelfTest && !includeTestRuns ? ', and ' : ''}
+                  {!includeTestRuns ? (
+                    <>
+                      test runs from the Workflows page, which are rehearsals — each read real
+                      evidence and used a real model, but nothing they decided was written
+                    </>
+                  ) : null}
+                  {/* Points AT the control; never a second copy of it. S3R owns
+                      the switches, and one act belongs in one place. */}
+                  . Switch {!includeSelfTest && !includeTestRuns ? 'either' : 'it'} on under{' '}
+                  <strong>Filters</strong> to include {!includeSelfTest && !includeTestRuns ? 'them' : 'it'}.
+                </>
+              )}
             </li>
             <li>
               Approval decisions taken before the fleet existed belong to the older Copilot

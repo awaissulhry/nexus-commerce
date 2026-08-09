@@ -174,7 +174,7 @@ export const GLOSSARY: Record<string, { title: string; body: string }> = {
   // thing they would misread as a problem with their account.
   selftest: {
     title: 'Self-test',
-    body: 'A worker whose only job is to check that the fleet itself is working. Its findings are about our own scheduled jobs, never about your Amazon account — so it is left out of the counts and shown with a badge. Hidden by default; tick the box to see it.',
+    body: 'A worker whose only job is to check that the fleet itself is working. Its findings are about our own scheduled jobs, never about your Amazon account — so it is left out of the counts and shown with a badge. Hidden by default; switch it on under Filters to see it.',
   },
   run: {
     title: 'Run',

@@ -126,8 +126,18 @@
 .sba-freshword {
   font-weight: 550;
 }
+/* S67R — was #b6c0cc, 1.81:1. S4R fixed the row separators by making them a
+   graphic rather than darkening a `·` until it reads like prose; this one was
+   left behind because the page-wide sweep only happened at the end. Same
+   treatment, same reasoning. */
 .sba-freshsep {
-  color: #b6c0cc;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #6b7684;
+  flex-shrink: 0;
+  color: transparent;
+  font-size: 0;
 }
 .sba-freshage {
   color: #5b6878;
@@ -730,7 +740,7 @@
   margin: 0 0 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7a8d;
+  color: #55616f;
 }
 .sba-notshown ul {
   margin: 0;
@@ -740,14 +750,17 @@
   flex-direction: column;
   gap: 5px;
 }
+/* S67R — was 11.5px at 2.73:1: the section whose only job is to say what the
+   page is hiding was the least legible thing on it. Fine print may be smaller;
+   the contrast floor does not move with the size. */
 .sba-notshown li {
-  font-size: 11.5px;
-  color: #8d97a6;
+  font-size: 13px;
+  color: #5b6878;
   line-height: 1.55;
   max-width: 92ch;
 }
 .sba-notshown a {
-  color: #3b6fd4;
+  color: #2f61c0;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -1193,7 +1206,7 @@
   cursor: pointer;
 }
 .sba-howtoggle {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   color: #3b6fd4;
 }
@@ -1203,7 +1216,7 @@
 }
 .sba-howbody p {
   margin: 10px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: #4a5867;
   line-height: 1.6;
   max-width: 88ch;
