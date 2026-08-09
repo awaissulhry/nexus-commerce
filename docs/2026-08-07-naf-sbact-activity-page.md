@@ -3999,7 +3999,7 @@ and `preview-only` was minted by the Approvals stream.
 | `.sba-howtoggle` | 11.5px | **12px** |
 | `.sba-howbody p` | 12.5px | **13px** |
 
-After this the page is **20 / 13 / 12 and nothing else**, for the first time.
+After this the page is **20 / 13 / 12** for the first time. **Corrected after measurement (see §24.7): "and nothing else" was wrong.** Two elements remain at 12.5px — `.h10-ds-fpanel-toggle` and `.h10-ds-btn sm` — and both are DS components' own control text, not this page's. The ladder governs the page's text; DS components keep their internal scale. Left as a stated boundary rather than reached into, which is why the claim is amended here instead of the measurement being rounded to fit it.
 
 ### 24.3.4 One shared file, one factual correction
 
@@ -4149,6 +4149,25 @@ Three things worth keeping from it:
   emits `/_next/static/chunks/….css`; it had been live for minutes. The probe
   was broken, not the deploy. Checking the asset the page actually links is the
   cheap version of that lesson.
+
+### Every state in §24.4, discharged
+
+Verified on prod, 1728×906, 2026-08-09 — including the two that the first pass
+had not exercised.
+
+| # | State | Result |
+|---|---|---|
+| 1–4 | the four scope combinations | each sentence rendered as specified; switches restored |
+| 5 | Runs grain | **S6 byte-identical** before, during and after. Structural, not incidental: S6's JSX reads `includeSelfTest` and `includeTestRuns` and **never `grain`**, so it cannot vary with it |
+| 6 | explainer collapsed | **82px exactly**, toggle reads *Read it*, zero body paragraphs in the DOM |
+| 7 | explainer open | five paragraphs, `<Term>` throughout, toggle reads *Close* |
+| 8 | 200% zoom | no escapes, nothing clipped, links hold at one line box |
+
+State 5 is the one worth naming: the study asked for "identical", and the
+cheapest way to *guarantee* identical is for the section not to read the input
+at all. Checking the source said more than watching the screen did — but both
+were done, because "it does not read grain" and "nothing else re-renders it into
+a different shape" are two claims.
 
 ### Known boundary, stated rather than fixed
 
