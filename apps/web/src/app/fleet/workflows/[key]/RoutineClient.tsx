@@ -720,12 +720,25 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
                           <button className="acr-btn ghost" onClick={() => void revert()}>
                             Revert to built-in
                           </button>
-                        ) : isDraft ? (
+                        ) : !isActive ? (
+                          /* S4.b — `activateWorkflowRevision` supersedes whatever
+                             is active and points at ANY target; it has never
+                             refused a superseded one. The UI offered this only
+                             on a never-activated draft, which left a custom
+                             with no rollback at all — it has no
+                             revert-to-built-in, because there is no code to
+                             return to. Same endpoint, same semantics, now
+                             reachable from the row that needs it. */
                           <button
                             className="acr-btn ghost"
+                            title={
+                              isDraft
+                                ? 'Make this recorded draft the wiring that runs'
+                                : 'Go back to this wiring — it becomes active again, and what runs now is set aside'
+                            }
                             onClick={() => { setActErr(null); setPendingAct(r) }}
                           >
-                            Activate…
+                            {isDraft ? 'Activate…' : 'Make this active…'}
                           </button>
                         ) : null}
                       </span>
