@@ -4245,6 +4245,43 @@ rehoming `FleetTimelinePage` first — a small change, but a different one from
 Recorded here so SB.2 inherits the fact rather than the summary. 541 lines, one
 commit in its history (`6ca387212`).
 
+### Are S8 and S9 buildable yet? Asked of the database, 2026-08-09
+
+They were deferred with *named data triggers* rather than "later", so the
+question has a factual answer. `apps/api/scripts/_sba-s89-trigger.mts` asks it.
+
+**S8, the control-audit lane — trigger NOT fired.** `AgentControlAudit` holds
+**0 rows**. It records what a control was before it changed, and nothing else
+does, so it **cannot be backfilled**: the lane can only be built after an
+operator first moves a dial. Building it now ships an empty section that no data
+will ever arrive in retrospectively.
+
+**S9, compare two runs — trigger NOT fired, and further away than "not yet".**
+It wants one worker with ≥10 runs across ≥2 charter revisions.
+
+| worker | runs | real | revisions |
+|---|---|---|---|
+| `fleet-selftest` | 39 | 38 | 0 |
+| `amazon-negative-miner` | 5 | 2 | 0 |
+| `amazon-bid-tuner` | 3 | 2 | 0 |
+| the other three | 2 each | 1 each | 0 |
+
+**0 of 53 fleet runs carry a `charterRevisionId`.** That is not a bug — I checked,
+because it looks exactly like one. `charter.activeRevisionId` is a *derived*
+property on the resolved charter (`charter-types.ts:72`, filled from the active
+revision relation in `charter-registry.ts:228`), not a column; the executor
+writes it correctly at `agent-executor.ts:315`. It is null on every run because
+only ONE charter has revisions at all (`amazon-negative-miner`, 2) and they
+postdate its runs.
+
+**Both are blocked on the same thing, and it is not design work.** 0 of 7
+charters are enabled — the fleet is entirely off — and the newest fleet run is
+1.8 days old and was a `preview`. No dial can move and no run can accumulate
+until it is switched on.
+
+So the page has no section left that can be built honestly today. S8 would be an
+empty lane; S9 would be a comparison of one revision with itself.
+
 ### With this, /fleet/activity is rebuilt end to end
 
 S1 header/scope/freshness · S2 the band · S3 the controls strip (+ Phase 0, the
