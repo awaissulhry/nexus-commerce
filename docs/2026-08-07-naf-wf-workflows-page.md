@@ -4022,13 +4022,30 @@ fallback — `walking:false`, totals exact, sample present.
 | 15 | Discard warns | ✅ prod — names $0.0353 and 16 findings; "Stay here" preserves the panel |
 | 16 | **Zero writes re-proven** | ✅ **prod — "No runs yet." after both walks** |
 
-#### One verification limitation, stated
+#### One verification limitation, stated — and then narrowed
 
 The two layout fixes (`e8ec0426f`, `ab3e06601`) were measured by applying the
 **shipped rules** to the live rendered panel, because re-creating the panel on
 prod requires another walk and the budget was spent. The numbers above are from
-real content at the real width; what was not re-observed is the deployed
-stylesheet painting them. The rules are CSS-only and deploy-verified present.
+real content at the real width.
+
+The deployed stylesheet was then read back to confirm it serves exactly those
+rules, rather than asserting it:
+
+```
+.wf-teststeps  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr))
+.wf-teststep   … min-width:0; padding:9px 12px …        ← NO max-width
+.wf-testfinds  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr))
+.wf-findlabel  color:#34404f; min-width:0; font-weight:650  ← NO nowrap / ellipsis
+```
+
+The cap and the ellipsis — the two declarations that caused both defects — are
+**absent from the served CSS**. What remains unobserved is only those rules and
+that content painted together in a single prod frame, which costs a walk.
+
+**Regression check on the S5R editor after all of it** (council, prod, no
+spend): grid **879.5 / 676.5**, 7 step cards, 6 pipeline steps, **0 raw form
+controls**, **0 contrast failures**, type unchanged at 7 sizes / 5 weights.
 
 #### The service change, and what it did not do
 
