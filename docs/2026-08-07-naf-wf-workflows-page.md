@@ -4383,6 +4383,18 @@ Measure the thing, then check the criterion was measuring it.
 
 ### 16.2 · What remains for new charters
 
+**WF.7 is RESEARCHED — the study is `docs/2026-08-10-naf-wf7-dynamics.md`
+(2026-08-10).** All eight axes researched, **four recommended**: evidence-
+overlay chaining (WF7.a), step-level conditions (WF7.b), the absence-of-event
+trigger (WF7.c, gated on locks §5 row 9), classified retry (WF7.d). Fan-out and
+data scoping DEFERRED with falsifiers; waits and sub-workflows REFUSED — the
+first because the fleet has no durable execution, the second because 5 routines
+of 2–6 steps do not repeat anything yet. The study's central finding:
+`executeWalk` walks `string[][]`, so **the expensive executor rewrite is
+demanded only by the two axes not recommended.**
+
+
+
 - **WF.7 — dynamic capabilities**: branching, per-item fan-out, waits, event
   triggers, retry branches, sub-workflows, evidence chaining. The mandate is in
   Part 4; retry-from-failed-step was filed here twice (S3R, S6R) because the
