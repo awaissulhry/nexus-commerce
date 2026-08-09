@@ -3710,3 +3710,112 @@ the `dataviz` skill's rule that status colours ship with an icon and a label.
 
 [nng]: https://www.nngroup.com/articles/empty-state-interface-design/
 [shopifyempty]: https://shopify.dev/docs/api/app-home/patterns/compositions/empty-state
+
+---
+
+## 14.9 — S4R execution record (2026-08-08/09)
+
+Approved on the study as written. Three phases and one repair.
+
+| Phase | Commit | What landed |
+|---|---|---|
+| **S4.a** | `7cf9cd553` | The false sentence removed; the two contradicting lines merged into one; the two 3.65:1 colours fixed |
+| **S4.b** | `ecac46a69` | The worked example — the real `ApprovalCard` from a fixture |
+| *repair* | `61af29abe` ⚠️ | Three defects on the example. **This commit carries S4.c's first changes under S4.b's message** — see §14.11 |
+| **S4.c** | `0a3a14dcd` | Five type sizes down to two |
+
+### Measured on prod
+
+| | Before | After |
+|---|---|---|
+| Empty-state copy | **a false sentence** — *"Approvals appear here when a plan passes the critic"* | true, and its second clause read from S2's `conditions` |
+| Distance between the claim and its retraction | separated by **the entire `<PrecedentPanel>`** | one block |
+| Empty state contrast | **3.65:1** — the most-read text on the page | **5.83** |
+| Freshness stamp contrast | **3.65:1** | **5.83** |
+| Contrast failures in S4 | 2 | **0** |
+| Distinct type sizes in the card | **5** (10 / 11.5 / 12.5 / 13 / 16) | **2** (13, and 11.5 in chips) |
+| Heading | 16px/**400** — the only 16px on the page, and a heading with no weight | 13/600 |
+| A worked example to read before the first real request | none | the real card, inert, 1580px of a 1614px queue |
+
+### The example card, and the three defects it shipped with
+
+All three were found by measuring the deployed page, and the first one matters
+most:
+
+1. **Its caption said "nothing here can be decided" and one control was live.**
+   I had relied on `busy`, which disables the *buttons*, and written "inert by
+   construction" into the commit message. **A surface whose own caption was
+   untrue — in an engagement whose headline defect was a surface whose own
+   caption was untrue.** It is a `<fieldset disabled>` now: every form control
+   it contains, including any added later, and the text stays readable, which
+   `inert` would not allow.
+2. **`20674d ago`** — the fixture used `new Date(0)`, so the example advertised
+   a request from 1970 on a card whose entire job is to look real.
+3. **The card was squeezed to 476px inside a 1614px queue** — `max-width: 58ch`
+   sat on the block rather than on the prose, and a card has no reading measure.
+
+### Verified on the deployed build
+
+| | |
+|---|---|
+| Controls in the example | 8, **0 live** by `:disabled`; the input **refuses focus**; no anchors |
+| Example width | 1580px of 1614px |
+| Prose measure | 497px |
+| Age / expiry | *"just now"* · *"18h left"* |
+| Contrast failures | **0** |
+
+### Width, zoom and keyboard
+
+Nine container widths on the deployed build, plus a 200% zoom proxy:
+
+| `.acr` | S4 height | example | overflow |
+|---|---|---|---|
+| 1662 → 1100 | 806px | 1580 → 1018px | none |
+| 900 / 744 / 640 | 824 / 856 / 920px | 818 / 662 / 558px | none |
+| 520 / 420 / 360 | 1001 / 1182 / 1368px | 438 / 338 / 278px | none |
+| **200% zoom** | — | — | **none** |
+
+The example card scales with its container at every width rather than being
+capped — which is the fix in §14.9's third defect, holding across the range.
+
+---
+
+## 14.10 — Two verification methods that were themselves wrong
+
+Recorded separately from the defects because they are transferable, and because
+in both cases the tool lied rather than the code.
+
+**1 · `input.disabled` does not see a `<fieldset disabled>` above it.** The IDL
+property reflects the element's *own* attribute only. My check reported a live
+input inside a correctly-disabled fieldset, and I reported that as a real
+defect before re-testing. **`:disabled` accounts for inheritance** — and the
+behavioural check is better than either: *can it take focus?*
+
+**2 · A deploy probe needs a baseline that returns 0 before the deploy.** Across
+this engagement mine failed in both directions:
+
+- one grepped a class that **already existed** one commit earlier, so it could
+  only ever say "deployed" — it reported success against the old build and
+  nearly put a false "verified" into the record;
+- its replacement grepped **authored CSS text**, which the minifier rewrites
+  (`flex: 0 1 auto` ships as `flex:0 auto`, properties reordered), so it could
+  only ever say "not deployed".
+
+> **Run the probe BEFORE the change deploys and require a 0.** A probe that has
+> never returned 0 is not evidence of anything.
+
+---
+
+## 14.11 — A mis-titled commit, recorded rather than rewritten
+
+**`61af29abe` is titled "S4.b — an operator can now read a request before their
+first one" and contains S4.c's first three fixes.** The message file from the
+previous phase was still on disk when a blocked tool call prevented the new one
+being written, and `git commit -F` took what was there.
+
+**Not amended, deliberately.** `--amend` on this shared tree is what cost a
+sibling session a commit earlier in this project (locks §6b), and the content
+and history here are correct — only the title is wrong. This is the same
+disposition the locks file records for `aaca58093`, which contains AS.1's files
+under ACT.2's message: *"Content and history are correct and complete — only the
+attribution is wrong. Not rebased on purpose."*
