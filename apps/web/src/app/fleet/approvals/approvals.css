@@ -494,7 +494,11 @@
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #6b7688;
+  /* #6b7688 measured 4.24:1 here — it passes on white and FAILS on the page's
+     own #f4f6f9, which is the surface this line actually sits on, because it is
+     outside the card. Found while auditing S2 (§13.8) and left alone then
+     because it belongs to S5. #55616f is the value S1 settled for this role. */
+  color: #55616f;
 }
 .aq-outnone svg {
   flex: 0 0 auto;
