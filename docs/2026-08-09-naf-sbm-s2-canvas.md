@@ -1,6 +1,9 @@
 # NAF.SB.M-S2R — Section 2, the canvas and the header: a measured audit and a rebuild
 
-**Status: STUDY LANDED 2026-08-09, AWAITING OPERATOR APPROVAL. No code written.**
+**Status: APPROVED by the operator 2026-08-09 (Option A; the rail claim granted
+and then NOT needed). Pass 1 SHIPPED AND PROD-VERIFIED; pass 2 partly shipped.
+See PART 13 for the execution record, the one finding that explains half this
+document, and the one fix that was reverted.**
 
 | | |
 |---|---|
@@ -739,3 +742,111 @@ Repo and prod evidence cited inline. External:
 - Steve Ruiz — [Creating a Zoom UI](https://www.steveruiz.me/posts/zoom-ui) ("By convention, we use the control key to identify a zoom")
 - Graph drawing — [Visualizing Graphs with Node and Edge Labels](https://arxiv.org/pdf/0911.0626) (ELP is NP-hard; unambiguous edge–label association) · [Edge Label Placement in Layered Graph Drawing](https://macau.uni-kiel.de/receive/macau_mods_00002021?lang=en)
 - Carbon [status indicator pattern](https://v10.carbondesignsystem.com/patterns/status-indicator-pattern/) and Cloudscape [empty states](https://cloudscape.design/patterns/general/empty-states/) — as cited in the Section 1 study
+
+---
+
+## PART 13 — The execution record
+
+| | commit |
+|---|---|
+| **S2.a** the page box + the first fit attempt | `c24fb3eb1` |
+| **S2.b+c** the card, the glyph, the focus ring, hover | `d79bb685c` |
+| **S2.a2/a3/a4** the frame, attempts two, three and four | `39e18f369`, `4fa51775d`, `9acc05aa5` |
+| **S2.c2** two of my own targets I had missed | `185dd82aa` |
+| **S2.g+h** the header switches, 38 banned tooltips | `1d8f1f5ac` |
+| **S2.d+e** edge labels *(reverted)*, the lane container | `6296a27b7` |
+| **revert** of the edge label | `5c96b6081` |
+
+### 13.1 · Against the exit criteria
+
+| | today | target | result |
+|---|---|---|---|
+| page height vs viewport | 1078.4 / 906 | ≤ viewport | **906, overshoot 0** ✅ |
+| canvas past the fold | 119.9px | 0 | **−52.5px** ✅ |
+| `fleet-auditor` visible | no | yes | **yes** ✅ |
+| zoom controls reachable | no | yes | **yes** ✅ |
+| transform at identity after load | 3 of 4 | 0 of 6 | **0** ✅ |
+| sub-AA text, canvas + header | 6 (worst 2.47) | 0 | **0** (worst 4.62) ✅ |
+| status glyph contrast | 1.8:1 | ≥3:1 | **4.62:1** ✅ |
+| card boundary / edge stroke | 1.28 / 2.73 | ≥3:1 | **3.86 / 4.05** ✅ |
+| keyboard focus indicator | none | visible ≥3:1 | **shipped** ✅ |
+| hover states | 0 | card + edge | **both** ✅ |
+| dimmed worker name | 1.78:1 | ≥4.5:1 | **6.31:1** ✅ |
+| `title=` on the canvas | 38 | 0 | **0 author** ✅ |
+| switch selected state | 1.11:1 | ≥3:1 | **8.24:1** ✅ |
+| converging labels sharing one x | 3 | 0 | **3 — REVERTED, still open** ❌ |
+| nodes off-screen unannounced | 23 (entity) | 0 | **not attempted** ❌ |
+
+### 13.2 · The one finding that explains half this document
+
+**xyflow never measures this canvas's nodes.** Every node carries
+`visibility: hidden` inline — *permanently*, not transiently as `MapClient.tsx`
+previously assumed — which is xyflow's not-yet-measured state, so `node.measured`
+is never populated.
+
+It was isolated behaviourally, not by reading source: **xyflow's own Zoom In
+control moves the transform while its own Fit View control does nothing.** That
+single asymmetry explains, at once:
+
+- why `fitView` was a coin toss across loads (C1),
+- why the ResizeObserver refit never fired (C2),
+- why `useNodesInitialized` never opened its gate (attempt 2),
+- why `setViewport` from a child of `<ReactFlow>` was inert (attempt 3),
+- and why a custom edge component **deleted every edge** (13.4).
+
+**The rule for anyone else here: on this canvas, any xyflow API that filters on
+measured dimensions is a silent no-op.** Seven canvases in this repo use custom
+`nodeTypes`; this is worth checking on each.
+
+### 13.3 · The frame took four attempts, all of which passed review
+
+1. `fitView` from `onInit` + a ResizeObserver — flaky across loads.
+2. `fitView` gated on `useNodesInitialized` — the documented pattern, the one
+   `EntityCanvas.tsx` already used. **Shipped, deployed, still identity.**
+3. `setViewport` with our own arithmetic, retried until the node DOM existed.
+   **Still identity.**
+4. **Compute the viewport before render and pass `defaultViewport`.** Works —
+   `zoom 0.7771 @ 173.4, 22` on prod.
+
+The lesson is not "xyflow is awkward". It is that **three consecutive fixes
+passed `tsc`, the ratchet, vitest and a careful read, and were wrong on
+production**, because each one asked the library for something it could not do
+and got silence rather than an error.
+
+### 13.4 · The regression I shipped, and reverted
+
+S2.d moved the converging labels off the midpoint with a custom `edgeTypes`
+entry. It solved C15 and **removed all four edges from the graph** —
+`.react-flow__edges` came back an empty `<div>` on prod while 8 nodes and 14
+handles rendered normally. Custom edges are handed `sourceX/sourceY` computed
+from measurements this canvas never gets; the built-in edge tolerates that and a
+custom one does not.
+
+Half the graph's information is worth more than three labels sharing an x, so it
+is reverted and **C15 is open again**, with the receipt written into `map.css`
+rather than quietly dropped. Solving it needs the measurement problem solved
+first, or a label drawn outside xyflow's edge layer entirely.
+
+### 13.5 · Two things I raised that turned out to be wrong
+
+- **The Part 9 boundary crossing was not one.** `.sbm-orail` already carried
+  `min-height: 0; overflow-y: auto` and `.sbm-rail-body` scrolls inside a
+  `min-height: 0` rail. Both were built for a bounded row; the row was the
+  missing part. The claim the operator granted was not taken and neither rail
+  was touched.
+- **Two audit leads did not reproduce.** The zoom controls do not overlap a card
+  in entity mode (0 overlaps at 1728), and uniform card size is not a defect —
+  it is what makes a column comparable, so it was kept deliberately and the
+  illegible tier chip was fixed instead.
+
+### 13.6 · And two of my own targets I missed on the first pass
+
+The card boundary shipped at **2.05:1** because I chose the colour against white
+when the card sits on the canvas's `#fbfcfe` — *a boundary is contrasted against
+what is outside it*. And the glyph shipped rendering at **8.5px**, exactly where
+it started, because the two fixes interact: the frame now actually runs, so the
+canvas sits at zoom 0.777 and an 11px mark renders at 8.5. Contrast is
+zoom-independent and was genuinely fixed; size is not. Both corrected in
+`185dd82aa`, with the limit written into the file — as the fleet grows the fit
+zooms further out and sizing stops winning, at which point **the word** is the
+channel that survives, which is why rule 2 insists there are three.
