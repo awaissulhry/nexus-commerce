@@ -719,6 +719,32 @@
 @media (max-width: 1100px) {
   .sbm-body {
     grid-template-columns: minmax(0, 1fr);
+    /*
+     * S3.k — WHY THE CANVAS MEASURED 2px HERE.
+     *
+     * One column, implicit `auto` rows. In the two- and three-column layouts the
+     * row height is driven by the tallest column — the rails — and the canvas
+     * got its height for free. Stacked, there is no tall sibling: the canvas's
+     * own content is nothing, because react-flow is absolutely positioned inside
+     * it, so the `auto` row collapsed to the view switch and the canvas measured
+     * **2px**. It was not a canvas bug; it was a row that had nothing to size to.
+     *
+     * Measured at 1100×800, each step verified as a control before shipping:
+     *   as shipped                        canvas   2.0px
+     *   + inspector actually hidden (S3.i)         77.3px
+     *   + this rule                               152.5px
+     *
+     * It is still cramped, and that is a different finding: at this width the
+     * page header, the census band and the footer take **407px of an 800px
+     * viewport**, leaving `.sbm-body` just 392.7px to divide. That belongs to
+     * §M1's band and the header, not here.
+     */
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  /* List view renders no overlay rail, so the table is the only child and wants
+     the whole height rather than the first `auto` row. */
+  .sbm-body.is-list {
+    grid-template-rows: minmax(0, 1fr);
   }
   /* ⚠ `.sbm-orail { display: none }` USED to live here and was removed in S3.h,
      not moved. It deleted the colour control, the legend and the filters while
