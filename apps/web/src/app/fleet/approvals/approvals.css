@@ -805,10 +805,15 @@
   margin-top: 2px;
 }
 
+/* S5.2 — the four hexes invented for this block (#f0c9c9 / #c53030 / #fdf7f7 /
+   #f0dcdc) retired to the design system's own danger ramp. #c53030's other
+   call sites are deliberately untouched: .aq-err and .aq-gateunknown are real
+   error states and .aq-cameback.attempted is a real failure, so their red is
+   already correct. Only .aq-card.r-high changed MEANING. */
 .aq-outside-card {
   margin: 14px 0 0;
-  border-color: #f0c9c9;
-  border-left: 3px solid #c53030;
+  border-color: var(--h10-danger-soft);
+  border-left: 3px solid var(--h10-danger-strong);
 }
 .aq-outhead {
   display: flex;
@@ -830,7 +835,7 @@
   margin-top: 2px;
 }
 .aq-outhead svg:nth-of-type(2) {
-  color: #c53030;
+  color: var(--h10-danger-strong);
 }
 .aq-outhead strong {
   font-weight: 650;
@@ -842,9 +847,9 @@
 .aq-outwhy {
   margin: 0 0 12px;
   padding: 10px 11px;
-  border: 1px solid #f0dcdc;
+  border: 1px solid var(--h10-danger-soft);
   border-radius: 6px;
-  background: #fdf7f7;
+  background: var(--h10-danger-soft);
   font-size: 12.5px;
   line-height: 1.55;
   color: #3a4658;
@@ -917,12 +922,31 @@
 .aq-card + .aq-card {
   margin-top: 10px;
 }
-.aq-card.heavy {
-  border-color: #e6d6b8;
+/*
+ * S5.2 — one meaning for red on this page: THIS ONE CAN ACTUALLY HAPPEN.
+ *
+ * `.aq-card.r-high` used to paint a 3px #c53030 left border. Every fleet
+ * approval is riskTier 'high' (§1.2), so that border was on every card,
+ * including the S4 example whose own text reads "changes nothing on Amazon" —
+ * measured identical to a live `set-price` row, down to the rgb() values. A
+ * severity signal present on 100% of items carries zero bits.
+ *
+ * The warm `heavy` tint moved for the same reason. `heavy` is
+ * `rev !== 'restore' || riskTier === 'high'`, true for essentially everything,
+ * and it was tinting cards that show no ack tick — a signal with no referent.
+ * `heavy` still does its real job in the logic (`needsAck = heavy &&
+ * canExecute`); it just no longer paints.
+ *
+ * Both now key off `can-run`, so weight and colour follow CONSEQUENCE. Risk
+ * tier keeps its word and its tooltip in the card head, which is where a thing
+ * that is true of everything belongs.
+ */
+.aq-card.can-run {
+  border-color: var(--h10-danger-soft);
+  /* 3px #e5484d on white = 3.91:1 — a graphic needs 3:1, and the consequence
+     sentence plus the ack tick carry the same meaning in words (WCAG 1.4.1). */
+  border-left: 3px solid var(--h10-danger);
   background: #fffdf9;
-}
-.aq-card.r-high {
-  border-left: 3px solid #c53030;
 }
 
 .aq-cardhead {

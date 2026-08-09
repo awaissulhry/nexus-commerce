@@ -535,7 +535,34 @@ export function ApprovalCard({
     : vocab.approveLabel
 
   return (
-    <div className={`aq-card r-${approval.riskTier}${heavy ? ' heavy' : ''}`}>
+    /*
+     * S5.2 — `can-run` is the class that carries the page's danger signal, and
+     * it is the ONLY thing that does.
+     *
+     * Measured on prod with the outside queue seeded: the S4 example card,
+     * whose own body text reads "changes nothing on Amazon", and a real
+     * `set-price` row that can reprice a live SKU rendered BYTE-IDENTICAL —
+     * `aq-card r-high heavy`, background rgb(255,253,249), border-left 3px
+     * rgb(197,48,48). The border keyed off `riskTier`, and §1.2 established
+     * that 100% of fleet approvals are high, so the strongest signal on the
+     * page was on every card and therefore carried no information.
+     *
+     * It was worse than uninformative. The `apply-content` row in the same
+     * seeded set — which can rewrite live listing content — is riskTier
+     * 'medium', so it rendered as the CALMEST card on screen: plain white, 1px
+     * grey. Risk tier and consequence are not weakly correlated here, they are
+     * inverted.
+     *
+     * `canExecute` is the honest axis, the card already receives it, and it
+     * already drives `needsAck`. Now it drives what the eye sees too. Colour is
+     * never the sole carrier (WCAG 1.4.1): the consequence sentence and the
+     * ack tick say the same thing in words on the same card.
+     */
+    <div
+      className={`aq-card r-${approval.riskTier}${heavy ? ' heavy' : ''}${
+        canExecute ? ' can-run' : ''
+      }`}
+    >
       {/*
         S6.c — the context row. Was three CHIPS (risk · reversibility · clock)
         at one size and one weight, mixing a policy tier, a consequence class
