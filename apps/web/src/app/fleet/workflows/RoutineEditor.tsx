@@ -435,7 +435,14 @@ export function RoutineEditor({
                   {prettyCron(draft.trigger.cron)}
                   {cronIsEvaluable(draft.trigger.cron)
                     ? ' · the clock re-arms the moment you publish'
-                    : ' — the checklist below says what the fleet will refuse'}
+                    : /* Prod caught this: `0 3 1 * *` is well-formed cron and the
+                         fleet still refuses it, because `nextCronFire` scans
+                         only 8 days ahead and the 1st of next month is further
+                         off than that. The parity is exact — the SERVER refuses
+                         it for the same reason — but "not a schedule this fleet
+                         can read" reads as "you typed it wrong", so the line
+                         names the real limit instead of implying a typo. */
+                      ' — it must be a five-field cron that fires at least once every 8 days'}
                 </span>
                 {/* The next fires are the safety net for anything the sentence
                     above can only echo: a schedule the fleet CAN evaluate but
