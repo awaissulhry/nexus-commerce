@@ -788,17 +788,16 @@
   color: #1c2530;
 }
 
-.sbm-edgelabel {
-  position: absolute;
-  pointer-events: none;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: #fff;
-  border: 1px solid #cdd5df;
+/* xyflow's own edge label. See the C15 note on `labelOf` in MapCanvas.tsx:
+   two attempts to move it off the convergence both removed every edge from the
+   graph, and the second would not have separated them anyway — the three
+   analysts share a column, so a source-anchored label lands at the same x. */
+.sbm-canvas .react-flow__edge-text {
   font-size: 10px;
-  font-weight: 550;
-  color: #45505f;
-  white-space: nowrap;
+  fill: #45505f;
+}
+.sbm-canvas .react-flow__edge-textbg {
+  fill: #ffffff;
 }
 
 /* nodes */
