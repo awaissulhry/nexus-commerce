@@ -2185,6 +2185,52 @@
   padding-bottom: 4px;
 }
 
+/*
+ * S3.n — BELOW 1100 THE PAGE STOPS PRETENDING IT FITS.
+ *
+ * `.sbm-page` is `height: 100dvh` — deliberately, since S1R — and everything
+ * inside divides that. It works from 1101 up: at 1101×800 the canvas gets
+ * 355.4px with no scrolling at all. It does not work below, and the reason is
+ * arithmetic rather than layout:
+ *
+ *   at 1100×800   header 112.3 + disclosure 29.3 + band 140.8 + footer 37 + gaps
+ *                 = **407px of chrome in an 800px viewport**
+ *
+ * — leaving `.sbm-body` 392.7px to split between the rail and the graph. The
+ * band alone gains 51.3px over its 1728 height and the footer 16.5px, purely
+ * from text wrapping at a narrower measure. S3.k already stopped the canvas
+ * collapsing to 2px, but 152.5px of graph is a diagram of a graph.
+ *
+ * Three fixed panels and a graph do not fit in 800px, and no redistribution
+ * makes them: the honest move is to stop dividing a fixed height and let the
+ * page be as tall as it needs, which is what every non-app-shell page does.
+ *
+ *   canvas at 1100×800   152.5px  →  400px
+ *   canvas at 1024×768   101.8px  →  400px
+ *   at 1101 and above    unchanged — the rule must not, and does not, apply
+ *
+ * ⚠ VERIFIED REACHABLE, because a taller page is only an improvement if you can
+ * get to the bottom of it: the app shell's `main.flex-1.overflow-auto` picks up
+ * the overflow (scrollHeight 1068 vs clientHeight 800) and scrolling to the end
+ * brings the footer fully into view. The page root itself never scrolls — see
+ * `reference_browser_probe_lies` — so testing `document.scrollingElement` here
+ * would have said "no scroll" and been wrong.
+ *
+ * The cost, stated: a wheel over the canvas pans the graph rather than scrolling
+ * the page, so the ~250px of scroll has to be driven from the chrome around it.
+ * That is the standard bargain for an embedded canvas, and the gesture is
+ * already written on screen.
+ */
+@media (max-width: 1100px) {
+  .sbm-page {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .sbm-canvas {
+    min-height: 400px;
+  }
+}
+
 /* ── motion ────────────────────────────────────────────────────────────── */
 /* `a11y.css` is imported by no fleet page, so the reduced-motion escape has to
    be declared here or this page ships without one. */
