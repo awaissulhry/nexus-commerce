@@ -257,6 +257,78 @@ board**, not against what the analysts would have just produced.
 
 ---
 
+## 8b · WF7.a, sized against the code (2026-08-10, same session)
+
+The study above recommended WF7.a on the strength of *"no contract change, one
+surface"*. That is still true of the **contract**. Reading the evidence path
+before opening its charter changed two other things, and both belong in the
+charter rather than in its first commit.
+
+### The attachment point is single, named, and already load-bearing
+
+A step does not read findings directly. Evidence is assembled by
+`getObservation(key, scope, narrow)` in `observation-builder.ts`, and exactly
+one builder reads the board:
+
+```
+observations/open-findings.observation.ts   ← the only reader of agentFinding
+```
+
+That is where a director sees what the analysts wrote, so that is where an
+overlay attaches. It is the **same choke point the assignment `target` narrows
+at** — `agent-executor.ts` calls it the "ONLY non-test call site", and notes
+that a constraint which does not bind there does not bind at all. An overlay
+that *adds* to evidence is the mirror of a target that *subtracts* from it, and
+inherits the same guarantee.
+
+### The reach is three files, two of them not this stream's
+
+| file | change | owner |
+|---|---|---|
+| `workflow-test.service.ts` | accumulate each step's `previewFindings`, hand them forward | **Workflows** |
+| `agent-executor.ts` | one additive `ExecuteOptions` field, passed through | core fleet — **precedent exists**: `workflowKey`, `workflowRevisionId` (WF.4a) and the whole `preview` branch (WF.5/AC.2) were added by this stream |
+| `open-findings.observation.ts` | union the overlay **in preview only** | core fleet — **no precedent; must be claimed with notice** |
+
+So WF7.a is not a one-file change, and its charter should say so.
+
+### The verification problem, which is the real finding
+
+**The two-step custom cannot exercise this axis at all.** `morning-negatives-pass`
+is two analysts with **no edge between them** — both cards read *"Receives
+nothing — it reads its own evidence"*. An overlay changes nothing on a graph
+with no hand-off, and analysts read observations rather than each other's
+findings regardless.
+
+The graph that exercises it is the **council**: the director receives findings
+from three analysts. So verifying WF7.a on prod costs a **council-shaped test
+walk** — the council's last real run was **$0.2126**, and a preview walks every
+switched-off worker too, so budget **~$0.25–0.30**, not the ~$0.04 the custom
+costs.
+
+Three consequences for WF7.a's charter:
+
+1. **It must authorize spend explicitly**, with the council number, not the
+   custom's. Every prior charter that authorized walks assumed the cheap graph.
+2. **A cheaper proof exists and should be required first:** the accumulation
+   and union are pure and can be unit-tested to exhaustion — an empty overlay,
+   one step's findings, three steps', a non-analyst tier that produces no
+   findings array, and the malformed shapes `sampleFindings` already guards
+   against. Prod then confirms one thing only: that the director's preview
+   changed because the overlay was there.
+3. **The falsification matters more than the confirmation.** The test must show
+   the director's preview is *different* with chaining than without — which
+   means one baseline council test and one chained one, i.e. **two walks**,
+   unless the baseline is taken from the run already on record.
+
+### What does not change
+
+No contract change. No editor, picture, runs, or DiffList work. One teaching
+sentence retires (*"Hand-offs are not simulated yet — each worker is tested on
+its own"*) and one replaces it. Zero-writes stays structural: the overlay lives
+in the preview path, which persists nothing to the board.
+
+---
+
 ## 9 · The roadmap
 
 Ranked by operator value per unit of new complexity. **Four of eight axes are
