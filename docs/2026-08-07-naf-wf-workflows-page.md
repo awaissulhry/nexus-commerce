@@ -2707,7 +2707,287 @@ their owners'.
 
 ---
 
+## PART 12 — NAF.WF-S4R · Section 4 restudied: Versions
+
+Opened 2026-08-08 after S1R (list), S2R (detail overview) and S3R (runs).
+Scope is the **Versions zone inside `RoutineClient.tsx`**, the Activate dialog
+and the Revert flow. The editor's publish/save dialogs are S5; the test lane is
+S6.
+
+**Semantics are frozen and none of them change here:** revisions are immutable,
+the note is mandatory, activation supersedes-then-points, revert-to-built-in
+cannot fail and is built-in-only, and the off switch is independent of versions.
+
+This is a small section carrying the system's audit trail. S3R just put
+`wiring rev N` chips on run rows; **this is where those chips must resolve**.
+
+### 12.1 · PHASE 0 — the audit, measured on prod
+
+Chrome, **1728 × 906**, 2026-08-08. Four routines: `morning-negatives-pass`
+(custom, 3 revisions, rev 3 active), `fleet-council` (built-in, 2 revisions both
+superseded, reverted to code), `fleet-sweep` and `on-demand-check` (built-ins,
+no revisions).
+
+#### D1 · There is no column: the "active" marker lands anywhere across 549.6px
+
+`.wf-vrow` is a flex row, so every element's x is a function of the length of
+everything before it.
+
+| Routine | element | x per row | spread |
+|---|---|---|---|
+| morning-negatives-pass | author + age | 559.1 · 577.9 · 626.7 | **67.6px** |
+| morning-negatives-pass | state chip | 755.3 · 774.1 · 822.9 | **67.6px** |
+| fleet-council | state chip | 870.4 · 860.8 · **321.4** | **549.6px** |
+
+That last row is the defect in one number. **The single thing an operator scans
+this section for — which wiring is live — is not in a consistent place**, and on
+a reverted built-in the live marker sits 540px to the left of where the other
+two markers are, because the built-in row has fewer elements before it.
+
+#### D2 · A superseded revision cannot be re-activated, though the API has always allowed it
+
+`activateWorkflowRevision` (`workflow-revisions.service.ts:68-83`) supersedes
+whatever is currently active and then sets `activatedAt: now, supersededAt:
+null` on its target. **There is no guard against the target being superseded** —
+the model is a pointer that moves, and it moves anywhere.
+
+The UI never offers it. Its ternary is `active → chip (+ Revert, built-ins) :
+superseded → chip : else → chip + Activate…`, so **"Activate…" appears only on a
+revision that has never been activated**.
+
+Measured consequences:
+
+- **`morning-negatives-pass` has no rollback path at all.** rev 3 is active, rev
+  1 and rev 2 are superseded, and a custom correctly has no revert-to-built-in
+  (there is no code to return to). To get rev 2's armed clock back the operator
+  must re-compose it in the editor from a diff they cannot see.
+- **`fleet-council` cannot return to rev 1 or rev 2.** Only revert-to-built-in
+  exists, and it is already in that state.
+
+This is the audit trail's central promise half-kept: you can see what changed,
+and you cannot go back to it.
+
+#### D3 · 47.6% of the row is empty
+
+Card 1614px; the rightmost content on any row ends at **914.5**; **768.5px** of
+dead width to its right.
+
+#### D4 · A revision says nothing about what ran under it
+
+S3R stamps `wiring rev N` on run rows. A revision row shows note, author, age
+and state — never "served N runs". The join is already in hand client-side:
+every `RunRow` carries `workflowRevisionId`.
+
+#### D5 · The diff exists only at activate-time, and only against "now"
+
+`computeDiff(a, b)` is pure and takes **any two definitions**; the UI calls it
+once, in the Activate dialog, comparing the current effective definition to the
+pending one. A superseded revision's contents are unreachable — you cannot see
+what rev 1 contained, or what rev 2 changed.
+
+#### D6 · The list shows creation order and calls it history
+
+`listWorkflowRevisions` orders by `revision: 'desc'`. Today that matches the
+activation order on every routine, so nothing is visibly wrong — but the model
+permits activating an older revision, and the moment it is used (D2's fix does
+exactly that) `revision desc` stops describing what happened when. The row
+carries `activatedAt` and `supersededAt` and shows neither.
+
+#### D7 · The built-in row is a different shape in the same slot
+
+Badge + name + *either* a chip *or* a `.wf-sub` sentence; no author, no date.
+It genuinely has less to say — but rendering it as a peer row with different
+columns is what puts its "active" chip at x=321.4 (D1).
+
+#### D8 · Revert hangs off the active revision, not the thing it returns to
+
+`Revert to built-in` renders inside the active revision's row. It applies at
+once with no confirmation, which is correct under the shipped
+asymmetric-confirmation rule (reducing risk applies immediately) — but the
+built-in row two lines below says *"the fallback every revert returns to"* and
+carries no control at all.
+
+#### D9 · Type and contrast are already compliant
+
+4 sizes (15 / 12.5 / 12 / 11.5), **3 weights**, **0 contrast failures**. The
+S1R palette and scale carried here with no work — the fourth surface to inherit
+them.
+
+#### D10 · A routine that has never been edited does not say so
+
+`fleet-sweep` renders one row — *"v1 · Built-in — defined in code · active"* —
+and the generic footer paragraph. Card height 172.3px. It is honest, but the
+actual fact ("nothing has ever been changed here") is never stated.
+
+#### The draft state: code-verified, deliberately not created on prod
+
+A draft is a revision with neither `activatedAt` nor `supersededAt`, produced by
+the editor's Save-as-draft (S5's surface). The ternary's else-branch renders the
+`draft` chip and the Activate button, so **the state is distinguishable and
+correct in code**. Creating one on prod would leave a permanent immutable row in
+a real routine's audit trail to prove a branch that reads unambiguously — so it
+is verified in code, per the charter's own preference.
+
+---
+
+### 12.2 · PHASE 1 — how the industry presents version history
+
+Part 1 surveyed the model; this asks about the *list*, and finds two distinct
+rollback philosophies.
+
+| Product | Row shows | Current marked | Diff | Rollback | Runs bound to version |
+|---|---|---|---|---|---|
+| **Grafana** | number · date · author · message · **a Notes column recording "restored from vN"** | — | **select TWO versions, then Compare**; text description + expandable raw JSON | **Restore** beside a version — and it **appends a NEW version with the old content**, never overwrites | — |
+| **Airflow 3** | version identified per structural change | latest shown on the DAG details page | pick which version the **graph** and **code** tabs display | — | **every run is bound to the version that existed when it started, and the UI shows it** |
+| **n8n** | saved iterations | — | open in a new tab to compare | **Restore** = "replace your current workflow with the selected version"; also View and Clone; retention capped by plan (24h → 5d → full) | — |
+| **Vellum** | release tags per environment | LATEST tag | — | **floating tags you move** to point at an earlier deployment | requests name a `release_tag` |
+| **Zapier / Make / Dify** *(Part 1)* | draft vs published; scenario versions | — | Make ships a version diff | restore a previous version | — |
+
+**The two philosophies, and which one we already have:**
+
+- **Append-a-copy** (Grafana, n8n): restoring creates a *new* version holding the
+  old content. History is strictly append-only; Grafana even records "restored
+  from vN" in a notes column.
+- **Move-the-pointer** (Vellum's floating tags — **and ours**): the same
+  immutable version becomes current again.
+
+Ours is the second, and it is the better fit *because of the run stamps*: a run
+records the revision id that served it, so re-activating rev 2 means later runs
+stamp **rev 2** — the same object the operator is looking at. Under
+append-a-copy they would stamp a rev 4 that is a copy of rev 2, and the audit
+trail would gain a synonym. **The model is right; the UI simply never exposes
+it.**
+
+**Airflow settles the other half.** Every run is bound to the version that
+produced it *and the UI says so*, and you can pick which version the graph and
+code show. S3R already stamps runs; S2R/S3R already let you pick which run the
+pipeline draws. The missing link is the reverse direction: from a **revision**
+to the runs it served (D4).
+
+**Judged for our N:** 0–5 revisions per routine, one operator, notes already
+mandatory. Grafana's select-two-and-compare is a control built for dozens of
+versions; at three rows it is furniture. What is *not* furniture is "what did
+this revision change" — the same question, answered per row without a selection
+model.
+
+### 12.3 · THE PROPOSAL
+
+#### 12.3.1 · A grid, so "which is live" has a place
+
+Six columns, declared, every row on the same grid — including the built-in:
+
+```
+rev 3   WF.6c verification — back to manual…   awaissulhry  36h ago   ● active      [ ⋯ ]
+rev 2   WF.6c verification — arm the clock…    awaissulhry  36h ago   superseded    [Make active…]
+rev 1   First wiring — the two spend analysts  awaissulhry  37h ago   superseded    [Make active…]
+v1      Built-in — defined in code             ships in code  —       the fallback  [Revert to built-in]
+```
+
+- The state chip gets **its own column**, so it lands at one x on every row
+  (D1, D7). The built-in row is a peer in the grid rather than a different
+  shape in the same slot.
+- **`activatedAt` → `supersededAt` becomes the row's time story** on hover and
+  in the meta line: *"active 36h ago → 12h ago"* on a superseded revision,
+  *"active since 36h ago"* on the live one. That makes the pointer's history
+  legible without inventing a second timeline (D6).
+- The footer paragraph shortens; its content moves to where it applies.
+
+#### 12.3.2 · Rollback, because the API already does it
+
+**`Make this active…`** on every non-active revision. It calls the same
+`POST /:key/revisions/:id/activate` the draft path already uses — **no API
+change, no new write path, no new semantics** (D2).
+
+The confirm reuses the Activate dialog and its settled copy, plus the diff
+**from what is running now to the revision being restored** — which
+`computeDiff` already produces from any two definitions. For a *forward*
+activation that diff reads as "what you are about to change"; for a *backward*
+one it reads as "what you are about to undo", which is the same sentence from
+the other end.
+
+**This is the one behaviour change in the section and it is stated plainly:**
+today only a never-activated draft can be activated; after S4.b any revision
+can. Nothing about immutability, note-mandatoriness or the supersede-then-point
+order changes — the endpoint's existing behaviour is simply reachable.
+
+#### 12.3.3 · What ran under it
+
+Each revision row gains **"served N runs"**, counted client-side from the runs
+already fetched by matching `workflowRevisionId` — **no API change**, following
+S1.c's restraint. Honesty conditions, both non-negotiable:
+
+- the count is over the **fetched window**, so when `runs.length >= 100` the
+  row says *"N of the newest 100 runs"* rather than a bare total;
+- a revision with zero matched runs says **"no runs under this wiring"**, not
+  `—` (the S2R/S3R rule: an em-dash on this page means *unknown*).
+
+A revision that was active while runs happened but predates the fetch window
+would under-count — which is why the caveat is attached to the number rather
+than left to be inferred.
+
+#### 12.3.4 · What this revision changed
+
+Per row, a disclosure: **"what changed"** → `computeDiff(previousRevision,
+thisRevision)` rendered with the existing `DiffList`. Not Grafana's
+select-two-and-compare: at three rows a selection model costs two clicks and a
+mental mode to answer a question each row can answer by itself. rev 1 has no
+predecessor, so it shows its contents as the initial wiring rather than a diff.
+
+`DiffList` is imported from `RoutineEditor` (S5's file). **This section consumes
+it unchanged and records the coupling** — if S5 moves it, this is a consumer.
+
+#### 12.3.5 · The never-edited state
+
+`fleet-sweep` should say the fact: *"No changes have ever been published — this
+routine runs the wiring that ships in code."* One sentence replacing an implied
+absence (D10).
+
+### 12.4 · Every state, to be discharged before the last phase closes
+
+| # | State | How |
+|---|---|---|
+| 1 | Built-in, no revisions | `fleet-sweep`, `on-demand-check` — prod |
+| 2 | Built-in, revisions all superseded (reverted) | `fleet-council` — prod |
+| 3 | Built-in, revision active | code (would need a publish on a live built-in) |
+| 4 | Custom, revisions, one active | `morning-negatives-pass` — prod |
+| 5 | Custom, no revisions | code — "it is honestly nothing" |
+| 6 | Draft (never activated) | **code** — creating one leaves a permanent row in a real audit trail |
+| 7 | Rollback to a superseded revision | prod, on `morning-negatives-pass`, **restored to rev 3 afterwards** |
+| 8 | Revert-to-built-in offered | built-ins only; refusal for customs is structural (no button rendered) |
+| 9 | "served N runs" with the fetch cap reached | code (`runs.length >= 100`; 53 today) |
+| 10 | "served N runs" = 0 | prod — the custom's revisions have no runs |
+| 11 | Diff on rev 1 (no predecessor) | prod |
+| 12 | 404 / unknown routine | prod |
+
+### 12.5 · Build phases
+
+| Phase | What | Exit criteria (measurable on a grid, per the S3R lesson) |
+|---|---|---|
+| **S4.a** | The grid: six declared columns, built-in as a peer row, chip column, active-from→until meta. | State-chip x **identical on every row** (spread 0, from 549.6px) · every column declared, widest ≤ **34%** · dead right ≤ **12%** (from 47.6%) · 5 sizes / 3 weights · 0 contrast failures |
+| **S4.b** | Rollback: `Make this active…` on any non-active revision, confirm with the current→target diff. | Every non-active revision offers it · the dialog names both directions correctly · a round trip on prod ends with rev 3 active |
+| **S4.c** | "served N runs" per revision, client-side, cap-honest. | Counts match the API join exactly · zero renders as words, never `—` · cap caveat present when `runs.length >= 100` (code-verified) |
+| **S4.d** | Per-row "what changed", the never-edited sentence, states + teaching. | Every §12.4 row screenshotted or code-verified · rev 1 shows contents not a diff · 0 `<Term>` inside a link |
+
+### 12.6 · Recorded, not built
+
+1. **Compare-any-two-versions** (Grafana). Deliberately not built: a selection
+   model is furniture at 0–5 revisions, and per-row "what changed" answers the
+   same question with no mode. Revisit at ~12 revisions on one routine.
+2. **`DiffList` lives in `RoutineEditor.tsx`** (S5). Consumed unchanged; noted
+   so S5 knows it has a consumer outside itself.
+3. **The three cross-stream items have now survived four section cycles
+   unmoved** — `.acr-btn.go` at 3.46:1, the red `approval-inbox` vitest, and
+   preview rows on the shared runs route. Rather than re-verify and re-report
+   them in a fifth study, S4.d consolidates them into **one dated block in the
+   locks doc** with file, line and the one-line fix for each, so an owner can
+   clear the ledger without re-deriving anything — and future section studies
+   cite that block instead of repeating the findings.
+
+---
+
 ## Sources
+
+**Part 12 (WF-S4R, version-history research, 2026-08-08)** — Grafana [dashboard version history](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/manage-version-history/) (select TWO versions then Compare; text diff + expandable raw JSON; **Restore appends a NEW version holding the old content** and a Notes column records "restored from vN") · Astronomer [Airflow DAG versioning](https://www.astronomer.io/docs/learn/airflow-dag-versioning) (**every run is bound to the version that existed when it started and the UI shows it**; graph and code tabs let you pick a version) · n8n [view change history](https://docs.n8n.io/build/manage-workflows/view-change-history) (View / Restore / Clone per version; restore = "replace your current workflow with the selected version"; retention 24h → 5d → full by plan) · Vellum [release tags](https://docs.vellum.ai/product/deployments/release-tags) (**floating tags you move** to point at an earlier deployment — the pointer model, as ours is)
 
 **Part 11 (WF-S3R, run-history research, 2026-08-08)** — Astronomer [Airflow UI](https://www.astronomer.io/docs/learn/airflow-ui) (grid = a column per run, **height = the run's duration**, colour = state, run-origin icons; a run's bar opens a Gantt, a task square opens that task instance's logs) · Inngest [inspecting function runs](https://www.inngest.com/docs/platform/monitor/inspecting-function-runs) (a run **expands in place** into trigger+payload, a steps timeline, and per-step inspection showing **every retry attempt with its own error**) · n8n [debug and re-run past executions](https://docs.n8n.io/workflows/executions/debug/) + [single-workflow executions](https://docs.n8n.io/build/understand-workflows/understand-executions/view-executions-for-a-single-workflow) (**"Copy to editor"** pins a past execution's data into the canvas; filter by Failed/Running/Success/Waiting) · Temporal [Web UI](https://docs.temporal.io/web-ui) (history in Timeline / All / Compact / JSON) · Dagster [webserver & UI](https://docs.dagster.io/guides/operate/webserver) (Runs tab per job) · GitHub Actions [view workflow run history](https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history)
 
