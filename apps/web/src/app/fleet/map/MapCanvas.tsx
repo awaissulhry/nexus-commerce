@@ -391,10 +391,20 @@ export function MapCanvas({
       id: l.id,
       type: 'lane',
       position: { x: l.x, y: l.y },
-      /* Behind its members. Lanes are pushed first so they render first, and
-         the explicit zIndex stops a later re-sort putting a container over the
-         cards it contains. */
-      zIndex: 0,
+      /*
+       * ⚠ NO EXPLICIT `zIndex` HERE, and that is the fix for a live defect.
+       *
+       * S2.e set `zIndex: 0` on the lane so it would sit behind its members.
+       * On prod that removed EVERY EDGE from the graph — `.react-flow__edges`
+       * came back an empty div — and it survived two reverts aimed at the edge
+       * label, because both of them were aimed at the wrong change. xyflow
+       * groups edges into z-index layers derived from their endpoint nodes, and
+       * giving SOME nodes an explicit zIndex while others have none puts the
+       * edges in a layer that never renders.
+       *
+       * Painting order alone is enough: lanes are pushed into the node array
+       * first, so they are already behind the workers.
+       */
       data: { title: l.title, note: l.note, w: l.w, h: l.h } satisfies LaneNodeData,
       draggable: false,
       selectable: false,
