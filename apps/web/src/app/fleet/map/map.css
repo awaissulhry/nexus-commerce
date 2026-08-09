@@ -86,6 +86,69 @@
 .sbm-sub a:hover {
   text-decoration: underline;
 }
+/* S2R — the subject control: tabs under the title, not a twin of the window
+   switch. A tab strip says "this changes what you are looking at"; a segmented
+   pill in a row of controls says "this is one more setting". */
+.sbm-modetabs {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 10px;
+}
+.sbm-modetabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  padding: 5px 2px;
+  margin-right: 18px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: #55616f;
+  cursor: pointer;
+}
+.sbm-modetabs button.on {
+  color: #1c2530;
+  font-weight: 680;
+  border-bottom-color: #1f4f8b;
+}
+.sbm-modetabs button:hover {
+  color: #1c2530;
+}
+.sbm-modetabs button:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The interaction hint. Pushed right so it reads as chrome rather than as a
+   caption on the view switch. */
+.sbm-gesturehint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #55616f;
+  white-space: nowrap;
+}
+
+/* The off-screen marker (entity mode). Grafana's hidden-node idiom: state the
+   count; do NOT offer a "fit everything" that would render 38 anonymous dots. */
+.sbm-offscreen {
+  position: absolute;
+  z-index: 5;
+  right: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #78838f;
+  font-size: 10.5px;
+  color: #45505f;
+  box-shadow: 0 1px 3px rgba(28, 37, 48, 0.12);
+}
+.sbm-offscreen b {
+  font-weight: 700;
+  color: #1c2530;
+}
+
 .sbm-head-right {
   display: flex;
   align-items: center;

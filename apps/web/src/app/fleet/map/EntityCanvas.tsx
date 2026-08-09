@@ -27,7 +27,7 @@
  * `getEntityNeighborhood` already return named nodes.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -333,6 +333,9 @@ export function EntityCanvas({
     getNodes: () => Array<{ position: { x: number; y: number }; measured?: { width?: number } }>
   } | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  /* The applied frame, kept so the off-screen count is DERIVED from it rather
+     than measured — it cannot then disagree with what is drawn. */
+  const [frame, setFrame] = useState({ zoom: 1, h: 0 })
   const refit = useCallback(() => {
     const inst = fitRef.current
     const box = wrapRef.current?.getBoundingClientRect()
@@ -343,7 +346,26 @@ export function EntityCanvas({
     const pad = 24
     const zoom = Math.max(0.55, Math.min(1, (box.width - pad * 2) / Math.max(1, maxRight)))
     inst.setViewport({ x: pad, y: pad, zoom }, { duration: 0 })
+    setFrame((p) => (p.zoom === zoom && p.h === box.height ? p : { zoom, h: box.height }))
   }, [])
+
+  /*
+   * S2R — how many things are below the fold, said out loud.
+   *
+   * This view deliberately fits the WIDTH and starts top-left (M.6): fitting
+   * everything would force zoom 0.36, below the tier that shows a name, and
+   * render 38 anonymous dots. The cost of that decision is that most of the
+   * graph is off-screen — measured on prod, 23 of 38 — and the page said
+   * nothing about it. Grafana's idiom for the same situation is a marker
+   * carrying the count of what is hidden.
+   */
+  const offScreen = useMemo(() => {
+    if (frame.h < 2) return 0
+    const visibleBottom = (frame.h - 24) / frame.zoom
+    let n = 0
+    for (const p of pos.values()) if (p.y + CARD_H > visibleBottom) n += 1
+    return n
+  }, [pos, frame])
   useEffect(() => {
     const el = wrapRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
@@ -361,6 +383,11 @@ export function EntityCanvas({
 
   return (
     <div className="sbm-canvas" ref={wrapRef}>
+      {offScreen > 0 ? (
+        <p className="sbm-offscreen" role="status">
+          <b>{offScreen}</b> of {pos.size} further down — scroll to reach them
+        </p>
+      ) : null}
       <ReactFlow
         key={hash}
         onInit={(inst) => {

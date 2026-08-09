@@ -212,12 +212,16 @@ export function MapClient() {
             <i>as it is</i>; <Link href="/fleet/workflows">Workflows</Link> is where you change what
             it should be.
           </p>
-        </div>
-        <div className="sbm-head-right">
-          {/* The mode switch changes the page's whole subject — which universe
-              of nodes you are looking at — so it belongs with the title, not
-              above the canvas where Map/List sits. */}
-          <div className="sbm-seg" role="radiogroup" aria-label="What to show">
+          {/*
+            S2R — the SUBJECT control, under the title.
+
+            It changes which universe of nodes the page is about; the window
+            switch on the right changes the denominator of every number. They
+            were pixel-identical devices 10px apart, which asked the reader to
+            learn which was which from position alone. Now they differ in
+            position, in shape and in label.
+          */}
+          <div className="sbm-modetabs" role="radiogroup" aria-label="What to show">
             {(['workers', 'entities'] as const).map((m) => (
               <button
                 key={m}
@@ -230,10 +234,12 @@ export function MapClient() {
                   setSelection(null)
                 }}
               >
-                {m === 'workers' ? 'Workers' : 'What they watch'}
+                {m === 'workers' ? 'The fleet' : 'What they watch'}
               </button>
             ))}
           </div>
+        </div>
+        <div className="sbm-head-right">
           {/* S2R — the two switches change different ORDERS of thing and were
               pixel-identical 10px apart. This one qualifies every number on the
               page; it now says so rather than relying on the reader inferring
@@ -430,6 +436,9 @@ export function MapClient() {
                     Your campaigns, grouped into the families that actually touch each other.
                   </span>
                 )}
+                <span className="sbm-gesturehint">
+                  Scroll to move · ⌘/Ctrl + scroll to zoom · double-click a card to focus it
+                </span>
               </div>
               {entityLoading && entity == null ? (
                 <div className="sbm-canvas sbm-skeleton" aria-busy="true" />
@@ -605,6 +614,13 @@ export function MapClient() {
                   ? 'Best for seeing where work goes next.'
                   : 'Best for ranking — who costs most, who has the most open.'}
               </span>
+              {/* S2R — the gesture, said out loud. Verified on prod that the
+                  convention already holds (plain wheel pans, ctrl/⌘+wheel zooms
+                  1.0 → 1.8), so this needed no code, only saying. A gesture
+                  nobody mentions is a gesture nobody finds. */}
+              {view === 'map' ? (
+                <span className="sbm-gesturehint">Scroll to move · ⌘/Ctrl + scroll to zoom</span>
+              ) : null}
             </div>
             {view === 'map' ? (
               <MapCanvas
