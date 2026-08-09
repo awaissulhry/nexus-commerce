@@ -4266,3 +4266,124 @@ Terraform's diff grammar, AP2's card, the automation-bias findings).
 [pajamas]: https://design.gitlab.com/patterns/destructive-actions/
 [radar]: https://docs.stripe.com/radar/reviews/risk-insights
 [primer]: https://primer.style/product/components/button/
+
+---
+
+## 15.11 — S6.d execution record: what rendering the shapes actually found
+
+S6.a–S6.c were argued from the code and from mocks. S6.d seeded one inert row
+per card shape and **measured the deployed page**. Every finding below was
+invisible to `tsc`, to the DS ratchet, to the security suite and to the build.
+
+### 15.11.1 The shapes, and what each one proved
+
+`apps/api/scripts/_apx-seed-shapes.mts` (committed) seeds five rows sharing
+`_apx-seed-card.mts`'s marker, so one cleanup removes both sets. Shapes (a),
+(f) and (g) need no row — (a) is the ordinary card the queue already has, and
+(f)/(g) are interaction states of it.
+
+| Shape | Seeded as | What the render proved |
+|---|---|---|
+| (a) | existing row | baseline: one primary, three sizes |
+| (b) | `set-price`, high risk | `canExecute` branch: tick present, consequence "If this is wrong, you sell at the wrong price…" |
+| (c) | `send-customer-message` | irreversible + executable: tick present, "a real customer receives incorrect or unwanted contact" |
+| (d) | `reason: 'not run — …'` | "You approved this before, and it did not run." |
+| (e) | `reason: 'execution failed: …'` | "You approved this, it was attempted, and it failed." — visibly distinct from (d) |
+| (f) | interaction | the editor takes the delta slot — **and the defect below** |
+| (g) | interaction | reject codes replace the verb row; 0 primaries |
+| (h) | `preview: {}` | the no-delta fallback renders instead of an empty slot |
+
+### 15.11.2 The five defects, all card-owned, all fixed
+
+**1 · Mid-edit, the primary promised the number the operator had just replaced.**
+The worst of them, and only a keystroke could find it. With `0.60` typed, the
+green button still read `Apply — bid €0.31 → €0.84` while `Use €0.60 instead`
+sat beside it as a *secondary*. Amend updates the proposal rather than
+approving it, so clicking the obvious button applied `0.84` and discarded the
+edit. Editing now replaces the verb row exactly as rejecting already did —
+the card's own grammar, applied where it had been missed — and the
+edit-submit is the single primary.
+
+**2 · A money delta with no unit.** `mutate.tools.ts` writes
+`'base price': { from: 49, to: 39 }` as bare numbers, so the card rendered
+`49 → 39`. Checked against the real tool before calling it a defect,
+precisely because a fixture can invent one. Now `€49.00 → €39.00`.
+
+**3 · The disabled primary composited to 2.59:1.** The same opacity trap S4
+found, in a new place. WCAG 1.4.3 exempts inactive controls, so this is a
+comprehension failure rather than a conformance one — and a sharper one: the
+label *names the change*, and reading it is how the operator decides whether
+to tick the box that enables it. Unfixable by raising opacity (~0.93 needed),
+so the disabled primary stops using opacity and goes solid and muted, 6.4:1.
+
+**4 · A fourth type size.** `.aq-ack` at 12.5px. Back to 17 / 13 / 11.5. The
+only 12.5px left inside a card belongs to the shared `.acr-btn`.
+
+**5 · A worker rendered as a database column.** `listing-quality-keeper` is a
+registered agent with a live cron but is not one of the seven charters, so its
+cards opened `listing quality keeper wants to change a price`. Fixed at both
+call sites — and the first fix, shipped and measured, **had no effect**,
+because these rows arrive by the `/approvals/outside` feed which builds its
+own name. A fix is not verified until the thing it was meant to change is
+seen to change.
+
+### 15.11.3 Two lies recorded, not fixed — they share one root cause
+
+Neither belongs to the card, and both come from the page treating *"not a
+charter"* as *"not part of the fleet"*:
+
+- **The tab badge said 3 while five cards rendered.** The server's count and
+  the server's list use different `WHERE` clauses, so an approval from a
+  non-charter agent is listed and never counted.
+- **The outside path tells the operator the agent is "from before the fleet,
+  so there is no worker page and no track record for it."** For
+  `listing-quality-keeper` that is simply false.
+
+Both are API/S3/S4 work. Recorded here so the next section does not rediscover
+them.
+
+### 15.11.4 A regression caught before it shipped
+
+The disabled-primary rule also matches inside S4's empty state, where the
+example is a real `<ApprovalCard>` in a `<fieldset disabled>` — its Apply
+would have gone grey, breaking the one job the example has. It was invisible
+while seeded rows filled the queue and would have appeared the instant they
+were cleaned. Restored on specificity, 5 classes to 4.
+
+### 15.11.5 Measurements
+
+| Check | Result |
+|---|---|
+| Composited contrast, all five shapes | **0 failures** (was 2 at 2.59:1) |
+| Type sizes inside a card | 17 / 13 / 11.5 + shared `.acr-btn` at 12.5 |
+| Primaries per card, every shape | exactly 1; mid-reject 0; mid-edit 1 |
+| Nine widths 900→1920 | no doc overflow, nothing spilling the card |
+| 200% zoom (viewports 756 and 640) | no overflow, no spill |
+| Tab order, card 0 | 10 stops, DOM order == visual order |
+| Escape dismisses a tooltip | **works** — see the instrument note below |
+| Widest prose line at 1920 | 79 chars (was 283) |
+| Database end state | 18 approvals · 0 pending · 0 exemplars · 0 audit rows |
+
+### 15.11.6 Three instrument errors, because two nearly became false findings
+
+- **The screenshot is not the viewport.** 1512×793 captured against a 1512×906
+  CSS viewport, so clicks aimed from `getBoundingClientRect` landed ~113px low
+  and kept closing the editor. Nearly filed as "a click inside the editor
+  closes it". Coordinates were abandoned for `focus()` plus real keys.
+- **Escape "failing" was the harness.** The automation key never reached the
+  document; a dispatched Escape dismissed the tooltip correctly, and still did
+  after 7s of focus. **No defect.** Nearly filed as a 1.4.13 failure.
+- **The deploy probe could never succeed.** It globbed
+  `/_next/static/css/*.css`; this app serves CSS from
+  `/_next/static/chunks/`. Zero forever, read as "not deployed yet". The
+  replacement was baselined, and a second version that hashed `css+js` against
+  a `css`-only baseline — which would have reported success instantly — was
+  caught before it ran. **Baseline every probe at both ends: it must be able
+  to fail, and able to succeed.**
+
+### 15.11.7 Commits
+
+`e6780ddc1` five defects · `9f894f3d4` the other door · `32bf8133f` the
+measure · `1bfc4aedc` keep S4's example green.
+
+**S6 is complete.**
