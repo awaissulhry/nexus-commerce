@@ -175,7 +175,10 @@ export function RowActions({
 
   items.push({
     key: 'delete',
-    label: 'Delete…',
+    // S4.b — one name for one action. The detail page's Delete opens the same
+    // kind of dialog since S3.a, so the ellipsis is no longer a distinction —
+    // it was just two people writing the same control twice.
+    label: 'Delete',
     danger: true,
     disabled: everRan,
     tip: everRan

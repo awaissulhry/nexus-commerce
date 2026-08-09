@@ -853,6 +853,25 @@
 .as-fname { font-size: 13px; }
 .as-fkind { font-size: 11.5px; }
 
+/* The trigger is a real control, not the borderless 16px text the detail page
+   removed for being indistinguishable from everything around it. */
+.as-howbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: #1f5fd0;
+  cursor: pointer;
+  text-decoration: underline;
+  vertical-align: baseline;
+}
+.as-howbtn:hover { color: #16489e; }
+
 .as-how {
   font-size: 13px;
   line-height: 1.7;

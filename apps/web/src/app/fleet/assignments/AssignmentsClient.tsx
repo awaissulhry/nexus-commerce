@@ -542,13 +542,16 @@ export function AssignmentsClient() {
               type="button"
               className={`acr-pg-chip${on ? ' on' : ''}`}
               aria-pressed={on}
-              title={`${def.tip}\n\nClick to show only these.`}
+              title={`${def.tip}\n\n${n} of ${rows?.length ?? 0} assignments are in this state. Click to show only these.`}
               onClick={() => setFilter(on ? null : k)}
             >
               {def.label}
-              <span className="n" title={`${n} of ${rows?.length ?? 0} assignments are in this state`}>
-                {n}
-              </span>
+              {/* S4.c — the count's sentence moves onto the BUTTON. It used to
+                  sit on this span, which is not focusable, so it reached a
+                  mouse and nothing else — and it was redundant with the chip's
+                  own tooltip anyway. Nothing is lost and one unreachable
+                  explanation goes away, six times over. */}
+              <span className="n">{n}</span>
             </button>
           )
         })}
@@ -586,10 +589,14 @@ export function AssignmentsClient() {
                 {q.trim() ? <> matching “{q.trim()}”</> : null}
                 {' · '}
                 <span
+                  /* S4.b — one sentence for this concept, on both surfaces, and
+                     it finally says what the currency is. Model time is billed
+                     in US dollars while the ads underneath are in euro, and
+                     nothing on this page said so. */
                   title={
                     spend.unknown > 0
-                      ? `What every assignment shown here has cost in model calls. ${spend.unknown} run${spend.unknown === 1 ? '' : 's'} stopped reporting and its cost cannot be known — left out rather than counted as zero.`
-                      : 'What every assignment shown here has cost in model calls.'
+                      ? `What every assignment shown here has cost in model calls, in US dollars — model time is billed in USD even though your ads are in euro. ${spend.unknown} run${spend.unknown === 1 ? '' : 's'} stopped reporting and its cost cannot be known, so it is left out rather than counted as zero.`
+                      : 'What every assignment shown here has cost in model calls, in US dollars — model time is billed in USD even though your ads are in euro.'
                   }
                 >
                   <b>${spend.total.toFixed(2)}</b> spent{spend.unknown > 0 ? '*' : ''}

@@ -293,13 +293,16 @@ export function AssignmentClient({ id }: { id: string }) {
             <span className="k">Spent so far</span>
             <span
               className="v"
+              /* S4.b — the same sentence the list uses. It described the same
+                 quantity in different words on each surface, and neither said
+                 what the currency was. */
               title={
                 a.hasUnknownCost
-                  ? 'One run stopped reporting and was closed after two hours. What it spent is unknown, so it is left OUT of this total rather than counted as zero.'
-                  : 'The sum of every run this assignment has made.'
+                  ? 'What every run of this assignment has cost in model calls, in US dollars — model time is billed in USD even though your ads are in euro. One run stopped reporting and its cost cannot be known, so it is left out rather than counted as zero.'
+                  : 'What every run of this assignment has cost in model calls, in US dollars — model time is billed in USD even though your ads are in euro.'
               }
             >
-              ${a.costUSD.toFixed(4)}
+              ${a.costUSD.toFixed(2)}
               {a.hasUnknownCost && ' + unknown'}
             </span>
           </div>
