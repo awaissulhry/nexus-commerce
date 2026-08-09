@@ -718,9 +718,18 @@
   .sbm-body {
     grid-template-columns: minmax(0, 1fr);
   }
-  .sbm-orail {
-    display: none;
-  }
+  /* ⚠ `.sbm-orail { display: none }` USED to live here and was removed in S3.h,
+     not moved. It deleted the colour control, the legend and the filters while
+     the canvas carried on painting in colours nothing then explained — which is
+     the exact failure the overlay model was written to prevent. The rail now
+     lies down instead; see the narrow-width block at the end of §M4.
+
+     It also had to go for a mechanical reason worth stating: S3.b gave
+     `.sbm-orail` a `display: grid` in §M4, ~700 lines LATER at the same
+     specificity, so this rule had already stopped firing. Two rules of equal
+     weight, the later one wins — the same trap as the dead `.sbm-rail` query
+     twelve lines above (C-S3.4). A `display: none` that does not hide anything
+     is worse than no rule at all, because the next reader believes it. */
 }
 
 .sbm-canvas {
@@ -1628,6 +1637,54 @@
 .sbm-orail-check input:focus-visible {
   outline: 2px solid #1f4f8b;
   outline-offset: 2px;
+}
+
+/*
+ * S3.h — BELOW 1100 THE RAIL LIES DOWN; IT DOES NOT DISAPPEAR.
+ *
+ * It used to be `display: none` there, which deleted the colour control, the
+ * legend and the filters while the canvas went on colouring its cards — a
+ * vocabulary with nothing to explain it, which is the failure this whole model
+ * exists to prevent. Nothing in the surveyed products drops the key to the
+ * colours while still painting in them; Bloom's legend collapses and can be
+ * expanded again, and Grafana replaces hidden nodes with a marker rather than
+ * silence.
+ *
+ * `.sbm-body` is one column at this width, so the rail is already full-width
+ * above the canvas — it only needed to stop being a tall thin thing. Three
+ * columns, the legend in two, capped so it cannot eat the canvas.
+ *
+ * ⚠ This block sits at the END of §M4, not up with the other media queries at
+ * the top of §M2. The base `.sbm-orail` rules are here, and a media query of
+ * equal specificity placed BEFORE them does nothing at all. That is how the old
+ * `display: none` quietly died, and how `.sbm-rail`'s 1400px rule has never
+ * fired (C-S3.4).
+ */
+@media (max-width: 1100px) {
+  .sbm-orail {
+    grid-template-rows: none;
+    grid-template-columns: 190px minmax(0, 1fr) auto;
+    gap: 0 14px;
+    max-height: 210px;
+  }
+  .sbm-orail-sec + .sbm-orail-sec {
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 14px;
+    border-top: 0;
+    border-left: 1px solid #eef2f6;
+  }
+  /* Six rungs down a 986px-wide rail would be one item per line and a marker
+     stranded 900px from its label. Two columns keeps label and marker together. */
+  .sbm-orail-sec.is-legend .sbm-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    align-content: start;
+  }
+  .sbm-orail-filters {
+    max-width: 230px;
+  }
 }
 
 /*
