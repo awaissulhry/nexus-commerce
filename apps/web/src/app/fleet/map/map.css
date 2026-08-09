@@ -707,8 +707,12 @@
   width: 252px;
   padding: 9px 11px;
   background: #fff;
-  /* was #dde4ec = 1.28:1; 1.4.11 wants 3:1 for a control's own boundary */
-  border: 1px solid #aab4c0;
+  /* was #dde4ec = 1.28:1; 1.4.11 wants 3:1 for a control's own boundary.
+     ⚠ #aab4c0 was my first try and it measured 2.05:1 — because I checked it
+     against WHITE and the card sits on the canvas's #fbfcfe. A boundary is
+     contrasted against what is OUTSIDE it, not what is inside. #78838f is
+     3.86:1 there. */
+  border: 1px solid #78838f;
   border-left: 3px solid #6b7684; /* the ring: status, redundantly with the word */
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(28, 37, 48, 0.06);
@@ -849,9 +853,17 @@
  *
  * 11px, every fill ≥3:1 against #fff, and the two hollow forms get a solid
  * casing so their OUTLINE carries the shape rather than their fill. */
+/* 13px, not 11px, and the reason is a genuine interaction between two fixes.
+   The frame now actually runs, so the canvas sits at zoom 0.777 for today's
+   fleet — and a mark sized at 11px renders at 8.5px, which is where it started.
+   Contrast is zoom-independent and is fixed (1.8:1 → 4.62:1); SIZE is not, so
+   the CSS size has to carry the zoom. 13px renders ~10px here.
+   The honest limit: as the fleet grows the fit zooms further out and this stops
+   being winnable by sizing. At that point the WORD is the channel that survives,
+   which is exactly why rule 2 insists there are three of them. */
 .sbm-glyph {
-  width: 11px;
-  height: 11px;
+  width: 13px;
+  height: 13px;
   flex: none;
   display: inline-block;
   background: #6b7684;
@@ -862,7 +874,7 @@
 .sbm-glyph.g-paused {                                                     /* bar, amber    4.79:1 */
   border-radius: 1px;
   background: #8a5a1a;
-  height: 5px;
+  height: 6px;
   align-self: center;
 }
 .sbm-glyph.g-attention {
