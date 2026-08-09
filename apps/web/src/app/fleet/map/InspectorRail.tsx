@@ -76,7 +76,14 @@ function Overview({ nodes, onPick }: { nodes: MapNode[]; onPick: (k: string) => 
                       module already computes the CAUSE for exactly this reason —
                       its own comment says the operator's next step differs by
                       class — and the rail was throwing it away. */}
-                  {s.needsAttention && s.tag ? (
+                  {/* ⚠ Gated on `word === 'attention'`, not on `needsAttention`.
+                      Verified on prod: `paused` and `not-set-up` also set
+                      `needsAttention`, so the first cut printed "Paused ·
+                      paused" and "Not set up · never set up". `attention` is
+                      the one word three different conditions share — which is
+                      the whole defect — and it is a stable field rather than a
+                      display string. */}
+                  {s.word === 'attention' && s.tag ? (
                     <>
                       <span className="cause">{s.tag}</span>
                       {' · '}
