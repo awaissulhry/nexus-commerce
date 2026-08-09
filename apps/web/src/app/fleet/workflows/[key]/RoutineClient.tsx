@@ -852,7 +852,7 @@ export function RoutineClient({ routineKey }: { routineKey: string }) {
           </div>
         </section>
 
-        <HowWorkflowsWork />
+        <HowWorkflowsWork page="detail" />
 
         {runDialog ? (
           <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">

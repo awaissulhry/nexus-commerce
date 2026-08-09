@@ -385,7 +385,7 @@ export function WorkflowsClient() {
       )}
 
       <div className="wf-howwrap">
-        <HowWorkflowsWork />
+        <HowWorkflowsWork page="list" />
       </div>
 
       {creating ? (
