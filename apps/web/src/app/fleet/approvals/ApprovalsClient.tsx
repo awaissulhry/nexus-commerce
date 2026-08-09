@@ -560,6 +560,89 @@ function GateStateSection({
  * Two composers over one set of facts is the defect S2.a fixed at the API, and
  * re-introducing it in the client would be the same mistake one layer up.
  */
+/**
+ * NAF.AQ-S4R S4.b — the worked example.
+ *
+ * The approved AQ-S4 spec listed this last; the research moved it to the
+ * centre, and the reason is specific to this queue rather than general: it
+ * **cannot fill** until Phase F, so without an example the operator's FIRST
+ * real approval would also be the first time they had ever seen the interface
+ * it arrives in. Everything the onboarding literature says about starting from
+ * something real rather than a blank workspace applies with more force when
+ * "blank" is the state for months.
+ *
+ * Three properties, each deliberate:
+ *
+ * · **It is the REAL `ApprovalCard`**, not a screenshot and not a simplified
+ *   mock. A mock-up would drift from the component the day either changed, and
+ *   the whole point is that the operator has read the thing they will actually
+ *   be given.
+ * · **It is inert by construction, not by instruction.** `busy` already
+ *   disables every control on the card, so nothing here can be clicked and no
+ *   new prop was added to a component the real queue depends on.
+ * · **It disappears the moment the fleet can produce real ones.** An example
+ *   sitting under a working queue is clutter; an example over a queue that
+ *   cannot fill is the only thing on screen worth reading.
+ *
+ * The fixture is the shape AQ.3 verified on production, so the numbers, the
+ * entity names and the reversibility class are all ones this card has really
+ * rendered. Nothing is fetched and nothing is seeded.
+ */
+const EXAMPLE_LABELS: FleetLabels = {
+  campaigns: {},
+  targets: {
+    'example-target': {
+      text: 'casco integrale',
+      matchType: 'EXACT',
+      campaignName: 'AIREON-IT-Generic',
+      marketplace: 'IT',
+    },
+  },
+}
+
+const EXAMPLE_APPROVAL = {
+  id: 'example',
+  toolName: 'set-target-bid',
+  charterKey: 'amazon-bid-tuner',
+  riskTier: 'high',
+  status: 'pending',
+  args: { targetId: 'example-target', proposedBidCents: 84 },
+  preview: {
+    currentBidCents: 31,
+    proposedBidCents: 84,
+    effect: 'Raises what you pay per click on one keyword.',
+  },
+  requestedAt: new Date(0).toISOString(),
+  expiresAt: null,
+  reason: null,
+  trackRecord: null,
+}
+
+function ExampleCard() {
+  return (
+    <div className="aq-example" role="group" aria-label="Example of a request. Not real.">
+      <p className="aq-examplenote">
+        <span className="aq-examplechip">Example</span>
+        This is what a request will look like. It is not real, and nothing here can be decided.
+      </p>
+      <div className="aq-examplebody">
+        <ApprovalCard
+          approval={EXAMPLE_APPROVAL}
+          labels={EXAMPLE_LABELS}
+          workerName="Bid tuner"
+          /* Inert by construction: `busy` disables every control on the card. */
+          busy
+          canExecute={false}
+          onDecide={() => {}}
+          onRecheck={async () => ({ stale: false, why: null })}
+          onAmend={async () => ({ ok: false })}
+          onSnooze={() => {}}
+        />
+      </div>
+    </div>
+  )
+}
+
 function EmptyWaiting({ gate }: { gate: GateState | null }) {
   const conditions = gate?.conditions ?? []
   const met = conditions.filter((c) => c.met).length
@@ -585,6 +668,10 @@ function EmptyWaiting({ gate }: { gate: GateState | null }) {
           )}
         </p>
       ) : null}
+
+      {/* Only while nothing can arrive. Once the fleet can produce real
+          requests the example is clutter, and it goes without being told to. */}
+      {blocked ? <ExampleCard /> : null}
     </div>
   )
 }

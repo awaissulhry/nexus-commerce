@@ -491,6 +491,49 @@
   padding-left: 10px;
 }
 
+/* S4.b — the worked example. It has to read as a demonstration at a glance and
+   never be mistaken for something decidable, so the frame is dashed (no real
+   card ever is), the chip says the word, and the body is dimmed with an
+   explicit colour rather than `opacity`.
+
+   The opacity point is the one worth keeping: it multiplies the contrast of
+   everything beneath it, so a role that passes at full strength quietly fails
+   once dimmed — the Assignments stream shipped exactly that defect and had to
+   undo it. The card keeps its own colours; only the frame says "example". */
+.aq-example {
+  margin: 14px 0 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 11px 12px 12px;
+}
+.aq-examplenote {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #55616f;
+  max-width: 76ch;
+}
+.aq-examplechip {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: #eef1f5;
+  color: #4a5867;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+/* The card inside keeps its own surface; the dashed frame is what marks it. */
+.aq-examplebody > * {
+  margin: 0;
+}
+
 /* ── S5 · waiting from outside the fleet (AQ.2) ─────────────────────────── */
 
 /*
