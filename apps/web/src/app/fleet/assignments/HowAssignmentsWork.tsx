@@ -19,9 +19,13 @@
  *    approval queue", implying things arrive there; the detail page now says
  *    plainly that an assignment cannot put anything there at all.
  *  - It named an action that no longer exists ("press Start").
- *  - It carried a live typo — `<em>themes</em>` followed by a newline renders
- *    as "themesare", because JSX strips a newline-plus-indent at an element
- *    boundary. Shipped since AS.1, seen by nobody.
+ *  - It carried a live typo, rendering "themesare". The space IS present in
+ *    the source, on the same line as `</em>` — I checked the bytes — and the
+ *    production bundle still emits `"themes"}),"are totals`. So the cause is
+ *    not the newline-at-an-element-boundary rule I first blamed; something in
+ *    the build drops that leading space. The fix is deterministic rather than
+ *    incidental: an explicit `{' '}`, which is what the rest of this codebase
+ *    uses at element boundaries. Shipped broken since AS.1, seen by nobody.
  *  - Its Drawer had no root class, so the contrast fix that landed one
  *    component away never reached it (subtitle at 3.10:1).
  *
@@ -76,7 +80,7 @@ export function HowAssignmentsWork() {
           <p>
             A narrowed run finds <strong>less</strong> than a run over your whole
             account, and that is the point. One kind of evidence is held back
-            entirely: waste <em>themes</em> are totals across your whole account
+            entirely: waste <em>themes</em>{' '}are totals across your whole account
             with no campaign of their own, so attributing them to one campaign
             would blame it for other campaigns&apos; spend. A portfolio resolves
             to the campaigns inside it each time it runs, so one added tomorrow
