@@ -699,6 +699,85 @@
   border-radius: 3px;
 }
 
+/* ── S6.b · the action area ──────────────────────────────────────────────
+ *
+ * Four structural defects, all measured or quoted in study Part 15:
+ * the NOTE rendered below the buttons that consume it; TWO `.acr-btn.go`
+ * primaries rendered at once with the editor open (Primer: "never put more
+ * than one in a group of buttons"); the rare recheck control sat ABOVE the
+ * primary action; and the reject codes stacked BELOW the verb row so the card
+ * showed two competing action areas.
+ *
+ * Order now: gate · input · verbs · rare controls. */
+
+.aq-notewrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 10px 0 8px;
+}
+.aq-notelabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #55616f;
+}
+
+.aq-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+/* Rare, and visibly so: no button chrome, one size down, BELOW the verbs.
+   Neither of these is part of deciding — they were competing with it. */
+.aq-tertiary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 9px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #eef1f5;
+}
+.aq-tlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: #55616f;
+  cursor: pointer;
+}
+.aq-tlink:hover:not(:disabled) {
+  color: #1f6fde;
+}
+.aq-tlink:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Reject REPLACES the verb row, so there is never a second action area. */
+.aq-rejectcancel {
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: #55616f;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.aq-rejectcancel:hover:not(:disabled) {
+  color: #1f6fde;
+}
+
 /* ── S5 · waiting from outside the fleet (AQ.2) ─────────────────────────── */
 
 /*

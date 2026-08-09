@@ -560,8 +560,61 @@ export function ApprovalCard({
         </p>
       ) : null}
 
-      {/* 1 — THE DELTA. First, and the only large type on the card. */}
-      {d.deltas.length > 0 ? (
+      {/* 1 — THE DELTA. First, and the only large type on the card.
+          (f) While editing, the EDITOR takes this slot: the number being
+          changed belongs where the number was, not in a panel further down. */}
+      {editing && editable && proposedNow != null ? (
+        <div className="aq-edit">
+          <label className="aq-editrow">
+            <span>Your {editable.label}</span>
+            <span className="aq-editeuro">
+              €
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value)
+                  setAmendErr(null)
+                }}
+              />
+            </span>
+            <span className="aq-editwas">the worker proposed €{(proposedNow / 100).toFixed(2)}</span>
+          </label>
+          <p className="aq-editnote">
+            Between €{(editable.min / 100).toFixed(2)} and €{(editable.max / 100).toFixed(2)}. Your
+            number is re-checked against the same rules the worker had to pass — the bid floor, the
+            pins, the protected terms — and the worker&apos;s original proposal is kept on the
+            record beside yours.
+          </p>
+          {amendErr ? <p className="aq-editerr">{amendErr}</p> : null}
+          <div className="aq-editactions">
+            {/* NOT `.acr-btn go`. Primer: never more than one primary in a
+                group — Apply below is the card's only primary, and this panel
+                previously rendered a second identical green button beside it. */}
+            <button
+              className="acr-btn"
+              disabled={busy || amending || !draftValid}
+              onClick={async () => {
+                setAmending(true)
+                setAmendErr(null)
+                try {
+                  const r = await onAmend(approval.id, { [editable.arg]: draftCents })
+                  if (!r.ok) setAmendErr(r.error ?? 'that change was refused')
+                  else setEditing(false)
+                } finally {
+                  setAmending(false)
+                }
+              }}
+            >
+              {amending ? 'Checking…' : `Use €${(Number(draft) || 0).toFixed(2)} instead`}
+            </button>
+            <button className="acr-btn" disabled={busy || amending} onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : d.deltas.length > 0 ? (
         <ul className="aq-deltas">
           {d.deltas.map((x, i) => (
             <li key={i}>
@@ -685,10 +738,110 @@ export function ApprovalCard({
         </dl>
       ) : null}
 
-      {/* AQ.3 — ask, on demand, whether the facts still hold */}
-      <div className="aq-recheck">
+      {/*
+        S6.b (study Part 15.4) — THE ACTION AREA.
+
+        Four things were wrong with it and all four were structural:
+        · the optional NOTE rendered BELOW the buttons that consume it, so
+          annotating a decision meant scrolling past it, typing, and coming back;
+        · TWO `.acr-btn.go` primaries rendered at once when the editor was open,
+          which Primer forbids outright;
+        · the recheck button — a rare, tertiary control — sat ABOVE the primary
+          action;
+        · the reject codes STACKED BELOW the verb row, so the card briefly
+          showed two competing action areas.
+
+        Order now: the gate, the input, the verbs, then the rare controls.
+      */}
+
+      {/* The only friction on this card, and only where a yes is irreversible
+          and can actually run (Pajamas' high tier). Immediately above the verb
+          it gates — a checkbox that gates a button two blocks away is a puzzle. */}
+      {needsAck ? (
+        <label className="aq-ack">
+          <input type="checkbox" checked={acked} onChange={(e) => setAcked(e.target.checked)} />
+          <span>
+            I have read what this does
+            {rev === 'never' ? ' — and that it cannot be undone' : ''}.
+          </span>
+        </label>
+      ) : null}
+
+      {/* An INPUT to the decision, so it precedes the decision. */}
+      <label className="aq-notewrap">
+        <span className="aq-notelabel">Note (optional)</span>
+        <input
+          className="aq-note"
+          placeholder="Recorded either way — it is what teaches the fleet"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+
+      {/* The verbs. When rejecting, the coded reasons REPLACE this row rather
+          than appearing beneath it, so there is never more than one action area. */}
+      {rejecting ? (
+        <div className="aq-reject">
+          <p className="aq-rejectq">
+            Why not? One click — this is what teaches the fleet.
+            <button className="aq-rejectcancel" disabled={busy} onClick={() => setRejecting(false)}>
+              Cancel
+            </button>
+          </p>
+          <div className="aq-codes">
+            {rejectCodesFor(approval.toolName).map((code) => (
+              <button
+                key={code}
+                className="aq-code"
+                disabled={busy}
+                onClick={() =>
+                  onDecide(approval.id, 'reject', note.trim() ? `${code} — ${note.trim()}` : code)
+                }
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="aq-actions">
+          {/* The card's ONE primary. It states the consequence, not the verb. */}
+          <button
+            className="acr-btn go"
+            disabled={busy || approveBlocked}
+            title={approveBlocked ? 'Tick the box above first.' : undefined}
+            onClick={() => onDecide(approval.id, 'approve', note.trim() || undefined)}
+          >
+            <Check size={13} /> {approveLabel}
+          </button>
+          <button className="acr-btn" disabled={busy} onClick={() => setRejecting(true)}>
+            <X size={13} /> Reject
+          </button>
+
+          {/* "Not now" — quiet and last. An escape, not a verb. */}
+          {snoozeOptions.length > 0 ? (
+            <span className="aq-snooze">
+              <Clock size={12} aria-hidden /> Not now —
+              {snoozeOptions.map((o) => (
+                <button
+                  key={o.label}
+                  className="aq-snoozeopt"
+                  disabled={busy}
+                  onClick={() => onSnooze(approval.id, new Date(Date.now() + o.ms))}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {/* The rare controls, BELOW the verbs and visibly lighter. Neither is
+          part of deciding; both were competing with it. */}
+      <div className="aq-tertiary">
         <button
-          className="acr-btn"
+          className="aq-tlink"
           disabled={busy || rechecking}
           onClick={async () => {
             setRechecking(true)
@@ -701,6 +854,11 @@ export function ApprovalCard({
         >
           <FileText size={12} /> {rechecking ? 'Checking…' : 'Check this is still true'}
         </button>
+        {editable && proposedNow != null && !editing ? (
+          <button className="aq-tlink" disabled={busy} onClick={() => setEditing(true)}>
+            <Pencil size={12} /> Right idea, wrong number?
+          </button>
+        ) : null}
         {recheck ? (
           <span className={recheck.stale ? 'aq-rc-stale' : 'aq-rc-ok'}>
             {recheck.stale
@@ -709,160 +867,6 @@ export function ApprovalCard({
           </span>
         ) : null}
       </div>
-
-      {needsAck ? (
-        <label className="aq-ack">
-          <input type="checkbox" checked={acked} onChange={(e) => setAcked(e.target.checked)} />
-          <span>
-            I have read what this does
-            {rev === 'never' ? ' — and that it cannot be undone' : ''}.
-          </span>
-        </label>
-      ) : null}
-
-      {/* AQ.8 — right idea, wrong number. */}
-      {editable && proposedNow != null ? (
-        editing ? (
-          <div className="aq-edit">
-            <label className="aq-editrow">
-              <span>Your {editable.label}</span>
-              <span className="aq-editeuro">
-                €
-                <input
-                  autoFocus
-                  inputMode="decimal"
-                  value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value)
-                    setAmendErr(null)
-                  }}
-                />
-              </span>
-              <span className="aq-editwas">
-                the worker proposed €{(proposedNow / 100).toFixed(2)}
-              </span>
-            </label>
-            <p className="aq-editnote">
-              Between €{(editable.min / 100).toFixed(2)} and €
-              {(editable.max / 100).toFixed(2)}. Your number is re-checked against the same rules
-              the worker had to pass — the bid floor, the pins, the protected terms — and the
-              worker&apos;s original proposal is kept on the record beside yours.
-            </p>
-            {amendErr ? <p className="aq-editerr">{amendErr}</p> : null}
-            <div className="aq-editactions">
-              <button
-                className="acr-btn go"
-                disabled={busy || amending || !draftValid}
-                onClick={async () => {
-                  setAmending(true)
-                  setAmendErr(null)
-                  try {
-                    const r = await onAmend(approval.id, { [editable.arg]: draftCents })
-                    if (!r.ok) setAmendErr(r.error ?? 'that change was refused')
-                    else setEditing(false)
-                  } finally {
-                    setAmending(false)
-                  }
-                }}
-              >
-                {amending ? 'Checking…' : `Use €${(Number(draft) || 0).toFixed(2)} instead`}
-              </button>
-              <button className="acr-btn" disabled={busy || amending} onClick={() => setEditing(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button className="aq-editopen" disabled={busy} onClick={() => setEditing(true)}>
-            <Pencil size={12} /> Right idea, wrong number? Edit the {editable.label}
-          </button>
-        )
-      ) : null}
-
-      {/*
-        AQ.4 — symmetric friction.
-
-        Reject used to demand a typed sentence while approve was one click.
-        That asymmetry is the documented mechanism by which decision support
-        becomes a decision engine: if disagreeing costs an essay and agreeing
-        costs a click, a tired operator agrees. Both verbs are one click now,
-        and the note is optional on either.
-
-        Note the direction of the fix. The instruction is "make rejecting no
-        harder than approving" — NOT "make approving harder". Friction is added
-        only where a yes is irreversible (the tick above), never to the safe
-        path.
-      */}
-      <div className="aq-actions">
-        <button
-          className="acr-btn go"
-          disabled={busy || approveBlocked}
-          title={approveBlocked ? 'Tick the box above first.' : undefined}
-          onClick={() => onDecide(approval.id, 'approve', note.trim() || undefined)}
-        >
-          <Check size={13} /> {approveLabel}
-        </button>
-        {!rejecting ? (
-          <button className="acr-btn" disabled={busy} onClick={() => setRejecting(true)}>
-            <X size={13} /> Reject
-          </button>
-        ) : (
-          <button className="acr-btn" disabled={busy} onClick={() => setRejecting(false)}>
-            Cancel
-          </button>
-        )}
-
-        {/* "Not now" — the third answer. Without it the only way to clear a
-            badge is to approve, which is the one thing a spend queue must not
-            teach. Quiet and last: it is an escape, not a verb. */}
-        {snoozeOptions.length > 0 && !rejecting ? (
-          <span className="aq-snooze">
-            <Clock size={12} aria-hidden /> Not now —
-            {snoozeOptions.map((o) => (
-              <button
-                key={o.label}
-                className="aq-snoozeopt"
-                disabled={busy}
-                onClick={() => onSnooze(approval.id, new Date(Date.now() + o.ms))}
-              >
-                {o.label}
-              </button>
-            ))}
-          </span>
-        ) : null}
-      </div>
-
-      {rejecting ? (
-        <div className="aq-reject">
-          <p className="aq-rejectq">Why not? One click — this is what teaches the fleet.</p>
-          <div className="aq-codes">
-            {rejectCodesFor(approval.toolName).map((code) => (
-              <button
-                key={code}
-                className="aq-code"
-                disabled={busy}
-                onClick={() =>
-                  onDecide(
-                    approval.id,
-                    'reject',
-                    note.trim() ? `${code} — ${note.trim()}` : code,
-                  )
-                }
-              >
-                {code}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* One optional note, shared by both verbs — never required by either. */}
-      <input
-        className="aq-note"
-        placeholder="Add a note (optional) — it is recorded either way"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-      />
     </div>
   )
 }
