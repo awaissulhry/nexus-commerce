@@ -22,7 +22,7 @@
 
 import { Def } from './definitions'
 import type { MapNode } from './lib'
-import { OVERLAYS, visibleBuckets, type Overlay } from './overlays'
+import { OVERLAYS, occupiedBucketIds, visibleBuckets, type Overlay } from './overlays'
 
 const TIERS = ['analyst', 'director', 'critic', 'auditor']
 
@@ -44,6 +44,7 @@ export function OverlayRail({
   onHideDiagnostic: (v: boolean) => void
 }) {
   const buckets = visibleBuckets(overlay, nodes)
+  const occupied = occupiedBucketIds(overlay, nodes)
   const tiers = TIERS.filter((t) => nodes.some((n) => n.tier === t))
   const hasDiagnostic = nodes.some((n) => n.diagnostic)
 
@@ -72,18 +73,27 @@ export function OverlayRail({
           colour channel is FOR, and it was the faintest important text in the
           section (3.62:1) sitting under a generic "What the colours mean". A
           legend title should be the meaningful one. */}
-      <div className="sbm-orail-sec">
+      <div className="sbm-orail-sec is-legend">
         <h3 className="sbm-orail-q">{overlay.question}</h3>
         <ul className="sbm-legend">
-          {buckets.map((b) => (
-            <li key={b.id}>
-              <span className={`sbm-swatch ${b.className}`} aria-hidden />
-              <span className="txt">
-                <span className="lab">{b.label}</span>
-                {b.note ? <span className="note">{b.note}</span> : null}
-              </span>
-            </li>
-          ))}
+          {buckets.map((b) => {
+            const here = occupied.has(b.id)
+            return (
+              <li key={b.id} className={here ? '' : 'is-vacant'}>
+                <span className={`sbm-swatch ${b.className}`} aria-hidden />
+                <span className="txt">
+                  <span className="lab">{b.label}</span>
+                  {here && b.note ? <span className="note">{b.note}</span> : null}
+                </span>
+                {/* The rung keeps its colour and its words, and says it is
+                    empty rather than being silently unexplained. Right-aligned
+                    so the empties can be read down the column at a glance — on
+                    a fleet where nothing may act, "May act on its own — none"
+                    is the most reassuring line on the page. */}
+                {here ? null : <span className="none">none</span>}
+              </li>
+            )
+          })}
         </ul>
         {overlay.id === 'health' ? (
           <p className="sbm-orail-foot">

@@ -1409,13 +1409,55 @@
 
 /* ── M4 · the overlay rail, and the tints it owns ──────────────────────── */
 
+/*
+ * S3R — THE RAIL STOPS BEING ONE SCROLL.
+ *
+ * It was `overflow-y: auto` over all three blocks: 778px of content in a 621px
+ * box, and what fell off the bottom was `Show` — the only filtering control on
+ * the page. Measured before this change:
+ *
+ *   1920×1080  content 778  box 739  →  Show 146.3 of 174.4px visible
+ *   1728×962   content 778  box 621  →  Show  28.3 of 174.4px
+ *   1440×900   content 778  box 559  →  Show     0 of 174.4px
+ *   1280×800   content 820  box 232  →  Show     0 of 174.4px
+ *
+ * ...behind a macOS overlay scrollbar, which shows nothing until you already
+ * know to scroll. And because scrolling down pushed `Colour by` off the top,
+ * there was NO scroll position at which the control and the filters were both
+ * on screen.
+ *
+ * A legend is reference material and scrolling reference material is normal. A
+ * filter you cannot see does not exist. So the two CONTROLS pin and the
+ * EXPLANATION absorbs the variance.
+ *
+ * ⚠ `minmax(0, max-content)`, not `1fr`. Both let the legend shrink and scroll
+ * when the rail is short, but `1fr` also STRETCHES it when the rail is tall —
+ * and the health overlay renders two legend rows, which would have opened ~220px
+ * of dead space between the legend and `Show`. Grid stretches its items; a track
+ * that should never exceed its content has to say so.
+ */
 .sbm-orail {
   min-height: 0;
-  overflow-y: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, max-content) auto;
+  align-content: start;
+  overflow: hidden;
   background: #fff;
   border: 1px solid #e6ebf1;
   border-radius: 9px;
   padding: 10px;
+}
+/* The legend block scrolls INSIDE itself, and its heading stays put — the
+   question is what orients the reader, so it is the last thing that should
+   scroll away from the swatches it introduces. */
+.sbm-orail-sec.is-legend {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sbm-orail-sec.is-legend .sbm-legend {
+  min-height: 0;
+  overflow-y: auto;
 }
 .sbm-orail-sec + .sbm-orail-sec {
   margin-top: 14px;
@@ -1505,6 +1547,19 @@
   font-size: 10px;
   color: #55616f; /* was #9aa5b3 = 2.50:1, on the rail's only real content */
   line-height: 1.4;
+}
+/* S3R — a rung nothing occupies keeps its swatch and its label, drops its
+   paragraph, and says so on one line. The marker is right-aligned so the
+   empties read as a column rather than as rows you have to parse. */
+.sbm-legend li.is-vacant .lab {
+  color: #55616f;
+}
+.sbm-legend .none {
+  flex: none;
+  margin-left: auto;
+  padding-top: 1px;
+  font-size: 10px;
+  color: #55616f;
 }
 .sbm-swatch {
   flex: none;
