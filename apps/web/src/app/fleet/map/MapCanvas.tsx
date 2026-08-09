@@ -36,7 +36,7 @@
  *    the rails; the canvas carries words, not tooltips.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -44,7 +44,6 @@ import {
   Handle,
   Position,
   ReactFlow,
-  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -174,136 +173,53 @@ function LaneNode({ data }: NodeProps) {
 
 const nodeTypes = { worker: WorkerNode, lane: LaneNode }
 
+/** The card and lane boxes, in graph coordinates. These are CSS constants
+ *  (`.sbm-node { width: 252px }`, `.sbm-lane { width: 640px }`) and are verified
+ *  against the DOM on prod: `offsetWidth/offsetHeight` report 252×82 and 640×41.
+ *  They live here because the frame has to be computable BEFORE first paint. */
+const NODE_W = 252
+const NODE_H = 82
+const LANE_W = 640
+const LANE_H = 41
+const FIT_PAD = 22
+
 /**
- * S2R — THE CANVAS FRAMES ITSELF. It does not ask the library to.
+ * The viewport, computed rather than requested.
  *
- * THE HISTORY, because this is the third attempt and the first two both looked
- * correct in review:
- *
- *   1. `fitView` from `onInit`, plus a ResizeObserver. Measured on prod: the
- *      same URL at the same viewport fitted at `matrix(0.981873,…,78.08,45)` on
- *      one load and landed on the **identity matrix** on three others, sampled
- *      every 100ms for four seconds. Driving the container 1034 → 620 → 1200 →
- *      1034px never moved it.
- *   2. `fitView` gated on `useNodesInitialized`, the documented pattern, which
- *      `EntityCanvas.tsx` has used since M.6. Shipped, deployed, measured — and
- *      the transform was STILL the identity matrix.
- *
- * WHAT THE THIRD MEASUREMENT FOUND, and it is the one that mattered: clicking
- * xyflow's own **Zoom In** control moved the transform to `1.2 @ -103.2,-56.8`,
- * while its own **Fit View** control did nothing at all. So pan/zoom is attached
- * and the container is real — `fitView` *specifically* is the no-op, because it
- * filters to nodes with measured dimensions and this graph never gets any. That
- * also explains attempt 2: `useNodesInitialized` is false for the same reason,
- * so the gate never opened and the fix could not fire.
- *
- * THE FIX IS TO STOP NEEDING THE MEASUREMENT. This canvas already computes every
- * node's position itself — layout is a function of topology alone, which is rule
- * 1 of this file. A canvas that owns its layout can own its frame: we read each
- * node's untransformed box straight from the DOM (`offsetWidth/offsetHeight`,
- * which CSS transforms do not affect), combine it with the positions we
- * computed, and set the viewport arithmetically.
- *
- * That makes the frame deterministic by construction rather than dependent on
- * when a third party decides it has measured something — which is exactly the
- * property rule 1 exists to protect, applied one level up.
+ * `zoom` is capped at 1.35 deliberately: a seven-node fleet blown up to fill the
+ * container stops looking like a diagram and starts looking like a zoomed
+ * screenshot. The floor matches the canvas's own `minZoom`.
  */
-function FitToContent({
-  hostRef,
-  sig,
-}: {
-  hostRef: React.RefObject<HTMLDivElement | null>
-  sig: string
-}) {
-  const { setViewport } = useReactFlow()
-
-  const fit = useCallback(() => {
-    const host = hostRef.current
-    if (!host) return
-    const { width: cw, height: ch } = host.getBoundingClientRect()
-    if (cw < 2 || ch < 2) return
-
-    /* Graph-space bounds, from the positions we set and the boxes the browser
-       laid out. `offsetWidth/Height` is the untransformed layout size, so it is
-       already in graph coordinates whatever the current zoom is. */
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    const els = host.querySelectorAll<HTMLElement>('.react-flow__node[data-id]')
-    if (els.length === 0) return
-    for (const el of els) {
-      const m = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(el.style.transform)
-      if (!m) continue
-      const x = parseFloat(m[1])
-      const y = parseFloat(m[2])
-      minX = Math.min(minX, x)
-      minY = Math.min(minY, y)
-      maxX = Math.max(maxX, x + el.offsetWidth)
-      maxY = Math.max(maxY, y + el.offsetHeight)
-    }
-    if (!Number.isFinite(minX) || maxX <= minX || maxY <= minY) return
-
-    const PAD = 22
-    const w = maxX - minX
-    const h = maxY - minY
-    /* 1.35, not 1.6: a seven-node fleet blown up to the container's full height
-       stops looking like a diagram and starts looking like a zoomed screenshot.
-       The floor matches the canvas's own `minZoom`. */
-    const zoom = Math.max(0.3, Math.min(1.35, (cw - PAD * 2) / w, (ch - PAD * 2) / h))
-    setViewport(
-      { zoom, x: (cw - w * zoom) / 2 - minX * zoom, y: (ch - h * zoom) / 2 - minY * zoom },
-      { duration: 0 },
-    )
-  }, [hostRef, setViewport])
-
-  /*
-   * Retry until the node DOM exists, then fit once.
-   *
-   * Two animation frames were not enough, and that is the whole reason the
-   * first cut of this shipped still stuck at the identity matrix: xyflow
-   * renders its node elements on its own schedule, so `querySelectorAll` came
-   * back empty, `fit()` returned early, and — with `sig` unchanged and the
-   * container never resizing — nothing ever asked again. A fit that runs once
-   * at a moment you do not control is the same bug in a new place, which is
-   * exactly what the previous two attempts were.
-   *
-   * Bounded at ~1s so a genuinely empty graph costs 60 idle frames and not a
-   * permanent rAF loop.
-   */
-  useEffect(() => {
-    let frame = 0
-    let tries = 0
-    const attempt = () => {
-      const host = hostRef.current
-      const ready = host != null && host.querySelector('.react-flow__node[data-id]') != null
-      if (ready) {
-        fit()
-        return
-      }
-      if (tries++ > 60) return
-      frame = requestAnimationFrame(attempt)
-    }
-    frame = requestAnimationFrame(attempt)
-    return () => cancelAnimationFrame(frame)
-  }, [sig, fit, hostRef])
-
-  useEffect(() => {
-    const el = hostRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    let frame = 0
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(fit)
-    })
-    ro.observe(el)
-    return () => {
-      cancelAnimationFrame(frame)
-      ro.disconnect()
-    }
-  }, [hostRef, fit])
-
-  return null
+function frameFor(
+  pos: Map<string, { x: number; y: number }>,
+  lanes: Array<{ y: number }>,
+  box: { w: number; h: number },
+): { x: number; y: number; zoom: number } {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const p of pos.values()) {
+    minX = Math.min(minX, p.x)
+    minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x + NODE_W)
+    maxY = Math.max(maxY, p.y + NODE_H)
+  }
+  for (const l of lanes) {
+    minX = Math.min(minX, 0)
+    minY = Math.min(minY, l.y)
+    maxX = Math.max(maxX, LANE_W)
+    maxY = Math.max(maxY, l.y + LANE_H)
+  }
+  if (!Number.isFinite(minX) || box.w < 2 || box.h < 2) return { x: 0, y: 0, zoom: 1 }
+  const w = Math.max(1, maxX - minX)
+  const h = Math.max(1, maxY - minY)
+  const zoom = Math.max(0.3, Math.min(1.35, (box.w - FIT_PAD * 2) / w, (box.h - FIT_PAD * 2) / h))
+  return {
+    zoom,
+    x: (box.w - w * zoom) / 2 - minX * zoom,
+    y: (box.h - h * zoom) / 2 - minY * zoom,
+  }
 }
 
 /** Stable across mounts: the same fleet always draws the same picture. */
@@ -552,7 +468,55 @@ export function MapCanvas({
     [edges, windowLabel, selectedEdgeId],
   )
 
+  /*
+   * THE FRAME, and this is the fourth attempt — the first three all shipped
+   * looking correct and all left the viewport at the identity matrix.
+   *
+   *   1. `fitView` from `onInit` + a ResizeObserver.
+   *   2. `fitView` gated on `useNodesInitialized`, the documented pattern.
+   *   3. `setViewport` with arithmetic of our own, retried until the node DOM
+   *      existed.
+   *
+   * What the measurements finally established, on prod: xyflow's own **Zoom In**
+   * control moves the transform, its own **Fit View** control does not, and
+   * neither `fitView` NOR `setViewport` called from a child of `<ReactFlow>` has
+   * any effect. Every node carries `visibility: hidden` inline — permanently,
+   * not transiently as this file previously assumed — which is xyflow's
+   * not-yet-measured state, so `node.measured` is never populated and every API
+   * that filters on it is a no-op.
+   *
+   * So the viewport is not requested at all. It is COMPUTED BEFORE RENDER and
+   * handed over as `defaultViewport`, which is a plain prop and cannot be
+   * defeated by store timing. This canvas already computes every node position
+   * itself — rule 1 — so it can compute its own frame from the same numbers;
+   * the card and lane sizes are CSS constants, checked against the DOM.
+   *
+   * The container size is quantised into 40px buckets before it reaches the
+   * remount key, so a drag-resize costs a handful of reframes rather than one
+   * per pixel, and a poll — which changes neither the topology nor the box —
+   * costs none at all.
+   */
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [box, setBox] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const read = () => {
+      const r = el.getBoundingClientRect()
+      const w = Math.round(r.width / 40) * 40
+      const h = Math.round(r.height / 40) * 40
+      setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }))
+    }
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const view = useMemo(
+    () => frameFor(positions.pos, positions.lanes, box),
+    [positions, box],
+  )
 
   return (
     <div
@@ -563,7 +527,10 @@ export function MapCanvas({
       aria-label="Fleet map. Use Tab to move between workers, Left and Right arrows to follow the work, Enter to open one."
     >
       <ReactFlow
-        key={hash}
+        /* The box is in the key so a genuine resize reframes; `hash` is in it so
+           a topology change does. A poll changes neither. */
+        key={`${hash}@${box.w}x${box.h}`}
+        defaultViewport={view}
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
@@ -586,7 +553,6 @@ export function MapCanvas({
         onEdgeClick={(_e, edge) => onSelectEdge(edge.id === selectedEdgeId ? null : edge.id)}
         onPaneClick={() => onSelect(null)}
       >
-        <FitToContent hostRef={wrapRef} sig={hash} />
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} className="sbm-bg" />
         <Controls showInteractive={false} />
       </ReactFlow>
