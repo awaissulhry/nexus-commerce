@@ -175,21 +175,30 @@ const sentenceCase = (s: string) => s.replace(/^./, (c) => c.toUpperCase())
  * the reason these rows are thinner than a fleet worker's.
  */
 interface Origin {
+  /**
+   * The MID-SENTENCE form, always — "the price watchdog", not "The price
+   * watchdog". S5.6 shipped a list reading "The listing quality keeper and The
+   * price watchdog": the strings were sentence-start forms and the list needed
+   * them mid-sentence. Lower-casing at the call site is the fragile fix (it
+   * mangles any proper noun that ever enters this map), so the map stores one
+   * grammatical form and `sentenceCase()` derives the other where a sentence
+   * actually begins.
+   */
   name: string
   what: string
 }
 const NO_HISTORY = 'so there is no worker page and no track record for it'
 const OUTSIDE_ORIGINS: Record<string, Origin> = {
   'manual-action': {
-    name: 'Someone using the copilot',
+    name: 'someone using the copilot',
     what: `a person rather than a worker, ${NO_HISTORY}`,
   },
   'pricing-watchdog': {
-    name: 'The price watchdog',
+    name: 'the price watchdog',
     what: `a scheduled check that watches your prices and runs outside the fleet, ${NO_HISTORY}`,
   },
   'listing-quality-keeper': {
-    name: 'The listing quality keeper',
+    name: 'the listing quality keeper',
     what: `a scheduled check that watches listing quality and runs outside the fleet, ${NO_HISTORY}`,
   },
 }
@@ -204,14 +213,14 @@ function listNames(names: string[]): string {
 function originOf(key: string | null): Origin {
   if (!key)
     return {
-      name: 'Something we cannot identify',
+      name: 'something we cannot identify',
       what: 'nothing on the run records which producer it was',
     }
   return (
     OUTSIDE_ORIGINS[key] ?? {
       /* Never the raw key. FX.1's rule for this section is names, not IDs, and
          S6 already closed two other doors onto the same defect. */
-      name: sentenceCase(humanTool(key)),
+      name: humanTool(key),
       what: `a system that runs outside the fleet, ${NO_HISTORY}`,
     }
   )
@@ -934,7 +943,7 @@ function OutsideQueue({
           {known.length > 0 ? (
             <>
               {' '}
-              {listNames(names)} can send them, and{' '}
+              {sentenceCase(listNames(names))} can send them, and{' '}
               {armed.length === 0
                 ? known.length === 1
                   ? 'it is switched off.'
@@ -1010,7 +1019,7 @@ function OutsideQueue({
                     construction rather than by lower-casing a display string
                     and hoping nothing in it was a proper noun. */}
                 <p className="aq-outorigin">
-                  <strong>{originOf(a.originKey).name}</strong> asked for this —{' '}
+                  <strong>{sentenceCase(originOf(a.originKey).name)}</strong> asked for this —{' '}
                   {originOf(a.originKey).what}.
                 </p>
                 <ApprovalCard
@@ -1030,7 +1039,7 @@ function OutsideQueue({
                   labels={labels}
                   /* One source for the name, so the origin line above the card
                      and the card's own first words can never disagree. */
-                  workerName={originOf(a.originKey).name}
+                  workerName={sentenceCase(originOf(a.originKey).name)}
                   busy={busy}
                   canExecute={a.canExecute}
                   onDecide={onDecide}
