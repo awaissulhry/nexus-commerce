@@ -990,6 +990,10 @@
 /* The built-in has fewer facts, so its description spans the columns it has
    nothing to put in — the state column stays where it is. */
 .wf-vrow.is-builtin .wf-vname { grid-column: 2 / 5; }
+/* A grid stretches its items, which turned a 34.6px badge into a 109.8px bar —
+   the same shape as the S1R chip defect one container type over. A badge hugs
+   its text; only the columns are shared. */
+.wf-vrow > .wf-vbadge { justify-self: start; }
 
 .wf-vauthor,
 .wf-vwhen {
