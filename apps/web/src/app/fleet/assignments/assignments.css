@@ -742,6 +742,16 @@
   color: #35507a;
   margin-bottom: 16px;
 }
+.as-toasttext { flex: 1 1 auto; }
+.as-toastx {
+  border: none;
+  background: none;
+  color: #35507a;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  flex: none;
+}
 
 /* ── S3.c · the run table ─────────────────────────────────────────────────
    "How it went" took 1132px of 1614 — 70% of the table — because it printed

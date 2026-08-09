@@ -88,7 +88,17 @@ export function AssignmentClient({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmStart, setConfirmStart] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  /**
+   * S3.e — the undo AS-S5 promised and nobody built.
+   *
+   * The study's own words: *"Close and Cancel apply immediately with no
+   * dialog, and are reversible — a 6-second 'Closed. Undo' toast plus a real
+   * Reopen route. Linear tolerates no-confirm only because it ships universal
+   * undo; copy the pair or neither."* The Reopen route shipped at AS.1. The
+   * undo half never did, so Close and Cancel produced no feedback at all —
+   * half of a pair the study said to take whole or leave whole.
+   */
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null)
 
   const load = useCallback(async () => {
     const res = await fetch(`${getBackendUrl()}/api/agent/fleet/assignments/${id}`, {
@@ -112,7 +122,12 @@ export function AssignmentClient({ id }: { id: string }) {
   )
 
   const act = useCallback(
-    async (path: string, body?: unknown, method = 'POST') => {
+    async (
+      path: string,
+      body?: unknown,
+      method = 'POST',
+      done?: { text: string; undo?: () => void },
+    ) => {
       setBusy(path)
       try {
         const res = await fetch(
@@ -137,8 +152,10 @@ export function AssignmentClient({ id }: { id: string }) {
           router.push('/fleet/assignments')
           return
         }
-        if (j.alreadyRunning) setToast('A run was already open — showing it.')
-        else if (j.haltedReason) setToast('It stopped before spending anything. See why below.')
+        if (j.alreadyRunning) setToast({ text: 'A run was already open — showing it.' })
+        else if (j.haltedReason)
+          setToast({ text: 'It stopped before spending anything. See why below.' })
+        else if (done) setToast(done)
         await load()
       } catch (e) {
         setError(String(e))
@@ -344,7 +361,12 @@ export function AssignmentClient({ id }: { id: string }) {
             <button
               className="acr-btn"
               disabled={!!busy || running}
-              onClick={() => act('/close')}
+              onClick={() =>
+                act('/close', undefined, 'POST', {
+                  text: 'Closed. Its runs and findings are kept.',
+                  undo: () => act('/reopen'),
+                })
+              }
               /* S3.e — the list's row menu disables Close during a run with
                  this sentence; this page used to offer it. Two surfaces
                  disagreeing about one action on one object is worse than
@@ -362,7 +384,12 @@ export function AssignmentClient({ id }: { id: string }) {
             <button
               className="acr-btn"
               disabled={!!busy}
-              onClick={() => act('/cancel')}
+              onClick={() =>
+                act('/cancel', undefined, 'POST', {
+                  text: 'Cancelled. It never ran, and nothing was spent.',
+                  undo: () => act('/reopen'),
+                })
+              }
               title="You called it off before it ran. Kept apart from Closed on purpose, and reversible."
             >
               <X size={13} /> Cancel
@@ -400,10 +427,23 @@ export function AssignmentClient({ id }: { id: string }) {
       </div>
 
       {toast && (
-        <div className="as-toast">
-          {toast}{' '}
-          <button className="acr-pg-sortbtn" onClick={() => setToast(null)}>
-            OK
+        <div className="as-toast" role="status">
+          <span className="as-toasttext">{toast.text}</span>
+          {toast.undo && (
+            <button
+              className="acr-btn"
+              disabled={!!busy}
+              onClick={() => {
+                const u = toast.undo
+                setToast(null)
+                u?.()
+              }}
+            >
+              <RotateCcw size={13} /> Undo
+            </button>
+          )}
+          <button className="as-toastx" onClick={() => setToast(null)} aria-label="Dismiss">
+            <X size={13} />
           </button>
         </div>
       )}
