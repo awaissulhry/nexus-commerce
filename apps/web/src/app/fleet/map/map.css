@@ -1905,6 +1905,30 @@
 
 /* ── M3 · the inspector rail ───────────────────────────────────────────── */
 
+/*
+ * S4.a — THIS RAIL HAD NEVER BEEN CONTRAST-CHECKED, IN ANY STATE.
+ *
+ * S2R swept the canvas and header; S3R swept the OVERLAY rail to 0 of 25. The
+ * inspector is a different component and nobody had measured it. Most of its
+ * content also cannot occur on a fleet that is switched off, so the states below
+ * were forced with a synthetic payload and measured on production:
+ *
+ *   the fleet at a glance   16 of 23 failing        a worker        21 of 35
+ *   a handoff (findings)    18 of 39                a handoff (plan) 9 of 17
+ *   entity, nothing         4 of 4                  entity, selected 15 of 29
+ *
+ * Three greys account for nearly all of it — and the faintest of them is where
+ * the safety facts live. `.sbm-dim` at 2.50:1 was carrying "cannot go above
+ * OBSERVE", the whole severity breakdown, and lifetime spend.
+ *
+ *   #9aa5b3  2.50:1   h4 headings · .sbm-dim · the roll-up meta · the key
+ *   #8a95a3  3.04:1   every field label · neutral status words
+ *   #7d879a  3.62:1   the panel title · hint · note
+ *
+ * All three become #55616f — 6.31:1 on this rail's white, and the token S1R
+ * established for exactly this role.
+ */
+
 .sbm-rail {
   min-height: 0;
   display: flex;
@@ -1928,12 +1952,12 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #7d879a;
+  color: #55616f; /* was #7d879a = 3.62:1 */
 }
 .sbm-rail-close {
   border: 0;
   background: none;
-  color: #8a95a3;
+  color: #55616f; /* was #8a95a3 = 3.04:1, on an icon-only control */
   cursor: pointer;
   display: flex;
   padding: 2px;
@@ -1955,7 +1979,7 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1 */
 }
 .sbm-rail-body h4:first-child {
   margin-top: 0;
@@ -1965,7 +1989,7 @@
   margin: 0 0 10px;
   font-size: 11.5px;
   line-height: 1.5;
-  color: #7d879a;
+  color: #55616f; /* was #7d879a = 3.62:1 */
 }
 .sbm-rail-reason {
   margin: 8px 0 4px;
@@ -1996,7 +2020,7 @@
 .sbm-rail-id .ky {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10.5px;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1 */
 }
 
 .sbm-row {
@@ -2009,7 +2033,7 @@
 .sbm-row .k {
   flex: none;
   width: 108px;
-  color: #8a95a3;
+  color: #55616f; /* was #8a95a3 = 3.04:1 — every field label in the panel */
 }
 .sbm-row .v {
   flex: 1 1 auto;
@@ -2025,8 +2049,10 @@
   gap: 6px;
   align-items: baseline;
 }
+/* ⚠ Not decoration. Measured, this class carries the autonomy CEILING
+   ("cannot go above OBSERVE"), the severity breakdown, and lifetime spend. */
 .sbm-dim {
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1 */
 }
 .sbm-warnline {
   width: 100%;
@@ -2065,15 +2091,15 @@
   font-size: 10.5px;
   font-weight: 600;
 }
-.sbm-rail-listbtn .st.tone-neutral { color: #8a95a3; }
+.sbm-rail-listbtn .st.tone-neutral { color: #55616f; } /* was #8a95a3 = 3.04:1 */
 .sbm-rail-listbtn .st.tone-good { color: #2f855a; }
 .sbm-rail-listbtn .st.tone-busy { color: #2b6cb0; }
-.sbm-rail-listbtn .st.tone-warn { color: #b7791f; }
+.sbm-rail-listbtn .st.tone-warn { color: #9a6410; } /* was #b7791f = 3.64:1 at 10.5px */
 .sbm-rail-listbtn .st.tone-bad { color: #c53030; }
 .sbm-rail-listbtn .meta {
   grid-column: 1 / -1;
   font-size: 10.5px;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1 */
 }
 
 .sbm-drops {
