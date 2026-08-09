@@ -1567,7 +1567,11 @@
   height: 11px;
   margin-top: 2px;
   border-radius: 3px;
-  background: #c3ccd8;
+  /* `background-color`, not the `background` shorthand — the shorthand resets
+     `background-image`, which is how `ov-nodata` draws its hatch. The fallback
+     is only reachable by the entity legend's `rel-*` swatches, which set their
+     own colour. */
+  background-color: var(--ov, #c3ccd8);
   border: 1px solid rgba(28, 37, 48, 0.08);
 }
 
@@ -1595,50 +1599,65 @@
  * with nothing to measure is not the bottom of the scale. An edge with no
  * traffic is not a fast edge; a worker that never ran is not a cheap worker.
  */
+/*
+ * S3R — ONE DECLARATION PER BUCKET, WHICH IS WHAT THE COMMENT ABOVE ALWAYS
+ * CLAIMED.
+ *
+ * It said "a colour changed here changes both". It did not: every colour was
+ * written TWICE — once as `.sbm-swatch.ov-X { background }` and again, eleven
+ * lines later, as `.sbm-node.ov-X { border-left-color }`. One class, two
+ * declarations, and nothing but care keeping them equal.
+ *
+ * They were equal; I checked all eleven pairs on prod. `ov-nodata` was NOT:
+ * the legend hatched `#eef2f6` at a 3px/6px pitch and the card hatched
+ * `rgba(200,210,222,0.16)` at 4px/8px. Same bucket, two different textures —
+ * the legend's noticeably stronger than the card it was explaining. That is
+ * the drift the model exists to make impossible, and it had already happened
+ * in the one bucket nobody would think to check.
+ *
+ * So the VALUE lives on the bucket class and nowhere else, and the two
+ * consumers read it. Changing a colour is now one edit by construction.
+ *
+ * ⚠ The node consumer must out-specify `.sbm-node.tone-*` (0,2,0), which also
+ * sets `border-left-color`. `.sbm-node` alone is (0,1,0) and would LOSE
+ * wherever it sat in the file, so the list of pairs stays — but it carries no
+ * colours now, only the plumbing.
+ */
+.ov-nodata {
+  --ov: #c3ccd8;
+  --ov-hatch: repeating-linear-gradient(45deg, #eef2f6, #eef2f6 3px, #ffffff 3px, #ffffff 6px);
+}
+.ov-off { --ov: #b9c2ce; }
+.ov-observe { --ov: #6b8fc4; }
+.ov-propose { --ov: #b7791f; }
+.ov-auto { --ov: #2f855a; }
+.ov-good { --ov: #2f855a; }
+.ov-warn { --ov: #b7791f; }
+.ov-bad { --ov: #c53030; }
+.ov-cost0 { --ov: #dfe6ee; }
+.ov-cost1 { --ov: #b7cbe4; }
+.ov-cost2 { --ov: #6b8fc4; }
+.ov-cost3 { --ov: #2f5d94; }
+
 .sbm-swatch.ov-nodata,
 .sbm-node.ov-nodata {
-  background-image: repeating-linear-gradient(
-    45deg,
-    #eef2f6,
-    #eef2f6 3px,
-    #ffffff 3px,
-    #ffffff 6px
-  );
-}
-.sbm-node.ov-nodata {
-  border-left-color: #c3ccd8;
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(200, 210, 222, 0.16),
-    rgba(200, 210, 222, 0.16) 4px,
-    #ffffff 4px,
-    #ffffff 8px
-  );
+  background-image: var(--ov-hatch);
 }
 
-.sbm-swatch.ov-off { background: #b9c2ce; }
-.sbm-swatch.ov-observe { background: #6b8fc4; }
-.sbm-swatch.ov-propose { background: #b7791f; }
-.sbm-swatch.ov-auto { background: #2f855a; }
-.sbm-swatch.ov-good { background: #2f855a; }
-.sbm-swatch.ov-warn { background: #b7791f; }
-.sbm-swatch.ov-bad { background: #c53030; }
-.sbm-swatch.ov-cost0 { background: #dfe6ee; }
-.sbm-swatch.ov-cost1 { background: #b7cbe4; }
-.sbm-swatch.ov-cost2 { background: #6b8fc4; }
-.sbm-swatch.ov-cost3 { background: #2f5d94; }
-
-.sbm-node.ov-off { border-left-color: #b9c2ce; }
-.sbm-node.ov-observe { border-left-color: #6b8fc4; }
-.sbm-node.ov-propose { border-left-color: #b7791f; }
-.sbm-node.ov-auto { border-left-color: #2f855a; }
-.sbm-node.ov-good { border-left-color: #2f855a; }
-.sbm-node.ov-warn { border-left-color: #b7791f; }
-.sbm-node.ov-bad { border-left-color: #c53030; }
-.sbm-node.ov-cost0 { border-left-color: #dfe6ee; }
-.sbm-node.ov-cost1 { border-left-color: #b7cbe4; }
-.sbm-node.ov-cost2 { border-left-color: #6b8fc4; }
-.sbm-node.ov-cost3 { border-left-color: #2f5d94; }
+.sbm-node.ov-nodata,
+.sbm-node.ov-off,
+.sbm-node.ov-observe,
+.sbm-node.ov-propose,
+.sbm-node.ov-auto,
+.sbm-node.ov-good,
+.sbm-node.ov-warn,
+.sbm-node.ov-bad,
+.sbm-node.ov-cost0,
+.sbm-node.ov-cost1,
+.sbm-node.ov-cost2,
+.sbm-node.ov-cost3 {
+  border-left-color: var(--ov);
+}
 
 /* ── M3 · the inspector rail ───────────────────────────────────────────── */
 
