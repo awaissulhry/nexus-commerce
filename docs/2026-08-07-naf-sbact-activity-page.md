@@ -3833,3 +3833,229 @@ file; only reading the file is.** The crash that followed was the useful part �
 it is what surfaced both the stub gap and the missing shape guard.
 
 **Thirty-four defects found on this page. Not one has been a type error.**
+
+---
+
+# PART 24 — S6 + S7 REBUILD: the footnote and the explainer
+
+**Status: STUDY ONLY. Nothing is built. Needs operator approval.**
+
+Stream tag `SB.ACT.S67R`. The last two unrebuilt sections, taken as one unit
+because they are the same act — the page explaining itself — and because
+between them they hold the last of the off-ladder type.
+
+---
+
+## 24.0 — What they are FOR
+
+> **S6:** Say out loud what this page is not showing, so a gap reads as a
+> **boundary** rather than a bug.
+>
+> **S7:** Teach the handful of words the page uses, to a reader who has just
+> seen them in context and not before.
+
+---
+
+## 24.1 — What is on screen today, measured
+
+### Three AA failures, and one of them is an irony
+
+Live prod, 1728×906:
+
+| | Size | Contrast |
+|---|---|---|
+| `.sba-notshown li` — **the whole body of S6** | 11.5px | **2.73** |
+| `.sba-notshown h3` | 12px | **4.05** |
+| `.sba-notshown a` | 11.5px | **4.40** |
+| `.sba-howtoggle` | 11.5px | 4.76 ✓ |
+| `.sba-howbody p` | 12.5px | 7.28 ✓ |
+
+**The section whose entire job is to say what the page is hiding is the least
+legible thing left on the page.** At 2.73:1 it is roughly the contrast S2's
+self-test note had before it was fixed, and S4's separators before those.
+
+### The last two off-ladder sizes live here
+
+**11.5px** (S6's list and S7's toggle) and **12.5px** (S7's body). S1 set
+20/13/12; S2, S3, S4 and S5 were each brought back to it. This is the last of
+it.
+
+### A claim that is no longer true
+
+S6 says, of the self-test:
+
+> *"…tick **the box** above to see them."*
+
+**There is no box.** S3R replaced the checkbox with a switch in a labelled
+`Counting` group inside the filter panel. The same six words are also in the
+shared glossary's `selftest` entry — *"Hidden by default; tick the box to see
+it"* — and that tooltip renders **on this page**, which is how it was found.
+
+### A claim that is missing entirely
+
+**S3 now hides a second population by default — 7 test runs — and S6 says
+nothing about it.** S6 exists to name what is missing; it currently names one of
+the two hidden populations. S7's fourth paragraph has the same gap: it explains
+the self-test as *"hidden by default"* and does not mention the test lane at
+all.
+
+That is the defect that matters here. The contrast is a legibility problem; this
+is a **truthfulness** problem, in the one section whose whole promise is that a
+silence on this page is deliberate.
+
+### Correctly absent, and worth recording as such
+
+Part 3's S6 list included *"(Runs grain only) From the newest 100 recorded
+runs."* It is not on screen and **should not be**: ACT.3 built the Runs grain on
+the timeline feed rather than `/agent/fleet/runs`, so the 100-row cap that
+sentence warned about does not apply. A footnote describing a cap that no longer
+exists would be its own defect.
+
+---
+
+## 24.2 — What the research says
+
+### A collapsed explainer earns its place, if its header answers one question
+
+[Progressive disclosure][pd] is Nielsen's, from 1995, and the accordion is its
+commonest form. The finding that matters for S7: the pattern works *"when the
+collapsed state communicates enough context that users can decide whether to
+expand"* — a good header answers **"What will I find if I click this?"** And:
+*"more than two disclosure levels often has low usability."*
+
+Ours reads **"How this page works" · "Read it"**. That answers the question, it
+is one level deep, and it is collapsed by default so it costs an experienced
+operator nothing. **This is a case where the research endorses what shipped** —
+S7's structure is right and only its type is wrong.
+
+**Steal:** nothing new. **Reject:** a tour, a modal, a first-run overlay — all
+rejected at ACT.6 and still rejected: they are dismissed once and never found
+again.
+
+### Fine print may be small; it may not be unreadable
+
+WCAG sets no minimum font size, and the convention for footnotes is smaller and
+quieter — but the guidance is explicit that footnotes and legal text *"should
+remain readable"*, and the **contrast floor does not move with the size**. All
+text must also survive **200% zoom** without loss of content.
+
+So the instinct behind S6's 11.5px was right and the execution crossed from
+*quiet* into *unreadable*. **Steal:** quieter than the list, by weight and
+colour. **Reject:** quieter by shrinking below the ladder.
+
+### Negative space, restated
+
+Part 2 already established this and it stands: every audited product ships a
+retention banner, and we have no retention policy, so printing one would invent
+a guarantee. CloudTrail's negative-space statement is the honest substitute, and
+S6 is it.
+
+---
+
+## 24.3 — The proposal
+
+### 24.3.1 S6 tells the truth about both populations
+
+The list becomes **derived from the two scope switches**, not one:
+
+| Scope state | What S6 says |
+|---|---|
+| both hidden *(the default)* | *"Two kinds of run are left out of the counts above: the **self-test**, which checks the fleet itself, and **test runs** from the Workflows page, which are rehearsals that wrote nothing. Both are switched on in **Filters**."* |
+| self-test shown only | names the test lane only |
+| test runs shown only | names the self-test only |
+| both shown | *"Nothing is being left out — you are looking at everything on record."* |
+
+The other three items are unchanged and still true: the Control Room owns the
+rules engines, the pre-fleet approvals live on the Approvals page, and nothing
+is deleted on a schedule.
+
+**No counts.** S1 states them, and a number that appears twice is a number that
+can disagree — this page's oldest rule.
+
+**"Tick the box" dies in both places.** The section says *"switched on in
+Filters"*, which is where the control now is.
+
+### 24.3.2 S7 names the second population
+
+Paragraph 4 currently teaches one hidden population. It teaches both:
+
+> **Two kinds of run are hidden by default.** The **self-test** checks that the
+> fleet itself works, so its findings are about our scheduled jobs rather than
+> your account. A **test run** is a rehearsal from the Workflows page: it read
+> real evidence and used a real model, but nothing it decided was written.
+> Between them they are most of the history on record, which is why they are
+> left out of the counts.
+
+Five paragraphs stay five. No new glossary term is needed — `selftest` exists
+and `preview-only` was minted by the Approvals stream.
+
+### 24.3.3 The type ladder, finished
+
+| | Now | Proposed |
+|---|---|---|
+| `.sba-notshown li` | 11.5px / 2.73 | **13px** / ≥ 4.5 |
+| `.sba-notshown h3` | 12px / 4.05 | 12px / ≥ 4.5 |
+| `.sba-notshown a` | 11.5px / 4.40 | 13px / ≥ 4.5 |
+| `.sba-howtoggle` | 11.5px | **12px** |
+| `.sba-howbody p` | 12.5px | **13px** |
+
+After this the page is **20 / 13 / 12 and nothing else**, for the first time.
+
+### 24.3.4 One shared file, one factual correction
+
+`glossary.tsx`'s `selftest` entry ends *"Hidden by default; tick the box to see
+it."* It is stale because S3R moved the control, and the tooltip renders on this
+page.
+
+This is **not a redefinition** — the locks doc's one-definition rule is intact;
+the term still means exactly what it meant. It is a six-word correction to a
+sentence about the UI. **Claim, correct, note, release**, per §3's protocol for
+that file.
+
+---
+
+## 24.4 — Every state
+
+| # | State | S6 renders |
+|---|---|---|
+| 1 | both populations hidden *(default)* | both named, with where the switches are |
+| 2 | self-test shown | the test lane named |
+| 3 | test runs shown | the self-test named |
+| 4 | both shown | *"Nothing is being left out"* |
+| 5 | Runs grain | identical — the grain changes what a row is, not what is excluded |
+
+| # | State | S7 renders |
+|---|---|---|
+| 6 | collapsed *(default)* | header + *Read it*, 82px |
+| 7 | open | five paragraphs, `<Term>` throughout, *Close* |
+| 8 | 200% zoom | both readable, nothing clipped — re-checked, since this is where small type fails first |
+
+---
+
+## 24.5 — The boundary
+
+**Against S1.** S1 counts; S6 names kinds. S6 prints no number.
+
+**Against S3.** S6 points at the switches and does not duplicate them. One
+control, one place — the rule S2 followed when it stopped its rows being
+controls.
+
+**Against the glossary.** S7 uses `<Term>`; it never restates a definition
+inline, because the one-definition rule is why `<Term>` exists.
+
+---
+
+## 24.6 — Sources
+
+[pd]: https://www.nngroup.com/videos/progressive-disclosure/
+
+**Progressive disclosure** · [NN/G — Progressive Disclosure][pd] (Nielsen, 1995;
+accordion headers must answer *"what will I find if I click this?"*; more than
+two levels reads poorly)
+
+**Fine print** · WCAG sets no minimum size; footnotes may be smaller but must
+remain readable, and the contrast floor does not move with the size. All text
+must survive 200% zoom.
+
+**In-repo** · live prod measurement at 1728×906, 2026-08-09 ·
+`glossary.tsx:175` · Part 2 (the retention-banner rejection)
