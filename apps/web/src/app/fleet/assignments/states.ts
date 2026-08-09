@@ -12,6 +12,15 @@
  * eight states, the reason string is what distinguishes them. If a tip is
  * ever weaker than its label, the page becomes eight words nobody can tell
  * apart.
+ *
+ * NAF.SB.AS-S4R — one word deliberately NOT used here: **"guard"**. It was the
+ * headline noun for `stopped` on two surfaces and was defined nowhere — not in
+ * the fleet glossary's 34 terms, not in a sentence, not anywhere an operator
+ * could reach. The audit's choice was to mint it or drop it, and dropping it
+ * costs nothing: the sentence already enumerates exactly what the guards are
+ * (a budget, the fleet halt, the kill switch, stale evidence), so the word was
+ * a label for a list that follows it. `GUARD_PREFIXES` below keeps the term —
+ * that is code naming a code concept, and no operator reads it.
  */
 
 export type AssignmentState =
@@ -81,9 +90,9 @@ export const ASSIGNMENT_STATES: Record<AssignmentState, StateDef> = {
   stopped: {
     key: 'stopped',
     label: 'Stopped',
-    tip: 'A guard stopped it on purpose — a budget, the fleet halt, the kill switch, or evidence too old to trust. The row names which one, and that is the thing to fix.',
+    tip: 'Something stopped it on purpose — a budget, the fleet halt, the kill switch, or evidence too old to trust. The row names which one, and that is the thing to fix.',
     pageWhy:
-      'A guard stopped it on purpose, before it could finish. The reason is below, and it is the thing to fix.',
+      'Something stopped it on purpose, before it could finish. The reason is below, and it is the thing to fix.',
     tone: 'warn',
     open: true,
     tile: true,
