@@ -3745,3 +3745,91 @@ future consumer, not a new contract.
 **In-repo** · `design-system/components/Drawer.tsx` (its own record of the
 41-Tab measurement and the `overlay` prop) · `design-system/styles/components.css`
 · live prod measurement at 1728×906
+
+---
+
+## 23.8 — S5R execution record (2026-08-09)
+
+Shipped in **`5dc7572e5`**, prod-verified. Both drawers render the DS `Drawer`;
+every line of content is unchanged.
+
+### The dialog contract, before and after
+
+| WAI-ARIA APG requirement | Before | After |
+|---|---|---|
+| Focus moves into the dialog on open | **No** (`activeElement` = `BODY`) | **Yes** |
+| Tab cycles within the dialog | **No** — 51 presses to reach it | **Trapped** |
+| Focus returns to the opener on close | **No** | **Yes**, to the exact row |
+| Content behind is inert | **No** — 55 of 59 reachable | **Trapped** |
+| Escape closes | Yes | Yes |
+
+Verified on prod by focusing a row, activating it, pressing Escape, and checking
+`document.activeElement` is the same row.
+
+### Two shared files, both claimed, both fixing every consumer
+
+1. **`components.css`** — `.h10-ds-drawer-b { overscroll-behavior: contain }`.
+   The DS drawer body scrolled the page behind it at the end of its own scroll.
+   One additive declaration; `contain` confirmed on prod.
+2. **`fleet-pages.css`** — the light pin is now `.fleet-surface, .fleet-portal`,
+   with `.fleet-surface` keeping its geometry in a second rule.
+
+**The second one is the finding worth carrying.** The pin works by re-declaring
+custom properties on an ancestor, so it reaches **descendants only** — and a DS
+`Drawer` portals to `<body>`. The moment the swap landed the panel rendered
+`rgb(24, 38, 59)` under the fleet's hard-coded near-black text: **black step
+labels on a navy panel.** That is the identical W.1 failure the pin was written
+for, arriving through the one door the pin cannot reach. Any fleet page that
+portals a DS component now needs `fleet-portal` on it; the values are shared,
+not copied, so the two cannot drift.
+
+### A robustness bug the stub exposed
+
+`RunDetail`'s header has always said *"an INCOMPLETE trace response has twice
+taken the worker page down through its error boundary, so every array here is
+guarded rather than assumed."* It then read `trace.run.trigger` without checking
+`run` existed.
+
+The stub had never served `/runs/:id/trace` — so **every previous verification of
+this page happened with the drawer unopened or pointed at the real API.** Opening
+it against the stub returned a 200 carrying `{ error: 'stub does not serve …' }`,
+and the whole page went to the error boundary. Both halves fixed: the stub serves
+the real trace, and a 200 with the wrong shape now shows *"That run came back in
+a shape this page cannot read."* Verified by shimming the response — page alive,
+drawer open, no boundary.
+
+**The lesson is about the harness.** A stub that answers unknown paths with a
+200 teaches a component to trust `r.ok`. The guard was written for arrays and
+the object slipped through the same door.
+
+### The 1,366-character error
+
+| | Before | After |
+|---|---|---|
+| Rendered | 1,366 chars, **322px** | 240 chars, **81px** |
+| Share of the drawer | **31%** | ~10% |
+| Drawer scroll height | 1,036px | **847px** |
+
+*Verbatim* is preserved and no longer first: **Show the whole message (1,366
+characters)** expands in place, and **Copy it** takes the whole string whatever
+is on screen — because the support case Part 3 protects is served by pasting,
+not by scrolling. Both verified on prod.
+
+### Type and contrast
+
+Six sizes (11.5 · 12 · 12.5 · 13 · 14 · 15) down to **12 · 13**, including
+pinning the DS drawer title's 15px exactly as S3R pinned the FilterBar's 18px.
+**Zero contrast failures** where there were five — plus `.sba-sev` at 10px,
+which four earlier sweeps missed because it renders only on runs that own
+findings.
+
+### One process failure of mine, recorded
+
+A Bash call carrying the container edit **was rejected before it executed**, and
+I read the tool error as a tool-only failure and re-ran just the type-check —
+which passed, because nothing had changed. I then spent two rounds measuring a
+component I had not actually edited. **A tool error is not evidence about the
+file; only reading the file is.** The crash that followed was the useful part —
+it is what surfaced both the stub gap and the missing shape guard.
+
+**Thirty-four defects found on this page. Not one has been a type error.**
