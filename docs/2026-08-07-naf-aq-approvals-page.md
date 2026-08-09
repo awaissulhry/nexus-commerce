@@ -3896,3 +3896,373 @@ floor, including under opacity.**
 **Not done, and deliberately:** the one-time first-approval band (§14.5 — it
 cannot fire while the queue is unreachable), and AQ.5, AQ.7, AQ.9, AQ.10, all
 of which would render nothing until Phase F moves one of §1.1's three walls.
+
+---
+
+# PART 15 — S6 DESIGN STUDY: the decision card
+
+**Status: AWAITING OPERATOR APPROVAL.** No code written. Stream tag `SB.AQ-S6R`.
+
+Scope: **AQ-S6 only** — `ApprovalCard.tsx` and its `aq-card*` rules. S1, S2, S4
+and S5's container are untouched; §15.8 handles the two sections that render
+this card.
+
+**Part 2 of this document already researched what goes ON this card** — the
+decision packet, Terraform's diff grammar, Radar's named insights, AP2's
+Max/Current/gap, the automation-bias findings. That work is not repeated. This
+part researches **how it should look and be read**, which the parent study
+barely touched.
+
+---
+
+## 15.0 — What S6 is FOR, in one sentence
+
+> **Let an operator who has never seen this screen answer three questions from
+> one card — what will change, what it costs if it is wrong, and can it be
+> undone — and make the safe answer no harder than the risky one.**
+
+The approved study calls this section "the entire product": every other section
+is a container for it, and it is the only one where getting the contents wrong
+produces a confident, well-designed, **wrong** decision.
+
+---
+
+## 15.1 — What is on screen today, measured
+
+The card renders live on production inside S4's worked example, so it can be
+measured without seeding. Prod, 1728×906, composited contrast (never declared —
+see §14.13).
+
+### 15.1.1 The hierarchy defect, quantified
+
+Ten blocks. "Visual weight" below is `font-size × (weight/400)` of the heaviest
+text in each block — a crude proxy, but enough to show the shape:
+
+| Block | Height | Weight |
+|---|---|---|
+| `aq-cardhead` | 45px | 21.1 |
+| **`aq-entity`** | 19px | **21.9 ← the heaviest thing on the card** |
+| **`aq-deltas`** — *what actually changes* | 43px | **18.8** |
+| `aq-effect` | 19px | 12.5 |
+| **`aq-noexec`** | **72px** | **21.0** |
+| **`aq-facts`** | **212px** | 17.9 |
+| `aq-recheck` | 35px | 17.2 |
+| `aq-editopen` | 19px | 12.0 |
+| **`aq-actions`** | 67px | **17.2** |
+| `aq-note` | 33px | — |
+
+Three findings fall straight out:
+
+1. **The whole card spans 12.0 → 21.9 — a 1.8× range across ten blocks.** That
+   is the "equal weight" failure [NN/g][nng] describes: when elements are
+   undifferentiated, the reader has no focus point and must read everything.
+2. **The delta — the thing being decided — is the third-heaviest**, below the
+   entity line and below the "changes nothing on Amazon" notice.
+3. **`aq-facts` is 212px of a 671px card — 32%** — and it is the *supporting
+   detail*. The delta gets 43px, **6.4%**. The card devotes five times more
+   space to context than to the decision.
+
+### 15.1.2 Type and colour
+
+| | Measured | Reference |
+|---|---|---|
+| Distinct font sizes | **6** (10.5 / 11 / 11.5 / 12 / 12.5 / 13) | [NN/g][nng]: *"Use no more than 3 sizes"* |
+| Size/weight pairs | **11** | S1, S2 and S4 each ship **2 sizes** |
+| Distinct hex values in the card's CSS | **28** | the brief estimated ~15 |
+| Composited contrast failures, this shape | **0** | (the states not rendered here are §15.10's build check) |
+
+### 15.1.3 Two defects not in the brief's list, both from reading the code
+
+- **The optional note renders BELOW the action row that consumes it.**
+  `.aq-note` is the last element; Apply and Reject are above it. An operator who
+  wants to leave a note has to scroll past the buttons, type, then come back up.
+  Both verbs read `note`, so the field is an input to a decision placed after
+  the decision.
+- **Two primary buttons render simultaneously.** `.acr-btn.go` is used for both
+  Apply and the edit panel's *"Use €0.45 instead"*. With the editor open, the
+  card shows two identical green primaries. [Primer][primer] is explicit:
+  *"Never put more than one in a group of buttons, and rarely use more than one
+  per page."*
+
+---
+
+## 15.2 — Research: how a decision card should be READ
+
+### A · Hierarchy is made by three sizes, not six
+
+[NN/g][nng] names the mechanisms — size, contrast, type treatment, spacing and
+grouping — and caps them: **no more than three sizes, no more than three
+contrast variations**. Its failure case is precisely §15.1.1: *"elements are all
+relatively equal in size and color"* → clutter and no focus point.
+
+**Steal:** three sizes, and let spacing and weight carry the rest.
+**Reject:** any new size introduced to solve a local problem — that is how six
+accumulated.
+
+### B · Friction should scale with reversibility, and low severity earns *none*
+
+[GitLab Pajamas][pajamas] tiers destructive actions and prescribes different
+friction for each: **high** severity ("difficult to undo or causes permanent
+data loss") gets a confirmation and a danger variant; **medium** gets a
+deliberate second step; **low** — *"consider adding no friction at all in order
+to streamline the interface."*
+
+**This is the evidence for re-tiering the tick.** AQ.3 already moved depth off
+`riskTier` onto reversibility × executability. Pajamas says the same thing from
+the other side and adds the part the card does not do: **the lowest tier should
+lose its friction entirely**, not merely have less.
+
+### C · Show a few named signals; put the rest one click away
+
+[Stripe Radar][radar] is the closest analogue in production. Its review surface
+shows a **risk insights** section with the decision-relevant signals — named,
+and quantified where a number is honest (the *fraud factor*: "3.5× more likely
+than average") — and everything else behind a single **"Show all insights"**
+control.
+
+Two properties worth copying exactly: signals are **named facts, not a score**,
+and the full set is **one control away, not fifteen blocks down**. This is also
+the automation-bias finding Part 2E already recorded — *present information
+rather than a recommendation, and position advice less prominently* — expressed
+as a layout.
+
+### D · One primary, and the safe path is the default
+
+[Primer][primer]: primary is *"highest-priority action; use sparingly. Never put
+more than one in a group of buttons."* [Pajamas][pajamas] positions cancel as
+the default path for destructive actions — *"positioning safety as the default"*.
+
+For this card the two verbs are not destructive-vs-safe in the usual sense:
+**approving spends money and rejecting does not**, so the "safe default" is
+reject, and the design must not make it look secondary in the sense of *lesser*.
+AQ.4 already made both one click; the visual job is to keep them **equal in
+effort and unequal in emphasis** — one primary (Apply, carrying its own
+consequence) and one clearly-available alternative, never a greyed-out
+afterthought.
+
+---
+
+## 15.3 — The reading order, and the mechanism for each step
+
+**This is the core of the study.** Five stops, in order, with what makes the eye
+land there.
+
+| # | What the eye hits | Mechanism |
+|---|---|---|
+| **1** | **The delta** — `bid €0.31 → €0.84` | Largest type on the card (the *only* large size), first in the flow, isolated by space above and below. Today it is third-heaviest |
+| **2** | **The thing it acts on** — *“casco integrale” (EXACT) in AIREON-IT-Generic* | Directly beneath the delta, one size down, no chrome. Today it is ABOVE the delta and heavier than it |
+| **3** | **What it costs if wrong, and whether it can be undone** | One sentence, body size, immediately under the entity — *promoted out of the collapsed `aq-facts` block*, where it is currently the fourth item in a 212px `<dl>` |
+| **4** | **The two verbs** | Isolated by a rule and the largest whitespace gap on the card. One primary, stating its own consequence |
+| **5** | Everything else — evidence, track record, expiry detail, recheck, edit | One tertiary row and one disclosure. Present, never competing |
+
+**The single most important inversion:** today the card's heaviest elements are
+the entity line and the "changes nothing on Amazon" notice, and the delta is
+third. **The delta is the decision.** Everything else is context for it.
+
+---
+
+## 15.4 — The proposed design
+
+### 15.4.1 The shape
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│ Bid tuner wants to change a bid              high risk · 18h left · 6m│  ← context row
+│                                                                        │
+│   bid   €0.31 → €0.84                                          +171%   │  ← 1. THE DELTA
+│   on “casco integrale” (EXACT) in AIREON-IT-Generic · IT                │  ← 2. the entity
+│                                                                        │
+│   If this is wrong you pay up to €0.53 more per click until you change  │  ← 3. consequence
+│   it back. It can be put back — the previous value is recorded.         │     + reversibility
+│                                                                        │
+│   Why this was proposed ⌄                                              │  ← 5. one disclosure
+│ ───────────────────────────────────────────────────────────────────── │
+│   Note (optional)  [________________________________]                  │  ← input BEFORE verbs
+│   [ Apply — bid €0.31 → €0.84 ]   [ Reject ]        Not now ⌄          │  ← 4. THE VERBS
+│   Check it is still true  ·  Right idea, wrong number?                  │  ← tertiary row
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+### 15.4.2 What moves, and why
+
+| Change | Reason |
+|---|---|
+| Delta promoted to first and largest | §15.3. It is the decision |
+| Entity demoted to a line under the delta | It answers *on what*, not *what* |
+| **Consequence + reversibility promoted out of `aq-facts`** | They are two of the three questions §15.0 requires an operator to answer, and they are currently the 2nd and 3rd items of a collapsed 212px list |
+| **`aq-noexec` (72px banner) collapses INTO the consequence line** | It *is* a consequence statement. When the action cannot execute, the consequence sentence says so; when it can, it states the real cost. One slot, one sentence, never two competing blocks |
+| Evidence, track record, expiry detail → one **"Why this was proposed"** disclosure | Radar's *Show all insights*. Named signals, one control away |
+| Recheck + edit → one tertiary row **below** the verbs | They are rare. Today recheck renders *above* the primary action |
+| **Note moves above the verbs** | It is an input to the decision; it currently sits after it |
+| **One primary button, ever** | Primer. The edit panel's confirm becomes a default button inside its own panel |
+| The dead disclosure is **deleted** | §15.5 defect 5 |
+
+### 15.4.3 Every card shape
+
+**(a) fleet bid change — high risk, reversible, CANNOT execute**
+```
+Bid tuner wants to change a bid                    high risk · 18h left
+  bid  €0.31 → €0.84                                            +171%
+  on “casco integrale” (EXACT) in AIREON-IT-Generic · IT
+  Approving records your decision and teaches the fleet — it changes
+  nothing on Amazon, because this action has no way to run yet.
+  Why this was proposed ⌄
+  ───────────────────────────────────────────────────────────────────
+  [ Apply — bid €0.31 → €0.84 ]  [ Reject ]            Not now ⌄
+```
+*No tick: a yes cannot do anything. The consequence slot carries the honest
+ceiling instead of a cost.*
+
+**(b) price change — high risk, reversible, CAN execute**
+```
+  base price  €49.00 → €39.00                                     −20%
+  on SKU XV-AIR-BLK-L
+  If this is wrong you sell at €10.00 under your intended price until
+  you change it back. It can be put back — the previous value is recorded.
+  [ Apply — base price €49.00 → €39.00 ]  [ Reject ]
+```
+
+**(c) customer message — irreversible, CAN execute**
+```
+  message                                                          new
+  to jane@example.com (amazon.it)
+  This cannot be taken back once it runs, by any means.
+  ☐ I have read what this does — and that it cannot be undone.
+  [ Apply — send this message ]  [ Reject ]
+```
+*The tick is the only friction on the card, and only here: Pajamas' high tier.*
+
+**(d) came back from staleness** — a band above the delta, neutral, not alarm:
+*"You approved this before and it did not run — the bid had already moved.
+Decide again with the facts as they are now."*
+
+**(e) came back from a failed execution** — the same slot, danger tone, and the
+uncomfortable sentence kept: *"…nothing here can tell you whether any part of it
+took effect, so check before deciding again."*
+
+**(f) mid-edit** — the editor opens **in place of the delta**, so the number
+being changed is where the number was. Its confirm is a *default* button, not a
+second primary.
+
+**(g) mid-reject** — the coded reasons replace the verb row rather than
+appearing below it, so the card never shows two competing action areas.
+
+**(h) no delta, no evidence** — the honest fallback, unchanged in substance:
+*"This action did not describe itself — read the details before deciding."* It
+occupies the delta slot, at delta size, because its absence is the most
+important fact on the card.
+
+### 15.4.4 Type, colour and contrast
+
+**Three sizes** (NN/g's cap), from S1/S2/S4's ladder:
+
+| Role | Size / weight |
+|---|---|
+| The delta | **17 / 600** — the only large size on the card |
+| Everything else | **13** at 400/600 |
+| Chips and the context row | **11.5** |
+
+**Colour means exactly one thing on this card: a state that is not normal.**
+28 hex values become a set of four roles — ink, muted ink, a rule, and one
+danger tone for the two states that are genuinely wrong (a failed execution, and
+a stale hand-back). Risk tier and reversibility stop being coloured chips and
+become **words in the context row**, because they are classifications, not
+alarms — the same call S2 made about its amber.
+
+Every value re-measured **composited** (§14.13), and no shared class forked: if
+`.acr-btn` needs a variant, it is added at source and the call-site count
+reported, per the precedent set by `.acr-btn.go` and `.acr-sub`.
+
+---
+
+## 15.5 — Verdict on each of the nine defects
+
+| # | Defect | Verdict |
+|---|---|---|
+| 1 | No hierarchy | **FIX** — measured at a 1.8× weight range across ten blocks, with the delta third. §15.3 is the whole answer |
+| 2 | Type scale unaudited | **FIX** — 6 sizes / 11 pairs → 3 sizes, against NN/g's cap of three |
+| 3 | Ad-hoc colour | **FIX** — 28 hex values (more than the brief's estimate) → four roles, one meaning |
+| 4 | Three semantics, one weight | **FIX** — risk and reversibility become words in the context row; only the expiry clock stays a chip, because only it is time-critical |
+| 5 | A dead disclosure | **DELETE IT.** `heavy` is true for every fleet tool, so the compact lane has never rendered. Pajamas' low tier says the answer is *no friction*, not *hidden content* — the facts move into the always-visible consequence line and the one disclosure |
+| 6 | Overloaded action area | **FIX** — one primary; note moved above the verbs; recheck and edit demoted to a tertiary row; reject codes *replace* the verb row rather than stacking under it |
+| 7 | Contrast re-measured composited | **DONE for this shape — 0 failures.** The states not rendered by S4's example (comeback, reject codes, edit panel, the tick) require seeded rows and are §15.10's build check. **Not claimed until then** |
+| 8 | Not verified responsive | **FIX** — nine widths, 200% zoom, keyboard, as S1/S2/S4 |
+| 9 | The card is not one card | **FIX, and it is measurable:** two `.acr-btn.go` render simultaneously when the editor is open, which is the clearest symptom of three phases each adding their own visual language |
+
+---
+
+## 15.6 — The two sections that render this card
+
+**S4's worked example.** Every S6 phase changes it, because it renders the real
+component — which was the point. **Each phase re-verifies S4's empty state and
+says so.** If the redesign makes the example misleading, fixing it is in scope.
+
+**S5's outside queue** renders this card for the four tools that CAN reach
+Amazon. **The design deliberately differs in exactly one place: the consequence
+sentence.** When the action can execute it states the real cost; when it cannot
+it states the honest ceiling. Same slot, same size, same position — so the two
+cases are comparable rather than differently-shaped, and an operator who has
+learned one has learned the other. **No other difference**, and specifically not
+a different colour or border, because "this one is real" is a property of the
+sentence, not of the chrome.
+
+---
+
+## 15.7 — Tooltip inventory
+
+| Term | Entry | Decision |
+|---|---|---|
+| `risk-tier` | ✓ | keep — moves to the context row, tag stays |
+| `undo-window` | ✓ | in the drawer/consequence copy, tagged once |
+| `preview-only` | ✓ | on shape (a)'s consequence sentence |
+| `exemplar` (precedent) | ✓ | in the disclosure, where the track record lives |
+| *reversibility words* — "can be put back", "only compensated for", "cannot be undone" | ✗ | **plain English, deliberately untagged.** They ARE the definition; a tooltip on a definition is a loop |
+| *staleness* | ✓ | on the comeback band (d) |
+| **New terms needed** | — | **none** |
+
+---
+
+## 15.8 — What I am explicitly NOT doing
+
+- **S1, S2, S3, S4's container, S5's container, S7–S10.**
+- **No API change, no migration, no new endpoint.** Everything proposed is a
+  rendering change over data the card already receives.
+- **Not moving `toolCardFor`.** The vocabulary stays imported from
+  `DecisionCard.tsx`; moving it is the Overview's migration, not this stream's.
+- **No glossary edits.**
+- **Not forking a shared class.** If `.acr-btn` needs a variant it is added at
+  source with the call-site count reported.
+- **Not rewriting the copy.** The sentences AQ.3/AQ.4/AQ.8 wrote are good and
+  were researched; this is a design pass over what they say, not a rewrite of
+  it. The exceptions are the consequence line (which merges two existing
+  sentences) and anything that becomes false by moving.
+
+---
+
+## 15.9 — Build order
+
+| Phase | What | Re-verifies S4? |
+|---|---|---|
+| **S6.a** | The reading order: delta promoted and enlarged, entity demoted, consequence line created (absorbing `aq-noexec`), `aq-facts` collapsed into one disclosure | yes |
+| **S6.b** | The action area: one primary, note above the verbs, recheck/edit to a tertiary row, reject codes replacing the verb row, the dead disclosure deleted | yes |
+| **S6.c** | Type and colour: 6 sizes → 3, 28 hex → four roles, risk/reversibility to words | yes |
+| **S6.d** | Every shape seeded and measured — (a)–(h) — plus nine widths, 200% zoom, keyboard, composited contrast; database back to exactly 18 | yes |
+
+---
+
+## 15.10 — Sources
+
+**Visual hierarchy** — [NN/g · Visual Hierarchy][nng]
+**Friction by severity** — [GitLab Pajamas · Destructive actions][pajamas]
+**Evidence presentation** — [Stripe Radar · Risk insights][radar]
+**Action hierarchy** — [GitHub Primer · Button][primer]
+**Numbers and deltas** — the `dataviz` skill: a before→after on one field is the
+numbers themselves, not a chart; status colours are reserved and ship with an
+icon and a label; proportional figures for standalone values.
+**Already done, not repeated** — Part 2 of this document (the decision packet,
+Terraform's diff grammar, AP2's card, the automation-bias findings).
+
+[nng]: https://www.nngroup.com/articles/visual-hierarchy-ux-definition/
+[pajamas]: https://design.gitlab.com/patterns/destructive-actions/
+[radar]: https://docs.stripe.com/radar/reviews/risk-insights
+[primer]: https://primer.style/product/components/button/
