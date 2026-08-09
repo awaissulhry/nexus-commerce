@@ -36,6 +36,8 @@ import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ago } from '../_shared/run-health'
 import { statusOf, type MapEdge, type MapNode } from './lib'
 
+export type Selection = { kind: 'worker' | 'edge'; id: string }
+
 const usd = (n: number) => `$${n.toFixed(4)}`
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info']
@@ -349,6 +351,46 @@ function EdgePanel({ edge, nodes }: { edge: MapEdge; nodes: MapNode[] }) {
   )
 }
 
+/* ── a selection that is not on this map ───────────────────────────────── */
+
+/**
+ * S4.c. A deep link to something that no longer exists used to be swallowed:
+ * `selection` was truthy, neither `node` nor `edge` resolved, and the ternary
+ * chain fell through to the roster — so the panel reverted to "The fleet at a
+ * glance" while still rendering a close button for a selection that was not
+ * there, and nothing anywhere said the key was missing. The URL kept repeating
+ * it, so a reload or a share reproduced it exactly.
+ *
+ * A dead end needs a way forward; that is the one thing every empty-state
+ * guideline agrees on.
+ */
+function MissingPanel({ selection, onClose }: { selection: Selection; onClose: () => void }) {
+  return (
+    <>
+      <div className="sbm-rail-id">
+        <div>
+          <div className="nm">Not on this map</div>
+          <div className="ky">{selection.id}</div>
+        </div>
+      </div>
+      <p className="sbm-rail-reason tone-neutral">
+        {selection.kind === 'worker'
+          ? 'This link asks for a worker the map is not showing. It may have been renamed or removed, or it belongs to a routine that is switched off.'
+          : 'This link asks for a handoff the map is not showing. The line only exists while a routine that declares it is switched on.'}
+      </p>
+      <div className="sbm-rail-exits">
+        <button type="button" className="sbm-rail-exitbtn" onClick={onClose}>
+          Show the whole fleet again <ArrowRight size={12} aria-hidden />
+        </button>
+        <Link href="/fleet/workers">
+          See every worker, including the ones not on this map{' '}
+          <ArrowRight size={12} aria-hidden />
+        </Link>
+      </div>
+    </>
+  )
+}
+
 /* ── the rail ──────────────────────────────────────────────────────────── */
 
 export function InspectorRail({
@@ -360,14 +402,29 @@ export function InspectorRail({
 }: {
   nodes: MapNode[]
   edges: MapEdge[]
-  selection: { kind: 'worker' | 'edge'; id: string } | null
-  onSelect: (sel: { kind: 'worker' | 'edge'; id: string } | null) => void
+  selection: Selection | null
+  onSelect: (sel: Selection | null) => void
   onClose: () => void
 }) {
   const node = selection?.kind === 'worker' ? nodes.find((n) => n.key === selection.id) : undefined
   const edge = selection?.kind === 'edge' ? edges.find((e) => e.id === selection.id) : undefined
+  /* Something is selected and neither half of the map has it. Distinct from
+     "nothing is selected", which is what this used to collapse into. */
+  const missing = selection != null && !node && !edge
 
-  const title = node ? 'Worker' : edge ? 'Handoff' : 'The fleet at a glance'
+  const title = node
+    ? 'Worker'
+    : /* S4.c — the plan edge is titled for what it is. The body already says
+         "the critic does not write an artifact… there is nothing to count
+         crossing here", so calling it a handoff made the header contradict the
+         paragraph under it. */
+      edge
+      ? edge.artifact === 'plan'
+        ? 'Review'
+        : 'Handoff'
+      : missing
+        ? 'Not on this map'
+        : 'The fleet at a glance'
 
   return (
     <aside className="sbm-rail" aria-label="Details">
@@ -389,6 +446,8 @@ export function InspectorRail({
           />
         ) : edge ? (
           <EdgePanel edge={edge} nodes={nodes} />
+        ) : missing ? (
+          <MissingPanel selection={selection} onClose={onClose} />
         ) : (
           <Overview nodes={nodes} onPick={(k) => onSelect({ kind: 'worker', id: k })} />
         )}
