@@ -531,6 +531,29 @@ export function InspectorRail({
           </button>
         ) : null}
       </header>
+      {/*
+       * S4.f — ONE live region for this panel, and it did not have one.
+       *
+       * The page has exactly one (`role="status"` on the census band's
+       * sub-line) and it does not cover the rail, so the entire contents could
+       * swap on selection and a screen-reader user heard nothing.
+       *
+       * It announces a SENTENCE, not the panel: making `.sbm-rail-body` itself
+       * live would re-read every row — thirty-odd of them on a worker — each
+       * time the selection changed, which is how a live region becomes
+       * something people switch off.
+       */}
+      <p className="sr-only" aria-live="polite">
+        {node
+          ? `Showing worker ${node.name}.`
+          : edge
+            ? `Showing the ${edge.artifact === 'plan' ? 'review' : 'handoff'} from ${
+                nodes.find((n) => n.key === edge.from)?.name ?? edge.from
+              } to ${nodes.find((n) => n.key === edge.to)?.name ?? edge.to}.`
+            : missing
+              ? `Nothing on this map matches ${selection?.id}.`
+              : 'Showing the whole fleet.'}
+      </p>
       <div className="sbm-rail-body">
         {node ? (
           <WorkerPanel

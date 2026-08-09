@@ -2202,6 +2202,32 @@
 .sbm-rail-exitbtn:hover {
   text-decoration: underline;
 }
+
+/*
+ * S4.f — THERE WAS NOT ONE FOCUS RULE IN THIS COMPONENT.
+ *
+ * Grepped every stylesheet for `focus` × `sbm-rail|sbm-row|sbm-drops|sbm-samples
+ * |sbm-linkbtn`: none. The seven roll-up buttons, the wiring link-buttons, the
+ * close button and the exit links all fell back to the UA ring, on a page where
+ * S1R, S2R and S3R each shipped an explicit one — including S3R's fix for a ring
+ * that measured 1.00:1 because it was drawn in the selected button's own colour.
+ *
+ * `outline-offset` differs by control on purpose: the roll-up buttons are full
+ * width and would clip an outset ring against the rail's padding, so theirs sits
+ * just inside.
+ */
+.sbm-rail .sbm-rail-listbtn:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: -2px;
+}
+.sbm-rail .sbm-linkbtn:focus-visible,
+.sbm-rail .sbm-rail-close:focus-visible,
+.sbm-rail .sbm-rail-exits a:focus-visible,
+.sbm-rail .sbm-rail-exitbtn:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 /* S4.c — an exit that clears state rather than navigating is still an exit, so
    it reads identically. A link would be wrong: there is nowhere to go. */
 .sbm-rail-exitbtn {
