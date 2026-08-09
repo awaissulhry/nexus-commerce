@@ -1188,25 +1188,50 @@
 .wf-problems p { margin: 0; font-size: 12.5px; line-height: 1.55; color: #91640f; }
 .wf-problems p + p { margin-top: 6px; }
 
-/* WF.5 — the test-run results panel */
+/* ── S6: the test lane ───────────────────────────────────────────────────
+   WF.5 built the panel; S6.a moved it ABOVE the editor grid and gave its
+   steps the page's card dialect. It used to render after the grid, which put
+   its top at 1020.6px in a 962px viewport on the TWO-step custom — and about
+   1150px below the fold on the council's 1741.8px grid. The operator
+   confirmed a spend, waited 43 seconds, and the screen did not change. */
 .wf-testpanel {
-  margin-top: 14px;
-  border: 1px solid #e6ebf1;
+  margin-top: 12px;
+  border: 1px solid #dbe6f2;
   border-radius: 10px;
-  background: #fbfcfe;
+  background: #f7fafd;
   padding: 12px 14px;
 }
-.wf-testrow {
+
+/* Fit the tracks, cap the card — the rule S5.a settled for the picture, for
+   the same reason: the old flex rows spent 432px of 1572 and left 72.5% dead
+   in the one zone no section had ever audited. */
+.wf-teststeps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+.wf-teststep {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 6px 0;
-  border-bottom: 1px solid #eef1f5;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  max-width: 420px;
+  padding: 9px 12px;
+  border: 1px solid #e0e6ee;
+  border-left: 3px solid #c3ccd8;
+  border-radius: 10px;
+  background: #fff;
   font-size: 12.5px;
 }
-.wf-testrow:last-of-type { border-bottom: 0; }
-.wf-testrow .nm { font-weight: 650; color: #26313f; min-width: 170px; }
+.wf-teststep .nm { font-weight: 650; color: #26313f; }
+/* The state is on the card, in its border, the way S5.c put a step's error on
+   the card that caused it. */
+.wf-teststep.is-running { border-left-color: #3f6fb5; }
+.wf-teststep.is-done    { border-left-color: #1f8a5a; }
+.wf-teststep.is-failed  { border-left-color: #a3312c; }
+.wf-teststep.is-stopped { border-left-color: #b8860b; }
+.wf-teststep.is-pending { background: #fbfcfe; }
 
 .wf-nameinput { width: 100%; font-family: inherit; margin-bottom: 6px; }
 

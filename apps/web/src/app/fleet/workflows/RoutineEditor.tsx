@@ -239,6 +239,29 @@ export function RoutineEditor({
     return out
   }, [draft, topo])
 
+  /* S6.c groundwork, needed here because the panel now renders the list:
+     the walk order comes from `topoLevels`, which sorts each level
+     alphabetically, so the panel listed Keyword harvester before Negative
+     miner while the cards listed them the other way. Two orders for two
+     steps on one screen. The panel follows the CARDS; the walk order is a
+     server concern the operator never asked about. */
+  const orderedTestSteps = useMemo(() => {
+    if (!testStatus) return []
+    const byStep = new Map(testStatus.steps.map((s) => [s.charterKey, s]))
+    const inCardOrder = draft.steps
+      .map((s) => byStep.get(s.charterKey))
+      .filter((s): s is TestStepRow => Boolean(s))
+    // Anything the walk knows about that the draft no longer does still shows.
+    const seen = new Set(inCardOrder.map((s) => s.charterKey))
+    return [...inCardOrder, ...testStatus.steps.filter((s) => !seen.has(s.charterKey))]
+  }, [testStatus, draft])
+
+  const walkPosition = useMemo(() => {
+    if (!testStatus?.walking) return null
+    const done = testStatus.steps.filter((s) => s.status !== 'pending').length
+    return { at: Math.max(1, done), of: testStatus.steps.length }
+  }, [testStatus])
+
   const badCron = draft.trigger.type === 'schedule' && !cronIsEvaluable(draft.trigger.cron)
 
   const setGate = (charterKey: string, gate: 'ask' | 'act' | 'inherit') =>
@@ -381,7 +404,8 @@ export function RoutineEditor({
             onClick={() => void openTestDialog()}
             title="Run every step of this draft in preview: real evidence, real model, nothing written"
           >
-            <FlaskConical size={13} /> Test this draft…
+            <FlaskConical size={13} />{' '}
+            {walkPosition ? `Testing… step ${walkPosition.at} of ${walkPosition.of}` : 'Test this draft…'}
           </button>
           <button
             className="acr-btn"
@@ -430,6 +454,58 @@ export function RoutineEditor({
             </button>
           </span>
         </div>
+      ) : null}
+
+      {/* S6.a — the panel sits where the button that started it is. It used
+          to render after the editor grid, which measured 1020.6px on the
+          two-step custom against a 962px viewport: confirm a spend, wait 43
+          seconds, and nothing on screen changes. On the council's 1741.8px
+          grid it was ~1150px below the fold. */}
+      {test && testStatus ? (
+        <section className="wf-testpanel" role="status" aria-live="polite">
+          <header className="wf-cardhead">
+            <h3><FlaskConical size={15} /> Test run</h3>
+            <span className="wf-legend">
+              {testStatus.walking ? 'testing…' : 'finished'} · $
+              {testStatus.totals.costUSD.toFixed(4)} spent ·{' '}
+              {testStatus.totals.findings} would-be finding
+              {testStatus.totals.findings === 1 ? '' : 's'}
+            </span>
+          </header>
+          {/* Cards in a fitted grid, the dialect S5.a settled for the picture:
+              fit the tracks, cap the card. The old flex rows spent 432px of
+              1572 — 72.5% dead — in a zone no section had ever audited. */}
+          <div className="wf-teststeps">
+            {orderedTestSteps.map((s) => {
+              const sentence = testStepSentence(s)
+              return (
+                <div className={`wf-teststep is-${s.status}`} key={s.charterKey}>
+                  <span className="nm">{byKey.get(s.charterKey)?.name ?? s.charterKey}</span>
+                  {s.status === 'pending' ? (
+                    <span className="acr-pg-muted">waiting its turn…</span>
+                  ) : s.status === 'running' ? (
+                    <span className="wf-run">working now…</span>
+                  ) : s.status === 'done' ? (
+                    <span className="acr-pg-ok">
+                      would have reported {s.findingCount} finding{s.findingCount === 1 ? '' : 's'}
+                    </span>
+                  ) : (
+                    <span className={s.status === 'stopped' ? 'wf-halt' : 'acr-pg-warn'}>
+                      {sentence ?? (s.status === 'stopped' ? 'stopped at a limit' : 'failed')}
+                    </span>
+                  )}
+                  <span className="wf-sub">
+                    {s.costUSD > 0 ? `$${s.costUSD.toFixed(4)}` : s.status === 'running' ? 'spending…' : ''}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="wf-vnote">
+            Nothing above was written to the board, and no proposal was queued — the model spend
+            is the only real thing a test does.
+          </p>
+        </section>
       ) : null}
 
       <div className="wf-editgrid">
@@ -660,46 +736,6 @@ export function RoutineEditor({
           </p>
         </div>
       </div>
-
-      {test && testStatus ? (
-        <div className="wf-testpanel">
-          <header className="wf-cardhead">
-            <h3><FlaskConical size={15} /> Test run</h3>
-            <span className="wf-legend">
-              {testStatus.walking ? 'testing…' : 'finished'} · $
-              {testStatus.totals.costUSD.toFixed(4)} spent ·{' '}
-              {testStatus.totals.findings} would-be finding
-              {testStatus.totals.findings === 1 ? '' : 's'}
-            </span>
-          </header>
-          {testStatus.steps.map((s) => {
-            const sentence = testStepSentence(s)
-            return (
-              <div className="wf-testrow" key={s.charterKey}>
-                <span className="nm">{byKey.get(s.charterKey)?.name ?? s.charterKey}</span>
-                {s.status === 'pending' ? (
-                  <span className="acr-pg-muted">waiting its turn…</span>
-                ) : s.status === 'running' ? (
-                  <span className="wf-run">working now…</span>
-                ) : s.status === 'done' ? (
-                  <span className="acr-pg-ok">
-                    would have reported {s.findingCount} finding{s.findingCount === 1 ? '' : 's'}
-                  </span>
-                ) : (
-                  <span className={s.status === 'stopped' ? 'wf-halt' : 'acr-pg-warn'}>
-                    {sentence ?? (s.status === 'stopped' ? 'stopped at a limit' : 'failed')}
-                  </span>
-                )}
-                {s.costUSD > 0 ? <span className="wf-sub">${s.costUSD.toFixed(4)}</span> : null}
-              </div>
-            )
-          })}
-          <p className="wf-vnote">
-            Nothing above was written to the board, and no proposal was queued — the model spend
-            is the only real thing a test does.
-          </p>
-        </div>
-      ) : null}
 
       {dialog === 'test' ? (
         <div className="acr-pg-confirmwrap" role="dialog" aria-modal="true">
