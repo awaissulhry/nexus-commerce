@@ -767,6 +767,18 @@
 .sba-notshown a:hover {
   text-decoration: underline;
 }
+/* The preflight reset is `img, svg, video, … { display: block }`, so the trailing
+   arrow inside these two links became a BLOCK box in an inline flow and took a
+   line of its own — measured on production as three line boxes per link, the
+   arrow orphaned under a full-width empty row. `white-space: nowrap` on the
+   anchor cannot prevent it: a block child breaks the line regardless of how the
+   inline parent is set. These are the only two inline-flow icons on the page —
+   every other icon sits in a flex row, where a block child is harmless, which is
+   why nothing else shows it. */
+.sba-notshown a svg {
+  display: inline-block;
+  vertical-align: -1px;
+}
 
 /* Screen-reader-only text: every icon carries a word for anyone who cannot
    see the shape, so state is never signalled by colour alone. */
