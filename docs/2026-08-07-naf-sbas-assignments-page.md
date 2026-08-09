@@ -2990,6 +2990,65 @@ start using it properly rather than borrowing half of it.
 
 ---
 
+### 13.12 · EXECUTED 2026-08-09 — S3.a–S3.e, prod-verified
+
+Commits: `1ed1e8d0f` (S3.a) · `77952d9d7` (S3.b) · `1e1fd6f9a` (S3.c + S3.d) ·
+`a7f9d64d7` (S3.e) · `744c6e69f` (two fixes the re-measure found).
+
+**Prod left at zero assignments. Nothing was started.**
+
+| # | Criterion | Before | After |
+|---|---|---|---|
+| 1 | Actions distinguishable by consequence | **0 of 3** | **3 of 3** |
+| 2 | Spending confirm interrupts | no overlay · no `role=dialog` · focus `BODY` · **254px reflow** | overlay · `role=dialog` + `aria-modal` + name · focus on **"Not now"** · **0px reflow** |
+| 3 | Text roles below 4.5:1 | **11** (and **17** once a run existed) | **0** |
+| 4 | Inline `style` attributes | **13** | **0** |
+| 5 | Widest run-table column | **1132px / 70%** | **436px / 49.5%** — *target missed, metric was wrong; see below* |
+| 6 | The assignment's title on its own page | **absent** | **present** |
+| 7 | Run rows offering an absolute timestamp | **0 of 8** | **8 of 8** |
+| 8 | Overdue visible | **no** | **"3d late"**, consistent with the list |
+| 9 | Close during a run | **enabled** | **disabled**, carrying the list's sentence |
+| 10 | Empty-state sentence centred | **no** | n/a — the dashed boxes became sentences |
+| 11 | Dead space below content, Not started | **225px** | resolved with 10 |
+| 12 | "Nothing reaches Amazon" | last line of the page | **y=232, above the fold** |
+
+**One criterion missed, and the target itself was wrong.** *"Widest column
+≤40%"* went 70% → 49.5%, and chasing it further would be chasing the wrong
+number: under `table-layout: fixed` every column without a declared width
+splits the **leftover**, so share is a function of how many columns you have,
+not of how much is wasted. Pinning four columns on a 1614px table actually
+handed the fifth **1170px — wider than the sentence-stuffed column this phase
+existed to fix**. Capping the table at 880px is the real fix; the honest metric
+is column width against its widest content, and by that measure the three
+numeric columns sit at 1.00×.
+
+**Four things learned that the study did not know:**
+
+1. **A Not-started page cannot show you the page.** The first audit found 11
+   sub-AA roles; once a run and its findings existed there were **17** — the
+   run-table header and twelve finding-kind labels only exist in states the
+   real object could not reach. Not a regression: surface the audit was
+   structurally unable to see.
+2. **`.as-page` missed this page too — the third time in the series.** Part 11
+   fixed `.acr-pg-tbl th` under `.as-page`; Part 12 found `.as-page` never
+   reached the portalled drawer; here it never reached the detail route at all,
+   because the route had no root class. The pattern is now three-for-three:
+   **a page-local override reaches exactly the subtree its root wraps, and
+   nobody notices until a state renders that uses the missed role.**
+3. **Fixing a layout can widen the thing you were narrowing.** See criterion 5.
+4. **My probe lied twice more, and the calibration rule paid for itself again.**
+   A blank title and worker turned out to be `location.href` clearing
+   `window.__id` on reload, and a second run of it read my own fetch patch
+   instead of the API. Both looked exactly like page defects.
+
+**Which states were verified how, restated:** `not_started` on a real row
+created and deleted through the UI; `finished` with 8 attempts, 12 findings and
+an unknown-cost run by synthetic payload; `running` and `cancelled` by synthetic
+payload during the audit. **Nothing past `not_started` has ever been produced by
+a real run**, which remains the standing caveat and the operator's call.
+
+---
+
 ## Sources
 
 **RPA queues** — [UiPath queues](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/about-queues-and-transactions) · [item statuses](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/transaction-statuses) · [queue triggers](https://docs.uipath.com/orchestrator/automation-cloud/latest/user-guide/queue-triggers) · [Action Center](https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions) · [Blue Prism work queues](https://docs.blueprism.com/en-US/bundle/blue-prism-enterprise-7-3/page/user-guide/control-room/ug-cr-queue-management.htm) · [Automation Anywhere WLM](https://docs.automationanywhere.com/bundle/enterprise-v2019/page/enterprise-cloud/topics/aae-client/bot-creator/using-workload/cloud-queues.html) · [Power Automate work queues](https://learn.microsoft.com/en-us/power-automate/desktop-flows/work-queues)
