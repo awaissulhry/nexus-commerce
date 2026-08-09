@@ -697,6 +697,66 @@
 .as-confirm p { margin: 0 0 9px; }
 .as-confirm p:last-of-type { margin-bottom: 0; }
 
+/* ── S3.d · legibility ────────────────────────────────────────────────────
+   Eleven text roles on this page measured below 4.5:1 on its first render,
+   the worst at 2.39 — including every label in the brief, which is the five
+   words that say what the object IS. */
+.as-briefcard { margin-bottom: 18px; }
+.as-detail .as-brief .k { color: #5b6573; }      /* was #97a1b0 — 2.41:1 */
+.as-detail .as-why { color: #35414f; }
+.as-wantback { margin-top: 14px; }
+.as-detail .as-caveat { color: #5b6573; }        /* was #8d97a6 — 2.73:1 */
+.as-mb16 { margin-bottom: 16px; }
+.as-mt22 { margin-top: 22px; }
+
+.as-sectionh {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #35414f;
+}
+
+/* Two dashed boxes of nothing were the largest objects on the page and left
+   225px of dead space below them. A sentence says the same thing. */
+.as-nothing {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #5b6573;
+  max-width: 72ch;
+}
+
+.as-findings { display: flex; flex-direction: column; gap: 0; }
+
+/* The "toast" is a panel with an OK button, so it is styled as the notice it
+   actually is rather than borrowing the pre-flight's box. */
+.as-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dbe6f5;
+  background: #f6faff;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: #35507a;
+  margin-bottom: 16px;
+}
+
+/* ── S3.c · the run table ─────────────────────────────────────────────────
+   "How it went" took 1132px of 1614 — 70% of the table — because it printed
+   the long-form guard sentence. Fixed layout, declared widths, phrase in the
+   cell and sentence in the tooltip. */
+.as-runs { table-layout: fixed; width: 100%; }
+.as-runs th, .as-runs td { overflow: hidden; }
+.as-runs .c-when { width: 132px; white-space: nowrap; }
+.as-runs .c-num { width: 104px; text-align: right; padding-right: 18px; }
+.as-runs .c-went {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── detail page ──────────────────────────────────────────────────────── */
 .as-brief {
   display: grid;

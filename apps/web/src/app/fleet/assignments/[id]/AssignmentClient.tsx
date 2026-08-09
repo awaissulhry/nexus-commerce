@@ -21,7 +21,13 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../../_shared/use-visibility-poll'
 import { ago, classifyFailure } from '../../_shared/run-health'
-import { errorSentence, reasonSentence, stateDef, type AssignmentState } from '../states'
+import {
+  errorSentence,
+  reasonSentence,
+  shortReason,
+  stateDef,
+  type AssignmentState,
+} from '../states'
 
 interface RunRow {
   id: string
@@ -233,7 +239,7 @@ export function AssignmentClient({ id }: { id: string }) {
       </div>
 
       {/* the frozen brief */}
-      <div className="acr-pg-ctrlbody" style={{ marginBottom: 18 }}>
+      <div className="as-briefcard">
         <div className="as-brief">
           <div>
             <span className="k">Worker</span>
@@ -282,7 +288,7 @@ export function AssignmentClient({ id }: { id: string }) {
           </div>
         </div>
         {a.wantBack && (
-          <p className="as-why" style={{ marginTop: 14 }}>
+          <p className="as-why as-wantback">
             <strong>What you wanted back:</strong> {a.wantBack}
           </p>
         )}
@@ -394,14 +400,14 @@ export function AssignmentClient({ id }: { id: string }) {
       </div>
 
       {toast && (
-        <div className="as-preflight" style={{ marginBottom: 16 }}>
+        <div className="as-toast">
           {toast}{' '}
           <button className="acr-pg-sortbtn" onClick={() => setToast(null)}>
             OK
           </button>
         </div>
       )}
-      {error && <div className="as-err" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="as-err as-mb16">{error}</div>}
 
       {/**
         * S3.a — a confirm that actually interrupts.
@@ -482,39 +488,70 @@ export function AssignmentClient({ id }: { id: string }) {
       )}
 
       {/* every attempt */}
-      <h3 className="acr-pg-ctrlwhat">Every time it has run</h3>
+      <h3 className="as-sectionh">Every time it has run</h3>
       {a.runs.length === 0 ? (
-        <div className="acr-pg-empty">
-          <p>It hasn&apos;t run yet.</p>
-          <p className="acr-pg-muted" style={{ maxWidth: '56ch', lineHeight: 1.6 }}>
-            Every worker in this fleet is switched off, so nothing will start it
-            but you.
-          </p>
-        </div>
+        <p className="as-nothing">
+          It hasn&apos;t run yet — every worker in this fleet is switched off, so
+          nothing will start it but you.
+        </p>
       ) : (
+        /**
+         * S3.c — the cell says it short; the tooltip says it properly.
+         *
+         * Measured with 8 attempts: "How it went" took **1132px of 1614 —
+         * 70% of the table** — because it printed `reasonSentence()`, the
+         * long-form explanation with the fix in it. The list solved this at
+         * AS.1 by printing `shortReason()` in a cell, and this page used the
+         * long form where the short one belongs and then had nowhere left to
+         * put the long one. Now the cell carries the phrase, the tooltip
+         * carries the sentence, and the widths are declared rather than
+         * allocated by whichever string happened to be longest.
+         */
         <div className="acr-pg-tablewrap">
-          <table className="acr-pg-tbl">
+          <table className="acr-pg-tbl as-runs">
             <thead>
               <tr>
-                <th>When</th>
-                <th>How it went</th>
-                <th>Found</th>
-                <th>Cost</th>
-                <th>Took</th>
+                <th className="c-when" title="When this attempt started. Hover any row for the exact time.">
+                  When
+                </th>
+                <th title="What came back. Hover a row for the full reason and what to do about it.">
+                  How it went
+                </th>
+                <th className="c-num" title="How many things this attempt judged worth your attention.">
+                  Found
+                </th>
+                <th className="c-num" title="What this attempt cost in model calls, in US dollars.">
+                  Cost
+                </th>
+                <th className="c-num" title="Wall-clock time from start to finish.">
+                  Took
+                </th>
               </tr>
             </thead>
             <tbody>
               {a.runs.map((r) => (
                 <tr key={r.id}>
-                  <td>{ago(r.createdAt)}</td>
-                  <td>{runSentence(r)}</td>
-                  <td>{r.status === 'running' ? '—' : r.findingCount}</td>
-                  <td>
-                    {r.haltedReason?.startsWith('orphaned:')
-                      ? <span title="Unknown — the reaper that closed this run does not record what it spent.">unknown</span>
-                      : `$${r.costUSD.toFixed(4)}`}
+                  <td className="c-when">
+                    {/* Every time on this page was relative and nothing offered
+                        the real one — on a page whose subject is when this ran
+                        and what it cost, that is the number you eventually
+                        need. */}
+                    <span title={new Date(r.createdAt).toLocaleString()}>{ago(r.createdAt)}</span>
                   </td>
-                  <td>{duration(r)}</td>
+                  <td className="c-went">
+                    <span title={runFullSentence(r)}>{runShort(r)}</span>
+                  </td>
+                  <td className="c-num">{r.status === 'running' ? '—' : r.findingCount}</td>
+                  <td className="c-num">
+                    {r.haltedReason?.startsWith('orphaned:') ? (
+                      <span title="Unknown — the reaper that closed this run does not record what it spent, so it is left out of the total rather than counted as zero.">
+                        unknown
+                      </span>
+                    ) : (
+                      `$${r.costUSD.toFixed(4)}`
+                    )}
+                  </td>
+                  <td className="c-num">{duration(r)}</td>
                 </tr>
               ))}
             </tbody>
@@ -523,19 +560,17 @@ export function AssignmentClient({ id }: { id: string }) {
       )}
 
       {/* what came out of it */}
-      <h3 className="acr-pg-ctrlwhat" style={{ marginTop: 22 }}>
+      <h3 className="as-sectionh as-mt22">
         What it found
       </h3>
       {a.findings.length === 0 ? (
-        <div className="acr-pg-empty">
-          <p className="acr-pg-muted">
-            {everRan
-              ? 'Nothing — it looked and found nothing worth reporting. That is a result, not a failure.'
-              : 'Nothing yet.'}
-          </p>
-        </div>
+        <p className="as-nothing">
+          {everRan
+            ? 'Nothing — it looked and found nothing worth reporting. That is a result, not a failure.'
+            : 'Nothing yet — it has not run.'}
+        </p>
       ) : (
-        <div className="acr-pg-ctrlbody">
+        <div className="as-findings">
           {a.findings.map((f) => (
             <div className="as-finding" key={f.id}>
               <div className="hd">
@@ -636,12 +671,24 @@ function ConfirmPanel({
   )
 }
 
-function runSentence(r: RunRow): string {
+/** The phrase that goes in the cell — the same vocabulary the list uses. */
+function runShort(r: RunRow): string {
   if (r.status === 'running') return 'running now…'
-  if (r.haltedReason?.startsWith('orphaned:')) return 'stopped reporting — closed after 2h'
-  if (r.haltedReason) return reasonSentence(r.haltedReason) ?? 'stopped at a limit'
-  if (!r.ok) return failureSentence(r)
+  if (r.haltedReason?.startsWith('orphaned:')) return 'stopped reporting'
+  if (r.haltedReason) return shortReason(r.haltedReason) ?? 'stopped at a limit'
+  if (!r.ok) return 'it broke'
   return r.findingCount > 0 ? 'finished' : 'finished — found nothing'
+}
+
+/** The sentence that goes in the tooltip: what happened, and what to do. */
+function runFullSentence(r: RunRow): string {
+  if (r.status === 'running')
+    return 'This attempt is still open. There is no way to stop it — it ends on its own, on a budget, or is closed after two hours if it stops reporting.'
+  if (r.haltedReason) return reasonSentence(r.haltedReason) ?? 'It stopped at a limit.'
+  if (!r.ok) return failureSentence(r)
+  return r.findingCount > 0
+    ? `It ran and came back with ${r.findingCount} thing${r.findingCount === 1 ? '' : 's'} worth your attention.`
+    : 'It ran, read the evidence, and judged that nothing needed doing. That is a result, not a failure.'
 }
 
 function failureSentence(r: RunRow): string {
