@@ -3001,6 +3001,7 @@ absence (D10).
 | Pointer history | carried, unshown | *"active since 26m ago"* · *"was active 27m ago → 26m ago"* |
 | Runs per revision | absent | **"served 43 runs" / "no runs under this wiring"** |
 | Contrast · sizes · weights · `<Term>` in links | 0 · 4 · 3 · 0 | **0 · 4 · 3 · 0** |
+| Teaching-card space after a `<Term>` | **2 of 9 swallowed** | **0 of 9** |
 
 **The rollback round trip, exercised on prod and restored.** Activating rev 2
 from a superseded row moved the pointer, rewrote both rows' time stories, and
@@ -3027,6 +3028,26 @@ the audit trail doing its job on itself.
 | 10 | Served count = 0 | prod — "no runs under this wiring" |
 | 11 | Diff on rev 1 | prod — **"WHAT REV 1 INTRODUCED"** + its six steps |
 | 12 | 404 | unchanged from S2R |
+
+**Two criteria discharged only when the question was asked a third time**
+(`f9df18440`), and one of them was a contradiction I wrote myself:
+
+- **"Counts match the API join exactly"** — now verified independently rather
+  than eyeballed: on `on-demand-check` the API yields **43** code-path
+  orchestrations against the rendered *"served 43 runs"*, with all **8** preview
+  rows excluded; on `fleet-council`, **1** against *"served 1 run"*, and both
+  revisions correctly *"no runs under this wiring"*. **Met.**
+- **"The dialog names both directions correctly"** — it did not. §12.3.2 said to
+  reuse the settled Activate copy unchanged, and §12.5 then demanded the dialog
+  name the direction; those cannot both hold, and what shipped named neither.
+  Every sentence was *true* of a rollback and none of them said you were going
+  backwards or that what is running now would stop. Resolved by **appending**
+  rather than rewriting: a restore now adds *"This one ran before, so this is a
+  step back: rev N is set aside and stops running. Nothing is rewritten — the
+  numbers stay put, so a run that stamped rev 2 still means rev 2."* That last
+  clause is the pointer model's quiet guarantee, and the confirm is exactly
+  where it matters — the moment an operator might fear that going back rewrites
+  history.
 
 **One defect prod caught, and it is worth generalising: a grid stretches its
 items too.** The rev badge rendered as a 109.8px bar around 34.6px of text —
