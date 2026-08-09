@@ -901,3 +901,86 @@ is made in one place and cannot half-land.
 
 *Sources cited inline in Part 2. Measurements: production, 2026-08-09, viewport
 1728×962; breakpoints in a same-origin nested viewport at the widths named.*
+
+---
+
+## PART 12 — The execution record
+
+Nine commits, all prod-verified. `2e97ce758` · `be4748700` · `fbaa135cc` ·
+`9d0d56dfa` · `13d30a49b` · `4b31c876c` · `885412da2` · `2671e7a8f`.
+
+### What moved
+
+| | before | after |
+|---|---|---|
+| text nodes below AA | **11 of 30** | **0 of 25** |
+| worst text in the rail | 2.50:1 | **6.31:1** |
+| the overlay's question | 3.62:1, a footnote | **10.32:1, the heading** |
+| `Show` visible at 1440×900 | **0 of 174.4px** | **181.9 of 181.9** |
+| `Show` visible at 1728×962 | 28.3 of 174.4px | **181.9 of 181.9** |
+| `Show` visible at 1280×800 | 0 of 174.4px | 80.1 of 181.9 *(see C-S3.4)* |
+| rail content hidden at rest | 157px | **0** |
+| legend height on this fleet | 365.1px | **183.8px** |
+| legend rows explaining a colour that is not on the canvas | 5 of 6, with prose | 5 of 6, marked `none` |
+| bucket colours below 3:1 | **4 of 12** | **0 of 12** |
+| the ring every worker wears | 1.75:1 | **3.10:1** |
+| adjacent rungs, autonomy | 1.10–1.84 | **1.52–1.54** |
+| adjacent steps, cost | 1.32–2.04 | **1.52–1.54** |
+| focus ring on the selected radio | **1.00:1** | **8.24:1** |
+| tab stops in the rail | 9 | **3** |
+| arrow-key support | declared, absent | **both groups** |
+| checkbox target | 194×16.5px | ≥24px, page-blue, own focus ring |
+| clipped hover tooltips | 4, each 94px too wide | **0** |
+| the rail below 1100px | `display: none` | 3 columns, legend in 2 |
+| colour declared per bucket | **twice** | **once** |
+
+The legend/canvas invariant was re-verified in all three overlays with
+transitions disabled: swatch edge and node ring identical for every bucket, and
+no node in a bucket the legend does not show.
+
+### Four things worth keeping
+
+**1 · A contrast probe lies while a transition is running.** I measured a
+legend/canvas colour mismatch — the section's worst possible defect — and it
+*reproduced*. It was not real: `.sbm-node` carries
+`transition: border-color 0.12s`, and a backgrounded tab throttles style
+recalculation, so `getComputedStyle` reported the previous overlay's ring for
+seconds after the class had changed. One injected `{transition: none}` settled
+it in a single call. **Before believing any cross-surface colour disagreement,
+kill the transition and re-measure.** (Related: `requestAnimationFrame` yields
+*zero* samples in a background tab — use `setTimeout`.)
+
+**2 · Breakpoints are reachable after all.** Section 2 recorded that the harness
+could not narrow below the display width. It cannot — but **a same-origin iframe
+has its own viewport, so `@media` evaluates against it**, unlike narrowing an
+element, which fires nothing. Every 1280/1440/1100/1024 figure here was measured
+that way, and it is what found C-S3.4.
+
+**3 · Source order beats specificity — three times in one file.** `.sbm-orail-q`
+(S3.a) needed the element in its selector. `.sbm-rail`'s 1400px query has never
+fired (C-S3.4, worth 226px to two sections). And **S3.b's own `display: grid`
+silently disabled the 1100px rule** — a behaviour change I shipped without
+noticing, caught only by measuring the breakpoint afterwards. S3.h turned that
+into the intended behaviour and *deleted* the rule rather than moving it: a
+`display: none` that hides nothing is worse than no rule, because the next
+reader believes it.
+
+**4 · I was wrong in the study, in writing.** D-S3.5 claimed the cost ramp could
+not hold four steps and proposed merging two buckets. It had conflated the
+impossible 3:1 separation with the achievable 1.5 one. Four steps fit; nothing
+was merged; the paragraph is struck through in place rather than quietly edited.
+
+### Still open
+
+- **C-S3.1** — under `autonomy`, colour is still the only channel. The fix is one
+  token on the node card; `MapCanvas.tsx` is S2R's. **Raised.**
+- **C-S3.2 / C-S3.4** — at 1280 the rail box is 234.3px against 288.9px of pinned
+  controls, so `Show` reaches 80.1 of 181.9 and the rest scrolls. No layout fixes
+  that; only the dead `.sbm-rail` media query does. **Raised.**
+- **C-S3.3** — the tier filter is armed and inert in List view. Both fixes land
+  outside the rail. **Raised.**
+- **C-S3.5** — whether the rail should carry Section 2's converging-edge count.
+  Recommended *no*, with the node badge as the better home. **Operator's call.**
+- **New:** at ≤1100 the canvas measures **2px tall**, before and after this work.
+  The page is unusable at that width for a reason that has nothing to do with the
+  rail. **Raised** — the canvas is S2R's.
