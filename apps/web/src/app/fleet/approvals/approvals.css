@@ -463,6 +463,33 @@
      element whose whole job is to say whether to trust what is on screen. */
   color: #55616f;
 }
+/* ── S4.c · two sizes, the same ladder S1 and S2 settled on ──────────────
+ *
+ * Measured on prod after S4.a/S4.b: FIVE distinct sizes inside one card —
+ * 10 / 11.5 / 12.5 / 13 / 16 — where S1 went to two (20 + 13) and S2 to two
+ * (13 + 11.5). The heading was the only 16px on the page AND had no weight,
+ * which is the one combination that reads as neither a heading nor body text.
+ *
+ * Every rule below is a page-local override of a SHARED class: `.ap-*` belongs
+ * to fleet-sections.css (the AP.1-AP.8 inbox the Overview still renders) and is
+ * not this stream's to edit. Scoped to `.aq-page` so the Overview's copy is
+ * untouched — the same containment S1 used for `.acr-sub`. */
+.aq-page .acr-cardhead h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.aq-page .ap-tabs button {
+  font-size: 13px;
+}
+.aq-page .ap-tabcount {
+  /* Chip scale, the one exception the ladder allows — as in S2's state chips. */
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.aq-page .ap-precedents .acr-fl-checkstoggle {
+  font-size: 13px;
+}
+
 /* ── S4 · the empty state (S2R replaced the two elements this had) ────────
  *
  * Was an `.acr-fl-empty` at 12.5px / #7b8798 — **3.65:1**, the least legible
