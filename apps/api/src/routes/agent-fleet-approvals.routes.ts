@@ -41,6 +41,10 @@ import {
 } from '../services/agent-fleet/approval-inbox.service.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
+import {
+  isAgentScheduleEnabled,
+  listAutonomousAgents,
+} from '../services/agents/autonomous-agent.service.js'
 import { resolveToolPolicy } from '../services/agents/tool-policy.service.js'
 
 /** The cadence `jobs/approval-maintenance.job.ts` runs at. */
@@ -284,6 +288,33 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       outside: {
         pending: outsidePending.reduce((n, r) => n + r._count, 0),
         byTool: outsidePending.map((r) => ({ toolName: r.toolName, count: r._count })),
+        /**
+         * S5.4 — the producers that could put a row in that list, and whether
+         * they are switched on.
+         *
+         * S5's empty state is its normal state, and the only thing that earns
+         * it space is saying what could arrive and whether anything is armed.
+         * That sentence must be READ, never asserted: "both are switched off"
+         * hard-coded in the client is the fleet stale-constant class, and this
+         * is the worst possible place for it — the single Control Center
+         * toggle that makes it false is exactly the transition §1.2 says is
+         * the whole risk.
+         *
+         * `isAgentScheduleEnabled` is the same read the cron itself makes
+         * before running (`AgentDefinition.enabled`, false when the row is
+         * missing), so the page cannot disagree with what will actually
+         * happen at 07:00. Read-only. The registry is enumerated rather than
+         * listed by hand, so a third scheduled agent appears here by existing.
+         *
+         * Names deliberately NOT sent: the client owns the operator-facing
+         * vocabulary in `originOf()`, and two naming maps would drift.
+         */
+        producers: await Promise.all(
+          listAutonomousAgents().map(async (a) => ({
+            key: a.key,
+            enabled: await isAgentScheduleEnabled(a.key),
+          })),
+        ),
       },
     }
   })
