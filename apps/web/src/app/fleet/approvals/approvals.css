@@ -815,44 +815,54 @@
   border-color: var(--h10-danger-soft);
   border-left: 3px solid var(--h10-danger-strong);
 }
+/* S5.3 — a heading, not a button. No `cursor: pointer`, no `font: inherit`
+   reset, no full-width hit area: nothing here is clickable, because the one
+   moment this section exists is the one moment it must not be collapsible. */
 .aq-outhead {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  width: 100%;
   padding: 2px 0 0;
-  border: 0;
-  background: transparent;
   color: #1c2530;
-  font: inherit;
   font-size: 13px;
   line-height: 1.45;
-  text-align: left;
-  cursor: pointer;
+}
+.aq-outheadbody {
+  /* The measure lives on the text column, not on the flex row, so the icon
+     stays beside the heading instead of being pushed by a max-width. */
+  min-width: 0;
+}
+.aq-outhead h3 {
+  margin: 0;
+  /* 13px and 650, matching `.aq-outhead strong` before it — the section is not
+     more important than the page title, and S1's ladder has no third size. */
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #1c2530;
+}
+.aq-outhead > svg {
+  color: var(--h10-danger-strong);
 }
 .aq-outhead svg {
   flex: 0 0 auto;
   margin-top: 2px;
 }
-.aq-outhead svg:nth-of-type(2) {
-  color: var(--h10-danger-strong);
-}
-.aq-outhead strong {
-  font-weight: 650;
-}
 
 .aq-outbody {
-  margin-top: 10px;
+  margin-top: 12px;
 }
+/* S5.3 — no box. This was a tinted panel with its own border INSIDE a card
+   that is already bordered red, so the page spent its alarm twice to say one
+   thing. It is now the second line of the heading block: same information,
+   one surface. 58ch, counted in real characters — `ch` has over-measured this
+   page twice. */
 .aq-outwhy {
-  margin: 0 0 12px;
-  padding: 10px 11px;
-  border: 1px solid var(--h10-danger-soft);
-  border-radius: 6px;
-  background: var(--h10-danger-soft);
+  margin: 4px 0 0;
   font-size: 12.5px;
   line-height: 1.55;
   color: #3a4658;
+  max-width: 58ch;
 }
 .aq-outwhy strong {
   color: #1c2530;

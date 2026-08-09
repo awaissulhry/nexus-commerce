@@ -42,8 +42,6 @@ import Link from 'next/link'
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Clock,
   MinusCircle,
   ShieldCheck,
@@ -859,8 +857,6 @@ function OutsideQueue({
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
   onSnooze: (id: string, until: Date | null) => void
 }) {
-  const [open, setOpen] = useState(true)
-
   // Empty is the normal state and should cost one line, not a card.
   if (rows.length === 0) {
     return (
@@ -874,41 +870,49 @@ function OutsideQueue({
 
   return (
     <section className="acr-card aq-outside-card" aria-labelledby="aq-out-h">
-      <button
-        className="aq-outhead"
-        id="aq-out-h"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+      {/*
+       * S5.3 — a heading, not a disclosure.
+       *
+       * This was a full-width chevron button, the pattern S1 and S2 were both
+       * rebuilt to remove. Here it was worse than a style inconsistency: this
+       * section renders ONLY when something that can reach Amazon is waiting,
+       * so the one moment it exists is the one moment it must not be
+       * collapsible. Its own `useState(true)` already conceded that — a
+       * control whose correct value is always the same is not a control, it is
+       * a way to get the wrong one.
+       *
+       * Collapsing it also cost the heading its semantics: a <button> is not a
+       * heading, so `aria-labelledby` pointed screen readers at a control
+       * rather than at a name, and the section had no heading in the document
+       * outline at all.
+       */}
+      <div className="aq-outhead">
         <AlertTriangle size={14} aria-hidden />
-        <span>
-          <strong>
-            {rows.length} request{rows.length === 1 ? '' : 's'} from outside the fleet
-          </strong>{' '}
-          — and unlike everything above, {rows.length === 1 ? 'it can' : 'these can'} actually
-          change something.
-        </span>
-      </button>
-
-      {open ? (
-        <div className="aq-outbody">
+        <div className="aq-outheadbody">
+          <h3 id="aq-out-h">
+            {rows.length} request{rows.length === 1 ? '' : 's'} can actually change something on
+            Amazon
+          </h3>
+          {/* The contrast sentence, and the reason this section exists, in the
+              header rather than in a separate tinted box below it. The box was
+              a second red surface inside an already-red card, which spent the
+              alarm twice to say one thing. */}
           <p className="aq-outwhy">
-            These come from producers outside the fleet, not from a fleet worker. They were
-            reaching{' '}
-            {/* `{' '}` and not a plain space: the space after this closing tag was
-                being stripped, so the deployed page read "no screen at alluntil
-                now". Pre-existing, and invisible in the source — this paragraph
-                already uses the same idiom twice for the same reason. */}
-            <strong>no screen at all</strong>{' '}
-            until now — the queue above only shows the fleet&apos;s
-            own three actions, while the clock that expires requests covers every action. So one of
-            these could be created, seen by nobody, and thrown away after {expiryHours} hours.
-            Deciding one here records your name, gives you the same twenty-second{' '}
+            Everything above only describes what it would do. These do not: deciding one here
+            records your name, gives you the same twenty-second{' '}
             <Term k="undo-window">undo window</Term>, and re-checks the facts before it runs.
+            {/* `{' '}` and not a plain space — the space after a closing tag is
+                stripped here; this paragraph already needed the idiom twice. */}
+            {' '}
+            Until this section existed they reached{' '}
+            <strong>no screen at all</strong>{' '}
+            and were thrown away after {expiryHours} hours.
           </p>
+        </div>
+      </div>
 
-          {rows.map((a) =>
+      <div className="aq-outbody">
+        {rows.map((a) =>
             a.status === 'scheduled' ? (
               <OutsideParked
                 key={a.id}
@@ -954,8 +958,7 @@ function OutsideQueue({
               </div>
             ),
           )}
-        </div>
-      ) : null}
+      </div>
     </section>
   )
 }
