@@ -493,6 +493,105 @@ function MissingPanel({ selection, onClose }: { selection: Selection; onClose: (
   )
 }
 
+/* ── the shell both modes share ────────────────────────────────────────── */
+
+/**
+ * S4.i — one shell, so the two universes cannot drift again.
+ *
+ * Entity mode's rail was written inline in `MapClient.tsx` and had grown four
+ * behavioural differences from this one, measured: no close button ever
+ * rendered, Escape did nothing, the selection was not in the URL so it could not
+ * be shared or restored, and the panel was titled "Thing". It also carried 4 of
+ * 4 contrast failures when empty and 15 of 29 with something selected, because
+ * S4.a's fixes landed on the rail's classes and entity mode only borrowed some
+ * of them.
+ *
+ * None of that was a decision. It is what happens when the same surface is
+ * written twice.
+ */
+export function RailShell({
+  title,
+  announce,
+  subject,
+  onClose,
+  collapsed,
+  onCollapsed,
+  children,
+}: {
+  title: string
+  announce: string
+  /** Named on the collapsed strip, so the control is never a bare chevron. */
+  subject: string | null
+  onClose?: () => void
+  collapsed: boolean
+  onCollapsed: (v: boolean) => void
+  children: React.ReactNode
+}) {
+  if (collapsed) {
+    return (
+      <aside className="sbm-rail is-collapsed" aria-label="Details">
+        <button
+          type="button"
+          className="sbm-rail-expand"
+          aria-expanded={false}
+          onClick={() => onCollapsed(false)}
+        >
+          <ChevronLeft size={13} aria-hidden />
+          <span className="lbl">Details</span>
+          {subject ? <span className="dot" aria-hidden /> : null}
+          <span className="sr-only">
+            {subject ? `Show details for ${subject}` : 'Show the details panel'}
+          </span>
+        </button>
+      </aside>
+    )
+  }
+
+  return (
+    <aside className="sbm-rail" aria-label="Details">
+      <header className="sbm-rail-head">
+        <h3>{title}</h3>
+        <div className="sbm-rail-headbtns">
+          {onClose ? (
+            <button
+              type="button"
+              className="sbm-rail-close"
+              aria-label="Clear selection"
+              onClick={onClose}
+            >
+              <X size={13} aria-hidden />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="sbm-rail-close"
+            aria-expanded
+            aria-label="Collapse the details panel"
+            onClick={() => onCollapsed(true)}
+          >
+            <ChevronRight size={13} aria-hidden />
+          </button>
+        </div>
+      </header>
+      {/*
+       * S4.f — ONE live region for this panel, and it did not have one. The page
+       * has exactly one (`role="status"` on the census band's sub-line) and it
+       * does not cover the rail, so the entire contents could swap on selection
+       * and a screen-reader user heard nothing.
+       *
+       * It announces a SENTENCE, not the panel: making `.sbm-rail-body` itself
+       * live would re-read every row — thirty-odd on a worker — each time the
+       * selection changed, which is how a live region becomes something people
+       * switch off.
+       */}
+      <p className="sr-only" aria-live="polite">
+        {announce}
+      </p>
+      <div className="sbm-rail-body">{children}</div>
+    </aside>
+  )
+}
+
 /* ── the rail ──────────────────────────────────────────────────────────── */
 
 export function InspectorRail({
@@ -551,71 +650,25 @@ export function InspectorRail({
    * they change the resource selection." A reader who deliberately made the
    * graph wide should not have it taken back by their next click.
    */
-  if (collapsed) {
-    return (
-      <aside className="sbm-rail is-collapsed" aria-label="Details">
-        <button
-          type="button"
-          className="sbm-rail-expand"
-          aria-expanded={false}
-          onClick={() => onCollapsed(false)}
-        >
-          <ChevronLeft size={13} aria-hidden />
-          <span className="lbl">Details</span>
-          {subject ? <span className="dot" aria-hidden /> : null}
-          <span className="sr-only">
-            {subject ? `Show details for ${subject}` : 'Show the details panel'}
-          </span>
-        </button>
-      </aside>
-    )
-  }
+  const announce = node
+    ? `Showing worker ${node.name}.`
+    : edge
+      ? `Showing the ${edge.artifact === 'plan' ? 'review' : 'handoff'} from ${
+          nodes.find((n) => n.key === edge.from)?.name ?? edge.from
+        } to ${nodes.find((n) => n.key === edge.to)?.name ?? edge.to}.`
+      : missing
+        ? `Nothing on this map matches ${selection?.id}.`
+        : 'Showing the whole fleet.'
 
   return (
-    <aside className="sbm-rail" aria-label="Details">
-      <header className="sbm-rail-head">
-        <h3>{title}</h3>
-        <div className="sbm-rail-headbtns">
-          {selection ? (
-            <button type="button" className="sbm-rail-close" aria-label="Clear selection" onClick={onClose}>
-              <X size={13} aria-hidden />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="sbm-rail-close"
-            aria-expanded
-            aria-label="Collapse the details panel"
-            onClick={() => onCollapsed(true)}
-          >
-            <ChevronRight size={13} aria-hidden />
-          </button>
-        </div>
-      </header>
-      {/*
-       * S4.f — ONE live region for this panel, and it did not have one.
-       *
-       * The page has exactly one (`role="status"` on the census band's
-       * sub-line) and it does not cover the rail, so the entire contents could
-       * swap on selection and a screen-reader user heard nothing.
-       *
-       * It announces a SENTENCE, not the panel: making `.sbm-rail-body` itself
-       * live would re-read every row — thirty-odd of them on a worker — each
-       * time the selection changed, which is how a live region becomes
-       * something people switch off.
-       */}
-      <p className="sr-only" aria-live="polite">
-        {node
-          ? `Showing worker ${node.name}.`
-          : edge
-            ? `Showing the ${edge.artifact === 'plan' ? 'review' : 'handoff'} from ${
-                nodes.find((n) => n.key === edge.from)?.name ?? edge.from
-              } to ${nodes.find((n) => n.key === edge.to)?.name ?? edge.to}.`
-            : missing
-              ? `Nothing on this map matches ${selection?.id}.`
-              : 'Showing the whole fleet.'}
-      </p>
-      <div className="sbm-rail-body">
+    <RailShell
+      title={title}
+      announce={announce}
+      subject={subject}
+      onClose={selection ? onClose : undefined}
+      collapsed={collapsed}
+      onCollapsed={onCollapsed}
+    >
         {node ? (
           <WorkerPanel
             node={node}
@@ -630,7 +683,6 @@ export function InspectorRail({
         ) : (
           <Overview nodes={nodes} onPick={(k) => onSelect({ kind: 'worker', id: k })} />
         )}
-      </div>
-    </aside>
+    </RailShell>
   )
 }

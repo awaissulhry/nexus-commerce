@@ -19,7 +19,7 @@ import { Map as MapIcon, Network, RefreshCw, ShieldAlert, ArrowRight } from 'luc
 import { getBackendUrl } from '@/lib/backend-url'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
-import { InspectorRail } from './InspectorRail'
+import { InspectorRail, RailShell } from './InspectorRail'
 import { OverlayRail } from './OverlayRail'
 import { ListView } from './ListView'
 import { EntityCanvas, relationOf, type EntityGraph } from './EntityCanvas'
@@ -173,18 +173,25 @@ export function MapClient() {
     if (win && WINDOWS.some((x) => x.key === win)) setWindowKey(win)
     const ov = q.get('colour')
     if (ov) setOverlayId(ov)
+    const thing = q.get('thing')
+    if (thing) {
+      setMode('entities')
+      setEntitySel(thing)
+    }
   }, [])
 
   useEffect(() => {
     const q = new URLSearchParams()
     if (selection?.kind === 'worker') q.set('worker', selection.id)
     if (selection?.kind === 'edge') q.set('edge', selection.id)
+    /* S4.i — it was the only selection on this page that was not shareable. */
+    if (mode === 'entities' && entitySel) q.set('thing', entitySel)
     if (view === 'list') q.set('view', 'list')
     if (windowKey !== '7d') q.set('window', windowKey)
     if (overlayId !== 'autonomy') q.set('colour', overlayId)
     const s = q.toString()
     window.history.replaceState(null, '', s ? `?${s}` : window.location.pathname)
-  }, [selection, view, windowKey, overlayId])
+  }, [selection, view, windowKey, overlayId, mode, entitySel])
 
   /* Escape precedence for this page, agreed once across the section studies:
      an open dialog first, then a confirm, then an active filter chip if focus
@@ -194,12 +201,19 @@ export function MapClient() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      /* S4.i — entity mode had no close button and Escape did nothing, so a
+         selection there could not be cleared by keyboard AT ALL. Measured on
+         prod: still selected after Escape. */
+      if (mode === 'entities') {
+        if (entitySel) setEntitySel(null)
+        return
+      }
       if (selection) setSelection(null)
       else if (activeChip) setActiveChip(null)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [selection, activeChip])
+  }, [selection, activeChip, mode, entitySel])
 
   return (
     <div className="sbm-page">
@@ -465,11 +479,20 @@ export function MapClient() {
               )}
             </div>
 
-            <aside className="sbm-rail" aria-label="Details">
-              <header className="sbm-rail-head">
-                <h3>{entitySel ? 'Thing' : 'What this is'}</h3>
-              </header>
-              <div className="sbm-rail-body">
+            {(() => {
+              const n = entity?.nodes.find((x) => `${x.type}|${x.id}` === entitySel)
+              /* S4.i — the same shell the workers rail uses. Entity mode used to
+                 render its own <aside>, and had drifted into four behavioural
+                 differences and 19 contrast failures. */
+              return (
+                <RailShell
+                  title={n ? n.type.charAt(0) + n.type.slice(1).toLowerCase() : 'What this is'}
+                  announce={n ? `Showing ${n.label}.` : 'Showing everything the fleet watches.'}
+                  subject={n?.label ?? null}
+                  onClose={entitySel ? () => setEntitySel(null) : undefined}
+                  collapsed={railCollapsed}
+                  onCollapsed={setRailCollapsed}
+                >
                 {(() => {
                   const n = entity?.nodes.find((x) => `${x.type}|${x.id}` === entitySel)
                   if (!n) {
@@ -528,8 +551,9 @@ export function MapClient() {
                     </>
                   )
                 })()}
-              </div>
-            </aside>
+                </RailShell>
+              )
+            })()}
           </div>
 
           <footer className="sbm-foot">

@@ -2210,7 +2210,10 @@
 }
 .sbm-samples .sev-medium {
   background: #fdf3e3;
-  color: #8a6d3b;
+  /* was #8a6d3b = 4.41:1 on this amber tint — just under, and only reachable
+     when a sample happens to carry `medium`, which is why the first sweep did
+     not surface it. Found by re-measuring the rebuilt panel. */
+  color: #7d6234;
 }
 
 /*
