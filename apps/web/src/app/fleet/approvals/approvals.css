@@ -804,6 +804,13 @@
   flex: 0 0 auto;
   margin-top: 2px;
 }
+/* S5.4 — the text is a child now, so the measure goes on the text and not on
+   the flex row, which would otherwise pull the icon away from the first word.
+   58ch, re-counted in real characters on prod. */
+.aq-outnone > span {
+  min-width: 0;
+  max-width: 58ch;
+}
 
 /* S5.2 — the four hexes invented for this block (#f0c9c9 / #c53030 / #fdf7f7 /
    #f0dcdc) retired to the design system's own danger ramp. #c53030's other

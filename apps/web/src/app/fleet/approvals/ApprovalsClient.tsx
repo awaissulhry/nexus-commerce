@@ -125,7 +125,15 @@ interface GateState {
     runsWhileFleetIsOff: boolean
     lastMaintenance: { startedAt: string; status: string; outputSummary: string | null } | null
   }
-  outside: { pending: number; byTool: Array<{ toolName: string; count: number }> }
+  outside: {
+    pending: number
+    byTool: Array<{ toolName: string; count: number }>
+    /* OPTIONAL on purpose. Railway and Vercel deploy separately and neither
+       order is guaranteed, so between the two deploys this client runs against
+       an API that has never heard of `producers`. S2.a took production down by
+       assuming the opposite. Every read below is guarded. */
+    producers?: Array<{ key: string; enabled: boolean }>
+  }
 }
 
 interface CharterRow {
@@ -185,6 +193,14 @@ const OUTSIDE_ORIGINS: Record<string, Origin> = {
     what: `a scheduled check that watches listing quality and runs outside the fleet, ${NO_HISTORY}`,
   },
 }
+/* "A", "A and B", "A, B and C" — the count is never known ahead of time
+   because the producer list is enumerated from the registry, not hand-written,
+   so a third scheduled agent must read as English without a code change. */
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 function originOf(key: string | null): Origin {
   if (!key)
     return {
@@ -839,6 +855,7 @@ function OutsideQueue({
   labels,
   busy,
   expiryHours,
+  producers,
   onDecide,
   onUndo,
   onCommit,
@@ -850,6 +867,7 @@ function OutsideQueue({
   labels: FleetLabels
   busy: boolean
   expiryHours: number
+  producers?: Array<{ key: string; enabled: boolean }>
   onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
   onUndo: (id: string) => void
   onCommit: (id: string) => void
@@ -857,13 +875,48 @@ function OutsideQueue({
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
   onSnooze: (id: string, until: Date | null) => void
 }) {
-  // Empty is the normal state and should cost one line, not a card.
+  /*
+   * S5.4 — empty is the NORMAL state, and it has to earn its line.
+   *
+   * "Nothing is waiting" is not information. What an operator cannot learn
+   * anywhere else is *what could arrive here and whether anything is armed to
+   * send it* — and this section's producers are not behind S2's checklist.
+   * S2's three conditions gate the FLEET's ability to ask; these two are crons
+   * with their own switch, so S2's "nothing NEW can reach this queue yet" is
+   * true today for a reason S2 does not measure. This line measures it.
+   *
+   * Every claim below is read from `AgentDefinition.enabled` via the same call
+   * the cron makes (S5.4a). Nothing is asserted: with no `producers` payload —
+   * an older API during a split deploy — the armed sentence is simply omitted
+   * rather than guessed.
+   */
   if (rows.length === 0) {
+    const known = producers ?? []
+    const armed = known.filter((p) => p.enabled)
+    const names = known.map((p) => originOf(p.key).name)
     return (
       <p className="aq-outnone">
         <ShieldCheck size={12} aria-hidden />
-        Nothing is waiting from outside the fleet either. Requests from outside the fleet would
-        appear here — they are the only ones that can change something on Amazon today.
+        <span>
+          Nothing is waiting from outside the fleet. These would be the only requests on this page
+          that can change something on Amazon — the fleet&apos;s own actions are{' '}
+          <Term k="preview-only">describes only</Term>.
+          {known.length > 0 ? (
+            <>
+              {' '}
+              {listNames(names)} can send them, and{' '}
+              {armed.length === 0
+                ? known.length === 1
+                  ? 'it is switched off.'
+                  : known.length === 2
+                    ? 'both are switched off.'
+                    : 'all of them are switched off.'
+                : `${listNames(armed.map((p) => originOf(p.key).name))} ${
+                    armed.length === 1 ? 'is' : 'are'
+                  } switched on.`}
+            </>
+          ) : null}
+        </span>
       </p>
     )
   }
@@ -1346,6 +1399,7 @@ export function ApprovalsClient() {
         labels={labels}
         busy={busy}
         expiryHours={gate?.expiry.hours ?? 24}
+        producers={gate?.outside.producers}
         onDecide={(id, d, reason) => void decide(id, d, reason)}
         onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
         onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
