@@ -35,6 +35,7 @@ import { ArrowRight, X } from 'lucide-react'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ago } from '../_shared/run-health'
 import { statusOf, type MapEdge, type MapNode } from './lib'
+import { overlayById } from './overlays'
 
 export type Selection = { kind: 'worker' | 'edge'; id: string }
 
@@ -69,6 +70,18 @@ function Overview({ nodes, onPick }: { nodes: MapNode[]; onPick: (k: string) => 
                 <span className="nm">{n.name}</span>
                 <span className={`st tone-${s.tone}`}>{s.label}</span>
                 <span className="meta">
+                  {/* S4.d — three unrelated conditions all say "Needs attention"
+                      and were separated only by hue: red for a failure, amber
+                      for a limit, measured 1.50:1 apart in greyscale. The shared
+                      module already computes the CAUSE for exactly this reason —
+                      its own comment says the operator's next step differs by
+                      class — and the rail was throwing it away. */}
+                  {s.needsAttention && s.tag ? (
+                    <>
+                      <span className="cause">{s.tag}</span>
+                      {' · '}
+                    </>
+                  ) : null}
                   {n.runs.lifetime === 0 ? 'not yet run' : ago(n.lastRun?.createdAt)}
                   {n.findings.open > 0 ? ` · ${n.findings.open} open` : ''}
                 </span>
@@ -95,6 +108,8 @@ function WorkerPanel({
   onPick: (k: string) => void
 }) {
   const s = statusOf(node)
+  /* The same bucket the canvas paints from — see the Row below. */
+  const autonomyBucket = overlayById('autonomy').bucketOf(node)
   const nameOf = (k: string) => nodes.find((n) => n.key === k)?.name ?? k
   const feedsIt = edges.filter((e) => e.to === node.key)
   const itFeeds = edges.filter((e) => e.from === node.key)
@@ -115,12 +130,30 @@ function WorkerPanel({
       <p className={`sbm-rail-reason tone-${s.tone}`}>{s.reason}</p>
 
       <h4>What it may do</h4>
+      {/*
+       * S4.d — this row is headed by the question and must answer it.
+       *
+       * It printed the raw dial. Measured on prod, for one PAUSED worker at one
+       * moment: the canvas painted `ov-off` and the legend read "Held at off",
+       * while this row said "OBSERVE · at its ceiling" — two surfaces on one
+       * screen answering one question two ways, and the canvas's answer was the
+       * right one. `overlays.ts` exists to prevent precisely that; its own
+       * comment says a node tinted from `autonomyLevel` alone "would paint a
+       * paused worker as armed".
+       *
+       * So the row reads the SAME bucket the canvas paints from rather than
+       * re-deriving the rule — the legend/canvas one-source rule, applied to a
+       * third surface. The dial stays, demoted to what it is: the setting that
+       * will apply again once whatever is holding it lets go.
+       */}
       <Row
-        k="Autonomy"
+        k="Right now"
         v={
           <>
-            <b>{node.charter.autonomyLevel}</b>
-            {node.charter.autonomyCap !== node.charter.autonomyLevel ? (
+            <b>{autonomyBucket.label}</b>
+            {autonomyBucket.id === 'off' && node.charter.autonomyLevel !== 'OFF' ? (
+              <span className="sbm-dim"> · the dial is still at {node.charter.autonomyLevel}</span>
+            ) : node.charter.autonomyCap !== node.charter.autonomyLevel ? (
               <span className="sbm-dim"> · cannot go above {node.charter.autonomyCap}</span>
             ) : (
               <span className="sbm-dim"> · at its ceiling</span>

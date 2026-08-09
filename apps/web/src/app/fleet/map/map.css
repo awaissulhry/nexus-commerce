@@ -2101,6 +2101,13 @@
   font-size: 10.5px;
   color: #55616f; /* was #9aa5b3 = 2.50:1 */
 }
+/* S4.d — the cause leads the meta line, because "Needs attention" is the same
+   word for a failure, a safety limit and an unreadable charter, and hue was the
+   only thing separating them (1.50:1 in greyscale). */
+.sbm-rail-listbtn .cause {
+  font-weight: 600;
+  color: #45505f;
+}
 
 .sbm-drops {
   margin: 0;
