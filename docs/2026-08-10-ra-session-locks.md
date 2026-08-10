@@ -1,6 +1,6 @@
 # RA — parallel-session file ownership
 
-Two or more Claude sessions build the nine Rules & Automation pages at the same time, on the same
+Two or more Claude sessions build the six Rules & Automation pages at the same time, on the same
 `main`, in the same working tree. **This file is the protocol and the live claim register.**
 
 Read this before editing any file in §3. Record a claim before you edit one. Release it when you
@@ -35,6 +35,7 @@ across the ten `/fleet` pages — read that file's §6 before your first commit.
 | `…/rules-automation/rules-automation.css` | RA.SB (scope bar) | 2026-08-10 | **released** — appended at EOF only |
 | `…/rules-automation/RulesAutomationClient.tsx` | RA.SB (scope bar) | 2026-08-10 | **released** |
 | `…/marketing/ads/_shell/AdsPageHeader.tsx` | RA.SB (`showMarket`, additive) | 2026-08-10 | **released** |
+| `apps/api/src/services/advertising/rule-category.ts` | RA.2 (category honesty) | 2026-08-10 | **released** |
 
 *(The scope bar has shipped. The first Automations session claims §3 rows 1–4.)*
 

@@ -373,6 +373,36 @@ Absorbs: Apply Rules, Bid, Keyword Harvest, Negative Targeting, Budget, Placemen
 library/playbooks/active/composer/builder/recs · Control Room "Rules" · the `AutomationDock`.
 **Deletes:** the three decorative columns (1.4), `placeholderSeeds.ts`, `ComingSoon`.
 
+#### 4.2a 🔴 Fixed on the way in — the colour said a pause-everything rule could not write
+
+`ruleCategory()` (shared by the dock, the rules tabs and the cockpit) fell back to `alert` for any
+action it did not recognise — and `alert`'s own definition is *"informs, never writes"*.
+
+Measured (`scripts/_ra2-category.mts`): **8 of 51 rules carried a writing action while labelled
+Alerts**, including **"Monthly spend cap (pause everything)"** and **"Monthly budget cap"**, whose
+action is `pause_all_campaigns` — the largest blast radius in the system. Four writing action types
+had no mapping at all: `pause_ad_group`, `refresh_dayparting`, `pause_all_campaigns`,
+`create_amazon_promotion`.
+
+All eight were `OFF`, so nothing had acted on the mislabel. The danger was the label: **colour is
+what an operator scans to decide what is safe to arm**, and slate said "this one cannot touch
+anything."
+
+Fixed two ways, because mapping alone would only fix today's eight:
+· `pause_ad_group` + `pause_all_campaigns` → **guard** (they suppress spend exactly as
+  `pause_campaign` already there; they differ in blast radius, not in kind)
+· `refresh_dayparting` → **placement** (it rewrites the plan the engine turns into hour-window
+  multipliers — the same family as rank-defense)
+· **the fallback now splits**: unmapped *with* a writing action → new **`other` / "Other changes"**;
+  unmapped with only `notify`/`alert_operator`/`log_only` → `alert`. So the next unmapped write
+  cannot inherit the same lie.
+
+After: **0 mislabelled**. Distribution moved bid 13 · placement 8→11 · guard 4→9 · negative 8 ·
+budget 6 · alert 12→4 · other 0. `create_amazon_promotion` is the only action with no family of its
+own and lands in `other`, correctly — it is not an ads-targeting action.
+
+---
+
 ### 4.3 Schedules `/schedules`
 
 *Anything that changes on a clock.*
@@ -558,6 +588,7 @@ Not blocking; answer when each study reaches them.
 | One ASIN can reach **76 campaigns** (§3.4) | 🔴 open — blast radius before every action |
 | **🔴 The picker and the server use DIFFERENT date vocabularies** (§3.5) | ✅ contained — the bar uses the server's keys; `DateRangePicker`'s remain wrong for any caller that forwards them |
 | `GET /advertising/campaigns` ignores `scopeGrain`/`scopeId` (§3.5) | 🔴 open — grain is narrowed client-side meanwhile |
+| **🔴 8 of 51 rules were labelled "Alerts — informs, never writes" while able to write** (§4.2a) | ✅ fixed 2026-08-10 — `rule-category.ts`, 0 remain |
 | Scope is mutually exclusive; "this portfolio in DE" needs 2 calls (§3.4) | 🔴 open — decide in the 4.2 study |
 | `dryRun` mode control is inert (Part 2) | 🔴 open — fix in the Automations build |
 | Date picker disabled + range never sent (1.6) | ✅ fixed — the bar sends `?preset=` on the server's vocabulary |
