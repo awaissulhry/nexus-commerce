@@ -1570,6 +1570,11 @@
    reading the diff. It passes contrast; it was only ever a size. */
 .aq-page .ap-decidedmeta .dt-risk {
   font-size: 11.5px;
+  /* The shared chip is `text-transform: uppercase`, which shouts MEDIUM RISK
+     in the middle of a quiet metadata line. Upper case is also measurably
+     slower to read and, at 11.5px in a row of sentence-case facts, it is the
+     loudest thing on a row whose whole point is that nothing happened. */
+  text-transform: none;
 }
 
 .aq-page .ap-prefleet {

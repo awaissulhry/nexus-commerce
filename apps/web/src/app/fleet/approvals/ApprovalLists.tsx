@@ -230,8 +230,11 @@ export function RecordList({ rows, nameOf }: { rows: ApprovalRow[]; nameOf: (k: 
                 {row.decidedBy ? (
                   <>by {row.decidedBy}</>
                 ) : (
+                  /* "nobody recorded" reads as a shrug; the fact is narrower
+                     and more useful than that — a person is what is missing,
+                     and the record is otherwise complete. */
                   <span title="No decider was recorded. Decisions taken from now on carry a name.">
-                    nobody recorded
+                    no person recorded
                   </span>
                 )}
                 <span className="dt-sep">·</span>
