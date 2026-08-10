@@ -1520,3 +1520,55 @@
   outline: 2px solid #1f6fde;
   outline-offset: 1px;
 }
+
+/* ── S10 · the record ───────────────────────────────────────────────────── */
+
+/*
+ * S10.1 — contrast and type, fixed under this page's root.
+ *
+ * `.ap-*` is defined in `fleet-sections.css`, under
+ * `app/marketing/ads/rules-automation/fleet/`, which this engagement may not
+ * touch. So this is S1's precedent for `.acr-sub`: the shared file is frozen
+ * ground and the fix lives here, scoped to a root only this page carries.
+ *
+ * ⚠ The shared rule serves TWO surfaces — this record and the Overview's
+ * `ApprovalInbox.tsx`, in that same frozen directory. The Overview's copy
+ * still fails at 2.95:1 and 3.77:1 after this. Recorded in the study and in
+ * the locks file rather than silently half-fixed; it is that file owner's.
+ *
+ * Measured on prod across all 18 rows before the change:
+ *   .ap-decidedmeta  11px  #8d97a6 on #ffffff = 2.95:1   ✗ (needs 4.5)
+ *   .ap-prefleet     10px  #77828f on #fafbfd = 3.77:1   ✗
+ * Neither involves opacity — both are declared colours, so this is a
+ * different failure from the three opacity recurrences, and `getComputedStyle`
+ * alone would have caught it. Nothing did, because nobody looked.
+ *
+ * #55616f is 6.02:1 on white and is the value S1 settled for this exact role
+ * page-wide, so the record and the header cannot drift apart.
+ */
+.aq-page .ap-decidedmeta {
+  font-size: 11.5px;
+  color: #55616f;
+}
+
+/*
+ * Type: six sizes in the record (10 / 10.5 / 11 / 11.5 / 12.5 / 16) where S6
+ * settled the card on three. The record was built to hold data and never had a
+ * design pass, so it grew its own ladder. Two sizes inside a row now — 13 for
+ * what happened, 11.5 for everything about it — which is the card's ladder,
+ * not a second dialect for the same ideas.
+ */
+.aq-page .ap-decidedwhat {
+  font-size: 13px;
+}
+.aq-page .ap-outcome {
+  font-size: 11.5px;
+}
+.aq-page .ap-prefleet {
+  font-size: 11.5px;
+  /* 6.02:1 on the #fafbfd this chip sits on, up from 3.77. S10.2 retires the
+     chip for accessible text; this makes it legible in the meantime rather
+     than leaving a known failure on screen across two deploys. */
+  color: #55616f;
+  border-color: #c3cdd9;
+}
