@@ -113,7 +113,14 @@ export function RulesAutomationClient() {
     ;(async () => {
       try {
         const j = await fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' }).then((r) => r.json())
-        const items = (Array.isArray(j?.items) ? j.items : []) as Array<{ portfolioId: string; name: string }>
+        // RA.AUTO — the array is under `portfolios`, NOT `items`. Measured on prod 2026-08-10.
+        //
+        // This read has always been wrong, which means the one fix kept from the reverted
+        // scope-bar work — "the Portfolio filter shows names, not raw Amazon ids" — never actually
+        // worked: `items` was always undefined, so `portfolioNames` stayed empty and every option
+        // fell through to `String(portfolioId)`. The plan's ledger records it as done. A fix
+        // verified by reading the diff rather than the rendered control is not a fix.
+        const items = (Array.isArray(j?.portfolios) ? j.portfolios : Array.isArray(j?.items) ? j.items : []) as Array<{ portfolioId: string; name: string }>
         if (alive) setPortfolioNames(Object.fromEntries(items.map((p) => [p.portfolioId, p.name])))
       } catch { /* the filter falls back to ids rather than losing the option */ }
     })()

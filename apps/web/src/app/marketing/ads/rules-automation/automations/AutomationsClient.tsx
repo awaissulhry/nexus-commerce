@@ -99,7 +99,14 @@ export function AutomationsClient() {
       .catch(() => {})
     void fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => { if (alive) setPortfolios((Array.isArray(d?.items) ? d.items : []) as Portfolio[]) })
+      // The array is under `portfolios`, NOT `items` — measured on prod, and `_rank/RankGoalBuilder`
+      // and `_schedule/CampaignSection` both already say so in a comment. Reading `items` returned
+      // an empty list, so the portfolio picker offered "No matches" and portfolio scope could not
+      // be bound at all. `items` is kept as a fallback only so a future rename cannot re-empty it.
+      .then((d) => {
+        const list = Array.isArray(d?.portfolios) ? d.portfolios : Array.isArray(d?.items) ? d.items : []
+        if (alive) setPortfolios(list as Portfolio[])
+      })
       .catch(() => {})
     return () => { alive = false }
   }, [])
