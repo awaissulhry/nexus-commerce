@@ -9,6 +9,31 @@ across the ten `/fleet` pages — read that file's §6 before your first commit.
 
 ---
 
+## 0 · Scope boundary — operator directive, 2026-08-10
+
+> *"In this session, we are not touching the Fleets page. We are only working on the Automation
+> page. That's it. And same goes for any alternate sessions that might mention the subpages or
+> the tabs, etc. Will not go touch other pages out of context if they're not related to
+> automations and stuff."*
+
+**A session is scoped to one page. That scope binds even where this document names other
+surfaces.** Specifically, an Automations session:
+
+- **must not edit `apps/web/src/app/fleet/*` or `…/rules-automation/fleet/*`** — another
+  programme owns them. Read for a pattern; never write.
+- **must not retire the `AutomationDock`, the Portfolios page, the Family Cockpit, the Control
+  Room or `/marketing/ads-console/*`.** Part 6 of the plan is a map, not a licence. Each is
+  retired in the session that owns it, after its replacement is live and verified.
+- touches shared/app-wide files (`AppRail`, `AdsPageHeader`, `app-nav.ts`) only when the
+  operator asked for that specific fix, and then minimally and additively.
+- **when the work genuinely needs another page: say so and stop.** Do not reach in.
+
+Why this is a rule and not a preference: every session shares one working tree and one `main`,
+and a broken shared file blocks *every* session's push. That happened on 2026-08-10 —
+`fleet/approvals/ApprovalsClient.tsx` failed the web build mid-session and held the queue.
+
+---
+
 ## 1 · The rule
 
 **One session owns one page's files.** Cross-page edits go through a claim.

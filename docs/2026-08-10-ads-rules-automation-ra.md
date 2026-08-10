@@ -523,6 +523,11 @@ Absorbs: Control Room "Guardrails" + "Levers", `ProtectedTermsPanel`, ads-consol
 
 ## Part 6 — The retirement map
 
+**⚠ This table is a MAP, not a licence.** Operator directive 2026-08-10: a session works one
+page and does not reach into others. Each surface below is retired **in the session that owns
+it**, after its replacement is live and verified — never as a side-effect of building the
+replacement. See §0 of the locks doc.
+
 Retire only when the replacement is live and verified, one surface at a time.
 
 | retire | when | to |
