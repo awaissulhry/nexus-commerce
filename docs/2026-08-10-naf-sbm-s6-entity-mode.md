@@ -328,6 +328,8 @@ should stay small — which is the real argument of Part 4.
 | **S6.c** | the relationship table (D-S6.2) | every edge in the payload is a row; direction and evidence readable |
 | **S6.d** | table becomes the default view (D-S6.2) | switch remembers, URL carries it |
 | **S6.f** | the mode itself goes in the URL | `?mode=entities` and `?ev=map` both round-trip |
+| **S6.g** | the table tells the truth when capped | forced `truncated: true` and the footer agrees with the band |
+| **S6.h** | every declared relation has an edge colour | forced `VARIANT_OF`; swatch, meter and stroke agree |
 
 `S6.a` first: it is a correctness defect, it is three lines, and it is the same
 fix a previous section already proved. **S6.f was not planned** — it was found
@@ -373,6 +375,45 @@ mode stays bare because it is the default.
 
 That is the second time in this section that the verify step found a defect the
 commit before had introduced, and the sixth across Sections 4–6.
+
+Verified after the fix: `?mode=entities&ev=map` lands in entity mode, Graph
+selected, both params preserved, 38 nodes and 103 edges drawn.
+
+### 10.3 · Forcing the two states prod cannot reach — both were hiding a defect
+
+Part 1 flagged two states the fleet's data never produces. Neither was
+hypothetical.
+
+**`truncated: true`** — patched the entity-graph fetch to cap at 40 links. The
+screen said two things about one number:
+
+```
+band    "Capped, so it shows the strongest links first"
+table   "One row per relationship the fleet derived — 40 of them"
+```
+
+The band was honest; the footer I had shipped in S6.c presented a capped view as
+the whole set. **That is the defect S6.a fixed** — a surface stating a fact it is
+not showing — reintroduced by the surface added to replace it. Fixed in S6.g.
+
+**A relation with no rows** — the vocabulary declares eleven classes and
+`map.css` coloured seven edges. `VARIANT_OF` is emitted by
+`entity-graph.service.ts`, so the gap was reachable. Relabelled a third of the
+edges and measured:
+
+| surface | colour |
+|---|---|
+| legend swatch | `rgb(183,203,228)` `#b7cbe4` |
+| meter segment | `rgb(183,203,228)` `#b7cbe4` |
+| **edge stroke** | **`rgb(195,204,216)` `#c3ccd8`** — the fallback |
+
+Measured beside `rel-competes` and `rel-cannibalizes`, which matched exactly.
+**The one-source rule held everywhere it had ever been exercised, and nowhere it
+had not** — which is precisely why §1.3's "the legend's one-source rule holds"
+was true and still incomplete. Fixed in S6.h.
+
+The method point: forcing is not a formality for empty states. Two forced
+payloads, two real defects, one of them mine from an hour earlier.
 
 ---
 
