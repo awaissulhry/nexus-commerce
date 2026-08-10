@@ -118,11 +118,29 @@ const ACTIONS: Record<string, string> = {
 export const NON_WRITING = new Set(['notify', 'alert_operator', 'log_only'])
 
 /**
+ * `targetAcos` is a FRACTION — the engine defaults it to 0.3 and uses it directly
+ * (`ads-bid-optimizer.service.ts`, `previewBidOptimization`). Measured on prod 2026-08-10: one rule
+ * stores `0.3` and one stores `30`, which the engine would read as a 3000% ACOS target.
+ *
+ * The server now refuses an out-of-range value rather than acting on it, but the operator still has
+ * to be able to SEE which of their rules carries one — a refusal buried in execution history is not
+ * the same as a warning on the rule.
+ */
+export function targetAcosProblem(raw: unknown): string | null {
+  if (raw == null) return null
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0 || n > 1) {
+    return `stored as ${JSON.stringify(raw)} — this field is a fraction (0.3 = 30%), so the engine reads it as ${Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : 'an invalid target'} and refuses to run it`
+  }
+  return null
+}
+
+/**
  * The parameters that change what an action DOES, rendered beside it.
  *
- * `targetAcos` is deliberately printed raw. Measured on prod: one rule stores `0.3` and another
- * stores `30` for the same key, so any surface that picked a unit would misreport one of them by
- * 100×. Printing the stored number keeps the discrepancy visible instead of laundering it.
+ * `targetAcos` is printed raw, never converted: two rules on prod store it in different units, so
+ * any surface that picked one would misreport the other by 100×. The discrepancy is surfaced by
+ * `targetAcosProblem` instead of laundered by a conversion.
  */
 function params(a: Record<string, unknown>): string {
   const out: string[] = []
@@ -151,7 +169,7 @@ function params(a: Record<string, unknown>): string {
   return out.join(', ')
 }
 
-export interface ActionLine { label: string; detail: string; writes: boolean; type: string }
+export interface ActionLine { label: string; detail: string; writes: boolean; type: string; problem?: string }
 
 /**
  * The "Then" lines. One per action, in stored order — that order is what the engine executes, and
@@ -164,14 +182,25 @@ export interface ActionLine { label: string; detail: string; writes: boolean; ty
  */
 export function actionLines(actions: unknown, fallbackTypes?: string[]): ActionLine[] {
   const raw = (Array.isArray(actions) ? actions : []) as Array<Record<string, unknown>>
-  const list = raw.length ? raw : (fallbackTypes ?? []).map((t) => ({ type: t }))
+  const list: Array<Record<string, unknown>> = raw.length
+    ? raw
+    : (fallbackTypes ?? []).map((t) => ({ type: t } as Record<string, unknown>))
   return list.map((a) => {
     const type = String(a?.type ?? '')
+    const problems = [
+      type === 'bid_to_target_acos' ? targetAcosProblem(a?.targetAcos) : null,
+      // A named scope this handler cannot honour is worse than no scope: the operator believes the
+      // rule is narrowed and it is not. The server refuses it; this says so on the rule itself.
+      Array.isArray(a?.campaignIds) && (a.campaignIds as unknown[]).length > 0 && typeof a?.campaignId !== 'string'
+        ? `names ${(a.campaignIds as unknown[]).length} campaigns via \`campaignIds\`, which this action cannot honour — refused rather than run account-wide`
+        : null,
+    ].filter(Boolean) as string[]
     return {
       type,
       label: ACTIONS[type] ?? (type.replace(/_/g, ' ') || 'unknown action'),
       detail: params(a ?? {}),
       writes: !!type && !NON_WRITING.has(type),
+      problem: problems.length ? problems.join(' · ') : undefined,
     }
   })
 }

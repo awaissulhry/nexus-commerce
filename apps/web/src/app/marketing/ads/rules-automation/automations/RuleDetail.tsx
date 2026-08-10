@@ -158,6 +158,14 @@ export function RuleDetail({
                             {a.label}
                             {a.detail && <em> — {a.detail}</em>}
                             {!a.writes && <span className="h10-au-nowrite">never reaches Amazon</span>}
+                            {/* A parameter the engine will refuse. Named on the rule, because a
+                                refusal that only appears in execution history is a refusal nobody
+                                reads until they are already wondering why nothing happened. */}
+                            {a.problem && (
+                              <span className="h10-au-problem">
+                                <AlertTriangle size={11} aria-hidden /> {a.problem}
+                              </span>
+                            )}
                           </span>
                         </li>
                       ))}

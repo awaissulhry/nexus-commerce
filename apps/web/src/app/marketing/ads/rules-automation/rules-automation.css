@@ -1310,6 +1310,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-dot.w { background: #b4530e; }
 .h10-au-dot.n { background: #cfd6df; }
 .h10-au-nowrite { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: #f1f4f8; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
+/* A parameter the engine will refuse. Amber rather than red: the rule is not broken, one of
+   its numbers is in the wrong unit, and the server declines it rather than acting. */
+.h10-au-problem { display: flex; align-items: flex-start; gap: 5px; margin-top: 4px; padding: 5px 8px; border-radius: 6px; background: #fff6e8; color: #8a5316; font-size: 10.5px; line-height: 1.5; }
+.h10-au-problem svg { flex-shrink: 0; margin-top: 2px; }
 .h10-au-desc { margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
 
 .h10-au-conf, .h10-au-ceiling, .h10-au-grad, .h10-au-capped { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; }

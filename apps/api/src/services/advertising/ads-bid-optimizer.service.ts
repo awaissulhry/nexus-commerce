@@ -249,6 +249,43 @@ export async function applyBidOptimization(args: { changes: Array<{ targetId: st
 ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<ActionResult> => {
   const targetAcos = typeof action.targetAcos === 'number' ? (action.targetAcos as number) : 0.3
   const campaignId = typeof action.campaignId === 'string' ? (action.campaignId as string) : undefined
+
+  /**
+   * RA.AUTO — two guards, both of which REFUSE rather than guess.
+   *
+   * `targetAcos` is a FRACTION: `previewBidOptimization` defaults it to `0.3 // 30% default
+   * fallback` and uses it directly. Measured on prod 2026-08-10 (`scripts/_ra8-targetacos-units.mts`):
+   * of the seven rules carrying this action, six store a fraction or nothing, and one — "AIREON —
+   * Target ACoS bidding" — stores `30`. Read as a fraction that is a 3000% ACOS target, i.e. "spend
+   * up to thirty times revenue", which in this engine raises every bid it touches.
+   *
+   * Nothing has been lost: that rule is PROPOSE, so it cannot write, and this action has applied 0
+   * bids in 60 days. But the ceiling admits it to AUTO, so one click on the Automations dial is all
+   * that stands between the stored 30 and a live account.
+   *
+   * Coercing 30 → 0.3 would be a guess about intent dressed as a fix, and a wrong guess here moves
+   * real money. Refusing is honest, loud, and visible in the execution history and on the rule row.
+   *
+   * The second guard is the same shape. This handler reads `campaignId` (SINGULAR). The AIREON rule
+   * stores `campaignIds` — an array of 11 — which is silently ignored, so a rule an operator scoped
+   * to eleven campaigns would optimise the entire account. Supporting the array is a real change to
+   * the bid engine and belongs in its own study; refusing to act on a scope this handler cannot
+   * honour costs nothing and cannot surprise anyone.
+   */
+  if (!Number.isFinite(targetAcos) || targetAcos <= 0 || targetAcos > 1) {
+    return {
+      type: action.type,
+      ok: false,
+      error: `targetAcos must be a fraction between 0 and 1 (0.3 = 30%); this rule stores ${JSON.stringify(action.targetAcos)}, which would be read as ${(targetAcos * 100).toFixed(0)}% and is refused`,
+    }
+  }
+  if (Array.isArray(action.campaignIds) && (action.campaignIds as unknown[]).length > 0 && !campaignId) {
+    return {
+      type: action.type,
+      ok: false,
+      error: `this rule names ${(action.campaignIds as unknown[]).length} campaigns via \`campaignIds\`, which this action cannot honour (it reads \`campaignId\`); refused rather than run account-wide`,
+    }
+  }
   // Apex C.2 — a rule can opt into profit-native per-SKU target ACOS.
   const profitMode = action.profitMode === true || action.profitMode === 'true'
   const mode = typeof action.acosMode === 'string' ? (action.acosMode as AcosMode) : undefined

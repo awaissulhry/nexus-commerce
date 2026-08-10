@@ -9,7 +9,7 @@
  * No `@/` imports — the vitest runner in apps/web has no such alias.
  */
 import { describe, it, expect } from 'vitest'
-import { conditionText, actionLines, triggerText, detectConflicts, NON_WRITING } from './ruleText'
+import { conditionText, actionLines, triggerText, detectConflicts, targetAcosProblem, NON_WRITING } from './ruleText'
 
 describe('conditionText — the "If" line', () => {
   it('renders a ratio as a percentage, not a fraction', () => {
@@ -205,5 +205,57 @@ describe('actionLines fallback — the missing-field guard', () => {
   it('is still empty when a rule genuinely has no actions', () => {
     expect(actionLines([], [])).toEqual([])
     expect(actionLines(null, undefined)).toEqual([])
+  })
+})
+
+describe('targetAcosProblem — the 100× trap', () => {
+  it('accepts a fraction', () => {
+    expect(targetAcosProblem(0.3)).toBeNull()
+    expect(targetAcosProblem(1)).toBeNull()
+    expect(targetAcosProblem(undefined)).toBeNull()
+  })
+
+  it('flags the value one rule on prod actually stores', () => {
+    // "AIREON — Target ACoS bidding" stores 30. previewBidOptimization defaults this field to
+    // 0.3 and uses it directly, so 30 is a 3000% ACOS target — "spend up to 30x revenue".
+    const p = targetAcosProblem(30)
+    expect(p).toContain('3000%')
+    expect(p).toContain('fraction')
+  })
+
+  it('flags nonsense rather than passing it through', () => {
+    expect(targetAcosProblem(0)).not.toBeNull()
+    expect(targetAcosProblem(-1)).not.toBeNull()
+    expect(targetAcosProblem('abc')).toContain('invalid')
+  })
+})
+
+describe('actionLines — parameters the engine will refuse', () => {
+  it('flags a percent-shaped targetAcos on the action itself', () => {
+    const l = actionLines([{ type: 'bid_to_target_acos', targetAcos: 30 }])[0]
+    expect(l.problem).toContain('3000%')
+  })
+
+  it('flags a campaignIds array the handler cannot honour', () => {
+    // The handler reads `campaignId` (singular). An operator who scoped a rule to 11 campaigns
+    // believes it is narrowed; without this it would run account-wide.
+    const l = actionLines([{ type: 'bid_to_target_acos', targetAcos: 0.3, campaignIds: ['a', 'b'] }])[0]
+    expect(l.problem).toContain('2 campaigns')
+    expect(l.problem).toContain('account-wide')
+  })
+
+  it('does not flag a singular campaignId, which IS honoured', () => {
+    const l = actionLines([{ type: 'bid_to_target_acos', targetAcos: 0.3, campaignId: 'abc' }])[0]
+    expect(l.problem).toBeUndefined()
+  })
+
+  it('reports both problems when a rule carries both', () => {
+    const l = actionLines([{ type: 'bid_to_target_acos', targetAcos: 30, campaignIds: ['a'] }])[0]
+    expect(l.problem).toContain('3000%')
+    expect(l.problem).toContain('account-wide')
+  })
+
+  it('leaves every other action unflagged', () => {
+    expect(actionLines([{ type: 'bid_up', percent: 20 }])[0].problem).toBeUndefined()
   })
 })
