@@ -1496,8 +1496,18 @@
 .sbm-liststatus {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  flex-wrap: wrap;
+  gap: 2px 5px;
   white-space: normal;
+}
+/* S5.c — the cause, on its own line and in neutral rather than the tone colour.
+   Three unrelated conditions all render "Needs attention" and were separated
+   only by red vs amber, 1.50:1 apart in greyscale. The words already existed on
+   `WorkerStatus.tag`; the table was throwing them away. */
+.sbm-listcause {
+  flex: 0 0 100%;
+  font-size: 11px;
+  color: #55616f;
 }
 .sbm-liststatus.tone-bad { color: #c53030; }
 .sbm-liststatus.tone-warn { color: #9a6410; } /* was #b7791f = 3.64:1 at 13px — text, not a swatch. Only reachable when something is paused or stopped at a limit, which is why the first sweep of the live fleet missed it. */

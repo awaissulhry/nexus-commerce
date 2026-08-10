@@ -112,6 +112,22 @@ export function ListView({
           <span className={`sbm-liststatus tone-${s.tone}`}>
             <span className={`sbm-glyph g-${s.word}`} aria-hidden />
             {s.label}
+            {/*
+             * S5.c — the same defect S4.d fixed in the inspector rail, still
+             * live here. Forced a failure, a limit and a degraded charter: all
+             * three rendered "Needs attention", separated only by red vs amber
+             * — 1.50:1 apart in greyscale, where WCAG credits lightness as a
+             * second channel only at 3:1.
+             *
+             * The shared module already computes the cause for exactly this
+             * reason; the table was throwing it away. Gated on
+             * `word === 'attention'`, not `needsAttention`, because `paused` and
+             * `not-set-up` set that flag too and would print "Paused · paused"
+             * — the mistake S4.d shipped and had to correct.
+             */}
+            {s.word === 'attention' && s.tag ? (
+              <span className="sbm-listcause">{s.tag}</span>
+            ) : null}
           </span>
         )
       },
