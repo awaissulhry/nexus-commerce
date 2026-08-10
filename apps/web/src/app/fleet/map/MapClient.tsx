@@ -218,6 +218,40 @@ export function MapClient() {
   const windowLabel = WINDOWS.find((w) => w.key === windowKey)?.label ?? windowKey
   const windowIndex = Math.max(0, WINDOWS.findIndex((w) => w.key === windowKey))
 
+  /*
+   * S7.g — CHANGING THE WINDOW CHANGES WHAT MOST NUMBERS ON THIS PAGE MEAN, AND
+   * A SCREEN READER WAS TOLD ONLY THAT A RADIO GOT SELECTED.
+   *
+   * The radio announces "24 hours, selected". It cannot announce the
+   * consequence, which is the whole point of the control. This says the
+   * denominator and what moved -- a SENTENCE, not a re-read of the page, for
+   * the reason S4.f gives about the rail: a live region that re-reads thirty
+   * rows is a live region people switch off.
+   *
+   * Gated on `data.window.key`, not on `windowKey`. The payload states which
+   * window it was computed for, so this cannot announce the new label over the
+   * old numbers -- which it would do for the ~5 seconds the API takes, and that
+   * is precisely the gap that made S5.b invisible for a whole section.
+   *
+   * Silent on first paint: arriving at a page is not a change.
+   */
+  const announcedWindow = useRef<string | null>(null)
+  const [windowAnnounce, setWindowAnnounce] = useState('')
+  useEffect(() => {
+    if (data == null || data.window.key !== windowKey) return
+    if (announcedWindow.current === null) {
+      announcedWindow.current = windowKey
+      return
+    }
+    if (announcedWindow.current === windowKey) return
+    announcedWindow.current = windowKey
+    const runs = data.nodes.reduce((t, n) => t + n.runs.window, 0)
+    const spend = data.nodes.reduce((t, n) => t + n.cost.windowUSD, 0)
+    setWindowAnnounce(
+      `Showing ${windowLabel}. ${runs} ${runs === 1 ? 'run' : 'runs'}, $${spend.toFixed(2)} spent. Open findings and “ever” figures are unchanged.`,
+    )
+  }, [data, windowKey, windowLabel])
+
   /**
    * The URL is the shareable unit. Selection state that lives only in React
    * cannot be pasted into a message, which is most of what an operations map
@@ -763,6 +797,10 @@ export function MapClient() {
         at 7 days, 2 of 57 at 24 hours — which is why `7 days`, `30 days` and
         `all time` currently render byte-identical pages.
       */}
+      <p className="sr-only" aria-live="polite">
+        {windowAnnounce}
+      </p>
+
       {data != null ? (
         <p className="sbm-footnote">
           Counts below cover <b>{windowLabel}</b>. Open findings, approvals and anything marked{' '}
