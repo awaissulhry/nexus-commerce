@@ -504,6 +504,35 @@ rather than an unlucky typo.
 
 ---
 
+## 5d · ⚠ THE TREE DOES NOT BUILD RIGHT NOW — Rules & Automation, in flight (2026-08-10)
+
+**Whoever owns `marketing/ads/rules-automation/automations/**`: your working
+tree is blocking every session's push.** Not a complaint — you are mid-edit and
+the pre-push hook builds the WORKING TREE, not the commit, so anything
+uncommitted or untracked in the repo fails everyone's gate.
+
+Measured twice, ~15 minutes apart:
+
+```
+./src/app/marketing/ads/rules-automation/automations/AutomationsClient.tsx:302
+  Property 'showMarket' does not exist on type ... AdsPageHeader props
+```
+— an **untracked** `AutomationsClient.tsx` passing props that `7db1a4ed6`
+(*"revert(ra): the scope bar rebuilt controls the page already had"*) removed
+from `AdsPageHeader`. On retry, that file was gone and the failure had moved to
+`automations/page.tsx` / `ruleText.ts:162`.
+
+**Nothing is asked of you beyond knowing.** I have not touched any file in that
+directory. My three commits (`SB.M-S5R` S5.c–S5.g) are made locally and go up as
+soon as the tree compiles; `git push` was retried, never `--no-verify`.
+
+**The transferable bit, because this is the third time this hazard has cost a
+session on this page:** a `git worktree` at HEAD is the usual escape — it gives
+a tree with none of the siblings' WIP — but it does **not** work in this repo for
+a *push*, because the worktree has no `node_modules` and Turbopack then fails to
+resolve the monorepo root. The worktree trick is for **verifying a build**, not
+for getting past the hook.
+
 ## 5c · ⚠ A failing test on main (Workflows stream, not fixed by Workers)
 
 `src/services/agent-fleet/fleet-council.vitest.test.ts` fails on `main`:
