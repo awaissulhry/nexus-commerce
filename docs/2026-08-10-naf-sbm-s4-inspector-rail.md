@@ -688,11 +688,39 @@ the study. All four came from the same step: **deploy the phase, force the state
 measure the rendered page.** Two of them were defects I had introduced in the
 commit immediately before.
 
+### Two open items closed, and both of my claims about them were wrong
+
+**§7 — "the one backend field this section needs" (S4.j). There was no field to
+add.** The critic already writes `criticNotes.summary` — its own sentence about
+the plan — and `fleet-map.service.ts` **already selects `criticNotes`** and
+extracted nothing from it but `blockedItems.length`. So the plan edge's silence
+was not missing data or a missing column; it was the same defect as the rail
+printing `In conflict: 3` while holding the array that explains those three.
+Data fetched and thrown away, twice, in one section.
+
+The asymmetry this section existed to fix is now closed: the finding edge
+accounts for every drop in the director's words, and the plan edge says what the
+critic said. Where there genuinely is no written reason, the panel says *that*,
+rather than staying silent and letting the absence read as a gap in the UI. And
+`overrideNote` covers the case where `fleet-council.service.ts` flips a `pass` to
+a `block` from deterministic pre-checks — the critic's summary then describes a
+verdict that is no longer in force, so the panel says so rather than printing a
+sentence that contradicts the verdict above it.
+
+**C-S4.2 — `.acr-term` at 2.50:1. Withdrawn; it was my page's colour.** Measured
+again after S4.a: the Term's text inherits from its container, which in the edge
+panel is `.ky` — the rail's own monospace key, which was `#9aa5b3`. S4.a moved it
+to `#55616f` and the same text now measures **6.31:1**. The shared file was never
+the cause, and claiming it would have changed nineteen consumers for a defect
+this page owned.
+
+What *is* left there is smaller and different: `.acr-term`'s dotted underline is
+`#9aa6b5` = **2.47:1**, and for a sighted mouse user it is the only cue that a
+word carries a definition. Whether that clears SC 1.4.11 is a judgement — the
+word itself is readable at 6.31:1, so no information is conveyed by the underline
+alone. **Recorded with the number, still not taken**, because it is a shared file
+and the call belongs to whoever owns it.
+
 ### Still open
 
-- **§7's one backend field.** `lastCritique` carries `planId`, `verdict` and
-  `blockedCount` but no reason, so a **block** still cannot say why — while the
-  finding edge explains every drop in the director's own words. The panel says
-  so plainly rather than implying the reason does not exist.
-- **C-S4.2** — `.acr-term` renders at 2.50:1 in `control-room.css`, a shared file
-  reaching nineteen consumers. **Raised, not touched.**
+Nothing from this section. The remaining `/fleet/map` work is S5–S9.
