@@ -64,9 +64,26 @@ What the same measurement *does* show is a different, smaller thing: the full
 tier needs ≥1.05 and the arrival clamp is ≤1.0, so **the middle tier is the only
 one you ever arrive in** — the third exists but nothing takes you there.
 
-And an unrelated bug fell out of it: the frame is computed once at mount and
-**never re-fits**, so a resized window keeps the zoom it was born with (measured
-identical at 1920 and 1024 after resizing).
+~~And an unrelated bug fell out of it: the frame is computed once at mount and
+never re-fits.~~ **WITHDRAWN — this was my own measurement error, and it is the
+sixth raise this engagement to dissolve.**
+
+I measured the zoom as identical at 1920 and 1024 after resizing and concluded
+the frame never re-fits. It does: there is a `ResizeObserver` on the wrapper
+calling `refit`. But it schedules through `requestAnimationFrame`, and **rAF
+does not run in a backgrounded tab** — a trap already recorded in
+`reference_iframe_real_viewport_probe` from Section 3.
+
+Proved rather than assumed, in the same tab that produced the bad reading:
+
+```
+requestAnimationFrame × 2  →  fired: 0
+setTimeout                 →  fired: true
+document.visibilityState   →  "hidden"
+```
+
+The resize handler was never exercised. **No code change**, and the phase that
+would have "fixed" it is struck from Part 8.
 
 ### 0.3 · Inline chrome — **half resolved, and I resolved half of it myself**
 
@@ -203,9 +220,10 @@ away, for the task it wins.
 `#8a95a3` → `#55616f`. One declaration; it is page chrome, not entity chrome, so
 it is called out rather than slipped in (§0.1).
 
-### D-S6.4 · The frame re-fits when the box changes
+### ~~D-S6.4 · The frame re-fits when the box changes~~ — withdrawn
 
-Same fix shape as S2R's: recompute on a real resize rather than only at mount.
+See §0.2. The frame already re-fits; my probe could not run the handler because
+`requestAnimationFrame` is dead in a backgrounded tab.
 
 ### D-S6.5 · The band and legend stay inline — deliberately
 
@@ -309,7 +327,6 @@ should stay small — which is the real argument of Part 4.
 | **S6.b** | footer contrast, both modes (D-S6.3) | 0 failures sweeping `.sbm-page`, worker **and** entity |
 | **S6.c** | the relationship table (D-S6.2) | every edge in the payload is a row; direction and evidence readable |
 | **S6.d** | table becomes the default view (D-S6.2) | switch remembers, URL carries it |
-| **S6.e** | frame re-fits on resize (D-S6.4) | arrival zoom differs by width when loaded at that width |
 
 `S6.a` first: it is a correctness defect, it is three lines, and it is the same
 fix a previous section already proved.
