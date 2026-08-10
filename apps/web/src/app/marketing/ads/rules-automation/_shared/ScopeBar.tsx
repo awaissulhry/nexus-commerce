@@ -37,6 +37,9 @@ import {
 interface PortfolioOpt { id: string; label: string; campaigns: number }
 interface CampaignOpt { id: string; label: string }
 
+/** `MarketSelect`'s own sentinel for "every market". Ours is '' — see the call site. */
+const MARKET_ALL = 'all'
+
 /**
  * Product line is not selectable yet, and the reason is concrete rather than
  * "coming soon": `AutomationRule` has no product scope column, `ContextIdentity`
@@ -118,11 +121,18 @@ export function ScopeBar() {
       <span className="ra-scope-fld">
         <label className="ra-scope-lbl" htmlFor="ra-scope-market">Market</label>
         {/* MarketSelect renders sandbox connections visibly but unselectable, and
-            says why — that behaviour predates this bar and is left alone. */}
+            says why — that behaviour predates this bar and is left alone.
+
+            🔴 Its "every market" sentinel is the STRING 'all', not ''. Translated
+            here rather than adopted, so the URL contract keeps '' = absent = all
+            and `?market=all` never reaches `scopeToQuery`, which would send
+            `marketplace=all` and filter campaigns to a marketplace of that literal
+            name — zero rows, no error. Caught on prod: the chip read "No market"
+            and the All-markets item never highlighted. */}
         <MarketSelect
           markets={markets}
-          value={scope.market}
-          onChange={(code) => setScope({ market: code })}
+          value={scope.market || MARKET_ALL}
+          onChange={(code) => setScope({ market: code === MARKET_ALL ? '' : code })}
           allowAll
           disabled={!ready}
         />
