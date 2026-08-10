@@ -1408,9 +1408,22 @@
   align-items: center;
   gap: 10px;
 }
+/*
+ * S5.a — THE LIST HAD NEVER BEEN CONTRAST-CHECKED EITHER.
+ *
+ * S2R swept the canvas, S3R the overlay rail, S4R the inspector rail. This is
+ * the fourth surface and the pattern held: 24 of 72 text nodes below AA on the
+ * live fleet, 26 of 72 with the states a switched-off fleet cannot reach forced
+ * into it.
+ *
+ * And the worst-placed failure of the four. `.sbm-listdim` at 2.50:1, twenty
+ * times over, is carrying the Role column and the adjacency column's own
+ * sentences — "starts the chain", "ends the chain". The faintest text in the
+ * table is the answer the table exists to give.
+ */
 .sbm-viewhint {
   font-size: 11px;
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.31:1 on the page's #f4f6f9 */
 }
 
 .sbm-listwrapper {
@@ -1487,11 +1500,13 @@
   white-space: normal;
 }
 .sbm-liststatus.tone-bad { color: #c53030; }
-.sbm-liststatus.tone-warn { color: #b7791f; }
+.sbm-liststatus.tone-warn { color: #9a6410; } /* was #b7791f = 3.64:1 at 13px — text, not a swatch. Only reachable when something is paused or stopped at a limit, which is why the first sweep of the live fleet missed it. */
 .sbm-liststatus.tone-good { color: #2f855a; }
 .sbm-liststatus.tone-busy { color: #2b6cb0; }
+/* ⚠ Not decoration: this is the Role column and the adjacency column's
+   "starts the chain" / "ends the chain". */
 .sbm-listdim {
-  color: #9aa5b3;
+  color: #55616f; /* was #9aa5b3 = 2.50:1, on 20 nodes */
 }
 /*
  * S3R C-S3.3 — the table dims the rows the rail filtered out.
@@ -1515,7 +1530,7 @@
 .sbm-listfoot {
   margin: 8px 6px 4px;
   font-size: 11px;
-  color: #8a95a3;
+  color: #55616f; /* was #8a95a3 = 3.04:1, and its two <b> inherited it */
 }
 .sbm-listfoot a {
   color: #2b6cb0;
