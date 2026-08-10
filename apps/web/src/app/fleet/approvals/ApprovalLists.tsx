@@ -51,6 +51,28 @@ export interface PrecedentRow {
 
 const humanize = (s: string) => s.replace(/[_-]+/g, ' ').trim()
 
+/*
+ * S10.3 — a record needs an absolute time.
+ *
+ * "54d ago" is a reading aid, not a receipt. EU AI Act Article 12 requires
+ * logs that allow full traceability of the system's operation, and a relative
+ * duration cannot be reconciled against anything — it also silently changes
+ * every time the page is opened. The absolute value leads and the relative one
+ * survives as the title, which is the order Terraform, Ansible and reflog all
+ * use for the same reason.
+ *
+ * Rendered in the reader's own timezone deliberately: they are reconciling
+ * against their own memory of the day, not against a server's clock.
+ */
+const absolute = (iso: string) =>
+  new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
 const ago = (iso: string) => {
   const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000)
   if (h < 1) return 'just now'
@@ -213,7 +235,9 @@ export function RecordList({ rows, nameOf }: { rows: ApprovalRow[]; nameOf: (k: 
                   </span>
                 )}
                 <span className="dt-sep">·</span>
-                {ago(when)}
+                <time dateTime={when} title={ago(when)}>
+                  {absolute(when)}
+                </time>
                 <span className="dt-sep">·</span>
                 <Term k="risk-tier">
                   <span className={`dt-risk r-${row.riskTier}`}>{row.riskTier} risk</span>
@@ -231,7 +255,33 @@ export function RecordList({ rows, nameOf }: { rows: ApprovalRow[]; nameOf: (k: 
                   </>
                 ) : null}
               </span>
-              {row.reason ? <span className="ap-reason">“{row.reason}”</span> : null}
+              {/*
+                * S10.3 — a reason with no author is not a quotation.
+                *
+                * 15 of the 18 rows carry a script marker — acp3b-verify,
+                * acp4a-verify-cleanup — and every one was rendered inside
+                * quotation marks, in the slot reserved for the operator's own
+                * words. Quotation marks assert a speaker.
+                *
+                * The rule is not a regex over `acp*`, which would rot the
+                * moment a script is renamed. It is: `decidedBy` is null, so
+                * there is no speaker, so there are no quotes. It stays correct
+                * when real decisions arrive — those carry a decider and render
+                * quoted, exactly as before — and it needs no maintenance.
+                *
+                * `<code>` here is the opposite of the one S5 deleted: that one
+                * dressed a NAME as machine text; this one is machine text and
+                * saying so is the entire point.
+                */}
+              {row.reason ? (
+                row.decidedBy ? (
+                  <span className="ap-reason">“{row.reason}”</span>
+                ) : (
+                  <span className="aq-marker">
+                    note, no author recorded: <code>{row.reason}</code>
+                  </span>
+                )
+              ) : null}
             </span>
           </li>
         )

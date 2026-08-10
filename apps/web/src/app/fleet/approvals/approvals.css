@@ -1614,3 +1614,27 @@
   font-size: 11.5px;
   color: #55616f;
 }
+
+/*
+ * S10.3 — an unattributed note.
+ *
+ * Deliberately NOT `.ap-reason`: that rule is italic with a quote-like left
+ * border, and it is the operator's voice. This is a machine marker with no
+ * author, so it sits in the metadata voice and its value is monospaced to say
+ * what it is without needing a word for it.
+ */
+.aq-marker {
+  margin-top: 2px;
+  font-size: 11.5px;
+  /* 6.02:1 — the page's settled secondary. */
+  color: #55616f;
+}
+.aq-marker code {
+  padding: 1px 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  background: #f4f6f9;
+  font-size: 11px;
+  /* #4a5563 on #f4f6f9 = 7.24:1. */
+  color: #4a5563;
+}
