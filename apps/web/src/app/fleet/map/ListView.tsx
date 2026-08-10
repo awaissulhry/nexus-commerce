@@ -111,10 +111,60 @@ export function ListView({
         </button>
       ),
     },
+    /*
+     * S5.f — ADJACENCY SITS IMMEDIATELY AFTER THE NAME.
+     *
+     * `table-layout: fixed`, and at 1024×768 the wrapper scrolls: 176px hidden,
+     * with "It feeds" cut by 175px. So the LAST columns are the ones a narrow
+     * viewport takes away — and they were the two that make this view an
+     * equivalent alternative rather than a worse Workers roster.
+     *
+     * Ranking is what a table wins at, but spend and findings have other homes
+     * (the census band, the inspector rail, Activity). The wiring has none. So
+     * when something has to scroll out of view it should be a number you can
+     * get elsewhere, not the arrows nothing else writes down.
+     *
+     * ⚠ S5.f2 — merely putting them ahead of the ranking columns was NOT
+     * enough, and measuring after deploying is what showed it. S5.d had added
+     * three columns and widened the table ~350px, so at 1440 (where the rail
+     * still takes 340px), 1100 and 1024, "It feeds" fell outside the scrollport
+     * anyway. Eleven columns do not fit in 910px and no ordering makes them; the
+     * only question is what is inside the first screenful. Name-then-wiring is
+     * also the form the equivalent alternative wants — it reads as an adjacency
+     * list, which is the thing a node-link diagram is being an alternative TO.
+     */
+    {
+      key: 'feedsIt',
+      label: 'Feeds it',
+      width: 158,
+      render: (n) => {
+        const list = feedsIt(n.key)
+        return list.length === 0 ? (
+          <span className="sbm-listdim">starts the chain</span>
+        ) : (
+          <span className="sbm-listwrap">{list.join(', ')}</span>
+        )
+      },
+    },
+    {
+      key: 'itFeeds',
+      label: 'It feeds',
+      width: 158,
+      render: (n) => {
+        const list = itFeeds(n.key)
+        return list.length === 0 ? (
+          <span className="sbm-listdim">
+            {n.lane === 'standalone' ? 'runs on its own' : 'ends the chain'}
+          </span>
+        ) : (
+          <span className="sbm-listwrap">{list.join(', ')}</span>
+        )
+      },
+    },
     {
       key: 'role',
       label: 'Role',
-      width: 92,
+      width: 78,
       sortable: true,
       sortValue: (n) => n.tier,
       render: (n) => <span className="sbm-listdim">{n.tier}</span>,
@@ -191,48 +241,6 @@ export function ListView({
               <span className="sbm-listcause">{s.tag}</span>
             ) : null}
           </span>
-        )
-      },
-    },
-    /*
-     * S5.f — ADJACENCY SITS AHEAD OF THE RANKING COLUMNS, DELIBERATELY.
-     *
-     * `table-layout: fixed`, and at 1024×768 the wrapper scrolls: 176px hidden,
-     * with "It feeds" cut by 175px. So the LAST columns are the ones a narrow
-     * viewport takes away — and they were the two that make this view an
-     * equivalent alternative rather than a worse Workers roster.
-     *
-     * Ranking is what a table wins at and what the picture answers badly, but
-     * spend and findings have other homes (the census band, the inspector rail,
-     * Activity). The wiring has none. So when something has to scroll out of
-     * view, it is a number you can get elsewhere, not the arrows nothing else
-     * writes down.
-     */
-    {
-      key: 'feedsIt',
-      label: 'Feeds it',
-      width: 168,
-      render: (n) => {
-        const list = feedsIt(n.key)
-        return list.length === 0 ? (
-          <span className="sbm-listdim">starts the chain</span>
-        ) : (
-          <span className="sbm-listwrap">{list.join(', ')}</span>
-        )
-      },
-    },
-    {
-      key: 'itFeeds',
-      label: 'It feeds',
-      width: 168,
-      render: (n) => {
-        const list = itFeeds(n.key)
-        return list.length === 0 ? (
-          <span className="sbm-listdim">
-            {n.lane === 'standalone' ? 'runs on its own' : 'ends the chain'}
-          </span>
-        ) : (
-          <span className="sbm-listwrap">{list.join(', ')}</span>
         )
       },
     },
