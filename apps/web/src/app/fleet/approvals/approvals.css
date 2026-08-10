@@ -1564,6 +1564,14 @@
 .aq-page .ap-outcome {
   font-size: 11.5px;
 }
+/* The risk chip comes from the Decision Timeline's vocabulary (`dt-`) and
+   arrived at 10px, which made FOUR sizes in a row after the three above — I
+   claimed three and shipped four, caught by re-measuring rather than by
+   reading the diff. It passes contrast; it was only ever a size. */
+.aq-page .ap-decidedmeta .dt-risk {
+  font-size: 11.5px;
+}
+
 .aq-page .ap-prefleet {
   font-size: 11.5px;
   /* 6.02:1 on the #fafbfd this chip sits on, up from 3.77. S10.2 retires the
