@@ -2,7 +2,7 @@
 
 **Date opened:** 2026-08-10
 **Surface:** `/marketing/ads/rules-automation/*`
-**Status:** section map agreed — **six pages, one scope bar**. The **scope bar has shipped** (§3.5). No page rebuilt yet; Automations is next.
+**Status:** section map agreed — **six pages**. The scope-bar attempt was **built and reverted** (§3.0): market, portfolio and campaign already exist as controls. No page rebuilt yet; Automations is next.
 **Read before touching anything under `/marketing/ads/rules-automation` or `/marketing/ads-console/automation`.**
 
 Companions — read, do not re-derive:
@@ -26,7 +26,8 @@ portfolio / market / product / campaign — without overcomplicating the UI. "We
 base. The UI is simple, and I like it quite a lot."**
 
 That second instruction is the more important one, and it is why this section is **six pages, not
-nine and not nineteen**. The four "views" are not four pages. They are one control.
+nine and not nineteen**. And the four "views" are not four pages *or* a new control — three of them
+are filters this page already has (§3).
 
 Everything below is measured against prod on 2026-08-10 (`apps/api/scripts/_ra0-census.mts`,
 read-only) or read out of current code.
@@ -44,8 +45,8 @@ read-only) or read out of current code.
 | `enabled`, `autonomyLevel=AUTO` | 9 | **writes to Amazon**, inside the write gate |
 
 - **All 51 are account-scoped.** `scopePortfolioId` / `scopeCampaignId` are null on every row — the
-  ACR.7 drag-to-scope binding has never been used once. Directly relevant to the scope bar (Part 3):
-  the grain the operator wants to act at is the grain no rule is bound to.
+  ACR.7 drag-to-scope binding has never been used once. The grain the operator wants to act at is
+  the grain no rule is bound to.
 - 21 distinct action types; the tab filter map covers 14. **Nine have no home at all**: `notify`,
   `alert_operator`, `retail_guard`, `pause_ad_group`, `pause_campaign`, `pause_all_campaigns`,
   `archive_keyword`, `refresh_dayparting`, `create_amazon_promotion`.
@@ -91,9 +92,10 @@ per-campaign field"), **Min/Max Bid** (`patchLocal` only, never PATCHed), **Budg
 `tabs/placeholderSeeds.ts` (`TAB_RULES`) and `ComingSoon` are **unreachable** — every tab key is
 handled by an explicit branch above them. Delete both.
 
-### 1.6 🔴 The scope-and-date substrate exists and is switched off
+### 1.6 The scope-and-date substrate that already exists
 
-This is the finding that makes Part 3 cheap.
+Read this before adding any scope or date control anywhere in the section — most of it is already
+built, which is exactly why the first attempt at a new bar was wrong (§3.0).
 
 - **The date range is built end-to-end.** `ads-core/date-range.ts` `resolveRange()` supports 13
   presets — today, yesterday, last 7/14/30/90, WTD, MTD, last month, QTD, YTD, last year, lifetime,
@@ -101,19 +103,19 @@ This is the finding that makes Part 3 cheap.
   whenever a range is passed, falling back to stored columns when it is not. **Rules & Automation
   passes `showDateRange={false}` and sends no range.** Wiring, not building.
 - **`AdsPageHeader` owns date-range state in a local `useState`** ("the header owns the state for
-  now"). It is therefore per-page, not in the URL, and not shared. This is what must change.
+  now") — per-page, not in the URL. Fine as-is; only lift it if a page needs to share it.
 - **`AdsMarketplaceProvider` exists and is not consumed by the header.** Its own comment says it was
   built because "each analytics page kept its own local market filter derived from whichever
   campaigns happened to load, so nothing agreed with anything else" — and `AdsPageHeader` still takes
   a `markets: string[]` prop that Rules & Automation derives from whichever campaigns loaded. The fix
   was written and never plugged in.
-- **The Portfolio filter shows raw Amazon portfolio IDs.** `RulesAutomationClient.tsx:110` sets
-  `label: String(p)` from `portfolioId`. Twelve portfolios, twelve opaque strings.
+- ~~**The Portfolio filter shows raw Amazon portfolio IDs.**~~ **Fixed 2026-08-10** — it now reads
+  names from `/advertising/portfolios`. The only survivor of the reverted scope-bar work.
 - **Portfolio is filtered client-side only.** `GET /advertising/campaigns` accepts `marketplace`,
   `status`, `search`, `limit` and the date params — no portfolio, no ASIN.
-- **There is no product-grain page anywhere in `/marketing/ads`.** Product view exists only at
-  `ads-console/products`, in the console being retired. **Of the four lenses, product is the only
-  real build.**
+- **There is no product grain anywhere in `/marketing/ads`** — no filter, no page, no scope column.
+  Product view exists only at `ads-console/products`, in the console being retired. **Of the four
+  grains, product is the only real build, and it belongs in the existing filter row.**
 
 ---
 
@@ -147,124 +149,87 @@ never by reading a column. See [[reference_ads_dryrun_is_dead_field]].
 
 ---
 
-## Part 3 — The scope bar: one control, four views ⭐
+## Part 3 — Scope and dates: use the filters that already exist ⭐
 
-**This is the organising device of the whole section. Build it before page work starts.**
+**Operator correction, 2026-08-10, after the first attempt shipped:**
 
-The operator wants portfolio / market / product / campaign views, with statistics and actions at each,
-over a date range — and explicitly does *not* want more pages. Those are not four pages, or sixteen
-tabs, or twenty-four. They are **one bar rendered once in the section layout and read by all six
-pages**.
+> *"It is important for you to understand what already exists. I don't want any unnecessary
+> building of something which already is there... the market scope and dates bar you added at the
+> top... could be merged into the filters. Why are we creating the new stuff, which is completely
+> unnecessary and also feeds the page with unnecessary information? ... Keep it simple, plain, and
+> easy to understand, but it has to be extremely efficient."*
 
-```
-[ Market ▾ ]   [ Scope: Account · Portfolio · Product · Campaign ▾ ]   [ Date range ▾ ]
-```
+### 3.0 🔴 What I built, why it was wrong, and what was reverted
 
-### 3.1 The contract
+I added a `ScopeBar` — market · grain (account/portfolio/product/campaign) · dates · a reach line —
+as a new row under the page header. **It was reverted in full** (`ScopeBar.tsx`, `ads-scope.ts` and
+its test deleted; `AdsPageHeader` and `rules-automation.css` restored byte-identical). Two reasons,
+both of which should have stopped it before it was written:
 
-- **State lives in the URL**: `?market=IT&scope=portfolio&id=<portfolioId>&preset=last30`
-  (`&start=&end=` when `preset=custom`). Shareable, bookmarkable, survives refresh, back/forward
-  works. This is the same choice DPS.3 already made when it moved the tabs off `useState` — "every
-  tab is now addressable" — so it is consistent with the section, not a new idea.
-- **Market resolves from `AdsMarketplaceProvider`**, never from whichever campaigns happened to load.
-  Sandbox markets stay visible and unselectable, with the reason shown (that behaviour already exists
-  in the provider — do not re-litigate it).
-- **Date resolves through `resolveRange()`** — the same server function, so the UI's "last 30 days"
-  and the API's are the same 30 days. Never hand-roll a date window; [[reference_day_grouping_utc_local_trap]]
-  is invisible to `tsc` and to looking.
-- **One hook, `useAdsScope()`**, returns `{ market, scope, id, range }`. Every page reads it. No page
-  keeps its own copy of any of the four. That is the whole of the "real-time sync" requirement: not
-  a push channel, but a single source that nothing shadows.
-- **Empty scope is `Account`.** Never fabricate a default portfolio or product.
+1. **Two of the four grains already existed as grid filters.** `AdsDataGrid` on this page already
+   passes a `filters` array containing **Portfolio** and **Campaign** (plus Status, Campaign Type,
+   Bid Automation) and a search box. The bar re-implemented Portfolio and Campaign as a second
+   control sitting directly above the first. Market already existed too — in `AdsPageHeader`.
+   [[feedback_check_ds_before_handrolling]] says exactly this: check what exists before
+   hand-rolling. I did not.
+2. **The date range could not change anything on that page.** The Apply Rules grid has **no metric
+   columns at all** — Bid Rule, Target ACoS, Min/Max Bid, Bid Automation, Budget Rule. Nothing on
+   it varies by date, so a date control there is furniture that costs a row of vertical space and
+   invites the reader to believe the numbers moved.
 
-### 3.2 Actions follow the scope
+**The rule this leaves behind: a control earns its place only if some pixel on the page changes
+when you move it.** Before adding any control, name the thing on screen it changes. If you cannot,
+it does not go there.
 
-The grain that is showing is the grain that acts. One selection model, four grains — not four sets
-of controls:
+### 3.1 Where the four grains actually live — nothing new required
 
-| scope | statistics show | an action applies to |
-|---|---|---|
-| Account | everything in the market | all allowlisted campaigns |
-| Portfolio | that portfolio's campaigns | those campaigns |
-| Product | campaigns advertising that ASIN | those campaigns / their ad groups |
-| Campaign | that campaign | that campaign |
-
-Every destructive or spending action confirms with **the resolved blast radius in rows and €** —
-"apply to 34 campaigns in AIREON, ~€212/day of budget affected" — computed from the current scope,
-never from a hard-coded noun.
-
-### 3.3 What has to be built vs wired
-
-| piece | state |
+| grain | the control that already exists |
 |---|---|
-| Date presets + resolution | **exists** — `resolveRange()`, 13 presets. Wire it. |
-| Date-windowed campaign metrics | **exists** — `GET /advertising/campaigns` with `preset`/`startDate`/`endDate`. Wire it. |
-| Market list + persistence | **exists** — `AdsMarketplaceProvider`. Consume it from the header. |
-| Portfolio list with real names | **partly** — `AmazonAdsPortfolio` has 12 rows; the filter shows IDs. Fix the label. |
-| Portfolio filter server-side | **missing** — add to `GET /advertising/campaigns`. |
-| **Product scope** | **missing** — needs an ASIN → campaigns/ad-groups resolver. The one real build. |
-| URL state + `useAdsScope()` | **missing** — new, small. |
+| Market | `AdsPageHeader`'s `MarketSelect` (its "all" sentinel is the string `'all'`) |
+| Portfolio | the grid's `Portfolio` filter — **now shows names, not raw ids** (the one fix kept) |
+| Campaign | the grid's `Campaign` filter + the search box |
+| Product line | **does not exist anywhere** — see 3.2 |
 
-**Product scope caveat, found 2026-08-06 and still true:** all 16 `B0H8*` ASINs the AIREON campaigns
-advertise are Xavia listings **missing from the Product catalogue**. A product picker built today
-would not be able to name them. Reconcile by running the existing Amazon import for AIREON — no new
-tooling — before the product lens ships. Measured scale of the gap: **4,211 of 4,485 ad-product rows
-(93.9%) link to a PIM `Product`; 274 do not.**
+**Acting at a grain uses what is already there too:** filter to the grain, select rows (the grid is
+`selectable`), and use the selection bar — which already carries Automation · Assign Rule · Target
+ACoS · Min/Max Bid. That is the existing mechanism and it needs no grain selector.
 
-### 3.4 🔴 The four grains, measured — and the obvious assumption is wrong
+### 3.2 What is genuinely missing (measured, `scripts/_ra1-grain.mts`)
 
-Operator instruction, 2026-08-10: *"I must have proper control over each and everything. Even if I
-want to apply a rule to just a single campaign, it should be super easy. Same for whole portfolios,
-the entire market, the entire product line — always."*
+Only two things, and neither is a bar:
 
-That requires all four grains to be **first-class and equally easy**. Measured on prod
-(`scripts/_ra1-grain.mts`, read-only), they are nowhere near equal:
+- **Product-line scope does not exist at any layer.** `RuleScope` is
+  `{scopeMarketplace, scopePortfolioId, scopeCampaignId}`; `ContextIdentity` carries no ASIN; there
+  is no product filter on the grid and no product page in `/marketing/ads`. The data path is ready
+  — `AdProductAd` has 4,485 rows, **100% carry an ASIN**, 250 distinct, 93.9% linked to a PIM
+  `Product`, and all 220 campaigns are reachable via `AdProductAd → AdGroup → Campaign`. When it is
+  built it belongs as **another filter in the existing filter row**, not a new control.
+  *Definition:* "product line" = the `Product` parent + its variations (`AdProductAd.productId`),
+  **not** `Product.familyId` — `ProductFamily` is an Akeneo attribute template.
+- **A date range, on pages that actually show metrics.** Not this one. It belongs on Automations
+  (rule activity over a window) and Coverage, and it goes in the grid's existing `toolbarRight`
+  slot — `AdsDataGrid` already exposes `toolbarLeft`/`toolbarRight` for precisely this.
 
-| grain | campaigns it can reach | **settable** today | **enforced** today |
-|---|---|---|---|
-| Market | **220 / 220** — IT 150 · DE 38 · FR 22 · ES 10 | 🔴 **no** — not accepted by the scope route | ✅ yes |
-| Portfolio | 🔴 **72 / 220 (33%)** across 10 portfolios | ✅ yes | ✅ yes |
-| Product line | **220 / 220** via `AdProductAd` → `AdGroup` → `Campaign` | 🔴 **no field exists** | 🔴 **no** |
-| Campaign | **220 / 220** | ✅ yes | ✅ yes |
+### 3.3 🔴 The three measured facts that survive the revert
 
-Four findings, each of which changes the build:
+These were found while building the wrong thing and remain true and load-bearing:
 
-1. **🔴 Portfolio is the weakest grain, not the strongest.** Only **72 of 220 campaigns carry a
-   `portfolioId`**. A rule bound to a portfolio **can never touch 148 campaigns — 67% of the
-   account.** Two of the 12 portfolios hold nothing. Any UI offering portfolio scope must say what
-   share of the account that scope actually reaches, or it silently under-applies. (This also bounds
-   the Family Cockpit, which is a per-portfolio view.)
-2. **🔴 Market is enforced but not settable.** `ruleMatchesScope()` honours `scopeMarketplace`
-   strictly, but `PATCH /advertising/autonomy/rules/:id/scope` accepts **only** `scopePortfolioId`
-   and `scopeCampaignId`. The market half is reachable only through the *other* route,
-   `PATCH /advertising/automation-rules/:id` — two routes, two halves of one feature. Add
-   `scopeMarketplace` to the scope route so one control writes one thing.
-3. **🔴 Product-line scope does not exist.** `RuleScope` is `{scopeMarketplace, scopePortfolioId,
-   scopeCampaignId}` and `ContextIdentity` carries no ASIN. This is a **schema + evaluator + UI**
-   build — the largest single item in the operator's grain requirement. The path is fully populated
-   and ready: `AdProductAd.asin` (4,485 rows, **100% carry an ASIN**, 250 distinct) → `adGroupId` →
-   `AdGroup.campaignId`, and **every one of the 220 campaigns is reachable this way**.
-   *Definition to pin first:* "product line" = the `Product` parent row and its variations
-   (`AdProductAd.productId`), **not** `Product.familyId` — `ProductFamily` is an Akeneo-style
-   *attribute template*, and using it would be a category error.
-4. **🔴 One product can mean 76 campaigns.** ASIN → campaign fan-out is severe: 105 ASINs reach 6
-   campaigns each, 34 reach 17, and several reach **70–76**. So the blast-radius confirmation in
-   §3.2 is not a nicety — **at product grain it is the only thing standing between "super easy" and
-   "I just changed 76 campaigns by accident."** Show the resolved count *before* the action, always.
+1. **Portfolio is the weakest grain, not the strongest.** Only **72 of 220 campaigns carry a
+   `portfolioId`** — a portfolio filter or a portfolio-scoped rule **cannot reach 148 campaigns,
+   67% of the account**. Two of the twelve portfolios hold nothing. This also bounds the Family
+   Cockpit, which is a per-portfolio view.
+2. **Market scope is enforced but not settable.** `ruleMatchesScope()` honours `scopeMarketplace`
+   strictly, but `PATCH /advertising/autonomy/rules/:id/scope` accepts **only**
+   `scopePortfolioId`/`scopeCampaignId`; the market half lives on the other route. One feature,
+   two routes.
+3. **One ASIN can reach 76 campaigns.** 105 ASINs reach 6 each, 34 reach 17, several reach 70–76.
+   Whenever product grain does arrive, an action taken at it must state its resolved campaign count
+   *before* it runs.
 
-**Scope is a hierarchy, and the model treats it as mutually exclusive.** The scope route nulls the
-portfolio when a campaign is set and vice versa. That is coherent, but it means "this portfolio, but
-only in DE" is not expressible in one call today. Decide in the 4.2 study whether scope is one
-choice or an AND of dimensions; do not let the UI imply the latter while the API does the former.
+### 3.4 🔴 The date-vocabulary trap — still true, and still a live hazard elsewhere
 
-### 3.5 🔴 SHIPPED 2026-08-10 — and the two-vocabularies trap it walked into
-
-`_shared/ads-scope.ts` + `_shared/ScopeBar.tsx`, 16 tests. The bar is live on the index page:
-market · scope (+ target) · dates · **a visible line saying what that reaches**.
-
-**The trap, found while wiring and worth the whole section:** `_shell/DateRangePicker.tsx` exports
-its own `DATE_PRESETS`, and they are a **different vocabulary** from `ads-core/date-range.ts`'s
-`RangePreset`, which is what the API actually resolves.
+`_shell/DateRangePicker.tsx` exports `DATE_PRESETS`, and they are a **different vocabulary** from
+`ads-core/date-range.ts`'s `RangePreset`, which is what the API resolves.
 
 | picker | server |
 |---|---|
@@ -274,34 +239,29 @@ its own `DATE_PRESETS`, and they are a **different vocabulary** from `ads-core/d
 | `lastWeek` `lastMonth` `lastQuarter` | `last_month` `ytd` `last_year` |
 | `last3m` `last12m` `last18m` `last24m` | `lifetime` `custom` `window` |
 
-**Only `today` and `yesterday` exist in both.** `resolveRange`'s `default:` branch falls back to
-`windowDays` (**7**) for anything it does not recognise — *silently*. Forwarding the picker's key
-would have returned **seven days of data under a "Last 30 days" label**, and the same for
-"Last 12 Months". Two more mismatches hide inside the names that look shared: the picker's
-`thisWeek` starts **Sunday**, the server's `wtd` starts **Monday (ISO)**; and the picker computes in
-**browser-local** time while the server anchors to **Europe/Rome**, because the daily fact tables
-are Rome calendar days stored at UTC midnight.
+**Only `today` and `yesterday` exist in both**, and `resolveRange`'s `default:` branch silently
+falls back to `windowDays` (**7**). Forwarding a picker key returns **seven days of data under a
+"Last 30 days" label**. Two further mismatches hide in the names that look shared: the picker's
+`thisWeek` starts **Sunday** vs the server's Monday-ISO `wtd`, and the picker computes in
+**browser-local** time while the server anchors to **Europe/Rome**.
 
-This is the **fifth** two-vocabularies defect in this programme, after `EXACT`/`_EXACT`, the
-rule-tab filter word, `expressionType` vs `isNegative`, and the ToS-IS `location` key.
+Fifth two-vocabularies defect in this programme. **The law, for whoever adds the date control to
+Automations:** *the server owns the date vocabulary; the client sends a key the server understands
+and never its own computed dates for a preset; resolved dates for display come from the response's
+own `range` echo, which `GET /advertising/campaigns` already returns as
+`{ startDate, endDate, preset }`.*
 
-**The law, so it is not rediscovered a sixth time:** *the server owns the date vocabulary. The
-client sends a key the server understands and never its own computed dates for a preset. Resolved
-dates for display come back in the response's `range` echo — which
-`GET /advertising/campaigns` already returns as `{ startDate, endDate, preset }` — and are never
-recomputed on the client.* A `custom` range is the one case the client supplies dates, which is
-exactly the case `resolveRange` accepts them for.
+⚠ **Still unfixed and outside this session's scope:** `DateRangePicker`'s presets remain wrong for
+any *other* page that forwards them to the API. Owner: whoever owns the shared ads shell.
 
-**Still open from this unit:** `GET /advertising/campaigns` accepts marketplace/status/search/limit
-+ the date params, and **ignores `scopeGrain`/`scopeId`**. `scopeToQuery` sends them anyway (never
-silently dropped), and the index narrows by grain client-side meanwhile — otherwise choosing a
-portfolio would leave all 220 campaigns on screen under a "72 of 220" reach line, the surface
-contradicting its own label. Teaching the endpoint the grain is the next server-side unit.
+### 3.5 The sixth one, and it was mine
 
-**Also note:** `DateRangePicker`'s presets remain wrong for any caller that forwards them to the
-API. This unit contained the problem for Rules & Automation; it did not fix the picker.
-
----
+The `ScopeBar` used `''` for "every market"; `MarketSelect`'s sentinel is the string `'all'`. The
+chip read "No market", and choosing All markets would have emitted `?marketplace=all` — filtering
+to a marketplace of that literal name, **zero rows, no error**. Caught by measuring the rendered
+control on prod, not by `tsc` and not by reading the code. Recorded because the lesson outlived the
+code: **a module comment stating a law does not prevent its author from breaking it; measuring
+does.**
 
 ## Part 4 — The section: six pages
 
@@ -333,7 +293,7 @@ here. If it belongs to another page, link to that page instead of building it.**
 | the record of every change, and undo | Activity → Done |
 | a limit that refuses a write | Controls |
 | a background engine's mode, cron, health | Controls |
-| **which market / portfolio / product / campaign / dates** | **the scope bar — never a page** |
+| **which market / portfolio / product / campaign / dates** | **the existing header + grid filters — never a new control, never a page** |
 
 The last row is the one that keeps this section at six pages. A "portfolio view" is not a page; it
 is the bar set to Portfolio.
@@ -362,8 +322,8 @@ Absorbs: Control Room "Today" + "Foresight", ads-console "home", `RuleImpactStri
 | Type filter | Bid · Harvest · Negative · Budget · Placement · **Other**. Replaces five tabs. **"Other" is mandatory** — nine action types are currently invisible (1.1). |
 | Rule list | plain-English *When / If / Then*, trigger, matches, runs, % acted, last run, scope, conflict flag. |
 | Mode control | **`autonomyLevel` only** — never `dryRun`. See Part 2. |
-| Scope binding | account / portfolio / campaign. **Pre-filled from the scope bar**: with the bar on a portfolio, "bind here" needs no second picker. All 51 are account-wide today. |
-| Bulk actions | mode, enable/disable, delete — confirm states the blast radius per §3.2. |
+| Scope binding | account / portfolio / campaign, via `PATCH /autonomy/rules/:id/scope`. All 51 are account-wide today. State the reach: a portfolio binding cannot touch 148 of 220 campaigns (§3.3). |
+| Bulk actions | mode, enable/disable, delete — the confirm states the resolved rule and campaign count. |
 | Simulate | run against real current data, show what it *would* do. `POST /advertising/automation-rules/:id/simulate` exists. Taken from Scale Insights. |
 | Conflicts | enabled rules on one trigger with opposing actions. Logic exists in `AutomationHub`; port it. |
 | Catalogue | 86 templates + playbooks. Born `enabled=false`, `autonomyLevel='OFF'`. |
@@ -424,8 +384,8 @@ every 8 days. Surface it here.
 
 *Who holds the keyword — us against the market, and which of our own products.*
 
-The two lenses the operator named are the scope bar, not two pages: **Account/Market scope answers
-"how much of the shelf do we hold"; Product scope answers "which of our products is holding it".**
+The two lenses the operator named are **filters on one page**, not two pages: the market lens answers
+"how much of the shelf do we hold"; the product lens answers "which of our products is holding it".
 
 | section | purpose |
 |---|---|
@@ -453,7 +413,7 @@ and never appears in both.* Defaults to Pending while any are waiting.
 |---|---|
 | Pending | the 185 `AdsRuleSuggestion` rows. Filter by rule, action type, age, € at stake. |
 | Decision card | what it wants, which rule proposed it, the evidence, the cost, what happens if ignored. |
-| Bulk decide | approve/dismiss a filtered set; confirm states blast radius per §3.2. |
+| Bulk decide | approve/dismiss a filtered set; the confirm states the resolved row count and € at stake. |
 | Done — change feed | `AdvertisingActionLog` + `CampaignBidHistory`, unified. |
 | Provenance | rule → trigger → evidence → timestamp (Prism's model, deep-dives §6). |
 | Undo | per class: **bids 24h · budgets and placements 7d · unknown 24h** (`rollbackWindowMsFor()`). Cross-check the flag against `previewRollbackOfAction` — a button the server then refuses is worse than no button. |
@@ -492,14 +452,15 @@ Absorbs: Control Room "Guardrails" + "Levers", `ProtectedTermsPanel`, ads-consol
 ## Part 5 — Laws that apply to every page
 
 1. **One subject, one page.** §4.0 is the contract. A second surface for a subject is a defect.
-2. **Views are the scope bar, never a page.** If a proposal starts "a portfolio version of…", the
-   answer is the bar.
+2. **Views are FILTERS, never a page and never a new bar.** If a proposal starts "a portfolio
+   version of…", the answer is the filter row that already exists. Before adding any control, name
+   the pixel that changes when you move it; if you cannot, it does not go there (§3.0).
 3. **All four grains are first-class, and equally easy.** Campaign, portfolio, market and product
    line get the *same* control, the *same* number of clicks and the *same* confirmation shape. No
    grain is a special case, an advanced mode, or a different screen. A surface that makes one grain
    easier than another has picked a favourite the operator did not.
 4. **Never offer a scope without stating its reach.** Portfolio scope reaches 33% of campaigns;
-   product scope can reach 76 at once (§3.4). Every scope control shows the resolved campaign count
+   product scope can reach 76 at once (§3.3). Every scope control shows the resolved campaign count
    before the action, and every action confirms with rows **and** €.
 5. **Nothing keeps its own copy of market, scope or date.** One hook, one URL. That *is* the
    real-time-sync requirement — a single source that nothing shadows.
@@ -553,8 +514,6 @@ instruction. Folding it in means it ships.
 The operator's method: define sections (this doc) → study one → build it → next.
 **Each section study is its own session.**
 
-0. **The scope bar (Part 3)** — first, because every page below reads it and retrofitting it into six
-   finished pages costs six times as much. Mostly wiring: only product scope is a real build.
 1. **Automations** (4.2) — the 51-automation gap, the biggest consolidation, and Part 2's defect.
    Start with the mode control: it is the only part of the current surface that is actively lying.
 2. **Controls** (4.6) — what may happen must be legible before more rules are armed.
@@ -585,19 +544,19 @@ Not blocking; answer when each study reaches them.
 
 | item | status |
 |---|---|
-| Section map agreed — 6 pages, 1 scope bar | ✅ 2026-08-10 |
-| Scope bar spec (Part 3) | ✅ **SHIPPED 2026-08-10** — `_shared/ads-scope.ts` + `ScopeBar.tsx`, 16 tests |
+| Section map agreed — 6 pages | ✅ 2026-08-10 |
+| Scope bar | ❌ **built and REVERTED 2026-08-10** (§3.0) — duplicated the grid's Portfolio/Campaign filters; its date control changed nothing on a grid with no metric columns |
 | **Portfolio scope reaches only 72/220 campaigns (33%)** (§3.4) | 🔴 open — state the reach in the UI |
 | **Market scope is enforced but not settable** by the scope route (§3.4) | 🔴 open — add `scopeMarketplace` |
 | **Product-line scope does not exist** — schema + evaluator + UI (§3.4) | 🔴 open — largest grain item |
 | One ASIN can reach **76 campaigns** (§3.4) | 🔴 open — blast radius before every action |
-| **🔴 The picker and the server use DIFFERENT date vocabularies** (§3.5) | ✅ contained — the bar uses the server's keys; `DateRangePicker`'s remain wrong for any caller that forwards them |
-| `GET /advertising/campaigns` ignores `scopeGrain`/`scopeId` (§3.5) | 🔴 open — grain is narrowed client-side meanwhile |
+| **🔴 `DateRangePicker` and the server use DIFFERENT date vocabularies** (§3.4) | 🔴 open — a picker key returns 7 days under any label. Owner: the shared ads shell |
+| **A control earns its place only if a pixel changes when you move it** (§3.0) | ✅ law recorded |
 | **🔴 8 of 51 rules were labelled "Alerts — informs, never writes" while able to write** (§4.2a) | ✅ fixed 2026-08-10 — `rule-category.ts`, 0 remain |
 | Scope is mutually exclusive; "this portfolio in DE" needs 2 calls (§3.4) | 🔴 open — decide in the 4.2 study |
 | `dryRun` mode control is inert (Part 2) | 🔴 open — fix in the Automations build |
-| Date picker disabled + range never sent (1.6) | ✅ fixed — the bar sends `?preset=` on the server's vocabulary |
-| `AdsPageHeader` ignores `AdsMarketplaceProvider` (1.6) | ✅ fixed for this section — the bar reads the provider; `showMarket={false}` retires the duplicate picker |
+| Date range on Apply Rules | ✅ **correctly absent** — that grid has no metric columns. Belongs on Automations/Coverage, in the grid's existing `toolbarRight` |
+| `AdsPageHeader` ignores `AdsMarketplaceProvider` (1.6) | 🔴 open — pre-existing, out of this session's scope |
 | Portfolio filter labels are raw IDs (1.6) | ✅ fixed — names from `/advertising/portfolios` |
 | No product-grain surface anywhere in `/marketing/ads` (1.6) | 🔴 open — the one real build |
 | 3 decorative columns on Apply Rules (1.4) | 🔴 open — delete |

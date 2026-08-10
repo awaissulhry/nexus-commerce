@@ -50,7 +50,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange,
-  showLearn = true, showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
+  showLearn = true, showDataSync = true, showDateRange = true, showChangeLog = false, primaryAction, channel = 'amazon',
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
@@ -62,8 +62,6 @@ export function AdsPageHeader({
   // CBN — per-page header tailoring (Rules & Automation hides Learn/Data-Sync/Date
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showLearn?: boolean; showDataSync?: boolean; showDateRange?: boolean
-  /** RA.SB — off where the page owns market in its own scope bar. */
-  showMarket?: boolean
   /** Opt in on pages that own or receive recorded changes. Off everywhere else by default. */
   showChangeLog?: boolean
   primaryAction?: HeaderPrimary
@@ -107,22 +105,14 @@ export function AdsPageHeader({
 
         {showDateRange && <DateRangePicker value={dateRange} onChange={(s, e) => { setDateRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
-        {/* market / account selector — shared with the campaign builders (APS.2a).
-            RA.SB — hideable, same per-page tailoring pattern as showLearn /
-            showDataSync / showDateRange above. Rules & Automation owns market in
-            its own scope bar, where it sits beside the grain and date controls it
-            composes with; two market pickers on one screen is the duplication
-            that bar exists to remove. Defaulted true, so all other pages are
-            byte-identical. */}
-        {showMarket && (
-          <MarketSelect
-            markets={marketOptions}
-            value={market}
-            onChange={onMarketChange}
-            allowAll
-            brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
-          />
-        )}
+        {/* market / account selector — shared with the campaign builders (APS.2a) */}
+        <MarketSelect
+          markets={marketOptions}
+          value={market}
+          onChange={onMarketChange}
+          allowAll
+          brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
+        />
 
         {/* Primary: a single button (e.g. "+ Rule") when primaryAction is set,
             otherwise the Action ▾ dropdown. */}
