@@ -1700,3 +1700,10 @@
   font-size: 11.5px;
   color: #55616f;
 }
+
+/* S10.5a — the waiting time on an expired row. Same voice as the rest of the
+   metadata line; it is a fact about the row, not a warning about it. */
+.aq-page .aq-waited {
+  font-size: 11.5px;
+  color: #55616f;
+}

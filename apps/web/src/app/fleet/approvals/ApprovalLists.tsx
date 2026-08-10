@@ -73,6 +73,22 @@ const absolute = (iso: string) =>
     minute: '2-digit',
   })
 
+/*
+ * S10.5a — how long a request waited before it died.
+ *
+ * The section brief calls this "the one signal the queue is beating the
+ * operator", and it was the one fact an expired row did not carry: the row
+ * showed when it was asked and never how long it went unanswered. Computed
+ * from the two timestamps the row already holds, so it cannot disagree with
+ * them.
+ */
+const waited = (from: string, to: string) => {
+  const h = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 3_600_000)
+  if (h < 1) return 'under an hour'
+  if (h < 48) return `${h} hour${h === 1 ? '' : 's'}`
+  return `${Math.round(h / 24)} days`
+}
+
 const ago = (iso: string) => {
   const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000)
   if (h < 1) return 'just now'
@@ -251,6 +267,18 @@ export function RecordList({ rows, nameOf }: { rows: ApprovalRow[]; nameOf: (k: 
                     against, carrying the most important fact on the row. It is
                     now words at the same size as the rest of the line, and it
                     says what it means rather than abbreviating it. */}
+                {/* S10.5a — only on an expired row, because only there is the
+                    waiting the point. On a decided row the same span would be
+                    latency, which is a different claim and one this page is
+                    deliberately not making yet (study 19.5). */}
+                {row.status === 'expired' && row.expiresAt ? (
+                  <>
+                    <span className="dt-sep">·</span>
+                    <span className="aq-waited">
+                      waited {waited(row.requestedAt, row.expiresAt)}
+                    </span>
+                  </>
+                ) : null}
                 {!row.isFleet ? (
                   <>
                     <span className="dt-sep">·</span>
