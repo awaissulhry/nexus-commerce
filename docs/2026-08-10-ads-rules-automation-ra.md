@@ -34,6 +34,81 @@ read-only) or read out of current code.
 
 ---
 
+## Part 0.5 — 🔒 THE OPERATING DOCTRINE (operator, 2026-08-10)
+
+Four answers that govern every rule, every default and every screen in this section. Recorded
+because they were previously implicit, and an implicit doctrine is how 185 proposals went unanswered.
+
+### D1 · Autonomy: **split by risk — act on routine, ask on structural**
+
+| acts on its own (inside caps, undoable) | always asks |
+|---|---|
+| bid changes on established campaigns | creating or pausing a campaign |
+| negating a search term that met clear criteria | restructuring ad groups |
+| budget shifts within a set limit | anything spending above the operator's threshold |
+| dayparting / rank schedules | anything with **no undo** |
+
+**Why:** bids are re-evaluated hourly and undoable for 24h; a structure change is not. And the
+alternative was tested by accident — asking about everything produced **185 pending proposals and
+exactly one ever applied**. Asking about everything is not more safety; it is fewer decisions.
+
+🔴 **This doctrine is ALREADY IMPLEMENTED — in `services/advertising/ads-graduation.ts`.** The
+ceiling reads a rule's most dangerous action and caps it: notify-only → AUTO · structural
+("creates or destroys entities … automation should leave behind a structure a human could still
+run by hand") → PROPOSE · unclassified → PROPOSE (default-deny) · reversible value adjustments →
+AUTO. **The doctrine's job now is to be surfaced, not built.**
+
+⚠ **The one place code and doctrine DISAGREE: negations.** D1 says a negation that met clear
+criteria should act. `ads-graduation.ts` caps the negation family at PROPOSE for a stated reason:
+*"A negative is the hardest thing in an account to notice later; this stays gated until a
+retirement path exists for them."* Its other precondition — a protected-terms whitelist — is
+**already satisfied** (10 terms configured), so **the retirement path is the ONLY thing standing
+between the operator's doctrine and the code's.** Building it is the unlock, and it is squarely
+D2 work.
+
+### D2 · Focus: **stop waste and hold position**
+
+Do: floor or cut bids where spend has no sales · negate wasteful search terms · harvest converting
+terms to exact · hold rank on priority keywords · move budget between campaigns · pause ads on lost
+stock or Buy Box.
+
+**Why this set and not "everything":** Amazon now gives **dynamic bidding, auto-targeting and basic
+bid automation away free**. It does **not** do dayparting, cross-campaign budget reallocation,
+negative harvesting or share of voice. That is the only ground where this tool still earns its
+place — and it means the **7 `bid_to_target_acos` rules are the least differentiated thing in the
+account**, not the crown jewels.
+
+**Deferred, not rejected:** growth (bid up winners, expand) once waste control is proven; and
+profit-first optimisation once **COGS is loaded** — every € figure today is an ACOS estimate.
+
+### D3 · Reach: **keep default-deny, widen deliberately**
+
+**82 of 216 campaigns are writable. 134 cannot be touched by ANY rule, whatever its settings.**
+That stays, and it is deliberate: no commercial tool ships a per-campaign default-deny allowlist,
+and it is this account's strongest safety property.
+
+Path: confirm the 82 are the intended ones → run the waste-control set on them → widen **one
+product family at a time**.
+
+⚠ **Consequence any surface must honour:** a rule can match campaigns it is not allowed to write
+to. "Matched 40, allowed to act on 12" is the honest reading — a rule that looks broken is often
+simply not permitted, and no screen should let those two be confused.
+
+### D4 · Interface: **explain what money does, stay quiet elsewhere**
+
+**LOUD, in full sentences** — wherever a control can spend or change something: what it will do, to
+how many campaigns, and whether it can be undone ("Set 6 rules to Auto — they may then change bids
+on 34 campaigns. Undoable for 24h."); why a rule cannot be armed yet; and **why a number is zero —
+"never ran" and "nothing to do" are different facts and must never render the same.**
+
+**QUIET, dense, no hand-holding** — the rule grid, filters, counts, sorting, anything read-only.
+
+**Why not teach everything:** teaching costs vertical space, and space spent explaining a sort
+arrow is space not spent explaining a bid change. **Why not dense everywhere:** that is exactly how
+the Dry-run/LIVE toggle went unnoticed as a lie for months.
+
+---
+
 ## Part 1 — What exists today (measured, not assumed)
 
 ### 1.1 The 51 automations are `AutomationRule` rows with `domain='advertising'`
