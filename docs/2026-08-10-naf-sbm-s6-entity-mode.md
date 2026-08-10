@@ -453,6 +453,38 @@ Both fixed in S6.i. **This is the third time this engagement that the pixels
 caught what a green probe had signed off**, after the `0 edges` selector and
 S5.d's clipped column.
 
+Verified after the fix, on production: `scrollWidth` 1022 = `clientWidth`, **0**
+cells carrying wire format (was 24), and the cell reading
+`giubbotto moto uomo exact +9 more`. 103 rows intact.
+
+At narrower widths the grid does scroll rather than clip — proved by driving
+`scrollLeft` to its maximum, not by reading `overflow-x`:
+
+| viewport | client | table | note |
+|---|---|---|---|
+| 1728 | 1022 | 954 | fits |
+| 1280 | 942 | 954 | scrolls 12px |
+| 1440 | **734** | 954 | scrolls 220px — the rail is present above 1400, so 1440 gives the centre *less* room than 1280 |
+
+`Its links` is last, so it is the first column to go — which is the order S5.f
+settled: the column you can get elsewhere scrolls out, the evidence does not.
+
+### 10.5 · The deploy that never happened
+
+S6.i reached `origin/main` and production did not change for 38 minutes. No
+failed build — **no build at all**. Root `vercel.json` runs
+`turbo-ignore @nexus/web`, and two docs-only commits had landed on the tip
+before Vercel built the web commit underneath, leaving nothing for turbo-ignore
+to judge as touching `@nexus/web`.
+
+Pushing S6.j — a real `apps/web` change — started a build within two minutes.
+
+I did not force it with `vercel deploy`: that CLI uploads the *working tree*,
+which under concurrent sessions carries other sessions' uncommitted edits and
+deletions straight to production. The lesson is cheap and general: **a green
+push is not a deploy**, and a docs commit pushed on top of an unbuilt web commit
+can strand it indefinitely.
+
 ---
 
 ## PART 9 — A measurement error of my own, recorded because it nearly shipped
