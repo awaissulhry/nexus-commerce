@@ -26,7 +26,7 @@
  * for every tool — see `runApprovalMaintenance`.
  */
 import prisma from '../../db.js'
-import { decideApproval } from '../agents/approval-gate.service.js'
+import { decideApproval, EXPIRY_HOURS } from '../agents/approval-gate.service.js'
 import { getTool } from '../agents/tool-registry.js'
 import { recordControlChange } from './control-audit.service.js'
 import { mintExemplarFromDecision } from './exemplar.service.js'
@@ -331,6 +331,21 @@ export async function commitScheduledApproval(
         decidedAt: null,
         executeAfter: null,
         reason: `not run — ${staleness.why}`,
+        /*
+         * S9.4 — the clock restarts, because the REQUEST is being asked again.
+         *
+         * Without this the row keeps the deadline it was created with, so one
+         * handed back at hour 23 gives the operator an hour and one handed
+         * back after 24 is expired by the very next sweep — seconds after
+         * being handed to them, with the fresh facts they were meant to judge.
+         *
+         * This does not contradict AP.5's one-clock design (see the comment on
+         * runApprovalMaintenance): it is still ONE column and ONE sweep. The
+         * clock is not duplicated, it is restamped, and the thing it measures
+         * — how long this request has been waiting for an answer — genuinely
+         * restarted when the answer was handed back.
+         */
+        expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
       },
     })
     await recordControlChange({
@@ -353,7 +368,43 @@ export async function commitScheduledApproval(
 
   const actorLabel = ap.decidedBy ?? 'unattributed'
   const out = await decideApproval(id, 'approve', actorLabel)
-  if (!out.ok) return out
+  if (!out.ok) {
+    /*
+     * S9.4 — a failed execution left the row lying about itself.
+     *
+     * `decideApproval` puts it back to `pending` with the failure in `reason`,
+     * but leaves `decidedBy` and `decidedAt` set from the claim. So the row sat
+     * in the queue waiting for a decision while carrying a decision — and the
+     * card's comeback banner had to infer the truth from a reason string.
+     *
+     * The order here is the whole fix. This early return used to skip
+     * `recordControlChange` entirely, so **nobody recorded that anyone had
+     * approved the attempt**: clearing `decidedBy` without writing the audit
+     * first would have erased the only trace that it happened. Audit, then
+     * clear, then restamp the clock the operator now has to answer within.
+     *
+     * Scoped here rather than in `decideApproval`, which the copilot's own
+     * route also calls. That path still leaves `decidedBy` set on a failed
+     * execution; recorded in the study rather than changed from this stream.
+     */
+    await recordControlChange({
+      charterKey: await charterKeyOf(id),
+      action: 'execution_failed',
+      to: { approvalId: id, status: out.status ?? 'pending' },
+      note: out.error ?? 'execution failed',
+      actor: actorLabel,
+    }).catch((err) => logger.error('[naf-ap] failure audit failed', { id, error: String(err) }))
+
+    await prisma.agentApproval.updateMany({
+      where: { id, status: 'pending' },
+      data: {
+        decidedBy: null,
+        decidedAt: null,
+        expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
+      },
+    })
+    return out
+  }
 
   await mintExemplarFromDecision(id, 'approve').catch((err) =>
     logger.error('[naf-ap] exemplar minting failed', { id, error: String(err) }),

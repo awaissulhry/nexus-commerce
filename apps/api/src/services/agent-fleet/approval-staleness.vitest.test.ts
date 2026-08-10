@@ -20,7 +20,13 @@ vi.mock('../../db.js', () => ({
     agentExemplar: { findMany: vi.fn() },
   },
 }))
-vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn() }))
+/* S9.4 — commitScheduledApproval now restamps `expiresAt` when it hands a
+   decision back, so it imports EXPIRY_HOURS from the same module. A mock that
+   omits it fails at import, not at assertion. */
+vi.mock('../agents/approval-gate.service.js', () => ({
+  decideApproval: vi.fn(),
+  EXPIRY_HOURS: 24,
+}))
 vi.mock('../agents/tool-registry.js', () => ({ getTool: vi.fn() }))
 vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
@@ -152,6 +158,22 @@ describe('AP.6 — commit refuses a stale action', () => {
     expect(data.decidedBy).toBeNull()
     expect(data.executeAfter).toBeNull()
     expect(String(data.reason)).toContain('currentBidCents changed')
+  })
+
+  it('S9.4 — a hand-back restamps the expiry clock', async () => {
+    tools.mockReturnValue(toolReturning({ ...STORED, currentBidCents: 60 }))
+    const before = Date.now()
+    await commitScheduledApproval('a1')
+    const back = db.agentApproval.updateMany.mock.calls.find(
+      (c) => (c[0]!.data as { status?: string }).status === 'pending',
+    )
+    const data = back![0]!.data as Record<string, unknown>
+    /* Without this the row keeps the deadline it was created with, so one
+       handed back after 24 hours is expired by the very next sweep — seconds
+       after being handed to the operator with the fresh facts they were meant
+       to judge. */
+    expect(data.expiresAt).toBeInstanceOf(Date)
+    expect((data.expiresAt as Date).getTime()).toBeGreaterThan(before)
   })
 
   it('records the refusal — a silent non-execution is worse than a failure', async () => {

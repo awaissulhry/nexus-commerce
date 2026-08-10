@@ -33,6 +33,12 @@ export type ControlAction =
   // described had moved. Recorded because a silent non-execution is worse
   // than a failure nobody can explain.
   | 'stale_refused'
+  // NAF.AQ-S9 — an approved action that was attempted and FAILED. Distinct
+  // from `stale_refused`, which never ran: this one reached the tool and the
+  // tool said no. Added because the commit path used to return early on
+  // failure and write no audit at all, so nothing anywhere recorded that a
+  // human had authorised the attempt.
+  | 'execution_failed'
   // NAF.AQ.8 — the operator edited a proposal before approving it. Its own
   // action rather than an approve, because the interesting fact is that the
   // worker's number was WRONG and a human corrected it: that is the highest
