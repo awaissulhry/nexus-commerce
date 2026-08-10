@@ -470,3 +470,74 @@ cheapest.
 *Sources cited inline in Part 2. Measurements: production, 2026-08-10; URL
 findings from a network trace; breakpoints in a same-origin nested viewport;
 unreachable states forced and production restored.*
+
+---
+
+## PART 11 — The execution record
+
+Eleven commits, S5.a–S5.g plus three second passes.
+
+### What moved
+
+| | before | after |
+|---|---|---|
+| text below AA in `.sbm-centre` | **24 of 72** (26 forced) | **0 of 96** |
+| columns | 8 | **11** |
+| answers *"what may it do?"* | **no** | yes, from the canvas's own bucket |
+| three conditions sharing "Needs attention" | hue only, 1.50:1 | cause named in words |
+| selection mark | one cell of eight | **the whole 1412px row**, with a left bar |
+| clicking the time window | **0 requests** | fetches immediately |
+| loading `?window=24h` | fetched `7d` | fetches `24h` |
+
+### Phase 0 earned its place before a line was written
+
+The inherited raise **survived and grew**. It was recorded as a startup flash on
+shared links; the network trace showed the everyday case is worse — **clicking
+the switch fired zero requests**, with the label, the URL and the `as of` stamp
+all updating while every number described the previously-fetched window.
+
+Two of the other Phase 0 checks came back clean and saved work: `colour`, `view`,
+`worker` and `edge` are structurally immune (client state applied after the
+payload), and S4.c's "Not on this map" cannot flash during load because the body
+only renders once `data != null && nodes.length > 0`.
+
+### Three fixes were half-right, and only the rendered page said so
+
+**S5.b fixed the click and not the deep link.** `tick()` opens with
+`if (inFlight.current) return`, and on mount the poll's own first request is
+already in flight when the URL effect changes the window — so the refresh is
+swallowed and nothing retries it. S5.b2 keys the retry off `asOf` (which changes
+when a load *completes*) and compares against the window a request was actually
+made **for**, not a flag set optimistically.
+
+**S5.d clipped its own new column.** `text-overflow: clip`, not ellipsis, so
+"the nightly job runs it" overflowed 128px by 31px and rendered as "the nightly
+job run" — cut mid-word with nothing to say so.
+
+**S5.f protected the wrong half.** Moving adjacency ahead of the ranking columns
+worked at 1280 and nowhere else — S5.d's three new columns had widened the table
+~350px, and at 1440 the inspector rail still takes 340px, so the *widest*
+viewport was as bad as the narrowest. Eleven columns do not fit in 910px and no
+ordering makes them; the only question is what is in the first screenful, so the
+wiring now sits immediately after the name.
+
+### The pattern, stated plainly
+
+Across Sections 4 and 5, **five fixes behaved differently from how they read**,
+and every one was caught by the same step: deploy, force the state, measure the
+rendered page. None was visible to `tsc`, to the DS ratchet, or to the study that
+proposed it. Two of them were defects introduced by the commit immediately
+before.
+
+That is not an argument for writing more carefully. It is an argument that the
+verification step is not optional decoration on the end of a phase — it is where
+roughly half the real defects in this engagement were found.
+
+### Still open
+
+- **C-S5.1** — entity mode has no list view. The same equivalence argument one
+  level up, and its own piece of work. **Raised.**
+- The push was blocked for a period by a sibling's in-flight tree; recorded in
+  the locks doc as **§5d**, including the negative result that a `git worktree`
+  cannot be used to get past the hook here (no `node_modules`, so Turbopack
+  cannot resolve the monorepo root).
