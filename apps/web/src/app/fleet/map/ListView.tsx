@@ -189,6 +189,48 @@ export function ListView({
         )
       },
     },
+    /*
+     * S5.f — ADJACENCY SITS AHEAD OF THE RANKING COLUMNS, DELIBERATELY.
+     *
+     * `table-layout: fixed`, and at 1024×768 the wrapper scrolls: 176px hidden,
+     * with "It feeds" cut by 175px. So the LAST columns are the ones a narrow
+     * viewport takes away — and they were the two that make this view an
+     * equivalent alternative rather than a worse Workers roster.
+     *
+     * Ranking is what a table wins at and what the picture answers badly, but
+     * spend and findings have other homes (the census band, the inspector rail,
+     * Activity). The wiring has none. So when something has to scroll out of
+     * view, it is a number you can get elsewhere, not the arrows nothing else
+     * writes down.
+     */
+    {
+      key: 'feedsIt',
+      label: 'Feeds it',
+      width: 168,
+      render: (n) => {
+        const list = feedsIt(n.key)
+        return list.length === 0 ? (
+          <span className="sbm-listdim">starts the chain</span>
+        ) : (
+          <span className="sbm-listwrap">{list.join(', ')}</span>
+        )
+      },
+    },
+    {
+      key: 'itFeeds',
+      label: 'It feeds',
+      width: 168,
+      render: (n) => {
+        const list = itFeeds(n.key)
+        return list.length === 0 ? (
+          <span className="sbm-listdim">
+            {n.lane === 'standalone' ? 'runs on its own' : 'ends the chain'}
+          </span>
+        ) : (
+          <span className="sbm-listwrap">{list.join(', ')}</span>
+        )
+      },
+    },
     {
       key: 'runs',
       label: 'Runs',
@@ -240,34 +282,6 @@ export function ListView({
           `$${n.cost.windowUSD.toFixed(4)}`
         ),
     },
-    {
-      key: 'feedsIt',
-      label: 'Feeds it',
-      width: 168,
-      render: (n) => {
-        const list = feedsIt(n.key)
-        return list.length === 0 ? (
-          <span className="sbm-listdim">starts the chain</span>
-        ) : (
-          <span className="sbm-listwrap">{list.join(', ')}</span>
-        )
-      },
-    },
-    {
-      key: 'itFeeds',
-      label: 'It feeds',
-      width: 168,
-      render: (n) => {
-        const list = itFeeds(n.key)
-        return list.length === 0 ? (
-          <span className="sbm-listdim">
-            {n.lane === 'standalone' ? 'runs on its own' : 'ends the chain'}
-          </span>
-        ) : (
-          <span className="sbm-listwrap">{list.join(', ')}</span>
-        )
-      },
-    },
   ]
 
   return (
@@ -280,7 +294,15 @@ export function ListView({
         // `is-dimmed`, matching the canvas card — NOT `sbm-listdim`, which is
         // already this table's muted-cell colour on seven cells. Third name
         // collision caught on this page; the first two shipped.
-        rowClassName={(n) => (dimmedKeys.has(n.key) ? 'is-dimmed' : undefined)}
+        /* S5.e — the whole ROW carries the selection. It was marked only in
+           the Worker cell (colour 5.42 → 15.48:1 plus an underline, both fine)
+           — one cell at the far left of a 1262px row of eleven. The canvas
+           gives a selected card a ring around the whole thing. */
+        rowClassName={(n) =>
+          [dimmedKeys.has(n.key) ? 'is-dimmed' : '', n.key === selectedKey ? 'is-selected' : '']
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         initialSort={{ key: 'status', dir: 'asc' }}
         emptyState="No workers to list yet."
       />

@@ -1486,6 +1486,15 @@
 .sbm-listname .sbm-tag-diag {
   flex: none;
 }
+/* S5.g — there was no focus rule for this table either. The name buttons and
+   the DataGrid's own sort buttons fell back to the UA ring, on a page where
+   S1R–S4R each shipped an explicit one. */
+.sbm-listgrid th button:focus-visible,
+.sbm-listname:focus-visible {
+  outline: 2px solid #1f4f8b;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .sbm-listname:hover .nm {
   text-decoration: underline;
 }
@@ -1530,6 +1539,24 @@
  * The status colours grey out with everything else, exactly as the card's glyph
  * does under `filter: grayscale(1)`. The words still say "last run failed".
  */
+/*
+ * S5.e — the selected ROW, not one cell of eleven.
+ *
+ * Selection was marked only in the Worker cell — the name goes #2b6cb0 →
+ * #1c2530 (5.42 → 15.48:1) and gains an underline, which is two channels and
+ * fine. But it is one cell at the far LEFT of a 1262px row, while the canvas
+ * gives a selected card a ring around the whole thing. The name treatment
+ * stays; it is the accessible name of the control that changed the selection.
+ *
+ * The bar is on the first cell rather than the `<tr>`: a `box-shadow` on a row
+ * is unreliable once cells paint their own background, and the cells here do.
+ */
+.sbm-listgrid tbody tr.is-selected > td {
+  background: #eef4fb;
+}
+.sbm-listgrid tbody tr.is-selected > td:first-child {
+  box-shadow: inset 3px 0 0 #2b6cb0;
+}
 .sbm-listgrid tbody tr.is-dimmed {
   background: #f7f9fb;
 }
