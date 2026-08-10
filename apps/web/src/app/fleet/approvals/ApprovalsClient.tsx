@@ -1315,13 +1315,16 @@ export function ApprovalsClient() {
   const nameOf = useCallback(
     (key: string | null) =>
       key
-        ? /* `nameByKey` covers the seven CHARTERS and nothing else, so an
-             unmapped key would open a card with lowercase machine text where a
-             worker's name belongs. Sentence-cased for that reason. (The
-             lowercase name actually seen on prod came in by the OUTSIDE path
-             below, not through here — this is the same defect's other door.) */
-          (nameByKey.get(key) ?? sentenceCase(key.replace(/[_-]+/g, ' ')))
-        : 'An agent we cannot identify',
+        ? /* `nameByKey` covers the seven CHARTERS and nothing else.
+             S10.2 — everything past that now goes through `originOf`, the map
+             S5 built, instead of de-hyphenating the key. The record was the
+             THIRD door onto the same defect: it rendered "Manual action asked
+             to change listing content" on 8 of the 18 rows, when
+             `manual-action` is a person pressing a button in the copilot. One
+             map, so the record, the outside queue and the card cannot describe
+             the same producer three different ways. */
+          (nameByKey.get(key) ?? sentenceCase(originOf(key).name))
+        : sentenceCase(originOf(null).name),
     [nameByKey],
   )
 
@@ -1477,7 +1480,45 @@ export function ApprovalsClient() {
             onSnooze={snooze}
           />
         ) : (
-          <RecordList rows={visible} nameOf={nameOf} />
+          <>
+            {/*
+             * S10.2 — what this record is OF, and whose decisions are in it.
+             *
+             * Two facts nothing on screen stated. First, the record and the
+             * queue count different universes: `whereFor('decided')` filters on
+             * status alone while `waiting` filters to FLEET_TOOLS, so the
+             * record shows rows the queue would never show. Second, and worse:
+             * measured on prod, 0 of 18 are fleet decisions and all 16
+             * producing runs have `mode = null`. A beginner reading
+             * "Decided 18" concludes they have made eighteen decisions about
+             * their fleet. They have made none.
+             *
+             * The count is computed from the rows on screen, never written
+             * down, so it cannot drift from what is rendered beneath it.
+             *
+             * Accessible text at the section's own size, not a badge — the
+             * seed-data research is explicit that a demo label must be text
+             * rather than a subtle marker, and the 10px `pre-fleet` chip was
+             * exactly the subtle marker it warns about.
+             */}
+            {(() => {
+              const pre = visible.filter((r) => !r.isFleet).length
+              if (pre === 0) return null
+              const all = pre === visible.length
+              return (
+                <p className="aq-recordnote">
+                  <strong>
+                    {all ? `None of these ${pre} are your decisions.` : `${pre} of these are not your decisions.`}
+                  </strong>{' '}
+                  {all ? 'Every one' : 'Each of them'} came from before the fleet existed, was
+                  answered by a setup script in under half a minute, and records no person. They
+                  are history, not decisions — and they are not{' '}
+                  <Term k="exemplar">precedent</Term>. The queue above never shows them.
+                </p>
+              )
+            })()}
+            <RecordList rows={visible} nameOf={nameOf} />
+          </>
         )}
 
         <PrecedentPanel precedents={precedents} nameOf={nameOf} />

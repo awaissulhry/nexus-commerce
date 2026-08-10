@@ -218,15 +218,16 @@ export function RecordList({ rows, nameOf }: { rows: ApprovalRow[]; nameOf: (k: 
                 <Term k="risk-tier">
                   <span className={`dt-risk r-${row.riskTier}`}>{row.riskTier} risk</span>
                 </Term>
+                {/* S10.2 — text, not a badge.
+                    This was a 10px dashed chip reading "pre-fleet", measured at
+                    3.77:1 — the subtle marker the seed-data research warns
+                    against, carrying the most important fact on the row. It is
+                    now words at the same size as the rest of the line, and it
+                    says what it means rather than abbreviating it. */}
                 {!row.isFleet ? (
                   <>
                     <span className="dt-sep">·</span>
-                    <span
-                      className="ap-prefleet"
-                      title="From the earlier agent system, before the fleet existed."
-                    >
-                      pre-fleet
-                    </span>
+                    <span className="aq-prefleet">from before the fleet</span>
                   </>
                 ) : null}
               </span>

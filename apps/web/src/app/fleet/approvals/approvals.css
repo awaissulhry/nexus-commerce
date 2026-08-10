@@ -1580,3 +1580,37 @@
   color: #55616f;
   border-color: #c3cdd9;
 }
+
+/*
+ * S10.2 — the record's section statement, and provenance as words.
+ *
+ * `.aq-recordnote` carries the two facts nothing on the page stated: that the
+ * record and the queue count different universes, and that none of the rows
+ * beneath it are the operator's decisions. Sized with the row, not shouted:
+ * it is a correction to a misreading, not an alarm, and S2's research on the
+ * fleet being OFF settled that a deliberate state is not a warning.
+ */
+.aq-recordnote {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border: 1px solid #e4e9ef;
+  border-left: 3px solid #c3cdd9;
+  border-radius: 6px;
+  background: #fafbfd;
+  font-size: 11.5px;
+  line-height: 1.55;
+  /* 6.02:1 on #fafbfd — the page's settled value for secondary prose. */
+  color: #55616f;
+  max-width: 58ch;
+}
+.aq-recordnote strong {
+  color: #1c2530;
+  font-weight: 650;
+}
+
+/* Replaces `.ap-prefleet`, which was a 10px dashed badge at 3.77:1. Plain
+   words in the metadata voice — no border, no background, nothing to decode. */
+.aq-page .aq-prefleet {
+  font-size: 11.5px;
+  color: #55616f;
+}
