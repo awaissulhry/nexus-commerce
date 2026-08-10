@@ -639,6 +639,13 @@ export interface BulkPreview {
   highRisk: number
   irreversible: number
   /**
+   * S8.1 — counted separately from `irreversible` so the sentence can say
+   * "partly" instead of rounding it up to "not at all", which would over-warn.
+   * Returned even though S8.4 makes its prose unreachable on an approve that
+   * proceeds: the fact is still true and a caller may want it.
+   */
+  partlyReversible: number
+  /**
    * NAF.AQ.6 — the money, where it can be computed HONESTLY. Null when it
    * cannot: a fabricated euro figure on a confirmation is worse than none,
    * because it is the number the operator will remember.
