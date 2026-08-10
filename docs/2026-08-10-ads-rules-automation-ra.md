@@ -2,7 +2,7 @@
 
 **Date opened:** 2026-08-10
 **Surface:** `/marketing/ads/rules-automation/*`
-**Status:** section map agreed — **six pages**. The scope-bar attempt was **built and reverted** (§3.0): market, portfolio and campaign already exist as controls. No page rebuilt yet; Automations is next.
+**Status:** 🔴 **ONE page, perfected** (operator, 2026-08-10) — the six-page plan is superseded; see Part 4. Automations shipped and is the last new route. The scope-bar attempt was **built and reverted** (§3.0): market, portfolio and campaign already exist as controls. No page rebuilt yet; Automations is next.
 **Read before touching anything under `/marketing/ads/rules-automation` or `/marketing/ads-console/automation`.**
 
 Companions — read, do not re-derive:
@@ -263,40 +263,61 @@ control on prod, not by `tsc` and not by reading the code. Recorded because the 
 code: **a module comment stating a law does not prevent its author from breaking it; measuring
 does.**
 
-## Part 4 — The section: six pages
+## Part 4 — 🔴 SUPERSEDED 2026-08-10: ONE page, perfected — not six
 
-```
-1. Overview      /marketing/ads/rules-automation
-2. Automations   …/automations
-3. Schedules     …/schedules
-4. Coverage      …/coverage
-5. Activity      …/activity
-6. Controls      …/controls
-```
+**Operator decision, 2026-08-10, after the Automations page shipped:**
 
-Six pages replace 10 tabs + 5 Control-Room tabs + ~16 ads-console tabs + a dock. Every one of them
-sits under the Part 3 bar.
+> *"Actually, I do not feel the need to make separate pages for everything. Let's actually perfect
+> this one, which already exists."*
 
-### 4.0 The boundary table — one subject, one owner
+**This Part previously specified six routes. It no longer does.** No further pages are to be built.
 
-**This is the anti-duplication contract. Before adding any section to any page, find its subject
-here. If it belongs to another page, link to that page instead of building it.**
+### 4.0 What this means concretely
 
-| subject | the ONE page that owns it |
+- **`/marketing/ads/rules-automation` stays the one surface**, navigated by the tab bar it already
+  has. No new routes, and **no new sidebar children** — the ads rail keeps its single
+  "Rules & Automation" line. This also settles Part 8's open question 1.
+- **`…/automations` stays.** It is built, reachable as a routed tab, and working. It is the last
+  new route in this programme, not the first of six.
+- **The remaining subjects become better TABS or sections on that surface**, not routes.
+- **The work is now mostly SUBTRACTIVE.** The tab bar currently has **11** tabs — one more than
+  when this started — because Automations was added before the tabs it supersedes were retired.
+  Getting it *down* is the job.
+
+### 4.0a The subtraction list — measured, in value order
+
+Nothing here requires building a new page. Each item removes noise or removes a lie.
+
+| # | do this | why | effect |
+|---|---|---|---|
+| 1 | **Retire the 5 rule-type tabs** — Bid · Keyword Harvest · Negative Targeting · Budget · Placement | They are ONE component (`RuleListTab`) with a different `liveType` string, and the Automations tab's 8-family type filter already supersedes all five — including the 9 action types that had no tab home | **11 tabs → 6**, no new code |
+| 2 | **Fix or delete the 3 decorative columns** on Apply Rules — Bid Rule, Min/Max Bid (local state only), Budget Rule (hard-coded `None` on all 220 campaigns) | A surface rendering what no executor reads. Only Target ACoS and Bid Automation reach the API | the landing tab stops lying |
+| 3 | **Delete `tabs/placeholderSeeds.ts` and `ComingSoon`** | Unreachable — every tab key is handled by an explicit branch above them | dead code gone |
+| 4 | **Make the empty tabs honest** — `BudgetSchedule` = 0 rows, `KeywordRank` = 0 rows | An empty grid that explains itself beats one that reads as broken; a tab with no data and no path to data should say so or go | 2 tabs stop pretending |
+| 5 | **Fold the Control Room's 5 tabs in** (Today · Levers · Guardrails · Activity · Foresight) | It is a parallel automation surface reachable as a chevron child — the duplication the operator forbade | one surface, not two |
+
+**Order matters:** #1 is the biggest win and costs nothing to build — but retire a tab only once
+the Automations page has been used in anger, and per §0 of the locks doc, retirement happens in the
+session that owns the surface.
+
+### 4.0b The boundary table — one subject, one owner
+
+**Still the anti-duplication contract; the owners are now tabs and sections, not routes.** Before
+adding anything, find its subject here. If it belongs elsewhere, link — do not rebuild.
+
+| subject | the ONE owner |
 |---|---|
-| is automation working, and does it need me | Overview |
-| a rule's definition, mode, scope, caps | Automations |
-| the catalogue of rules you could add | Automations |
-| anything that fires on a clock | Schedules |
-| who holds a keyword — us vs the market, and which of our ASINs | Coverage |
-| a decision waiting for a human | Activity → Pending |
-| the record of every change, and undo | Activity → Done |
-| a limit that refuses a write | Controls |
-| a background engine's mode, cron, health | Controls |
+| a rule's definition, mode, scope, caps | **Automations** tab |
+| the catalogue of rules you could add | **Automations** tab |
+| anything that fires on a clock | **Rank & Dayparting** tab (already routed) |
+| who holds a keyword — us vs the market, and which of our ASINs | **Share of Voice** tab |
+| a decision waiting for a human · the record of every change, and undo | one **Activity** tab (Pending \| Done) |
+| a limit that refuses a write · an engine's mode, cron, health | one **Controls** tab |
+| is automation working, and does it need me | **Apply Rules** (the landing tab), once #2 above is done |
 | **which market / portfolio / product / campaign / dates** | **the existing header + grid filters — never a new control, never a page** |
 
-The last row is the one that keeps this section at six pages. A "portfolio view" is not a page; it
-is the bar set to Portfolio.
+The specs in 4.1–4.6 below still describe WHAT each subject must show. Read them as tab/section
+specs. Ignore every route path in them.
 
 ### 4.1 Overview `/rules-automation`
 
@@ -511,26 +532,19 @@ instruction. Folding it in means it ships.
 
 ## Part 7 — Sequence
 
-The operator's method: define sections (this doc) → study one → build it → next.
-**Each section study is its own session.**
-
-1. **Automations** (4.2) — the 51-automation gap, the biggest consolidation, and Part 2's defect.
-   Start with the mode control: it is the only part of the current surface that is actively lying.
-2. **Controls** (4.6) — what may happen must be legible before more rules are armed.
-3. **Overview** (4.1) — needs 1 and 2 to have anything true to summarise.
-4. **Coverage** (4.4) — the operator's named concern; opens by re-running the AIREON-vs-GALE
-   comparison now that a comparable second family has matured.
-5. **Activity** (4.5) — 185 rows waiting.
-6. **Schedules** (4.3) — least broken today, so last.
-
----
+**Superseded by Part 4.** No further pages. The order of work is the subtraction list in §4.0a:
+retire the five rule-type tabs → fix/delete the three decorative columns → delete the dead code →
+make the empty tabs honest → fold in the Control Room. Open defects (market scope not settable,
+product-line scope absent, the rule catalogue not on the page) are finished on the Automations tab,
+not on new routes.
 
 ## Part 8 — Open questions for the operator
 
 Not blocking; answer when each study reaches them.
 
-1. **Sidebar shape.** Rules & Automation has one chevron child today. Six pages need a decision —
-   grouped children like `/fleet`, or in-page navigation only.
+1. ~~**Sidebar shape.**~~ **RESOLVED 2026-08-10** — no new pages, so no new rail children. The ads
+   rail keeps its single "Rules & Automation" line and the tab bar stays the section's navigation.
+   One navigation tree, which is what the rail's own comment already required.
 2. **`maxHourlySpendCentsEur` is null** → a €500/h default against a €20.91 peak hour. Your number.
 3. **The 19 paused SB/SD campaigns** carry ~€1,040/day of standing budgets. Un-pausing changes spend.
 4. **Campaign restructure** (4.4) — splitting one-ad-group-per-family into per-ASIN ad groups is the
