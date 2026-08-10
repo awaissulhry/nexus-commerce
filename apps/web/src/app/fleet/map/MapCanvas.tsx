@@ -66,6 +66,12 @@ interface WorkerNodeData {
   open: number
   openExpired: number
   costWindow: number
+  /** S7.c — how many runs produced `costWindow`. The service computes this for
+   *  exactly one reason, in its own words: "$0.00 over three runs and $0.00
+   *  over no runs render identically — one is a measured zero and the other is
+   *  no data". The card was deciding with `neverRun` instead, which is a
+   *  LIFETIME test applied to a WINDOWED number. */
+  costRuns: number
   runsLifetime: number
   neverRun: boolean
   diagnostic: boolean
@@ -142,9 +148,27 @@ function WorkerNode({ data }: NodeProps) {
         {/* A worker that never ran gets a dash, NOT `$0.00`. "Ran and cost
             nothing" and "was never measured" are different facts, and printing
             the cheaper-looking one is the exact error the parent study names
-            for the cost overlay. */}
-        <span className={`sbm-fact ${d.neverRun ? 'is-empty' : ''}`}>
-          <b>{d.neverRun ? '—' : usd(d.costWindow)}</b> spent
+            for the cost overlay.
+
+            S7.c — that was right, and the test was wrong. `neverRun` is
+            `runs.lifetime === 0`, a LIFETIME question, and it was guarding
+            `costWindow`, a WINDOWED number. So a worker that has run three
+            times but not inside the window fell through to the measured-zero
+            branch: on prod at 24 hours the card read `$0.00 spent` for Bid
+            tuner while the LIST, same worker and same window, read "no runs in
+            this window". Two renderings of one fact, disagreeing on one screen,
+            and the card's was the false one.
+
+            Three states:
+              never run at all        —  spent          (slot 1 already says why;
+                                                         repeating "not yet run"
+                                                         here would print it
+                                                         twice on one card)
+              ran, but not in window  —  not in this window
+              ran in window           —  $0.1090 spent  (including a real $0) */}
+        <span className={`sbm-fact ${d.neverRun || d.costRuns === 0 ? 'is-empty' : ''}`}>
+          <b>{d.neverRun || d.costRuns === 0 ? '—' : usd(d.costWindow)}</b>{' '}
+          {!d.neverRun && d.costRuns === 0 ? 'not in this window' : 'spent'}
         </span>
       </div>
       {/*
@@ -503,6 +527,7 @@ export function MapCanvas({
           open: n.findings.open,
           openExpired: n.findings.openExpired,
           costWindow: n.cost.windowUSD,
+          costRuns: n.cost.runs,
           runsLifetime: n.runs.lifetime,
           neverRun: n.runs.lifetime === 0,
           diagnostic: n.diagnostic,
@@ -529,11 +554,26 @@ export function MapCanvas({
         // 1 dropped" collided with its neighbour and truncated mid-word on
         // prod. What the director DROPPED and why is the edge inspector's
         // centrepiece (M.4), where there is room to print the reason it wrote.
+        /* S7.b — "nothing reviewed yet" reads as NEVER, and it was printed over
+           a window that simply did not reach the critique.
+
+           The finding edges beside it already say `nothing carried in 24 hours`
+           — the window is named, so the reader knows which absence they are
+           looking at. The plan edge said "yet", flatly, while this fleet's
+           9-item BLOCK sat four days back.
+
+           That is the same defect S4.k fixed in the inspector rail, and the
+           field it added for it, `latestCritique`, is already on this payload
+           and deliberately ignores the window. Out-of-window content is still
+           NOT promoted into the window: the label says where to look, it does
+           not show the older verdict under an in-window heading. */
         const label =
           e.artifact === 'plan'
             ? e.verdicts && e.verdicts.pass + e.verdicts.revise + e.verdicts.block > 0
               ? `${e.verdicts.block > 0 ? 'blocked' : e.verdicts.revise > 0 ? 'sent back' : 'passed'}`
-              : 'nothing reviewed yet'
+              : e.latestCritique
+                ? `nothing reviewed in ${windowLabel}`
+                : 'nothing reviewed yet'
             : e.counts.crossed > 0
               ? `${e.counts.crossed} carried`
               : `nothing carried in ${windowLabel}`
