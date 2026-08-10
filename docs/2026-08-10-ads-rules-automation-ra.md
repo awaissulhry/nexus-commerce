@@ -324,7 +324,7 @@ Absorbs: Control Room "Today" + "Foresight", ads-console "home", `RuleImpactStri
 | Mode control | **`autonomyLevel` only** — never `dryRun`. See Part 2. |
 | Scope binding | account / portfolio / campaign, via `PATCH /autonomy/rules/:id/scope`. All 51 are account-wide today. State the reach: a portfolio binding cannot touch 148 of 220 campaigns (§3.3). |
 | Bulk actions | mode, enable/disable, delete — the confirm states the resolved rule and campaign count. |
-| Simulate | run against real current data, show what it *would* do. `POST /advertising/automation-rules/:id/simulate` exists. Taken from Scale Insights. |
+| Simulate | run against real current data, show what it *would* do. ⚠ **The endpoint I originally cited here was a loaded gun** — it called the WHOLE evaluator and would have given the 8 writing AUTO rules a live tick. Rewritten 2026-08-10 (`52f3ec0e8`) to `simulateOneRule`; it can simulate a DISABLED rule, and it writes audit rows (nothing reaches Amazon). |
 | Conflicts | enabled rules on one trigger with opposing actions. Logic exists in `AutomationHub`; port it. |
 | Catalogue | 86 templates + playbooks. Born `enabled=false`, `autonomyLevel='OFF'`. |
 | Builder | custom rules. `/builder/[type]` exists; fold it in. |
@@ -545,6 +545,13 @@ Not blocking; answer when each study reaches them.
 | item | status |
 |---|---|
 | Section map agreed — 6 pages | ✅ 2026-08-10 |
+| **Automations page (4.2) SHIPPED** — census, 8-family type filter, mode dial, scope binding, conflicts, bulk mode+delete, graduation board, rule drawer | ✅ 2026-08-10 |
+| `POST …/simulate` ran the whole evaluator (would have armed 8 AUTO rules) | ✅ fixed `52f3ec0e8` |
+| **Refusals: a stored `30` read as a 3000% ACoS target; `campaignIds` array silently ignored** | ✅ both refuse + warn on the rule, 2026-08-10 |
+| **Market scope: still enforced but NOT settable** — the scope route takes only portfolio+campaign | 🔴 **open — next unit** |
+| **Product-line scope: does not exist at any layer** (schema + evaluator + UI) | 🔴 **open — needs approval** |
+| Adding a rule: the 86-template catalogue + builder are not on the page yet | 🔴 open |
+| Ads action handlers register only under `if (adsCronOn)` (`index.ts:1435`) | 🔴 open — app-wide boot ordering, own change |
 | **Automations page (4.2) BUILT + PROD-VERIFIED 2026-08-10** — `…/rules-automation/automations` | ✅ census · type filter · rule list · mode notches · scope+reach · caps · conflicts · history · drawer. **0 contrast fails across 494 text elements, 0px dead space, no horizontal overflow.** 25 pure tests. Nothing retired |
 | **The mode control's WRITE path — VERIFIED on prod 2026-08-10** | ✅ tested on `__E_probe_KEYWORD_HIGH_ACOS__` (OFF · `alert_operator` only · ceiling AUTO · 0 evaluations ever), so no setting of it could reach Amazon. Off→Observe→Auto→Off all landed, each with its toast; census tracked every move; **restored to Off**. Residual: its `autonomyLevel` column is now `OFF` rather than `PROPOSE`-while-disabled — resolved mode identical |
 | **The census's own point, demonstrated live** | ✅ moving an alert-only rule to AUTO left **"Writing to Amazon" at 8** and moved the notify-only tally 1→2. Counting AUTO rules would have read 9 and implied new exposure |
