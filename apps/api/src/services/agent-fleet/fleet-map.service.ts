@@ -864,9 +864,28 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
         artifact: e.artifact,
         declaredBy: declaredByEdge.get(id) ?? [],
         counts: { crossed, dropped: dropped.length, conflicted: conflicts.length },
-        everCrossed: isPlan
-          ? (verdicts?.pass ?? 0) + (verdicts?.revise ?? 0) + (verdicts?.block ?? 0) > 0
-          : crossedLifetime > 0,
+        /**
+         * S7.a — this field's own doc comment says LIFETIME, and for a plan
+         * edge it was windowed.
+         *
+         * `verdictsByPair` is built under `if (p.criticVerdict && inWindow)`
+         * below, so reading it here made the stroke follow the window — the
+         * exact thing the comment on `everCrossed` forbids. Measured on
+         * production: `amazon-ads-director → plan-critic`, this fleet's only
+         * critique edge and the one carrying a 9-item BLOCK, drew solid at 7d
+         * and went dashed grey at 24h. A 24-hour window said a link that has
+         * genuinely carried work never had.
+         *
+         * `latestCritiqueByPair` is the lifetime answer and already exists:
+         * S4.k populates it under a bare `if (p.criticVerdict)`, deliberately
+         * ignoring the window, for this same class of question. Both it and
+         * `crossedLifetime` are bounded by the `take: 200` on `planRows` — the
+         * same bound the finding edges have always had, not a new one.
+         *
+         * `counts.crossed`, `verdicts` and `lastCritique` stay windowed. The
+         * label is windowed on purpose; only the stroke is not.
+         */
+        everCrossed: isPlan ? latestCritiqueByPair.has(id) : crossedLifetime > 0,
         dropped,
         conflicts,
         samples: (samplesByPair.get(id) ?? []).map((s) => ({
