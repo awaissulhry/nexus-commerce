@@ -237,7 +237,13 @@ const rollbackable = (e: ExecRow) =>
   && (e.status === 'SUCCESS' || e.status === 'PARTIAL')
   && Date.now() - new Date(e.startedAt).getTime() < ROLLBACK_WINDOW_MS
 
-function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: string }; onClose: () => void }) {
+// RA.AUTO — exported so the Automations page reuses this drawer rather than growing a second
+// one. Behaviour is unchanged for the five rule-type tabs that already render it. The 24h
+// window below is correct here and is NOT the per-action window: `rollbackByExecutionId`
+// (rollback.service.ts:424) filters on the flat 24h constant, so a whole-run undo really does
+// close after a day whatever it changed. `rollbackWindowMsFor` governs the single-change
+// Change Log path instead.
+export function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: string }; onClose: () => void }) {
   const [items, setItems] = useState<ExecRow[]>([])
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState<ExecRow | null>(null)

@@ -1184,3 +1184,156 @@
 .h10-imp-warn { display: flex; align-items: flex-start; gap: 7px; width: 100%; margin-top: 2px; padding: 8px 11px; border-radius: 8px; background: #fdeaea; color: #a02c2c; font-size: 11.5px; line-height: 1.5; }
 .h10-imp-warn svg { flex-shrink: 0; margin-top: 1px; }
 .h10-imp-warn b { color: #8a2020; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   RA.AUTO — Automations (…/rules-automation/automations)
+
+   Appended at EOF, which is the section's convention for a shared stylesheet and also the
+   only safe place: source order beats specificity here, so an override placed anywhere but
+   the end of what it overrides is a coin toss.
+
+   Namespace is `h10-au-*`, deliberately NOT `h10-am-*`: that prefix is the app-wide Ads
+   Manager grid namespace and it is already defined across four stylesheets. The DS button and
+   link primitives (`h10-am-btn`, `h10-am-link`) and the modal shell (`h10-ntm-*`) are reused
+   from this file as-is.
+
+   Hard-coded hex throughout, matching the rest of the file: `.h10-shell` pins
+   `color-scheme: light`, so a token that resolves dark would produce a dark card in a
+   permanently light shell.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Census band ─────────────────────────────────────────────────────────────────────── */
+.h10-au-census { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.h10-au-stat { flex: 1 1 190px; min-width: 190px; padding: 11px 14px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
+.h10-au-stat .k { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.h10-au-stat .v { margin-top: 3px; font-size: 22px; font-weight: 800; line-height: 1.1; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-au-stat .v.muted { color: #8a93a1; }
+.h10-au-stat .s { margin-top: 3px; font-size: 11px; line-height: 1.45; color: #8a93a1; }
+/* The one stat that says how much of the account is moving without being asked. */
+.h10-au-stat.writing { border-color: #f0c9a8; background: #fff9f3; }
+.h10-au-stat.writing .v { color: #b4530e; }
+.h10-au-stat.ready { border-color: #b9dcc6; background: #f4fbf6; }
+.h10-au-stat.ready .v { color: #14724d; }
+
+/* ── Banners ─────────────────────────────────────────────────────────────────────────── */
+.h10-au-banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 13px; margin-bottom: 10px; border-radius: 9px; font-size: 12px; line-height: 1.55; }
+.h10-au-banner svg { flex-shrink: 0; margin-top: 2px; }
+.h10-au-banner.err { background: #fdeaea; color: #a02c2c; }
+.h10-au-banner.warn { background: #fff6e8; color: #8a5316; }
+.h10-au-banner.ok { background: #f0f6fd; color: #1f4f8f; }
+.h10-au-gradrule { display: flex; align-items: flex-start; gap: 9px; padding: 10px 13px; margin-bottom: 10px; border: 1px solid #e3e7ec; border-radius: 9px; background: #fbfcfe; font-size: 11.5px; line-height: 1.6; color: #55606d; }
+.h10-au-gradrule svg { flex-shrink: 0; margin-top: 2px; color: #14724d; }
+
+/* ── First column: swatch · name · badges ────────────────────────────────────────────── */
+.h10-au-namew { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.h10-au-swatch { flex-shrink: 0; width: 4px; height: 26px; border-radius: 2px; }
+.h10-au-nm { display: flex; flex-direction: column; min-width: 0; }
+.h10-au-name { border: 0; background: none; padding: 0; text-align: left; font: inherit; font-size: 12.5px; font-weight: 700; color: #1c2530; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-au-name:hover { color: #1f6fde; text-decoration: underline; }
+.h10-au-nm em { font-style: normal; font-size: 10.5px; color: #8a93a1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-au-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.h10-au-badge.writes { background: #fdf0e3; color: #b4530e; }
+.h10-au-badge.ready { background: #e7f5ed; color: #14724d; }
+.h10-au-badge.conf { background: #fdeaea; color: #a02c2c; }
+/* Appears on row hover; always focusable so the drawer is reachable from the keyboard. */
+.h10-au-open { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 7px; border: 1px solid #dfe3e9; border-radius: 6px; background: #fff; font-size: 10.5px; font-weight: 700; color: #55606d; cursor: pointer; opacity: 0; transition: opacity .12s; }
+tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
+.h10-au-open:hover { border-color: #1f6fde; color: #1f6fde; }
+
+/* ── The mode dial ───────────────────────────────────────────────────────────────────── */
+.h10-au-dial { display: inline-flex; border: 1px solid #dfe3e9; border-radius: 7px; overflow: hidden; background: #fff; }
+.h10-au-notch { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-right: 1px solid #eef1f5; background: #fff; font-size: 10.5px; font-weight: 700; color: #6b7480; cursor: pointer; white-space: nowrap; }
+.h10-au-notch:last-child { border-right: 0; }
+.h10-au-notch:hover:not(:disabled) { background: #f4f7fb; color: #1c2530; }
+.h10-au-notch:disabled { opacity: .38; cursor: not-allowed; }
+.h10-au-notch.on.off { background: #6b7480; color: #fff; }
+.h10-au-notch.on.observe { background: #55606d; color: #fff; }
+.h10-au-notch.on.propose { background: #1f6fde; color: #fff; }
+/* Auto is the only notch that can change the account, and it is the only one coloured as a
+   consequence rather than a selection. */
+.h10-au-notch.on.auto { background: #b4530e; color: #fff; }
+/* The notch a rule has EARNED. Highlighted, never pre-selected and never auto-clicked. */
+.h10-au-notch.earned { background: #e7f5ed; color: #14724d; box-shadow: inset 0 0 0 1px #b9dcc6; }
+
+/* ── Cells ───────────────────────────────────────────────────────────────────────────── */
+.h10-au-trg { font-size: 11.5px; color: #55606d; }
+.h10-au-scope { font-size: 11.5px; color: #55606d; }
+.h10-au-scope.account { color: #8a93a1; }
+.h10-au-scope em { font-style: normal; font-weight: 700; color: #1c2530; }
+.h10-au-week { display: flex; flex-direction: column; line-height: 1.35; font-size: 11px; color: #8a93a1; }
+.h10-au-week b { font-size: 13px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-au-week em { font-style: normal; }
+.h10-au-week i { font-style: normal; font-weight: 700; }
+.h10-au-week i.bad { color: #c0392b; }
+.h10-au-week i.cap { color: #8a5316; }
+.h10-au-never { color: #b3bac4; }
+.h10-au-rowconf td { background: #fffaf8; }
+
+/* ── Selection bar ───────────────────────────────────────────────────────────────────── */
+.h10-au-bulkrow { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.h10-au-bulkrow .lbl { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+
+/* ── The detail drawer ───────────────────────────────────────────────────────────────── */
+/* z-index sits ABOVE the section's modals (140) and BELOW H10Select's portalled popover
+   (.h10-dd-pop.fixed, 200) and its backdrop (199). A drawer at 200 would tie with the select
+   inside it and depend on paint order; a drawer above 200 would clip every dropdown it
+   contains. The bulk modal closes this drawer rather than fighting it. */
+.h10-au-back { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 160; display: flex; justify-content: flex-end; }
+.h10-au-drawer { z-index: 161; width: min(680px, 100vw); height: 100%; background: #fff; display: flex; flex-direction: column; box-shadow: -14px 0 40px rgba(20,28,38,.18); }
+.h10-au-dh { display: flex; align-items: flex-start; gap: 12px; padding: 15px 18px; border-bottom: 1px solid #eef1f5; }
+.h10-au-dh > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.h10-au-dh b { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: #1c2530; line-height: 1.35; }
+.h10-au-dh b .h10-au-swatch { height: 15px; }
+.h10-au-dh span { font-size: 11px; color: #8a93a1; }
+.h10-au-dh > button { margin-left: auto; flex-shrink: 0; border: 0; background: none; padding: 2px; color: #8a93a1; cursor: pointer; border-radius: 6px; }
+.h10-au-dh > button:hover { background: #f1f4f8; color: #1c2530; }
+.h10-au-db { flex: 1; overflow-y: auto; padding: 16px 18px 24px; }
+
+/* When / If / Then — a label column and a value column, so the three lines read as one shape. */
+.h10-au-def { border: 1px solid #e3e7ec; border-radius: 10px; padding: 13px 15px; background: #fbfcfe; }
+.h10-au-defrow { display: grid; grid-template-columns: 46px 1fr; gap: 10px; align-items: baseline; padding: 5px 0; }
+.h10-au-defrow + .h10-au-defrow { border-top: 1px solid #eef1f5; }
+.h10-au-defrow .k { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.h10-au-defrow .v { font-size: 12px; line-height: 1.55; color: #1c2530; min-width: 0; }
+.h10-au-defrow .v.muted, .h10-au-defrow .v em.muted { color: #8a93a1; font-style: normal; }
+.h10-au-acts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.h10-au-acts li { display: flex; align-items: flex-start; gap: 7px; }
+.h10-au-acts li em { font-style: normal; color: #8a93a1; }
+.h10-au-dot { flex-shrink: 0; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; }
+/* An action that reaches Amazon is marked, because that is the only property of an action an
+   operator must never have to infer. */
+.h10-au-dot.w { background: #b4530e; }
+.h10-au-dot.n { background: #cfd6df; }
+.h10-au-nowrite { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: #f1f4f8; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #8a93a1; }
+.h10-au-desc { margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+
+.h10-au-conf, .h10-au-ceiling, .h10-au-grad, .h10-au-capped { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.55; }
+.h10-au-conf svg, .h10-au-ceiling svg, .h10-au-grad svg, .h10-au-capped svg { flex-shrink: 0; margin-top: 2px; }
+.h10-au-conf { background: #fdeaea; color: #a02c2c; }
+.h10-au-ceiling { background: #f1f4f8; color: #55606d; }
+.h10-au-capped { background: #fff6e8; color: #8a5316; }
+.h10-au-grad.ready { background: #e7f5ed; color: #14724d; }
+.h10-au-grad.failing { background: #fdeaea; color: #a02c2c; }
+.h10-au-grad.unseen, .h10-au-grad.unreviewed, .h10-au-grad.building { background: #f1f4f8; color: #55606d; }
+
+/* Three lanes, because a wide surface lays facts side by side rather than in one long column. */
+.h10-au-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+.h10-au-lane { border: 1px solid #e3e7ec; border-radius: 10px; padding: 13px 15px; background: #fff; min-width: 0; }
+.h10-au-lane h4 { margin: 0 0 9px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #8a93a1; }
+.h10-au-scopeform { display: flex; flex-wrap: wrap; gap: 7px; }
+.h10-au-reach { margin: 10px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-au-reach b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-au-lane .h10-am-btn { margin-top: 10px; }
+.h10-au-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; font-size: 11px; line-height: 1.55; color: #8a93a1; }
+.h10-au-note svg { flex-shrink: 0; margin-top: 2px; }
+.h10-au-note b { color: #55606d; }
+.h10-au-note.danger { padding: 9px 12px; border-radius: 8px; background: #fdeaea; color: #a02c2c; }
+.h10-au-note.danger b { color: #8a2020; }
+.h10-au-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; line-height: 1.5; color: #55606d; }
+.h10-au-list li { padding-left: 11px; position: relative; }
+.h10-au-list li::before { content: ''; position: absolute; left: 0; top: 7px; width: 4px; height: 4px; border-radius: 50%; background: #cfd6df; }
+
+@media (max-width: 720px) {
+  .h10-au-drawer { width: 100vw; }
+  .h10-au-lanes { grid-template-columns: 1fr; }
+}

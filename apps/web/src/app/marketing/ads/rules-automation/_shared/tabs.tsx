@@ -34,6 +34,15 @@ export const RULES_BASE = '/marketing/ads/rules-automation'
 // described the mode nobody uses.
 export const RULES_TABS: RulesTab[] = [
   { key: 'rules', label: 'Apply Rules', subtitle: 'Create and manage rules for all of your campaigns' },
+  // RA.AUTO — one page for all 51 automations, with the type filter that replaces the five
+  // action-type tabs below. Added rather than swapped: the tabs it supersedes are retired in
+  // the session that owns them, once this page is live and verified (plan Part 6).
+  {
+    key: 'automations',
+    label: 'Automations',
+    routed: true,
+    subtitle: 'Every automation you have, what it can change, and the one control that decides',
+  },
   { key: 'bid', label: 'Bid' },
   { key: 'keyword-harvest', label: 'Keyword Harvest' },
   { key: 'negative-targeting', label: 'Negative Targeting' },
