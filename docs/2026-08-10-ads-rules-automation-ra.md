@@ -311,29 +311,29 @@ the survivors become pages. *"For the budget schedule, we can actually drop it."
 | **Automations** | **KEEP — make it the landing tab** | The 51 rules; it *is* the subject of the section. Already built. |
 | Bid · Keyword Harvest · Negative Targeting · Budget · Placement | **DROP (5)** | One component (`RuleListTab`) + a `liveType` string. The Automations 8-family type filter supersedes all five *and* covers the 9 action types that had no tab home. Their Delete also lies — "cannot be undone", then removes the row from local state only. |
 | **Rank & Dayparting** | **KEEP — untouched** | Done and good. Not reopened. |
-| Budget Schedules | **DROP** | `BudgetSchedule` = **0 rows**, never used. Operator decision 2026-08-10. |
+| **Budget Schedules** | **KEEP** | Operator decision 2026-08-10 (reversing a same-day drop). ⚠ `BudgetSchedule` = **0 rows** — so it must say *why* it is empty and how to create one, not render a bare empty grid. |
 | **Share of Voice** | **KEEP — absorbs Keyword Tracker** | Its `SovTrackerTab` already has a Rules \| Report toggle that can carry both. |
 | Keyword Tracker | **MERGE** ↑ | Same component with a different `kind` prop; `KeywordRank` = **0 rows**. |
 | Control Room (5 tabs, chevron child) | **BECOMES 2 pages** | Today+Foresight+Activity → **Activity**; Guardrails+Levers → **Controls**. Real subjects, wrong home. Retire the Control Room only in the session that owns it. |
 
-**Final: 5 pages** — Automations · Rank & Dayparting · Share of Voice · Activity · Controls.
-Two are already built. **Eight surfaces are deleted and nothing new is invented.**
+**Final: 6 pages** — Automations · Rank & Dayparting · Budget Schedules · Share of Voice ·
+Activity · Controls. Two are already built. **Seven surfaces are deleted and nothing new is
+invented.**
 
 `ProtectedTermsPanel` (the 10-term whitelist deciding what can never be negated) rides on the
 Negative Targeting tab today and **must not vanish with it** → it belongs on **Controls**.
 
-#### 🔴 Dropping Budget Schedules must NOT delete `_schedule/`
+#### 🔴 `_schedule/` is shared with Rank Goals — never delete it wholesale
 
-`_schedule/ScheduleBuilder.tsx` is imported by **`_rank/RankGoalBuilder.tsx`** — Rank Goals renders
-it for its classic style (`?style=classic`). Deleting `_schedule/` to remove Budget Schedules would
-take down the one page the operator said not to touch.
+Recorded because a same-day decision to drop Budget Schedules was reversed, and the next person to
+consider it needs this: **`_schedule/ScheduleBuilder.tsx` is imported by
+`_rank/RankGoalBuilder.tsx`** — Rank Goals renders it for its classic style (`?style=classic`).
+Deleting `_schedule/` would take down the one page the operator said not to touch.
 
-Safe to delete: **`_schedule/BudgetScheduleTab.tsx` only** (single importer:
-`RulesAutomationClient.tsx:32`), its branch in that client, and the `budget-schedules` tab entry.
-**Must survive: `ScheduleBuilder.tsx`, `CampaignSection.tsx`, `dayparting.css`** and everything else
-under `_schedule/`. Decide separately what happens to the `budget-schedule` slug in
-`_shared/ruleTypes.ts` and its `/builder/budget-schedule` route — check `RuleTypeModal` for a link
-to it before removing either.
+With Budget Schedules KEPT, nothing under `_schedule/` is deleted at all, and the risk is moot for
+now. If it is ever dropped again: only `_schedule/BudgetScheduleTab.tsx` is safe to remove (single
+importer, `RulesAutomationClient.tsx:32`). `ScheduleBuilder.tsx`, `CampaignSection.tsx` and
+`dayparting.css` must survive.
 
 ### 4.0b The boundary table — one subject, one owner
 
