@@ -42,9 +42,14 @@ const AUTONOMY = overlayById('autonomy')
 
 /** `lane` is how a worker is INVOKED, which the canvas draws as a container and
  *  the table had no column for. */
+/* ⚠ Kept short enough to FIT. Measured on prod after S5.d: the cell is 128px,
+   `white-space: nowrap` with `text-overflow: clip` — not ellipsis — so "the
+   nightly job runs it" overflowed by 31px and rendered as "the nightly job run",
+   cut mid-word with nothing to say it had been. A column that clips silently is
+   worse than a shorter phrase. */
 const LANE_WORDS: Record<string, string> = {
   ranked: 'a step of a routine',
-  standalone: 'the nightly job runs it',
+  standalone: 'the nightly job',
   unwired: 'nothing runs it',
 }
 const LANE_ORDER: Record<string, number> = { ranked: 0, standalone: 1, unwired: 2 }
