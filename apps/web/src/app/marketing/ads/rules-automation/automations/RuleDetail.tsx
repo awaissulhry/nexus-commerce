@@ -44,7 +44,7 @@ export interface DetailRule {
     id: string | null
     name: string | null
     /** RA.GRAIN — the fourth grain, resolved to a name by the server. */
-    product?: { id: string; sku: string | null; name: string | null; isLine: boolean; variations: number; missing: boolean } | null
+    product?: { id: string; sku: string | null; name: string | null; isLine: boolean; variations: number; variationsInCatalogue?: number; missing: boolean } | null
   }
   caps: { perDay: number | null; perExecutionCents: number | null; perDayCents: number | null }
   week: { acted: number; proposed: number; failed: number; capped: number }
@@ -185,9 +185,20 @@ export function RuleDetail({
             {/* The limitation, stated where the control is rather than discovered afterwards. */}
             {rule.scope.product && !rule.scope.product.missing && (
               <p className="h10-au-note">
-                Product scope decides which <b>campaigns</b> this rule may act on. It does not narrow
-                the action to that product&rsquo;s targets — a bid change still moves every target in a
-                matching campaign, because that is the grain the actions work at.
+                <span>
+                  Bound to <b>{rule.scope.product.sku}</b>
+                  {rule.scope.product.isLine
+                    ? <> — the whole line, {rule.scope.product.variations} advertised variation
+                      {rule.scope.product.variations === 1 ? '' : 's'}
+                      {rule.scope.product.variationsInCatalogue != null
+                        && rule.scope.product.variationsInCatalogue > rule.scope.product.variations
+                        && <> of {rule.scope.product.variationsInCatalogue} in the catalogue; the rest are
+                          advertised nowhere, so no binding can reach them</>}.</>
+                    : <> — one variation.</>}
+                  {' '}Product scope decides which <b>campaigns</b> this rule may act on. It does not
+                  narrow the action to that product&rsquo;s targets — a bid change still moves every
+                  target in a matching campaign, because that is the grain the actions work at.
+                </span>
               </p>
             )}
           </section>

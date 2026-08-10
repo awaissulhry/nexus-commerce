@@ -6549,6 +6549,29 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const productById = new Map(scopedProducts.map((p) => [p.id, p]))
 
     /**
+     * ADVERTISED children, not catalogue children — the count that explains the reach beside it.
+     *
+     * IT-MOSS-JACKET has 30 children in the PIM and 21 that any campaign advertises. Reporting 30
+     * here while the scope form's reach line said "21 advertised variations" was two numbers for
+     * one thing, which is the third time this shape of defect has appeared in this programme
+     * (targetAcos units, then 40-vs-18 in the reach label). Only the advertised count is
+     * actionable: the other 9 cannot be reached by any binding.
+     */
+    const advertisedChildren = scopedProductIds.length
+      ? await prisma.adProductAd.findMany({
+        where: { product: { parentId: { in: scopedProductIds } } },
+        select: { productId: true, product: { select: { parentId: true } } },
+      })
+      : []
+    const advertisedByParent = new Map<string, Set<string>>()
+    for (const a of advertisedChildren) {
+      const parent = a.product?.parentId
+      if (!parent || !a.productId) continue
+      const s = advertisedByParent.get(parent) ?? new Set<string>()
+      s.add(a.productId); advertisedByParent.set(parent, s)
+    }
+
+    /**
      * RA.AUTO — actions that never reach Amazon. Same set as `rule-category.ts`'s
      * NON_WRITING_ACTIONS, and it is the difference between "9 rules are on AUTO" and "8 rules
      * can change your account". Measured on prod: "Alert: ACOS spike" is AUTO and its only
@@ -6607,7 +6630,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
               name: productById.get(r.scopeProductId)?.name ?? null,
               /** A parent is the whole line; a child is one variation. */
               isLine: (childCountByParent.get(r.scopeProductId) ?? 0) > 0,
-              variations: childCountByParent.get(r.scopeProductId) ?? 0,
+              /** Variations any campaign actually advertises — the number that explains the reach. */
+              variations: advertisedByParent.get(r.scopeProductId)?.size ?? 0,
+              /** Every variation in the catalogue, so "21 of 30" is stateable rather than implied. */
+              variationsInCatalogue: childCountByParent.get(r.scopeProductId) ?? 0,
               /** True when the id no longer resolves — the reach line then reads 0, honestly. */
               missing: !productById.has(r.scopeProductId),
             }
