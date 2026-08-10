@@ -1425,3 +1425,46 @@
   background: #15804f;
   color: #fff;
 }
+
+/* ── S8 · deciding many at once ─────────────────────────────────────────── */
+
+/*
+ * S8.2 — the group-scoped select-all.
+ *
+ * A link, not a button-shaped control: it selects, it does not decide, and
+ * giving it button weight would put a third thing that looks actionable beside
+ * "Reject all (12)" in the same header. `aq-` and not `ap-` — `ap-*` belongs
+ * to fleet-sections.css, which this page also loads.
+ *
+ * 24px min-height rather than leaning on WCAG 2.5.8's Spacing exception: it
+ * sits inline in a header row next to another control, which is exactly the
+ * case the exception does not cover.
+ */
+.aq-selectall {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  /* 4.83:1 on the card white this header sits on. */
+  color: #1f6fde;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.aq-selectall:hover {
+  color: #17539f;
+}
+.aq-selectall:disabled {
+  /* Not opacity — the contrast-under-opacity trap has cost this page a round
+     of "verified" numbers already. A solid muted colour instead, 4.6:1. */
+  color: #55616f;
+  text-decoration: none;
+  cursor: default;
+}
+.aq-selectall:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 2px;
+}

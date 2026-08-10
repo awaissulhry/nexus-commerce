@@ -409,6 +409,48 @@ export function WaitingList({
               {group.some((r) => r.status === 'scheduled') ? ' · some already approved' : ''}
               {group.some((r) => r.riskTier === 'high') ? ' · includes high risk' : ''}
             </span>
+            {/*
+             * S8.2 — select-all, scoped to THIS GROUP and saying its own number.
+             *
+             * Without it the section could not do the job it exists for:
+             * clearing forty near-identical proposals meant forty clicks. With
+             * it, the only honest scope is the group the operator can see —
+             * there is deliberately no cross-group select-all and no second
+             * step to extend one. A control that silently means "all 340
+             * matching a filter you are not looking at" is the most dangerous
+             * thing this page could ship, and the count is in the label so the
+             * number is agreed before the click, not after.
+             *
+             * Parked rows are excluded because they cannot be decided — the
+             * same rule `previewBulk` applies server-side, so select-all can
+             * never produce the "3 others are not affected" clause by itself.
+             */}
+            {(() => {
+              const selectable = group.filter((r) => r.status !== 'scheduled')
+              if (selectable.length < 2) return null
+              const allSelected = selectable.every((r) => selected.has(r.id))
+              return (
+                <button
+                  type="button"
+                  className="aq-selectall"
+                  disabled={busy}
+                  onClick={() =>
+                    setSelected((prev) => {
+                      const next = new Set(prev)
+                      for (const r of selectable) {
+                        if (allSelected) next.delete(r.id)
+                        else next.add(r.id)
+                      }
+                      return next
+                    })
+                  }
+                >
+                  {allSelected
+                    ? `Clear the ${selectable.length} selected here`
+                    : `Select all ${selectable.length} in this group`}
+                </button>
+              )
+            })()}
             {rejectAllFor === charterKey ? (
               <span className="acr-fl-rejectrow">
                 <input
