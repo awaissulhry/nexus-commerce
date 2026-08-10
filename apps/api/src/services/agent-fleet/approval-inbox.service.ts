@@ -776,6 +776,31 @@ export async function previewBulk(
    */
   const workers = new Set(rows.map((r) => r.agentRun?.agentKey ?? 'unknown'))
   const sameWorker = workers.size <= 1
+
+  /*
+   * S8.4 — a bulk YES never spans a row that can reach Amazon.
+   *
+   * Today this holds by accident: the outside queue renders its cards without
+   * a checkbox, so executable rows cannot be selected. That is a property of
+   * one component, not a rule, and the endpoint takes a list of ids from
+   * anywhere. The same gap as same-worker before S8.1 — a UI convention doing
+   * an invariant's job.
+   *
+   * Why it must be a rule: S6's read-and-understood tick is per card, because
+   * the sentence it gates ("If this is wrong, you sell at the wrong price…")
+   * is per card. A bulk approve either bypasses that gate or asks for one tick
+   * covering forty different consequences, and both are worse than clicking
+   * forty times. This is also the only section whose failure mode is euros x N.
+   *
+   * Asked of the live tool registry rather than of FLEET_TOOLS, so a fleet
+   * tool that gains an executor is caught the day it does, without anyone
+   * remembering to update a list.
+   *
+   * Approve only. Rejecting many is always safe and is the operator's escape
+   * hatch — refusing it would be friction with no hazard behind it.
+   */
+  const executable = rows.filter((r) => typeof getTool(r.toolName)?.execute === 'function')
+  const anyExecutable = executable.length > 0
   const notActionable = all.length - rows.length
   const byTool: Record<string, number> = {}
   for (const r of rows) byTool[r.toolName] = (byTool[r.toolName] ?? 0) + 1
@@ -796,7 +821,11 @@ export async function previewBulk(
           .join(', ')}). Approve one kind at a time — a single yes should never span two different consequences.`
       : decision === 'approve' && !sameWorker
         ? `These come from ${workers.size} different workers. Approve one worker at a time — a single yes should never span two workers' judgement.`
-        : null
+        : decision === 'approve' && anyExecutable
+          ? `${executable.length === 1 ? 'One of these' : `${executable.length} of these`} can actually change something on Amazon (${[
+              ...new Set(executable.map((r) => r.toolName.replace(/-/g, ' '))),
+            ].join(', ')}). Those are decided one at a time, each with its own confirmation — a single yes should never carry a real change to Amazon alongside anything else.`
+          : null
 
   const kinds = Object.entries(byTool)
     .map(([tool, n]) => `${n} × ${tool.replace(/-/g, ' ')}`)
@@ -831,6 +860,15 @@ export async function previewBulk(
    * Recorded in the study rather than built, because the registry is not this
    * stream's.
    */
+  /*
+   * ⚠ S8.4 makes the first two branches unreachable on an approve that
+   * proceeds: every tool that is irreversible or partly reversible is also
+   * executable, and an executable row blocks the batch before this sentence is
+   * built. They are kept, and the counts are returned in the payload, because
+   * the guard is a policy and policies get relaxed — if one ever is, the prose
+   * is already correct rather than silently reassuring. Asserted by the tests
+   * as a BLOCK today, not as prose that cannot render.
+   */
   const reversibility =
     irreversible > 0
       ? ` ${irreversible} of them cannot be undone once ${irreversible === 1 ? 'it runs' : 'they run'}.`
@@ -860,6 +898,7 @@ export async function previewBulk(
     byTool,
     highRisk,
     irreversible,
+    partlyReversible,
     euro,
     homogeneous,
     blockedReason,

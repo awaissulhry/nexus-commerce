@@ -284,12 +284,38 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     expect(p.sentence).toContain('All of these can be put back')
   })
 
-  it('S8.1 — says when a row can only be partly undone', async () => {
+  it('S8.1/S8.4 — counts a partly-reversible row, and blocks it for being executable', async () => {
     db.agentApproval.findMany.mockResolvedValue([
       pending('publish-listing', 'high', {}, 'listing-quality-keeper'),
     ] as never)
     const p = await previewBulk(['a'], 'approve')
-    expect(p.sentence).toContain('can only be partly undone')
+    // The fact is computed and returned...
+    expect(p.partlyReversible).toBe(1)
+    // ...but the prose for it is unreachable while S8.4 stands, because every
+    // partly-reversible tool is also executable. Asserting the sentence here
+    // would have been asserting a branch that cannot render.
+    expect(p.blockedReason).toContain('can actually change something on Amazon')
+  })
+
+  it('S8.4 — refuses to bulk-approve anything that can reach Amazon', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-price', 'high', {}, 'pricing-watchdog'),
+      pending('set-price', 'high', {}, 'pricing-watchdog'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    expect(p.blockedReason).toContain('can actually change something on Amazon')
+    // Same worker, same kind — every other homogeneity rule is satisfied, so
+    // this can only be the executable guard.
+    expect(p.blockedReason).not.toContain('different kinds')
+    expect(p.blockedReason).not.toContain('different workers')
+  })
+
+  it('S8.4 — still allows a bulk REJECT of executable rows', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-price', 'high', {}, 'pricing-watchdog'),
+    ] as never)
+    const p = await previewBulk(['a'], 'reject')
+    expect(p.blockedReason).toBeNull()
   })
 
   it('calls out the high-risk share and the undo window on approve', async () => {

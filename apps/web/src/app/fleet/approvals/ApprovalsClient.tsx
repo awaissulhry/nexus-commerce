@@ -1014,6 +1014,20 @@ function OutsideQueue({
                 onCommit={onCommit}
               />
             ) : (
+              /*
+               * S8.4 — no checkbox here, and that is a RULE, not an oversight.
+               *
+               * These are the only rows on the page that can reach Amazon. S6's
+               * read-and-understood tick is per card because the sentence it
+               * gates is per card, so a bulk approve would either bypass it or
+               * ask for one tick covering several different consequences. This
+               * section is decided one row at a time, on purpose.
+               *
+               * The rule is enforced server-side in `previewBulk` as well —
+               * an executable row blocks a bulk approve wherever the ids come
+               * from — so adding a checkbox here would not quietly work. It
+               * would produce a refusal, which is the correct failure.
+               */
               <div key={a.id} className="aq-outrow">
                 {/* The name leads the sentence, so its capital is correct by
                     construction rather than by lower-casing a display string
