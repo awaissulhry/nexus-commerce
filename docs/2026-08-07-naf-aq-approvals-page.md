@@ -5157,3 +5157,110 @@ partial with the failed rows named.
 [uipath]: https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions
 
 **AWAITING OPERATOR APPROVAL — no code written.**
+
+---
+
+## 18.10 — S8 execution record
+
+Five phases, seven commits, 31 tests. The database began and ended at exactly
+**18 approvals · 0 pending · 0 exemplars · 0 audit rows**, probed independently
+each time. **No bulk decision was ever executed**: the result banner is client
+state, so states (g) and (h) were produced by stubbing the response.
+
+| Phase | Commit | What |
+|---|---|---|
+| S8.1 | `35e1cf922` | Same worker beside same kind; reversibility said either way; a two-list drift corrected |
+| S8.2 | `30e60eee3` | Group-scoped select-all with its count in the label |
+| S8.3 | `addb16362` | Tiered confirmation above 24; the guard that had stopped guarding |
+| S8.4 | `07e7206f0` `b503e1353` | Executable rows excluded from bulk approve, as a rule |
+| S8.5 | `9ac8f5541` | The opacity trap, third occurrence |
+
+### 18.10.1 The audit was the most valuable phase
+
+Two of the spec's four complaints were already fixed, one was half-done, and
+the fourth — "select-all scoped to the visible group" — turned out to be a
+**missing feature**, not a dangerous one. Building to the spec without reading
+the code first would have produced a rewrite of two working things and missed
+the one that stopped the section doing its job.
+
+### 18.10.2 Every state, measured on prod
+
+| State | Result |
+|---|---|
+| (a) nothing selected | select-all offered per group, suppressed below two rows |
+| (b) 26 selected, homogeneous | "This approves 26 actions… €8.71 in total across 26 keywords. All of these can be put back." |
+| (c) mixed kinds | blocked; only a "Back" button |
+| (c′) **same kind, different workers** | blocked — "These come from 2 different workers"; **no confirm offered** |
+| (d) parked row | excluded from select-all (26 boxes beside 1 parked row) |
+| (e) 3 selected | no typed box; "Yes, do it", enabled |
+| (f) 26 selected | "Type approve 26 to confirm"; `approve 260` refused, `approve 26` accepted |
+| (g) all done | "All 3 went through." |
+| (h) partial | "24 of 27 went through — 3 did not. …The ones that did not are still in the list below." |
+| eleven widths (900–1920 + 200% at 1512/1280) | bar reflows 60→165px, no overflow, no spill |
+| composited contrast | 1 failure found and fixed; 0 after |
+
+### 18.10.3 Three defects I introduced, each caught by a different check
+
+1. **A second `agentRun.findMany`** in `previewBulk` — caught by the **existing
+   unit suite** the moment it ran (nine failures). Replaced with the relation
+   include, which is the idiom `charterKeyOf` uses ten lines above.
+2. **The client guard stopped guarding.** It decided whether to offer "Yes, do
+   it" by matching `/Approve one kind at a time/` against the server's prose.
+   S8.1 added a second refusal — two workers, one kind — that the regex does
+   not match, so a blocked batch would have offered a live confirm over an
+   explanation of why it cannot happen. Caught by **reading my own diff against
+   the comment above it**, then proven on prod by seeding the cross-worker case
+   specifically so it could not rest on a unit test alone.
+3. **`partlyReversible` on the object and not on the interface** — caught by
+   the **pre-push hook**, because I ran `tsc` after the first edit to that file
+   and only vitest after the second. Vitest passes happily on code that does
+   not typecheck.
+
+### 18.10.4 The reachability trap, twice
+
+S8.1 argued that speaking only the `irreversible` count would be useless
+because every irreversible tool is executable and executable rows cannot be
+selected — then added a `partlyReversible` branch with the identical flaw one
+line later. S8.4's guard exposed it by failing that test. The counts are
+returned and asserted as **facts**; the prose is kept and marked unreachable
+while the guard stands, because a policy can be relaxed and correct prose is
+cheaper than reassuring prose.
+
+### 18.10.5 The trap that keeps coming back
+
+The disabled bulk confirm composited to **2.59:1** — the same opacity trap S4
+found and S6.d fixed, in the one place S6.d's `.aq-card` scope did not reach.
+It matters more here: S8.3 gates that button behind typing, so it is disabled
+during exactly the moments the operator reads *"Yes, approve 26"*.
+
+Widened to `.aq-page`. The rule was never "cards keep their labels readable" —
+it is **"a disabled primary keeps its label readable"**, because on this page a
+primary's label always names the change. **2.59 → 6.69:1.** Third occurrence;
+knowing the trap has never once prevented it, and measuring has caught it every
+time.
+
+### 18.10.6 Two findings for other people
+
+- **The count hand-off is now evidence, not argument.** With 26 + 2 decidable
+  rows and one parked, the tab read **"Waiting for you 29"**. Parked rows are
+  counted as waiting. Still §6c-AQ's, still not this stream's to change.
+- **A verification method was quietly broken.** The deploy probes enumerated
+  stylesheets with `[A-Za-z0-9_./-]+\.css`, which silently omits any chunk
+  containing `~` — and the file carrying this page's CSS is
+  `02sne9h7~ep1m.css`. Every CSS-only probe in this engagement was searching an
+  incomplete set and could have reported "not deployed" forever. Enumerate from
+  `href="…"`, never from a hand-written character class.
+
+### 18.10.7 An unplanned demonstration worth keeping
+
+While staging state (h), the parked seed's ten-minute timer elapsed; the sweep
+tried to commit it, the dry-run refused it, and it returned to the queue as
+pending. The selection became **27** — and the phrase already typed,
+`approve 26`, **stopped matching, so the confirm refused**.
+
+That is the typed gate binding to the server's decidable count rather than to
+`selected.size`, demonstrated by an accident rather than a fixture: the queue
+changed under the operator and the stale confirmation would not authorise the
+new number.
+
+**S8 is complete.**
