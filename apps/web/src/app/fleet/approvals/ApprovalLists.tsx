@@ -32,6 +32,8 @@ export interface InboxCounts {
 }
 
 export interface ApprovalRow extends CardApproval {
+  /** S9.5 — the operator's own words. `reason` is the system's. */
+  operatorNote?: string | null
   /** NAF.AQ — resolved through AgentRun so `?assignment=` can filter. */
   assignmentId?: string | null
   decidedAt: string | null
@@ -383,31 +385,30 @@ export function RecordList({ rows, nameOf }: { rows: ApprovalRow[]; nameOf: (k: 
                 ) : null}
               </span>
               {/*
-                * S10.3 — a reason with no author is not a quotation.
+                * S9.5 supersedes S10.3's heuristic with an exact rule.
                 *
-                * 15 of the 18 rows carry a script marker — acp3b-verify,
-                * acp4a-verify-cleanup — and every one was rendered inside
-                * quotation marks, in the slot reserved for the operator's own
-                * words. Quotation marks assert a speaker.
+                * S10.3 inferred authorship — `decidedBy` is null, so there is
+                * no speaker, so no quotation marks — because ONE column was
+                * carrying both the operator's words and the system's. That was
+                * the best rule available with one column, and it was still a
+                * guess about a field's meaning.
                 *
-                * The rule is not a regex over `acp*`, which would rot the
-                * moment a script is renamed. It is: `decidedBy` is null, so
-                * there is no speaker, so there are no quotes. It stays correct
-                * when real decisions arrive — those carry a decider and render
-                * quoted, exactly as before — and it needs no maintenance.
+                * There are two columns now. `operatorNote` is the operator's
+                * voice by definition and is the only thing ever quoted;
+                * `reason` is the system's — "not run — …", "execution failed:
+                * …", "approved; this tool is preview-only" — and is never
+                * quoted, whoever decided the row.
                 *
                 * `<code>` here is the opposite of the one S5 deleted: that one
-                * dressed a NAME as machine text; this one is machine text and
-                * saying so is the entire point.
+                * dressed a NAME as machine text; this one IS machine text.
                 */}
+              {row.operatorNote ? (
+                <span className="ap-reason">“{row.operatorNote}”</span>
+              ) : null}
               {row.reason ? (
-                row.decidedBy ? (
-                  <span className="ap-reason">“{row.reason}”</span>
-                ) : (
-                  <span className="aq-marker">
-                    note, no author recorded: <code>{row.reason}</code>
-                  </span>
-                )
+                <span className="aq-marker">
+                  recorded by the system: <code>{row.reason}</code>
+                </span>
               ) : null}
             </span>
           </li>

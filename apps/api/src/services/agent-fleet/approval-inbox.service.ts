@@ -180,7 +180,11 @@ export async function decideFleetApproval(input: {
   // decision is recorded immediately (attributable, durable); only the
   // execution waits.
   if (input.decision === 'approve') {
-    const parked = await scheduleApproval({ id: input.id, actor: input.actor })
+    const parked = await scheduleApproval({
+      id: input.id,
+      actor: input.actor,
+      note: input.reason || undefined,
+    })
     if (!parked.ok) return parked
     await recordControlChange({
       charterKey: await charterKeyOf(input.id),
@@ -203,6 +207,23 @@ export async function decideFleetApproval(input: {
     input.reason || undefined,
   )
   if (!out.ok) return out
+
+  /* Both verbs write the operator's note to the same column. The gate stores
+     the reject reason in `reason` as well, which is harmless — but the record
+     quotes `operatorNote`, so there is exactly one field that can ever be
+     attributed to a person. */
+  try {
+    /* try/catch rather than `.catch()` on the call: the decision has already
+       committed and this is a side record, so it must not be able to fail the
+       thing that already happened — and `await` survives a caller that returns
+       something other than a promise, which `.catch()` does not. */
+    await prisma.agentApproval.update({
+      where: { id: input.id },
+      data: { operatorNote: input.reason || null },
+    })
+  } catch {
+    /* recorded in the audit trail regardless; the row's copy is a convenience */
+  }
 
   await mintExemplarFromDecision(input.id, input.decision, input.reason || undefined).catch(
     (err) => logger.error('[naf-ap] exemplar minting failed', { id: input.id, error: String(err) }),
@@ -242,6 +263,9 @@ export const UNDO_WINDOW_MS = 20_000
 export async function scheduleApproval(input: {
   id: string
   actor: InboxActor
+  /** S9.5 — the operator's own words. Previously not passed at all, so an
+      approve note reached the audit trail and never the row. */
+  note?: string
 }): Promise<{ ok: boolean; status?: string; executeAfter?: string; error?: string }> {
   const executeAfter = new Date(Date.now() + UNDO_WINDOW_MS)
   // Atomic pending→scheduled claim: two tabs cannot both schedule the same row.
@@ -252,6 +276,10 @@ export async function scheduleApproval(input: {
       decidedBy: input.actor.label,
       decidedAt: new Date(),
       executeAfter,
+      /* Into `operatorNote`, never `reason`: the gate overwrites `reason` with
+         its own sentence for a preview-only tool, which would destroy the
+         operator's words a few seconds later. */
+      operatorNote: input.note ?? null,
     },
   })
   if (claim.count === 0) {
@@ -406,7 +434,20 @@ export async function commitScheduledApproval(
     return out
   }
 
-  await mintExemplarFromDecision(id, 'approve').catch((err) =>
+  /*
+   * S9.5 — with the note, not without it.
+   *
+   * This called `mintExemplarFromDecision(id, 'approve')` with no third
+   * argument, so every exemplar minted from an APPROVE carried
+   * `operatorNote: null`. The precedent panel tells the operator that
+   * approving with a reason teaches the fleet; on the approve path it taught
+   * it nothing at all. Read back off the row, which now holds it.
+   */
+  const noted = await prisma.agentApproval.findUnique({
+    where: { id },
+    select: { operatorNote: true },
+  })
+  await mintExemplarFromDecision(id, 'approve', noted?.operatorNote ?? undefined).catch((err) =>
     logger.error('[naf-ap] exemplar minting failed', { id, error: String(err) }),
   )
   await recordControlChange({

@@ -14,6 +14,10 @@ vi.mock('../../db.js', () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
       updateMany: vi.fn(),
+      /* S9.5 — decideFleetApproval writes the operator's note to its own
+         column after a decision. A mock without `update` throws a TypeError
+         synchronously, before any .catch() can attach. */
+      update: vi.fn(),
     },
     agentRun: { findMany: vi.fn() },
   },

@@ -1,0 +1,16 @@
+-- NAF.AQ-S9R S9.5 — the operator's own words get their own column.
+--
+-- `reason` was carrying two different things: what the OPERATOR said, and what
+-- the SYSTEM said. The gate writes "approved; this tool is preview-only (no
+-- execute)" into it, the commit path writes "not run — …" and "execution
+-- failed: …", and the record then renders whichever it finds as a quotation.
+--
+-- Worse, on an approve the operator's note never reached the row at all —
+-- `scheduleApproval` was called without it — so it survived only in the audit
+-- trail and the minted exemplar carried `operatorNote: null`. The precedent
+-- panel promises that approving with a reason teaches the fleet; on the
+-- approve path it taught it nothing.
+--
+-- Additive and nullable: every existing row keeps its `reason` untouched and
+-- reads as it does today.
+ALTER TABLE "AgentApproval" ADD COLUMN "operatorNote" TEXT;

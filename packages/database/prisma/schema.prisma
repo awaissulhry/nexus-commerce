@@ -11439,7 +11439,13 @@ model AgentApproval {
   requestedAt  DateTime  @default(now())
   decidedBy    String?
   decidedAt    DateTime?
+  /// What the SYSTEM recorded: "not run — …", "execution failed: …",
+  /// "approved; this tool is preview-only". Never the operator's voice.
   reason       String?
+  /// NAF.AQ-S9 — what the OPERATOR actually said, verbatim. Split from
+  /// `reason` because the record renders one of them in quotation marks and
+  /// quoting a machine sentence attributes it to a person who never said it.
+  operatorNote String?
   expiresAt    DateTime?
   /// NAF.AP.4 — an approved action waits here before it runs, so an approve
   /// can be taken back. Set with status='scheduled'; null otherwise. Nothing
@@ -15919,7 +15925,7 @@ model AgentAssignment {
 
   /// "What does finished look like" — optional, prefilled from the charter's
   /// one-liner. Required free text would make the typed target decorative.
-  wantBack String? @db.Text
+  wantBack String?   @db.Text
   /// Classifies and colours the row, and raises it in the default order. It
   /// never blocks a start and never starts anything.
   dueAt    DateTime?
