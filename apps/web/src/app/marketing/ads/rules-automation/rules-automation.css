@@ -1333,7 +1333,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-lanes > .h10-au-lane:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .h10-au-lane { border: 1px solid #e3e7ec; border-radius: 10px; padding: 13px 15px; background: #fff; min-width: 0; }
 .h10-au-lane h4 { margin: 0 0 9px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
-.h10-au-scopeform { display: flex; flex-wrap: wrap; gap: 7px; }
 .h10-au-reach { margin: 10px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
 .h10-au-reach b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 .h10-au-lane .h10-am-btn { margin-top: 10px; }
@@ -1349,4 +1348,22 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 @media (max-width: 720px) {
   .h10-au-drawer { width: 100vw; }
   .h10-au-lanes { grid-template-columns: 1fr; }
+}
+
+/* ── RA.GRAIN — the four-grain scope form ─────────────────────────────────────────────────
+   Appended at EOF with `h10-au-*` selectors only, same as the RA.AUTO block above. Nothing
+   here can reach Rank Goals or any other tab in this section: every selector is scoped to a
+   class that exists only inside the Automations drawer. */
+.h10-au-scope2 { display: flex; flex-direction: column; gap: 9px; }
+.h10-au-scoperow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* A fixed label column so "Where" and "What" line up and the two rows read as one form. */
+.h10-au-scoperow .lbl { flex: 0 0 42px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
+/* Scope is the one lane that spans the drawer — it holds two rows of controls, not one. */
+.h10-au-lane.wide { margin-top: 14px; }
+.h10-au-reach.bad { padding: 8px 11px; border-radius: 8px; background: #fff6e8; color: #8a5316; display: flex; align-items: flex-start; gap: 7px; }
+.h10-au-reach.bad svg { flex-shrink: 0; margin-top: 2px; }
+.h10-au-reach.bad b { color: #8a2020; }
+
+@media (max-width: 720px) {
+  .h10-au-scoperow .lbl { flex-basis: 100%; }
 }

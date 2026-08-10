@@ -32,7 +32,8 @@ import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { HistoryDrawer } from '../tabs/RuleListTab'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ModeNotches, RANK, type Level } from './ModeNotches'
-import { RuleDetail, type Campaign, type Portfolio, type Readiness, type DetailRule } from './RuleDetail'
+import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
+import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { detectConflicts, triggerText } from './ruleText'
 
 interface Rule extends DetailRule {
@@ -56,8 +57,7 @@ export function AutomationsClient() {
   const [protectedTerms, setProtectedTerms] = useState(0)
   const [grad, setGrad] = useState<Map<string, Readiness>>(new Map())
   const [weeksRequired, setWeeksRequired] = useState(3)
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [scopeOptions, setScopeOptions] = useState<ScopeOptions | null>(null)
   const [market, setMarket] = useState('all')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -89,31 +89,26 @@ export function AutomationsClient() {
 
   useEffect(() => { void load() }, [load])
 
-  // Campaigns and portfolios exist for ONE reason: to state a scope's reach before it is bound,
-  // and to fill the header's market switch. Nothing else on the page reads them.
+  /**
+   * RA.GRAIN — one read feeds every grain's picker and the local reach maths.
+   *
+   * Replaces the two separate campaigns/portfolios fetches. `/advertising/scope-options` carries
+   * ~220 campaigns plus 13 product lines with their campaign ids, which is small enough to compute
+   * any combination's exact reach in the browser — so a dropdown twiddle costs nothing and the
+   * number shown is the same intersection the server enforces.
+   */
   useEffect(() => {
     let alive = true
-    void fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
+    void fetch(`${getBackendUrl()}/api/advertising/scope-options`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => { if (alive) setCampaigns((Array.isArray(d?.items) ? d.items : []) as Campaign[]) })
-      .catch(() => {})
-    void fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' })
-      .then((r) => r.json())
-      // The array is under `portfolios`, NOT `items` — measured on prod, and `_rank/RankGoalBuilder`
-      // and `_schedule/CampaignSection` both already say so in a comment. Reading `items` returned
-      // an empty list, so the portfolio picker offered "No matches" and portfolio scope could not
-      // be bound at all. `items` is kept as a fallback only so a future rename cannot re-empty it.
-      .then((d) => {
-        const list = Array.isArray(d?.portfolios) ? d.portfolios : Array.isArray(d?.items) ? d.items : []
-        if (alive) setPortfolios(list as Portfolio[])
-      })
+      .then((d) => { if (alive && Array.isArray(d?.campaigns)) setScopeOptions(d as ScopeOptions) })
       .catch(() => {})
     return () => { alive = false }
   }, [])
 
   const markets = useMemo(
-    () => Array.from(new Set(campaigns.map((c) => c.marketplace).filter(Boolean))) as string[],
-    [campaigns],
+    () => Array.from(new Set((scopeOptions?.campaigns ?? []).map((c) => c.marketplace).filter(Boolean))) as string[],
+    [scopeOptions],
   )
 
   const setLevel = async (rule: Rule, level: Level) => {
@@ -137,16 +132,22 @@ export function AutomationsClient() {
     } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
 
-  const setScope = async (rule: Rule, scope: { scopePortfolioId?: string | null; scopeCampaignId?: string | null }) => {
+  const setScope = async (rule: Rule, scope: ScopeValue) => {
     setBusy(rule.id); setErr(null); setNote(null)
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${rule.id}/scope`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scope),
       })
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string }
-      if (!r.ok || j.ok === false) throw new Error(j.error ?? `Could not bind scope (${r.status})`)
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string; reach?: { campaigns: number; total: number } }
+      if (!r.ok || j.ok === false) {
+        // 409 scope_matches_nothing is the server refusing a combination that could never fire.
+        // It gets the server's own sentence, which names which pair conflicts.
+        throw new Error(j.message ?? j.error ?? `Could not bind scope (${r.status})`)
+      }
       await load()
-      setNote(`Scope updated for “${rule.name}”.`)
+      setNote(j.reach
+        ? `Scope updated for “${rule.name}” — it now covers ${j.reach.campaigns} of ${j.reach.total} campaigns.`
+        : `Scope updated for “${rule.name}”.`)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
 
@@ -502,8 +503,7 @@ export function AutomationsClient() {
       {detail && (
         <RuleDetail
           rule={detail}
-          campaigns={campaigns}
-          portfolios={portfolios}
+          scopeOptions={scopeOptions}
           readiness={grad.get(detail.id)}
           conflicts={conflicts.get(detail.id)}
           busy={busy === detail.id}

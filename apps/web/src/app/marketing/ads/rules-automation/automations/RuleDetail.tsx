@@ -14,14 +14,11 @@
  * are reused as-is.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { AlertTriangle, Clock, GraduationCap, ShieldAlert, X } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+import { ScopeForm, type ScopeOptions, type ScopeValue } from './ScopeForm'
 import { conditionText, actionLines, triggerText } from './ruleText'
 import type { Level } from './ModeNotches'
-
-export interface Campaign { id: string; name: string; portfolioId?: string | null; marketplace?: string | null }
-export interface Portfolio { portfolioId: string; name: string }
 
 export interface Readiness {
   verdict: 'ready' | 'unreviewed' | 'unseen' | 'building' | 'failing' | 'capped'
@@ -42,7 +39,13 @@ export interface DetailRule {
   writes: boolean
   actions?: unknown
   actionTypes: string[]
-  scope: { kind: 'account' | 'portfolio' | 'campaign'; id: string | null; name: string | null }
+  scope: {
+    kind: 'account' | 'portfolio' | 'campaign'
+    id: string | null
+    name: string | null
+    /** RA.GRAIN — the fourth grain, resolved to a name by the server. */
+    product?: { id: string; sku: string | null; name: string | null; isLine: boolean; variations: number; missing: boolean } | null
+  }
   caps: { perDay: number | null; perExecutionCents: number | null; perDayCents: number | null }
   week: { acted: number; proposed: number; failed: number; capped: number }
   lifetime: { evaluations: number; matches: number; executions: number }
@@ -57,54 +60,22 @@ const eur = (c: number | null) => (c == null ? null : `€${(c / 100).toFixed(2)
 const num = (n: number) => n.toLocaleString('en-IE')
 
 export function RuleDetail({
-  rule, campaigns, portfolios, readiness, conflicts, busy, onScope, onHistory, onClose,
+  rule, scopeOptions, readiness, conflicts, busy, onScope, onHistory, onClose,
 }: {
   rule: DetailRule
-  campaigns: Campaign[]
-  portfolios: Portfolio[]
+  /** RA.GRAIN — one payload feeds every grain's picker AND the local reach maths. */
+  scopeOptions: ScopeOptions | null
   readiness?: Readiness
   conflicts?: string[]
   busy: boolean
-  onScope: (scope: { scopePortfolioId?: string | null; scopeCampaignId?: string | null }) => void
+  onScope: (scope: ScopeValue) => void
   onHistory: () => void
   onClose: () => void
 }) {
-  const [kind, setKind] = useState<'account' | 'portfolio' | 'campaign'>(rule.scope.kind)
-  const [pf, setPf] = useState(rule.scope.kind === 'portfolio' ? (rule.scope.id ?? '') : '')
-  const [cp, setCp] = useState(rule.scope.kind === 'campaign' ? (rule.scope.id ?? '') : '')
-
   const cond = useMemo(() => conditionText(rule.conditions), [rule.conditions])
   // `actionTypes` is the fallback, never the primary: it is filtered and parameterless, so it can
   // say WHAT a rule does but not by how much. See actionLines' own note.
   const then = useMemo(() => actionLines(rule.actions, rule.actionTypes), [rule.actions, rule.actionTypes])
-
-  /**
-   * Law 4 — never offer a scope without stating its reach.
-   *
-   * Portfolio is the weakest grain in this account, not the strongest: only 72 of 220 campaigns
-   * carry a portfolioId, so a portfolio binding is unreachable for two thirds of the account.
-   * That is not a footnote — it decides whether the binding is worth making at all.
-   */
-  const reach = useMemo(() => {
-    if (kind === 'campaign') return cp ? 1 : 0
-    if (kind === 'portfolio') return pf ? campaigns.filter((c) => String(c.portfolioId ?? '') === pf).length : 0
-    return campaigns.length
-  }, [kind, pf, cp, campaigns])
-
-  const unportfolioed = useMemo(() => campaigns.filter((c) => !c.portfolioId).length, [campaigns])
-
-  const dirty =
-    kind !== rule.scope.kind ||
-    (kind === 'portfolio' && pf !== (rule.scope.id ?? '')) ||
-    (kind === 'campaign' && cp !== (rule.scope.id ?? ''))
-
-  const canApply = dirty && (kind === 'account' || (kind === 'portfolio' && !!pf) || (kind === 'campaign' && !!cp))
-
-  const apply = () => {
-    if (kind === 'account') onScope({ scopePortfolioId: null, scopeCampaignId: null })
-    else if (kind === 'portfolio') onScope({ scopePortfolioId: pf || null, scopeCampaignId: null })
-    else onScope({ scopeCampaignId: cp || null, scopePortfolioId: null })
-  }
 
   const caps = [
     rule.caps.perDay != null ? `${rule.caps.perDay} execution${rule.caps.perDay === 1 ? '' : 's'} per day` : null,
@@ -188,54 +159,40 @@ export function RuleDetail({
             </p>
           )}
 
-          <div className="h10-au-lanes">
-            <section className="h10-au-lane">
-              <h4>Scope</h4>
-              <div className="h10-au-scopeform">
-                <H10Select
-                  width={140}
-                  ariaLabel="Scope grain"
-                  value={kind}
-                  onChange={(v) => setKind(v as 'account' | 'portfolio' | 'campaign')}
-                  options={[
-                    { value: 'account', label: 'Whole account' },
-                    { value: 'portfolio', label: 'One portfolio' },
-                    { value: 'campaign', label: 'One campaign' },
-                  ]}
-                />
-                {kind === 'portfolio' && (
-                  <H10Select
-                    width={210} searchable ariaLabel="Portfolio" value={pf} onChange={setPf}
-                    options={portfolios.map((p) => ({ value: p.portfolioId, label: p.name }))}
-                  />
-                )}
-                {kind === 'campaign' && (
-                  <H10Select
-                    width={240} searchable ariaLabel="Campaign" value={cp} onChange={setCp}
-                    options={campaigns.map((c) => ({ value: c.id, label: c.name }))}
-                  />
-                )}
-              </div>
-              {/* The reach, before the action rather than after it. */}
-              <p className="h10-au-reach">
-                Would reach <b>{num(reach)}</b> of {num(campaigns.length)} campaigns.
-                {kind === 'portfolio' && unportfolioed > 0 && (
-                  <> {num(unportfolioed)} campaigns carry no portfolio at all, so no portfolio
-                    binding can ever reach them.</>
-                )}
+          {/* RA.GRAIN — scope gets the full width, because it is now two rows of controls (market ×
+              campaigns, and products) rather than one dropdown. All four grains, one form, one
+              Bind — which is the symmetry the operator asked for. */}
+          <section className="h10-au-lane wide">
+            <h4>Scope — where this rule may act</h4>
+            <ScopeForm
+              options={scopeOptions}
+              current={{
+                scopeMarketplace: rule.marketplace,
+                scopePortfolioId: rule.scope.kind === 'portfolio' ? rule.scope.id : null,
+                scopeCampaignId: rule.scope.kind === 'campaign' ? rule.scope.id : null,
+                scopeProductId: rule.scope.product?.id ?? null,
+              }}
+              busy={busy}
+              onApply={onScope}
+            />
+            {rule.scope.product?.missing && (
+              <p className="h10-au-problem">
+                <AlertTriangle size={11} aria-hidden />
+                This rule is bound to a product that no longer exists in the catalogue, so it covers
+                nothing. Rebind it or clear the product scope.
               </p>
-              {canApply && (
-                <button type="button" className="h10-am-btn primary sm" disabled={busy} onClick={apply}>
-                  {busy ? 'Binding…' : `Bind to ${kind === 'account' ? 'the whole account' : `this ${kind}`}`}
-                </button>
-              )}
-              {/* One feature, two routes — stated rather than silently missing. */}
+            )}
+            {/* The limitation, stated where the control is rather than discovered afterwards. */}
+            {rule.scope.product && !rule.scope.product.missing && (
               <p className="h10-au-note">
-                Market scope lives on a different route and is not editable here
-                {rule.marketplace ? <> — this rule is pinned to <b>{rule.marketplace}</b>.</> : '.'}
+                Product scope decides which <b>campaigns</b> this rule may act on. It does not narrow
+                the action to that product&rsquo;s targets — a bid change still moves every target in a
+                matching campaign, because that is the grain the actions work at.
               </p>
-            </section>
+            )}
+          </section>
 
+          <div className="h10-au-lanes">
             <section className="h10-au-lane">
               <h4>Caps</h4>
               {caps.length
