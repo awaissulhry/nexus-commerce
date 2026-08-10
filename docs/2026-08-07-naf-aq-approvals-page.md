@@ -5264,3 +5264,356 @@ changed under the operator and the stale confirmation would not authorise the
 new number.
 
 **S8 is complete.**
+
+---
+
+# Part 19 — S10 design study: the record, and what your decisions taught the fleet
+
+## 19.0 — What S10 is FOR, in one sentence
+
+**Tell an operator what they have decided, what they have not, and what the
+fleet learned from it — and where the answer is "nothing yet", make that read
+as the truth rather than as a loading state.**
+
+## 19.1 — Ground truth, measured
+
+`apps/api/scripts/_apx-s10-truth.mts`, read-only, every number paired with the
+query that produced it. Run 2026-08-10.
+
+### 19.1.1 The two universes
+
+```
+waiting (status pending|scheduled AND toolName IN FLEET_TOOLS AND not snoozed):  0
+decided (status IN DECIDED_STATUSES, no tool clause):                           18
+  ...of which are fleet tools:                                                   0
+expired:                                                                         0
+```
+
+**The record shows 18 rows the queue would never have shown**, and nothing on
+screen says so.
+
+### 19.1.2 Not one is a fleet decision
+
+```
+producing runs: 16
+by agentKey:   {"manual-action": 8, "listing-quality-keeper": 8}
+by run.mode:   {"null": 16}        ← null = not a fleet run
+by run.userId: {"null": 16}
+by tool:       {"apply-content": 12, "set-price": 3, "send-customer-message": 2, "publish-listing": 1}
+by status:     {"executed": 3, "rejected": 15}
+by riskTier:   {"medium": 12, "high": 6}
+```
+
+### 19.1.3 Attribution and reasons
+
+```
+decidedBy null:     18 / 18
+rows with a reason: 15 / 18
+distinct reasons:   ["acp3b-verify","acp3b-reject-test","acp4a-verify-cleanup","acp5a-cost-verify"]
+script-looking:     15 / 15
+```
+
+The three without a reason are the three `executed` rows — approve has never
+carried one.
+
+### 19.1.4 Latency
+
+```
+n=18  min=0.7s  median=0.9s  max=23.8s   under 5s: 16/18
+```
+
+**Correcting the brief:** the median measures **0.9s**, not 0.6s. The
+difference is immaterial to the conclusion and material to the method — this is
+exactly why a number ships with its query.
+
+### 19.1.5 AP.8 is dark. It is dark-but-CORRECT.
+
+```
+keys trackRecords() builds:
+  manual-action::apply-content 2 · manual-action::set-price 3
+  manual-action::send-customer-message 2 · manual-action::publish-listing 1
+  listing-quality-keeper::apply-content 10
+keys a fleet card could look up: 0
+```
+
+The mechanism is sound: `listInbox` sets `charterKey = run.agentKey`, and the
+card looks up `` `${charterKey}::${toolName}` `` — the same shape
+`trackRecords()` emits. It is dark because **waiting is fleet-tools-only and
+every historical row is a non-fleet tool**, so the two sets cannot intersect.
+Nothing is broken; there is simply no row where a track record could attach.
+Verifiable by seeding one decided and one waiting row for the same worker and
+fleet tool — see 19.6, S10.5.
+
+### 19.1.6 Precedent, and statuses that have never rendered
+
+```
+AgentExemplar: 0 rows, 0 active          ← genuine, not a bug
+statuses present:            {"executed": 3, "rejected": 15}
+DECIDED_STATUSES renderable: approved, executed, rejected, executing, superseded
+```
+
+**`approved`, `executing` and `superseded` have never rendered in production.**
+`superseded` is AQ.8's "You changed the number" — the one outcome word that
+describes an operator action nobody has taken.
+
+### 19.1.7 What the page actually renders (prod, scoped to `main`)
+
+```
+row 1:  Rejected · Listing quality keeper asked to change listing content ·
+        nobody recorded · 54d ago · MEDIUM RISK · pre-fleet · “acp5a-cost-verify”
+row 18: Approved — and it ran · Manual action asked to change listing content ·
+        nobody recorded · 54d ago · MEDIUM RISK · pre-fleet
+```
+
+Measured on those rows:
+
+| element | size | colour | on | ratio |
+|---|---|---|---|---|
+| `.ap-decidedmeta` | 11px | `#8d97a6` | `#ffffff` | **2.95** ✗ |
+| `.ap-prefleet` | 10px | `#77828f` | `#fafbfd` | **3.77** ✗ |
+| `.ap-reason` | 11.5px | `#616d7c` | `#ffffff` | 5.27 ✓ |
+| `.ap-decidedwhat` | 12.5px | `#232c37` | `#ffffff` | 14.12 ✓ |
+| `.ap-outcome` | 10.5px | `#5a6675` | `#f1f4f8` | 5.30 ✓ |
+
+Neither failure involves opacity (`op = 1.00`); both are declared colours.
+Font sizes in the record: **10, 10.5, 11, 11.5, 12.5, 16 — six**, where S6
+settled the card on three.
+
+## 19.2 — Research, and what each lens yields
+
+Six lenses. Where a claim below is from a source I read, it is cited; where it
+is applied from an earlier part of this document, it says so. I did not survey
+a hundred products end-to-end and will not pretend otherwise — the corpus below
+is what actually informed the design.
+
+### A · Decision histories and audit trails
+
+ServiceNow's approval audit trail is the closest analogue and its central idea
+is **separating who decided from what the system did**: it records delegation
+explicitly, distinguishes an administrator acting by impersonation from the
+user, and shows the *actual approver* rather than the flow initiator. A
+complete trail carries actor, modified values, rationale and timestamp for
+every event.
+
+**Taken:** actor and rationale are one unit. If the actor is unknown, the
+rationale cannot be attributed either — which is precisely the case on all 18
+rows and precisely what the page currently gets wrong by quoting them.
+**Refused:** delegation modelling. Nothing here has delegates.
+
+### B · Annotation and labelling queues
+
+Scale, Labelbox, Snorkel, Prodigy and Argilla all separate a **gold set** from
+working labels, with consensus and adjudication built around that distinction.
+The category that matters here is the one none of them has a name for: a row
+that is *neither* gold nor a working label — a fixture. Our 18 rows are
+fixtures.
+
+**Taken:** the record needs a third state, "not a decision at all", and it must
+be a property of the row, not a footnote.
+
+### C · Immutable receipts
+
+Terraform's plan output, Ansible recaps, `git reflog`. What a receipt owes you
+when the thing it describes cannot be re-run: the inputs, the outcome, and an
+absolute time. **Taken:** absolute timestamps. "54d ago" is not a receipt, and
+EU AI Act Article 12's traceability requirement is not met by a relative
+duration. **Refused:** diff-style rendering — the card already owns the diff.
+
+### D · Feedback loops made visible
+
+The most useful finding is from the ACM study *No Explainability without
+Accountability*: in interactive ML, **explanations significantly increased
+frustration while feedback significantly decreased it**. Showing a user what
+their input *did* beats explaining what the system *would* do.
+
+**Taken:** this is the argument for the precedent panel being first-class
+rather than collapsed behind a chevron. It is the only place on this page where
+the operator is shown a consequence of their own work. Hiding it by default
+inverts the finding.
+
+### E · Records that must admit their own emptiness or falsity
+
+The load-bearing lens, given 19.1.2. Published guidance on demo/sample data is
+blunt: label it *"sample data for illustration only"*, and **the label must be
+accessible text, not a subtle badge** — with an explicit warning against
+letting demo content be confused with real alerts.
+
+**Taken, and it condemns the current design directly:** `pre-fleet` is a 10px
+badge at **3.77:1**. It is the subtle badge the guidance names, carrying the
+single most important fact on the section.
+
+### F · Accessibility and regulation
+
+- **WCAG 1.4.3** — 2.95:1 and 3.77:1 both fail at these sizes. Not arguable.
+- **EU AI Act Article 12** — logs must allow *full traceability of the system's
+  operation*, which an actor-less, relative-timestamped row does not provide.
+- **Article 14(4)(b)** — oversight must let a person *"remain aware of the
+  possible tendency of automatically relying or over-relying on the output
+  produced by a high-risk AI system (automation bias)"*. That is AP.8's
+  charter, and 19.1.5 shows it has never once fired.
+- **Article 14(4)(d)** — *"to decide… not to use the high-risk AI system or to
+  otherwise disregard, override or reverse the output"*. The record is the
+  evidence that this happened. A record whose every row is unattributed is not
+  evidence of oversight; it is evidence that oversight was not recorded.
+
+**The synthesis:** a record that cannot be trusted is worse than no record,
+because it is *counted*. "Decided 18" is currently read as eighteen acts of
+oversight and is in fact zero.
+
+## 19.3 — Defects, severity, evidence
+
+| # | Defect | Sev | Evidence |
+|---|---|---|---|
+| 1 | Metadata line fails contrast on every row | **High** | 2.95:1, 11px, `#8d97a6` — 19.1.7 |
+| 2 | `pre-fleet` badge fails contrast and is a badge | **High** | 3.77:1, 10px; lens E says accessible text, not a badge |
+| 3 | Script markers rendered as quotations | **High** | `“acp5a-cost-verify”` in the operator-reason slot, 15 rows |
+| 4 | "Decided 18" reads as eighteen decisions | **High** | 0/18 are fleet; all 16 runs `mode=null` |
+| 5 | Record and queue count different universes, silently | **High** | 18 vs 0 — 19.1.1 |
+| 6 | `manual-action` renders as "Manual action asked to…" | Medium | S5 fixed this on the outside queue; the record is the third door |
+| 7 | Six font sizes | Medium | 10/10.5/11/11.5/12.5/16 vs the card's three |
+| 8 | Relative timestamps only | Medium | "54d ago"; Article 12 traceability |
+| 9 | Precedent collapsed behind a borrowed chevron | Medium | `acr-fl-checkstoggle`, the pattern S1/S2/S3 retired; lens D inverts it |
+| 10 | AP.8 never fires | Medium | 0 reachable keys — dark-but-correct, 19.1.5 |
+| 11 | `approved` / `executing` / `superseded` never rendered | Low | verify by seeding, not by reading |
+| 12 | No link to Activity | Low | the section brief asks for it |
+
+## 19.4 — The design
+
+### 19.4.1 What the record is OF — decided, and said out loud
+
+**It stays every approval the system has held.** Filtering it to fleet tools
+would make it agree with the queue and lie by omission, and AP.2 already ruled
+that the Decision Timeline and this page must not disagree about the same past.
+
+So the universe stays and **the page states it**, once, above the list:
+
+```
+  The decision record
+  Everything this system has ever been asked to approve — including requests
+  from before the fleet existed, which the queue above never shows.
+
+  ⚠ None of these 18 are yours. Every one was answered by a setup script in
+    under half a minute, with no person recorded. They are history, not
+    decisions — and not precedent.
+```
+
+Accessible text, at the section's own type size — lens E's rule, applied to the
+fact the 10px badge was carrying.
+
+### 19.4.2 A reason with no author is not a quotation
+
+The rule is not a regex over `acp*`. It is:
+
+> **`decidedBy` is null ⟹ there is no speaker ⟹ no quotation marks.**
+
+Sound today and sound later: a real rejection carries a decider, and its reason
+renders as the operator's words, quoted, exactly as now. A row with no decider
+renders its `reason` as what it is — a recorded marker, in the metadata voice,
+never in the reason slot's quotes.
+
+### 19.4.3 Per-row, after
+
+```
+  ✗ Rejected     Listing quality keeper asked to change listing content
+                 17 Jun 2026, 05:24 · no person recorded · medium risk
+                 [ from before the fleet ]   marker: acp5a-cost-verify
+```
+
+Absolute date first (lens C, Article 12), relative kept as a title. "no person
+recorded" instead of "nobody recorded" — same honesty, less shrug.
+"from before the fleet" as **text at 11.5px**, not a 10px badge.
+
+### 19.4.4 Type and colour
+
+Three sizes, matching the card: **13 / 11.5** for the row, and the section
+heading already at 16. `.ap-decidedmeta` to `#55616f` (**6.02:1**, the value S1
+settled for this role page-wide), the pre-fleet phrase likewise. No new hexes.
+
+### 19.4.5 Precedent, first-class
+
+Always visible, never collapsed. Heading, one sentence of mechanism, then
+either the list or the true empty state:
+
+```
+  What your decisions have taught the fleet
+
+  When you approve or reject with a reason, that decision is kept as an
+  example and the most recent ones are read back to that worker on its next
+  run. It is the only thing on this page that makes a reason worth writing.
+
+  Nothing yet — and that is accurate, not a delay. No fleet approval has ever
+  been decided, so there is nothing for a worker to read. The first yes or no
+  you give here becomes the first one.
+```
+
+The empty state names *why* it is empty and *what would fill it*. That is the
+difference between an empty state and a loading state, and it is the one place
+on this page where careful work is rewarded rather than merely permitted.
+
+### 19.4.6 What the operator sees, by state
+
+(a) 18 pre-fleet rows, banner present, precedent empty — **today** ·
+(b) a mix of pre-fleet and real rows, banner counts only the pre-fleet ones ·
+(c) all rows real, banner absent entirely ·
+(d) a `superseded` row — "You changed the number" ·
+(e) an `approved`/`executing` row ·
+(f) precedent populated ·
+(g) expired rows, with how long each waited ·
+(h) >100 rows — honest truncation.
+
+## 19.5 — What I am deliberately NOT building
+
+- **No latency or approval-rate statistic.** From 18 script rows a "how fast
+  you decide" figure would read 0.9s and mean nothing — the operator has never
+  decided. It belongs to AQ.10, after ~20 real decisions, as Part 4 already
+  ruled.
+- **No control over precedent.** Nothing in the API can deactivate, reweight or
+  correct an exemplar; a control that cannot act is worse than none.
+- **No change to `whereFor`/`inboxCounts`** — still §6c-AQ's.
+- **No fleet filter on the record** — 19.4.1.
+- **Not fixing `FleetTab.tsx:275`** — a sibling's, and not ruled on.
+- **No new glossary term.** `exemplar` already exists and is already linked.
+
+## 19.6 — Build order
+
+| Phase | What | Verified by |
+|---|---|---|
+| **S10.1** | Contrast and type: metadata and pre-fleet to `#55616f`, six sizes → three | composited measurement on all 18 rows |
+| **S10.2** | Truth: the section statement, the pre-fleet phrase as text, `manual-action` through S5's origin map | prod render + the count in the banner matching the probe |
+| **S10.3** | A reason with no author stops being a quotation; absolute timestamps | seeded row **with** a decider renders quoted; without renders as a marker |
+| **S10.4** | Precedent first-class: uncollapsed, mechanism stated, true empty state | prod render; seeded exemplar for the populated case |
+| **S10.5** | Prove AP.8 is dark-but-correct: seed one decided + one waiting row, same worker, same fleet tool | the track record renders for the first time in production |
+| **S10.6** | Every state (a)–(h) seeded and measured; nine widths, 200% zoom, keyboard; database back to 18 · 0 · 0 · 0 · 0 | full sweep |
+
+## 19.7 — Verification recipe
+
+Per phase: baseline the probe **both ways** before the deploy; enumerate
+stylesheets from `href="…"` (never a character class — `02sne9h7~ep1m.css`);
+scope every DOM query to `main`; measure contrast **composited**; assert
+against exported values, never source text. Seeds carry the shared marker,
+cleanup keys on the marker alone and fails loudly, and the end state is
+re-probed independently: **18 approvals · 0 pending · 0 scheduled · 0 exemplars
+· 0 audit rows**.
+
+Two states need writes that this page has never made — a decided row **with** a
+decider (S10.3) and an `AgentExemplar` (S10.4). Both are seeded inert rows
+under the marker and removed by the same cleanup; neither enables anything.
+
+## 19.8 — Sources
+
+**Audit trails** — [ServiceNow · approval audit trail][sn], [what is an audit log][snlog]
+**Labelling provenance** — gold sets and adjudication across [Scale/Labelbox/Snorkel/Prodigy/Argilla][label]
+**Seed-data honesty** — [dummy/demo data guidance][demo] ("accessible text, not a subtle badge")
+**Feedback vs explanation** — [No Explainability without Accountability, CHI][chi]
+**Regulation** — [EU AI Act Article 12][a12] · [Article 14][a14] (4)(b) automation bias, (4)(d) override
+**Applied, not repeated** — Part 2F on severity and colour; S6's reversibility vocabulary; S8's outcome words.
+
+[sn]: https://www.sirion.ai/library/contract-insights/approval-audit-trail-explained/
+[snlog]: https://www.servicenow.com/products/governance-risk-and-compliance/what-is-an-audit-log.html
+[label]: https://techdailyshot.com/blog/comparing-data-labeling-platforms-2026
+[demo]: https://supademo.com/blog/dummy-data
+[chi]: https://dl.acm.org/doi/fullHtml/10.1145/3313831.3376624
+[a12]: https://artificialintelligenceact.eu/article/12/
+[a14]: https://artificialintelligenceact.eu/article/14/
+
+**AWAITING OPERATOR APPROVAL — no code written.**
