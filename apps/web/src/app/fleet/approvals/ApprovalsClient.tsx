@@ -1420,8 +1420,24 @@ export function ApprovalsClient() {
             onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
             onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}
             onBulkPreview={async (ids, d) => {
-              const r = await post('approvals/bulk-preview', { ids, decision: d })
-              return r?.sentence ?? `This affects ${ids.length} actions.`
+              const r = (await post('approvals/bulk-preview', { ids, decision: d })) as unknown as {
+                sentence?: string
+                count?: number
+                blockedReason?: string | null
+              } | null
+              /* S8.3 — the COUNT and the refusal FLAG come back too.
+                 The count is the server's tally of what is actually decidable,
+                 not `ids.length`, so the typed confirmation cannot name one
+                 number while the sentence names another. And `blockedReason`
+                 replaces the client's old regex over the server's prose: a
+                 client that re-derives a server decision by matching its
+                 wording is one copy edit away from offering an impossible
+                 button. */
+              return {
+                sentence: r?.sentence ?? `This affects ${ids.length} actions.`,
+                count: typeof r?.count === 'number' ? r.count : ids.length,
+                blocked: !!r?.blockedReason,
+              }
             }}
             onBulkDecide={(ids, d, reason) => {
               void post('approvals/bulk-decide', { ids, decision: d, reason }).then((r) => {

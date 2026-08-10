@@ -310,14 +310,25 @@ export function WaitingList({
   onRejectAll: (charterKey: string, reason: string) => void
   onUndo: (id: string) => void
   onCommit: (id: string) => void
-  onBulkPreview: (ids: string[], decision: 'approve' | 'reject') => Promise<string>
+  onBulkPreview: (
+    ids: string[],
+    decision: 'approve' | 'reject',
+  ) => Promise<{ sentence: string; count: number; blocked: boolean }>
   onBulkDecide: (ids: string[], decision: 'approve' | 'reject', reason?: string) => void
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
   onSnooze: (id: string, until: Date | null) => void
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [pendingBulk, setPendingBulk] = useState<{ decision: 'approve' | 'reject'; sentence: string } | null>(null)
+  const [pendingBulk, setPendingBulk] = useState<{
+    decision: 'approve' | 'reject'
+    sentence: string
+    /** The server's count of what is actually decidable, not `selected.size`. */
+    count: number
+    /** The server refused this batch; there is nothing to confirm. */
+    blocked: boolean
+  } | null>(null)
+  const [typed, setTyped] = useState('')
   const [bulkReason, setBulkReason] = useState('')
   const [rejectAllFor, setRejectAllFor] = useState<string | null>(null)
   const [rejectAllReason, setRejectAllReason] = useState('')
@@ -326,6 +337,10 @@ export function WaitingList({
     setSelected(new Set())
     setPendingBulk(null)
     setBulkReason('')
+    /* S8.3 — a typed confirmation left in the box would carry over to the next
+       batch, where it names the wrong count and would silently satisfy the
+       gate. It has to die with the selection that justified it. */
+    setTyped('')
   }
 
   const grouped = new Map<string, ApprovalRow[]>()
@@ -333,6 +348,12 @@ export function WaitingList({
     const k = a.charterKey ?? ''
     grouped.set(k, [...(grouped.get(k) ?? []), a])
   }
+
+  /* Ashby's threshold: a plain acknowledgement up to two dozen, a typed one
+     above it. 24 is their line and there is no better-evidenced number. */
+  const BULK_TYPE_THRESHOLD = 24
+  const needsTyping = !!pendingBulk && !pendingBulk.blocked && pendingBulk.count > BULK_TYPE_THRESHOLD
+  const confirmPhrase = pendingBulk ? `${pendingBulk.decision} ${pendingBulk.count}` : ''
 
   return (
     <>
@@ -351,23 +372,73 @@ export function WaitingList({
                   onChange={(e) => setBulkReason(e.target.value)}
                 />
               ) : null}
-              {/* AQ.6 — when the server refuses a mixed batch, the sentence
-                  IS the refusal, so there is nothing to confirm. Showing a
-                  live "Yes, do it" over an explanation of why it cannot happen
-                  is how an operator learns to distrust the confirmation. */}
-              {!/Approve one kind at a time/.test(pendingBulk.sentence) ? (
-                <button
-                  className="acr-btn go"
-                  disabled={busy || (pendingBulk.decision === 'reject' && !bulkReason.trim())}
-                  onClick={() => {
-                    onBulkDecide([...selected], pendingBulk.decision, bulkReason.trim() || undefined)
-                    clearSelection()
-                  }}
-                >
-                  Yes, do it
-                </button>
+              {/* AQ.6 — when the server refuses a batch, the sentence IS the
+                  refusal, so there is nothing to confirm. Showing a live
+                  "Yes, do it" over an explanation of why it cannot happen is
+                  how an operator learns to distrust the confirmation.
+
+                  S8.3 — this tested `/Approve one kind at a time/` against the
+                  server's prose. S8.1 added a SECOND refusal (two workers, one
+                  kind) which that regex does not match, so the guard silently
+                  stopped covering the case it was written for. It reads the
+                  server's `blockedReason` flag now: a client that re-derives a
+                  server decision by matching its wording is one copy edit away
+                  from offering a button that cannot work. */}
+              {!pendingBulk.blocked ? (
+                <>
+                  {/*
+                   * S8.3 — friction that scales with N.
+                   *
+                   * The same verb is a light action on two rows and a heavy one
+                   * on forty; until now both confirmed identically with one
+                   * click. Ashby's pattern is the reference: a plain
+                   * acknowledgement up to a couple of dozen records, and above
+                   * that the operator types the action out. It defends against
+                   * the specific failure this section owns — a hand already
+                   * moving to "Yes, do it" because the last six batches were
+                   * fine.
+                   *
+                   * The phrase names the SERVER's decidable count, not
+                   * `selected.size`, so the operator cannot type one number
+                   * while agreeing to another.
+                   */}
+                  {needsTyping ? (
+                    <label className="aq-bulktype">
+                      Type <code>{confirmPhrase}</code> to confirm:
+                      <input
+                        autoFocus
+                        value={typed}
+                        onChange={(e) => setTyped(e.target.value)}
+                        aria-label={`Type ${confirmPhrase} to confirm`}
+                      />
+                    </label>
+                  ) : null}
+                  <button
+                    className="acr-btn go"
+                    disabled={
+                      busy ||
+                      (pendingBulk.decision === 'reject' && !bulkReason.trim()) ||
+                      (needsTyping && typed.trim().toLowerCase() !== confirmPhrase)
+                    }
+                    onClick={() => {
+                      onBulkDecide([...selected], pendingBulk.decision, bulkReason.trim() || undefined)
+                      clearSelection()
+                    }}
+                  >
+                    {needsTyping
+                      ? `Yes, ${pendingBulk.decision} ${pendingBulk.count}`
+                      : 'Yes, do it'}
+                  </button>
+                </>
               ) : null}
-              <button className="acr-btn" disabled={busy} onClick={() => setPendingBulk(null)}>
+              <button
+                className="acr-btn"
+                disabled={busy}
+                onClick={() => {
+                  setPendingBulk(null)
+                  setTyped('')
+                }}
+              >
                 Back
               </button>
             </>
@@ -378,7 +449,10 @@ export function WaitingList({
                 className="acr-btn go"
                 disabled={busy}
                 onClick={async () =>
-                  setPendingBulk({ decision: 'approve', sentence: await onBulkPreview([...selected], 'approve') })
+                  setPendingBulk({
+                    decision: 'approve',
+                    ...(await onBulkPreview([...selected], 'approve')),
+                  })
                 }
               >
                 <Check size={13} /> Approve selected
@@ -387,7 +461,10 @@ export function WaitingList({
                 className="acr-btn"
                 disabled={busy}
                 onClick={async () =>
-                  setPendingBulk({ decision: 'reject', sentence: await onBulkPreview([...selected], 'reject') })
+                  setPendingBulk({
+                    decision: 'reject',
+                    ...(await onBulkPreview([...selected], 'reject')),
+                  })
                 }
               >
                 <X size={13} /> Reject selected

@@ -1468,3 +1468,40 @@
   outline: 2px solid #1f6fde;
   outline-offset: 2px;
 }
+
+/*
+ * S8.3 — the typed confirmation, shown only above the threshold.
+ *
+ * Deliberately plain and inline in the bulk bar rather than a modal: the
+ * blast-radius sentence it is confirming has to stay on screen and readable
+ * while the operator types, and a dialog would cover the queue it describes.
+ */
+.aq-bulktype {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #1c2530;
+}
+.aq-bulktype code {
+  padding: 1px 5px;
+  border: 1px solid #d7dee7;
+  border-radius: 3px;
+  background: #f4f6f9;
+  font-size: 12px;
+}
+.aq-bulktype input {
+  min-width: 130px;
+  /* 26px, clearing WCAG 2.5.8's 24px outright — it sits between two controls
+     in a single row, which is where the Spacing exception does not apply. */
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid #c3cdd9;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.aq-bulktype input:focus-visible {
+  outline: 2px solid #1f6fde;
+  outline-offset: 1px;
+}
