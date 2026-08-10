@@ -20,7 +20,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
 import { MapCanvas } from './MapCanvas'
 import { InspectorRail, RailShell } from './InspectorRail'
-import { OverlayRail } from './OverlayRail'
+import { OverlayRail, rovingKeys } from './OverlayRail'
 import { ListView } from './ListView'
 import { EntityCanvas, relationOf, type EntityGraph } from './EntityCanvas'
 import { EntityListView } from './EntityListView'
@@ -216,6 +216,7 @@ export function MapClient() {
   }, [activeChip, nodes, tierFilter, hideDiagnostic])
 
   const windowLabel = WINDOWS.find((w) => w.key === windowKey)?.label ?? windowKey
+  const windowIndex = Math.max(0, WINDOWS.findIndex((w) => w.key === windowKey))
 
   /**
    * The URL is the shareable unit. Selection state that lives only in React
@@ -344,20 +345,63 @@ export function MapClient() {
           <span className="sbm-seglabel" aria-hidden>
             Window
           </span>
-          <div className="sbm-seg" role="radiogroup" aria-label="Time window">
+          {/*
+            S7.e — IN ENTITY MODE THIS CONTROL GOVERNS NOTHING, AND NOW SAYS SO.
+
+            The entity graph is rebuilt nightly by the sweep and has no time
+            dimension; `loadEntities` does not send `window` and the endpoint
+            takes none. Measured on prod before this: the radios were live and
+            enabled, one click fired two requests to the WORKERS map endpoint —
+            whose data this mode does not display — and the band was
+            byte-identical before and after. `observations/scope-filter.ts:6-7`
+            is this page's own law: "a control that is not enforced must not be
+            rendered. This is the enforcement."
+
+            Disabled and explained, NOT hidden. Hiding it would make the header
+            change shape across a mode switch, which is the layout instability
+            six sections have been removing.
+
+            S7.f — and it is one tab stop again. It declared `role="radiogroup"`
+            with correct `aria-checked` and then gave every radio `tabIndex 0`:
+            four stops where WAI-ARIA APG specifies one, and no arrow keys. The
+            overlay rail was fixed in S3; this group was missed. Same helper,
+            imported rather than copied.
+          */}
+          <div
+            className="sbm-seg"
+            role="radiogroup"
+            aria-label={
+              mode === 'entities'
+                ? 'Time window — does not apply to what they watch'
+                : 'Time window'
+            }
+            onKeyDown={(e) =>
+              mode === 'entities'
+                ? undefined
+                : rovingKeys(e, WINDOWS.length, windowIndex, (i) => setWindowKey(WINDOWS[i].key))
+            }
+          >
             {WINDOWS.map((w) => (
               <button
                 key={w.key}
                 type="button"
                 role="radio"
                 aria-checked={windowKey === w.key}
-                className={windowKey === w.key ? 'on' : ''}
-                onClick={() => setWindowKey(w.key)}
+                aria-disabled={mode === 'entities' || undefined}
+                tabIndex={windowKey === w.key ? 0 : -1}
+                className={`${windowKey === w.key ? 'on' : ''}${mode === 'entities' ? ' is-na' : ''}`}
+                onClick={() => {
+                  if (mode === 'entities') return
+                  setWindowKey(w.key)
+                }}
               >
                 {w.label}
               </button>
             ))}
           </div>
+          {mode === 'entities' ? (
+            <span className="sbm-asof">rebuilt nightly — no time window</span>
+          ) : null}
           <span className="sbm-asof">
             {asOf ? `as of ${asOf.toLocaleTimeString()}` : 'loading…'}
           </span>
@@ -694,6 +738,42 @@ export function MapClient() {
           onExplain={() => setExplainAt(Date.now())}
         />
       )}
+
+      {/*
+        S7.d — THE DENOMINATOR, SAID ONCE, IN WORDS.
+
+        The page prints four kinds of number and the window governs one of them:
+        windowed (spend, carried, plans), lifetime ("ever"), today (a UTC day),
+        and STATE — `status:'open'`, `status:'pending'`, which is a queue depth
+        and not a period at all. The inspector rail already names its
+        denominators inline ("3 in this window · 3 ever"); the card and the list
+        have three slots each and no room to. One sentence carries them.
+
+        It renders in WORKERS mode only — and it gets that for free: this branch
+        is already inside the workers arm of the mode ternary, which tsc proved
+        by rejecting a `mode !== 'entities'` guard here as unreachable. The
+        window does not reach entity mode at all (S7.e), and a sentence claiming
+        a denominator there would be the same lie in prose that the live control
+        is in pixels.
+
+        The "whole history" clause is derivable from ONE payload, which matters
+        because the page only ever holds one window: if the runs inside this
+        window already account for every run the fleet has made, then every
+        wider window is arithmetically identical. Measured on prod — 57 of 57
+        at 7 days, 2 of 57 at 24 hours — which is why `7 days`, `30 days` and
+        `all time` currently render byte-identical pages.
+      */}
+      {data != null ? (
+        <p className="sbm-footnote">
+          Counts below cover <b>{windowLabel}</b>. Open findings, approvals and anything marked{' '}
+          <i>ever</i> are not limited by it; spend today is a UTC day.
+          {windowKey !== 'all' &&
+          data.totals.runsLifetime > 0 &&
+          nodes.reduce((s, n) => s + n.runs.window, 0) === data.totals.runsLifetime
+            ? ' Every run the fleet has made falls inside this window, so the longer windows show the same numbers.'
+            : ''}
+        </p>
+      ) : null}
 
       {data?.warnings.map((w) => (
         <p key={w} className="sbm-footnote warn">

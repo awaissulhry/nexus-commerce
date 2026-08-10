@@ -42,7 +42,11 @@ const TIERS = ['analyst', 'director', 'critic', 'auditor']
  * not a shortcut. The caller re-focuses because the DOM node that should hold
  * focus is the one that just became checked.
  */
-function rovingKeys(
+/* S7.f — exported for the WINDOW radiogroup in `MapClient.tsx`, which declared
+   the same pattern and shipped four tab stops. One implementation, not two:
+   this page's own law is that a thing and its explanation render from one
+   source, and a keyboard contract is no different. */
+export function rovingKeys(
   e: KeyboardEvent<HTMLElement>,
   count: number,
   current: number,

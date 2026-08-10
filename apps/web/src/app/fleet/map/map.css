@@ -218,6 +218,29 @@
   outline-color: #ffffff;
 }
 
+/*
+ * S7.e — in entity mode the window governs nothing, so it stops LOOKING armed.
+ *
+ * `aria-disabled`, not `disabled`: the control stays discoverable and keeps its
+ * accessible name, which is where the reason lives ("does not apply to what
+ * they watch"). A `disabled` button is skipped by most screen-reader element
+ * lists, so the operator would simply never learn why the window did nothing.
+ *
+ * Placed at the END of the `.sbm-seg` rules it overrides. Specificity already
+ * decides it here — `.sbm-seg button.on.is-na` is (0,3,1) against (0,2,1) — but
+ * source order on this page has silently decided four of these already, so the
+ * position is deliberate rather than incidental.
+ */
+.sbm-seg button.is-na {
+  color: #55616f; /* 6.31:1 on #fff */
+  cursor: default;
+}
+.sbm-seg button.on.is-na {
+  background: #e7ecf2;
+  color: #55616f; /* 5.32:1 on #e7ecf2 — computed, not estimated; AA at 11.5px */
+  font-weight: 650;
+}
+
 /* The two switches change different ORDERS of thing — one picks the universe of
    nodes, the other the denominator of every number — and they were pixel
    identical, 10px apart. The window switch gets a visible label so it reads as
