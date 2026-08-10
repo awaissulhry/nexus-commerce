@@ -105,6 +105,18 @@ describe('triggerText', () => {
   it('humanises the rest', () => {
     expect(triggerText('KEYWORD_WASTED_SPEND')).toBe('Keyword wasted spend')
   })
+
+  it('keeps acronyms uppercase', () => {
+    // "Cac spike" shipped to prod and reads as a typo. Nine of the 21 triggers in use here
+    // contain an acronym.
+    expect(triggerText('CAC_SPIKE')).toBe('CAC spike')
+    expect(triggerText('KEYWORD_HIGH_ACOS')).toBe('Keyword high ACOS')
+    expect(triggerText('CAMPAIGN_ROAS_DECLINING')).toBe('Campaign ROAS declining')
+    expect(triggerText('KEYWORD_LOW_CTR')).toBe('Keyword low CTR')
+    expect(triggerText('CVR_DROP')).toBe('CVR drop')
+    expect(triggerText('SOV_BID')).toBe('SOV bid')
+    expect(triggerText('FBA_AGE_THRESHOLD_REACHED')).toBe('FBA age threshold reached')
+  })
 })
 
 describe('detectConflicts', () => {

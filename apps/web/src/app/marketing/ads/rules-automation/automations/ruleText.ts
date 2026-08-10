@@ -168,10 +168,26 @@ export function actionLines(actions: unknown): ActionLine[] {
   })
 }
 
-/** Trigger → the "When" line. SCHEDULE is renamed because "scheduled" is what it means. */
+/**
+ * The acronyms this account's trigger names are built from. Without them, sentence-casing
+ * `CAC_SPIKE` produces "Cac spike", which shipped to prod and reads as a typo rather than a
+ * metric. Nine of the 21 triggers in use contain one.
+ */
+const ACRONYMS = new Set(['CAC', 'ACOS', 'ROAS', 'CTR', 'CVR', 'SOV', 'FBA', 'TOS', 'ASIN', 'SP', 'SB', 'SD'])
+
+/** Trigger → the "When" line. SCHEDULE is renamed because "on a schedule" is what it means. */
 export function triggerText(trigger: string): string {
   if (trigger === 'SCHEDULE') return 'On a schedule (every evaluator tick)'
-  return trigger.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase())
+  const words = trigger.split('_').filter(Boolean)
+  return words
+    .map((w, i) => {
+      if (ACRONYMS.has(w)) return w
+      const lower = w.toLowerCase()
+      return i === 0 ? lower.replace(/^./, (c) => c.toUpperCase()) : lower
+    })
+    .join(' ')
+    // A leading acronym leaves the sentence starting mid-word otherwise; nothing to capitalise.
+    .trim()
 }
 
 // ── Conflicts ────────────────────────────────────────────────────────────────────────────

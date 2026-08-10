@@ -14,7 +14,12 @@
  * control trustworthy: a notch above the rule's graduation ceiling renders DISABLED but keeps
  * its reason, and a 409 from the server is presented as the policy it is rather than as a
  * failure. Its `acr-*` classes live in `control-room.css`, which another programme also owns,
- * so the markup is restyled here under `h10-am-*` instead of importing across pages.
+ * so the markup is restyled here under `h10-au-*` instead of importing across pages.
+ *
+ * `h10-au-`, NOT `h10-am-`: that prefix is the app-wide Ads Manager grid namespace. This file
+ * shipped once with `h10-am-dial`/`h10-am-notch`, which match no stylesheet in the repo, and the
+ * dial rendered on prod as the bare words "OffObserveProposeAuto" — an undefined class is silent,
+ * so nothing failed and tsc had nothing to say. The pre-commit check for it is in ds-classes.
  */
 
 import { Eye, MessageSquare, Power, Zap, GraduationCap } from 'lucide-react'
@@ -44,7 +49,7 @@ export function ModeNotches({
   onSet: (level: Level) => void
 }) {
   return (
-    <div className="h10-am-dial" role="group" aria-label={`Mode for ${ruleName}`}>
+    <div className="h10-au-dial" role="group" aria-label={`Mode for ${ruleName}`}>
       {LEVELS.map((lv) => {
         const M = LEVEL_META[lv]
         const above = RANK[lv] > RANK[ceiling]
@@ -54,7 +59,7 @@ export function ModeNotches({
           <button
             key={lv}
             type="button"
-            className={`h10-am-notch ${lv.toLowerCase()}${on ? ' on' : ''}${earned ? ' earned' : ''}`}
+            className={`h10-au-notch ${lv.toLowerCase()}${on ? ' on' : ''}${earned ? ' earned' : ''}`}
             aria-pressed={on}
             disabled={above || busy}
             // A disabled notch keeps its reason. A control that refuses silently is what
