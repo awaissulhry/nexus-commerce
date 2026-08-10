@@ -198,14 +198,19 @@ ACoS · Min/Max Bid. That is the existing mechanism and it needs no grain select
 
 Only two things, and neither is a bar:
 
-- **Product-line scope does not exist at any layer.** `RuleScope` is
-  `{scopeMarketplace, scopePortfolioId, scopeCampaignId}`; `ContextIdentity` carries no ASIN; there
-  is no product filter on the grid and no product page in `/marketing/ads`. The data path is ready
-  — `AdProductAd` has 4,485 rows, **100% carry an ASIN**, 250 distinct, 93.9% linked to a PIM
-  `Product`, and all 220 campaigns are reachable via `AdProductAd → AdGroup → Campaign`. When it is
-  built it belongs as **another filter in the existing filter row**, not a new control.
-  *Definition:* "product line" = the `Product` parent + its variations (`AdProductAd.productId`),
-  **not** `Product.familyId` — `ProductFamily` is an Akeneo attribute template.
+- ~~**Product-line scope does not exist at any layer.**~~ ✅ **SHIPPED 2026-08-10.**
+  🔴 **My definition here was WRONG and nearly caused the wrong build.** I wrote that a product
+  line is `AdProductAd.productId`. It is not: **`productId` is the VARIATION** — 223 rows, one
+  ASIN each, names duplicated across them. `ProductVariation` and `ProductFamily` both have
+  **0 rows**, so neither models the line either.
+  **The line is `Product.parentId`** (the self-relation `ProductHierarchy`): all 223 advertised
+  products are children of exactly **13 parents**. So the picker is 13 rows and the schema change
+  was one nullable column — no new entity, and **no SKU-prefix heuristic**, which the executing
+  session had half-written before finding `parentId`. That heuristic would have inferred a
+  business entity from a string and mis-grouped the glove lines, whose name lives in the second
+  word. *Lesson: look for the modelled relation before inferring one from text.*
+  Only the `familyId` half of my original note was right — `ProductFamily` is an Akeneo attribute
+  template and using it would be a category error.
 - **A date range, on pages that actually show metrics.** Not this one. It belongs on Automations
   (rule activity over a window) and Coverage, and it goes in the grid's existing `toolbarRight`
   slot — `AdsDataGrid` already exposes `toolbarLeft`/`toolbarRight` for precisely this.
@@ -643,10 +648,13 @@ Not blocking; answer when each study reaches them.
 | **Market scope is enforced but not settable** by the scope route (§3.4) | 🔴 open — add `scopeMarketplace` |
 | **Product-line scope does not exist** — schema + evaluator + UI (§3.4) | 🔴 open — largest grain item |
 | One ASIN can reach **76 campaigns** (§3.4) | 🔴 open — blast radius before every action |
+| **Product scope narrows WHICH CAMPAIGNS a rule may touch, not the action** — a bid change still moves every target in a matching campaign | ⚠ by design, stated at the control. Narrowing the action itself is a separate build |
+| **`AIRMESH-JACKET` + `AIR-MESH-JACKET-MEN` are two parents for what reads as one line** (same for the two knee-slider parents) | 🔴 **OPERATOR DECISION** — shown separately with their own counts rather than merged on a guess. A catalogue question, not an ads one |
+| **27 uncatalogued ASINs (274 ad rows)** cannot be named by any picker | 🔴 open — the form now shows the COUNT rather than omitting them silently; the existing Amazon import is the fix |
 | **🔴 `DateRangePicker` and the server use DIFFERENT date vocabularies** (§3.4) | 🔴 open — a picker key returns 7 days under any label. Owner: the shared ads shell |
 | **A control earns its place only if a pixel changes when you move it** (§3.0) | ✅ law recorded |
 | **🔴 8 of 51 rules were labelled "Alerts — informs, never writes" while able to write** (§4.2a) | ✅ fixed 2026-08-10 — `rule-category.ts`, 0 remain |
-| Scope is mutually exclusive; "this portfolio in DE" needs 2 calls (§3.4) | 🔴 open — decide in the 4.2 study |
+| ~~Scope is mutually exclusive; "this portfolio in DE" needs 2 calls~~ | ✅ **my claim was wrong** — `ruleMatchesScope` has always ANDed the dimensions; only the WRITE route was exclusive. Fixed 2026-08-10: the route takes all four. Portfolio ⇄ campaign remain exclusive and that is provably right under AND. And the example was moot: **no portfolio spans more than one market** |
 | `dryRun` mode control is inert (Part 2) | 🔴 open — fix in the Automations build |
 | Date range on Apply Rules | ✅ **correctly absent** — that grid has no metric columns. Belongs on Automations/Coverage, in the grid's existing `toolbarRight` |
 | `AdsPageHeader` ignores `AdsMarketplaceProvider` (1.6) | 🔴 open — pre-existing, out of this session's scope |
