@@ -61,8 +61,11 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/RulesAutomationClient.tsx` | RA.SB (scope bar) | 2026-08-10 | **released** |
 | `…/marketing/ads/_shell/AdsPageHeader.tsx` | RA.SB (`showMarket`, additive) | 2026-08-10 | **released** |
 | `apps/api/src/services/advertising/rule-category.ts` | RA.2 (category honesty) | 2026-08-10 | **released** |
+| `apps/api/src/routes/advertising.routes.ts` | RA.AUTO (`GET /autonomy/rules`, additive fields only) | 2026-08-10 | **released** |
+| `…/rules-automation/_shared/tabs.tsx` | RA.AUTO (one additive tab entry) | 2026-08-10 | **released** |
+| `…/rules-automation/rules-automation.css` | RA.AUTO (Automations page) | 2026-08-10 | **released** — appended at EOF only |
 
-*(The scope bar has shipped. The first Automations session claims §3 rows 1–4.)*
+*(The scope bar has shipped. RA.AUTO holds §3 rows 1, 2 and 6 — all additive.)*
 
 **`AdsPageHeader` note for other sessions:** it gained a `showMarket?: boolean`
 prop, defaulted `true`. Every page that does not pass it renders byte-identically;

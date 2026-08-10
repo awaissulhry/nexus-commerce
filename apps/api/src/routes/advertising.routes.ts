@@ -6452,6 +6452,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           scopePortfolioId: true, scopeCampaignId: true,
           evaluationCount: true, matchCount: true, executionCount: true,
           lastEvaluatedAt: true, lastMatchedAt: true, lastExecutedAt: true, createdAt: true,
+          // RA.AUTO — the rule list has to render plain-English When / If / Then, and this was
+          // the one board that could not: it returned neither. Consumers that do not read them
+          // are unaffected; every field below is additive.
+          description: true, conditions: true,
         },
         orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
       }),
@@ -6489,6 +6493,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       weekBy.set(g.ruleId, m)
     }
 
+    /**
+     * RA.AUTO — the cap rows, counted SEPARATELY rather than merged back in.
+     *
+     * Excluding them from `failed` (above) is right: the engine declining to run a rule is not
+     * the rule failing. But dropping them entirely hid the thing that actually governs this
+     * account. Measured on prod 2026-08-10: "Profit-native bid optimisation" wrote 3,793 times
+     * in 30 days and was refused 19,423 times by its own daily cap — so the cap, not the rule,
+     * is what decides how much of the account it reaches. A health strip that shows only the
+     * writes describes the wrong bottleneck, and an operator raising a threshold to get more
+     * coverage would be turning the one knob that cannot deliver it.
+     */
+    const cappedRows = await prisma.automationRuleExecution.groupBy({
+      by: ['ruleId'],
+      where: { startedAt: { gte: weekAgo }, ruleId: { in: rules.map((r) => r.id) }, errorMessage: 'DAILY_CAP_EXCEEDED' },
+      _count: { _all: true },
+    })
+    const cappedBy = new Map(cappedRows.map((g) => [g.ruleId, g._count._all]))
+
     const { resolveAutonomy } = await import('../services/advertising/ads-autonomy.js')
     const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
     const { ruleCategory, RULE_CATEGORY_META } = await import('../services/advertising/rule-category.js')
@@ -6508,6 +6530,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const portfolioName = new Map(scopedPortfolios.map((p) => [p.externalPortfolioId, p.name]))
     const campaignName = new Map(scopedCampaigns.map((c) => [c.id, c.name]))
 
+    /**
+     * RA.AUTO — actions that never reach Amazon. Same set as `rule-category.ts`'s
+     * NON_WRITING_ACTIONS, and it is the difference between "9 rules are on AUTO" and "8 rules
+     * can change your account". Measured on prod: "Alert: ACOS spike" is AUTO and its only
+     * action is `alert_operator`, so a census band counting AUTO rules overstated the rules
+     * able to write by one. `actionTypes` below already strips these for display, which is why
+     * the flag has to be computed before that filter rather than from it.
+     */
+    const NON_WRITING = new Set(['notify', 'alert_operator', 'log_only'])
+
     const items = rules.map((r) => {
       const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
         .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
@@ -6516,6 +6548,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         id: r.id,
         name: r.name,
+        description: r.description,
+        conditions: r.conditions,
+        /** Whether ANY of this rule's actions reaches Amazon. AUTO on a notify-only rule writes nothing. */
+        writes: actionTypes.some((t) => !NON_WRITING.has(t)),
         trigger: r.trigger,
         marketplace: r.scopeMarketplace,
         level: resolveAutonomy(r),
@@ -6542,6 +6578,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           acted: (week.SUCCESS ?? 0) + (week.PARTIAL ?? 0),
           proposed: week.DRY_RUN ?? 0,
           failed: week.FAILED ?? 0,
+          /** The engine declining to run it. Never merged into `failed` — see cappedBy above. */
+          capped: cappedBy.get(r.id) ?? 0,
         },
         lifetime: { evaluations: r.evaluationCount, matches: r.matchCount, executions: r.executionCount },
         lastEvaluatedAt: r.lastEvaluatedAt,
