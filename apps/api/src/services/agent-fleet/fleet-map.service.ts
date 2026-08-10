@@ -215,6 +215,21 @@ export interface MapEdge {
    *  scorecard.service.ts already runs. `none` — this edge cannot carry a
    *  volume at all: the critic UPDATES the plan row in place rather than
    *  authoring an artifact, so there is no second row to count. */
+  /**
+   * S4.k — the most recent verdict IGNORING the window, so "nothing reviewed"
+   * can tell the two cases apart.
+   *
+   * The page already draws this distinction everywhere else: `overlays.ts`
+   * separates "never run" from "has run before, but not inside the time window
+   * you are looking at", because they are different facts. The plan edge did
+   * not, and it mattered — this fleet's only critique is a 9-item BLOCK with a
+   * 945-character reason, and at the default 7-day window the panel said
+   * "Nothing has been reviewed yet", which reads as *never happened*.
+   *
+   * Out-of-window content is NOT promoted into the window. The panel says where
+   * to look; it does not quietly show older data under an in-window heading.
+   */
+  latestCritique: { verdict: string; at: string; inWindow: boolean } | null
   lineage: 'plan-items' | 'none'
   lineageNote: string
 }
@@ -573,6 +588,7 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
   const samplesByPair = new Map<string, MapEdge['samples']>()
   const verdictsByPair = new Map<string, { pass: number; revise: number; block: number }>()
   const lastCritiqueByPair = new Map<string, MapEdge['lastCritique']>()
+  const latestCritiqueByPair = new Map<string, MapEdge['latestCritique']>()
 
   for (const p of planRows) {
     const inWindow = !since || p.createdAt >= since
@@ -653,6 +669,22 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
     // not author an artifact, it UPDATES the plan row in place with a verdict
     // (`agent-executor.ts` critic branch). So it carries the verdict instead,
     // which is the honest thing that crossed it.
+    if (p.criticVerdict) {
+      for (const seed of edgeSeed.values()) {
+        if (seed.from !== p.charterKey || seed.artifact !== 'plan') continue
+        const lid = edgeId(seed.from, seed.to, seed.artifact)
+        // `planRows` is ordered createdAt desc and is NOT window-filtered, so
+        // the first verdict seen for a pair is the most recent one there is.
+        if (!latestCritiqueByPair.has(lid)) {
+          latestCritiqueByPair.set(lid, {
+            verdict: p.criticVerdict,
+            at: p.createdAt.toISOString(),
+            inWindow,
+          })
+        }
+      }
+    }
+
     if (p.criticVerdict && inWindow) {
       for (const seed of edgeSeed.values()) {
         if (seed.from !== p.charterKey || seed.artifact !== 'plan') continue
@@ -843,6 +875,7 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
         })),
         verdicts: isPlan ? (verdicts ?? { pass: 0, revise: 0, block: 0 }) : null,
         lastCritique: lastCritiqueByPair.get(id) ?? null,
+        latestCritique: isPlan ? (latestCritiqueByPair.get(id) ?? null) : null,
         lineage: isPlan ? 'none' : 'plan-items',
         lineageNote: isPlan
           ? 'The critic does not write an artifact — it records a verdict on the plan itself, so there is nothing to count crossing here.'

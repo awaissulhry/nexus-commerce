@@ -122,6 +122,10 @@ export interface MapEdge {
      *  verdict that is no longer the one in force. */
     overrideNote: string | null
   } | null
+  /** The most recent verdict IGNORING the window, so "nothing reviewed" can
+   *  tell "never" apart from "not in the last 7 days". Out-of-window content is
+   *  never promoted into the window — this only says where to look. */
+  latestCritique: { verdict: string; at: string; inWindow: boolean } | null
   lineage: 'plan-items' | 'none'
   lineageNote: string
 }

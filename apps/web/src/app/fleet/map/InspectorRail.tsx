@@ -392,8 +392,32 @@ function EdgePanel({ edge, nodes }: { edge: MapEdge; nodes: MapNode[] }) {
                 </p>
               ) : null}
             </>
+          ) : edge.latestCritique ? (
+            /*
+             * S4.k — "nothing reviewed" used to mean two different things and
+             * said the same words for both. This fleet's only critique is a
+             * 9-item BLOCK with a 945-character reason, and at the default
+             * 7-day window the panel read "Nothing has been reviewed yet" —
+             * which reads as *never happened*.
+             *
+             * The page already draws this distinction everywhere else:
+             * `overlays.ts` separates "never run" from "has run before, but not
+             * inside the time window you are looking at". The out-of-window
+             * verdict is NOT promoted into the window; the panel says where to
+             * look and leaves the reader to widen it.
+             */
+            <p className="sbm-rail-note">
+              Nothing was reviewed in this window. The most recent verdict was a{' '}
+              <b>{edge.latestCritique.verdict}</b> on{' '}
+              {new Date(edge.latestCritique.at).toLocaleDateString(undefined, {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
+              {' — widen the window to read what the critic said.'}
+            </p>
           ) : (
-            <p className="sbm-dim">Nothing has been reviewed yet.</p>
+            <p className="sbm-rail-note">Nothing has been reviewed yet.</p>
           )}
         </>
       ) : (
