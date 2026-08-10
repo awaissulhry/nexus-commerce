@@ -51,6 +51,22 @@ export function MapClient() {
   const [tierFilter, setTierFilter] = useState<string | null>(null)
   const [hideDiagnostic, setHideDiagnostic] = useState(false)
   const [view, setView] = useState<'map' | 'list'>('map')
+  /*
+   * S6.d — entity mode has its OWN view preference, and it defaults to the
+   * table.
+   *
+   * Not a shared `view`, though I wired it that way first: the two modes want
+   * opposite defaults, and one piece of state cannot hold two. Worker mode is 7
+   * nodes — below the ~20-vertex threshold where Ghoniem/Fekete/Castagliola
+   * found node-link still wins — so the picture opens. Entity mode is 38 nodes
+   * and 103 edges, above it, where the same study puts a matrix ahead on every
+   * task except path-tracing. So the table opens, and the graph is one click
+   * away for the task it wins.
+   *
+   * Two preferences, two params. `?ev=map` says "I want the picture here",
+   * which is a different sentence from `?view=list`.
+   */
+  const [entityView, setEntityView] = useState<'map' | 'list'>('list')
   /** Which universe the page is showing: the workers, or the things they
    *  reason about. Two different node sets, one shell. */
   const [mode, setMode] = useState<'workers' | 'entities'>('workers')
@@ -227,6 +243,8 @@ export function MapClient() {
     if (win && WINDOWS.some((x) => x.key === win)) setWindowKey(win)
     const ov = q.get('colour')
     if (ov) setOverlayId(ov)
+    const ev = q.get('ev')
+    if (ev === 'map' || ev === 'list') setEntityView(ev)
     const thing = q.get('thing')
     if (thing) {
       setMode('entities')
@@ -240,12 +258,13 @@ export function MapClient() {
     if (selection?.kind === 'edge') q.set('edge', selection.id)
     /* S4.i — it was the only selection on this page that was not shareable. */
     if (mode === 'entities' && entitySel) q.set('thing', entitySel)
+    if (mode === 'entities' && entityView !== 'list') q.set('ev', entityView)
     if (view === 'list') q.set('view', 'list')
     if (windowKey !== '7d') q.set('window', windowKey)
     if (overlayId !== 'autonomy') q.set('colour', overlayId)
     const s = q.toString()
     window.history.replaceState(null, '', s ? `?${s}` : window.location.pathname)
-  }, [selection, view, windowKey, overlayId, mode, entitySel])
+  }, [selection, view, windowKey, overlayId, mode, entitySel, entityView])
 
   /* Escape precedence for this page, agreed once across the section studies:
      an open dialog first, then a confirm, then an active filter chip if focus
@@ -520,24 +539,24 @@ export function MapClient() {
                       key={v}
                       type="button"
                       role="radio"
-                      aria-checked={view === v}
-                      tabIndex={view === v ? 0 : -1}
-                      className={view === v ? 'on' : ''}
-                      onClick={() => setView(v)}
+                      aria-checked={entityView === v}
+                      tabIndex={entityView === v ? 0 : -1}
+                      className={entityView === v ? 'on' : ''}
+                      onClick={() => setEntityView(v)}
                     >
                       {v === 'list' ? 'Table' : 'Graph'}
                     </button>
                   ))}
                 </div>
                 <span className="sbm-viewhint">
-                  {view === 'list'
+                  {entityView === 'list'
                     ? 'Best for reading — every overlap, and the search term behind it.'
                     : 'Best for tracing — which families touch which.'}
                 </span>
               </div>
               {entityLoading && entity == null ? (
                 <div className="sbm-canvas sbm-skeleton" aria-busy="true" />
-              ) : entity && entity.nodes.length > 0 && view === 'list' ? (
+              ) : entity && entity.nodes.length > 0 && entityView === 'list' ? (
                 <EntityListView graph={entity} selectedKey={entitySel} onSelect={setEntitySel} />
               ) : entity && entity.nodes.length > 0 ? (
                 <EntityCanvas
