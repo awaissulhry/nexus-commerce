@@ -36,35 +36,11 @@
 
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { relationOf, type EntityGraph, type EntityEdge } from './EntityCanvas'
+/* S6.i — its own module so it can be tested: this file imports the design
+   system, and the apps/web vitest runner has no `@/` alias. */
+import { termsOf } from './entity-terms'
 
 const keyOf = (t: string, i: string) => `${t}|${i}`
-
-/**
- * S6.i — `properties.on` is a LIST, which S6.c did not know.
- *
- * It reads `kw:<term>|<TYPE>, kw:<term>|<TYPE>, …` — on production, up to ten
- * terms in one value. S6.c matched it with `/^kw:(.*)\|([A-Z]+)$/`, and `.*` is
- * greedy, so it stripped the leading `kw:` and the final `|EXACT` and left every
- * separator in between on screen:
- *
- *   giubbotto moto uomo|EXACT, kw:giacca moto uomo|EXACT, kw:giacca moto|EXACT…
- *
- * which is the wire format the column exists to hide. A regex anchored at both
- * ends looks like it validates the whole string; against a list it matches the
- * first and last field and swallows the rest.
- */
-function termsOf(on: string): Array<{ term: string; type: string }> {
-  return on
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((t) => {
-      const m = /^kw:([^|]*)\|([A-Z]+)$/.exec(t)
-      /* An unexpected shape shows itself rather than being swallowed — the same
-         rule the page applies to an id it cannot resolve. */
-      return m ? { term: m[1], type: m[2].toLowerCase() } : { term: t, type: '' }
-    })
-}
 
 export function EntityListView({
   graph,
