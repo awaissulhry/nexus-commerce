@@ -1405,7 +1405,22 @@
  * because of what its label says. Recorded in the study as a latent issue for
  * any other page that puts information in a disabled label.
  */
-.aq-card .acr-btn.go:disabled {
+/*
+ * S8.5 — widened from `.aq-card` to the whole page, because the trap recurred
+ * exactly where the narrower selector stopped.
+ *
+ * The bulk confirm is `.ap-bulkbar .acr-btn.go`, not inside a card, so it kept
+ * the shared `opacity: .55` and measured 2.59:1 while disabled. And it is
+ * disabled precisely while it must be read: S8.3 gates it behind typing the
+ * phrase, so "Yes, approve 26" — the label naming the action AND the count —
+ * is greyed out during the only moments the operator is looking at it.
+ *
+ * The rule this page actually needs is not "cards keep their labels readable",
+ * it is "a disabled PRIMARY on this page keeps its label readable", because on
+ * this page a primary's label always names the change. One selector for both,
+ * and S4's example still wins on specificity (5 classes to 4).
+ */
+.aq-page .acr-btn.go:disabled {
   opacity: 1;
   background: #eef1f4;
   color: #4a5563;

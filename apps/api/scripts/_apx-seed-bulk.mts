@@ -141,6 +141,32 @@ for (let i = 1; i <= 2; i++) {
 }
 console.log('  2  × create-negative-keyword · amazon-negative-miner (mixed worker AND kind)')
 
+// TWO set-target-bid rows under the OTHER worker. Same kind, different worker
+// — the case S8.1's rule added and S8.3's guard fix protects, and the one the
+// old client regex (`/Approve one kind at a time/`) would have missed, because
+// the refusal it produces says "different workers" instead. Without these rows
+// that fix can only be proven by a unit test, never on the deployed page.
+for (let i = 1; i <= 2; i++) {
+  await prisma.agentApproval.create({
+    data: {
+      agentRunId: minerRun,
+      toolName: 'set-target-bid',
+      riskTier: 'high',
+      args: { targetId: `aq-seed-crossworker-${i}`, proposedBidCents: 55 },
+      preview: {
+        target: { expression: `casco crossworker ${i}`, matchType: 'EXACT' },
+        campaign: { name: 'AIREON-IT-Generic (SEED)' },
+        currentBidCents: 40,
+        proposedBidCents: 55,
+        effect: `Moves "casco crossworker ${i}" from €0.40 to €0.55.`,
+      },
+      status: 'pending',
+      expiresAt: EXPIRES(),
+    },
+  })
+}
+console.log('  2  × set-target-bid    · amazon-negative-miner (SAME kind, different worker)')
+
 // A parked row in the tuner group — it must be excluded from select-all and
 // must produce the "not affected" clause if selected by hand.
 await prisma.agentApproval.create({
