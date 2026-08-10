@@ -924,27 +924,23 @@
   font-weight: 650;
 }
 
-.aq-outparked {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border: 1px solid #bbe5c8;
-  border-radius: 6px;
-  background: #f3faf5;
+/*
+ * S9.1 — `.aq-outparked` and its children are gone with `OutsideParked`. The
+ * outside queue renders the shared `ParkedRow`, so it wears `.ap-scheduled`
+ * like the fleet queue and the two cannot drift visually either.
+ *
+ * S9.2 — a parked row with no run time. Not a countdown at zero: a state, with
+ * its own words and Undo still reachable, because Undo is the only way out.
+ * Amber and not red — nothing is wrong with Amazon, the row is simply stuck,
+ * and S2 settled that a deliberate or inert state is not an alarm.
+ */
+.aq-page .ap-scheduled.aq-stuck {
+  border-color: #ecd9ae;
+  background: #fff8ec;
 }
-.aq-outparkedbody {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12.5px;
-  color: #3a4658;
-}
-.aq-outparkedbody strong {
-  color: #1c2530;
-  font-weight: 650;
+.aq-page .ap-scheduled.aq-stuck .ap-schedicon {
+  /* #8a6320 on #fff8ec = 5.31:1 — the fleet's existing warn ink, not a new one. */
+  color: #8a6320;
 }
 
 /* ── S6 · the decision card (AQ.3) ──────────────────────────────────────── */

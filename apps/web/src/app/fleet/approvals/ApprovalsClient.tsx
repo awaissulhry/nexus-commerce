@@ -33,7 +33,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactElement,
 } from 'react'
@@ -45,7 +44,6 @@ import {
   Clock,
   MinusCircle,
   ShieldCheck,
-  Undo2,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
@@ -54,6 +52,7 @@ import { HowApprovalsWork } from './HowApprovalsWork'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { ApprovalCard, type FleetLabels } from './ApprovalCard'
 import {
+  ParkedRow,
   PrecedentPanel,
   RecordList,
   ViewTabs,
@@ -795,70 +794,6 @@ interface OutsideRow {
   trackRecord: null
 }
 
-/**
- * A parked row for the outside queue.
- *
- * Deliberately a second, smaller implementation of the shipped `ScheduledRow`:
- * that one is not exported, and this stream committed not to edit the file it
- * lives in while the Overview still renders it. AQ.3 moves the card into this
- * directory and the two become one — recorded here so the duplication is a
- * decision with an end date rather than an accident.
- */
-function OutsideParked({
-  row,
-  busy,
-  onUndo,
-  onCommit,
-}: {
-  row: OutsideRow
-  busy: boolean
-  onUndo: (id: string) => void
-  onCommit: (id: string) => void
-}) {
-  const until = row.executeAfter ? new Date(row.executeAfter).getTime() : 0
-  const [left, setLeft] = useState(() => Math.max(0, Math.ceil((until - Date.now()) / 1000)))
-  const fired = useRef(false)
-
-  useEffect(() => {
-    if (!until) return
-    const t = setInterval(() => {
-      const secs = Math.max(0, Math.ceil((until - Date.now()) / 1000))
-      setLeft(secs)
-      if (secs === 0 && !fired.current) {
-        fired.current = true
-        onCommit(row.id)
-      }
-    }, 500)
-    return () => clearInterval(t)
-  }, [until, row.id, onCommit])
-
-  return (
-    <div className="aq-outparked">
-      <span className="aq-outparkedbody">
-        {/* FX.1 again: `humanTool` here de-hyphenated the TOOL KEY, so a parked
-            row read "Approved — set price". `toolCardFor` is the vocabulary the
-            rest of this page already decides with. */}
-        <strong>Approved — {toolCardFor(row.toolName).shortAsk}</strong>
-        <span>
-          {left > 0 ? (
-            <>
-              Running in {left} second{left === 1 ? '' : 's'} — the{' '}
-              <Term k="undo-window">undo window</Term>. Nothing has happened yet.
-            </>
-          ) : (
-            'Running now…'
-          )}
-        </span>
-      </span>
-      {left > 0 ? (
-        <button className="acr-btn" disabled={busy} onClick={() => onUndo(row.id)}>
-          <Undo2 size={13} /> Undo
-        </button>
-      ) : null}
-    </div>
-  )
-}
-
 function OutsideQueue({
   rows,
   labels,
@@ -1006,9 +941,13 @@ function OutsideQueue({
       <div className="aq-outbody">
         {rows.map((a) =>
             a.status === 'scheduled' ? (
-              <OutsideParked
+              /* S9.1 — the same component the fleet queue renders. No
+                 workerName: this queue names its producer on the line above. */
+              <ParkedRow
                 key={a.id}
-                row={a}
+                id={a.id}
+                toolName={a.toolName}
+                executeAfter={a.executeAfter}
                 busy={busy}
                 onUndo={onUndo}
                 onCommit={onCommit}

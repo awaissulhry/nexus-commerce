@@ -163,21 +163,59 @@ export function ViewTabs({
 
 /* ── a parked approve, with its undo ───────────────────────────────────── */
 
+/**
+ * S9.1 — ONE parked row.
+ *
+ * This existed twice: here and as `OutsideParked` in ApprovalsClient.tsx, with
+ * byte-identical countdown maths (`until`, the 500ms interval, the `fired`
+ * ref, the commit-at-zero) and two different sentences for the same fact —
+ * "Nothing has reached Amazon yet" against "Nothing has happened yet". Every
+ * fix to the undo window landed half, which is how the null-`executeAfter`
+ * defect below survived in both copies at once.
+ *
+ * It takes the minimum shape both queues can supply rather than either row
+ * type, so neither caller has to widen its model to use it.
+ *
+ * AP.4's reasoning, kept where someone would go to "improve" it: the write is
+ * HELD, not compensated — the Amazon call has not been made, so Undo means it
+ * never happens. Gmail's Undo Send works the same way and for the same reason:
+ * it delays delivery rather than recalling a sent message. And this is a ROW,
+ * not a toast, because a toast dies on reload and the undo would die with it.
+ */
 export function ParkedRow({
-  row,
+  id,
+  toolName,
+  executeAfter,
   workerName,
   busy,
   onUndo,
   onCommit,
 }: {
-  row: ApprovalRow
-  workerName: string
+  id: string
+  toolName: string
+  executeAfter: string | null
+  /** Omitted by the outside queue, which names its producer above the row. */
+  workerName?: string
   busy: boolean
   onUndo: (id: string) => void
   onCommit: (id: string) => void
 }) {
-  const card = toolCardFor(row.toolName)
-  const until = row.executeAfter ? new Date(row.executeAfter).getTime() : 0
+  const card = toolCardFor(toolName)
+  const until = executeAfter ? new Date(executeAfter).getTime() : 0
+
+  /*
+   * S9.2 — a row with no run time is not a countdown at zero.
+   *
+   * `until` was 0 when `executeAfter` was null, so `if (!until) return` meant
+   * the interval never started, `left` stayed 0, the row rendered "Running
+   * now…" forever, Undo was hidden (gated on `left > 0`) and `onCommit` never
+   * fired. A stuck row that claimed to be running, with no way out — in both
+   * copies.
+   *
+   * The structural rule: a countdown renders only when there is a time to
+   * count to. Everything else is a different state and says so.
+   */
+  const stuck = !executeAfter
   const [left, setLeft] = useState(() => Math.max(0, Math.ceil((until - Date.now()) / 1000)))
   const fired = useRef(false)
 
@@ -188,23 +226,31 @@ export function ParkedRow({
       setLeft(secs)
       if (secs === 0 && !fired.current) {
         fired.current = true
-        onCommit(row.id)
+        onCommit(id)
       }
     }, 500)
     return () => clearInterval(t)
-  }, [until, row.id, onCommit])
+  }, [until, id, onCommit])
 
   return (
-    <div className="ap-scheduled">
+    <div className={`ap-scheduled${stuck ? ' aq-stuck' : ''}`}>
       <span className="ap-schedicon" aria-hidden>
         <Timer size={13} />
       </span>
       <span className="ap-schedbody">
         <span className="ap-schedwhat">
-          Approved — {workerName} will {card.shortAsk}
+          Approved — {workerName ? `${workerName} will ` : ''}
+          {card.shortAsk}
         </span>
-        <span className="ap-schedmeta">
-          {left > 0 ? (
+        {/* aria-live so a screen reader is told the state, but POLITE and only
+            on the sentence — the number itself is not announced every second. */}
+        <span className="ap-schedmeta" aria-live="polite">
+          {stuck ? (
+            <>
+              Approved, but no run time was recorded — so it will not run on its own.
+              Undo puts it back in the queue.
+            </>
+          ) : left > 0 ? (
             <>
               Running in {left} second{left === 1 ? '' : 's'} — the{' '}
               <Term k="undo-window">undo window</Term>. Nothing has reached Amazon yet.
@@ -214,8 +260,9 @@ export function ParkedRow({
           )}
         </span>
       </span>
-      {left > 0 ? (
-        <button className="acr-btn" disabled={busy} onClick={() => onUndo(row.id)}>
+      {/* Undo stays available on a stuck row: it is the only way out of one. */}
+      {left > 0 || stuck ? (
+        <button className="acr-btn" disabled={busy} onClick={() => onUndo(id)}>
           <Undo2 size={13} /> Undo
         </button>
       ) : null}
@@ -683,7 +730,9 @@ export function WaitingList({
             a.status === 'scheduled' ? (
               <ParkedRow
                 key={a.id}
-                row={a}
+                id={a.id}
+                toolName={a.toolName}
+                executeAfter={a.executeAfter}
                 workerName={nameOf(a.charterKey)}
                 busy={busy}
                 onUndo={onUndo}
