@@ -531,5 +531,83 @@ touch `use-visibility-poll.ts`. **Nothing in this section changes that contract.
 
 ---
 
+## PART 10 — The execution record
+
+All measured on production. The API carries an exact deploy marker —
+`GET /api/health` returns `{"build":"<sha>"}` — so every phase below was
+verified against a build proven to contain it.
+
+### 10.1 · What each phase did, measured
+
+| phase | before | after |
+|---|---|---|
+| **S7.a** | plan edge at 24h: `everCrossed:false`, `dasharray 4px,4px`, `rgb(138,148,163)` | `everCrossed:true`, `dasharray none`, `rgb(91,127,168)` — identical to the finding edges, while `verdicts` stays 0/0/0 |
+| **S7.b** | `nothing reviewed yet` | `nothing reviewed in 24 hours` |
+| **S7.c** | card `$0.00 spent` vs list `no runs in this window` | card `— no runs`; never-run cards still `— spent` |
+| **S7.d** | no denominator anywhere | the sentence, plus the clause at 7d/30d and correctly absent at 24h |
+| **S7.e** | radios live; **2 fetches** to the workers endpoint; band byte-identical | `aria-disabled` ×4, reason in the group name, **0 fetches** |
+| **S7.f** | **4** tab stops | **1** |
+| **S7.g** | radio state only | a sentence naming the denominator and what moved |
+
+`.is-na` measured on prod: **6.31:1** on white, **5.32:1** on `#e7ecf2`,
+`opacity: 1` — so the composite-opacity trap does not apply.
+
+### 10.2 · S7.c shipped twice, because the first wording overflowed one card
+
+The first version said `— not in this window`, which is what §D-S7.2 specified.
+It overflowed exactly one card. `Fleet self-test analyst` carries
+`47 open · 47 stale` in slot 2, the facts row is 159px of `nowrap`, and the
+third slot ran **17px past the card's inner edge** — visibly, because the row is
+`overflow: visible`. Every other card had 23–40px of slack.
+
+Measured by swapping the text and reading the painted `Range` against the card's
+inner right edge (697px):
+
+| phrase | text right | over |
+|---|---|---|
+| `— not in this window` | 714 | **+17** |
+| `— no runs in this window` | 728 | +32 |
+| `— none in this window` | 720 | +23 |
+| `— no runs in window` | 714 | +18 |
+| `— not in window` | 700 | +3 |
+| **`— no runs`** | **679** | **−18** ✓ |
+
+So the slot **cannot** say "window" on the widest card, and the denominator is
+carried by S7.d's sentence instead — which is what that sentence is for.
+
+**A correction to this study's own exit criterion.** §9 said S7.c passes when
+"the card and the list agree, word for word". They do not: the card says
+`— no runs`, the list says `no runs in this window`. They agree in *substance* —
+neither states a measured zero — and word-for-word was unachievable in 159px of
+`nowrap`. The criterion was written before the width was measured.
+
+### 10.3 · Two raises of mine that dissolved, and one instrument save
+
+Beyond §0.5's two, during the build:
+
+- **"tsc says my `mode !== 'entities'` guard is unreachable"** — not a bug in
+  the guard, a *proof* that S7.d's placement is already inside the workers arm
+  of the mode ternary. The compiler answered a question I was about to answer by
+  reading.
+- **"The window control has no `radiogroup` wrapper"** (§2.5) — it does, with
+  `aria-label="Time window"`. `closest('[role]')` had matched the button itself.
+- **The instrument saved a false report twice**: once when a 4.5-second wait
+  made a working refetch look broken (the API is slower than that), and once
+  when a "0 polls in 26s" control turned out to have run in a backgrounded tab,
+  where the hook *correctly* stops polling.
+
+### 10.4 · What is still open
+
+- **`.sbm-fact` is `text-overflow: clip` with `overflow: visible`.** So a slot
+  that outgrows its card does not clip — it paints past the edge. That is how
+  S7.c's overflow was visible at all, and it means **any** future lengthening of
+  a card fact fails the same way, silently to a probe that only reads text.
+  Raised, not fixed: it is a shipped section's layout.
+- The split-boundary case for an **edge** (some crossings in window, some out)
+  still does not occur on this fleet — all 15 are inside 7 days — so S7.a's
+  behaviour there remains reasoned, not observed.
+
+---
+
 *Measurements: production, 2026-08-10; payload at four windows, DOM at two;
 instrument verified visible with rAF firing before any timing-sensitive probe.*
