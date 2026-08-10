@@ -6455,6 +6455,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // the one board that could not: it returned neither. Consumers that do not read them
           // are unaffected; every field below is additive.
           description: true, conditions: true,
+          // RA.GRAIN — the fourth grain.
+          scopeProductId: true,
         },
         orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
       }),
@@ -6530,6 +6532,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const campaignName = new Map(scopedCampaigns.map((c) => [c.id, c.name]))
 
     /**
+     * RA.GRAIN — resolve product scope to a NAME, and say whether it is a line or one variation.
+     *
+     * "scopeProductId: cmsn…" tells an operator nothing; "GALE-JACKET — the whole line, 18
+     * variations" tells them what the rule can touch. Resolved here rather than in the client so
+     * every consumer of this board agrees, the same reason portfolio and campaign names are.
+     */
+    const scopedProductIds = [...new Set(rules.map((r) => r.scopeProductId).filter((x): x is string => !!x))]
+    const scopedProducts = scopedProductIds.length
+      ? await prisma.product.findMany({ where: { id: { in: scopedProductIds } }, select: { id: true, sku: true, name: true, parentId: true } })
+      : []
+    const childCounts = scopedProductIds.length
+      ? await prisma.product.groupBy({ by: ['parentId'], where: { parentId: { in: scopedProductIds } }, _count: { _all: true } })
+      : []
+    const childCountByParent = new Map(childCounts.map((c) => [c.parentId as string, c._count._all]))
+    const productById = new Map(scopedProducts.map((p) => [p.id, p]))
+
+    /**
      * RA.AUTO — actions that never reach Amazon. Same set as `rule-category.ts`'s
      * NON_WRITING_ACTIONS, and it is the difference between "9 rules are on AUTO" and "8 rules
      * can change your account". Measured on prod: "Alert: ACOS spike" is AUTO and its only
@@ -6573,11 +6592,27 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         category: ruleCategory(actionTypes),
         categoryColor: RULE_CATEGORY_META[ruleCategory(actionTypes)].color,
         categoryLabel: RULE_CATEGORY_META[ruleCategory(actionTypes)].label,
-        scope: r.scopeCampaignId
-          ? { kind: 'campaign' as const, id: r.scopeCampaignId, name: campaignName.get(r.scopeCampaignId) ?? r.scopeCampaignId }
-          : r.scopePortfolioId
-            ? { kind: 'portfolio' as const, id: r.scopePortfolioId, name: portfolioName.get(r.scopePortfolioId) ?? r.scopePortfolioId }
-            : { kind: 'account' as const, id: null, name: null },
+        // `kind`/`id`/`name` are unchanged — the AutomationDock and the Control Room's Levers view
+        // both read them, so RA.GRAIN adds `product` beside them rather than restructuring.
+        scope: {
+          ...(r.scopeCampaignId
+            ? { kind: 'campaign' as const, id: r.scopeCampaignId, name: campaignName.get(r.scopeCampaignId) ?? r.scopeCampaignId }
+            : r.scopePortfolioId
+              ? { kind: 'portfolio' as const, id: r.scopePortfolioId, name: portfolioName.get(r.scopePortfolioId) ?? r.scopePortfolioId }
+              : { kind: 'account' as const, id: null, name: null }),
+          product: r.scopeProductId
+            ? {
+              id: r.scopeProductId,
+              sku: productById.get(r.scopeProductId)?.sku ?? null,
+              name: productById.get(r.scopeProductId)?.name ?? null,
+              /** A parent is the whole line; a child is one variation. */
+              isLine: (childCountByParent.get(r.scopeProductId) ?? 0) > 0,
+              variations: childCountByParent.get(r.scopeProductId) ?? 0,
+              /** True when the id no longer resolves — the reach line then reads 0, honestly. */
+              missing: !productById.has(r.scopeProductId),
+            }
+            : null,
+        },
         caps: {
           perDay: r.maxExecutionsPerDay,
           perExecutionCents: r.maxValueCentsEur,
@@ -6602,34 +6637,210 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * ACR.7 — bind or unbind a rule's scope (the drag-and-drop write path).
+   * ACR.7 / RA.GRAIN — bind or unbind a rule's scope. ALL FOUR grains, one route.
    *
-   * scopePortfolioId = external portfolio id (matches Campaign.portfolioId); scopeCampaignId =
-   * local Campaign.id. Explicit null clears. Setting one clears the other — "this campaign
-   * only" and "this portfolio only" are alternative answers to the same question, and holding
-   * both would make the narrower one silently win while the UI showed the wider one.
+   * Was portfolio + campaign only, which made market a split feature: `ruleMatchesScope` honoured
+   * `scopeMarketplace` strictly, but the only way to write it was the unrelated
+   * `PATCH /advertising/automation-rules/:id`. One feature, two routes, and the UI could not offer
+   * the market grain at all.
+   *
+   * Semantics match enforcement exactly — the four dimensions **AND** together, as
+   * `ruleMatchesScope` already applied them:
+   *   · scopeMarketplace — contexts of that marketplace only
+   *   · scopePortfolioId — external portfolio id, matching Campaign.portfolioId
+   *   · scopeCampaignId  — local Campaign.id
+   *   · scopeProductId   — a `Product.id`: a PARENT for the whole line, or one child variation
+   *
+   * Portfolio and campaign stay MUTUALLY EXCLUSIVE, and under AND that is provably right rather
+   * than a simplification: a campaign belongs to at most one portfolio, so holding both is either
+   * redundant (the campaign is in it) or contradictory (it is not, and the rule can never fire).
+   * Market and product compose with anything.
+   *
+   * Measured on prod 2026-08-10, market × product is the pairing that earns its place: 106 of 250
+   * advertised ASINs span more than one market, and the GALE line runs in all four (IT 32 · DE 22 ·
+   * FR 14 · ES 9). "GALE in DE only" — 22 campaigns — was previously inexpressible. By contrast
+   * market × portfolio is redundant in this account: no portfolio spans more than one market.
+   *
+   * A combination that resolves to ZERO campaigns is REFUSED (409), not stored. Storing it would
+   * leave a rule that reads as armed and can never fire, and the refusal names which pair
+   * conflicts so the operator knows which of their two choices to change.
    */
   fastify.patch('/advertising/autonomy/rules/:id/scope', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as { scopePortfolioId?: string | null; scopeCampaignId?: string | null }
-    const rule = await prisma.automationRule.findUnique({ where: { id }, select: { id: true, name: true, domain: true } })
+    const body = request.body as {
+      scopeMarketplace?: string | null
+      scopePortfolioId?: string | null
+      scopeCampaignId?: string | null
+      scopeProductId?: string | null
+    }
+    const rule = await prisma.automationRule.findUnique({
+      where: { id },
+      select: {
+        id: true, name: true, domain: true,
+        scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true,
+      },
+    })
     if (!rule || rule.domain !== 'advertising') { reply.code(404); return { ok: false, error: 'not_found' } }
 
-    let data: { scopePortfolioId: string | null; scopeCampaignId: string | null }
-    if (body.scopeCampaignId != null) {
-      const c = await prisma.campaign.findUnique({ where: { id: body.scopeCampaignId }, select: { id: true, name: true } })
-      if (!c) { reply.code(400); return { ok: false, error: 'campaign not found' } }
-      data = { scopeCampaignId: c.id, scopePortfolioId: null }
-    } else if (body.scopePortfolioId != null) {
-      const pf = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: body.scopePortfolioId }, select: { name: true } })
-      if (!pf) { reply.code(400); return { ok: false, error: 'portfolio not found' } }
-      data = { scopePortfolioId: body.scopePortfolioId, scopeCampaignId: null }
-    } else {
-      data = { scopePortfolioId: null, scopeCampaignId: null }
+    // Absent key = leave that dimension alone; explicit null = clear it. Without this a UI that
+    // only wanted to change the market would silently unbind the portfolio.
+    const has = (k: keyof typeof body) => Object.prototype.hasOwnProperty.call(body, k)
+    const next = {
+      scopeMarketplace: has('scopeMarketplace') ? (body.scopeMarketplace ?? null) : rule.scopeMarketplace,
+      scopePortfolioId: has('scopePortfolioId') ? (body.scopePortfolioId ?? null) : rule.scopePortfolioId,
+      scopeCampaignId: has('scopeCampaignId') ? (body.scopeCampaignId ?? null) : rule.scopeCampaignId,
+      scopeProductId: has('scopeProductId') ? (body.scopeProductId ?? null) : rule.scopeProductId,
     }
-    await prisma.automationRule.update({ where: { id }, data })
-    logger.warn('[ACR7-RULE-SCOPE]', { ruleId: id, name: rule.name, ...data, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
-    return { ok: true, ruleId: id, ...data }
+
+    // Whichever of the exclusive pair arrived in THIS request wins; the other is cleared.
+    if (has('scopeCampaignId') && body.scopeCampaignId != null) next.scopePortfolioId = null
+    else if (has('scopePortfolioId') && body.scopePortfolioId != null) next.scopeCampaignId = null
+
+    if (next.scopeCampaignId != null) {
+      const c = await prisma.campaign.findUnique({ where: { id: next.scopeCampaignId }, select: { id: true } })
+      if (!c) { reply.code(400); return { ok: false, error: 'campaign not found' } }
+    }
+    if (next.scopePortfolioId != null) {
+      const pf = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: next.scopePortfolioId }, select: { name: true } })
+      if (!pf) { reply.code(400); return { ok: false, error: 'portfolio not found' } }
+    }
+    if (next.scopeProductId != null) {
+      const p = await prisma.product.findUnique({ where: { id: next.scopeProductId }, select: { id: true } })
+      if (!p) { reply.code(400); return { ok: false, error: 'product not found' } }
+    }
+    if (next.scopeMarketplace != null) {
+      // Refuse a market this account cannot serve, rather than storing a rule that never fires.
+      const known = await prisma.campaign.findFirst({ where: { marketplace: next.scopeMarketplace }, select: { id: true } })
+      if (!known) {
+        reply.code(400)
+        return { ok: false, error: 'unknown_marketplace', message: `No campaign in this account is in "${next.scopeMarketplace}".` }
+      }
+    }
+
+    const { resolveScopeReach } = await import('../services/advertising/ads-scope-reach.js')
+    const reach = await resolveScopeReach({
+      marketplace: next.scopeMarketplace,
+      portfolioId: next.scopePortfolioId,
+      campaignId: next.scopeCampaignId,
+      productId: next.scopeProductId,
+    })
+    if (reach.contradiction) {
+      reply.code(409)
+      return { ok: false, error: 'scope_matches_nothing', message: reach.contradiction, reach: { campaigns: 0, total: reach.total } }
+    }
+
+    await prisma.automationRule.update({ where: { id }, data: next })
+    logger.warn('[RA-GRAIN-RULE-SCOPE]', {
+      ruleId: id, name: rule.name, ...next, campaigns: reach.campaignIds.length,
+      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+    })
+    return {
+      ok: true,
+      ruleId: id,
+      ...next,
+      reach: { campaigns: reach.campaignIds.length, total: reach.total, applied: reach.applied, notes: reach.notes },
+    }
+  })
+
+  /**
+   * RA.GRAIN — everything a scope picker needs, in one read.
+   *
+   * Deliberately returns the DATA rather than a reach-calculator endpoint. The whole payload is
+   * ~220 campaigns plus 13 product lines carrying their campaign ids, so the client can compute
+   * the exact reach of ANY combination locally — including the contradictory ones — with no
+   * round-trip per keystroke. A `GET /scope-reach?…` per change would have been one request for
+   * every dropdown twiddle and would still have needed this list for the options.
+   *
+   * `productLines` is 13 rows, not 223, because a product line is already modelled:
+   * `Product.parentId` (self-relation `ProductHierarchy`). Measured 2026-08-10 — every one of the
+   * 223 advertised products is a child of one of these 13 parents. `ProductVariation` (0 rows) and
+   * `ProductFamily` (0 rows) are not the line and must not be reached for.
+   *
+   * Children are included so the picker can offer "the whole line" and "one variation" from the
+   * same list, which is the affordance `campaign-builder/.../ProductSelection.tsx` already ships.
+   */
+  fastify.get('/advertising/scope-options', async (_request, reply) => {
+    const [campaigns, portfolios, ads] = await Promise.all([
+      prisma.campaign.findMany({
+        select: { id: true, name: true, marketplace: true, portfolioId: true, status: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.amazonAdsPortfolio.findMany({ select: { externalPortfolioId: true, name: true }, orderBy: { name: 'asc' } }),
+      prisma.adProductAd.findMany({
+        where: { productId: { not: null } },
+        select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
+      }),
+    ])
+
+    // product id → the campaigns advertising it
+    const campaignsByProduct = new Map<string, Set<string>>()
+    const asinsByProduct = new Map<string, Set<string>>()
+    for (const a of ads) {
+      if (!a.productId) continue
+      const cid = a.adGroup?.campaignId
+      if (cid) {
+        const s = campaignsByProduct.get(a.productId) ?? new Set<string>()
+        s.add(cid); campaignsByProduct.set(a.productId, s)
+      }
+      if (a.asin) {
+        const s = asinsByProduct.get(a.productId) ?? new Set<string>()
+        s.add(a.asin); asinsByProduct.set(a.productId, s)
+      }
+    }
+
+    const advertisedIds = [...campaignsByProduct.keys()]
+    const advertised = advertisedIds.length
+      ? await prisma.product.findMany({
+        where: { id: { in: advertisedIds } },
+        select: { id: true, sku: true, name: true, parentId: true },
+      })
+      : []
+    const parentIds = [...new Set(advertised.map((p) => p.parentId).filter((x): x is string => !!x))]
+    const parents = parentIds.length
+      ? await prisma.product.findMany({ where: { id: { in: parentIds } }, select: { id: true, sku: true, name: true } })
+      : []
+    const parentById = new Map(parents.map((p) => [p.id, p]))
+
+    // Group the advertised children under their parent. A product with no parent stands alone as
+    // its own line — it is a line of one, not an orphan to hide.
+    const lines = new Map<string, { id: string; sku: string; name: string; children: Array<{ id: string; sku: string; name: string; asins: string[]; campaigns: string[] }>; campaigns: Set<string> }>()
+    for (const child of advertised) {
+      const key = child.parentId ?? child.id
+      const head = child.parentId ? parentById.get(child.parentId) : child
+      if (!head) continue
+      const line = lines.get(key) ?? { id: head.id, sku: head.sku, name: head.name, children: [], campaigns: new Set<string>() }
+      const childCampaigns = [...(campaignsByProduct.get(child.id) ?? [])]
+      line.children.push({
+        id: child.id, sku: child.sku, name: child.name,
+        asins: [...(asinsByProduct.get(child.id) ?? [])],
+        campaigns: childCampaigns,
+      })
+      for (const c of childCampaigns) line.campaigns.add(c)
+      lines.set(key, line)
+    }
+
+    reply.header('Cache-Control', 'private, max-age=120')
+    return {
+      totalCampaigns: campaigns.length,
+      campaigns,
+      portfolios,
+      /** Campaigns carrying no portfolio — the blind spot the portfolio grain cannot reach. */
+      campaignsWithoutPortfolio: campaigns.filter((c) => !c.portfolioId).length,
+      productLines: [...lines.values()]
+        .map((l) => ({
+          id: l.id, sku: l.sku, name: l.name,
+          variations: l.children.length,
+          campaigns: [...l.campaigns],
+          children: l.children.sort((a, b) => a.sku.localeCompare(b.sku)),
+        }))
+        .sort((a, b) => b.campaigns.length - a.campaigns.length),
+      /**
+       * Advertised ad rows with no `productId` at all — they cannot be named by any picker. The
+       * fix is running the existing Amazon import; stated so the count is visible rather than
+       * being silently absent from the list.
+       */
+      unnamedAdRows: await prisma.adProductAd.count({ where: { productId: null } }),
+    }
   })
 
   fastify.patch('/advertising/autonomy/rules/:id', async (request, reply) => {

@@ -76,3 +76,91 @@ describe('contextIdentity', () => {
       .toEqual({ marketplace: 'DE', campaignId: null, portfolioId: null })
   })
 })
+
+// ── RA.GRAIN — the product grain, and composition ─────────────────────────────────────────
+describe('ruleMatchesScope — product grain', () => {
+  const line = { ...unscoped, scopeProductIds: ['parent', 'childA', 'childB'] }
+
+  it('fires when the context advertises any product in the scope', () => {
+    expect(ruleMatchesScope(line, { marketplace: 'IT', campaignId: 'c1', portfolioId: null, productIds: ['childA'] })).toBe(true)
+    expect(ruleMatchesScope(line, { marketplace: 'IT', campaignId: 'c1', portfolioId: null, productIds: ['zzz', 'childB'] })).toBe(true)
+  })
+
+  it('does not fire when the context advertises none of them', () => {
+    expect(ruleMatchesScope(line, { marketplace: 'IT', campaignId: 'c1', portfolioId: null, productIds: ['other'] })).toBe(false)
+  })
+
+  it('does NOT fire on a context with no product identity', () => {
+    // An FBA-age or account-level context knows of no products. "Only this product's events"
+    // cannot honestly match one that belongs to no product — the same rule campaign- and
+    // portfolio-scoped rules already follow, not a new exception.
+    expect(ruleMatchesScope(line, { marketplace: 'IT', campaignId: null, portfolioId: null, productIds: [] })).toBe(false)
+    expect(ruleMatchesScope(line, { marketplace: 'IT', campaignId: 'c1', portfolioId: null })).toBe(false)
+  })
+
+  it('an EMPTY scope array is not a scope — it must not silence the rule', () => {
+    // The expansion returning nothing (a deleted product, say) must not turn into "matches
+    // everything" NOR into "matches nothing without saying so". Empty means unscoped here; the
+    // reach line is what tells the operator the binding resolves to zero campaigns.
+    const empty = { ...unscoped, scopeProductIds: [] }
+    expect(ruleMatchesScope(empty, { marketplace: 'IT', campaignId: 'c1', portfolioId: null, productIds: [] })).toBe(true)
+  })
+
+  it('every existing caller keeps working without the new fields', () => {
+    expect(ruleMatchesScope(unscoped, { marketplace: 'IT', campaignId: 'c1', portfolioId: null })).toBe(true)
+  })
+})
+
+describe('ruleMatchesScope — dimensions AND together', () => {
+  it('market + product: the case that earns composition', () => {
+    // Measured on prod: 106 of 250 advertised ASINs span >1 market, and the GALE line runs in all
+    // four (IT 32 · DE 22 · FR 14 · ES 9). "GALE in DE only" is a real scope.
+    const galeInDe = { ...unscoped, scopeMarketplace: 'DE', scopeProductIds: ['gale', 'gale-m'] }
+    expect(ruleMatchesScope(galeInDe, { marketplace: 'DE', campaignId: 'c1', portfolioId: null, productIds: ['gale-m'] })).toBe(true)
+    // Right product, wrong market — the whole point of composing.
+    expect(ruleMatchesScope(galeInDe, { marketplace: 'IT', campaignId: 'c2', portfolioId: null, productIds: ['gale-m'] })).toBe(false)
+    // Right market, wrong product.
+    expect(ruleMatchesScope(galeInDe, { marketplace: 'DE', campaignId: 'c3', portfolioId: null, productIds: ['moss'] })).toBe(false)
+  })
+
+  it('a contradictory combination matches nothing, which is why the route refuses to store one', () => {
+    const impossible = { ...unscoped, scopeMarketplace: 'DE', scopeCampaignId: 'it-campaign' }
+    expect(ruleMatchesScope(impossible, { marketplace: 'IT', campaignId: 'it-campaign', portfolioId: null })).toBe(false)
+    expect(ruleMatchesScope(impossible, { marketplace: 'DE', campaignId: 'it-campaign', portfolioId: null })).toBe(true)
+  })
+})
+
+describe('contextIdentity — product resolution', () => {
+  const ext = new Map<string, string>()
+  const pf = new Map<string, string | null>([['c1', 'ext-gale']])
+
+  it('resolves products at AD-GROUP grain when the context has one', () => {
+    // A target-grain context carries adGroup: { id }. An ad group advertises far fewer products
+    // than its campaign, so resolving there makes a product-scoped rule genuinely narrower.
+    const byAdGroup = new Map([['ag1', ['childA']]])
+    const byCampaign = new Map([['c1', ['childA', 'childB', 'childC']]])
+    const id = contextIdentity({ marketplace: 'IT', campaign: { id: 'c1' }, adGroup: { id: 'ag1' } }, ext, pf, byAdGroup, byCampaign)
+    expect(id.productIds).toEqual(['childA'])
+  })
+
+  it('falls back to CAMPAIGN grain when there is no ad group', () => {
+    const byCampaign = new Map([['c1', ['childA', 'childB']]])
+    const id = contextIdentity({ marketplace: 'IT', campaign: { id: 'c1' } }, ext, pf, new Map(), byCampaign)
+    expect(id.productIds).toEqual(['childA', 'childB'])
+  })
+
+  it('is empty for a context with no campaign identity at all', () => {
+    const id = contextIdentity({ marketplace: 'IT' }, ext, pf, new Map(), new Map([['c1', ['x']]]))
+    expect(id.productIds).toEqual([])
+    expect(id.campaignId).toBeNull()
+  })
+
+  it('costs nothing when no rule is product-scoped — and says so by OMITTING the key', () => {
+    // Absent means "nothing asked, nothing resolved"; [] means "resolved, advertises nothing".
+    // Collapsing the two would also have changed the returned shape for every pre-existing caller.
+    const id = contextIdentity({ marketplace: 'IT', campaign: { id: 'c1' } }, ext, pf)
+    expect(id.productIds).toBeUndefined()
+    expect('productIds' in id).toBe(false)
+    expect(id.portfolioId).toBe('ext-gale')
+  })
+})

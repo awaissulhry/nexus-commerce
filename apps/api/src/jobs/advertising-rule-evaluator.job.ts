@@ -413,9 +413,49 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
    */
   const rules = await prisma.automationRule.findMany({
     where: { domain: 'advertising', trigger, enabled: true },
-    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true },
+    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true },
   })
   if (rules.length === 0) return { evaluations, matches, capped, failed }
+
+  /**
+   * RA.GRAIN — product scope, resolved once per trigger and only when some rule asks for it.
+   *
+   * The column holds one `Product.id`, which may be a PARENT — a whole product line. Expanding a
+   * parent to its children is a database read, and `ruleMatchesScope` is pure, so the expansion
+   * happens here and the matcher receives ids. Measured: the 13 parents in this account expand to
+   * 18–49 children each, and the widest line (GALE) reaches 77 of 220 campaigns across 4 markets.
+   *
+   * Every map below is built ONLY when a product-scoped rule exists for this trigger, so an
+   * account that never uses the grain pays nothing for it.
+   */
+  const productScoped = rules.filter((r) => r.scopeProductId != null)
+  const expandedByRule = new Map<string, string[]>()
+  const productsByAdGroup = new Map<string, string[]>()
+  const productsByCampaign = new Map<string, string[]>()
+  if (productScoped.length > 0) {
+    const { expandProductScope } = await import('../services/advertising/ads-scope-reach.js')
+    const wanted = new Set<string>()
+    for (const r of productScoped) {
+      const ids = await expandProductScope(r.scopeProductId!)
+      expandedByRule.set(r.id, ids)
+      for (const p of ids) wanted.add(p)
+    }
+    // Only the ad-product rows for products some rule actually cares about — not all 4,485.
+    const ads = await prisma.adProductAd.findMany({
+      where: { productId: { in: [...wanted] } },
+      select: { productId: true, adGroupId: true, adGroup: { select: { campaignId: true } } },
+    })
+    for (const a of ads) {
+      if (!a.productId) continue
+      const ag = productsByAdGroup.get(a.adGroupId) ?? []
+      if (!ag.includes(a.productId)) { ag.push(a.productId); productsByAdGroup.set(a.adGroupId, ag) }
+      const cid = a.adGroup?.campaignId
+      if (cid) {
+        const cp = productsByCampaign.get(cid) ?? []
+        if (!cp.includes(a.productId)) { cp.push(a.productId); productsByCampaign.set(cid, cp) }
+      }
+    }
+  }
 
   // Identity maps, only if any rule actually scopes below marketplace level.
   const needsCampaignIdentity = rules.some((r) => r.scopePortfolioId != null || r.scopeCampaignId != null)
@@ -443,8 +483,10 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   }
 
   for (const ctx of contexts) {
-    const identity = contextIdentity(ctx, extToLocal, localToPortfolio)
-    const applicable = rules.filter((r) => ruleMatchesScope(r, identity))
+    const identity = contextIdentity(ctx, extToLocal, localToPortfolio, productsByAdGroup, productsByCampaign)
+    // Each rule is matched with its OWN expanded product set — a per-rule value, so it cannot be
+    // hoisted out of this filter the way the shared identity maps can.
+    const applicable = rules.filter((r) => ruleMatchesScope({ ...r, scopeProductIds: expandedByRule.get(r.id) ?? null }, identity))
     if (applicable.length === 0) continue
     const results = await evaluateAllRulesForTrigger({
       domain: 'advertising',
@@ -1124,7 +1166,7 @@ export async function simulateOneRule(ruleId: string): Promise<{
     where: { id: ruleId },
     select: {
       id: true, name: true, domain: true, trigger: true, enabled: true,
-      scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true,
+      scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return { ok: false, error: 'not_found' }
@@ -1202,7 +1244,36 @@ export async function simulateOneRule(ruleId: string): Promise<{
     }
   }
 
-  const inScope = contexts.filter((ctx) => ruleMatchesScope(rule, contextIdentity(ctx, extToLocal, localToPortfolio)))
+  /**
+   * RA.GRAIN — a simulation must honour the product grain too, or it reports a reach the real
+   * tick would not produce. Same expansion as `applyMarketplaceScope`, for one rule.
+   */
+  let expandedProductIds: string[] | null = null
+  const simProductsByAdGroup = new Map<string, string[]>()
+  const simProductsByCampaign = new Map<string, string[]>()
+  if (rule.scopeProductId) {
+    const { expandProductScope } = await import('../services/advertising/ads-scope-reach.js')
+    expandedProductIds = await expandProductScope(rule.scopeProductId)
+    const ads = await prisma.adProductAd.findMany({
+      where: { productId: { in: expandedProductIds } },
+      select: { productId: true, adGroupId: true, adGroup: { select: { campaignId: true } } },
+    })
+    for (const a of ads) {
+      if (!a.productId) continue
+      const ag = simProductsByAdGroup.get(a.adGroupId) ?? []
+      if (!ag.includes(a.productId)) { ag.push(a.productId); simProductsByAdGroup.set(a.adGroupId, ag) }
+      const cid = a.adGroup?.campaignId
+      if (cid) {
+        const cp = simProductsByCampaign.get(cid) ?? []
+        if (!cp.includes(a.productId)) { cp.push(a.productId); simProductsByCampaign.set(cid, cp) }
+      }
+    }
+  }
+
+  const inScope = contexts.filter((ctx) => ruleMatchesScope(
+    { ...rule, scopeProductIds: expandedProductIds },
+    contextIdentity(ctx, extToLocal, localToPortfolio, simProductsByAdGroup, simProductsByCampaign),
+  ))
 
   /**
    * Register the ads action handlers before evaluating, because nothing else here guarantees it.

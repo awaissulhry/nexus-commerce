@@ -12788,6 +12788,19 @@ model AutomationRule {
   /// Campaign.portfolioId; scopeCampaignId holds the local Campaign.id.
   scopePortfolioId        String?
   scopeCampaignId         String?
+  /// RA.GRAIN — the fourth grain: a `Product.id`, either a PARENT (the whole product line) or one
+  /// child variation. Not a FK on purpose: deleting a product must not cascade a rule away, and a
+  /// dangling id resolves to zero campaigns, which the reach line states honestly.
+  ///
+  /// The line grain needed no new entity. `Product.parentId` (self-relation `ProductHierarchy`)
+  /// already models it, and measured on prod 2026-08-10 all 223 advertised products are children
+  /// of exactly 13 parents — GALE-JACKET 18 children / 77 campaigns / 4 markets, and so on. Do NOT
+  /// reach for `ProductVariation` (0 rows) or `ProductFamily` (0 rows, and an Akeneo-style
+  /// attribute template rather than a line).
+  ///
+  /// Scope stays an AND of dimensions. market × product is the pairing that earns its place:
+  /// 106 of 250 advertised ASINs span more than one market, so "GALE in DE only" is a real scope.
+  scopeProductId          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

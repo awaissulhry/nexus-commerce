@@ -25,6 +25,18 @@ export interface RuleScope {
   scopeMarketplace: string | null
   scopePortfolioId: string | null
   scopeCampaignId: string | null
+  /**
+   * RA.GRAIN — the product grain, ALREADY EXPANDED by the caller.
+   *
+   * The column stores one `Product.id`, which may be a parent (a whole product line). Expanding
+   * a parent to its children needs the database, and this function is pure — so the caller
+   * expands once per tick and passes the resulting ids here. Empty or absent = not product-scoped.
+   *
+   * Deliberately a set of ids rather than the raw column: it keeps the matcher a plain
+   * intersection, and it means the parent-vs-child distinction is resolved in exactly one place
+   * instead of being re-derived at every comparison.
+   */
+  scopeProductIds?: string[] | null
 }
 
 export interface ContextIdentity {
@@ -33,12 +45,29 @@ export interface ContextIdentity {
   campaignId: string | null
   /** External portfolio id the campaign belongs to, when known. */
   portfolioId: string | null
+  /**
+   * RA.GRAIN — `Product.id`s this context advertises. Resolved at the finest grain the context
+   * offers: an ad-group-grain context (a target, say) resolves to that ad group's products; a
+   * campaign-grain context resolves to the whole campaign's. Empty for contexts with no campaign
+   * identity at all, which is why a product-scoped rule does not fire on them — the same rule
+   * campaign- and portfolio-scoped rules already follow.
+   */
+  productIds?: string[]
 }
 
 export function ruleMatchesScope(rule: RuleScope, ctx: ContextIdentity): boolean {
   if (rule.scopeMarketplace != null && rule.scopeMarketplace !== ctx.marketplace) return false
   if (rule.scopeCampaignId != null && rule.scopeCampaignId !== ctx.campaignId) return false
   if (rule.scopePortfolioId != null && rule.scopePortfolioId !== ctx.portfolioId) return false
+  // Product: the context must advertise at least one of the scoped products. A context that
+  // knows of no products cannot satisfy "only this product's events", so it does not match —
+  // consistent with the campaign/portfolio rule above rather than a new exception.
+  if (rule.scopeProductIds != null && rule.scopeProductIds.length > 0) {
+    const want = rule.scopeProductIds
+    const have = ctx.productIds
+    if (!have || have.length === 0) return false
+    if (!have.some((p) => want.includes(p))) return false
+  }
   return true
 }
 
@@ -52,19 +81,44 @@ export function contextIdentity(
   ctx: unknown,
   extToLocal: Map<string, string>,
   localToPortfolio: Map<string, string | null>,
+  /**
+   * RA.GRAIN — product lookups, supplied only when some rule is product-scoped. Both are
+   * optional so every existing caller keeps working unchanged and pays nothing when no rule
+   * uses the grain.
+   */
+  productsByAdGroup?: Map<string, string[]>,
+  productsByCampaign?: Map<string, string[]>,
 ): ContextIdentity {
   const c = ctx as {
     marketplace?: string | null
     campaign?: { id?: string | null }
+    adGroup?: { id?: string | null }
     searchTerm?: { externalCampaignId?: string | null }
   }
   let campaignId: string | null = c.campaign?.id ?? null
   if (!campaignId && c.searchTerm?.externalCampaignId) {
     campaignId = extToLocal.get(c.searchTerm.externalCampaignId) ?? null
   }
-  return {
+  // Finest grain first. A target-grain context carries `adGroup: { id }` (see
+  // UnderperformContext), and an ad group advertises far fewer products than its campaign — so
+  // resolving there makes a product-scoped rule genuinely narrower rather than campaign-wide.
+  let productIds: string[] | undefined
+  const adGroupId = c.adGroup?.id ?? null
+  if (adGroupId && productsByAdGroup) productIds = productsByAdGroup.get(adGroupId)
+  if (!productIds && campaignId && productsByCampaign) productIds = productsByCampaign.get(campaignId)
+
+  const base = {
     marketplace: c.marketplace ?? null,
     campaignId,
     portfolioId: campaignId ? (localToPortfolio.get(campaignId) ?? null) : null,
   }
+  /**
+   * `productIds` is present only when a lookup was actually attempted, and the distinction is
+   * deliberate: ABSENT means "no rule asked, so nothing was resolved", while `[]` means "resolved,
+   * and this context advertises nothing". Emitting `[]` unconditionally would collapse those two
+   * into one and would silently change the returned shape for every caller that predates this
+   * grain — three existing tests pin that shape, and they were right to.
+   */
+  const attempted = !!productsByAdGroup || !!productsByCampaign
+  return attempted ? { ...base, productIds: productIds ?? [] } : base
 }

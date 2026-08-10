@@ -64,8 +64,14 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/routes/advertising.routes.ts` | RA.AUTO (`GET /autonomy/rules`, additive fields only) | 2026-08-10 | **released** |
 | `…/rules-automation/_shared/tabs.tsx` | RA.AUTO (one additive tab entry) | 2026-08-10 | **released** |
 | `…/rules-automation/rules-automation.css` | RA.AUTO (Automations page) | 2026-08-10 | **released** — appended at EOF only |
+| `apps/api/src/routes/advertising.routes.ts` | RA.GRAIN (scope route + `GET /advertising/scope-options`) | 2026-08-10 | **released** |
+| `apps/api/src/services/automation-rule-scope.ts` | RA.GRAIN (product grain) | 2026-08-10 | **released** — see §3 row 11 |
+| `apps/api/src/jobs/advertising-rule-evaluator.job.ts` | RA.GRAIN (product identity resolution) | 2026-08-10 | **released** |
+| `packages/database/prisma/schema.prisma` | RA.GRAIN (`scopeProductId`, additive) | 2026-08-10 | **released** |
+| `…/rules-automation/rules-automation.css` | RA.GRAIN (scope form, `h10-au-*` at EOF) | 2026-08-10 | **released** — appended at EOF only |
 
-*(The scope bar has shipped. RA.AUTO holds §3 rows 1, 2 and 6 — all additive.)*
+*(The scope bar has shipped. RA.AUTO held §3 rows 1, 2 and 6 — all additive. RA.GRAIN holds
+rows 2, 6, 10, 11 and the evaluator; all additive, all released.)*
 
 **`AdsPageHeader` note for other sessions:** it gained a `showMarket?: boolean`
 prop, defaulted `true`. Every page that does not pass it renders byte-identically;
@@ -88,6 +94,7 @@ only Rules & Automation passes `false`, because market lives in its scope bar.
 | 8 | `apps/api/src/services/advertising/ads-autonomy.ts` | `resolveAutonomy` — the mode contract |
 | 9 | `apps/web/src/app/marketing/ads/_shared/AutomationDock.tsx` | reads/writes the same rules as page 4 |
 | 10 | `packages/database/prisma/schema.prisma` | every migration |
+| 11 | `apps/api/src/services/automation-rule-scope.ts` | `ruleMatchesScope` — the one answer to "does this rule apply here". Added to this list by RA.GRAIN: the generic name suggests app-wide, but `grep -a` finds exactly ONE importer (`advertising-rule-evaluator.job.ts`) plus its own test, so it is advertising-only in practice — and load-bearing for all four grains |
 
 **Also shared, and currently owned by another programme:** everything under `apps/web/src/app/fleet/*`
 and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them; the RA pages link to
