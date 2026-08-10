@@ -90,7 +90,13 @@ export function MapClient() {
     if (mode === 'entities' && entity == null && !entityLoading) void loadEntities()
   }, [mode, entity, entityLoading, loadEntities])
 
+  /** The window the most recent request was actually FOR — see the refetch
+   *  effect below. Set here rather than in the effect, because a `refresh()`
+   *  can be swallowed and must not be recorded as if it happened. */
+  const loadedWindow = useRef<string | null>(null)
+
   const load = useCallback(async () => {
+    loadedWindow.current = windowKey
     const r = await fetch(`${backend}/api/agent/fleet/map?window=${windowKey}`, {
       cache: 'no-store',
     })
@@ -151,16 +157,28 @@ export function MapClient() {
    *
    * ⚠ `refresh` is `() => void tick()`, a NEW FUNCTION EVERY RENDER, so putting
    * it in the dependency array would run this effect on every render and fetch
-   * in a loop. It is held in a ref and the effect depends on `windowKey` alone.
+   * in a loop. It is held in a ref.
+   *
+   * ⚠⚠ S5.b2 — AND `tick()` OPENS WITH `if (inFlight.current) return`, WHICH
+   * SILENTLY SWALLOWS THIS. Verified on prod: the click case worked (clicking
+   * "30 days" fetched 30d, where it had fetched nothing) and the DEEP LINK
+   * still did not, because on mount the poll's own first tick is already in
+   * flight when the URL effect changes the window — so the refresh is dropped
+   * and nothing retries it.
+   *
+   * Hence `asOf` in the deps: it changes whenever a load COMPLETES, which is
+   * exactly when a swallowed refresh becomes possible again. And the comparison
+   * is against `loadedWindow` — the window a request was actually made for —
+   * rather than a flag set optimistically here, because marking a refresh as
+   * done when it was swallowed is what loses it. It converges: once the fetch
+   * for the current window completes, the two agree and the effect stops.
    */
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
-  const fetchedWindow = useRef(windowKey)
   useEffect(() => {
-    if (fetchedWindow.current === windowKey) return
-    fetchedWindow.current = windowKey
+    if (loadedWindow.current === windowKey) return
     refreshRef.current()
-  }, [windowKey])
+  }, [windowKey, asOf])
 
   const nodes = data?.nodes ?? []
 
