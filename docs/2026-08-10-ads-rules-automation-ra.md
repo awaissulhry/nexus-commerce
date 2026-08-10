@@ -2,7 +2,7 @@
 
 **Date opened:** 2026-08-10
 **Surface:** `/marketing/ads/rules-automation/*`
-**Status:** section map agreed — **six pages, one scope bar**. No section study started.
+**Status:** section map agreed — **six pages, one scope bar**. The **scope bar has shipped** (§3.5). No page rebuilt yet; Automations is next.
 **Read before touching anything under `/marketing/ads/rules-automation` or `/marketing/ads-console/automation`.**
 
 Companions — read, do not re-derive:
@@ -257,6 +257,50 @@ portfolio when a campaign is set and vice versa. That is coherent, but it means 
 only in DE" is not expressible in one call today. Decide in the 4.2 study whether scope is one
 choice or an AND of dimensions; do not let the UI imply the latter while the API does the former.
 
+### 3.5 🔴 SHIPPED 2026-08-10 — and the two-vocabularies trap it walked into
+
+`_shared/ads-scope.ts` + `_shared/ScopeBar.tsx`, 16 tests. The bar is live on the index page:
+market · scope (+ target) · dates · **a visible line saying what that reaches**.
+
+**The trap, found while wiring and worth the whole section:** `_shell/DateRangePicker.tsx` exports
+its own `DATE_PRESETS`, and they are a **different vocabulary** from `ads-core/date-range.ts`'s
+`RangePreset`, which is what the API actually resolves.
+
+| picker | server |
+|---|---|
+| `today` `yesterday` | `today` `yesterday` |
+| `latest7` `latest30` `latest60` | `last7` `last14` `last30` `last90` |
+| `thisWeek` `thisMonth` `thisQuarter` | `wtd` `mtd` `qtd` |
+| `lastWeek` `lastMonth` `lastQuarter` | `last_month` `ytd` `last_year` |
+| `last3m` `last12m` `last18m` `last24m` | `lifetime` `custom` `window` |
+
+**Only `today` and `yesterday` exist in both.** `resolveRange`'s `default:` branch falls back to
+`windowDays` (**7**) for anything it does not recognise — *silently*. Forwarding the picker's key
+would have returned **seven days of data under a "Last 30 days" label**, and the same for
+"Last 12 Months". Two more mismatches hide inside the names that look shared: the picker's
+`thisWeek` starts **Sunday**, the server's `wtd` starts **Monday (ISO)**; and the picker computes in
+**browser-local** time while the server anchors to **Europe/Rome**, because the daily fact tables
+are Rome calendar days stored at UTC midnight.
+
+This is the **fifth** two-vocabularies defect in this programme, after `EXACT`/`_EXACT`, the
+rule-tab filter word, `expressionType` vs `isNegative`, and the ToS-IS `location` key.
+
+**The law, so it is not rediscovered a sixth time:** *the server owns the date vocabulary. The
+client sends a key the server understands and never its own computed dates for a preset. Resolved
+dates for display come back in the response's `range` echo — which
+`GET /advertising/campaigns` already returns as `{ startDate, endDate, preset }` — and are never
+recomputed on the client.* A `custom` range is the one case the client supplies dates, which is
+exactly the case `resolveRange` accepts them for.
+
+**Still open from this unit:** `GET /advertising/campaigns` accepts marketplace/status/search/limit
++ the date params, and **ignores `scopeGrain`/`scopeId`**. `scopeToQuery` sends them anyway (never
+silently dropped), and the index narrows by grain client-side meanwhile — otherwise choosing a
+portfolio would leave all 220 campaigns on screen under a "72 of 220" reach line, the surface
+contradicting its own label. Teaching the endpoint the grain is the next server-side unit.
+
+**Also note:** `DateRangePicker`'s presets remain wrong for any caller that forwards them to the
+API. This unit contained the problem for Rules & Automation; it did not fix the picker.
+
 ---
 
 ## Part 4 — The section: six pages
@@ -507,16 +551,18 @@ Not blocking; answer when each study reaches them.
 | item | status |
 |---|---|
 | Section map agreed — 6 pages, 1 scope bar | ✅ 2026-08-10 |
-| Scope bar spec (Part 3) | 🔴 open — **build first** |
+| Scope bar spec (Part 3) | ✅ **SHIPPED 2026-08-10** — `_shared/ads-scope.ts` + `ScopeBar.tsx`, 16 tests |
 | **Portfolio scope reaches only 72/220 campaigns (33%)** (§3.4) | 🔴 open — state the reach in the UI |
 | **Market scope is enforced but not settable** by the scope route (§3.4) | 🔴 open — add `scopeMarketplace` |
 | **Product-line scope does not exist** — schema + evaluator + UI (§3.4) | 🔴 open — largest grain item |
 | One ASIN can reach **76 campaigns** (§3.4) | 🔴 open — blast radius before every action |
+| **🔴 The picker and the server use DIFFERENT date vocabularies** (§3.5) | ✅ contained — the bar uses the server's keys; `DateRangePicker`'s remain wrong for any caller that forwards them |
+| `GET /advertising/campaigns` ignores `scopeGrain`/`scopeId` (§3.5) | 🔴 open — grain is narrowed client-side meanwhile |
 | Scope is mutually exclusive; "this portfolio in DE" needs 2 calls (§3.4) | 🔴 open — decide in the 4.2 study |
 | `dryRun` mode control is inert (Part 2) | 🔴 open — fix in the Automations build |
-| Date picker disabled + range never sent (1.6) | 🔴 open — wiring |
-| `AdsPageHeader` ignores `AdsMarketplaceProvider` (1.6) | 🔴 open — wiring |
-| Portfolio filter labels are raw IDs (1.6) | 🔴 open — one line |
+| Date picker disabled + range never sent (1.6) | ✅ fixed — the bar sends `?preset=` on the server's vocabulary |
+| `AdsPageHeader` ignores `AdsMarketplaceProvider` (1.6) | ✅ fixed for this section — the bar reads the provider; `showMarket={false}` retires the duplicate picker |
+| Portfolio filter labels are raw IDs (1.6) | ✅ fixed — names from `/advertising/portfolios` |
 | No product-grain surface anywhere in `/marketing/ads` (1.6) | 🔴 open — the one real build |
 | 3 decorative columns on Apply Rules (1.4) | 🔴 open — delete |
 | `placeholderSeeds.ts` / `ComingSoon` dead (1.5) | 🔴 open — delete |

@@ -32,8 +32,15 @@ across the ten `/fleet` pages — read that file's §6 before your first commit.
 | `docs/2026-08-10-ads-rules-automation-ra.md` | RA.0 (planning) | 2026-08-10 | **released** |
 | `docs/2026-08-10-ra-session-locks.md` | RA.0 (planning) | 2026-08-10 | **released** |
 | `apps/web/src/app/_shared/AppRail.tsx` | RA.0 (rail active-state fix) | 2026-08-10 | **released** |
+| `…/rules-automation/rules-automation.css` | RA.SB (scope bar) | 2026-08-10 | **released** — appended at EOF only |
+| `…/rules-automation/RulesAutomationClient.tsx` | RA.SB (scope bar) | 2026-08-10 | **released** |
+| `…/marketing/ads/_shell/AdsPageHeader.tsx` | RA.SB (`showMarket`, additive) | 2026-08-10 | **released** |
 
-*(No page build has started. The first Automations session claims §3 rows 1–4.)*
+*(The scope bar has shipped. The first Automations session claims §3 rows 1–4.)*
+
+**`AdsPageHeader` note for other sessions:** it gained a `showMarket?: boolean`
+prop, defaulted `true`. Every page that does not pass it renders byte-identically;
+only Rules & Automation passes `false`, because market lives in its scope bar.
 
 ---
 

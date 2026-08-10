@@ -1184,3 +1184,54 @@
 .h10-imp-warn { display: flex; align-items: flex-start; gap: 7px; width: 100%; margin-top: 2px; padding: 8px 11px; border-radius: 8px; background: #fdeaea; color: #a02c2c; font-size: 11.5px; line-height: 1.5; }
 .h10-imp-warn svg { flex-shrink: 0; margin-top: 1px; }
 .h10-imp-warn b { color: #8a2020; }
+
+/* ══ RA.SB — the section scope bar ═══════════════════════════════════════════
+   One row: market · scope (+ target) · dates · what that reaches.
+
+   Appended at the END of this file on purpose. Source order beats specificity
+   here, and three earlier blocks in this stylesheet already style `select` and
+   label-ish spans; anything declared above could otherwise win over these.
+
+   Colours are the console's hard-coded light palette (#1c2530 ink, #8a93a1
+   muted, #1f6fde accent), NOT tokens — `.h10-shell` pins this subtree
+   `color-scheme: light`, so a token that flips in dark mode would render a dark
+   control inside a permanently light shell. */
+.ra-scopebar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 16px; margin: 0 0 2px;
+  background: #f8fafc; border: 1px solid #e6e9ee; border-radius: 10px;
+}
+.ra-scope-fld { display: inline-flex; align-items: center; gap: 7px; }
+.ra-scope-lbl {
+  font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+  font-weight: 800; color: #8a93a1; white-space: nowrap;
+}
+.ra-scope-sel {
+  height: 30px; max-width: 230px; padding: 0 26px 0 9px;
+  border: 1px solid #d8dde4; border-radius: 7px; background: #fff;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: #1c2530;
+  cursor: pointer; text-overflow: ellipsis;
+  /* Native chevron kept — this is a plain select and should look like one, so
+     keyboard and screen-reader behaviour is the platform's, not a re-implementation. */
+}
+.ra-scope-sel.wide { max-width: 320px; }
+.ra-scope-sel:focus-visible { outline: 2px solid #1f6fde; outline-offset: 1px; }
+.ra-scope-sel:disabled { background: #f1f4f8; color: #8a93a1; cursor: not-allowed; }
+.ra-scope-sel option:disabled { color: #9aa3b0; }
+
+/* The reach line. Visible text, never a tooltip: portfolio scope reaches 72 of
+   220 campaigns on prod, and an operator must not have to hover to find that out
+   before acting through it. */
+.ra-scope-reach {
+  margin-left: auto; font-size: 11.5px; font-weight: 600; color: #5b6573;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ra-scope-note {
+  flex-basis: 100%; font-size: 11.5px; color: #8a93a1; line-height: 1.5;
+}
+
+/* Narrow viewports: the reach line stops being pushed to the far right, where it
+   would sit a full row away from the control it describes. */
+@media (max-width: 900px) {
+  .ra-scope-reach { margin-left: 0; flex-basis: 100%; white-space: normal; }
+}

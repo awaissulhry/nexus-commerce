@@ -25,6 +25,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { RuleTypeModal } from './_shared/RuleTypeModal'
 import { NoDataIllus } from './_shared/NoDataIllus'
 import { RulesTabs, rulesTabByKey, RULES_TABS } from './_shared/tabs'
+import { ScopeBar } from './_shared/ScopeBar'
+import { useAdsScope } from './_shared/ads-scope'
 import { RuleImpactStrip } from './RuleImpactStrip'
 import { RuleListTab } from './tabs/RuleListTab'
 import { ProtectedTermsPanel } from './ProtectedTermsPanel'
@@ -90,25 +92,69 @@ export function RulesAutomationClient() {
   const sp = useSearchParams()
   const requested = sp.get('tab') ?? 'rules'
   const tab = rulesTabByKey(requested) && !rulesTabByKey(requested)?.routed ? requested : 'rules'
-  const [market, setMarket] = useState('all')
+  // RA.SB — market and date range come from the section scope (the URL), not from
+  // local state seeded by whichever campaigns happened to load. `query` already
+  // carries the server's own parameter names, so the range is resolved by
+  // `resolveRange` in Europe/Rome rather than by this component's clock.
+  const { scope, query: scopeQuery, key: scopeKeyVal } = useAdsScope()
   const [sel, setSel] = useState<Set<string>>(new Set())
+  /** externalPortfolioId → name, so the Portfolio filter can show words. */
+  const [portfolioNames, setPortfolioNames] = useState<Record<string, string>>({})
   const [showRuleType, setShowRuleType] = useState(false)
   // selection-bar bulk popovers (Automation menu / Target ACoS / Min-Max Bid)
   const [bulkPop, setBulkPop] = useState<{ kind: 'automation' | 'targetAcos' | 'minMaxBid'; x: number; y: number } | null>(null)
   const [bulkDraft, setBulkDraft] = useState({ acos: '30', min: '', max: '' })
 
   const load = useCallback(async () => {
+    setLoading(true)
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`, { cache: 'no-store' })
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500&${scopeQuery}`, { cache: 'no-store' })
       const d = await r.json()
       setRows((d.items ?? []) as Camp[])
     } catch { /* ignore */ } finally { setLoading(false) }
-  }, [])
+    // scopeKeyVal is the dependency: it changes exactly when the scope does, and
+    // never when an unrelated URL param (?tab=) does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeKeyVal])
   useEffect(() => { void load() }, [load])
 
-  const markets = useMemo(() => Array.from(new Set(rows.map((c) => c.marketplace).filter(Boolean))) as string[], [rows])
-  const portfolioOpts = useMemo(() => Array.from(new Set(rows.map((c) => c.portfolioId).filter(Boolean))).map((p) => ({ value: String(p), label: String(p) })), [rows])
-  const visible = useMemo(() => (market === 'all' ? rows : rows.filter((c) => c.marketplace === market)), [rows, market])
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const j = await fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' }).then((r) => r.json())
+        const items = (Array.isArray(j?.items) ? j.items : []) as Array<{ portfolioId: string; name: string }>
+        if (alive) setPortfolioNames(Object.fromEntries(items.map((p) => [p.portfolioId, p.name])))
+      } catch { /* the filter falls back to ids rather than losing the option */ }
+    })()
+    return () => { alive = false }
+  }, [])
+
+  // RA.SB — market is filtered by the SERVER (`?marketplace=`), so the rows that
+  // arrive are already the chosen market's.
+  //
+  // Grain is narrowed HERE for now, deliberately and visibly: `scopeToQuery`
+  // does send `scopeGrain`/`scopeId`, but `GET /advertising/campaigns` accepts
+  // only marketplace/status/search/limit + the date params, so it ignores them.
+  // Narrowing client-side keeps the grid honest against the bar until the
+  // endpoint learns the grain; without it, choosing a portfolio would leave all
+  // 220 campaigns on screen under a "72 of 220" reach line — the surface
+  // contradicting its own label.
+  const visible = useMemo(() => {
+    if (scope.grain === 'campaign' && scope.id) return rows.filter((c) => c.id === scope.id)
+    if (scope.grain === 'portfolio' && scope.id) return rows.filter((c) => String(c.portfolioId ?? '') === scope.id)
+    return rows
+  }, [rows, scope.grain, scope.id])
+  // Portfolio filter options carry NAMES. This list used to be
+  // `label: String(portfolioId)` — twelve opaque Amazon ids in a dropdown an
+  // operator was expected to choose from.
+  const portfolioOpts = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const c of rows) {
+      if (c.portfolioId) seen.set(String(c.portfolioId), portfolioNames[String(c.portfolioId)] ?? String(c.portfolioId))
+    }
+    return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [rows, portfolioNames])
 
   // optimistic per-campaign update + persist (UI-only fields stay local)
   const patchLocal = (id: string, patch: Partial<Camp>) => setRows((rs) => rs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
@@ -254,14 +300,19 @@ export function RulesAutomationClient() {
       <AdsPageHeader
         title="Rules & Automation"
         subtitle={activeTab.subtitle ?? 'Create and manage rules for all of your campaigns'}
-        markets={markets}
-        market={market}
-        onMarketChange={setMarket}
+        // RA.SB — market, scope and dates all live in the ScopeBar below, so the
+        // header's own market picker is off here: one control per question.
+        markets={[]}
+        market={scope.market}
+        onMarketChange={() => {}}
         showLearn={false}
         showDataSync={false}
         showDateRange={false}
+        showMarket={false}
         primaryAction={{ label: 'Rule', icon: <Plus size={15} />, onClick: () => setShowRuleType(true) }}
       />
+
+      <ScopeBar />
 
       <RulesTabs active={tab} />
 
