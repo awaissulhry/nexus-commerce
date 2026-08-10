@@ -160,10 +160,27 @@ export function EntityListView({
         initialSort={{ key: 'links', dir: 'asc' }}
         emptyState="No relationships worked out yet."
       />
+      {/* S6.g — this sentence used to say "the fleet derived N of them" in every
+          case. Forced `truncated: true` on production and the screen contradicted
+          itself: the band said "Capped, so it shows the strongest links first"
+          while this footer presented the same 40 rows as the whole set. That is
+          the defect S6.a fixed one phase earlier — a surface stating a fact it is
+          not showing — reintroduced by the surface I added to replace it. */}
       <p className="sbm-listfoot">
-        One row per relationship the fleet derived — {graph.edges.length} of them, across{' '}
-        {graph.nodes.length} campaigns. <b>Worked out from</b> is the search term the fleet saw
-        them both bidding on. Nothing here changes anything; the workers read these directly.
+        {graph.truncated ? (
+          <>
+            The strongest {graph.edges.length} relationships, across {graph.nodes.length} campaigns
+            — the fleet worked out more than this view carries. Open one campaign to see everything
+            around it.
+          </>
+        ) : (
+          <>
+            One row per relationship the fleet derived — {graph.edges.length} of them, across{' '}
+            {graph.nodes.length} campaigns.
+          </>
+        )}{' '}
+        <b>Worked out from</b> is the search term the fleet saw them both bidding on. Nothing here
+        changes anything; the workers read these directly.
       </p>
     </div>
   )
