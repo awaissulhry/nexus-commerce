@@ -98,6 +98,36 @@ export const relationOf = (r: string) =>
 
 const CARD_W = 210
 const CARD_H = 62
+
+/**
+ * S6.a — DECLARED GEOMETRY, and the reason is a bug this repo has already paid
+ * for once.
+ *
+ * `reference_xyflow_never_measures`: xyflow may never measure a custom node.
+ * When it does not, the element keeps `visibility: hidden` — its
+ * not-yet-measured marker — for ever, `isNodeInitialized()` stays false,
+ * `getEdgePosition()` returns null, and `EdgeWrapper` drops EVERY edge. S2R
+ * lost most of a session to it on the worker canvas and fixed it by declaring
+ * the geometry instead of waiting for the library. This canvas never got that
+ * fix.
+ *
+ * It has been working by luck. Measured on prod, same page, same data, same
+ * moment: the real tab drew **103 of 103** edges with its nodes measured; a
+ * nested viewport drew **0**, with `visibility: hidden` stuck on every node and
+ * no declared width. And when it fails, the census band above it still reads
+ * "38 things the fleet watches, and 103 links it worked out between them" —
+ * the page stating a number it is not drawing.
+ *
+ * Both clauses of `isNodeInitialized` accept declared values, and
+ * `getEdgePosition` falls back to `toHandleBounds(node.handles)`. A canvas that
+ * computes its own layout can declare its own geometry and stop asking.
+ */
+function handlesFor(nodeId: string) {
+  return [
+    { id: null, nodeId, type: 'target' as const, position: Position.Left, x: 0, y: CARD_H / 2, width: 5, height: 5 },
+    { id: null, nodeId, type: 'source' as const, position: Position.Right, x: CARD_W, y: CARD_H / 2, width: 5, height: 5 },
+  ]
+}
 const GAP_X = 26
 const GAP_Y = 20
 const GROUP_GAP = 54
@@ -285,6 +315,11 @@ export function EntityCanvas({
         id: keyOf(n.type, n.id),
         type: 'entity',
         position: p,
+        /* S6.a — see `handlesFor`. Without these three, every edge on this
+           canvas depends on xyflow choosing to measure. */
+        width: CARD_W,
+        height: CARD_H,
+        handles: handlesFor(keyOf(n.type, n.id)),
         data: {
           label: n.label,
           sublabel: n.sublabel,
