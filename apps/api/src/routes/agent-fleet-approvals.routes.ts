@@ -373,6 +373,63 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * S9.3 — hold the undo window open.
+   *
+   * **This exists because of WCAG 2.2.1 Timing Adjustable (Level A).** The
+   * twenty-second window is a time limit on the operator's ability to act, and
+   * of the six exceptions the only candidate is *Essential* — "the time limit
+   * is essential and extending it would invalidate the activity". Extending an
+   * undo window invalidates nothing; the action simply runs later. So the
+   * exception does not hold and the limit needs Turn off / Adjust / Extend.
+   * Repeatable holds provide all three.
+   *
+   * It has to be SERVER-side. The maintenance sweep commits on
+   * `executeAfter <= now` regardless of what any browser believes, so a
+   * client-side pause would be a lie that ends with the action running while
+   * the screen says it is held.
+   *
+   * It is also the control an operator actually wants. "Wait, let me check
+   * something" is not "no", and without this the only way to buy time is Undo
+   * and re-approve — which throws away the decision and, on a fleet with a
+   * track record, teaches the wrong thing.
+   *
+   * Only a scheduled row can be held: pending has no clock to push, and
+   * anything terminal has already happened. Bounded per press, unbounded in
+   * total, on purpose — repeated holds are how "turn off" is expressed without
+   * a second control that can disagree with this one.
+   *
+   * Nothing here executes. It moves one timestamp forward.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/agent/fleet/approvals/:id/hold',
+    async (request, reply) => {
+      const HOLD_MS = 10 * 60 * 1000
+      const ap = await prisma.agentApproval.findUnique({
+        where: { id: request.params.id },
+        select: { status: true, executeAfter: true },
+      })
+      if (!ap) return reply.code(404).send({ error: 'approval not found' })
+      if (ap.status !== 'scheduled') {
+        return reply.code(409).send({ error: `not parked (${ap.status})` })
+      }
+      /* From NOW, never from the existing `executeAfter`: pressing Hold on a
+         row with two seconds left must give ten minutes, not ten minutes and
+         two seconds, and pressing it on an overdue row must still give ten
+         minutes rather than a time already in the past. */
+      const executeAfter = new Date(Date.now() + HOLD_MS)
+      const held = await prisma.agentApproval.updateMany({
+        where: { id: request.params.id, status: 'scheduled' },
+        data: { executeAfter },
+      })
+      if (held.count === 0) {
+        // Lost the race with the sweep — it committed while we were deciding.
+        return reply.code(409).send({ error: 'it already ran' })
+      }
+      return { ok: true, executeAfter: executeAfter.toISOString(), heldForMs: HOLD_MS }
+    },
+  )
+
+  /**
    * AQ.8 — edit-then-approve. The one thing the industry standard has that we
    * did not, and named in the parent page map as the single highest-value gap.
    *
