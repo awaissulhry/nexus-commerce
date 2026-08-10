@@ -625,3 +625,74 @@ cheapest win.
 1512×793; breakpoints in a same-origin nested viewport; states that cannot occur
 on a switched-off fleet were forced with a synthetic payload and production
 restored afterwards.*
+
+---
+
+## PART 12 — The execution record
+
+Twelve commits, S4.a through S4.i plus three corrections found by verifying.
+
+### What moved
+
+| | before | after |
+|---|---|---|
+| roster, text below AA | **16 of 23** | **0 of 26** |
+| worker panel | **21 of 35** | **0 of 43** |
+| handoff panel | **18 of 39** | **0 of 46** |
+| review (plan) panel | **9 of 17** | **0 of 17** |
+| entity rail, nothing selected | **4 of 4** | **0** |
+| exits visible, worker | **0 of 51.5px** | **FULL**, 192px scrolling beneath |
+| exits visible, 5-drop handoff | **0 of 28.3px** | **FULL**, 540px beneath |
+| **detail at 1399 / 1280 / 1100 / 1024** | **none anywhere** | **shown at every width** |
+| stale deep link | silent, close button for nothing | names the key, two exits |
+| plan edge title | "Handoff", contradicting its body | **"Review"** |
+| rail vs canvas, paused worker | "OBSERVE · at its ceiling" | **"Held at off · the dial is still at OBSERVE"** |
+| one word, three conditions | red vs amber, 1.50:1 apart | cause named in words |
+| approvals · plans · conflicts | rendered nowhere | all three render |
+| focus rules in the component | **0** | every control |
+| live region | none | one, announcing the selection |
+| rail width when the graph is the work | 340px, always | **44px**, canvas +296px |
+
+### Three defects found by verifying, not by reasoning
+
+**1 · The cause clause repeated labels that already said it.** S4.d gated on
+`needsAttention` — but `paused` and `not-set-up` set that flag too, so the roster
+read *"Paused · paused"* and *"Not set up · never set up"*. Re-gated on
+`word === 'attention'`, the one word three unrelated conditions actually share.
+
+**2 · A contrast failure the first sweep could not see.** The `medium` severity
+chip measured **4.41:1**, and only renders when a sample happens to carry that
+severity. It was invisible to the original audit and surfaced only when the
+rebuilt panel was re-measured with a forced payload.
+
+**3 · The collapsed strip announced itself twice.** Its accessible name came out
+as *"Details Show details for Fleet auditor"*, because a visible label and an
+`sr-only` sentence were both inside the button. `aria-label` with the visible
+word hidden.
+
+### And one the reflow itself created
+
+The reflow put a 280px panel under the canvas — and at 1399/1280 the page was
+still a fixed `100dvh`, so that 280px came **straight out of the canvas**:
+**202px at 1399, 102px at 1280**, worse than the 394px it had when the panel was
+simply hidden. A fix that makes the thing it fixes worse is not a fix.
+
+S3.n's rule was right but scoped to the wrong width. It now reads: **whenever the
+rail is a bottom panel, the page stops dividing a fixed height** — 1400 rather
+than 1100. Above 1400 the rail is a column and nothing changes.
+
+### The habit that paid, three times
+
+Every one of the four above was invisible to `tsc`, to the DS ratchet, and to
+the study. All four came from the same step: **deploy the phase, force the state,
+measure the rendered page.** Two of them were defects I had introduced in the
+commit immediately before.
+
+### Still open
+
+- **§7's one backend field.** `lastCritique` carries `planId`, `verdict` and
+  `blockedCount` but no reason, so a **block** still cannot say why — while the
+  finding edge explains every drop in the director's own words. The panel says
+  so plainly rather than implying the reason does not exist.
+- **C-S4.2** — `.acr-term` renders at 2.50:1 in `control-room.css`, a shared file
+  reaching nineteen consumers. **Raised, not touched.**
