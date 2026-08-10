@@ -21,8 +21,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
+import { resolveActiveNav } from './app-rail-active'
 import type { LucideIcon } from 'lucide-react'
 
 /** Third-level item — a market under a channel (e.g. Amazon → IT). */
@@ -100,6 +101,13 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
   const isActiveHref = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`)
 
+  // Exactly ONE row carries `.on` — see app-rail-active.ts for the defect this
+  // replaced and why longest-match is the rule. Expansion and the `.section`
+  // tint below deliberately stay prefix-based.
+  const best = useMemo(() => resolveActiveNav(navItems, pathname), [navItems, pathname])
+  const isOn = (href: string, depth: number) =>
+    best != null && best.href === href && best.depth === depth
+
   // Seed collapsible groups: open iff the current pathname is the parent, a
   // child, or (for channel → markets) a grandchild. Both the top-level group
   // and the channel sub-group are keyed by their own href so a deep-link to a
@@ -154,8 +162,7 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
                 isActiveHref(c.href) ||
                 (c.children?.some((m) => isActiveHref(m.href)) ?? false),
             )
-          const exactActive =
-            !it.external && isActiveHref(it.href) && !childRouteActive
+          const exactActive = !it.external && isOn(it.href, 1)
           const sectionActive = childRouteActive
           const active = exactActive
           const isOpen = hasChildren && !!open[it.href]
@@ -232,7 +239,7 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
               {hasChildren && isOpen && (
                 <div className="h10-sub">
                   {it.children!.map((c) => {
-                    const childActive = isActiveHref(c.href)
+                    const childActive = isOn(c.href, 2)
                     const hasMarkets = !!c.children?.length
 
                     // Plain leaf sub-item (e.g. Shopify, Organize) — may carry
@@ -282,7 +289,7 @@ export function AppRail({ navItems, brand, header, footer, pinned, onSeeAllMarke
                               <Link
                                 key={m.href}
                                 href={m.href}
-                                className={`h10-subsubitem ${pathname === m.href || pathname.startsWith(`${m.href}/`) ? 'on' : ''}`}
+                                className={`h10-subsubitem ${isOn(m.href, 3) ? 'on' : ''}`}
                               >
                                 {m.code && <span className="mcode">{m.code}</span>}
                                 <span className="mname">{m.label}</span>
