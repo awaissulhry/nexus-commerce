@@ -190,7 +190,26 @@ export interface MapEdge {
     severity: string
   }>
   verdicts: { pass: number; revise: number; block: number } | null
-  lastCritique: { planId: string; verdict: string; blockedCount: number } | null
+  /**
+   * S4 — `summary` is the critic's OWN SENTENCE about the plan, and it was
+   * already being read and thrown away: this service selects `criticNotes` and
+   * extracted nothing from it but `blockedItems.length`.
+   *
+   * That mattered because of an asymmetry the map made visible. The finding
+   * edge accounts for every dropped item in the director's own words; the plan
+   * edge could say `Blocked = 1` and never say why — on the most consequential
+   * verdict the fleet produces. `overrideNote` carries the other case:
+   * `fleet-council.service.ts` can flip a `pass` to `block` from deterministic
+   * pre-checks, and when it does, the critic's summary describes a verdict that
+   * is no longer the one in force.
+   */
+  lastCritique: {
+    planId: string
+    verdict: string
+    blockedCount: number
+    summary: string | null
+    overrideNote: string | null
+  } | null
   /** How `crossed` was counted, so the tooltip can say it honestly.
    *  `plan-items` — resolved from AgentPlan.items[].findingId, the join
    *  scorecard.service.ts already runs. `none` — this edge cannot carry a
@@ -644,11 +663,19 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
         else if (p.criticVerdict === 'block') v.block += 1
         verdictsByPair.set(id, v)
         if (!lastCritiqueByPair.has(id)) {
-          const notes = (p.criticNotes as { blockedItems?: unknown[] } | null) ?? null
+          const notes =
+            (p.criticNotes as {
+              blockedItems?: unknown[]
+              summary?: unknown
+              note?: unknown
+            } | null) ?? null
+          const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
           lastCritiqueByPair.set(id, {
             planId: p.id,
             verdict: p.criticVerdict,
             blockedCount: Array.isArray(notes?.blockedItems) ? notes.blockedItems.length : 0,
+            summary: str(notes?.summary),
+            overrideNote: str(notes?.note),
           })
         }
       }

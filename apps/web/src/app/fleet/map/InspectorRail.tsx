@@ -365,6 +365,32 @@ function EdgePanel({ edge, nodes }: { edge: MapEdge; nodes: MapNode[] }) {
                   }
                 />
               ) : null}
+              {/*
+               * S4.j — the asymmetry this section existed to fix, closed.
+               *
+               * The finding edge accounts for every dropped item in the
+               * director's own words. This edge could say "Blocked: 1" and never
+               * say why — on the most consequential verdict the fleet produces.
+               * The sentence was already persisted and the map service was
+               * reading `criticNotes` and taking nothing from it but a count.
+               */}
+              {edge.lastCritique?.summary ? (
+                <>
+                  <h4>What the critic said</h4>
+                  <ul className="sbm-drops">
+                    <li>{edge.lastCritique.summary}</li>
+                  </ul>
+                </>
+              ) : edge.lastCritique ? (
+                <p className="sbm-rail-note">
+                  The critic recorded this verdict without a written reason.
+                </p>
+              ) : null}
+              {edge.lastCritique?.overrideNote ? (
+                <p className="sbm-rail-note">
+                  <b>This verdict was overridden:</b> {edge.lastCritique.overrideNote}
+                </p>
+              ) : null}
             </>
           ) : (
             <p className="sbm-dim">Nothing has been reviewed yet.</p>

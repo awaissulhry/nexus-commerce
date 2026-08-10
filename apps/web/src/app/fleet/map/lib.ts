@@ -110,7 +110,18 @@ export interface MapEdge {
     severity: string
   }>
   verdicts: { pass: number; revise: number; block: number } | null
-  lastCritique: { planId: string; verdict: string; blockedCount: number } | null
+  lastCritique: {
+    planId: string
+    verdict: string
+    blockedCount: number
+    /** The critic's own sentence. Already persisted; the map service used to
+     *  read `criticNotes` and extract nothing from it but a count. */
+    summary: string | null
+    /** Set when `fleet-council.service.ts` overrode a passing verdict from
+     *  deterministic pre-checks — in which case the summary above describes a
+     *  verdict that is no longer the one in force. */
+    overrideNote: string | null
+  } | null
   lineage: 'plan-items' | 'none'
   lineageNote: string
 }
