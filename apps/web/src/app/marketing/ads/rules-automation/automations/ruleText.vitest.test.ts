@@ -183,3 +183,27 @@ describe('detectConflicts', () => {
     expect(m.size).toBe(2)
   })
 })
+
+describe('actionLines fallback — the missing-field guard', () => {
+  it('never claims "does nothing" when only actionTypes survived', () => {
+    // `GET /autonomy/rules` shipped without `actions`, and the drawer rendered
+    // "no actions — this rule does nothing" over a rule carrying bid_to_target_acos.
+    // A missing field must cost detail, never reverse the claim.
+    const lines = actionLines(undefined, ['bid_to_target_acos'])
+    expect(lines).toHaveLength(1)
+    expect(lines[0].writes).toBe(true)
+    expect(lines[0].label).toBe('Move bids toward the target ACOS')
+    expect(lines[0].detail).toBe('')
+  })
+
+  it('prefers the raw actions when both are present', () => {
+    const lines = actionLines([{ type: 'bid_up', percent: 20 }], ['bid_to_target_acos'])
+    expect(lines).toHaveLength(1)
+    expect(lines[0].detail).toContain('20%')
+  })
+
+  it('is still empty when a rule genuinely has no actions', () => {
+    expect(actionLines([], [])).toEqual([])
+    expect(actionLines(null, undefined)).toEqual([])
+  })
+})

@@ -153,10 +153,18 @@ function params(a: Record<string, unknown>): string {
 
 export interface ActionLine { label: string; detail: string; writes: boolean; type: string }
 
-/** The "Then" lines. One per action, in stored order, writing actions first is NOT applied —
- *  order is what the engine executes, and reordering it for looks would misdescribe the rule. */
-export function actionLines(actions: unknown): ActionLine[] {
-  const list = (Array.isArray(actions) ? actions : []) as Array<Record<string, unknown>>
+/**
+ * The "Then" lines. One per action, in stored order — that order is what the engine executes, and
+ * sorting the writing ones to the top for looks would misdescribe the rule.
+ *
+ * `fallbackTypes` is the safety net, and it exists because the absence of it shipped: when the
+ * payload carried no `actions` array this returned `[]` and the drawer rendered "no actions — this
+ * rule does nothing" over a rule that writes bids. A missing field must degrade to less detail,
+ * never to the opposite claim.
+ */
+export function actionLines(actions: unknown, fallbackTypes?: string[]): ActionLine[] {
+  const raw = (Array.isArray(actions) ? actions : []) as Array<Record<string, unknown>>
+  const list = raw.length ? raw : (fallbackTypes ?? []).map((t) => ({ type: t }))
   return list.map((a) => {
     const type = String(a?.type ?? '')
     return {

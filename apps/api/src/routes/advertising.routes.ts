@@ -6550,6 +6550,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         name: r.name,
         description: r.description,
         conditions: r.conditions,
+        /**
+         * RA.AUTO — the RAW actions, parameters and all.
+         *
+         * `actionTypes` below is filtered (it drops notify/alert_operator) and carries no
+         * parameters, so it cannot answer "what would this rule do". Rendering a Then-line from
+         * it alone made the Automations drawer print "no actions — this rule does nothing" over
+         * a rule carrying `bid_to_target_acos` and a WRITES badge. A surface stating the opposite
+         * of the truth about whether a rule touches the account is the exact defect this
+         * programme exists to remove.
+         */
+        actions: r.actions,
         /** Whether ANY of this rule's actions reaches Amazon. AUTO on a notify-only rule writes nothing. */
         writes: actionTypes.some((t) => !NON_WRITING.has(t)),
         trigger: r.trigger,

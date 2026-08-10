@@ -1321,8 +1321,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-grad.failing { background: #fdeaea; color: #a02c2c; }
 .h10-au-grad.unseen, .h10-au-grad.unreviewed, .h10-au-grad.building { background: #f1f4f8; color: #55606d; }
 
-/* Three lanes, because a wide surface lays facts side by side rather than in one long column. */
+/* Lanes, because a wide surface lays facts side by side rather than in one long column.
+   `auto-fit` alone left the LAST lane holding one column of a two-column row: measured 328px of
+   644 empty beside Record. The last lane spans the row instead, so there is no width at which
+   this grid renders a hole. */
 .h10-au-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+.h10-au-lanes > .h10-au-lane:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .h10-au-lane { border: 1px solid #e3e7ec; border-radius: 10px; padding: 13px 15px; background: #fff; min-width: 0; }
 .h10-au-lane h4 { margin: 0 0 9px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
 .h10-au-scopeform { display: flex; flex-wrap: wrap; gap: 7px; }

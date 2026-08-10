@@ -74,7 +74,9 @@ export function RuleDetail({
   const [cp, setCp] = useState(rule.scope.kind === 'campaign' ? (rule.scope.id ?? '') : '')
 
   const cond = useMemo(() => conditionText(rule.conditions), [rule.conditions])
-  const then = useMemo(() => actionLines(rule.actions), [rule.actions])
+  // `actionTypes` is the fallback, never the primary: it is filtered and parameterless, so it can
+  // say WHAT a rule does but not by how much. See actionLines' own note.
+  const then = useMemo(() => actionLines(rule.actions, rule.actionTypes), [rule.actions, rule.actionTypes])
 
   /**
    * Law 4 — never offer a scope without stating its reach.
