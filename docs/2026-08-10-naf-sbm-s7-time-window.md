@@ -11,7 +11,9 @@ prints a count.
 Measured on production 2026-08-10, against the live payload at **all four
 windows** and against the rendered DOM at two of them.
 
-**Status: study only. No code has been written.**
+**Status: BUILT AND VERIFIED ON PRODUCTION.** Parts 0–9 are the study as
+approved; **Part 10 is the execution record**, including the phase that shipped
+twice and a correction to one of this document's own exit criteria.
 
 ---
 
