@@ -5735,3 +5735,294 @@ to learn it.
   latency figure reads 0.9s and means nothing.
 
 **S10 is complete.**
+
+---
+
+# Part 20 — S9 design study: the twenty seconds after yes, and what actually landed
+
+## 20.0 — What S9 is FOR, in one sentence
+
+**Make yes safe to say quickly by making it genuinely reversible for twenty
+seconds, and never let the page claim something reached Amazon before it did.**
+
+## 20.1 — The Half B scope decision, defended
+
+**Verdict: build Half A in full; defer Half B to AQ.7 with a written interface
+contract.** Not because no executor has run — that alone would not settle it,
+since S10 designed against real-but-unrepresentative data and shipped. Because
+of three measured facts, any one of which would be enough.
+
+**1. There is nowhere to put a receipt.** `AgentApproval` has `id`,
+`agentRunId`, `toolName`, `riskTier`, `args`, `preview`, `status`,
+`requestedAt`, `decidedBy`, `decidedAt`, `reason`, `expiresAt`, `executeAfter`,
+`snoozedUntil`. **No result column, no executedAt, no per-item outcome, no
+error code.** And `decideApproval` already computes the outcome and throws it
+away:
+
+```ts
+const res = await tool.execute(ap.args, { userId: decidedBy })
+await prisma.agentApproval.update({
+  data: { status: res.ok ? 'executed' : 'pending',
+          reason: res.ok ? null : `execution failed: ${res.error}` },
+})
+return { ok: res.ok, status: …, result: res.data, error: res.error }
+//                                     ^^^^^^^^^^ returned to the caller, never persisted
+```
+
+A receipt rendered today would be rendered from nothing.
+
+**2. Revert cannot be built on the service the brief points at.**
+`rollback.service.ts` reverses `AD_GROUP`, `PRODUCT_AD`, `AD_TARGET` and
+`CAMPAIGN`. The four tools that can execute are `set-price`,
+`apply-content`, `publish-listing` and `send-customer-message` — catalog and
+messaging, not advertising — and `mutate.tools.ts` writes
+`advertisingActionLog` **zero times** (measured, not assumed). The brief says
+"nothing links an approval to it"; the sharper truth is that **linking them
+would be wrong**. There are 44,370 `AdvertisingActionLog` rows and not one was
+produced by an approval.
+
+**3. A seeded receipt would prove only that my fixture matches my renderer.**
+This is S10's own lesson turned on its owner: *a mechanism that has never fired
+is indistinguishable from a broken one*. S10 could design against the 18
+pre-fleet rows because **the rows existed and only their provenance was wrong**
+— the gap was nameable on screen. Half B has neither rows nor columns. I would
+invent a shape, render it, and discover at AQ.7 that the executor returns
+something else.
+
+**Why this is not a cop-out.** The deferral ships something: §20.6 is an
+interface contract that makes AQ.7 cheap and stops the executor being built in
+a shape the receipt cannot use. Amazon's own documentation is the argument for
+writing it now — on a FATAL feed, *"some, none, or all of the operations within
+the feed might have completed successfully"*. A boolean `ok` **cannot express
+that**, so if `execute()` is designed before the receipt is, it will return a
+boolean and the receipt will be unbuildable a second time.
+
+## 20.2 — Ground truth, measured
+
+`apps/api/scripts/_apx-s9-truth.mts`, read-only.
+
+```
+scheduled rows now: 0          → every parked state must be seeded
+executed/approved/executing:   3  (apply-content ×2, set-price ×1)
+   all three: decidedBy = null, reason = null  → no receipt data exists
+pending rows carrying a reason: 0  → no comeback state exists naturally
+AdvertisingActionLog rows: 44,370, produced by approvals: 0
+pending rows already past expiresAt: 0
+UNDO_WINDOW_MS = 20_000
+```
+
+**The write path is held, proven in code before seeding anything:**
+
+```ts
+const tool = getTool(ap.toolName)
+if (!tool?.execute) {
+  // → status 'approved', reason 'approved; this tool is preview-only (no execute)'
+  return { ok: true, status: 'approved', error: 'this tool is preview-only …' }
+}
+```
+
+A parked row on any of the three **fleet** tools can commit and cannot reach
+Amazon. That is the seeding safety argument, and it is structural.
+
+## 20.3 — Research, by lens
+
+**Undo windows — held, not recalled.** Gmail's Undo Send does not retrieve a
+sent message; it *delays delivery* and the mail sits in a temporary outbox for
+5–30 seconds. Undo cancels a send that never happened. **This is exactly AP.4's
+model** (`executeAfter`, the write held), and it is worth keeping the code
+comment that says so: the day someone "improves" this into a compensating
+recall, Undo stops meaning what it says. Gmail's ceiling is 30s; ours is 20s.
+**Taken:** the vocabulary — *held*, never *recalled*. **Refused:** a toast. A
+toast dies on reload; the row is the undo.
+
+**Apply/plan receipts and partial success.** Terraform apply, Ansible recaps,
+Kubernetes rollout status all render per-resource outcomes because the
+operation is not atomic. Amazon is blunter: on a FATAL feed *"some, none, or
+all"* operations may have succeeded. **Taken, into the contract:** a scalar
+result is unrenderable; the receipt needs per-item outcomes.
+
+**Retry-the-remaining.** SP-API's guidance is poll the processing report, then
+retry with exponential backoff (1s, 4s, 10s, 30s, ≤4 attempts). The design
+question is scoping the remainder so a retry cannot double-write. **Taken into
+the contract:** a retry must be keyed to the failed items by a stable id the
+first attempt returned, never "run it again".
+
+**Compensating actions vs undo.** Refund-vs-void and `git revert`-vs-`reset`
+are the same distinction this page already made in S6: reversibility is **one
+class**, stated once. Undo (inside the window) means *the call never happened*.
+Revert (outside it) means *a new change Amazon will see*. **Taken:** Revert must
+never borrow Undo's words, and it belongs in the `compensate` class the card
+already knows.
+
+**Countdowns and time pressure.** The automation-bias work already in Part 2
+says a pause exists to create a moment of thought; a countdown that creates
+urgency defeats it. **Taken:** the countdown must read as *how long you still
+have*, never as a deadline racing down. No colour change as it drops, no
+acceleration, no motion.
+
+**Accessibility — and the requirement no earlier section has faced.**
+**WCAG 2.2.1 Timing Adjustable (Level A).** A 20-second limit on the
+operator's ability to act engages it directly. The exceptions are Turn off /
+Adjust / Extend / Real-time / Essential / 20 Hours. The **Essential** exception
+requires that *"the time limit is essential and extending it would invalidate
+the activity"* — and extending an undo window invalidates nothing; the action
+simply runs later. **So Essential does not hold, and today's window fails
+2.2.1.** Also **EU AI Act Art. 14(4)(e)**: the right to *"intervene… or
+interrupt"*. A window you cannot extend is a weak interrupt.
+
+## 20.4 — Defects, severity, evidence
+
+| # | Defect | Sev | Evidence |
+|---|---|---|---|
+| 1 | The 20s window cannot be extended | **High** | WCAG 2.2.1 Level A; Essential exception does not apply |
+| 2 | Null `executeAfter` ⇒ "Running now…" forever, no Undo, never commits | **High** | `until = 0` ⇒ `if (!until) return` ⇒ interval never starts; Undo gated on `left > 0`. **Both copies** |
+| 3 | The parked row exists twice, byte-identical | **High** | `ApprovalLists.tsx:180` and `ApprovalsClient.tsx:818` — same maths, same strings; every fix lands half |
+| 4 | A hand-back never resets `expiresAt` | **High** | Neither comeback path touches it; a row handed back after 24h expires on the next sweep |
+| 5 | A machine sentence is written into `reason` on a row that HAS a decider | **High** | `'approved; this tool is preview-only (no execute)'` — S10.3 renders that as the operator's **quoted words** |
+| 6 | A failed execution keeps `decidedBy`, **and no audit row is written** | **High** | `if (!out.ok) return out` returns *before* `recordControlChange`, so nobody records who approved the attempt |
+| 7 | Undo must never fail silently | **High** | the `post()` no-body-400 bug made it unusable in production once |
+| 8 | Countdown re-render scope and reduced-motion unverified | Medium | 500ms interval; must not re-render the list |
+
+**Defect 5 is the sharpest, and it is one this page created.** S10.3's rule —
+*no decider ⇒ no quotation marks* — is correct and insufficient: `reason` is
+**overloaded**, carrying both the operator's words and the system's
+explanations. The structural fix is not to widen the rule but to stop
+overloading the column: `status: 'approved'` already means *preview-only,
+nothing ran*, so the sentence is redundant and the record should render that
+fact **from the status**, never from a string.
+
+## 20.5 — The design, Half A
+
+**One parked row.** The two copies collapse into one exported component. The
+outside queue and the fleet queue render the same thing, as S6 did for the
+card.
+
+```
+  ⏱  Approved — change a keyword's bid
+     Running in 14 seconds — the undo window. Nothing has reached Amazon yet.
+                                                   [ Hold ]   [ Undo ]
+```
+
+**`Hold` is the 2.2.1 answer, and it is honest.** It pushes `executeAfter`
+server-side — a client-only pause would be a lie, because the sweep commits on
+the server. It satisfies *Extend* (and, held repeatedly, *Turn off*), and it is
+the control an operator actually wants: *wait, let me check something* is not
+the same as *no*, and today they are forced to Undo and re-approve.
+
+**Null `executeAfter` is a broken state, and it says so.** Not a countdown at
+zero: *"This was approved but no run time was recorded, so it will never run on
+its own."* with Undo available — because Undo is exactly the escape from a
+stuck row. Structural rule: **a countdown renders only when there is a time to
+count to.**
+
+**"Approved" and "it ran" stay different words** — S10 already proved both
+render — and the preview-only case gets its own sentence from the **status**:
+*"Approved. Nothing ran: this action is preview-only."*
+
+**The hand-back resets the clock.** `expiresAt = now + EXPIRY_HOURS` when a row
+returns to pending. This does not violate AP.5's one-clock design: it is still
+one column and one sweep, restamped because **the request is being asked
+again**. Leaving it is what produces a row that dies seconds after coming back.
+
+**A failed execution clears `decidedBy` — and writes the audit row first.**
+Order matters: today the early return skips `recordControlChange`, so clearing
+alone would erase the only record that anyone approved it. Audit first, then
+clear, so the row's state is coherent and the history survives.
+
+## 20.6 — The AQ.7 interface contract (the deliverable of deferring Half B)
+
+For the receipt to be buildable when an executor exists, `execute()` and the
+schema must agree on this shape. Written now so the executor is not built
+against a boolean.
+
+**Additive migration** (pre-approved class; no destructive change):
+
+```prisma
+model AgentApproval {
+  …
+  /// AQ.7 — what actually landed. Null until something has run.
+  result      Json?      // ExecutionReceipt, below
+  executedAt  DateTime?
+}
+```
+
+**`ExecutionReceipt`** — the shape `execute()` must return and the row must
+store:
+
+```ts
+interface ExecutionReceipt {
+  attemptedAt: string
+  /** Per ITEM, never a scalar: Amazon says "some, none, or all" may land. */
+  items: Array<{
+    /** Stable across retries — this is what scopes "retry the remaining". */
+    ref: string
+    entity: string            // "GALE-JKT-BLK-L", never an internal id
+    ok: boolean
+    /** Amazon's own words, verbatim, plus its code. Never paraphrased. */
+    error?: { code: string; message: string; retryable: boolean }
+  }>
+  /** Set only where a compensating change is possible, and it is NOT an undo. */
+  revert?: { kind: 'compensate'; handle: string } | null
+}
+```
+
+**Three rules the contract carries:**
+1. **No scalar `ok`.** A top-level boolean cannot express partial success and
+   would make the receipt unbuildable a second time.
+2. **`ref` is stable across attempts**, so retry-the-remaining is scoped to the
+   failed items and cannot double-write.
+3. **`revert` is `compensate`, never `restore`** — S6's vocabulary, so the card
+   and the receipt cannot drift about what reversibility means.
+
+**Not built here, and explicitly not designed as UI**, because a screen drawn
+against an imagined payload is the thing §20.1.3 argues against.
+
+## 20.7 — What I am deliberately NOT building
+
+- **The receipt, retry-the-remaining, and Revert** — §20.1, contract in §20.6.
+- **Any link to `rollback.service.ts`** — wrong domain, measured.
+- **A toast** — AP.4's reasoning stands and stays in the code.
+- **Colour or motion on the countdown** — §20.3.
+- **Changes to `whereFor`/`inboxCounts`** — still §6c-AQ's.
+- **`ApprovalInbox.tsx`'s contrast failures** — frozen directory, recorded.
+- **Nothing that makes anything execute.** Half A is about the seconds *before*
+  execution, and the fleet stays off.
+
+## 20.8 — Build order
+
+| Phase | What |
+|---|---|
+| **S9.1** | One parked row: collapse the two copies, exported, both queues render it |
+| **S9.2** | Null `executeAfter` renders as a stuck row with Undo, not a countdown at zero |
+| **S9.3** | `Hold` — server-side extend; WCAG 2.2.1 satisfied |
+| **S9.4** | The clock: hand-back restamps `expiresAt`; audit-then-clear on failed execution |
+| **S9.5** | Stop overloading `reason`; preview-only explains itself from status |
+| **S9.6** | Every state seeded and measured; Undo proven **from a click**; reduced-motion and re-render scope; database back to 18 · 0 · 0 · 0 · 0 |
+
+## 20.9 — Verification recipe
+
+Every state here must be seeded — none occurs on a fleet that is off. Seeds use
+**fleet tools only**, whose `execute()` is absent, so a committed seed lands in
+`approved` and cannot reach Amazon (§20.2). Per phase: baseline probes both
+ways, enumerate stylesheets from `href="…"`, scope DOM queries to `main`,
+measure contrast composited, assert against exported values. **Undo is proven
+by a real click, never by a unit test** — the `post()` no-body-400 bug made it
+unusable in production once and a test would not have caught it. End state
+re-probed independently: **18 · 0 pending · 0 scheduled · 0 exemplars · 0 audit
+rows**.
+
+## 20.10 — Sources
+
+**Undo windows** — [Gmail Undo Send][gmail] (held, not recalled)
+**Partial success** — [SP-API submit a feed][spapi] ("some, none, or all"), [handling errors][spapierr] (backoff 1s/4s/10s/30s)
+**Timing** — [WCAG 2.2.1 Timing Adjustable][wcag221] — the Essential exception, quoted
+**Oversight** — [EU AI Act Art. 14][a14] (4)(e), intervene or interrupt
+**Applied, not repeated** — Part 2 on automation bias; S6's reversibility class; S8's outcome words; S10's structural-rule-over-regex principle.
+
+[gmail]: https://blog.google/products/gmail/how-to-unsend-email-gmail/
+[spapi]: https://developer-docs.amazon.com/sp-api/docs/submit-a-feed
+[spapierr]: https://docs.developer.amazonservices.com/en_US/dev_guide/DG_Errors.html
+[wcag221]: https://www.w3.org/WAI/WCAG22/Understanding/timing-adjustable.html
+[a14]: https://artificialintelligenceact.eu/article/14/
+
+**AWAITING OPERATOR APPROVAL — no code written.**
