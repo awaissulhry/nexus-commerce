@@ -330,6 +330,7 @@ should stay small — which is the real argument of Part 4.
 | **S6.f** | the mode itself goes in the URL | `?mode=entities` and `?ev=map` both round-trip |
 | **S6.g** | the table tells the truth when capped | forced `truncated: true` and the footer agrees with the band |
 | **S6.h** | every declared relation has an edge colour | forced `VARIANT_OF`; swatch, meter and stroke agree |
+| **S6.i** | the evidence column reads as evidence | no `kw:`/`|` on screen; every column inside the table |
 
 `S6.a` first: it is a correctness defect, it is three lines, and it is the same
 fix a previous section already proved. **S6.f was not planned** — it was found
@@ -414,6 +415,42 @@ was true and still incomplete. Fixed in S6.h.
 
 The method point: forcing is not a formality for empty states. Two forced
 payloads, two real defects, one of them mine from an hour earlier.
+
+### 10.4 · Then the screenshot found two more, in the column I was proudest of
+
+Every probe so far had confirmed the evidence column *exists* and that the row
+count matched. Both are the shape of check that passes while the cell is wrong.
+
+**`properties.on` is a list.** It reads `kw:<term>|<TYPE>, kw:<term>|<TYPE>, …`
+— ten terms on production. S6.c parsed it with `/^kw:(.*)\|([A-Z]+)$/`, and
+`.*` is greedy, so it stripped the leading `kw:` and the final `|EXACT` and left
+every separator in between on screen:
+
+```
+giubbotto moto uomo|EXACT, kw:giacca moto uomo|EXACT, kw:giacca moto|EXACT…
+```
+
+the exact wire format the column exists to hide — with a comment beside it
+claiming it was hiding it. **A regex anchored at both ends looks like it
+validates the whole string; against a list it matches the first and last field
+and swallows the rest.**
+
+**And the table was wider than the table.** Declared widths summed to 1056
+against 1022 of client width. At 1512:
+
+| | px |
+|---|---|
+| `Its links` header right edge | 1380 |
+| wrapper right edge | 1352 |
+| `scrollWidth` / `clientWidth` | 1056 / 1022 |
+
+So the column that answers *which campaign is tangled up in the most overlap* —
+the one this file's own comment calls the point of the table — had its values
+off the edge on an ordinary laptop. Rebudgeted to 954.
+
+Both fixed in S6.i. **This is the third time this engagement that the pixels
+caught what a green probe had signed off**, after the `0 edges` selector and
+S5.d's clipped column.
 
 ---
 
