@@ -802,6 +802,7 @@ function OutsideQueue({
   producers,
   state,
   onRetry,
+  onHold,
   onDecide,
   onUndo,
   onCommit,
@@ -816,6 +817,7 @@ function OutsideQueue({
   producers?: Array<{ key: string; enabled: boolean }>
   state: 'loading' | 'ok' | 'failed'
   onRetry: () => void
+  onHold?: (id: string) => Promise<{ ok: boolean; executeAfter?: string; error?: string }>
   onDecide: (id: string, decision: 'approve' | 'reject', reason?: string) => void
   onUndo: (id: string) => void
   onCommit: (id: string) => void
@@ -951,6 +953,7 @@ function OutsideQueue({
                 busy={busy}
                 onUndo={onUndo}
                 onCommit={onCommit}
+                onHold={onHold}
               />
             ) : (
               /*
@@ -1096,6 +1099,31 @@ export function ApprovalsClient() {
     setErr(null)
     setLoading(false)
   }, [backend, view])
+
+  /*
+   * S9.3 — hold the undo window open. Returns the server's new deadline so the
+   * row can apply it at once rather than waiting up to 10s for the next poll.
+   * Failures are RETURNED, never swallowed: the row shows them inline.
+   */
+  const hold = useCallback(
+    async (id: string) => {
+      try {
+        const r = await fetch(`${backend}/api/agent/fleet/approvals/${id}/hold`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        })
+        const d = (await r.json().catch(() => null)) as
+          | { executeAfter?: string; error?: string }
+          | null
+        if (!r.ok) return { ok: false, error: d?.error ?? `could not hold it (${r.status})` }
+        return { ok: true, executeAfter: d?.executeAfter }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'could not hold it' }
+      }
+    },
+    [backend],
+  )
 
   const { asOf, refresh } = useVisibilityPoll(
     useCallback(async () => {
@@ -1417,6 +1445,7 @@ export function ApprovalsClient() {
             onRecheck={recheck}
             onAmend={amend}
             onSnooze={snooze}
+            onHold={hold}
           />
         ) : (
           <>
@@ -1472,6 +1501,7 @@ export function ApprovalsClient() {
         producers={gate?.outside.producers}
         state={outsideOk === null ? 'loading' : outsideOk ? 'ok' : 'failed'}
         onRetry={() => void refresh()}
+        onHold={hold}
         onDecide={(id, d, reason) => void decide(id, d, reason)}
         onUndo={(id) => void post(`approvals/${id}/undo`).then(after)}
         onCommit={(id) => void post(`approvals/${id}/commit`).then(after)}

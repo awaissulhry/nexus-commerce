@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Check, Clock, GraduationCap, PauseCircle, Timer, Undo2, X } from 'lucide-react'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ApprovalCard, type CardApproval, type FleetLabels } from './ApprovalCard'
@@ -190,6 +190,7 @@ export function ParkedRow({
   busy,
   onUndo,
   onCommit,
+  onHold,
 }: {
   id: string
   toolName: string
@@ -199,9 +200,12 @@ export function ParkedRow({
   busy: boolean
   onUndo: (id: string) => void
   onCommit: (id: string) => void
+  /** S9.3 — optional so the row still renders against an API that predates
+      the hold route. Absent means the button is not offered, never a button
+      that throws. */
+  onHold?: (id: string) => Promise<{ ok: boolean; executeAfter?: string; error?: string }>
 }) {
   const card = toolCardFor(toolName)
-  const until = executeAfter ? new Date(executeAfter).getTime() : 0
 
   /*
    * S9.2 — a row with no run time is not a countdown at zero.
@@ -216,13 +220,32 @@ export function ParkedRow({
    * count to. Everything else is a different state and says so.
    */
   const stuck = !executeAfter
-  const [left, setLeft] = useState(() => Math.max(0, Math.ceil((until - Date.now()) / 1000)))
+  /*
+   * S9.3 — the server's new deadline, applied at once.
+   *
+   * The page polls every 10s, so without this a hold on a row with four
+   * seconds left would still reach zero locally and call commit. The server
+   * would refuse it (`still inside the undo window`), so nothing would run —
+   * but the row would read "Running now…" for six seconds while being held,
+   * which is the page telling the operator the opposite of the truth.
+   */
+  const [heldUntil, setHeldUntil] = useState<string | null>(null)
+  const [holdErr, setHoldErr] = useState<string | null>(null)
+  const [holding, setHolding] = useState(false)
+  const effectiveAfter = heldUntil ?? executeAfter
+  const deadline = effectiveAfter ? new Date(effectiveAfter).getTime() : 0
+  const [left, setLeft] = useState(() => Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
   const fired = useRef(false)
 
   useEffect(() => {
-    if (!until) return
+    if (!deadline) return
+    /* Reset with the deadline: after a hold this effect re-runs, and a `fired`
+       left true from the previous window would mean the new one never commits
+       at all. */
+    fired.current = false
+    setLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
     const t = setInterval(() => {
-      const secs = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+      const secs = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
       setLeft(secs)
       if (secs === 0 && !fired.current) {
         fired.current = true
@@ -230,7 +253,7 @@ export function ParkedRow({
       }
     }, 500)
     return () => clearInterval(t)
-  }, [until, id, onCommit])
+  }, [deadline, id, onCommit])
 
   return (
     <div className={`ap-scheduled${stuck ? ' aq-stuck' : ''}`}>
@@ -260,12 +283,38 @@ export function ParkedRow({
           )}
         </span>
       </span>
+      {/* S9.3 — Hold before Undo: it is the softer of the two and the one an
+          operator reaches for mid-thought. Offered only while a window is
+          actually running — a stuck row has no clock to extend, and a row at
+          zero is already gone. */}
+      {left > 0 && onHold ? (
+        <button
+          className="acr-btn"
+          disabled={busy || holding}
+          onClick={async () => {
+            setHolding(true)
+            setHoldErr(null)
+            try {
+              const r = await onHold(id)
+              if (r.ok && r.executeAfter) setHeldUntil(r.executeAfter)
+              /* Never silently: the same rule Undo earned the hard way when
+                 post()'s no-body-400 made it unusable in production. */
+              else setHoldErr(r.error ?? 'could not hold it')
+            } finally {
+              setHolding(false)
+            }
+          }}
+        >
+          <PauseCircle size={13} /> {holding ? 'Holding…' : 'Hold'}
+        </button>
+      ) : null}
       {/* Undo stays available on a stuck row: it is the only way out of one. */}
       {left > 0 || stuck ? (
         <button className="acr-btn" disabled={busy} onClick={() => onUndo(id)}>
           <Undo2 size={13} /> Undo
         </button>
       ) : null}
+      {holdErr ? <span className="aq-holderr">{holdErr}</span> : null}
     </div>
   )
 }
@@ -459,6 +508,7 @@ export function WaitingList({
   onRecheck,
   onAmend,
   onSnooze,
+  onHold,
 }: {
   rows: ApprovalRow[]
   labels: FleetLabels
@@ -477,6 +527,7 @@ export function WaitingList({
   onRecheck: (id: string) => Promise<{ stale: boolean; why: string | null }>
   onAmend: (id: string, args: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
   onSnooze: (id: string, until: Date | null) => void
+  onHold?: (id: string) => Promise<{ ok: boolean; executeAfter?: string; error?: string }>
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pendingBulk, setPendingBulk] = useState<{
@@ -737,6 +788,7 @@ export function WaitingList({
                 busy={busy}
                 onUndo={onUndo}
                 onCommit={onCommit}
+                onHold={onHold}
               />
             ) : (
               <div key={a.id} className="ap-selectrow">

@@ -1718,3 +1718,12 @@
 .aq-page .aq-precedentlist .ap-ptext strong {
   font-size: 11.5px;
 }
+
+/* S9.3 — a hold that failed says so on the row. Never a toast, for the same
+   reason the parked row is not one: it must survive being looked away from. */
+.aq-holderr {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  /* #9c2f2a on the parked row's #f3faf5 = 6.24:1. */
+  color: #9c2f2a;
+}
