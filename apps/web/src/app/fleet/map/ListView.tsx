@@ -34,6 +34,20 @@
 import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { ago } from '../_shared/run-health'
 import { statusOf, type MapEdge, type MapNode } from './lib'
+import { overlayById } from './overlays'
+
+/** The same overlay the canvas paints from and the rail reads — not a second
+ *  derivation of "what may it do". */
+const AUTONOMY = overlayById('autonomy')
+
+/** `lane` is how a worker is INVOKED, which the canvas draws as a container and
+ *  the table had no column for. */
+const LANE_WORDS: Record<string, string> = {
+  ranked: 'a step of a routine',
+  standalone: 'the nightly job runs it',
+  unwired: 'nothing runs it',
+}
+const LANE_ORDER: Record<string, number> = { ranked: 0, standalone: 1, unwired: 2 }
 
 const RANK: Record<string, number> = {
   attention: 0,
@@ -100,6 +114,49 @@ export function ListView({
       sortValue: (n) => n.tier,
       render: (n) => <span className="sbm-listdim">{n.tier}</span>,
     },
+    /*
+     * S5.d — THE THREE COLUMNS THAT MAKE THIS AN EQUIVALENT ALTERNATIVE AGAIN.
+     *
+     * WCAG's bar for a complex image is not "a table exists" but a text
+     * alternative that "serves a purpose equivalent" — for data, "a complete
+     * text equivalent of the data or information provided in the image". After
+     * Sections 2–4 the canvas card had drifted ahead of the table on three
+     * facts, so the picture could answer questions its own alternative could
+     * not:
+     *
+     *   the autonomy level   S3.j put it in WORDS on the card precisely because
+     *                        colour alone failed SC 1.4.1. The table never had
+     *                        it — so the page's DEFAULT question, "what is each
+     *                        worker allowed to do", was answerable only in the
+     *                        picture.
+     *   the lane             S2R made it a real container saying "Runs as part
+     *                        of the nightly job — not a step of any routine".
+     *                        A structural fact about how a worker is invoked.
+     *   the runs count       the card's third fact slot.
+     *
+     * `Right now` reads the SAME bucket the canvas paints from and the
+     * inspector rail reads (S4.d), so three surfaces cannot drift. Sorting it
+     * sorts by the autonomy ladder, which is the order the legend prints.
+     */
+    {
+      key: 'mayDo',
+      label: 'Right now',
+      width: 132,
+      sortable: true,
+      sortValue: (n) => AUTONOMY.buckets.findIndex((b) => b.id === AUTONOMY.bucketOf(n).id),
+      render: (n) => {
+        const b = AUTONOMY.bucketOf(n)
+        return <span>{b.short ?? b.label}</span>
+      },
+    },
+    {
+      key: 'lane',
+      label: 'How it runs',
+      width: 128,
+      sortable: true,
+      sortValue: (n) => LANE_ORDER[n.lane] ?? 9,
+      render: (n) => <span className="sbm-listdim">{LANE_WORDS[n.lane] ?? n.lane}</span>,
+    },
     {
       key: 'status',
       label: 'Status',
@@ -131,6 +188,16 @@ export function ListView({
           </span>
         )
       },
+    },
+    {
+      key: 'runs',
+      label: 'Runs',
+      width: 78,
+      align: 'right',
+      sortable: true,
+      sortValue: (n) => -n.runs.lifetime,
+      render: (n) =>
+        n.runs.lifetime === 0 ? <span className="sbm-listdim">none</span> : n.runs.lifetime,
     },
     {
       key: 'lastRun',
