@@ -4997,3 +4997,163 @@ friction.
 
 **Verdict: S7 needs no build. Two deferrals with conditions, one decline with a
 reason, and one inherited idea recorded.**
+
+---
+
+# Part 18 — S8 design study: deciding many at once
+
+## 18.0 — What S8 is FOR, in one sentence
+
+**Let an operator clear forty near-identical proposals in two minutes without
+ever making a mistake that costs euros × N — and after S5, without ever
+sweeping a row that can reach Amazon into the same gesture as one that cannot.**
+
+## 18.1 — Audit first: two of the spec's four complaints are already fixed
+
+The AQ-S8 spec was written before AQ.4/AQ.6 landed. Measured against the code
+as it stands:
+
+| Spec bullet | Reality today |
+|---|---|
+| Blast-radius sentence built server-side, reconciled against decidable rows | **Shipped.** `previewBulk` counts only `pending`, and AQ.6's comment records getting this wrong once: a parked row is already approved, so counting it over-reports exactly as omitting it under-reported. It says so explicitly rather than silently dropping rows |
+| "A result the operator can read… the client discards `failed[]`" | **Fixed.** `bulkResult` is captured and rendered with a `partial` variant |
+| Homogeneity: same worker, same action kind, **same worker version** | **Partial.** Action kind is enforced server-side and blocks approve. Same-worker is "enforced by the caller's grouping" — a UI convention, not an invariant. **Version is not checked at all** |
+| Select-all scoped to the visible group, never the queue | **Moot, and worse.** There is no select-all *at all*. Clearing forty rows is forty clicks, so the section does not currently achieve its own purpose |
+
+**So S8 is not the rebuild the spec implies.** Two bullets are done, one is
+half-done, and the fourth turns out to be a missing feature rather than a
+dangerous one.
+
+## 18.2 — What S5 changed, and the question it forces
+
+Bulk today cannot touch the rows that can execute. The outside queue renders
+`ApprovalCard` directly with **no checkbox** — `grep -c checkbox
+ApprovalsClient.tsx` → `0` — so selection exists only in the fleet queue, whose
+three tools are all preview-only.
+
+That is the safest possible state, and it is **incidental**: the outside queue
+was built as a separate section, not excluded on purpose. Nothing records the
+decision, so nothing stops a future phase adding a checkbox there.
+
+**Proposal: make it a rule, and say so in code.** Bulk covers rows that cannot
+execute. A row that can reach Amazon is decided one at a time, with its own ack
+tick. This is the one place where "euros × N" is not a figure of speech, and
+the ack gate S6 built is per-card by design — a bulk approve would either
+bypass it or ask the operator to tick once for forty different consequences,
+and both are worse than clicking forty times.
+
+## 18.3 — Research
+
+**Scaling friction to N** — Ashby confirms destructive bulk actions with a
+*tiered* pattern: at or below 24 records a checkbox acknowledgement; above 24,
+the operator must type the action name. The generalisable rule is that the same
+verb is a light action on one row and a heavy one on a hundred, so the
+confirmation must scale with the count rather than with the verb.
+
+**Select-all scope** — Gmail's two-step is the reference: selecting the page is
+one act, extending to "everything that matches" is a separate, explicit second
+act. NN/g's bulk-action guidance adds that the confirmation must state the
+count, because selection scope multiplies blast radius.
+
+**Homogeneity** — UiPath restricts bulk to actions of the same type *and the
+same process version*, and to the same form layout. The version clause is the
+part this page is missing: two proposals from the same worker before and after
+a charter revision are not the same kind of thing, and a single yes should not
+span both.
+
+**Already researched, not repeated** — Part 2F on colour and severity, and
+GitLab Pajamas' tiers, both applied in S5/S6.
+
+## 18.4 — The gaps, and the verdict on each
+
+| # | Gap | Verdict |
+|---|---|---|
+| 1 | No select-all — the section cannot do its job | **Build**, scoped to the visible group only, with the count in the label |
+| 2 | `irreversible` is computed and never spoken | **Build.** The spec named this and it is still true: the sentence carries count, kinds, high-risk share and euros, but not the irreversible count |
+| 3 | Friction is flat: 2 rows and 40 rows confirm identically | **Build**, tiered on N |
+| 4 | Worker version not part of homogeneity | **Defer, with a condition.** `AgentCharterRevision` exists but approvals do not record which revision produced them. That is a producer-side change; recorded for the charter stream |
+| 5 | Same-worker is a UI convention, not an invariant | **Build** — enforce it server-side beside the action-kind check, where it cannot be bypassed by a future caller |
+| 6 | Executable rows silently excluded from bulk | **Build as an explicit rule**, per 18.2 |
+
+## 18.5 — The euro figure already exists, and only bulk uses it
+
+`euroExposure()` computes an aggregate delta for `set-target-bid` and
+`set-price` and feeds the bulk sentence. **Nothing on the single card reads
+it.** So AQ-S6's "reversibility class × euros at risk" — recorded in Part 17 as
+unfinished, with a €2 change and a €2,000 change getting identical friction —
+is not blocked on new machinery. It is blocked on wiring an existing function
+into the card.
+
+**Not S8's to build**, because it changes single-card friction and that is S6's
+surface. But S8 is where the function lives, and the connection is recorded
+here so the next S6 pass does not rebuild it.
+
+## 18.6 — Proposed design
+
+```
+  ── nothing selected (the normal state) ─────────────────────────────────
+  [ ]  Bid tuner · 12 waiting                              Reject all (12)
+
+  ── some selected ───────────────────────────────────────────────────────
+  [✓] 3 selected   ·   Select all 12 in this group
+      [ Approve 3 ]  [ Reject 3 ]
+
+  ── confirming, small N ─────────────────────────────────────────────────
+  ⚠ This approves 3 actions: 3 × change a keyword's bid — 3 of them high
+    risk. It raises total daily bid exposure by €1.44. None can be undone
+    once run. You have 20 seconds to take it back.
+      [ Yes, approve 3 ]  [ Cancel ]
+
+  ── confirming, large N (> 24) ──────────────────────────────────────────
+  ⚠ This approves 37 actions: 37 × change a keyword's bid — 37 high risk.
+    It raises total daily bid exposure by €22.80. None can be undone once
+    run.
+    Type  approve 37  to confirm:  [____________]
+      [ Yes, approve 37 ]  [ Cancel ]
+```
+
+**Select-all is group-scoped and says its own number** — "Select all 12 in this
+group", never a bare "Select all". There is no cross-group or cross-filter
+select-all, and no second step to extend one: this queue is not Gmail's, and
+the only honest scope here is the group the operator can see.
+
+**Every state:** (a) nothing selected · (b) some selected, homogeneous ·
+(c) some selected, mixed kinds → approve blocked with the existing sentence,
+reject still allowed · (d) selection includes already-decided or parked rows →
+the existing "N others are not affected" clause · (e) confirming below the
+threshold · (f) confirming above it · (g) result, all done · (h) result,
+partial with the failed rows named.
+
+## 18.7 — What I am explicitly NOT doing
+
+- **Not adding selection to the outside queue** — 18.2 makes its absence a rule.
+- **Not building cross-group or cross-filter select-all.**
+- **Not wiring euros into the single card** — 18.5, S6's surface.
+- **Not adding worker-version homogeneity** — the data is not recorded yet.
+- **Not touching `inboxCounts()`** — still the open §6c-AQ hand-off.
+- **Not enabling anything.** Every state above is reachable with seeded
+  preview-only rows in the fleet queue.
+
+## 18.8 — Build order
+
+| Phase | What |
+|---|---|
+| **S8.1** | Server: same-worker enforced beside same-kind; `irreversible` spoken in the sentence |
+| **S8.2** | Group-scoped select-all with its count in the label |
+| **S8.3** | Tiered confirmation — typed confirmation above the threshold |
+| **S8.4** | The exclusion rule for executable rows, written where a future caller will hit it |
+| **S8.5** | Every state (a)–(h) seeded and measured; nine widths, 200% zoom, keyboard, composited contrast; database back to exactly 18 |
+
+## 18.9 — Sources
+
+**Tiered destructive confirmation** — [Ashby · Confirm destructive actions][ashby]
+**Bulk guidance** — [NN/g · Bulk Actions][nngbulk], [Eleken · Bulk action UX][eleken]
+**Select-all scope** — Gmail's two-step select-all
+**Homogeneity + version** — [UiPath Action Center · Managing actions][uipath]
+
+[ashby]: https://www.ashbyhq.com/product-updates/confirm-destructive-actions
+[nngbulk]: https://www.nngroup.com/videos/bulk-actions-design-guidelines/
+[eleken]: https://www.eleken.co/blog-posts/bulk-actions-ux
+[uipath]: https://docs.uipath.com/action-center/automation-cloud/latest/user-guide/managing-actions
+
+**AWAITING OPERATOR APPROVAL — no code written.**
