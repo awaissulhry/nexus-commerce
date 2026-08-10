@@ -107,7 +107,7 @@ export function RuleDetail({
   }
 
   const caps = [
-    rule.caps.perDay != null ? `${rule.caps.perDay} executions per day` : null,
+    rule.caps.perDay != null ? `${rule.caps.perDay} execution${rule.caps.perDay === 1 ? '' : 's'} per day` : null,
     rule.caps.perExecutionCents != null ? `${eur(rule.caps.perExecutionCents)} per execution` : null,
     rule.caps.perDayCents != null ? `${eur(rule.caps.perDayCents)} per day` : null,
   ].filter(Boolean) as string[]
