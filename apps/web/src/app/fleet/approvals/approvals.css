@@ -1639,7 +1639,12 @@
   border: 1px solid #e2e8f0;
   border-radius: 3px;
   background: #f4f6f9;
-  font-size: 11px;
+  /* 11.5px, not 11. I set this a half-step smaller for monospace optical
+     balance and thereby broke the three-size rule I had just claimed to
+     restore — the second time in this section that measuring the rendered
+     page, not reading the diff, is what caught it. One ladder, no optical
+     exceptions to remember. */
+  font-size: 11.5px;
   /* #4a5563 on #f4f6f9 = 7.24:1. */
   color: #4a5563;
 }
@@ -1706,4 +1711,14 @@
 .aq-page .aq-waited {
   font-size: 11.5px;
   color: #55616f;
+}
+
+/* S10.6 — the precedent list reuses `.ap-plabel` (10px) and `.ap-ptext` (12px)
+   from the shared stylesheet, which put the section back on five sizes the
+   moment it was seen populated. Normalised here, under this page's root,
+   because that stylesheet is in the frozen directory. */
+.aq-page .aq-precedentlist .ap-plabel,
+.aq-page .aq-precedentlist .ap-ptext,
+.aq-page .aq-precedentlist .ap-ptext strong {
+  font-size: 11.5px;
 }
