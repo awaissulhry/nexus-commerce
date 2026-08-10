@@ -721,6 +721,51 @@ word itself is readable at 6.31:1, so no information is conveyed by the underlin
 alone. **Recorded with the number, still not taken**, because it is a shared file
 and the call belongs to whoever owns it.
 
+### S4.k, and a claim of mine that was wrong
+
+**What I reported:** that the critic's 945-character block reason was *invisible
+at the default 7-day window*, because the panel read "Nothing has been reviewed
+yet".
+
+**What is true:** the critique is dated **6 Aug** and today is **10 Aug**, so it
+is *inside* the 7-day window (`inWindow: true`, `verdicts: {block: 1}`), and the
+panel has been showing it there since S4.j deployed. I inferred the 7-day
+behaviour from a `window=all` probe instead of measuring `window=7d`. That is
+the exact failure this document has been naming all the way through — reasoning
+about a state rather than looking at it — and it is the fourth raise this
+engagement that did not survive contact with a measurement.
+
+**S4.k is still right, and is now verified for the reason it should have had.**
+Two different facts were sharing one sentence: *never reviewed* and *not
+reviewed in this window*. `overlays.ts` separates exactly that pair everywhere
+else. Exercised at `window=24h`, where the 6 Aug verdict genuinely falls
+outside, the panel reads:
+
+> "Nothing was reviewed in this window. The most recent verdict was a block on
+> 6 Aug 2026 — widen the window to read what the critic said."
+
+...and the out-of-window verdict is not promoted into the window.
+
+### Raised, not taken — a window from the URL does not refetch
+
+Found while verifying the above, and it is not the rail's:
+
+Loading `?window=24h` renders **the default window's data under the 24-hour
+label** — measured: the panel showed `Blocked 1` while the API's own 24h response
+said `{pass: 0, revise: 0, block: 0}`. The cause is in the page's wiring, not the
+panel: `MapClient` reads the URL in a mount effect *after* `useVisibilityPoll`
+has already fired its first `load()` with the default `7d`, and the hook holds
+`load` in a **ref** (`loadRef.current = load`) with a `useCallback([], …)` tick —
+so a changed `windowKey` updates the ref and triggers **no refetch**.
+
+It converges on the next poll tick, so it is a startup flash on a shared link
+rather than a permanent error — but the URL is described in `MapClient`'s own
+comment as "the shareable unit", and a shared link that shows the wrong window's
+numbers for its first seconds undercuts that. **`use-visibility-poll.ts` is a
+shared `_shared/` module and the window switch is the header's, so this is
+raised with the measurement rather than fixed here.**
+
 ### Still open
 
-Nothing from this section. The remaining `/fleet/map` work is S5–S9.
+Nothing from this section's own surface. One item raised above for the page
+shell. The remaining `/fleet/map` work is S5–S9.
