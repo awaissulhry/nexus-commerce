@@ -486,7 +486,14 @@ export function MapClient() {
                  differences and 19 contrast failures. */
               return (
                 <RailShell
-                  title={n ? n.type.charAt(0) + n.type.slice(1).toLowerCase() : 'What this is'}
+                  /* `.toUpperCase()` on the first letter, not just `.charAt(0)`:
+                     the endpoint returns the type already lower-cased, so the
+                     first cut rendered "campaign" as a panel title. */
+                  title={
+                    n
+                      ? n.type.charAt(0).toUpperCase() + n.type.slice(1).toLowerCase()
+                      : 'What this is'
+                  }
                   announce={n ? `Showing ${n.label}.` : 'Showing everything the fleet watches.'}
                   subject={n?.label ?? null}
                   onClose={entitySel ? () => setEntitySel(null) : undefined}
