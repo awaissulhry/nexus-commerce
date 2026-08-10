@@ -164,11 +164,32 @@ function WorkerNode({ data }: NodeProps) {
                                                          repeating "not yet run"
                                                          here would print it
                                                          twice on one card)
-              ran, but not in window  —  not in this window
-              ran in window           —  $0.1090 spent  (including a real $0) */}
+              ran, but not in window  —  no runs
+              ran in window           —  $0.1090 spent  (including a real $0)
+
+            THE WORDING IS A MEASUREMENT, not a preference. "not in this window"
+            shipped first and overflowed ONE card: `Fleet self-test analyst`
+            carries `47 open · 47 stale` in slot 2, and the facts row is 159px
+            of `nowrap`, so the third slot ran 17px past the card's inner edge —
+            visibly, because the row is `overflow: visible`. Every other card
+            had 23-40px of slack, which is why only the screenshot caught it.
+
+            Measured by swapping the text and reading the painted range against
+            the card's inner right edge (697px):
+
+              — not in this window      714   +17  ✗
+              — no runs in this window  728   +32  ✗
+              — none in this window     720   +23  ✗
+              — no runs in window       714   +18  ✗
+              — not in window           700    +3  ✗   (3px is still wrong)
+              — no runs                 679   -18  ✓
+
+            So the slot cannot say "window" on the widest card, and the
+            denominator is carried by S7.d's sentence instead — which is what
+            that sentence is for. */}
         <span className={`sbm-fact ${d.neverRun || d.costRuns === 0 ? 'is-empty' : ''}`}>
           <b>{d.neverRun || d.costRuns === 0 ? '—' : usd(d.costWindow)}</b>{' '}
-          {!d.neverRun && d.costRuns === 0 ? 'not in this window' : 'spent'}
+          {!d.neverRun && d.costRuns === 0 ? 'no runs' : 'spent'}
         </span>
       </div>
       {/*
