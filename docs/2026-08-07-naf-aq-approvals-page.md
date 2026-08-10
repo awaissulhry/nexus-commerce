@@ -5617,3 +5617,121 @@ under the marker and removed by the same cleanup; neither enables anything.
 [a14]: https://artificialintelligenceact.eu/article/14/
 
 **AWAITING OPERATOR APPROVAL — no code written.**
+
+---
+
+## 19.9 — S10 execution record
+
+Six phases, nine commits. The database began and ended at exactly **18
+approvals · 0 pending · 0 scheduled · 0 exemplars · 0 audit rows**, re-probed
+independently. No approval was decided by this engagement.
+
+| Phase | Commit | What |
+|---|---|---|
+| S10.1 | `c938cf218` `336adeee2` | Contrast on every row; six type sizes → three |
+| S10.2 | `2c2a9f2c4` | What the record is OF; the badge became words; `manual-action` through S5's map |
+| S10.3 | `5477af29f` `61ce575ee` | A reason with no author stops being a quotation; absolute timestamps |
+| S10.4 | `8ea21dfdd` | Precedent first-class |
+| S10.5 | `c63a8c8a4` `c36c46183` | AP.8 proven; an expired row says how long it waited |
+| S10.6 | `705d7f464` | Three sizes, again |
+
+### 19.9.1 The headline: the record was unreadable and nobody had looked
+
+`.ap-decidedmeta` — the who · when · risk line on **every** row — measured
+**2.95:1**. The `pre-fleet` badge, carrying the single most important fact in
+the section, measured **3.77:1** at 10px.
+
+Neither involves opacity. Unlike the three opacity recurrences elsewhere on
+this page, a plain `getComputedStyle` would have caught both at any point in
+the last two months. Nothing did, because the record was built to hold data and
+had never had a design pass. **After: 0 composited failures across 235 text
+nodes**, with everything seeded.
+
+### 19.9.2 The rule that replaced a regex
+
+15 of 18 rows rendered a script marker — `acp5a-cost-verify` — inside
+quotation marks, in the slot reserved for the operator's own words. The fix is
+not a pattern over `acp*`, which would rot on a rename and would mislabel a
+real reason containing the word "verify". It is:
+
+> `decidedBy` is null ⟹ there is no speaker ⟹ there are no quotation marks.
+
+Proven from both sides by seeding: the row **with** a decider renders
+*“too aggressive for a term this broad”* quoted, while the 15 authorless rows
+render as unattributed notes.
+
+### 19.9.3 AP.8: dark-but-correct, settled by making the sets intersect
+
+The study claimed the mechanism was sound and merely starved. That is a claim
+about mechanism, and the only honest way to settle it was to create the one
+condition under which it could fire — a decided row and a waiting row sharing a
+worker and a fleet tool. On prod:
+
+```
+HOW THIS WORKER HAS FARED WITH YOU
+"You have answered 2 of these before — 1 approved, 1 rejected."
+```
+
+Article 14(4)(b)'s automation-bias signal works. It had simply never had a row
+to attach to. The count is defensible against its query: `trackRecords()`
+filters to `approved|executed|rejected`, so the seeded superseded, executing
+and expired rows are correctly absent from it.
+
+### 19.9.4 Three statuses rendered for the first time
+
+`superseded` → *"You changed the number"*, `approved`, and `executing` →
+*"Approved, running now"* had never existed in production. All three verified
+by seeding, not by reading `outcomeWords()`.
+
+### 19.9.5 Two things only a seeded state could show
+
+- **The banner adapts.** With 4 fleet rows among 22 it switched itself from
+  "None of these 18 are your decisions" to "18 of these are not your
+  decisions". The count is computed from the rows on screen, so it cannot drift
+  from what is rendered beneath it — and the sentence disappears entirely once
+  every row is real.
+- **An expired row never said how long it waited** — the section brief's "one
+  signal the queue is beating the operator". Invisible until the first expired
+  row production has ever held was seeded. Now *"waited 24 hours"*, and only on
+  expired rows: the same span on a decided row is latency, which this page is
+  deliberately not claiming yet.
+
+### 19.9.6 What I got wrong, twice, the same way
+
+**I claimed six type sizes became three, and shipped more — twice.**
+
+1. S10.1 missed `.dt-risk` at 10px, a chip borrowed from the Decision
+   Timeline's vocabulary that none of my three overrides touched.
+2. S10.6 found three more once precedent was seeded populated — and one was
+   mine: I had set `.aq-marker code` a half-step smaller in S10.3 for monospace
+   optical balance, breaking the rule I had just claimed to restore.
+
+Neither was findable by reading the diff. Both needed the rendered page, and
+the second needed a **seeded state to make an unreachable branch reachable** —
+which is the same lesson S8 learned about guards and is now the second section
+to learn it.
+
+### 19.9.7 Measurements
+
+| Check | Result |
+|---|---|
+| Composited contrast, seeded | **0 failures / 235 nodes** (was ~100 failing) |
+| Type sizes in the section | 11.5 / 13 / 16 |
+| Eleven widths 900–1920 + 200% at 1512/1280 | no overflow, no spill |
+| Prose | banner 76 chars, precedent 77 (limit 80) |
+| Tab stops in precedent | 1 — the `exemplar` definition, which 1.4.13 requires to be focusable. No control, because none can act |
+| Database | 18 · 0 · 0 · 0 · 0, before and after |
+
+### 19.9.8 Left for others, with evidence
+
+- **The Overview's `ApprovalInbox.tsx` still renders 2.95:1 and 3.77:1.** It
+  shares the `.ap-*` rules this section overrode under `.aq-page`, and it lives
+  in the frozen directory. A real accessibility failure on a live surface,
+  fixed here and not there, recorded rather than half-fixed.
+- **`whereFor('waiting')` still counts parked rows as waiting** — §6c-AQ, now
+  with S8's live evidence.
+- **The oversight statistics** (approval rate, latency, override rate per
+  worker) remain AQ.10's, after ~20 real decisions. From today's 18 rows a
+  latency figure reads 0.9s and means nothing.
+
+**S10 is complete.**
