@@ -331,6 +331,7 @@ should stay small — which is the real argument of Part 4.
 | **S6.g** | the table tells the truth when capped | forced `truncated: true` and the footer agrees with the band |
 | **S6.h** | every declared relation has an edge colour | forced `VARIANT_OF`; swatch, meter and stroke agree |
 | **S6.i** | the evidence column reads as evidence | no `kw:`/`|` on screen; every column inside the table |
+| **S6.j** | the parser is locked to the shape prod stores | vitest, first fixture verbatim from production |
 
 `S6.a` first: it is a correctness defect, it is three lines, and it is the same
 fix a previous section already proved. **S6.f was not planned** — it was found
