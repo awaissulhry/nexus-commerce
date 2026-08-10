@@ -290,7 +290,8 @@ export function CreateAssignment({
       /* The Drawer portals to <body>, so it is OUTSIDE `.as-page` and none of
          this page's overrides reach it. This class is that root — the same
          lesson as Part 11's `.as-page`, one portal further out. */
-      className="as-drawer"
+      /* Page colours AND the fleet light pin — a portal needs both. */
+      className="as-drawer fleet-portal"
       footer={
         /**
          * S2.c — the commit bar.

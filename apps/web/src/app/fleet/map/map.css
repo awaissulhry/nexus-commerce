@@ -1205,19 +1205,30 @@
   outline: 2px solid #2b6cb0;
   outline-offset: 1px;
 }
+/* NAF.SB.M — a measure caps the PROSE, never the block.
+   `max-width: 88ch` sat on the body box, so the white panel itself stopped at
+   888px inside a 1614px slot and left 726px — 45% — of bare page beside it.
+   That is the dead-width defect the Workflows rebuild removed section by
+   section, and Approvals wrote the same rule down at its own S6.d: a
+   max-width on the block shrinks the block, not the line length.
+
+   And `ch` was measuring the wrong font. It resolves against the element it
+   is set on, and this box sets no font-size — so 88ch was computed from the
+   inherited 16px while every paragraph inside renders at 12.5px. px, and on
+   the prose. */
 .sbm-how-body {
   margin-top: 8px;
   padding: 14px 16px;
   background: #fff;
   border: 1px solid #e6ebf1;
   border-radius: 9px;
-  max-width: 88ch;
 }
 .sbm-how-body p {
   margin: 0 0 10px;
   font-size: 12.5px;
   line-height: 1.6;
   color: #4a5666;
+  max-width: 760px;
 }
 .sbm-how-body h4 {
   margin: 16px 0 6px;

@@ -63,6 +63,12 @@ export function HowApprovalsWork({
         title="How approvals work"
         subtitle="What this queue guarantees, and what it cannot do."
         width={520}
+        /* A Drawer portals to <body>, outside `.fleet-surface`, where the DS
+           `.dark` block wins again. Measured on prod in dark mode: this panel
+           painted rgb(24,38,59) while the page stayed light and the heading
+           rendered pure black on it — 1.38:1. `.fleet-portal` carries the same
+           pin; see fleet-pages.css:19. */
+        className="fleet-portal"
       >
         <div className="aq-how">
           <h4>Only a worker set to PROPOSE can ask you</h4>

@@ -57,7 +57,10 @@ export function HowAssignmentsWork() {
         /* The fourth subtree of this page to need its own root, and the reason
            is the one Part 12 recorded: a portal escapes every ancestor, so no
            page-level class can ever reach it. */
-        className="as-drawer"
+        /* `.as-drawer` carries this page's colours; `.fleet-portal` carries
+           the fleet's LIGHT PIN, which a portal needs and no page class
+           provides. Both, or the panel goes dark in dark mode. */
+        className="as-drawer fleet-portal"
       >
         <div className="as-how">
           <h4>What an assignment is</h4>
