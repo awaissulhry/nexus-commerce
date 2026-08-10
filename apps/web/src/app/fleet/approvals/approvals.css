@@ -1643,3 +1643,60 @@
   /* #4a5563 on #f4f6f9 = 7.24:1. */
   color: #4a5563;
 }
+
+/*
+ * S10.4 — precedent, first-class.
+ *
+ * Was a chevron disclosure closed by default on `acr-fl-checkstoggle`, a class
+ * belonging to another surface. It is a section now, always open, because it
+ * is the only place on this page that shows the operator a consequence of
+ * their own work.
+ */
+.aq-precedent {
+  margin: 16px 0 0;
+  padding: 13px 14px;
+  border: 1px solid #e4e9ef;
+  border-radius: 7px;
+  background: #fafbfd;
+}
+.aq-precedent h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: #1c2530;
+}
+.aq-precedent h4 svg {
+  flex: 0 0 auto;
+  color: #55616f;
+}
+.aq-precedentwhy,
+.aq-precedentempty {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  /* 6.02:1 on #fafbfd. */
+  color: #55616f;
+  max-width: 58ch;
+}
+.aq-precedentempty strong {
+  color: #1c2530;
+  font-weight: 650;
+}
+.aq-precedentlist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.aq-precedentlist li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11.5px;
+  color: #55616f;
+}

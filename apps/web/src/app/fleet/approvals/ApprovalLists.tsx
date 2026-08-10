@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Check, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
 import { toolCardFor } from '@/app/marketing/ads/rules-automation/fleet/DecisionCard'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ApprovalCard, type CardApproval, type FleetLabels } from './ApprovalCard'
@@ -302,38 +302,68 @@ export function PrecedentPanel({
   precedents: PrecedentRow[]
   nameOf: (k: string | null) => string
 }) {
-  const [open, setOpen] = useState(false)
+  /*
+   * S10.4 — first-class, never collapsed.
+   *
+   * This was a chevron disclosure closed by default, built on
+   * `acr-fl-checkstoggle` — a class belonging to PlanStory and CharterStudio on
+   * another surface, and the borrowed-disclosure pattern S1, S2 and S5 were
+   * each rebuilt to remove.
+   *
+   * Hiding it also inverted the one research finding that bears directly on
+   * it. In interactive ML, explanations were measured to INCREASE user
+   * frustration while feedback DECREASED it (No Explainability without
+   * Accountability, CHI 2020): showing someone what their input did beats
+   * explaining what the system would do. This panel is the only place on the
+   * page that shows a consequence of the operator's own work — the entire
+   * reason writing a reason is worth anything — and it was the one thing
+   * behind a click.
+   *
+   * There is no control here on purpose. Nothing in the API can deactivate,
+   * reweight or correct an exemplar, and a control that cannot act is worse
+   * than none.
+   */
   return (
-    <div className="ap-precedents">
-      <button className="acr-fl-checkstoggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+    <section className="aq-precedent" aria-labelledby="aq-prec-h">
+      <h4 id="aq-prec-h">
         <GraduationCap size={13} aria-hidden />
-        {precedents.length === 0
-          ? 'Your decisions have not taught the fleet anything yet'
-          : `What your decisions have taught the fleet (${precedents.length})`}
-      </button>
-      {open ? (
-        precedents.length === 0 ? (
-          <p className="acr-fl-empty">
-            No <Term k="exemplar">precedent</Term> exists yet, because no fleet approval has been
-            decided. The first yes or no you give here becomes the first one.
-          </p>
-        ) : (
-          <ul className="ap-precedentlist">
-            {precedents.map((p, i) => (
-              <li key={i}>
-                <span className={`ap-plabel l-${p.label}`}>{p.label}</span>
-                <span className="ap-ptext">
-                  <strong>{nameOf(p.charterKey)}</strong>
-                  {p.toolName ? ` · ${humanize(p.toolName)}` : ''}
-                  {p.note ? <span className="ap-reason">“{p.note}”</span> : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )
-      ) : null}
-    </div>
+        What your decisions have taught the fleet
+      </h4>
+      <p className="aq-precedentwhy">
+        When you approve or reject with a reason, that decision is kept as an{' '}
+        <Term k="exemplar">exemplar</Term> and the most recent ones are read back to that worker
+        on its next run. It is the only thing on this page that makes writing a reason worth
+        anything.
+      </p>
+      {precedents.length === 0 ? (
+        /*
+         * The honest empty state, and today it is the TRUE one.
+         *
+         * It says why it is empty and what would fill it — which is the whole
+         * difference between an empty state and a loading state, and the
+         * difference an operator uses to decide whether to trust the surface.
+         */
+        <p className="aq-precedentempty">
+          <strong>Nothing yet — and that is the truth, not a delay.</strong> No fleet approval has
+          ever been decided, so there is nothing for a worker to read. The eighteen rows above came
+          from before the fleet and were answered by a script, which is why none of them counts.
+          The first yes or no you give here becomes the first one.
+        </p>
+      ) : (
+        <ul className="aq-precedentlist">
+          {precedents.map((p, i) => (
+            <li key={i}>
+              <span className={`ap-plabel l-${p.label}`}>{p.label}</span>
+              <span className="ap-ptext">
+                <strong>{nameOf(p.charterKey)}</strong>
+                {p.toolName ? ` · ${humanize(p.toolName)}` : ''}
+                {p.note ? <span className="ap-reason">“{p.note}”</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
