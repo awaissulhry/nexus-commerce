@@ -245,6 +245,13 @@ export function MapClient() {
     if (ov) setOverlayId(ov)
     const ev = q.get('ev')
     if (ev === 'map' || ev === 'list') setEntityView(ev)
+    /* S6.f — which MODE you are in was the one piece of view state the URL never
+       carried. Only `thing` implied entity mode, and `thing` needs a selection,
+       so entity mode with nothing selected could not be linked at all — and
+       `?ev=map`, a URL THIS PAGE WRITES, reloaded into worker mode and then
+       erased itself on the next write. `mode` is the missing half. `thing` still
+       implies it, so links already shared keep working. */
+    if (q.get('mode') === 'entities') setMode('entities')
     const thing = q.get('thing')
     if (thing) {
       setMode('entities')
@@ -256,6 +263,8 @@ export function MapClient() {
     const q = new URLSearchParams()
     if (selection?.kind === 'worker') q.set('worker', selection.id)
     if (selection?.kind === 'edge') q.set('edge', selection.id)
+    /* S6.f — worker mode is the default, so it stays bare; entity mode says so. */
+    if (mode === 'entities') q.set('mode', 'entities')
     /* S4.i — it was the only selection on this page that was not shareable. */
     if (mode === 'entities' && entitySel) q.set('thing', entitySel)
     if (mode === 'entities' && entityView !== 'list') q.set('ev', entityView)
