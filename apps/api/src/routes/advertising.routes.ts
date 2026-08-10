@@ -6044,17 +6044,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(404)
       return { error: 'not_found' }
     }
-    if (!rule.enabled) {
-      // Allow testing disabled rules — temporarily flip + flip back.
-      await prisma.automationRule.update({ where: { id }, data: { enabled: true } })
-      try {
-        const result = await evaluateRule({ ruleId: id, context: body.context, forceDryRun: true, isTestRun: true })
-        return { result }
-      } finally {
-        await prisma.automationRule.update({ where: { id }, data: { enabled: false } })
-      }
-    }
-    const result = await evaluateRule({ ruleId: id, context: body.context, forceDryRun: true, isTestRun: true })
+    // RA.AUTO — a disabled rule is evaluated via `ignoreEnabled`, not by arming it.
+    //
+    // This used to write `enabled: true`, evaluate, and write it back in a `finally`. For the
+    // duration the database held a genuinely armed rule, against an evaluator cron that ticks
+    // every 15 minutes — and if the process died in between, the rule stayed armed. The flag
+    // reaches the same result with no window and no write. Behaviour for callers is identical.
+    const result = await evaluateRule({
+      ruleId: id, context: body.context, forceDryRun: true, isTestRun: true,
+      ignoreEnabled: !rule.enabled,
+    })
     return { result }
   })
 

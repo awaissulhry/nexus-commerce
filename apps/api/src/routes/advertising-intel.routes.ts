@@ -62,22 +62,38 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
-  // Trigger a single automation rule immediately (dry-run forced for safety).
-  // Returns the execution result so the operator can see what it WOULD do
-  // before going live — the "simulate now" feature on the rule detail page.
+  /**
+   * Simulate ONE rule against real current data. Nothing reaches Amazon.
+   *
+   * RA.AUTO rewrote this route. It used to say "dry-run forced for safety" and then call
+   * `void runAdvertisingRuleEvaluatorOnce()` — the whole evaluator, all 21 triggers, every
+   * enabled rule, with dry-run forced by nothing but the account-level SUGGEST posture (which is
+   * off). Pressing Simulate on one PROPOSE rule therefore handed the eight writing AUTO rules a
+   * live tick, and the un-awaited `void` meant it returned before anything happened and could
+   * never show what the rule would do. Nothing in the UI called it, which is the only reason
+   * this was latent rather than an incident.
+   *
+   * `simulateOneRule` evaluates that rule and no other, with `forceDryRun` and `isTestRun` set,
+   * and can simulate a DISABLED rule without arming it — which is the main case, since 29 of the
+   * 51 rules are off and "what would this do" is what you ask before turning one on.
+   *
+   * It DOES write `AutomationRuleExecution` rows, one per evaluated context, exactly as a
+   * dry-run tick does. "Writes nothing" means nothing reaches Amazon, not that the database is
+   * untouched — the response says so on `wroteAuditRows` so no caller has to guess.
+   */
   fastify.post('/advertising/automation-rules/:id/simulate', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const rule = await prisma.automationRule.findUnique({ where: { id, domain: 'advertising' }, select: { id: true, trigger: true, conditions: true, actions: true, name: true } })
-    if (!rule) { reply.status(404); return { error: 'rule not found' } }
-    // Fire the rule in forced dry-run against the current evaluation context.
     try {
-      const { runAdvertisingRuleEvaluatorOnce } = await import('../jobs/advertising-rule-evaluator.job.js')
-      // Can't easily run one rule — instead trigger the whole evaluator and return
-      // the most recent execution for this rule so the UI shows fresh data.
-      void runAdvertisingRuleEvaluatorOnce()
-      return { ok: true, ruleName: rule.name, triggered: true, note: 'Evaluator triggered — check execution history for this rule in ~30s' }
+      const { simulateOneRule } = await import('../jobs/advertising-rule-evaluator.job.js')
+      const out = await simulateOneRule(id)
+      if (!out.ok) { reply.status(out.error === 'not_found' ? 404 : 400); return out }
+      return {
+        ...out,
+        reachedAmazon: false,
+        wroteAuditRows: out.results?.length ?? 0,
+      }
     } catch (e) {
-      reply.status(500); return { error: (e as Error)?.message }
+      reply.status(500); return { ok: false, error: (e as Error)?.message }
     }
   })
 

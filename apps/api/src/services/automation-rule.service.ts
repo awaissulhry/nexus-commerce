@@ -413,6 +413,22 @@ export interface EvaluateRuleArgs {
    *  produces no reviewable artifact is invisible. Distinct from forceDryRun,
    *  which the cron sets for the whole account under autonomy=SUGGEST. */
   isTestRun?: boolean
+  /**
+   * RA.AUTO — evaluate a DISABLED rule anyway, without enabling it.
+   *
+   * `enabled` is the gate on whether a rule runs by itself, and it must stay that. But the
+   * question "what would this do if I turned it on" is the whole point of a simulation, and a
+   * disabled rule is the main thing anyone wants to ask it about.
+   *
+   * Before this existed, the only way to answer it was the `/automation-rules/:id/test` route's
+   * trick of writing `enabled: true`, evaluating, and writing it back in a `finally` — which put
+   * a real armed rule in the database for the duration, against an evaluator cron that ticks
+   * every 15 minutes, and left the rule armed for good if the process died in between.
+   *
+   * ONLY ever combined with `forceDryRun: true` by its callers. Nothing here enforces that
+   * pairing, so a future caller must keep it: this flag says "ignore the gate", not "it is safe".
+   */
+  ignoreEnabled?: boolean
 }
 
 export interface EvaluateRuleResult {
@@ -463,7 +479,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       errorMessage: 'Rule not found',
     }
   }
-  if (!rule.enabled) {
+  if (!rule.enabled && !args.ignoreEnabled) {
     return {
       ruleId: rule.id,
       matched: false,

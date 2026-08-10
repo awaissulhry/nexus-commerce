@@ -1076,6 +1076,174 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   return summary
 }
 
+/**
+ * RA.AUTO — simulate ONE rule against real current data, and write nothing.
+ *
+ * This replaces what `POST /advertising/automation-rules/:id/simulate` used to do, which was
+ * `void runAdvertisingRuleEvaluatorOnce()` — the entire evaluator, all 21 triggers, every enabled
+ * rule, with no forced dry-run. Its comment claimed "dry-run forced for safety" and the only
+ * thing forcing dry-run in that path is the ACCOUNT-level SUGGEST posture, which is off. So
+ * pressing Simulate on one PROPOSE rule handed the eight writing AUTO rules a live tick, and
+ * because the call was not awaited it returned before anything happened and could never report
+ * what the rule would have done. Nothing in the UI called it, which is the only reason this was
+ * a latent hazard rather than an incident.
+ *
+ * Three things make this safe, and all three are required:
+ *   · `ruleIds: [ruleId]` — no other rule is evaluated, so no other rule can act
+ *   · `forceDryRun: true` — this rule cannot write either, whatever its autonomy says
+ *   · `isTestRun: true`   — and it cannot leave a proposal in the Suggestions queue
+ *
+ * `ignoreEnabled` lets a DISABLED rule be simulated without arming it, which is the main case:
+ * 29 of the 51 rules are off, and "what would this do" is the question you ask before turning one
+ * on. The old `/test` route answered it by writing `enabled: true` and hoping to write it back.
+ *
+ * NOT free of side effects, and the caller must say so: `evaluateRule` records an
+ * `AutomationRuleExecution` row per context, exactly as a dry-run tick does. That is the audit
+ * trail working as intended — but "writes nothing" means nothing reaches AMAZON, not that the
+ * database is untouched. Same distinction the fleet's preview surfaces had to learn.
+ */
+export async function simulateOneRule(ruleId: string): Promise<{
+  ok: boolean
+  error?: string
+  ruleName?: string
+  trigger?: string
+  enabled?: boolean
+  /** Contexts the rule's trigger produced from current data, before scope filtering. */
+  contextsBuilt?: number
+  /** Contexts left after the rule's own market/portfolio/campaign scope. */
+  contextsInScope?: number
+  matched?: number
+  results?: Array<{
+    matched: boolean
+    status: string
+    errorMessage?: string
+    actions: Array<{ type?: string; ok?: boolean; error?: string; output?: unknown }>
+  }>
+}> {
+  const rule = await prisma.automationRule.findUnique({
+    where: { id: ruleId },
+    select: {
+      id: true, name: true, domain: true, trigger: true, enabled: true,
+      scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true,
+    },
+  })
+  if (!rule || rule.domain !== 'advertising') return { ok: false, error: 'not_found' }
+
+  // Only the builder for THIS rule's trigger runs. The old route's cost was building all 21.
+  const BUILDERS: Record<string, () => Promise<Array<{ marketplace: string | null }>>> = {
+    FBA_AGE_THRESHOLD_REACHED: buildFbaAgeContexts,
+    AD_SPEND_PROFITABILITY_BREACH: buildProfitabilityContexts,
+    CAC_SPIKE: buildCacSpikeContexts,
+    AD_TARGET_UNDERPERFORMING: buildUnderperformContexts,
+    CAMPAIGN_PERFORMANCE_BUDGET: buildCampaignBudgetContexts,
+    KEYWORD_ZERO_IMPRESSIONS: buildZeroImpressionContexts,
+    KEYWORD_LOW_CTR: buildLowCtrContexts,
+    CVR_DROP: buildCvrDropContexts,
+    KEYWORD_WASTED_SPEND: buildWastedKeywordContexts,
+    SEARCH_TERM_CONVERTING: buildSearchTermConvertingContexts,
+    KEYWORD_HIGH_ACOS: buildHighAcosKeywordContexts,
+    KEYWORD_SCALE_OPPORTUNITY: buildScaleOpportunityContexts,
+    AD_GROUP_UNDERPERFORMING: buildAdGroupUnderperformContexts,
+    NEW_TO_BRAND_WINNER: buildNewToBrandWinnerContexts,
+    CAMPAIGN_NO_SALES: buildCampaignNoSalesContexts,
+    SEARCH_TERM_WASTING: buildSearchTermWastingContexts,
+    CAMPAIGN_ROAS_DECLINING: buildCampaignRoasDecliningContexts,
+    KEYWORD_RISING_STAR: buildRisingStarContexts,
+    SOV_BID: buildSovBidContexts,
+    KEYWORD_RANK_BID: buildKeywordRankBidContexts,
+  }
+
+  let contexts: Array<{ marketplace: string | null }>
+  if (rule.trigger === 'SCHEDULE') {
+    // SCHEDULE has no builder — the tick synthesises one context per active marketplace,
+    // carrying month-to-date spend so the budget-cap rules can evaluate. Mirrored here rather
+    // than extracted, because the tick's version also feeds 22 other triggers in one pass.
+    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
+    const now = new Date()
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    const spend = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['marketplace'],
+      where: { entityType: 'CAMPAIGN', date: { gte: monthStart } },
+      _sum: { costMicros: true },
+    })
+    const byMkt = new Map(spend.map((r) => [r.marketplace, microsToCents(r._sum.costMicros)]))
+    contexts = [...new Set(conns.map((c) => c.marketplace))].map((mkt) => ({
+      trigger: 'SCHEDULE' as const,
+      marketplace: mkt,
+      budget: { monthlySpendCents: byMkt.get(mkt) ?? 0 },
+    }))
+  } else {
+    const build = BUILDERS[rule.trigger]
+    if (!build) return { ok: false, error: `no context builder for trigger ${rule.trigger}`, ruleName: rule.name, trigger: rule.trigger }
+    contexts = await build()
+  }
+
+  // Same scope enforcement as the real tick, so a simulation cannot claim reach the rule
+  // would not have. Identity maps only matter when the rule scopes below marketplace.
+  const extToLocal = new Map<string, string>()
+  const localToPortfolio = new Map<string, string | null>()
+  if (rule.scopePortfolioId != null || rule.scopeCampaignId != null) {
+    const exts = new Set<string>(); const locals = new Set<string>()
+    for (const ctx of contexts) {
+      const c = ctx as unknown as { campaign?: { id?: string }; searchTerm?: { externalCampaignId?: string } }
+      if (c.campaign?.id) locals.add(c.campaign.id)
+      if (c.searchTerm?.externalCampaignId) exts.add(c.searchTerm.externalCampaignId)
+    }
+    const camps = await prisma.campaign.findMany({
+      where: { OR: [
+        ...(locals.size ? [{ id: { in: [...locals] } }] : []),
+        ...(exts.size ? [{ externalCampaignId: { in: [...exts] } }] : []),
+      ] },
+      select: { id: true, externalCampaignId: true, portfolioId: true },
+    })
+    for (const c of camps) {
+      if (c.externalCampaignId) extToLocal.set(c.externalCampaignId, c.id)
+      localToPortfolio.set(c.id, c.portfolioId)
+    }
+  }
+
+  const inScope = contexts.filter((ctx) => ruleMatchesScope(rule, contextIdentity(ctx, extToLocal, localToPortfolio)))
+
+  /**
+   * Register the ads action handlers before evaluating, because nothing else here guarantees it.
+   *
+   * `automation-action-handlers.ts` mutates the exported `ACTION_HANDLERS` map as a module-load
+   * side effect, and its ONLY importer is `index.ts:1435` — inside `if (adsCronOn)`. So on any
+   * instance where ads crons are off, every ads action resolves to no handler and comes back
+   * `Unknown action type: retail_guard`.
+   *
+   * Measured, and it is why this line exists: the first verification run of this function (from a
+   * script, outside the server) reported exactly that for `alert_operator` and `retail_guard` —
+   * both of which have handlers. A simulation that reports "unknown action" for a rule that works
+   * is worse than no simulation, because it reads as a broken rule rather than a broken probe.
+   * Importing here is idempotent and makes this function true regardless of who booted what.
+   */
+  await import('../services/advertising/automation-action-handlers.js')
+
+  const { evaluateRule } = await import('../services/automation-rule.service.js')
+  const results: Array<{ matched: boolean; status: string; errorMessage?: string; actions: Array<{ type?: string; ok?: boolean; error?: string; output?: unknown }> }> = []
+  for (const ctx of inScope) {
+    const r = await evaluateRule({ ruleId: rule.id, context: ctx, forceDryRun: true, isTestRun: true, ignoreEnabled: true })
+    results.push({
+      matched: r.matched,
+      status: r.status,
+      errorMessage: r.errorMessage,
+      actions: (r.actionResults ?? []).map((a) => ({ type: a.type, ok: a.ok, error: a.error, output: a.output })),
+    })
+  }
+
+  return {
+    ok: true,
+    ruleName: rule.name,
+    trigger: rule.trigger,
+    enabled: rule.enabled,
+    contextsBuilt: contexts.length,
+    contextsInScope: inScope.length,
+    matched: results.filter((r) => r.matched).length,
+    results,
+  }
+}
+
 export async function runAdvertisingRuleEvaluatorCron(): Promise<void> {
   try {
     await recordCronRun('advertising-rule-evaluator', async () => {
