@@ -42,13 +42,19 @@ const AUTONOMY = overlayById('autonomy')
 
 /** `lane` is how a worker is INVOKED, which the canvas draws as a container and
  *  the table had no column for. */
-/* ⚠ Kept short enough to FIT. Measured on prod after S5.d: the cell is 128px,
-   `white-space: nowrap` with `text-overflow: clip` — not ellipsis — so "the
-   nightly job runs it" overflowed by 31px and rendered as "the nightly job run",
-   cut mid-word with nothing to say it had been. A column that clips silently is
-   worse than a shorter phrase. */
+/*
+ * ⚠ EVERY ONE OF THESE HAS TO FIT IN 128px, and the grid gives no warning when
+ * one does not: the cell is `white-space: nowrap` with `text-overflow: clip` —
+ * not ellipsis — so an overflowing value is cut mid-word with nothing to say so.
+ *
+ * Measured twice, because the first fix was incomplete. S5.d shipped "the
+ * nightly job runs it", which overflowed by 31px. S5.d2 shortened that one and
+ * I checked only the row I had been looking at — "a step of a routine" was
+ * still over by 12px on the other six. The column has ~108px of text room, so
+ * the budget is about 16 characters.
+ */
 const LANE_WORDS: Record<string, string> = {
-  ranked: 'a step of a routine',
+  ranked: 'a routine step',
   standalone: 'the nightly job',
   unwired: 'nothing runs it',
 }
