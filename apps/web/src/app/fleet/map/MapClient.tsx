@@ -13,7 +13,7 @@
  * none of the three dial-bypassing paths the spend audit found.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Map as MapIcon, Network, RefreshCw, ShieldAlert, ArrowRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -126,6 +126,41 @@ export function MapClient() {
   }, [backend, windowKey])
 
   const { asOf, refresh } = useVisibilityPoll(load)
+
+  /*
+   * S5.b — CHANGING THE WINDOW DID NOT FETCH.
+   *
+   * Measured on prod with a network trace, which is the only way this was ever
+   * going to be visible:
+   *
+   *   load `?window=24h`   → the first and only request is `?window=7d`
+   *   click "30 days"      → 0 requests
+   *   click "all time"     → 0 requests
+   *
+   * The switch label updated, the URL updated, and the `as of` stamp stayed
+   * frozen, while every number on the page went on describing whatever window
+   * was last actually retrieved. It self-corrects on the next 10s poll tick, so
+   * it is "silently wrong for up to ten seconds, every time you change the
+   * window" — and the deep link is only the half somebody happened to notice.
+   *
+   * `useVisibilityPoll` holds `load` in a ref behind a `useCallback([], …)`
+   * tick, so its effect runs exactly once and a changed input triggers nothing.
+   * That ref pattern is right — it stops the interval restarting on every
+   * render — it just has no companion for "the input changed, fetch now". This
+   * is that companion, and it lives here because the hook is another stream's.
+   *
+   * ⚠ `refresh` is `() => void tick()`, a NEW FUNCTION EVERY RENDER, so putting
+   * it in the dependency array would run this effect on every render and fetch
+   * in a loop. It is held in a ref and the effect depends on `windowKey` alone.
+   */
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  const fetchedWindow = useRef(windowKey)
+  useEffect(() => {
+    if (fetchedWindow.current === windowKey) return
+    fetchedWindow.current = windowKey
+    refreshRef.current()
+  }, [windowKey])
 
   const nodes = data?.nodes ?? []
 
