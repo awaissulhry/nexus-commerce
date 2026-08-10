@@ -2474,10 +2474,23 @@
   stroke-width: 2.4;
 }
 
+/*
+ * S6.b — THE PAGE FOOTER, MISSED BY ALL FIVE PRIOR SWEEPS.
+ *
+ * `#8a95a3` measures **2.81:1** on this page's #f4f6f9, and it fails in BOTH
+ * modes — "Wiring read from 4 enabled routines…" in worker mode, "Rebuilt every
+ * night by the sweep. An id shown instead of a name…" in entity mode.
+ *
+ * S2R swept the canvas and header, S3R `.sbm-orail`, S4R `.sbm-rail`, S5R
+ * `.sbm-centre`, and S6R's first pass `.sbm-band`. Every one was scoped to the
+ * region being rebuilt, and the footer sits between them — found only by
+ * sweeping `.sbm-page` instead. **A sweep scoped to your own section leaves the
+ * seams unmeasured.**
+ */
 .sbm-foot {
   flex: none;
   font-size: 11px;
-  color: #8a95a3;
+  color: #55616f; /* was #8a95a3 = 2.81:1 */
   padding-bottom: 4px;
 }
 
