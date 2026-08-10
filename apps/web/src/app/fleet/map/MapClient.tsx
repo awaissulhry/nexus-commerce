@@ -23,6 +23,7 @@ import { InspectorRail, RailShell } from './InspectorRail'
 import { OverlayRail } from './OverlayRail'
 import { ListView } from './ListView'
 import { EntityCanvas, relationOf, type EntityGraph } from './EntityCanvas'
+import { EntityListView } from './EntityListView'
 import { HowThisMapWorks } from './HowThisMapWorks'
 import { CensusBand, CensusBandSkeleton } from './CensusBand'
 import { overlayById } from './overlays'
@@ -508,8 +509,36 @@ export function MapClient() {
                   Scroll to move · ⌘/Ctrl + scroll to zoom · double-click a card to focus it
                 </span>
               </div>
+              {/* S6.c — the same switch worker mode has, over the same `view`
+                  state and the same `?view=` param, because "picture or table"
+                  is one preference and a reader who wants tables wants them in
+                  both universes. */}
+              <div className="sbm-viewswitch">
+                <div className="sbm-seg" role="radiogroup" aria-label="How to show the relationships">
+                  {(['list', 'map'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={view === v}
+                      tabIndex={view === v ? 0 : -1}
+                      className={view === v ? 'on' : ''}
+                      onClick={() => setView(v)}
+                    >
+                      {v === 'list' ? 'Table' : 'Graph'}
+                    </button>
+                  ))}
+                </div>
+                <span className="sbm-viewhint">
+                  {view === 'list'
+                    ? 'Best for reading — every overlap, and the search term behind it.'
+                    : 'Best for tracing — which families touch which.'}
+                </span>
+              </div>
               {entityLoading && entity == null ? (
                 <div className="sbm-canvas sbm-skeleton" aria-busy="true" />
+              ) : entity && entity.nodes.length > 0 && view === 'list' ? (
+                <EntityListView graph={entity} selectedKey={entitySel} onSelect={setEntitySel} />
               ) : entity && entity.nodes.length > 0 ? (
                 <EntityCanvas
                   graph={entity}

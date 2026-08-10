@@ -57,6 +57,16 @@ export interface EntityEdge {
   toType: string
   relation: string
   weight: number | null
+  /**
+   * S6.c — the EVIDENCE, which the endpoint has always returned and this type
+   * did not name, so nothing could render it: the search term the inference
+   * rests on, e.g. `kw:giacca moto uomo|EXACT`.
+   *
+   * A derived relationship that cannot say what it was derived from asks the
+   * reader to take "these two compete" on trust. Nothing in the data-catalog
+   * tools surveyed surfaces this at all; we already had it on the wire.
+   */
+  properties?: { on?: string | null } | null
 }
 export interface EntityGraph {
   nodes: EntityNode[]

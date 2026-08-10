@@ -1573,6 +1573,18 @@
   color: #2b6cb0;
 }
 
+/* S6.c — the relationship table's two cell shapes. The swatch class is the
+   SAME class that strokes the edge on the canvas, so the table and the picture
+   cannot disagree about what "takes sales from" looks like. */
+.sbm-entrel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sbm-entterm {
+  overflow-wrap: anywhere;
+}
+
 /* ── M4 · the overlay rail, and the tints it owns ──────────────────────── */
 
 /*
