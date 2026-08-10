@@ -24,10 +24,11 @@
  * "these two compete, on this search term" — and a row per node would put the
  * thing the reader came for inside a cell.
  *
- * IT CARRIES THE EVIDENCE. `properties.on` is the search term the inference
- * rests on. A derived relationship that cannot say what it was derived from
- * asks the reader to take it on trust, and none of the data-catalog tools
- * surveyed surfaces this at all.
+ * IT CARRIES THE EVIDENCE. `properties.on` is the set of search terms the
+ * inference rests on — a set, not one term, which is what S6.i had to correct.
+ * A derived relationship that cannot say what it was derived from asks the
+ * reader to take it on trust, and none of the data-catalog tools surveyed
+ * surfaces this at all.
  *
  * NO ACTIONS. Same rule as the worker list: this shows derived relationships
  * and nothing else. There is no dial here, and there is nothing to press.
@@ -37,6 +38,33 @@ import { DataGrid, type Column } from '@/design-system/components/DataGrid'
 import { relationOf, type EntityGraph, type EntityEdge } from './EntityCanvas'
 
 const keyOf = (t: string, i: string) => `${t}|${i}`
+
+/**
+ * S6.i — `properties.on` is a LIST, which S6.c did not know.
+ *
+ * It reads `kw:<term>|<TYPE>, kw:<term>|<TYPE>, …` — on production, up to ten
+ * terms in one value. S6.c matched it with `/^kw:(.*)\|([A-Z]+)$/`, and `.*` is
+ * greedy, so it stripped the leading `kw:` and the final `|EXACT` and left every
+ * separator in between on screen:
+ *
+ *   giubbotto moto uomo|EXACT, kw:giacca moto uomo|EXACT, kw:giacca moto|EXACT…
+ *
+ * which is the wire format the column exists to hide. A regex anchored at both
+ * ends looks like it validates the whole string; against a list it matches the
+ * first and last field and swallows the rest.
+ */
+function termsOf(on: string): Array<{ term: string; type: string }> {
+  return on
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((t) => {
+      const m = /^kw:([^|]*)\|([A-Z]+)$/.exec(t)
+      /* An unexpected shape shows itself rather than being swallowed — the same
+         rule the page applies to an id it cannot resolve. */
+      return m ? { term: m[1], type: m[2].toLowerCase() } : { term: t, type: '' }
+    })
+}
 
 export function EntityListView({
   graph,
@@ -56,7 +84,7 @@ export function EntityListView({
     {
       key: 'from',
       label: 'This campaign',
-      width: 260,
+      width: 236,
       sortable: true,
       sortValue: (e) => nameOf(e.fromType, e.from).toLowerCase(),
       render: (e) => {
@@ -76,7 +104,7 @@ export function EntityListView({
     {
       key: 'relation',
       label: 'Relationship',
-      width: 172,
+      width: 150,
       sortable: true,
       sortValue: (e) => relationOf(e.relation).label,
       /* The swatch class is the SAME class that colours the edge on the canvas —
@@ -91,7 +119,7 @@ export function EntityListView({
     {
       key: 'to',
       label: 'That campaign',
-      width: 260,
+      width: 236,
       sortable: true,
       sortValue: (e) => nameOf(e.toType, e.to).toLowerCase(),
       render: (e) => {
@@ -111,29 +139,33 @@ export function EntityListView({
     {
       key: 'on',
       label: 'Worked out from',
-      width: 268,
+      width: 250,
       sortable: true,
-      sortValue: (e) => e.properties?.on ?? '',
+      sortValue: (e) => termsOf(e.properties?.on ?? '')[0]?.term ?? '',
       render: (e) => {
         const on = e.properties?.on
         if (!on) return <span className="sbm-listdim">not recorded</span>
-        /* `kw:giacca moto uomo|EXACT` — the operator reads a search term and a
-           match type, not a wire format. Split rather than reformat, so an
-           unexpected shape still shows itself rather than being swallowed. */
-        const m = /^kw:(.*)\|([A-Z]+)$/.exec(on)
-        return m ? (
+        const ts = termsOf(on)
+        if (!ts.length) return <span className="sbm-listdim">not recorded</span>
+        /* One term fits a cell; ten do not. Show the first and SAY how many are
+           behind it, so the cell reads as a sample rather than the whole
+           evidence — the same obligation the capped table takes on in its
+           footer. No claim is made about which term matters most: the fleet
+           records them as a set and this page does not rank them. */
+        const [first, ...rest] = ts
+        return (
           <span className="sbm-entterm">
-            {m[1]} <span className="sbm-listdim">{m[2].toLowerCase()}</span>
+            {first.term}
+            {first.type ? <span className="sbm-listdim"> {first.type}</span> : null}
+            {rest.length ? <span className="sbm-listdim"> +{rest.length} more</span> : null}
           </span>
-        ) : (
-          <span className="sbm-entterm">{on}</span>
         )
       },
     },
     {
       key: 'links',
       label: 'Its links',
-      width: 96,
+      width: 82,
       align: 'right',
       sortable: true,
       /* "Which campaign is tangled up in the most overlap" — one click, and the
