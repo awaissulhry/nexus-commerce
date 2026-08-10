@@ -1393,6 +1393,17 @@
 .sbm-canvas .react-flow__edge.rel-harvested .react-flow__edge-path { stroke: #2f855a; }
 .sbm-canvas .react-flow__edge.rel-negated .react-flow__edge-path { stroke: #8a6d3b; }
 .sbm-canvas .react-flow__edge.rel-promoted .react-flow__edge-path { stroke: #7f9dc0; }
+/* S6.h — the vocabulary declared eleven swatches and coloured only seven edges.
+   VARIANT_OF is emitted by entity-graph.service.ts, so this was reachable, not
+   hypothetical: forced on production, its legend swatch and meter segment read
+   #b7cbe4 while the edge drew the #c3ccd8 fallback. Three surfaces, two colours,
+   for the one relation prod happens to have no rows of.
+   rel-ranks and rel-suppressed have no emitter today and so could not be forced
+   — they are here because the next emitter must not have to rediscover this.
+   rel-other is deliberately absent: its swatch IS the fallback stroke. */
+.sbm-canvas .react-flow__edge.rel-variant .react-flow__edge-path { stroke: #b7cbe4; }
+.sbm-canvas .react-flow__edge.rel-ranks .react-flow__edge-path { stroke: #4a5666; }
+.sbm-canvas .react-flow__edge.rel-suppressed .react-flow__edge-path { stroke: #a33a3a; }
 
 /* ── M5 · the centre pane: view switch, then map or list ───────────────── */
 
