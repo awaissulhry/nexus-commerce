@@ -327,9 +327,52 @@ should stay small — which is the real argument of Part 4.
 | **S6.b** | footer contrast, both modes (D-S6.3) | 0 failures sweeping `.sbm-page`, worker **and** entity |
 | **S6.c** | the relationship table (D-S6.2) | every edge in the payload is a row; direction and evidence readable |
 | **S6.d** | table becomes the default view (D-S6.2) | switch remembers, URL carries it |
+| **S6.f** | the mode itself goes in the URL | `?mode=entities` and `?ev=map` both round-trip |
 
 `S6.a` first: it is a correctness defect, it is three lines, and it is the same
-fix a previous section already proved.
+fix a previous section already proved. **S6.f was not planned** — it was found
+by verifying S6.d, see §10.2.
+
+---
+
+## PART 10 — Verified on production
+
+### 10.1 · What the exit criteria measured
+
+| phase | measurement | result |
+|---|---|---|
+| **S6.a** | real tab | 38 nodes · **103 edges** · 0 hidden |
+| **S6.a** | **nested viewport** (0 edges before the fix) | 38 nodes · **103 edges** · 0 hidden |
+| **S6.b** | `.sbm-foot` colour | `rgb(85,97,111)` = `#55616f` |
+| **S6.c** | rows in the relationship table | **103** — one per edge, matching the band |
+| **S6.d** | arrival view | Table, `aria-checked="true"` |
+
+The nested-viewport row is the one that matters. That environment is what
+exposed the defect — 0 edges and 38 permanently-hidden nodes — and it is the
+environment in which the fix had to be proved, not merely the one where the bug
+never showed.
+
+### 10.2 · Verifying S6.d found a defect in S6.d
+
+Entity mode had **no representation in the URL at all**. `view`, `window`,
+`colour`, `worker`, `edge`, `thing` were all carried; the worker/entity switch
+was not. Only `thing` implied entity mode, and `thing` requires a selection — so
+entity mode with nothing selected could not be linked.
+
+Which made the `ev` param S6.d had just added a URL that does not come back.
+Measured, on production, on a URL **the page wrote itself**:
+
+```
+click "What they watch" → "Graph"   page writes  ?ev=map
+reload exactly that                 lands in     WORKER mode, 7 nodes
+                                    url now      ""   ← the writer erased it
+```
+
+`S6.f` adds `mode=entities`, the same shape `view=list` already uses. Worker
+mode stays bare because it is the default.
+
+That is the second time in this section that the verify step found a defect the
+commit before had introduced, and the sixth across Sections 4–6.
 
 ---
 
