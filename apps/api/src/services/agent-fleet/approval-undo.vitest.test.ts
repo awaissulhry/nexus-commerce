@@ -226,11 +226,20 @@ describe('AP.5 — one expiry clock', () => {
 })
 
 describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
-  const pending = (toolName: string, riskTier: string, preview: unknown = {}) => ({
+  /* S8.1 — the worker is part of homogeneity now, so a fixture has to carry
+     one. Defaults to a single worker so the existing cases keep testing what
+     they were written to test; the mixed-worker case passes its own. */
+  const pending = (
+    toolName: string,
+    riskTier: string,
+    preview: unknown = {},
+    agentKey = 'amazon-bid-tuner',
+  ) => ({
     toolName,
     riskTier,
     preview,
     status: 'pending',
+    agentRun: { agentKey },
   })
 
   it('names the count and the kinds', async () => {
@@ -243,6 +252,44 @@ describe('AP.4 / AQ.6 — the blast radius is stated before it fires', () => {
     expect(p.count).toBe(3)
     expect(p.sentence).toContain('approves 3 actions')
     expect(p.sentence).toContain('3 × set target bid')
+  })
+
+  it('S8.1 — blocks an approve that spans two workers, even at one action kind', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'high', {}, 'amazon-bid-tuner'),
+      pending('set-target-bid', 'high', {}, 'amazon-keyword-harvester'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    expect(p.homogeneous).toBe(false)
+    expect(p.blockedReason).toContain('2 different workers')
+    // Same KIND, so the old kind-only check would have waved this through.
+    expect(p.blockedReason).not.toContain('different kinds')
+  })
+
+  it('S8.1 — a rejection is never blocked by homogeneity', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'high', {}, 'amazon-bid-tuner'),
+      pending('create-negative-keyword', 'high', {}, 'amazon-negative-miner'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'reject')
+    expect(p.blockedReason).toBeNull()
+  })
+
+  it('S8.1 — states reversibility either way, not only when it is bad', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('set-target-bid', 'low'),
+      pending('set-target-bid', 'low'),
+    ] as never)
+    const p = await previewBulk(['a', 'b'], 'approve')
+    expect(p.sentence).toContain('All of these can be put back')
+  })
+
+  it('S8.1 — says when a row can only be partly undone', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      pending('publish-listing', 'high', {}, 'listing-quality-keeper'),
+    ] as never)
+    const p = await previewBulk(['a'], 'approve')
+    expect(p.sentence).toContain('can only be partly undone')
   })
 
   it('calls out the high-risk share and the undo window on approve', async () => {

@@ -655,7 +655,20 @@ export interface BulkPreview {
   blockedReason: string | null
 }
 
+/*
+ * S8.1 — the server's half of the reversibility vocabulary.
+ *
+ * `publish-listing` was missing: the card calls it `partial` and this file
+ * called it fully reversible, so the two disagreed about the same tool. Kept
+ * as two explicit lists rather than a boolean so the sentence can say "partly"
+ * instead of rounding it to "not at all", which would over-warn.
+ *
+ * These duplicate DecisionCard.tsx's `undoable` field because web and api do
+ * not share a module. The durable fix is a reversibility field on the tool
+ * registry; until then, changing one list means changing the other.
+ */
 const IRREVERSIBLE_TOOLS = ['send-customer-message']
+const PARTLY_REVERSIBLE_TOOLS = ['publish-listing']
 
 /**
  * What a bulk decision is about to do, in a sentence. Built server-side from
@@ -735,25 +748,55 @@ export async function previewBulk(
    */
   const all = await prisma.agentApproval.findMany({
     where: { id: { in: ids } },
-    select: { toolName: true, riskTier: true, preview: true, status: true },
+    select: {
+      toolName: true,
+      riskTier: true,
+      preview: true,
+      status: true,
+      // One query, via the relation — the same idiom `charterKeyOf` uses just
+      // above. A second `agentRun.findMany` worked but cost an extra round
+      // trip to learn something the join already knows.
+      agentRun: { select: { agentKey: true } },
+    },
   })
   const rows = all.filter((r) => r.status === 'pending')
+
+  /*
+   * S8.1 — same WORKER, not just same action kind.
+   *
+   * The comment below used to say same-worker was "enforced by the caller's
+   * grouping today". That is a UI convention, not an invariant: the endpoint
+   * takes a list of ids and will happily preview any mixture, so the guarantee
+   * held only for as long as every caller grouped first. UiPath's rule is the
+   * one worth copying — same action type AND same producing version — and this
+   * is the half of it the data supports today.
+   *
+   * The worker lives on the run, exactly as `charterKey` does everywhere else
+   * on this page; the approval itself stays free of the concept.
+   */
+  const workers = new Set(rows.map((r) => r.agentRun?.agentKey ?? 'unknown'))
+  const sameWorker = workers.size <= 1
   const notActionable = all.length - rows.length
   const byTool: Record<string, number> = {}
   for (const r of rows) byTool[r.toolName] = (byTool[r.toolName] ?? 0) + 1
   const highRisk = rows.filter((r) => r.riskTier === 'high').length
   const irreversible = rows.filter((r) => IRREVERSIBLE_TOOLS.includes(r.toolName)).length
+  const partlyReversible = rows.filter((r) => PARTLY_REVERSIBLE_TOOLS.includes(r.toolName)).length
   const euro = euroExposure(rows)
 
-  // Homogeneity: one action kind. Same-worker is enforced by the caller's
-  // grouping today; the action kind is what actually differs in consequence.
-  const homogeneous = Object.keys(byTool).length <= 1
+  // Homogeneity: one action kind AND one worker. Either alone is insufficient
+  // — two workers proposing the same kind of change are still two different
+  // things to agree with, and that is the case the caller's grouping used to
+  // hide rather than prevent.
+  const homogeneous = Object.keys(byTool).length <= 1 && sameWorker
   const blockedReason =
-    decision === 'approve' && !homogeneous
+    decision === 'approve' && Object.keys(byTool).length > 1
       ? `These are ${Object.keys(byTool).length} different kinds of action (${Object.keys(byTool)
           .map((t) => t.replace(/-/g, ' '))
           .join(', ')}). Approve one kind at a time — a single yes should never span two different consequences.`
-      : null
+      : decision === 'approve' && !sameWorker
+        ? `These come from ${workers.size} different workers. Approve one worker at a time — a single yes should never span two workers' judgement.`
+        : null
 
   const kinds = Object.entries(byTool)
     .map(([tool, n]) => `${n} × ${tool.replace(/-/g, ' ')}`)
@@ -765,11 +808,38 @@ export async function previewBulk(
     notActionable > 0
       ? ` ${notActionable} other${notActionable === 1 ? '' : 's'} you selected ${notActionable === 1 ? 'is' : 'are'} already decided or counting down, and ${notActionable === 1 ? 'is' : 'are'} not affected.`
       : ''
+  /*
+   * S8.1 — reversibility, said EITHER WAY.
+   *
+   * The spec's complaint was that the server computes `irreversible` and never
+   * speaks it. Speaking only the count would have been worse than useless:
+   * every irreversible tool is also an executable one, and executable rows are
+   * not selectable (§18.2), so a bare count clause would be a sentence
+   * fragment that can never fire — a stale constant with extra steps.
+   *
+   * So the sentence states the reversibility of the batch in every case. "All
+   * of these can be put back" is the common answer and it is worth reading:
+   * it is the fact that makes a bulk yes reasonable at all.
+   *
+   * ⚠ Two lists disagree about `publish-listing`. The card's vocabulary
+   * (DecisionCard.tsx) classes it `partial`; the server's `IRREVERSIBLE_TOOLS`
+   * knew only `send-customer-message` and therefore called it fully
+   * reversible. AQ-S6 says reversibility must never be "asserted in two places
+   * that can drift", and it had. Latent rather than live — neither tool can
+   * reach a bulk selection today — but corrected here, and the real fix is a
+   * reversibility field on the tool registry so both sides read one source.
+   * Recorded in the study rather than built, because the registry is not this
+   * stream's.
+   */
+  const reversibility =
+    irreversible > 0
+      ? ` ${irreversible} of them cannot be undone once ${irreversible === 1 ? 'it runs' : 'they run'}.`
+      : partlyReversible > 0
+        ? ` ${partlyReversible} of them can only be partly undone.`
+        : ' All of these can be put back.'
   const tail =
     decision === 'approve'
-      ? highRisk > 0
-        ? ` — ${highRisk} of them high risk.${money} You have 20 seconds to take it back.`
-        : `.${money} You have 20 seconds to take it back.`
+      ? `${highRisk > 0 ? ` — ${highRisk} of them high risk` : ''}.${money}${reversibility} You have 20 seconds to take it back.`
       : ''
 
   return {
