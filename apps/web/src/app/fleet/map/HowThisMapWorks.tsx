@@ -127,8 +127,16 @@ export function HowThisMapWorks({ openSignal }: { openSignal?: number }) {
 
           <h4>The two views</h4>
           <p>
-            <b>Workers</b> is the fleet itself. <b>What they watch</b> is the other thing entirely:
-            your campaigns and products, and the connections the fleet worked out between them by
+            {/* S8.h — `{' '}` is load-bearing, not formatting. A JSX text node
+                that begins with a space AND spans a line break loses that
+                space: the compiler trims each line of a multi-line text block,
+                so Prettier wrapping this paragraph rendered "What they
+                watchis". The single-line node after <b>Workers</b> two words
+                earlier keeps its space, which is why only one of the two broke
+                and why it survived review. */}
+            <b>Workers</b> is the fleet itself. <b>What they watch</b>{' '}
+            is the other thing entirely: your campaigns and products, and the connections the
+            fleet worked out between them by
             reading your data — which campaigns compete with each other, which are taking each
             other&apos;s sales. One is the machinery; the other is what the machinery is looking
             at.
@@ -256,7 +264,9 @@ export function HowThisMapWorks({ openSignal }: { openSignal?: number }) {
               under the band. A fourth telling is what produced the drift. */}
           <h4>A number that surprises people</h4>
           <p>
-            <b>Waiting for you is always zero</b> right now, and that is not an empty inbox: the
+            {/* S8.h — same seam, same cause: this rendered "zeroright now". */}
+            <b>Waiting for you is always zero</b>{' '}
+            right now, and that is not an empty inbox: the
             fleet&apos;s suggestion tools are preview-only at the moment, so nothing can be queued
             for approval even when a plan passes the critic.
           </p>
