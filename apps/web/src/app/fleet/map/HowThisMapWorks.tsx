@@ -88,22 +88,42 @@ export function HowThisMapWorks({ openSignal }: { openSignal?: number }) {
 
           <h4>Reading a line</h4>
           <p>
-            A line means one worker&apos;s <Term k="finding">findings</Term> are handed to another.
-            The label counts what was actually <b>carried</b> — how many of that worker&apos;s
-            findings the <Term k="director">director</Term> named in its <Term k="plan">plan</Term>.
-            A faint dashed line means nothing has ever crossed it: the connection exists, but no
-            work has gone down it yet.
+            A line means one worker&apos;s <Term k="finding">findings</Term> are handed to another,
+            and the <Term k="director">director</Term> is the one deciding what to take. A faint
+            dashed line means nothing has ever crossed it: the connection exists, but no work has
+            gone down it yet. Click a line to see the handoff — the reasons the director wrote for
+            what it left behind are printed there.
           </p>
-          <p>
-            Click a line to see the handoff. The most useful part is what the director{' '}
-            <b>dropped</b> — it has to give a reason for every finding it chose not to carry, in
-            its own words, and those reasons are printed there.
-          </p>
-          <p>
-            The last line, into the <Term k="critic">critic</Term>, has no count. The critic does
-            not produce anything of its own; it marks a plan as passed, sent back or blocked. So
-            that line shows the verdict rather than a number.
-          </p>
+          {/* S8.e — these three sentences were restated here in prose while
+              `DEFINITIONS.carried`, `.dropped` and `['no-count']` sat in
+              definitions.tsx with NO READER, under a header claiming "everything
+              is keyed here; the surfaces look it up". So the page had two
+              wordings of each and the keyed one was the copy nobody saw.
+
+              Rendered from the keys now, the same way "What each number counts"
+              renders from `CHIPS` — the only part of this drawer that survived
+              seven sections without going stale.
+
+              NOT wired into the inspector rail, which is where an edge's counts
+              actually live. Measured first: `.sbm-rail` is `overflow: hidden` at
+              340px with `.sbm-rail-body` scrolling inside it, and `Def`'s tip is
+              288px opening DOWNWARD. That is the box S3 already pulled `Def` out
+              of once. A definition that gets clipped is the defect this section
+              opened with. */}
+          <dl className="sbm-defs">
+            <div>
+              <dt>Carried</dt>
+              <dd>{DEFINITIONS.carried}</dd>
+            </div>
+            <div>
+              <dt>Dropped</dt>
+              <dd>{DEFINITIONS.dropped}</dd>
+            </div>
+            <div>
+              <dt>No count, into the critic</dt>
+              <dd>{DEFINITIONS['no-count']}</dd>
+            </div>
+          </dl>
 
           <h4>The two views</h4>
           <p>

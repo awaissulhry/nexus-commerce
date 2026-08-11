@@ -58,9 +58,27 @@ export const DEFINITIONS: Record<string, string> = {
     'Suggestions the workers have written that nothing has used or dismissed yet. This counts findings, not workers, so it is not something you can filter the map by.',
 
   /* cost */
-  spend: 'What this worker spent on AI in the window you are looking at.',
-  'no-runs':
-    'It did not run in this window, so there is nothing to measure — which is not the same as being cheap.',
+  /* S8.e — `spend` lived here with no reader, and it goes rather than being
+     given one. Its sentence ("what this worker spent in the window you are
+     looking at") is now said by two surfaces that a reader actually meets: the
+     rail's own Spend row, which prints "…in this window · …ever" beside the
+     figure, and S8.c's window section in the drawer. A third copy kept only to
+     satisfy a rule about keys is the drift the rule exists to prevent. */
+  /* S8.d — `no-runs` used to live here with its own copy of the cost legend's
+     sentence, and the two had already drifted four words apart in the middle:
+
+       legend  "…so it has no cost here — which is not the same as being cheap."
+       here    "…so there is nothing to measure — which is not the same as…"
+
+     I first tried DERIVING this key from the overlay bucket. The S8.f test
+     rejected it, correctly: deriving is not reading, and a key nothing renders
+     is dead however it is computed. So it goes. The overlay owns the sentence
+     because the overlay is what puts it on screen, and there is now exactly one
+     copy of it in the repo.
+
+     The card's `— no runs` and the list's `no runs in this window` are LABELS in
+     fixed-width slots, not the sentence, and are not a second and third wording.
+     The card has 18px of slack before it reproduces S7.c's overflow. */
 }
 
 /**
