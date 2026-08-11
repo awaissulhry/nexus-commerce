@@ -12,7 +12,7 @@ import prisma from '../db.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
-import { getNegatives, NEG_MARKETS } from '../services/advertising/negatives.service.js'
+import { getNegatives, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
@@ -344,10 +344,13 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // it renders is ever computed from a page of rows.
   fastify.get('/advertising/negatives', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
-    const market = (q.market ?? '').toUpperCase()
-    if (!NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    // `all` is accepted here and refused on the Keyword Tracker: everything this page counts is a
+    // count of rows, and those sum honestly across markets. See the service header.
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === NEG_MARKET_ALL ? NEG_MARKET_ALL : raw.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
       reply.status(400)
-      return { error: `market is required and must be one of ${NEG_MARKETS.join('/')}`, code: 'market_required' }
+      return { error: `market is required and must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null

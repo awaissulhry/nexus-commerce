@@ -190,6 +190,26 @@ describe('resolveNegScope — five grains, most specific wins', () => {
     expect(r.campaignsWithoutPortfolio).toBe(1)
   })
 
+  it('market="all" spans every production market — and only those', () => {
+    // Legitimate here and refused on the Keyword Tracker: everything this page counts is a count of
+    // rows, and rows sum honestly across markets. `what am I blocking` is an account-wide question
+    // before it is a per-market one, and it is the page's default view.
+    const r = resolveNegScope(graph, { market: 'all' })
+    expect(r.boundBy).toBe('market')
+    expect(r.campaignIds).toEqual(['c-de-1', 'c-it-1', 'c-it-2'])
+  })
+
+  it('market="all" still lets a finer grain bind', () => {
+    const r = resolveNegScope(graph, { market: 'all', campaign: 'c-de-1' })
+    expect(r.boundBy).toBe('campaign')
+    expect(r.campaignIds).toEqual(['c-de-1'])
+  })
+
+  it('a sandbox market is not in "all"', () => {
+    const withSandbox: NegScopeGraph = { ...graph, campaigns: [...graph.campaigns, { id: 'c-uk', name: 'UK', marketplace: 'UK', portfolioId: null }] }
+    expect(resolveNegScope(withSandbox, { market: 'all' }).campaignIds).not.toContain('c-uk')
+  })
+
   it('an unknown line or portfolio resolves to an empty scope, not to the whole market', () => {
     expect(resolveNegScope(graph, { market: 'IT', portfolio: 'nope' }).campaignIds).toEqual([])
     expect(resolveNegScope(graph, { market: 'IT', line: 'nope' }).campaignIds).toEqual([])

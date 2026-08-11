@@ -56,6 +56,18 @@ export { normaliseNegTerm }
 /** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
 export const NEG_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
 
+/**
+ * `all` is a legitimate scope HERE, unlike on the Keyword Tracker.
+ *
+ * That page refuses it because market volume, rank and share are per-marketplace quantities with no
+ * honest sum. Everything this page counts is a count of rows: 2,059 = IT 1,542 + DE 282 + FR 170 +
+ * ES 65, and "what am I blocking" is an account-wide question before it is a per-market one. Every
+ * row carries its own market so the merged view still reads.
+ */
+export const NEG_MARKET_ALL = 'all'
+const inScopeMarket = (m: string | null | undefined, market: string): boolean =>
+  market === NEG_MARKET_ALL ? NEG_MARKETS.includes((m ?? '') as (typeof NEG_MARKETS)[number]) : m === market
+
 export type NegGrain = 'market' | 'line' | 'portfolio' | 'campaign' | 'adGroup'
 export type NegView = 'negations' | 'terms'
 export type NegMatchType = 'EXACT' | 'PHRASE' | 'ASIN' | 'OTHER'
@@ -146,7 +158,7 @@ export interface NegResolvedScope {
  * preferring one is how a shared link shows a different thing to the person who opens it.
  */
 export function resolveNegScope(graph: NegScopeGraph, req: NegScopeRequest): NegResolvedScope {
-  const inMarket = graph.campaigns.filter((c) => c.marketplace === req.market)
+  const inMarket = graph.campaigns.filter((c) => inScopeMarket(c.marketplace, req.market))
   const base = {
     campaignsInMarket: inMarket.length,
     campaignsWithoutPortfolio: inMarket.filter((c) => !c.portfolioId).length,
@@ -514,7 +526,7 @@ export async function getNegatives(req: NegRequest): Promise<NegPayload> {
   // portfolioId, so no portfolio-scoped view reaches them.
   let unreachable: NegPayload['scope']['unreachable'] = null
   if (scope.boundBy === 'portfolio') {
-    const marketCampaignIds = new Set(campaigns.filter((c) => c.marketplace === req.market).map((c) => c.id))
+    const marketCampaignIds = new Set(campaigns.filter((c) => inScopeMarket(c.marketplace, req.market)).map((c) => c.id))
     const noPfIds = new Set(campaigns.filter((c) => marketCampaignIds.has(c.id) && !c.portfolioId).map((c) => c.id))
     const [negativesWithoutPortfolio, negativesTotal] = await Promise.all([
       prisma.adTarget.count({ where: { isNegative: true, adGroup: { campaignId: { in: [...noPfIds] } } } }),
