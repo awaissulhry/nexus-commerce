@@ -721,9 +721,27 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
   // rather than silently reporting $0.00, which would read as "spent nothing".
   const spentTodayUSD = todayRows.reduce((s, r) => s + num(r._sum.costUSD), 0)
   const spendLedgerReadable = true
+  /*
+   * S9.a — THE LAST PLACE ON THIS PAGE WHERE ABSENCE AND FAILURE LOOKED ALIKE.
+   *
+   * This `catch` returned `[]` and said nothing, so "the fleet has no scheduled
+   * jobs" and "the schedule could not be read" rendered identically. That is
+   * the defect class every other section of this page has removed — and the
+   * same file gets it right three lines of code away, where an unreadable
+   * wiring layer sets `degraded` AND pushes a warning.
+   *
+   * Degrading is still the right call here: a schedule that cannot be read is
+   * no reason to deny the operator seven workers, four edges and a spend
+   * figure. It just has to say so.
+   */
   const schedule = await getFleetSchedule(asOf)
     .then((s) => s.jobs)
-    .catch(() => [] as FleetScheduleJob[])
+    .catch(() => {
+      warnings.push(
+        'The schedule could not be read, so no next-run times are shown. Everything else on this page is unaffected.',
+      )
+      return [] as FleetScheduleJob[]
+    })
 
   /* 7 — assemble the nodes */
   const nodes: MapNode[] = charters.map((c) => {
