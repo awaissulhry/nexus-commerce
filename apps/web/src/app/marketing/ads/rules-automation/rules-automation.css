@@ -1403,9 +1403,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* "All markets" is offered by the shared header on every ads page; this grid cannot honestly
    render it, so it says so instead of summing four marketplaces. */
-.h10-kt-pick { margin: 16px 0 0; padding: 22px 24px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; max-width: 640px; }
+/* Full width, like every other block on this page — a 640px card followed by an empty page reads
+   as a layout that failed rather than a state that is waiting for you. The measure is held on the
+   paragraph instead, in px: `ch` is not a measure. */
+.h10-kt-pick { margin: 16px 0 0; padding: 22px 24px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; }
 .h10-kt-pick h3 { margin: 0 0 7px; font-size: 15px; font-weight: 800; color: #1c2530; }
-.h10-kt-pick p { margin: 0; font-size: 12.5px; line-height: 1.6; color: #55606d; }
+.h10-kt-pick p { margin: 0; max-width: 620px; font-size: 12.5px; line-height: 1.6; color: #55606d; }
 .h10-kt-pickrow { display: flex; gap: 8px; margin-top: 14px; }
 
 /* Toolbar: the share-data filter and the brand-term toggle. */

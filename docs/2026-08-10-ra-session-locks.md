@@ -69,10 +69,21 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/jobs/advertising-rule-evaluator.job.ts` | RA.GRAIN (product identity resolution) | 2026-08-10 | **released** |
 | `packages/database/prisma/schema.prisma` | RA.GRAIN (`scopeProductId`, additive) | 2026-08-10 | **released** |
 | `…/rules-automation/rules-automation.css` | RA.GRAIN (scope form, `h10-au-*` at EOF) | 2026-08-10 | **released** — appended at EOF only |
-| `…/rules-automation/_shared/tabs.tsx` | KT.1 (`keyword-tracker` → `routed: true` + subtitle) | 2026-08-11 | **released** |
-| `…/rules-automation/RulesAutomationClient.tsx` | KT.1 (drop the `keyword-tracker` branch only) | 2026-08-11 | **released** |
-| `…/rules-automation/rules-automation.css` | KT.1 (`h10-kt-*` at EOF) | 2026-08-11 | **released** — appended at EOF only |
-| `apps/api/src/routes/advertising-intel.routes.ts` | KT.1 (`GET /advertising/keyword-tracker`, additive) | 2026-08-11 | **released** |
+| `…/rules-automation/_shared/tabs.tsx` | KT.1 (`keyword-tracker` → `routed: true` + subtitle) | 2026-08-11 | **released** — landed `f6f526dda` |
+| `…/rules-automation/RulesAutomationClient.tsx` | KT.1 (drop the `keyword-tracker` branch only) | 2026-08-11 | **released** — landed `f6f526dda`; `share-of-voice` branch untouched |
+| `…/rules-automation/rules-automation.css` | KT.1 (`h10-kt-*` at EOF) | 2026-08-11 | **released** — appended at EOF only, `f6f526dda` + `5a24ef3aa` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | KT.1 (`GET /advertising/keyword-tracker`, additive) | 2026-08-11 | **released** — landed `31cba2535` |
+
+**Two findings from KT.1 that bind every page in this section:**
+
+1. 🔴 **The page gutter is ZERO, not 24px.** Measured on prod at 1728px: `.h10-hdr`,
+   `.h10-rules-tabs` and `.h10-am-card` all sit at **96→1698** — `h10-main`'s 30px padding is the
+   gutter. A block styled `margin: … 24px` inside `.h10-rules-page` is inset 24px past everything
+   else on the page. (`.h10-svt-seg` carries that 24px and is the likely source of the pattern.)
+2. 🔴 **The shared grid paints its first column blue.** `.h10-am-grid td.nm .t` sets
+   `#1f6fde` at specificity (0,3,1), so a page-level `.my-cell .t { color }` loses. Every existing
+   consumer makes that column a link, so it reads correctly there — a page whose first column is
+   NOT a link must override it (match the specificity; `!important` is not needed).
 
 *(The scope bar has shipped. RA.AUTO held §3 rows 1, 2 and 6 — all additive. RA.GRAIN holds
 rows 2, 6, 10, 11 and the evaluator; all additive, all released.)*
