@@ -151,6 +151,17 @@ export interface MapNode {
     window: number
     lifetime: number
     runningNow: boolean
+    /**
+     * ⚠ S9.e — AWAITING A READER, and kept deliberately. Nothing renders these
+     * two, but they are unread because the fleet is OFF, not because the design
+     * moved past them: `runningNow` (which IS read, via run-health) can only
+     * say THAT something is running, and the moment the fleet is lit an
+     * operator needs to know which run and for how long. Deleting them would
+     * have to be undone that day.
+     *
+     * This is the distinction S9 drew: delete what the design has moved past,
+     * mark what only the fleet being off explains.
+     */
     runningRunId: string | null
     runningSince: Date | null
   }
@@ -262,8 +273,16 @@ export interface FleetMapView {
      *  fell back to the code graph — the same fail-open law the orchestrator
      *  uses, surfaced instead of hidden. */
     degraded: boolean
-    /** Null when the union could be topologically ordered. Otherwise the
-     *  reason, and every `rank` is null. */
+    /**
+     * Null when the union could be topologically ordered. Otherwise the reason,
+     * and every `rank` is null.
+     *
+     * ⚠ S9.e — AWAITING A READER. Nothing renders this today, while its twin
+     * `degraded` is read nine times and the warning that accompanies it IS
+     * rendered. It is kept rather than deleted because a cycle in the wiring is
+     * exactly the state an operator must be able to see, and the missing piece
+     * is a reader, not the field. Do not delete it as dead code; give it one.
+     */
     unorderedReason: string | null
   }
   nodes: MapNode[]
@@ -281,11 +300,32 @@ const num = (d: unknown): number => (d == null ? 0 : Number(d))
 
 const edgeId = (from: string, to: string, artifact: string) => `${from}~${to}~${artifact}`
 
-/** UTC day start. The fleet's budget guard bounds a day this way, in JS,
- *  never `AT TIME ZONE` in SQL — matched here so the map's "today" and the
- *  guard's "today" cannot disagree. Note it does NOT match the Workers
- *  roster's local-midnight figure; §M1 discloses the difference rather than
- *  quietly showing a third number. */
+/**
+ * UTC day start. The fleet's budget guard bounds a day this way, in JS, never
+ * `AT TIME ZONE` in SQL — matched here so the map's "today" and the guard's
+ * "today" cannot disagree. That part is unchanged and is the reason for it.
+ *
+ * S9.f — THE SECOND HALF OF THIS COMMENT WAS A CLAIM ABOUT ANOTHER SURFACE,
+ * AND IT WAS NOT TRUE. It said "§M1 discloses the difference rather than
+ * quietly showing a third number". §M1's own definition still reads "since
+ * midnight", unqualified, and said nothing about UTC for months.
+ *
+ * The disclosure DOES exist now — S7.d's window sentence under the band and
+ * S8.c's drawer both say "today means a UTC day" — but they were written days
+ * later, they are different surfaces, and NEITHER mentions the Workers roster's
+ * figure, which is what this comment claimed was disclosed.
+ *
+ * The disagreement itself is real and cannot be deployed away: `WorkersClient`
+ * computes `setHours(0,0,0,0)` IN THE BROWSER, so it is the operator's local
+ * midnight. At UTC+2 the two pages describe different two-hour windows every
+ * night. Measured 2026-08-11: UTC boundary 00:00Z, roster boundary 22:00Z the
+ * previous day; both read $0.00 that day, so the disagreement was structural
+ * and invisible.
+ *
+ * Whether the roster should change is the Workers stream's call and is posted
+ * to the locks doc. What this file owes is to stop asserting a disclosure it
+ * does not control.
+ */
 function utcDayStart(now: Date): Date {
   const d = new Date(now)
   d.setUTCHours(0, 0, 0, 0)
