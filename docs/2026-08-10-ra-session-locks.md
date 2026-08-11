@@ -69,13 +69,24 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/jobs/advertising-rule-evaluator.job.ts` | RA.GRAIN (product identity resolution) | 2026-08-10 | **released** |
 | `packages/database/prisma/schema.prisma` | RA.GRAIN (`scopeProductId`, additive) | 2026-08-10 | **released** |
 | `…/rules-automation/rules-automation.css` | RA.GRAIN (scope form, `h10-au-*` at EOF) | 2026-08-10 | **released** — appended at EOF only |
+| `…/rules-automation/_shared/tabs.tsx` | KT.1 (`keyword-tracker` → `routed: true` + subtitle) | 2026-08-11 | **released** |
+| `…/rules-automation/RulesAutomationClient.tsx` | KT.1 (drop the `keyword-tracker` branch only) | 2026-08-11 | **released** |
+| `…/rules-automation/rules-automation.css` | KT.1 (`h10-kt-*` at EOF) | 2026-08-11 | **released** — appended at EOF only |
+| `apps/api/src/routes/advertising-intel.routes.ts` | KT.1 (`GET /advertising/keyword-tracker`, additive) | 2026-08-11 | **released** |
 
 *(The scope bar has shipped. RA.AUTO held §3 rows 1, 2 and 6 — all additive. RA.GRAIN holds
 rows 2, 6, 10, 11 and the evaluator; all additive, all released.)*
 
-**`AdsPageHeader` note for other sessions:** it gained a `showMarket?: boolean`
-prop, defaulted `true`. Every page that does not pass it renders byte-identically;
-only Rules & Automation passes `false`, because market lives in its scope bar.
+**🔴 `AdsPageHeader` correction (KT.1, verified 2026-08-11).** The note that used to sit here said
+the header had gained a `showMarket?: boolean` prop. **It has not** — that work was reverted with
+the scope bar and `showMarket` has zero hits repo-wide. The props a page can rely on today are
+`market` / `onMarketChange` (the market picker, always rendered) and `showLearn` / `showDataSync` /
+`showDateRange` / `showChangeLog` / `primaryAction`. A page that wants scope pickers of its own must
+own one market state and pass it into the header, rather than rendering a second market control.
+
+**`advertising-intel.routes.ts` belongs on the §3 list in practice.** It is not the 600 KB file, but
+it is now edited by more than one session and a duplicate route registration there is the same boot
+crash. Claim it before adding a route.
 
 ---
 

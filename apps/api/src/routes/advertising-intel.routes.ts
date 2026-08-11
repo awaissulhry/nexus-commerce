@@ -11,6 +11,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
+import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
@@ -291,6 +292,41 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const { sqpDebugState } = await import('../services/advertising/sqp.service.js')
     reply.header('Cache-Control', 'no-store')
     return sqpDebugState.last ?? { note: 'no SQP report ingested yet this process' }
+  })
+
+  // ── KT.1 — the Keyword Tracker page's one read ──────────────────────
+  // Registered HERE and not in advertising.routes.ts on purpose: that file sees heavy concurrent
+  // edits from parallel sessions and a duplicate route registration there is a boot crash, not a
+  // warning. One call carries the resolved scope, the freshness of every source it read, and the
+  // rows. See keyword-tracker.service.ts for why a row picks its own SQP period.
+  fastify.get('/advertising/keyword-tracker', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const market = (q.market ?? '').toUpperCase()
+    if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+    }
+    const measured = q.measured === 'yes' || q.measured === 'no' ? q.measured : 'all'
+    const sortKeys = ['keyword', 'volume', 'rank', 'share', 'asins', 'asOf'] as const
+    const out = await getKeywordTracker({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      list: q.list ?? null,
+      // branded=1 includes our own brand terms; absent or 0 excludes them, because our brand
+      // flatters every share number on the page.
+      branded: q.branded === '1' || q.branded === 'true',
+      measured,
+      sort: sortKeys.includes(q.sort as (typeof sortKeys)[number]) ? (q.sort as (typeof sortKeys)[number]) : undefined,
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+      limit: q.limit ? Number(q.limit) : undefined,
+      offset: q.offset ? Number(q.offset) : undefined,
+    })
+    // Short private cache: the grid is a full scan of SQP joined to the campaign/ad graph, and the
+    // underlying feeds move once a night at most.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
   })
 
   // ── Data Kiosk economics (Phase 2) ─────────────────────────────────
