@@ -6026,3 +6026,167 @@ rows**.
 [a14]: https://artificialintelligenceact.eu/article/14/
 
 **AWAITING OPERATOR APPROVAL — no code written.**
+
+---
+
+## 20.11 — S9 execution record
+
+Six phases, seven commits. Database began and ended at **18 approvals · 0
+pending · 0 scheduled · 0 exemplars · 0 audit rows**, probed independently.
+Nothing executed.
+
+| Phase | Commit | What |
+|---|---|---|
+| S9.1+S9.2 | `aebbfb944` | One parked row; a stuck row says so instead of counting down at zero |
+| S9.3a | `6d386ab4e` | `Hold` route — the WCAG 2.2.1 answer, server-side |
+| S9.3b | `614a60418` | `Hold` on the row, applying the server's new deadline at once |
+| S9.4 | `75f3f84d3` | The clock restarts on a hand-back; a failed attempt is audited before it is cleared |
+| S9.5 | `16d4df146` | The operator's words get their own column |
+
+### 20.11.1 What the duplication was hiding
+
+The parked row existed twice with byte-identical countdown maths and two
+different sentences for the same fact. Merging it first was not tidiness: the
+null-`executeAfter` defect lived in **both** copies, and fixing it in one would
+have looked complete.
+
+That defect was worse than "renders a stale label". `until` was 0, so the
+interval never started, `left` stayed 0, and **Undo was hidden** because it is
+gated on `left > 0`. A row that claimed to be running, could not run, and could
+not be taken back. Proven fixed by clicking Undo on a seeded stuck row and
+watching it return to the queue.
+
+### 20.11.2 The requirement no earlier section faced
+
+**WCAG 2.2.1 Timing Adjustable (Level A).** Of its six exceptions the only
+candidate is *Essential* — *"the time limit is essential and extending it would
+invalidate the activity"* — and extending an undo window invalidates nothing.
+The exception does not hold, so the window needed Turn off / Adjust / Extend.
+
+`Hold` provides all three by being repeatable, and it is **server-side because
+it has to be**: the sweep commits on `executeAfter <= now` regardless of what
+any browser believes, so a client-side pause would be a lie that ends with the
+action running while the screen says it is held. Measured on prod: **510s →
+599s**, applied from the returned deadline rather than the next poll.
+
+### 20.11.3 Two fixes that changed shape once the code was read
+
+**The failed-execution fix was nearly destructive.** The obvious move is to
+clear `decidedBy`, since a pending row should not carry a decision. But
+`if (!out.ok) return out` **skipped `recordControlChange` entirely**, so
+nothing anywhere recorded that a human had authorised the attempt — the row was
+the only trace and clearing it would have erased it. The fix is the *order*:
+audit, then clear, then restamp.
+
+**S9.5 was scoped as "stop overloading `reason`" and found something worse.**
+`scheduleApproval({ id, actor })` never received the note, so **an approve note
+never reached the database at all** — and `mintExemplarFromDecision(id,
+'approve')` was called with no third argument, so every exemplar minted from an
+approve carried `operatorNote: null`. S10.4's precedent panel promises that
+approving with a reason teaches the fleet; on the approve path it taught it
+nothing.
+
+**This corrects Part 17.** S7's audit recorded "approve carries an optional
+note" as *shipped* because I verified the card sends it and the route accepts
+it. I never traced it to a column. It stopped one function short.
+
+### 20.11.4 A rule retired, not added
+
+S10.3 inferred authorship — *`decidedBy` is null ⟹ no speaker ⟹ no quotation
+marks* — because one column carried two voices. It was the best rule available
+then and it was still a guess about a field's meaning. With `operatorNote`
+added, `reason` is the system's and is never quoted, whoever decided the row.
+Proven on a seeded row carrying **both**:
+
+```
+“fine on brand terms where we already rank”                    ← quoted, once
+recorded by the system: approved; this tool is preview-only    ← never quoted
+```
+
+### 20.11.5 Measurements
+
+| Check | Result |
+|---|---|
+| Parked states rendered | live countdown · stuck · held · undone |
+| `Hold`, from a click | 510s → 599s, server-side confirmed |
+| `Undo` on a stuck row, from a click | row returned to the queue; `decidedBy` cleared |
+| Countdown re-render scope | **only `.ap-schedmeta` mutates** over 2.6s — the list does not re-render |
+| Motion | no animation; the countdown is text, so `prefers-reduced-motion` has nothing to suppress |
+| Composited contrast, parked row | 0 failures |
+| Database | 18 · 0 · 0 · 0 · 0, before and after |
+
+### 20.11.6 Left for others
+
+- **`decideApproval` still leaves `decidedBy` set on a failed execution** for
+  the copilot's own route, which also calls it. Fixed for this page's commit
+  path only; the shared gate is not this stream's.
+- **Half B**, per §20.1, with the contract in §20.6.
+- §6c-AQ and `ApprovalInbox.tsx` remain handed off.
+
+**S9 is complete.**
+
+---
+
+# Part 21 — The page, closed
+
+Ten sections. Seven rebuilt end-to-end, one audited, one deferred with a
+contract, one deferred with a threshold.
+
+| Section | State | Where |
+|---|---|---|
+| S1 identity | rebuilt | Part 12 |
+| S2 the gate | rebuilt | Part 13 |
+| S3 | traded places with S2 by design | Part 4 |
+| S4 the queue and its empty state | rebuilt | Part 14 |
+| S5 outside the fleet | rebuilt | Part 16 |
+| S6 the decision card | rebuilt | Part 15 |
+| S7 the four answers | audited; three gaps declined or deferred with reasons | Part 17 |
+| S8 bulk | rebuilt | Part 18 |
+| S9 the undo window | rebuilt (Half A); receipt deferred with a contract | Part 20 |
+| S10 the record and precedent | rebuilt | Part 19 |
+
+### 21.1 What the page still cannot do, and why
+
+**Nothing on it has ever executed.** The three fleet tools are preview-only and
+the fleet is off by operator constraint, so:
+
+- **the receipt does not exist** — and cannot, until `execute()` returns the
+  per-item shape in §20.6 and the row has somewhere to keep it;
+- **Revert does not exist** — `rollback.service.ts` reverses advertising
+  entities and no executable approval tool writes one;
+- **the oversight statistics do not exist** — AQ.10 needs ~20 real decisions,
+  and today a latency figure computed from the 18 script rows reads 0.9s and
+  means nothing;
+- **AP.8's track record has fired exactly once**, in a seeded state built to
+  prove the mechanism works (§19.9.3).
+
+Every one of those is a *consequence of the fleet being off*, not a defect, and
+each is recorded with the condition that would let it ship.
+
+### 21.2 The three things this page learned that outlived their section
+
+1. **Measure the rendered page; a diff cannot be checked by reading it.** Every
+   section found defects invisible to `tsc`, the DS ratchet, the security suite
+   and the build. Twice in S10 I claimed a type ladder I had not actually
+   shipped, and only re-measuring caught it.
+2. **A structural rule beats a pattern match.** S10's *no decider ⟹ no
+   quotation marks* needed no maintenance where a regex over `acp*` would have
+   rotted; S8's client guard broke exactly that way when a second refusal was
+   added. S9.5 then retired even that rule by giving the operator's voice its
+   own column — the best version of this principle is the one that makes the
+   rule unnecessary.
+3. **A mechanism that has never fired is indistinguishable from a broken one.**
+   Both AP.8 and the S8 guards were settled by seeding the one state that could
+   distinguish them, not by reading the code that implements them.
+
+### 21.3 Open, and belonging to someone else
+
+- **§6c-AQ** — parked rows counted as waiting, with S8's live evidence.
+- **`ApprovalInbox.tsx`** — 2.95:1 and 3.77:1 on the Overview, sharing the
+  `.ap-*` rules this page overrode under `.aq-page`. Frozen directory.
+- **`decideApproval`** — leaves `decidedBy` set on a failed execution for the
+  copilot's route.
+- **AQ.7 / AQ.9 / AQ.10** — the receipt, Ask, and the oversight check, each
+  with its condition written down.
+
+**The page is closed.**
