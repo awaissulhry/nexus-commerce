@@ -1377,7 +1377,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* The scope bar. Product line · Portfolio · Campaign — market is NOT here; it stays in the page
    header's existing picker, because two controls for one fact is what sank the reverted bar. */
-.h10-kt-scope { display: flex; flex-direction: column; gap: 7px; margin: 14px 24px 0; padding: 11px 14px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
+.h10-kt-scope { display: flex; flex-direction: column; gap: 7px; margin: 14px 0 0; padding: 11px 14px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
 .h10-kt-scoperow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
 .h10-kt-lbl { flex: 0 0 auto; align-self: center; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
 .h10-kt-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -1386,10 +1386,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-clear:hover { color: #1c2530; background: #e7ebf1; }
 
 /* The one sentence that states what resolved, and how old the numbers under it are. */
-.h10-kt-said { margin: 10px 24px 0; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-kt-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
 .h10-kt-said b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 
-.h10-kt-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 24px 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-kt-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
 .h10-kt-scope .h10-kt-note { margin: 0; }
 .h10-kt-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
 .h10-kt-note b { font-weight: 800; color: #1c2530; }
@@ -1397,13 +1397,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-note .lnk { font: inherit; font-size: inherit; font-weight: 700; color: #1f6fde; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 
 /* What a scope CANNOT reach. Amber, not red: the view is correct, its reach is partial. */
-.h10-kt-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 24px 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-kt-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
 .h10-kt-blind svg { flex-shrink: 0; margin-top: 2px; }
 .h10-kt-blind b { font-weight: 800; color: #7a4512; }
 
 /* "All markets" is offered by the shared header on every ads page; this grid cannot honestly
    render it, so it says so instead of summing four marketplaces. */
-.h10-kt-pick { margin: 16px 24px 0; padding: 22px 24px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; max-width: 640px; }
+.h10-kt-pick { margin: 16px 0 0; padding: 22px 24px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; max-width: 640px; }
 .h10-kt-pick h3 { margin: 0 0 7px; font-size: 15px; font-weight: 800; color: #1c2530; }
 .h10-kt-pick p { margin: 0; font-size: 12.5px; line-height: 1.6; color: #55606d; }
 .h10-kt-pickrow { display: flex; gap: 8px; margin-top: 14px; }
@@ -1421,7 +1421,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The keyword cell. `N of ours` is the count of OUR OWN ASINs holding a row on the query — the
    fact only SQP can produce, because the search-term report has no ASIN column. */
 .h10-kt-kw { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.h10-kt-kw .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1c2530; }
+.h10-kt-kw .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* 🔴 The shared grid paints its first column blue — `.h10-am-grid td.nm .t` (0,3,1) beats
+   `.h10-kt-kw .t` (0,2,0), so a plain `color:` here loses. Measured blue on prod. Every other
+   grid in this console makes that column a LINK; a keyword here is not one until KT.4 adds the
+   history drawer, and blue text that does nothing when clicked is a promise the page cannot keep.
+   Matched on specificity rather than !important so KT.4 can simply delete this rule. */
+.h10-am-grid td.nm .h10-kt-kw .t { color: #1c2530; }
 .h10-kt-kw .bd, .h10-kt-kw .ac { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-kt-kw .bd { background: #f1f4f8; color: #55606d; }
 .h10-kt-kw .ac { background: #fff6e8; color: #8a5316; }
@@ -1444,7 +1450,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
 
 @media (max-width: 900px) {
-  .h10-kt-scope, .h10-kt-said, .h10-kt-note, .h10-kt-blind, .h10-kt-pick { margin-left: 14px; margin-right: 14px; }
   .h10-kt-scoperow { gap: 10px; }
   .h10-kt-field { flex: 1 1 190px; }
 }
