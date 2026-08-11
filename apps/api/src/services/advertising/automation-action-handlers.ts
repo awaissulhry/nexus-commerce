@@ -35,6 +35,9 @@ import { ACTION_HANDLERS, type ActionResult, getFieldPath } from '../automation-
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
+// NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
+// safety promise was written into every negation rule's action JSON and consulted by nothing.
+import { checkProtectConverting, protectConvertingConfig, normaliseNegTerm } from './ads-protect-converting.js'
 import {
   updateCampaignWithSync,
   updateAdGroupWithSync,
@@ -907,6 +910,9 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
     userId: `automation:${meta.ruleId}`,
     plan,
     destinations: destinations && typeof destinations === 'object' ? destinations : undefined,
+    // NEG.0(a) — carry the rule's own toggle through. Absent means ON, in the service as here.
+    protectConverting: (action as unknown as { protectConverting?: boolean }).protectConverting,
+    protectDays: (action as unknown as { protectDays?: number }).protectDays,
   })
   return {
     type: action.type,
@@ -917,6 +923,9 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       isolationNegativesAdded: result.isolationNegativesAdded,
       productsGraduated: result.productsGraduated,
       productNegativesAdded: result.productNegativesAdded,
+      // A refusal that never leaves the service is the same silent skip in a different file.
+      negativesProtected: result.negativesProtected,
+      protectedTerms: result.protectedTerms.slice(0, 5),
       errors: result.errors.slice(0, 5),
     },
   }
@@ -1018,11 +1027,34 @@ ACTION_HANDLERS.add_negative_exact = async (action, context, meta): Promise<Acti
   const externalAdGroupId = scope === 'AD_GROUP'
     ? ((action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId)
     : undefined
+
+  // NEG.0(b) — the gate's FIRST substantive check is `if (!ctx.marketplace) → deniedAt:'connection'`
+  // (ads-write-gate.ts:165-171), BEFORE the whitelist at :304. This handler used to hide the missing
+  // field behind `as never`, so every negation it attempted was refused at the connection check and
+  // the whitelist never ran. Refuse here instead: a write that cannot be gated is not a write.
+  const marketplace = (context as any)?.marketplace as string | undefined
+  if (!marketplace) return { type: action.type, ok: false, error: 'No marketplace in context — the write gate cannot resolve a connection, so this negation cannot be checked against the protected terms' }
+
+  // NEG.0(a) — "Never create a negative for a term that converted (≥1 order) in the last 30 days in
+  // any campaign". Checked BEFORE the dry-run return: every rule in this account is on PROPOSE, so
+  // the dry run is the only path any of them takes, and a preview promising a negation the armed
+  // rule would refuse is the same defect one step earlier.
+  const guard = await checkProtectConverting({ terms: [keyword], config: protectConvertingConfig(action) })
+  const decision = guard.get(normaliseNegTerm(keyword))
+  if (decision && !decision.allowed) {
+    logger.warn('[add_negative_exact] refused by protectConverting', { ruleId: meta.ruleId, keyword, evidence: decision.evidence })
+    return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword, externalCampaignId, scope } }
+  }
+
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, scope } }
   const { createNegative } = await import('./ads-negative-kw.service.js')
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: (context as any).marketplace, isActive: true }, select: { profileId: true } })
-  await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope } as never)
-  return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'NEGATIVE_EXACT', scope } }
+  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+  const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope, marketplace })
+  // A denied write used to be reported as `ok: true`. With the gate now reachable (above), a
+  // refusal by the protected-terms whitelist is the expected outcome for a brand term — and it has
+  // to land in the execution row as a failure, or the whitelist is invisible to whoever reads it.
+  if (res.denied) return { type: action.type, ok: false, error: `Write gate denied at ${res.denied.deniedAt}: ${res.denied.reason}`, output: { keyword, externalCampaignId, scope, denied: res.denied } }
+  return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'NEGATIVE_EXACT', scope, alreadyExisted: res.alreadyExisted, externalTargetId: res.externalNegativeKeywordId } }
 }
 
 // ── promote_to_exact ──────────────────────────────────────────────────
@@ -1059,15 +1091,35 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
     },
     select: { id: true, externalCampaignId: true },
   })
+  // NEG.0(a) — extended to this handler beyond the two the fix pack named, deliberately: this is
+  // the widest blast radius in the section (74 campaign-level negatives per execution on IT), it
+  // negates ONE term everywhere at once, and "a term that converted" is exactly the term for which
+  // that is the worst possible outcome. Its rules predate the builder's switch and carry no key, so
+  // the absent-means-ON default is what protects them.
+  const guard = await checkProtectConverting({ terms: [keyword], config: protectConvertingConfig(action) })
+  const decision = guard.get(normaliseNegTerm(keyword))
+  if (decision && !decision.allowed) {
+    logger.warn('[sync_negatives_across_campaigns] refused by protectConverting', { ruleId: meta.ruleId, keyword, wouldHaveNegatedIn: campaigns.length, evidence: decision.evidence })
+    return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword, marketplace, wouldHaveNegatedIn: campaigns.length } }
+  }
+
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length, ruleScoped: sweep.scoped } }
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
   const { createNegative } = await import('./ads-negative-kw.service.js')
-  let added = 0; const errors: string[] = []
+  let added = 0; let denied = 0; const errors: string[] = []
   for (const c of campaigns) {
-    try { await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN' } as never); added++ }
+    // NEG.0(b) — `marketplace` was omitted here behind `as never`. All 22 campaign-scope negatives
+    // in the account carry no Amazon id because of it: the gate denied at `connection` and the
+    // local mirror was written anyway. Per-campaign outcomes are counted separately for the same
+    // reason — one number over 74 attempts is how those 22 rows became invisible.
+    try {
+      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN', marketplace })
+      if (r.denied) { denied++; if (errors.length < 5) errors.push(`${c.externalCampaignId}: denied at ${r.denied.deniedAt} — ${r.denied.reason}`) }
+      else added++
+    }
     catch (e) { errors.push((e as Error).message) }
   }
-  return { type: action.type, ok: added > 0, output: { keyword, marketplace, added, errors: errors.slice(0, 5) } }
+  return { type: action.type, ok: added > 0, output: { keyword, marketplace, added, denied, attempted: campaigns.length, errors: errors.slice(0, 5) } }
 }
 
 // ── set_campaign_target_acos ──────────────────────────────────────────

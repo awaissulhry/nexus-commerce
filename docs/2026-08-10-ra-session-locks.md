@@ -73,6 +73,12 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/RulesAutomationClient.tsx` | KT.1 (drop the `keyword-tracker` branch only) | 2026-08-11 | **released** — landed `f6f526dda`; `share-of-voice` branch untouched |
 | `…/rules-automation/rules-automation.css` | KT.1 (`h10-kt-*` at EOF) | 2026-08-11 | **released** — appended at EOF only, `f6f526dda` + `5a24ef3aa` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | KT.1 (`GET /advertising/keyword-tracker`, additive) | 2026-08-11 | **released** — landed `31cba2535` |
+| `apps/api/src/services/advertising/automation-action-handlers.ts` | NEG.0 (enforce `protectConverting`; pass `marketplace`) | 2026-08-12 | **released** |
+| `apps/api/src/services/advertising/ads-harvest.service.ts` | NEG.0 (enforce `protectConverting` in `applyHarvest`; pass `marketplace`) | 2026-08-12 | **released** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.1 (`GET /advertising/negatives`, additive) | 2026-08-12 | **claimed** |
+| `…/rules-automation/_shared/tabs.tsx` | NEG.1 (`negative-targeting` → `routed: true` + subtitle) | 2026-08-12 | **claimed** |
+| `…/rules-automation/RulesAutomationClient.tsx` | NEG.1 (drop the `negative-targeting` branch only) | 2026-08-12 | **claimed** |
+| `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **claimed** — appended at EOF only |
 
 **Two findings from KT.1 that bind every page in this section:**
 

@@ -14,8 +14,13 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { createNegative } from './ads-negative-kw.service.js'
+import { createNegative, type NegativeMatchType } from './ads-negative-kw.service.js'
 import { createKeywordLocal, createNegativeKeywordCampaignLocal, createTargetLocal, createNegativeProductTargetLocal } from './ads-create.service.js'
+// NEG.0(a) — enforced HERE rather than at applyHarvest's five callers, for the reason the write
+// gate gives about itself: a protection only some callers honour is not a protection. The five are
+// the rule engine, the POST route, ads-auto-harvest (which wrote the 22 engine-attributed rows),
+// and two recommendation-accept paths.
+import { checkProtectConverting, normaliseNegTerm, type NegationDecision, type ProtectConvertingConfig } from './ads-protect-converting.js'
 
 export interface HarvestCandidate {
   query: string
@@ -73,7 +78,18 @@ export async function previewHarvest(opts: { windowDays?: number; minSpendCents?
   return { negatives, graduations, productNegatives, productGraduations, windowDays }
 }
 
-export interface HarvestApplyResult { negativesAdded: number; keywordsGraduated: number; isolationNegativesAdded: number; productsGraduated: number; productNegativesAdded: number; errors: string[] }
+export interface HarvestApplyResult {
+  negativesAdded: number
+  keywordsGraduated: number
+  isolationNegativesAdded: number
+  productsGraduated: number
+  productNegativesAdded: number
+  errors: string[]
+  /** NEG.0(a) — negations refused because the term converted inside the window. */
+  negativesProtected: number
+  /** The refusals in full. A count nobody can read back to a term is a silent skip with a number on it. */
+  protectedTerms: Array<{ term: string; path: 'wasteful' | 'isolation'; reason: string }>
+}
 // AT.4b — per-(external)-ad-group match-type plan from a wizard rule's `sources`.
 // Absent → the original defaults (graduate EXACT, negate NEGATIVE_EXACT). H.5 adds the product flags:
 // graduateProduct/negateProduct gate whether converting/wasteful ASINs become product targets.
@@ -83,8 +99,33 @@ export type HarvestPlan = Record<string, { graduate?: string[]; negate?: string[
 // that hosts that match type in the same product group (e.g. EXACT → the Exact campaign). A graduated
 // keyword is created there instead of back in the source ad group. Absent → graduate in source (the
 // standalone "Auto harvest & negate" template, unchanged).
-export async function applyHarvest(args: { negatives?: HarvestCandidate[]; graduations?: Array<HarvestCandidate & { bidEur?: number }>; productNegatives?: HarvestCandidate[]; productGraduations?: Array<HarvestCandidate & { bidEur?: number }>; userId?: string; plan?: HarvestPlan; destinations?: Record<string, string> }): Promise<HarvestApplyResult> {
-  const result: HarvestApplyResult = { negativesAdded: 0, keywordsGraduated: 0, isolationNegativesAdded: 0, productsGraduated: 0, productNegativesAdded: 0, errors: [] }
+export async function applyHarvest(args: { negatives?: HarvestCandidate[]; graduations?: Array<HarvestCandidate & { bidEur?: number }>; productNegatives?: HarvestCandidate[]; productGraduations?: Array<HarvestCandidate & { bidEur?: number }>; userId?: string; plan?: HarvestPlan; destinations?: Record<string, string>; protectConverting?: boolean; protectDays?: number }): Promise<HarvestApplyResult> {
+  const result: HarvestApplyResult = { negativesAdded: 0, keywordsGraduated: 0, isolationNegativesAdded: 0, productsGraduated: 0, productNegativesAdded: 0, errors: [], negativesProtected: 0, protectedTerms: [] }
+
+  // NEG.0(a) — one read for the whole batch, then a pure decision per term.
+  //
+  // 🔴 This deliberately covers the H.3 ISOLATION negation as well as the wasteful one, and that is
+  // load-bearing: an isolation negation targets a term that just graduated *because* it converted,
+  // so under a literal reading of the builder's sentence every one of them is refused. The two
+  // paths are counted separately below so the effect is visible rather than inferred. If isolation
+  // should be exempt — the argument being that the term is not blocked, only routed, since the same
+  // term is created as EXACT in the destination campaign in the same transaction — that is an
+  // operator decision, not one to make silently inside a safety fix.
+  const protectConfig: ProtectConvertingConfig = {
+    enabled: args.protectConverting !== false,
+    days: args.protectDays != null && Number(args.protectDays) > 0 ? Math.floor(Number(args.protectDays)) : 30,
+  }
+  const candidateTerms = [...(args.negatives ?? []), ...(args.graduations ?? [])].map((c) => c.query)
+  const guard = await checkProtectConverting({ terms: candidateTerms, config: protectConfig })
+  const refusalFor = (query: string): NegationDecision | null => {
+    const d = guard.get(normaliseNegTerm(query))
+    return d && !d.allowed ? d : null
+  }
+  const recordRefusal = (query: string, path: 'wasteful' | 'isolation', d: NegationDecision) => {
+    result.negativesProtected++
+    result.protectedTerms.push({ term: query, path, reason: d.reason })
+    logger.warn('[applyHarvest] negation refused by protectConverting', { query, path, evidence: d.evidence })
+  }
 
   // H.7 — negate at campaign scope: push to Amazon (gated, via createNegative) THEN mirror a local row
   // so our platform reflects it immediately (gated-local symmetry with graduations). Ordered so
@@ -93,15 +134,28 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
   const negateCampaign = async (externalCampaignId: string, query: string, planNegate?: string[]): Promise<number> => {
     const negMatches = planNegate?.length ? planNegate : ['EXACT']
     const camp = await prisma.campaign.findFirst({ where: { externalCampaignId }, select: { marketplace: true } })
-    const conn = camp?.marketplace ? await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } }) : null
+    // NEG.0(b) — `marketplace` was omitted here behind `as never`, so the gate denied at
+    // `connection` (ads-write-gate.ts:165-171) before it ever reached the protected-terms check,
+    // and `createNegativeKeywordCampaignLocal` — which has no gate of its own — wrote the local row
+    // regardless. That pair is why all 22 campaign-scope negatives in the account carry no Amazon
+    // id. Refuse rather than repeat it: a push that cannot be gated must not leave a mirror behind.
+    if (!camp?.marketplace) throw new Error(`no local campaign (or no marketplace) for externalCampaignId=${externalCampaignId} — cannot resolve a connection for the write gate`)
+    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } })
     for (const nm of negMatches) {
-      const r = (await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, keywordText: query, matchType: `NEGATIVE_${nm}`, scope: 'CAMPAIGN' } as never)) as { externalNegativeKeywordId?: string | null }
-      await createNegativeKeywordCampaignLocal({ externalCampaignId, keywordText: query, matchType: nm as 'EXACT' | 'PHRASE', externalTargetId: r?.externalNegativeKeywordId ?? null, userId: args.userId })
+      // Amazon SP has no negative-broad (ads-api-client.ts:1759). A plan asking for one used to be
+      // sent as `NEGATIVE_BROAD` and rejected downstream; name it here instead.
+      if (nm !== 'EXACT' && nm !== 'PHRASE') throw new Error(`unsupported negative match type "${nm}" — Amazon SP accepts EXACT and PHRASE only`)
+      const matchType: NegativeMatchType = nm === 'EXACT' ? 'NEGATIVE_EXACT' : 'NEGATIVE_PHRASE'
+      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, keywordText: query, matchType, scope: 'CAMPAIGN', marketplace: camp.marketplace })
+      if (r.denied) throw new Error(`write gate denied at ${r.denied.deniedAt}: ${r.denied.reason}`)
+      await createNegativeKeywordCampaignLocal({ externalCampaignId, keywordText: query, matchType: nm, externalTargetId: r.externalNegativeKeywordId ?? null, userId: args.userId })
     }
     return negMatches.length
   }
 
   for (const n of args.negatives ?? []) {
+    const refused = refusalFor(n.query)
+    if (refused) { recordRefusal(n.query, 'wasteful', refused); continue }
     try {
       await negateCampaign(n.externalCampaignId, n.query, args.plan?.[n.externalAdGroupId]?.negate)
       result.negativesAdded++
@@ -132,8 +186,18 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
       // recurring tick won't pile up duplicates and nothing pushes live while gated.
       const promotedElsewhere = !!srcAg && gradMatches.some((gm) => { const d = args.destinations?.[gm]; return !!d && d !== srcAg.id })
       if (promotedElsewhere) {
-        try { result.isolationNegativesAdded += await negateCampaign(g.externalCampaignId, g.query, args.plan?.[g.externalAdGroupId]?.negate) }
-        catch (e) { result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`) }
+        // 🔴 NEG.0(a), the awkward case: a graduated term converted by definition, so the literal
+        // reading of "never negate a term that converted" refuses every isolation negation. Applied
+        // as written and counted under `path: 'isolation'` so the effect is legible on the result
+        // rather than showing up as an unexplained zero. Unreachable today — the only caller that
+        // has ever run this service (ads-auto-harvest) passes no `destinations`, so
+        // `promotedElsewhere` is false for it.
+        const refused = refusalFor(g.query)
+        if (refused) recordRefusal(g.query, 'isolation', refused)
+        else {
+          try { result.isolationNegativesAdded += await negateCampaign(g.externalCampaignId, g.query, args.plan?.[g.externalAdGroupId]?.negate) }
+          catch (e) { result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`) }
+        }
       }
     } catch (e) { result.errors.push(`grad "${g.query}": ${(e as Error).message}`) }
   }
