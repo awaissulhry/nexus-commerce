@@ -1367,3 +1367,88 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 @media (max-width: 720px) {
   .h10-au-scoperow .lbl { flex-basis: 100%; }
 }
+
+/* ── KT.1 — Keyword Tracker page ──────────────────────────────────────────────────────────────
+   Appended at EOF, `h10-kt-*` selectors only, exactly as the RA.AUTO and RA.GRAIN blocks above:
+   source order beats specificity in this file, so an override that is not last is not an
+   override. Nothing here can reach another tab — every selector is a class that exists only on
+   /rules-automation/keyword-tracker. The one reused family is `.h10-svt-seg` (the section's
+   segmented control) and it is used, not restyled. */
+
+/* The scope bar. Product line · Portfolio · Campaign — market is NOT here; it stays in the page
+   header's existing picker, because two controls for one fact is what sank the reverted bar. */
+.h10-kt-scope { display: flex; flex-direction: column; gap: 7px; margin: 14px 24px 0; padding: 11px 14px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
+.h10-kt-scoperow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.h10-kt-lbl { flex: 0 0 auto; align-self: center; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
+.h10-kt-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.h10-kt-field .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: #667080; }
+.h10-kt-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11.5px; font-weight: 600; color: #55606d; background: #f1f4f8; border: 0; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+.h10-kt-clear:hover { color: #1c2530; background: #e7ebf1; }
+
+/* The one sentence that states what resolved, and how old the numbers under it are. */
+.h10-kt-said { margin: 10px 24px 0; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-kt-said b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+
+.h10-kt-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 24px 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-kt-scope .h10-kt-note { margin: 0; }
+.h10-kt-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
+.h10-kt-note b { font-weight: 800; color: #1c2530; }
+.h10-kt-note.out { padding: 8px 11px; border-radius: 8px; background: #f1f4f8; }
+.h10-kt-note .lnk { font: inherit; font-size: inherit; font-weight: 700; color: #1f6fde; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+
+/* What a scope CANNOT reach. Amber, not red: the view is correct, its reach is partial. */
+.h10-kt-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 24px 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-kt-blind svg { flex-shrink: 0; margin-top: 2px; }
+.h10-kt-blind b { font-weight: 800; color: #7a4512; }
+
+/* "All markets" is offered by the shared header on every ads page; this grid cannot honestly
+   render it, so it says so instead of summing four marketplaces. */
+.h10-kt-pick { margin: 16px 24px 0; padding: 22px 24px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; max-width: 640px; }
+.h10-kt-pick h3 { margin: 0 0 7px; font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-kt-pick p { margin: 0; font-size: 12.5px; line-height: 1.6; color: #55606d; }
+.h10-kt-pickrow { display: flex; gap: 8px; margin-top: 14px; }
+
+/* Toolbar: the share-data filter and the brand-term toggle. */
+.h10-kt-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.h10-kt-tools .h10-svt-seg { margin: 0; padding: 2px; }
+.h10-kt-tools .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
+.h10-kt-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: #55606d; background: #f1f4f8; border: 0; border-radius: 7px; padding: 6px 11px; cursor: pointer; }
+.h10-kt-toggle:hover { color: #1c2530; background: #e7ebf1; }
+.h10-kt-toggle.on { color: #1f6fde; background: #e8f1fd; }
+.h10-kt-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: #667080; }
+.h10-kt-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-weight: 700; }
+
+/* The keyword cell. `N of ours` is the count of OUR OWN ASINs holding a row on the query — the
+   fact only SQP can produce, because the search-term report has no ASIN column. */
+.h10-kt-kw { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.h10-kt-kw .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1c2530; }
+.h10-kt-kw .bd, .h10-kt-kw .ac { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.h10-kt-kw .bd { background: #f1f4f8; color: #55606d; }
+.h10-kt-kw .ac { background: #fff6e8; color: #8a5316; }
+
+/* A blank is not a zero: `not measured` is a value with words, `0.00%` is a measurement. */
+.h10-kt-share { font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; }
+.h10-kt-share.zero { color: #8a5316; }
+.h10-kt-nm { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; }
+.h10-kt-nd { color: #667080; }
+
+/* Every row states the age of what it shows. Stale is a value, not an absence. */
+.h10-kt-age { display: inline-flex; align-items: baseline; gap: 6px; font-size: 11.5px; color: #1c2530; white-space: nowrap; }
+.h10-kt-age i { font-style: normal; padding: 1px 5px; border-radius: 5px; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.h10-kt-age.fresh i { background: #e7f5ed; color: #14724d; }
+.h10-kt-age.ageing i { background: #f1f4f8; color: #55606d; }
+.h10-kt-age.stale i { background: #fff6e8; color: #8a5316; }
+
+.h10-kt-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
+.h10-kt-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-kt-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
+
+@media (max-width: 900px) {
+  .h10-kt-scope, .h10-kt-said, .h10-kt-note, .h10-kt-blind, .h10-kt-pick { margin-left: 14px; margin-right: 14px; }
+  .h10-kt-scoperow { gap: 10px; }
+  .h10-kt-field { flex: 1 1 190px; }
+}
+
+/* The marketplace a row belongs to. A row is one keyword × market, and volume/rank/share are all
+   per-marketplace, so the market is on the row and not only in the header. */
+.h10-kt-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }

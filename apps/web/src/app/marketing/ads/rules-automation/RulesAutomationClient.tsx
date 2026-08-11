@@ -334,9 +334,9 @@ export function RulesAutomationClient() {
           emptyLabel="No campaigns found."
         />
       ) : tab === 'share-of-voice' ? (
+        // KT.1 — `keyword-tracker` left this switch for its own route
+        // (…/rules-automation/keyword-tracker). Share of Voice still renders from here.
         <SovTrackerTab kind="sov" />
-      ) : tab === 'keyword-tracker' ? (
-        <SovTrackerTab kind="tracker" />
       ) : tab === 'budget' ? (
         <RuleListTab
           noun="Budget Rule"

@@ -51,7 +51,14 @@ export const RULES_TABS: RulesTab[] = [
   { key: 'budget-schedules', label: 'Budget Schedules' },
   { key: 'placement', label: 'Placement' },
   { key: 'share-of-voice', label: 'Share of Voice' },
-  { key: 'keyword-tracker', label: 'Keyword Tracker' },
+  // KT.1 — its own page. The tab used to render SovTrackerTab kind="tracker": a [ Rules | Report ]
+  // segment over KeywordRank, a table with 0 rows, so all four columns read `#—` on every row.
+  {
+    key: 'keyword-tracker',
+    label: 'Keyword Tracker',
+    routed: true,
+    subtitle: 'On the keywords you chose — are we on the page, and is it moving?',
+  },
 ]
 
 export const rulesTabByKey = (key: string): RulesTab | undefined => RULES_TABS.find((t) => t.key === key)
