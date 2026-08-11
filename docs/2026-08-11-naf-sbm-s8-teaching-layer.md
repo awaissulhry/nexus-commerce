@@ -9,7 +9,9 @@ the teaching prose in `CensusBand.tsx`, `OverlayRail.tsx`, `InspectorRail.tsx`,
 
 Measured on production 2026-08-11.
 
-**Status: study only. No code has been written.**
+**Status: BUILT AND VERIFIED ON PRODUCTION.** Parts 0–9 are the study as
+approved; **Part 10 is the execution record**, including two phases the study
+did not contain and one raise I nearly filed wrong.
 
 ---
 
@@ -462,6 +464,93 @@ and let S7.d's sentence carry the denominators.
 
 `S8.a` first: it is the only defect that makes the teaching physically
 unreadable, and it is the one a reader hits without opening anything.
+
+---
+
+## PART 10 — The execution record
+
+### 10.1 · What each phase did, measured on production
+
+| phase | before → after |
+|---|---|
+| **S8.a** | `OPEN FINDINGS` tip ended at 1850 in a 1728 viewport; page carried 122px of horizontal scroll → **every tip on screen at 1100/1280/1440/1728; overflow 0** |
+| **S8.b** | the drawer claimed `$0.0000` → **no four-decimal figure anywhere on the page** |
+| **S8.c** | no mention of entity mode's table or of the window → **Table/Graph explained; four denominators as a `<dl>`; the greyed-out note; the all-`Off` clause** |
+| **S8.d** | two near-identical copies of the cost sentence → **exactly one copy on screen**, owned by the legend |
+| **S8.e** | `carried`/`dropped`/`no-count` restated in prose, keys unread → **rendered from the keys**; `spend` deleted |
+| **S8.f** | no mechanism → **13 tests, 6 of which failed against pre-fix `main`** |
+| **S8.g** | *(not in the study)* 7 drawer headings at **2.50:1** → **6.31:1** |
+| **S8.h** | *(not in the study)* two glued word-pairs → **spaces restored** |
+
+Final sweep: drawer **66 nodes / 0 failures**, whole page with the drawer open
+**192 nodes / 0 failures**, horizontal overflow **0**.
+
+### 10.2 · S8.a needed no accessibility trade-off after all
+
+The study kept `display: none` as a fallback I had explicitly **not** verified
+against real screen readers, and put the position clamp first for that reason.
+The clamp fixed both defects — the clipping *and* the phantom scrollbar — so
+S1R's `visibility: hidden` contract is untouched and the unverified option was
+never needed. Anchoring to `.sbm-facts` rather than to an index or a viewport
+was checked at four widths first: right-anchored, the left-most edge is 628px at
+a 1100px viewport.
+
+### 10.3 · The tests caught two of my own errors, which is the argument for them
+
+Written last and **seen to fail first**, as the build order required.
+
+- My first key parser sliced `definitions.tsx` to end-of-file and reported `k`
+  and `children` — `Def`'s destructured props — as dead definitions. The parser
+  is bounded now and an assertion guards it.
+- S8.d first *derived* `no-runs` from the overlay bucket. The test rejected it,
+  correctly: **deriving is not reading**, and a key nothing renders is dead
+  however it is computed. It was deleted instead.
+- The `$0.0000` guard failed on **my own S8.b comment**, which quotes the deleted
+  sentence so the next reader knows what went. It reads comment-stripped source
+  now — an operator reads the rendered drawer, not the file.
+
+### 10.4 · Two phases the study did not contain
+
+**S8.g — the sweep the brief asked for, and the brief was right.**
+`.sbm-how-body` had never been measured: 62 nodes, **7 failures, all of them the
+drawer's `<h4>` headings**, `#9aa5b3` at 2.50:1 on white. The teaching layer is
+the one surface whose whole job is to be read. This page has already replaced
+that exact value with `#55616f` in **eleven** other places across S1–S7 — the
+drawer is simply where nobody pointed the sweep, which is the same method
+failure S6.b recorded when the page footer turned up at 2.81:1 between five
+clean regions.
+
+**S8.h — JSX glued two word-pairs together.** The drawer rendered *"What they
+watchis"* and *"zeroright now"*. Not a typo: the source has carried the space
+since the drawer was written. **A JSX text node that begins with a space and
+spans a line break loses that space**, because the compiler trims each line of a
+multi-line text block. The single-line node two words earlier keeps its space —
+so Prettier's wrapping broke one seam and not the other, which is why it
+survived seven sections.
+
+Found in the **screenshot**, confirmed in the DOM child nodes, then a sweep for
+the pattern found the second. That second one appears verbatim in this study's
+own Part 2 quotation of the drawer, and I read past it.
+
+### 10.5 · A raise I nearly filed wrong
+
+I spotted `.sbm-ent-sub` still at `#9aa5b3` and began writing it up. Measured
+first: it renders **zero times** at arrival zoom — S6 recorded that the full text
+tier needs zoom ≥ 1.05 and the arrival frame clamps to ≤ 1.0. Rather than file a
+speculative raise, I reached the state: at zoom 1.8 it renders **39 times at
+2.50:1**, 10px.
+
+So it is real, it is reachable, and it is **Section 6's surface** — recorded with
+the measurement rather than absorbed here.
+
+### 10.6 · The instrument, and what it cost
+
+The tab reported `hidden` for this entire section and could not be foregrounded,
+so every number above is geometry and none is timing. One probe artefact came
+directly from working around that: **`innerText` applies `text-transform` and
+`textContent` does not**, so `innerText.includes('What the window covers')` was
+false for a heading plainly on screen, and every `h4` failed the same check. I
+was one step from reporting a shipped phase as missing.
 
 **S8.f deliberately last, and it must be seen to fail first.** A test written
 after the fix that has never failed is a test nobody knows works.
