@@ -68,11 +68,13 @@ export interface MapNode {
     maxToolCallsPerRun: number
   }
   lastRun: MapRun | null
-  recentRuns: MapRun[]
+  /* S9.c/S9.d — `recentRuns` and `runs.notOkWindow` are gone from the payload.
+     Both were declared here, shipped on every read, and rendered by nothing;
+     `recentRuns` alone was 28% of it. See fleet-map.service.ts for the full
+     reason and for the running-row lesson its comment used to carry. */
   runs: {
     window: number
     lifetime: number
-    notOkWindow: number
     runningNow: boolean
     runningRunId: string | null
     runningSince: string | null
@@ -84,10 +86,9 @@ export interface MapNode {
     currency: string
     windowUSD: number
     runs: number
-    todayUSD: number
+    /* S9.d — per-node `todayUSD` and the token counters are gone; nothing read
+       them. The FLEET-level `state.spentTodayUSD` below IS read, and stays. */
     lifetimeUSD: number
-    inputTokensWindow: number
-    outputTokensWindow: number
   }
   declaredBy: Provenance[]
 }
@@ -126,7 +127,6 @@ export interface MapEdge {
    *  tell "never" apart from "not in the last 7 days". Out-of-window content is
    *  never promoted into the window — this only says where to look. */
   latestCritique: { verdict: string; at: string; inWindow: boolean } | null
-  lineage: 'plan-items' | 'none'
   lineageNote: string
 }
 
@@ -140,8 +140,11 @@ export interface FleetMapPayload {
     haltedBy: string | null
     dailyCeilingUSD: number
     degraded: boolean
+    /* S9.b — `spendLedgerReadable` retired. It was a literal `true` in the
+       service (an unreadable ledger throws inside the Promise.all before it is
+       reached), so it could never be false, and nothing rendered it. A field
+       that cannot be false is not a signal. */
     spentTodayUSD: number
-    spendLedgerReadable: boolean
   }
   schedule: Array<{
     key: string

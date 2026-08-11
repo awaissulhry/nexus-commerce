@@ -129,16 +129,27 @@ export interface MapNode {
     maxToolCallsPerRun: number
   }
   lastRun: MapRun | null
-  /** Newest first, capped at five. The inspector rail renders these; it is not
-   *  a run history — that is Activity's, at its own altitude. */
-  recentRuns: MapRun[]
+  /*
+   * S9.c/S9.d — REMOVED HERE: `recentRuns` and `runs.notOkWindow`.
+   *
+   * `recentRuns` carried the comment *"the inspector rail renders these"*. It
+   * does not, and never did — the rail imports only `ago` from run-health and
+   * ends in links to Activity, which is where run history lives. The field was
+   * 28% of a 27.1 KB payload (27.1 → 19.5 KB) and was read by nothing.
+   *
+   * `notOkWindow` was the sole consumer of a JS derivation over the `take: 400`
+   * slice, while `runs.window` beside it came from an uncapped `groupBy` — two
+   * numbers on one card from two populations. Also read by nothing.
+   *
+   * ⚠ THE LESSON THAT COMMENT CARRIED, KEPT because it outlives the field: an
+   * `AgentRun` is created `ok: false` and only flips true at completion, so
+   * counting `!ok` counts the run that is still in flight. It cost the Workers
+   * stream three separate bugs. Nothing in this file counts `!ok` any more; if
+   * something ever does again, exclude `status === 'running'`.
+   */
   runs: {
     window: number
     lifetime: number
-    /** Excludes rows still `running`: an AgentRun is created `ok:false` and
-     *  only flips true at completion, so counting `!ok` counts the run that is
-     *  still in flight. Hit three separate times by the Workers stream. */
-    notOkWindow: number
     runningNow: boolean
     runningRunId: string | null
     runningSince: Date | null
@@ -158,12 +169,14 @@ export interface MapNode {
     windowUSD: number
     /** How many runs produced `windowUSD`. Without it, $0.00 over three runs
      *  and $0.00 over no runs render identically — one is a measured zero and
-     *  the other is no data, and the overlay must not colour them the same. */
+     *  the other is no data, and the overlay must not colour them the same.
+     *  S7.c made the card honour this; it is the most load-bearing field here. */
     runs: number
-    todayUSD: number
+    /* S9.d — `todayUSD` (per node), `inputTokensWindow` and `outputTokensWindow`
+       removed: all three were read by nothing. The FLEET-level `spentTodayUSD`
+       on `state` is read, and stays — it is the one the census band spends
+       against the daily cap. */
     lifetimeUSD: number
-    inputTokensWindow: number
-    outputTokensWindow: number
   }
   declaredBy: Array<{ workflowKey: string; kind: string; source: string }>
 }
@@ -230,14 +243,13 @@ export interface MapEdge {
    * to look; it does not quietly show older data under an in-window heading.
    */
   latestCritique: { verdict: string; at: string; inWindow: boolean } | null
-  lineage: 'plan-items' | 'none'
   lineageNote: string
 }
 
 export interface FleetMapView {
   asOf: Date
   window: { key: WindowKey; days: number | null; since: Date | null }
-  state: FleetStateView & { spentTodayUSD: number; spendLedgerReadable: boolean }
+  state: FleetStateView & { spentTodayUSD: number }
   schedule: FleetScheduleJob[]
   wiring: {
     workflows: Array<{
@@ -530,14 +542,6 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
       recentByKey.set(r.agentKey, list)
     }
   }
-  // Not-ok in the window, excluding rows still in flight (see MapNode.runs).
-  const notOkWindowByKey = new Map<string, number>()
-  for (const r of lastRunRows) {
-    if (since && r.createdAt < since) continue
-    if (r.status === 'running') continue
-    if (r.ok) continue
-    notOkWindowByKey.set(r.agentKey, (notOkWindowByKey.get(r.agentKey) ?? 0) + 1)
-  }
   if (lastRunRows.length === 400) {
     warnings.push(
       'Run detail is read from the most recent 400 fleet runs; totals and costs are counted over all of them.',
@@ -720,7 +724,6 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
   // Promise.all above, so an unreadable spend ledger throws before this point
   // rather than silently reporting $0.00, which would read as "spent nothing".
   const spentTodayUSD = todayRows.reduce((s, r) => s + num(r._sum.costUSD), 0)
-  const spendLedgerReadable = true
   /*
    * S9.a — THE LAST PLACE ON THIS PAGE WHERE ABSENCE AND FAILURE LOOKED ALIKE.
    *
@@ -788,11 +791,9 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
         maxToolCallsPerRun: c.maxToolCallsPerRun,
       },
       lastRun: recent[0] ?? null,
-      recentRuns: recent,
       runs: {
         window: w?._count._all ?? 0,
         lifetime: l?._count._all ?? 0,
-        notOkWindow: notOkWindowByKey.get(c.key) ?? 0,
         runningNow: running != null,
         runningRunId: running?.id ?? null,
         runningSince: running?.createdAt ?? null,
@@ -804,10 +805,7 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
         currency: 'USD',
         windowUSD: num(w?._sum.costUSD),
         runs: w?._count._all ?? 0,
-        todayUSD: 0, // filled below, one query for the fleet rather than per node
         lifetimeUSD: num(l?._sum.costUSD),
-        inputTokensWindow: w?._sum.inputTokens ?? 0,
-        outputTokensWindow: w?._sum.outputTokens ?? 0,
       },
       declaredBy: declaredByNode.get(c.key) ?? [],
     }
@@ -913,7 +911,6 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
         verdicts: isPlan ? (verdicts ?? { pass: 0, revise: 0, block: 0 }) : null,
         lastCritique: lastCritiqueByPair.get(id) ?? null,
         latestCritique: isPlan ? (latestCritiqueByPair.get(id) ?? null) : null,
-        lineage: isPlan ? 'none' : 'plan-items',
         lineageNote: isPlan
           ? 'The critic does not write an artifact — it records a verdict on the plan itself, so there is nothing to count crossing here.'
           : 'Counted from the findings the director named in its plan. A finding it read and dropped is counted separately, with its reason.',
@@ -921,14 +918,10 @@ export async function getFleetMap(windowKey: WindowKey = '7d'): Promise<FleetMap
     })
 
   /* today's spend, per worker and for the fleet, from one grouped read */
-  const todayMap = new Map<string, number>()
-  for (const r of todayRows) todayMap.set(r.agentKey, num(r._sum.costUSD))
-  for (const n of nodes) n.cost.todayUSD = todayMap.get(n.key) ?? 0
-
   return {
     asOf,
     window: { key: windowKey, days, since },
-    state: { ...state, spentTodayUSD, spendLedgerReadable },
+    state: { ...state, spentTodayUSD },
     schedule,
     wiring: {
       workflows: wiringRows.map((r) => ({

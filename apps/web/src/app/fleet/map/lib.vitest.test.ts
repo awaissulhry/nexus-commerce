@@ -52,11 +52,9 @@ function node(over: Partial<MapNode> & { key: string }): MapNode {
       maxToolCallsPerRun: 2,
     },
     lastRun: null,
-    recentRuns: [],
     runs: {
       window: 0,
       lifetime: 0,
-      notOkWindow: 0,
       runningNow: false,
       runningRunId: null,
       runningSince: null,
@@ -68,10 +66,7 @@ function node(over: Partial<MapNode> & { key: string }): MapNode {
       currency: 'USD',
       windowUSD: 0,
       runs: 0,
-      todayUSD: 0,
       lifetimeUSD: 0,
-      inputTokensWindow: 0,
-      outputTokensWindow: 0,
     },
     declaredBy: [],
     ...over,
@@ -114,25 +109,25 @@ const FIXTURE: MapNode[] = [
   node({
     key: 'running-worker',
     charter: { ...node({ key: 'x' }).charter, enabled: true, autonomyLevel: 'OBSERVE' },
-    runs: { window: 1, lifetime: 1, notOkWindow: 0, runningNow: true, runningRunId: 'r', runningSince: null },
+    runs: { window: 1, lifetime: 1, runningNow: true, runningRunId: 'r', runningSince: null },
   }),
   node({
     key: 'working-worker',
     charter: { ...node({ key: 'x' }).charter, enabled: true, autonomyLevel: 'OBSERVE' },
     lastRun: run(),
-    runs: { window: 1, lifetime: 1, notOkWindow: 0, runningNow: false, runningRunId: null, runningSince: null },
+    runs: { window: 1, lifetime: 1, runningNow: false, runningRunId: null, runningSince: null },
   }),
   node({
     key: 'failed-worker',
     charter: { ...node({ key: 'x' }).charter, enabled: true, autonomyLevel: 'OBSERVE' },
     lastRun: run({ ok: false, errorMessage: 'fetch failed' }),
-    runs: { window: 1, lifetime: 1, notOkWindow: 1, runningNow: false, runningRunId: null, runningSince: null },
+    runs: { window: 1, lifetime: 1, runningNow: false, runningRunId: null, runningSince: null },
   }),
   node({
     key: 'limited-worker',
     charter: { ...node({ key: 'x' }).charter, enabled: true, autonomyLevel: 'OBSERVE' },
     lastRun: run({ ok: false, haltedReason: 'budget_tokens: 20142 of 20000 run tokens used' }),
-    runs: { window: 1, lifetime: 1, notOkWindow: 1, runningNow: false, runningRunId: null, runningSince: null },
+    runs: { window: 1, lifetime: 1, runningNow: false, runningRunId: null, runningSince: null },
   }),
   node({ key: 'waiting-worker', approvals: { waiting: 2, scheduled: 1 } }),
   node({ key: 'selftest', diagnostic: true, findings: { open: 47, openExpired: 47, bySeverity: {} } }),
@@ -189,7 +184,7 @@ describe('census', () => {
     const chip = CHIPS.find((c) => c.id === 'never-run')!
     const ranLongAgo = node({
       key: 'ran-once',
-      runs: { window: 0, lifetime: 4, notOkWindow: 0, runningNow: false, runningRunId: null, runningSince: null },
+      runs: { window: 0, lifetime: 4, runningNow: false, runningRunId: null, runningSince: null },
     })
     expect(chip.matches(ranLongAgo)).toBe(false)
   })
@@ -254,7 +249,7 @@ describe('verdict', () => {
       off('a'),
       on('broke', {
         lastRun: run({ ok: false, errorMessage: 'fetch failed' }),
-        runs: { window: 1, lifetime: 1, notOkWindow: 1, runningNow: false, runningRunId: null, runningSince: null },
+        runs: { window: 1, lifetime: 1, runningNow: false, runningRunId: null, runningSince: null },
       }),
     ]
     const v = verdict(nodes, false)
@@ -293,7 +288,7 @@ describe('verdict', () => {
   it('never claims a plural of one, in either the noun or the verb', () => {
     const one = [
       on('solo', {
-        runs: { window: 1, lifetime: 1, notOkWindow: 0, runningNow: true, runningRunId: 'r', runningSince: null },
+        runs: { window: 1, lifetime: 1, runningNow: true, runningRunId: 'r', runningSince: null },
       }),
     ]
     expect(verdict(one, false).headline).toBe('1 worker is running now.')

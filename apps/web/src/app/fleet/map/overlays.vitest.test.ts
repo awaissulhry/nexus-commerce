@@ -44,12 +44,11 @@ function node(over: Partial<MapNode> & { key: string }): MapNode {
       maxToolCallsPerRun: 2,
     },
     lastRun: null,
-    recentRuns: [],
-    runs: { window: 0, lifetime: 0, notOkWindow: 0, runningNow: false, runningRunId: null, runningSince: null },
+    runs: { window: 0, lifetime: 0, runningNow: false, runningRunId: null, runningSince: null },
     findings: { open: 0, openExpired: 0, bySeverity: {} },
     plans: { authoredWindow: 0, verdictsWindow: { pass: 0, revise: 0, block: 0 } },
     approvals: { waiting: 0, scheduled: 0 },
-    cost: { currency: 'USD', windowUSD: 0, runs: 0, todayUSD: 0, lifetimeUSD: 0, inputTokensWindow: 0, outputTokensWindow: 0 },
+    cost: { currency: 'USD', windowUSD: 0, runs: 0, lifetimeUSD: 0 },
     declaredBy: [],
   }
   return { ...base, ...over, charter: { ...base.charter, ...(over.charter ?? {}) } } as MapNode
@@ -63,7 +62,7 @@ const run = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as NonNullable<MapNode['lastRun']>
 
-const ran = { window: 1, lifetime: 1, notOkWindow: 0, runningNow: false, runningRunId: null, runningSince: null }
+const ran = { window: 1, lifetime: 1, runningNow: false, runningRunId: null, runningSince: null }
 
 /** One node per bucket that can exist, across all three overlays. */
 const FIXTURE: MapNode[] = [
@@ -74,11 +73,11 @@ const FIXTURE: MapNode[] = [
   node({ key: 'propose', charter: { enabled: true, autonomyLevel: 'PROPOSE' } as never }),
   node({ key: 'auto', charter: { enabled: true, autonomyLevel: 'AUTO' } as never }),
   node({ key: 'never-run' }),
-  node({ key: 'clean', lastRun: run(), runs: ran, cost: { currency: 'USD', windowUSD: 0.005, runs: 1, todayUSD: 0, lifetimeUSD: 0.005, inputTokensWindow: 0, outputTokensWindow: 0 } }),
-  node({ key: 'failed', lastRun: run({ ok: false, errorMessage: 'fetch failed' }), runs: ran, cost: { currency: 'USD', windowUSD: 0.05, runs: 1, todayUSD: 0, lifetimeUSD: 0.05, inputTokensWindow: 0, outputTokensWindow: 0 } }),
-  node({ key: 'limited', lastRun: run({ ok: false, haltedReason: 'budget_tokens: 20142 of 20000 run tokens used' }), runs: ran, cost: { currency: 'USD', windowUSD: 0.9, runs: 1, todayUSD: 0, lifetimeUSD: 0.9, inputTokensWindow: 0, outputTokensWindow: 0 } }),
-  node({ key: 'free-run', lastRun: run(), runs: ran, cost: { currency: 'USD', windowUSD: 0, runs: 2, todayUSD: 0, lifetimeUSD: 0, inputTokensWindow: 0, outputTokensWindow: 0 } }),
-  node({ key: 'ran-before', runs: { window: 0, lifetime: 4, notOkWindow: 0, runningNow: false, runningRunId: null, runningSince: null } }),
+  node({ key: 'clean', lastRun: run(), runs: ran, cost: { currency: 'USD', windowUSD: 0.005, runs: 1, lifetimeUSD: 0.005 } }),
+  node({ key: 'failed', lastRun: run({ ok: false, errorMessage: 'fetch failed' }), runs: ran, cost: { currency: 'USD', windowUSD: 0.05, runs: 1, lifetimeUSD: 0.05 } }),
+  node({ key: 'limited', lastRun: run({ ok: false, haltedReason: 'budget_tokens: 20142 of 20000 run tokens used' }), runs: ran, cost: { currency: 'USD', windowUSD: 0.9, runs: 1, lifetimeUSD: 0.9 } }),
+  node({ key: 'free-run', lastRun: run(), runs: ran, cost: { currency: 'USD', windowUSD: 0, runs: 2, lifetimeUSD: 0 } }),
+  node({ key: 'ran-before', runs: { window: 0, lifetime: 4, runningNow: false, runningRunId: null, runningSince: null } }),
 ]
 
 describe('overlays', () => {
