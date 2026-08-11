@@ -1259,7 +1259,24 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9aa5b3;
+  /*
+   * S8.g — every heading in the teaching layer was below AA, and the teaching
+   * layer is the one surface whose whole job is to be read.
+   *
+   * `#9aa5b3` measures 2.50:1 on white at 11px; the floor is 4.5. Swept
+   * `.sbm-how-body` on production: 62 text nodes, 7 failures, and all 7 are
+   * these headings — one rule, one colour, nothing else in the drawer wrong.
+   *
+   * This page has already replaced this exact value with `#55616f` in ELEVEN
+   * other places across S1–S7 (`git grep '9aa5b3' map.css` reads as a history
+   * of that sweep). The drawer is simply the surface nobody pointed the sweep
+   * at, because every previous sweep was scoped to the region being rebuilt —
+   * the same method finding S6.b recorded when the page footer turned up at
+   * 2.81:1 between five clean regions.
+   *
+   * #55616f is 6.31:1 on white.
+   */
+  color: #55616f;
 }
 .sbm-how-body h4:first-child {
   margin-top: 0;
