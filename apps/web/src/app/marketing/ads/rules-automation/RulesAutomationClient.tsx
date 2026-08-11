@@ -27,7 +27,9 @@ import { NoDataIllus } from './_shared/NoDataIllus'
 import { RulesTabs, rulesTabByKey, RULES_TABS } from './_shared/tabs'
 import { RuleImpactStrip } from './RuleImpactStrip'
 import { RuleListTab } from './tabs/RuleListTab'
-import { ProtectedTermsPanel } from './ProtectedTermsPanel'
+// NEG.1 — ProtectedTermsPanel moved to the Negative Targeting page, which is now its own route.
+// It is rendered there exactly as it was rendered here, so the move loses nothing; NEG.5 replaces
+// it with the panel plus the whitelist audit.
 import { SovTrackerTab } from './tabs/SovTrackerTab'
 import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
 import { TAB_RULES } from './tabs/placeholderSeeds'
@@ -399,26 +401,6 @@ export function RulesAutomationClient() {
             </span>
           )}
         />
-      ) : tab === 'negative-targeting' ? (
-        <>
-        {/* ADX G4 — protection sits above the rules that negate, because it is their
-            opposite: those decide what gets negated, this decides what never can be. */}
-        <ProtectedTermsPanel />
-        <RuleListTab
-          noun="Negative Targeting Rule"
-          seed={[]}
-          liveType="negative-targeting"
-          editHref={(id) => `/marketing/ads/rules-automation/builder/negative-targeting?ruleId=${id}`}
-          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/negative-targeting' }}
-          emptyNode={(
-            <span className="h10-rr-empty">
-              <NoDataIllus size={104} />
-              <b>Create a Negative Targeting Rule to block wasted spend!</b>
-              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/negative-targeting"><Plus size={13} /> Create Rule</a>
-            </span>
-          )}
-        />
-        </>
       ) : TAB_RULES[tab] ? (
         <RuleListTab noun={TAB_RULES[tab].noun} seed={TAB_RULES[tab].rows} onAddRule={() => setShowRuleType(true)} />
       ) : (

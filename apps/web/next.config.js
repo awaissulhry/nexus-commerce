@@ -30,6 +30,23 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      // ── NEG.1 — the Negative Targeting tab became its own route ────────────
+      //
+      // `RulesAutomationClient.tsx:91-94` resolves an unknown OR ROUTED `?tab=`
+      // to 'rules'. So the moment a tab is flipped to `routed: true`, every
+      // existing `?tab=<key>` link silently renders Apply Rules instead — no
+      // 404, no message, just the wrong page. This is a real 308 rather than a
+      // one-line `redirect()` stub for the reason the ACR.6 block below gives.
+      //
+      // FIRST in the array, and matched on `has` rather than on the path, so it
+      // cannot be swallowed by anything later.
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'negative-targeting' }],
+        destination: '/marketing/ads/rules-automation/negative-targeting',
+        permanent: true,
+      },
+
       // Phase 4 (2026-05-06): /pim/review → /catalog/organize.
       // Page does catalog organization, not a review queue; renamed
       // so the URL matches the behaviour. Permanent because the new

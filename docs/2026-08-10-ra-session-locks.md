@@ -76,9 +76,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/automation-action-handlers.ts` | NEG.0 (enforce `protectConverting`; pass `marketplace`) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/ads-harvest.service.ts` | NEG.0 (enforce `protectConverting` in `applyHarvest`; pass `marketplace`) | 2026-08-12 | **released** |
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.1 (`GET /advertising/negatives`, additive) | 2026-08-12 | **released** |
-| `…/rules-automation/_shared/tabs.tsx` | NEG.1 (`negative-targeting` → `routed: true` + subtitle) | 2026-08-12 | **claimed** |
-| `…/rules-automation/RulesAutomationClient.tsx` | NEG.1 (drop the `negative-targeting` branch only) | 2026-08-12 | **claimed** |
-| `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **claimed** — appended at EOF only |
+| `…/rules-automation/_shared/tabs.tsx` | NEG.1 (`negative-targeting` → `routed: true` + subtitle) | 2026-08-12 | **released** |
+| `…/rules-automation/RulesAutomationClient.tsx` | NEG.1 (drop the `negative-targeting` branch only) | 2026-08-12 | **released** |
+| `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **released** — appended at EOF only |
 | `…/rules-automation/rules-automation.css` | KT.1b (2 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **claimed** — shares the file with NEG.1's `h10-ng-*`; disjoint selectors, EOF-append only |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **claimed** — KT-only files, listed so nobody else edits them mid-fix |
 
@@ -134,7 +134,22 @@ and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them
 
 ## 4 · Requests and hand-offs
 
-*(none open)*
+**NEG.1 → KT.1b, 2026-08-12.** `…/keyword-tracker/KeywordTrackerClient.tsx:74` failed the web build
+at 01:40 — `'rowState' is declared but its value is never read`. Recorded only so the next session
+to hit a red push knows it is not theirs: the pre-push builds the whole TREE, so one session's
+in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors — `since` and
+`pickTermPeriod` undefined — were present at 01:20 and gone by 01:35, so this is active work.)
+
+**NEG.1 finding that binds every routed tab, `next.config.js`.** NEG.1 added a
+`has: [{ type: 'query', key: 'tab', … }]` redirect for `?tab=negative-targeting`, because
+`RulesAutomationClient.tsx:91-94` resolves a **routed** `?tab=` to `'rules'` — so the moment a tab
+is flipped to its own page, every existing link to it silently renders **Apply Rules**. No 404, no
+message, and `check-link-targets.mjs` cannot see it because `RulesTabs` builds its href in a
+function call rather than a literal.
+
+🔴 **`?tab=keyword-tracker` has that bug live right now** — KT.1 flipped the tab and no redirect was
+added. It is one entry of the same shape, and it belongs to whoever owns KT; not fixed here because
+a session is scoped to one page.
 
 ---
 

@@ -45,7 +45,14 @@ export const RULES_TABS: RulesTab[] = [
   },
   { key: 'bid', label: 'Bid' },
   { key: 'keyword-harvest', label: 'Keyword Harvest' },
-  { key: 'negative-targeting', label: 'Negative Targeting' },
+  // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
+  // nothing else: 2,059 negatives existed and no screen anywhere in the product listed one.
+  {
+    key: 'negative-targeting',
+    label: 'Negative Targeting',
+    routed: true,
+    subtitle: 'What you are blocking, where, and who decided',
+  },
   { key: 'budget', label: 'Budget' },
   { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, subtitle: 'Hold a rank, on a schedule, across many campaigns' },
   { key: 'budget-schedules', label: 'Budget Schedules' },
