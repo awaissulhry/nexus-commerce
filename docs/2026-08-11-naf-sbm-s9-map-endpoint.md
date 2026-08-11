@@ -10,7 +10,9 @@ Measured against production data 2026-08-11. **No pixels: the database is this
 section's browser**, and every claim below was proved by querying a second way
 rather than by reading the service and reasoning about it.
 
-**Status: study only. No code has been written.**
+**Status: BUILT AND VERIFIED ON PRODUCTION.** Parts 0–8 are the study as
+approved; **Part 9 is the execution record**, including the latency figure §0.0
+could not take and a parser bug that repeated Section 8's exactly.
 
 ---
 
@@ -369,6 +371,87 @@ and it is two lines.
 
 **S9.g last and seen to fail first**, for the reason Section 8 gave: a test
 written after the fix that has never failed is a test nobody knows works.
+
+---
+
+---
+
+## PART 9 — The execution record
+
+### 9.1 · Measured on production, after deploy
+
+| | before | after |
+|---|---|---|
+| payload, 7d | 27.1 KB | **18.9 KB (−30%)** |
+| fields read by nothing | 9 | **3, each marked and argued** |
+| `schedule` read fails | `[]`, silent | **`[]` + a warning** |
+| comments asserting a non-fact | 2 | **0** |
+| **round trip, browser → prod** | never recorded | **3,911 ms** |
+
+**The latency figure §0.0 refused to guess at.** My local probe gave `20000ms`
+(a pool timeout), then `11634 / 10078 / 452789`. None of those was the endpoint;
+they were my laptop's path to Neon. The real number — 3.9s from the browser to
+Railway — only became measurable when the Chrome extension reconnected. Stating
+the gap instead of filling it was worth four hours of not having the number.
+
+### 9.2 · The eight shipped surfaces, re-verified after six fields were removed
+
+The hard constraint of this section. Verified after deploy, on production:
+
+| surface | state |
+|---|---|
+| census band | halt sentence, spend, open findings ✓ |
+| canvas | 7 cards, `3 runs · 5 open · $0.11 spent` ✓ |
+| edges | 4 drawn, `7 carried` / `blocked` ✓ |
+| inspector rail | renders on selection ✓ |
+| list | 7 rows ✓ |
+| entity mode | 111 rows, band agrees ✓ |
+| window + denominator sentence | S7.d present ✓ |
+| console | **0 errors** |
+
+### 9.3 · Both tests were seen to fail first
+
+```
+S9.a   against main    1 failed | 2 passed
+S9.g   pre-deletion    6 failed | 76 passed
+       after           76 passed
+whole apps/api suite   351 files | 4484 tests, green
+```
+
+### 9.4 · My parser had Section 8's bug, three days later
+
+S9.g/1's first cut sliced from `export interface MapNode` to end-of-file and
+reported **`where`, `select` and `tool`** as unread payload fields — two Prisma
+query keys and a member of a local `PlanItem` interface, none of which the
+browser ever sees. Section 8's glossary-key parser failed in the identical way,
+for the identical reason, and I had written the guard against it myself.
+
+The parse is bounded to the three exported interfaces now, and the first `it()`
+asserts those three names never reappear.
+
+### 9.5 · The test forced two exception sets into the open, which is the point
+
+Neither existed as a concept before the test demanded one:
+
+- **`AWAITING_A_READER`** — `unorderedReason`, `runningRunId`, `runningSince`,
+  `asOf`, `modelProvider`. Unread because the fleet is off or the reader was
+  never built, **not** because the field is dead.
+- **`MUST_NOT_BE_RENDERED`** — `scopePortfolioIds`, `scopeCampaignIds`. Stored,
+  accepted at create, merged onto the charter, and enforced by no query, filter
+  or prompt. **A reader for these would itself be the defect**, under
+  `scope-filter.ts:6-7`.
+
+A test that had simply demanded "every field has a reader" would have been wrong
+about seven fields. Being forced to say *why* each one is exempt is the durable
+half of this section.
+
+### 9.6 · What was deliberately not taken
+
+Both proposals are posted to the locks doc §5 as rows 8 and 9 and neither is
+acted on: D5's one-line write in `agent-executor.ts`, and the per-charter
+aggregate the Workers roster's own comment asks for. The map keeps working
+either way, which is exactly why an audit of a read-only endpoint should not be
+the thing that changes the shared execution path.
 
 ---
 
