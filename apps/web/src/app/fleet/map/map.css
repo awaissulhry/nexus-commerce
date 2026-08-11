@@ -1325,6 +1325,49 @@
   right: 0;
   height: 7px;
 }
+/*
+ * S8.a — THE TWO RIGHT-HAND DEFINITIONS FELL OFF THE WINDOW, AND THE CLOSED
+ * ONES WERE THE PAGE'S HORIZONTAL SCROLLBAR.
+ *
+ * `.sbm-def-tip` is 288px anchored `left: 0`, so it opens rightward whatever is
+ * to the right of it. The band's two facts sit at the far right of the header,
+ * and measured in real viewports (same-origin iframes, so the media queries
+ * actually fire) BOTH overflow at EVERY supported width:
+ *
+ *            SPENT TODAY        OPEN FINDINGS
+ *   1100     tip ends 1113      tip ends 1222      (viewport 1100)
+ *   1280     tip ends 1293      tip ends 1402
+ *   1440     tip ends 1453      tip ends 1562
+ *   1728     tip ends 1741      tip ends 1850   ← 122px, 42% of the definition
+ *
+ * A definition you cannot finish reading is this section's entire deliverable,
+ * lost to a one-line default.
+ *
+ * And the closed tips cost more than they look. `visibility: hidden` keeps the
+ * box in layout, and an absolutely-positioned box still contributes to an
+ * ancestor scroller's overflow — so the page carried a 122px horizontal
+ * scrollbar at all times. Proved with a control rather than inferred:
+ *
+ *   closed tips as-is        scrollWidth 1784   clientWidth 1662   overflow 122
+ *   closed tips display:none scrollWidth 1662   clientWidth 1662   overflow   0
+ *   restored                 scrollWidth 1784                      overflow 122
+ *
+ * Anchoring these two to their RIGHT edge fixes both at once, and touches
+ * nothing about the accessibility contract — `visibility: hidden` stays, so the
+ * tip stays out of browse mode and reachable through `aria-describedby`, which
+ * is why S1R chose it. Verified safe at every width: right-anchored, the
+ * left-most edge is 628px at a 1100px viewport, so it cannot run off the other
+ * side either.
+ *
+ * Scoped to `.sbm-facts` — the band's right-hand group — rather than to the
+ * viewport, because CSS cannot ask where an element is and a hard-coded
+ * "third instance" would be wrong the first time the band gains a fact.
+ */
+.sbm-facts .sbm-def-tip {
+  left: auto;
+  right: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sbm-def-tip {
     transition: none;
