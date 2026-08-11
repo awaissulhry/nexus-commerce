@@ -75,10 +75,12 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/routes/advertising-intel.routes.ts` | KT.1 (`GET /advertising/keyword-tracker`, additive) | 2026-08-11 | **released** — landed `31cba2535` |
 | `apps/api/src/services/advertising/automation-action-handlers.ts` | NEG.0 (enforce `protectConverting`; pass `marketplace`) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/ads-harvest.service.ts` | NEG.0 (enforce `protectConverting` in `applyHarvest`; pass `marketplace`) | 2026-08-12 | **released** |
-| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.1 (`GET /advertising/negatives`, additive) | 2026-08-12 | **claimed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.1 (`GET /advertising/negatives`, additive) | 2026-08-12 | **released** |
 | `…/rules-automation/_shared/tabs.tsx` | NEG.1 (`negative-targeting` → `routed: true` + subtitle) | 2026-08-12 | **claimed** |
 | `…/rules-automation/RulesAutomationClient.tsx` | NEG.1 (drop the `negative-targeting` branch only) | 2026-08-12 | **claimed** |
 | `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **claimed** — appended at EOF only |
+| `…/rules-automation/rules-automation.css` | KT.1b (2 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **claimed** — shares the file with NEG.1's `h10-ng-*`; disjoint selectors, EOF-append only |
+| `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **claimed** — KT-only files, listed so nobody else edits them mid-fix |
 
 **Two findings from KT.1 that bind every page in this section:**
 

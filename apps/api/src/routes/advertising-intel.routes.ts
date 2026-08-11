@@ -12,6 +12,7 @@ import prisma from '../db.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
+import { getNegatives, NEG_MARKETS } from '../services/advertising/negatives.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
@@ -325,6 +326,50 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
     // Short private cache: the grid is a full scan of SQP joined to the campaign/ad graph, and the
     // underlying feeds move once a night at most.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── NEG.1 — the Negative Targeting page's one read ──────────────────
+  // Here rather than in advertising.routes.ts for the same reason KT.1 is: a duplicate route in
+  // that 600 KB file is a boot crash, not a warning, and it sees heavy concurrent edits.
+  //
+  // Not a variant of `GET /advertising/targets?negative=1`: that route selects `externalTargetId`
+  // for its own filtering and then drops it from the returned row, and caps at 2,000 rows against
+  // a base of 2,059 — so it can neither say whether a negative reached Amazon nor show the whole
+  // account. Both are the point of this page.
+  //
+  // One call carries the resolved scope, the census over the FULL filtered set, the facet counts,
+  // and the rows — so the page can state what it is showing without a second fetch, and no count
+  // it renders is ever computed from a page of rows.
+  fastify.get('/advertising/negatives', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const market = (q.market ?? '').toUpperCase()
+    if (!NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${NEG_MARKETS.join('/')}`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    const out = await getNegatives({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      view: q.view === 'terms' ? 'terms' : 'negations',
+      q: q.q ?? null,
+      match: oneOf(q.match, ['EXACT', 'PHRASE', 'ASIN', 'OTHER', 'all'] as const),
+      level: oneOf(q.level, ['AD_GROUP', 'CAMPAIGN', 'all'] as const),
+      state: oneOf(q.state, ['live', 'paused', 'archived', 'all'] as const),
+      amazon: oneOf(q.amazon, ['yes', 'no', 'all'] as const),
+      attribution: oneOf(q.attribution, ['user', 'engine', 'unattributed', 'actor-not-recorded', 'all'] as const),
+      sort: oneOf(q.sort, ['term', 'match', 'scope', 'market', 'state', 'amazon', 'added', 'by', 'spread'] as const),
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+      window: q.window ? Number(q.window) : null,
+    })
+    // Short private cache. The base is 2,059 rows joined up to the campaign graph and it changes
+    // only when an ingest ticks or an operator acts.
     reply.header('Cache-Control', 'private, max-age=60')
     return out
   })
