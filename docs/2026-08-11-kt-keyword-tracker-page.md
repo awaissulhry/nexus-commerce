@@ -260,7 +260,13 @@ because `runSqpIngestOnce` sums only `r.upserted` and drops `asinsRequested`, `r
 `[sqp] asin report failed` warnings. **I could not read either without credentials, so I am not
 guessing at the cause.**
 
-**3.5 · Runs take 40 minutes to 3.5 hours** and two were auto-swept as stale after 2.3 h. Forty
+**3.5 · Runs take 40 minutes to 3.5 hours** and ~~two~~ **three** were auto-swept as stale after
+2.3 h. 🔴 **Corrected (KT.1b, 2026-08-12):** the third is the 2026-08-11 run, which the §3 table
+above quotes as a clean `SUCCESS` — it carries `status=SUCCESS` **and**
+`errorMessage="stale (auto-swept after 2.3h)"` at the same time. A `CronRun` row can hold both, and
+exactly one of the last fourteen does: the newest. All time, **13 runs carry a "stale" error message
+while only 12 have a non-SUCCESS status** — that difference of one is the run this table read as
+healthy. Forty
 sequential Amazon report generations at ~6 minutes each is the shape of that number.
 
 **3.6 · The decoy env var is real.** Railway carries `NEXUS_ENABLE_SQP_INGEST_CRON=1`, which no
@@ -311,8 +317,9 @@ This is the finding that changes what the page can be on day one.
 | | |
 |---|---|
 | `AmazonAdsPlacementReport` rows with `topOfSearchIS` | **811** of 4,542 |
-| date range | 2026-07-07 … **2026-08-09** (2 days old) |
-| distinct campaigns with a reading | **65** of 220 |
+| date range | 2026-07-07 … **2026-08-09** ~~(2 days old)~~ |
+| 🔴 **corrected (KT.1b, 2026-08-12)** | **the `topOfSearchIS` column lags the report it rides on by one day.** `AmazonAdsPlacementReport` holds rows dated **2026-08-10**; the newest row with a non-null `topOfSearchIS` is **2026-08-09**. So this signal is T-2 on the day this study was written and T-3 the day after — stated as a lag rather than an age, because an age rots overnight and this one did. The nightly `tos-is-ingest` run updated 300 rows without advancing the max date. |
+| distinct campaigns with a reading | **65** ~~of 220~~ — 🔴 **corrected (KT.1b): of the 81 campaigns that have ANY placement row.** 139 of the 220 have none at all, so "65 of 220" charges 139 campaigns with a missing column they were never eligible for. |
 | average | 25.77 % |
 | by market | IT 693 days avg 25.51 % · DE 87 avg 29.62 % · FR 20 avg 26.90 % · ES 11 avg 9.24 % |
 | `tos-is-ingest` cron | **daily SUCCESS**, e.g. 2026-08-11 02:30 `profiles=9 rowsFetched=466 withIS=365 rowsUpdated=300 errors=0` |
@@ -892,7 +899,7 @@ read-only and re-runnable.
 |---|---|
 | the tab | now `routed: true` in `_shared/tabs.tsx`; the `keyword-tracker` branch is gone from `RulesAutomationClient` (the `share-of-voice` branch stays, and `SovTrackerTab`/`TrackerTab` are untouched) |
 | the grid | six columns on `AdsDataGrid`: Keyword · Market · Market volume · Market rank · Our impression share · As of |
-| the scope spine | market → line → portfolio → campaign, cascading, most specific wins — one pure function, 8 tests |
+| the scope spine | market → line → portfolio → campaign, cascading, most specific wins — one pure function, ~~8~~ **7** tests (🔴 corrected, KT.1b: counted, not remembered; KT.1's suite was 7 scope + 4 period = 11) |
 | the URL | `?market &line &portfolio &campaign &list &branded &measured &sort &dir &kw` — every view linkable, absent param = default |
 | the sentence | states the resolved scope, the age range of the share data, and the age of the paid data that is *not* on the grid yet |
 | default view (IT) | **97 rows, 97 measured, 47 terms carrying more than one of our own ASINs**, one real zero. 702 ms |
@@ -986,3 +993,120 @@ effective background and the ancestor opacity chain: **every one passes AA**, lo
 query — at market scope every SQP row for the market counts, which is right for
 "how many of OUR ASINs are on this query" but means the ASIN count beside it is a scope size, not a
 filter. Narrower scopes do filter on it. Worth one sentence of UI when a spend column arrives.
+
+---
+
+## KT.1b — fixed
+
+**Shipped and verified on production 2026-08-12.** Session slug `kt1b`.
+Measured with `_kt1b-period-gate.mts` (the constant space) and `_kt1b-verify.mts` (the fix and the
+four corrections above) — both read-only and re-runnable.
+
+### 🔴 The fix: one SQP period per view
+
+KT.1's per-row rule ranked one week's population against another's. Measured on prod before the fix:
+
+| view | periods on the grid | cross-period pairs | **inverted pairs** |
+|---|---|---|---|
+| IT · default | 2 (07-19 × 95, 07-26 × 2) | 190 comparable | **116** |
+| IT · portfolio `IT_Gale` | 2 | 96 comparable | **81** |
+| IT · campaign `Gale Jacket Yellow Only` | **5** | 921 comparable + **555 with no common week at all** | **167** |
+
+*(An inverted pair = two terms whose displayed order is the opposite of their order on the newest
+week where both actually have a row. The brief quoted 129 / 197 / 275; those are a different — and
+unstated — definition, so the numbers above are mine, defined here and reproducible from the script.
+The structural number is the one the fix drives to zero: **cross-period pairs**.)*
+
+`giubbotto moto`, verbatim from the feed: **1.56 % on 07-19 → 0.01 % on 07-26, because its covered
+ASIN rows went 4 → 1.** It rendered at share-rank **#92 of 97** while its rank on a week its
+neighbours also have is **#11**. Nothing about that row was wrong except the week it came from.
+
+**After:** the distinct `asOf` among measured rows is **1 in every scope and every market**, so
+cross-period pairs — and therefore inversions — are **0 by construction**, not by luck.
+
+| view | period | measured | no row this week | never measured |
+|---|---|---|---|---|
+| IT · default | 2026-07-19 (23d) | **97** | 0 | 0 |
+| IT · portfolio `IT_Gale` | 2026-07-19 | **97** | 0 | 0 |
+| IT · campaign `Gale Jacket Yellow Only` | 2026-07-19 | **25** | 45 | 27 |
+| DE | 2026-07-19 | 2 | 6 | 89 |
+| ES | 2026-07-12 (30d) | 0 | 3 | 94 |
+| FR | 2026-07-12 | 0 | 3 | 94 |
+
+IT's yield is **97 of 97**, not the 95–97 the brief estimated: every curated term has a 07-19 row.
+
+### The constants, and the table they came from
+
+`_kt1b-period-gate.mts` prints 4 ratios × 3 lookbacks × 4 markets, under two definitions of "a
+normal week". **The definition mattered more than either constant:**
+
+| | LOCAL median (over the lookback) | BASELINE median (last 12 periods) |
+|---|---|---|
+| ES, ratio 0.5, lookback 28d | picks **2026-07-26** — 71 rows, **17 % of a normal week** | **rejects everything** and says so |
+
+A lookback-local median is dragged down by the very truncation it exists to catch. **BASELINE.**
+
+| constant | chosen | why, from the table |
+|---|---|---|
+| `SQP_COMPLETENESS_RATIO` | **0.5** | Every ratio 0.3–0.6 rejects 2026-07-26 in all four markets (8 IT rows vs a 655 median · 5 DE vs 428 · 71 ES vs 414 · 1 FR vs 69), so the ratio is not what saves IT. What it decides is **ES 07-19 at 193 rows — 47 % of a normal week**: 0.4 accepts it, 0.5 takes the complete 07-12 week instead. Half a week of coverage is not a share. |
+| `KT_LOOKBACK_DAYS` | **42** (was 56) | 42 and 56 pick the **same period in all four markets today**, so 42 is strictly tighter at zero cost, and it raises the truncated-week warning two weeks sooner if the feed keeps stalling. **28 was rejected**: it truncates ES *and* FR, both of which have a complete week 30 days back, and a complete week at 30 days beats a 17 %-complete week at 16. |
+| `SQP_BASELINE_PERIODS` | **12** | A quarter of weekly history. A median over 11–12 periods absorbs one truncated week without moving (IT: 655 either way). |
+
+**Both constants now have tests; the 56-day bound never did** — it lived in the orchestrator, not in
+the period function. 19 tests: 7 scope + 3 archived-campaign + 9 for the gate, including the
+local-vs-baseline divergence, both truncated branches, the no-data case, and `42 ≡ 56 today`.
+
+🔴 **The truncated-week warning is not visible on today's data.** At the chosen constants no market
+falls to that branch, so it is verified by unit test and **not by eye**. That is a gap, stated rather
+than papered over: the first day the feed stalls for six weeks, that sentence renders untested in a
+browser.
+
+### The four things KT.1 shipped without saying
+
+| # | what it now says |
+|---|---|
+| 3.1 | **The list is disabled.** `Xavia GALE IT — coverage` is `enabled: false`; the page names it and says no engine acts on it. Nothing filters on the flag — filtering would blank the page. |
+| 3.2 | **A blank is two states.** `no row this week` (with **last seen DD MMM**, unbounded by the lookback — a date is worth stating at any age) vs `never measured`. With `branded=1`, `xavia` stops showing **5.45 % from 21 Jun** and becomes a blank that says so; that share was the defect in miniature. |
+| 3.3 | **The footer carries the period, not the ingest stamp.** It printed *"Brand Analytics ingested 10 Aug"* under data from the week of 19 Jul, because `ingestedAt` is when a row was last re-upserted and the cron re-upserts old weeks nightly. `ingestedAt` stays in the payload for KT.5. |
+| 3.4 | **The keyword stops behaving like a link.** KT.1 fixed the colour and missed `ads.css:695`'s `cursor: pointer` and `:696`'s hover underline. Two lines at the same specificity, deleted whole when KT.4 makes it a real link. |
+
+### Also fixed, because each was one line and a true number
+
+- **An ARCHIVED campaign no longer inflates the count.** The page prints **149** IT campaigns, not
+  150, and the portfolio grain's "cannot reach" figure drops it too. It stays resolvable by an
+  explicit `?campaign=` pick — the picker is fed by `/advertising/scope-options` (another session's
+  route, unfiltered), and a pick that silently resolved to nothing is worse than one that resolves.
+- **6.6 s → 1.6 s cold** (477 ms on a narrow scope). The period `groupBy` and the three freshness
+  probes depend on nothing but `market`, so they joined the existing parallel batch instead of
+  costing two more serial round trips.
+- **The `Math.min()`-over-nothing → `Infinity`** in the client's freshness derivation is gone, not
+  guarded: with one period there is one date to state, so the row-scan it lived in was deleted.
+
+### Recorded, not fixed — and not this session's work
+
+- 🔴 **`sort` / `dir` are read from the URL and never written back to it, and `AdsDataGrid` has no
+  `useSearchParams`. So KT.1's "every view is linkable" claim is FALSE for sorting** — clicking a
+  column header changes the grid and not the URL. Deep-linking a sort works; producing that link by
+  clicking does not. Needs a shared-layer change (a sort callback on `AdsDataGrid`, which nine pages
+  render). **The KT.1 record's claim is retracted to that extent.**
+- `sort=asins` is accepted by the route and implemented in the comparator with **no matching grid
+  column** — the count is a badge in the keyword cell. Harmless, and reachable only by hand-typing.
+- The `lists` payload is returned and rendered nowhere; `?list=` is honoured but **unreachable from
+  the UI**. → KT.2.
+- **`reportPeriod` is unguarded.** All 15,075 rows are `WEEK` today (measured), so the period gate
+  cannot yet be fooled — but one `MONTH` row would enter the candidate set and could win the
+  newest-period pick.
+- ASIN-coverage denominators, the summed-share bound, per-term ad coverage, the dated cliff banner
+  and feed health → **KT.5**. Watchlist CRUD, the list picker and enablement → **KT.2**. The
+  per-keyword history drawer — the right home for a term's newer-but-off-period data → **KT.4**.
+- The throwaway `_kt1-*.mts` probes KT.1 committed are left in place; another session may be reading
+  them. `_kt1b-period-gate.mts` and `_kt1b-verify.mts` join them.
+
+### One coordination fact worth recording
+
+**KT.1b's two CSS lines were committed by another session.** NEG.1's commit `1df95d678` ran
+`git commit --only rules-automation.css` while my appended `h10-kt-*` block was sitting uncommitted
+in the shared working tree, so their commit carries my lines under their message. Nothing was lost
+and the selectors are disjoint — but this is the `commit --only` hazard the locks doc §5 names,
+running in the direction it does not warn about: **not "my commit breaks", but "my change ships
+inside someone else's".** Recorded in the locks doc for the next session that shares this file.

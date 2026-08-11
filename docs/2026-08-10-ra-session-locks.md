@@ -79,8 +79,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/_shared/tabs.tsx` | NEG.1 (`negative-targeting` → `routed: true` + subtitle) | 2026-08-12 | **released** |
 | `…/rules-automation/RulesAutomationClient.tsx` | NEG.1 (drop the `negative-targeting` branch only) | 2026-08-12 | **released** |
 | `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **released** — appended at EOF only |
-| `…/rules-automation/rules-automation.css` | KT.1b (2 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **claimed** — shares the file with NEG.1's `h10-ng-*`; disjoint selectors, EOF-append only |
-| `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **claimed** — KT-only files, listed so nobody else edits them mid-fix |
+| `…/rules-automation/rules-automation.css` | KT.1b (3 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **released** — see §5's new trap: these lines shipped inside NEG.1's `1df95d678`, not in a KT.1b commit |
+| `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
 
 **Two findings from KT.1 that bind every page in this section:**
 
@@ -165,6 +165,15 @@ a session is scoped to one page.
   A UI that depends on a new route must ship **after** the route is live. Prove a route is deployed
   with the 401-vs-404 trick: `GET` it unauthenticated — **401 means it exists and is RBAC-mapped**,
   404 means it is not deployed yet.
+- 🔴 **`git commit --only <shared file>` can ship ANOTHER session's uncommitted work under your
+  message.** The hazard §5 already names runs the other way — "your commit can be red on its own".
+  This is the same mechanism pointing outward. Measured 2026-08-12: NEG.1 committed
+  `rules-automation.css` while KT.1b's appended `h10-kt-*` block sat uncommitted in the shared tree,
+  so `1df95d678` carries three lines of KT.1b CSS under a Negative-Targeting message. Nothing broke
+  — the selectors are disjoint and EOF-appended, which is exactly why the append convention exists —
+  but the git history now attributes them wrongly, and had the other session's lines been mid-edit
+  the commit would have shipped a broken stylesheet for nine pages. **Before `commit --only` on a
+  file in §3, `git diff` it and check every hunk is yours.**
 - **An untracked file can block every session's push.** The DS-conformance ratchet greps comments
   too — a comment can fail it.
 - **Two Next dev servers in one repo fight over `.next`** ("Another write batch or compaction is

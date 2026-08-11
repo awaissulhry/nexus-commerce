@@ -43,6 +43,16 @@ import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from './Keywo
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
 const DEFAULT_MARKET = 'IT'
 
+/**
+ * KT.1b — why a row is blank, as three states rather than one.
+ *
+ * KT.1 rendered "not measured" for both *the feed has never reported this term here* and *the feed
+ * has it, just not in the week this view renders*. Measured on prod: DE 89 never-measured against
+ * 1 aged out, ES 94 against 2, FR 94 against 3 — four markets printing one string for two problems
+ * with two different fixes.
+ */
+type RowState = 'measured' | 'no-row-this-period' | 'never-measured'
+
 interface Row {
   keyword: string
   marketplace: string
@@ -52,9 +62,16 @@ interface Row {
   asinsCompeting: number
   asOf: string | null
   asOfAgeDays: number | null
+  /** absent while the API deploy is still rolling — a commit is TWO deploys */
+  state?: RowState
+  lastSeen?: string | null
+  lastSeenAgeDays?: number | null
   measured: boolean
   branded: boolean
 }
+
+/** Tolerates an API that has not yet rolled out `state` (it would then be a KT.1 response). */
+const rowState = (r: Row): RowState => r.state ?? (r.measured ? 'measured' : 'never-measured')
 
 interface Payload {
   scope: {
@@ -63,11 +80,34 @@ interface Payload {
     line: { id: string; name: string } | null
     portfolio: { id: string; name: string } | null
     campaign: { id: string; name: string } | null
-    list: { id: string; name: string; marketplace: string; terms: number } | null
-    resolved: { campaigns: number; asins: number; keywordsWatched: number; keywordsMeasured: number }
+    list: { id: string; name: string; marketplace: string; terms: number; enabled?: boolean } | null
+    resolved: {
+      campaigns: number; asins: number; keywordsWatched: number; keywordsMeasured: number
+      keywordsNoRowThisPeriod?: number; keywordsNeverMeasured?: number
+    }
     unreachable: { campaignsWithoutPortfolio: number; campaignsInMarket: number } | null
   }
-  window: { lookbackDays: number; periodsUsed: Array<{ start: string; terms: number }>; newestAsOf: string | null; oldestAsOf: string | null }
+  /**
+   * KT.1b — `period` is THE week the whole grid renders. `periodsUsed` / `newestAsOf` survive as
+   * KT.1 fields so an old client keeps working across the deploy gap; they now always hold 0 or 1
+   * entries, which is the whole point of the fix.
+   */
+  window: {
+    lookbackDays: number
+    completenessRatio?: number
+    baselinePeriods?: number
+    period?: string | null
+    periodAgeDays?: number | null
+    periodRows?: number
+    baselineRows?: number
+    threshold?: number
+    reason?: 'complete' | 'incomplete-week' | 'outside-lookback' | 'no-data'
+    truncated?: boolean
+    rejected?: Array<{ start: string; rows: number }>
+    periodsUsed: Array<{ start: string; terms: number }>
+    newestAsOf: string | null
+    oldestAsOf: string | null
+  }
   freshness: {
     sqp: { latestPeriodStart: string | null; ingestedAt: string | null; ageDays: number | null }
     searchTerm: { latestDate: string | null; ageDays: number | null }
@@ -185,22 +225,30 @@ export function KeywordTrackerClient() {
     {
       key: 'share', label: 'Our impression share',
       tip: 'Brand Analytics impressionShare for our BEST ASIN on this query: our share of every impression the marketplace served for it. Not Share of Voice (our own ad-traffic mix) and not top-of-search impression share (Amazon\'s top-slot share, measured per campaign).',
-      render: (r) => (
-        r.measured
-          ? <span className={`h10-kt-share${r.impressionShare === 0 ? ' zero' : ''}`}>{sharePct(r.impressionShare ?? 0)}</span>
-          : <span className="h10-kt-nm">not measured</span>
-      ),
+      render: (r) => {
+        const st = rowState(r)
+        if (st === 'measured') {
+          return <span className={`h10-kt-share${r.impressionShare === 0 ? ' zero' : ''}`}>{sharePct(r.impressionShare ?? 0)}</span>
+        }
+        // Two different blanks. "no row this week" is a coverage gap you can chase; "never
+        // measured" is a term Amazon has no data for at all. Same pill, different words.
+        return st === 'no-row-this-period'
+          ? <span className="h10-kt-nm" title={`The feed has this term in ${r.marketplace}, but not in the week this grid renders${r.lastSeen ? ` — its newest row is the week of ${dayMonth(r.lastSeen)}` : ''}`}>no row this week</span>
+          : <span className="h10-kt-nm" title={`Brand Analytics has never reported this term in ${r.marketplace}, at any period`}>never measured</span>
+      },
       sortValue: (r) => r.impressionShare ?? -1,
       filterValue: (r) => (r.impressionShare ?? 0) * 100,
     },
     {
       key: 'asOf', label: 'As of', metric: false,
-      tip: 'The week this row\'s volume, rank and share came from. Rows can differ: each term reads the newest weekly period that actually holds a row for it, inside the lookback window stated above the grid.',
-      render: (r) => (
-        r.asOf
-          ? <span className={`h10-kt-age ${ageClass(r.asOfAgeDays)}`}>{dayMonth(r.asOf)}<i>{r.asOfAgeDays}d</i></span>
-          : <span className="h10-kt-nd">no row in window</span>
-      ),
+      tip: 'The week this whole grid renders — one period for every row, so two rows can be compared with each other. A blank row shows the last week the feed DID report that term, if there is one.',
+      render: (r) => {
+        if (r.asOf) return <span className={`h10-kt-age ${ageClass(r.asOfAgeDays)}`}>{dayMonth(r.asOf)}<i>{r.asOfAgeDays}d</i></span>
+        // A blank row still states an age when there is one to state: the last week the feed DID
+        // report it. Deliberately not bounded by the lookback — a date is worth stating at any age.
+        if (r.lastSeen) return <span className="h10-kt-age stale" title="The newest week this term has a row in, at any age">last seen {dayMonth(r.lastSeen)}<i>{r.lastSeenAgeDays}d</i></span>
+        return <span className="h10-kt-nd">—</span>
+      },
       sortValue: (r) => r.asOf ?? '',
     },
   ], [])
@@ -221,17 +269,23 @@ export function KeywordTrackerClient() {
     bits.push(`${num(s.resolved.asins)} ASIN${s.resolved.asins === 1 ? '' : 's'}`)
     bits.push(`watching ${num(s.resolved.keywordsWatched)} term${s.resolved.keywordsWatched === 1 ? '' : 's'}`)
     bits.push(`${num(s.resolved.keywordsMeasured)} with share data`)
+    // KT.1b — with one period per view this split is a real, actionable number rather than an
+    // artefact of every row shopping for its own week.
+    const noRow = s.resolved.keywordsNoRowThisPeriod ?? 0
+    if (noRow > 0) bits.push(`${num(noRow)} with no row that week`)
     return bits.join(' · ')
   })()
 
-  const shareAge = (() => {
-    if (!data || !data.window.newestAsOf) return null
-    const { newestAsOf, oldestAsOf } = data.window
-    const ages = data.rows.filter((r) => r.asOfAgeDays != null).map((r) => r.asOfAgeDays!)
-    const lo = Math.min(...ages), hi = Math.max(...ages)
-    if (newestAsOf === oldestAsOf) return `share from the week of ${dayMonth(newestAsOf)} (${lo}d old)`
-    return `share from the weeks of ${dayMonth(oldestAsOf!)}–${dayMonth(newestAsOf)} (${lo}–${hi}d old)`
-  })()
+  /**
+   * KT.1b — one period, so one clause. This used to scan the rendered rows for their min and max
+   * age, which was both a symptom of the defect (a range implies more than one week) and a latent
+   * `Math.min()`-over-nothing → `Infinity` if the page ever showed no measured row.
+   */
+  const period = data?.window.period ?? data?.window.newestAsOf ?? null
+  const periodAge = data?.window.periodAgeDays ?? null
+  const shareAge = period
+    ? `share from the week of ${dayMonth(period)}${periodAge != null ? ` (${periodAge}d old)` : ''}`
+    : null
 
   return (
     <div className="h10-rules-page">
@@ -298,6 +352,51 @@ export function KeywordTrackerClient() {
                 the {num(s.unreachable.campaignsInMarket)} {s.market} campaigns.</b>{' '}
                 They carry no portfolio id, so no portfolio-scoped view reaches them. Their ASINs are
                 excluded from the share figures below.
+              </span>
+            </p>
+          )}
+
+          {/* 🔴 KT.1b — every share on the grid comes from one week. When the gate could not find a
+              whole one, that is the first thing you need to know, in a full sentence, because it
+              makes every number below it suspect. Untriggered on today's data in all four markets
+              (verified by unit test, not by eye — stated in the KT.1b doc entry). */}
+          {data?.window.truncated && period && (
+            <p className="h10-kt-blind">
+              <AlertTriangle size={13} />
+              <span>
+                {data.window.reason === 'outside-lookback' ? (
+                  <>
+                    <b>No Brand Analytics week inside the last {data.window.lookbackDays} days.</b>{' '}
+                    This grid is showing the week of {dayMonth(period)}
+                    {periodAge != null ? ` — ${periodAge} days old` : ''}. Treat every share below as
+                    a historical figure, not a current one.
+                  </>
+                ) : (
+                  <>
+                    <b>
+                      The week of {dayMonth(period)} is incomplete: {num(data.window.periodRows ?? 0)}{' '}
+                      rows where a normal {market} week holds about {num(data.window.baselineRows ?? 0)}.
+                    </b>{' '}
+                    No week inside the last {data.window.lookbackDays} days carried at least{' '}
+                    {Math.round((data.window.completenessRatio ?? 0.5) * 100)}% of that, so this is the
+                    best there is. Every share below is measured against however many of our ASINs the
+                    feed happened to cover, so a low number here may be a coverage gap and not a loss.
+                  </>
+                )}
+              </span>
+            </p>
+          )}
+
+          {/* 🔴 KT.1b — §3.1: the one coverage set on prod is `enabled: false`. KT.1 fetched that
+              field, returned it and never said it. Nothing filters on it and nothing should — the
+              page would go blank — but a page reading a disabled list has to admit it. */}
+          {s?.list && s.list.enabled === false && (
+            <p className="h10-kt-note">
+              <Info size={13} />
+              <span>
+                The watchlist is “{s.list.name}” ({num(s.list.terms)} terms), which is{' '}
+                <b>disabled as a coverage set</b> — no engine acts on it, and this page reads it purely
+                as a list of terms to watch. Editing and enabling it is KT.2.
               </span>
             </p>
           )}
@@ -377,9 +476,17 @@ export function KeywordTrackerClient() {
             toolbarRight={data?.window ? (
               <span className="h10-kt-win">
                 lookback {data.window.lookbackDays}d
-                {data.window.periodsUsed.length > 1 && (
-                  <i title={data.window.periodsUsed.map((p) => `${p.start}: ${p.terms} terms`).join(' · ')}>
-                    {data.window.periodsUsed.length} weeks in view
+                {period && (
+                  <i
+                    className={data.window.truncated ? 'bad' : undefined}
+                    title={
+                      data.window.truncated
+                        ? `This week is incomplete: ${num(data.window.periodRows ?? 0)} rows against a ${num(data.window.baselineRows ?? 0)}-row normal week`
+                        : `${num(data.window.periodRows ?? 0)} rows in ${market} that week, against a ${num(data.window.baselineRows ?? 0)}-row normal week`
+                        + ((data.window.rejected?.length ?? 0) ? `. Skipped ${data.window.rejected!.length} newer week(s) that were too thin: ${data.window.rejected!.map((r) => `${r.start} (${r.rows} rows)`).join(', ')}` : '')
+                    }
+                  >
+                    week of {dayMonth(period)}
                   </i>
                 )}
               </span>
@@ -398,19 +505,30 @@ export function KeywordTrackerClient() {
                   </>
                 ) : (
                   <>
-                    <b>Not measured — no Brand Analytics row for any watched term in {market}.</b>
+                    <b>
+                      No Brand Analytics row for any watched term in {market}
+                      {period ? <> in the week of {dayMonth(period)}</> : null}.
+                    </b>
                     <span>
-                      {num(data?.scope.resolved.keywordsWatched ?? 0)} terms are being watched. The
-                      weekly Brand Analytics feed holds no row for any of them within the last{' '}
-                      {data?.window.lookbackDays ?? 56} days
-                      {f?.sqp.latestPeriodStart ? <> — its newest {market} period is {dayMonth(f.sqp.latestPeriodStart)} ({f.sqp.ageDays}d old)</> : null}.
-                      That is an absence of measurement, not a zero share.
+                      {num(data?.scope.resolved.keywordsWatched ?? 0)} terms are being watched, and this
+                      grid renders one week at a time so its rows can be compared with each other
+                      {period && periodAge != null ? <> — the newest week complete enough to use is {dayMonth(period)}, {periodAge} days old</> : null}.
+                      {(data?.scope.resolved.keywordsNoRowThisPeriod ?? 0) > 0
+                        ? <> {num(data!.scope.resolved.keywordsNoRowThisPeriod!)} of them have rows in an older week; switch the filter to “Not measured” to see when each was last seen.</>
+                        : <> That is an absence of measurement, not a zero share.</>}
                     </span>
                   </>
                 )}
               </span>
             )}
-            reportLabel={f?.sqp.ingestedAt ? `Brand Analytics ingested ${new Date(f.sqp.ingestedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : undefined}
+            /**
+             * 🔴 KT.1b — this printed "Brand Analytics ingested 10 Aug" under data from the week of
+             * 19 Jul, because `ingestedAt` is when a row was last re-upserted and the cron
+             * re-upserts old weeks nightly. Two statements about the same data, three weeks apart,
+             * and this is the one you read without looking for it. It carries the PERIOD now;
+             * `ingestedAt` stays in the payload for the feed-health work in KT.5.
+             */
+            reportLabel={period ? `Brand Analytics · week of ${dayMonth(period)}${periodAge != null ? ` · ${periodAge} days old` : ''}` : undefined}
           />
         </>
       )}
