@@ -101,3 +101,27 @@
    is showing, so putting it anywhere else would separate the control from the thing it controls. */
 .rd-grain { display: inline-flex; align-items: center; gap: 10px; }
 .rd-grain .rd-clock { color: #8b95a1; font-size: 11px; white-space: nowrap; }
+
+/* ── The 14-column trap, measured on prod ───────────────────────────────────────────────────
+   `AdsDataGrid` is `table-layout: auto`, so a single long cell sizes its whole column. One
+   schedule is named "Time×rank — XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile
+   E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (IT)" — 144 characters — which
+   took the Schedule column to 962px of a 1600px table and pushed the last column's right edge to
+   3256px against a card edge of 1698.
+
+   The failure is invisible twice over: `.h10-shell` is `overflow-x: hidden`, so there is no
+   scrollbar and `document.scrollWidth === clientWidth` reports "no horizontal overflow" while nine
+   columns sit unreachable off-screen. Only per-column rect arithmetic finds it. A screenshot shows
+   a tidy grid.
+
+   Fixed at the CONTENT, not the grid: AdsDataGrid is shared by every ads page and is not this
+   session's to change. Capping the free-text cells lets `auto` distribute the remaining width
+   across the columns that carry the argument. */
+.rd-trunc {
+  display: inline-block;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}

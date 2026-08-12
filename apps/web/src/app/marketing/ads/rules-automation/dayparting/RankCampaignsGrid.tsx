@@ -59,7 +59,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
       key: 'schedule', label: 'Schedule', metric: false, sortable: true, sortValue: (r) => r.groupName ?? '',
       tip: 'The rank schedule that holds this campaign. One campaign, one schedule — the database enforces it.',
       render: (r) => (r.groupName
-        ? <a className="h10-nt-name" href={`?grain=schedules&row=${r.groupId}`} onClick={(e) => { e.stopPropagation(); e.preventDefault(); setUrl({ grain: 'schedules', row: r.groupId ?? '', drawer: '' }) }} title={`Show ${r.groupName} in the Schedules grain`}>{r.groupName}</a>
+        ? <a className="h10-nt-name rd-trunc" href={`?grain=schedules&row=${r.groupId}`} onClick={(e) => { e.stopPropagation(); e.preventDefault(); setUrl({ grain: 'schedules', row: r.groupId ?? '', drawer: '' }) }} title={r.groupName}>{r.groupName}</a>
         : <span className="rd-none">—</span>),
     },
     {
@@ -109,12 +109,12 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     },
     {
       key: 'portfolio', label: 'Portfolio', metric: false, sortable: true, sortValue: (r) => r.portfolioName ?? '',
-      render: (r) => (r.portfolioId ? <span title={r.portfolioName ?? ''}>{portfolioNames[r.portfolioId] ?? r.portfolioId}</span> : <span className="rd-none" title="This campaign carries no portfolio, so no portfolio-scoped rule can reach it.">—</span>),
+      render: (r) => (r.portfolioId ? <span className="rd-trunc" title={r.portfolioName ?? ''}>{portfolioNames[r.portfolioId] ?? r.portfolioId}</span> : <span className="rd-none" title="This campaign carries no portfolio, so no portfolio-scoped rule can reach it.">—</span>),
     },
     {
       key: 'line', label: 'Product line', metric: false, sortable: true, sortValue: (r) => r.productLineIds.join(','),
       render: (r) => (r.productLineIds.length
-        ? <span>{r.productLineIds.map((id) => lineLabel.get(id) ?? id).join(', ')}</span>
+        ? <span className="rd-trunc" title={r.productLineIds.map((id) => lineLabel.get(id) ?? id).join(', ')}>{r.productLineIds.map((id) => lineLabel.get(id) ?? id).join(', ')}</span>
         : <span className="rd-none">—</span>),
     },
     {
