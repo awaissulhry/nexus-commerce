@@ -255,10 +255,21 @@ consistent with the standing note that widening the scope moves published baseli
 **3.4 · Today's run wrote nothing.** `rows=0` means zero parsed rows across 4 markets × 10 ASINs =
 40 reports. The summary cannot distinguish *"40 reports failed"* from *"40 reports were empty"*
 because `runSqpIngestOnce` sums only `r.upserted` and drops `asinsRequested`, `rows` and
-`failedAsins` on the floor (`sqp-ingest.job.ts:36-43`). The answer is in
-`sqpDebugState` (`GET /advertising/sqp/debug`, deployed and `ads.view`-gated) and in the
-`[sqp] asin report failed` warnings. **I could not read either without credentials, so I am not
-guessing at the cause.**
+`failedAsins` on the floor (`sqp-ingest.job.ts:36-43`).
+
+🔴 **Answered (SQP.1, 2026-08-12) — neither. See [the SQP feed record](2026-08-12-sqp-feed.md).**
+All 40 reports were **abandoned by our own poll loop at its 300-second ceiling**, and all 40 then
+finished at Amazon afterwards: asked directly, **104 of 104** abandoned reports across all time are
+`DONE`, none fatal, none empty, none still generating. They were generated in full and thrown away.
+The reason they were late is queueing, not slowness — Amazon generates this account's reports
+**one at a time**, so a request at 03:45 waited 83 minutes to start and then took 7 seconds, and the
+08-11 batch took 14.6 hours to drain. Which also means §3.5's 3.5-hour runtime is not a separate
+problem: 208.3 of that run's 208.4 minutes were spent inside the poll loop, so the runtime and the
+zero yield are one defect reported twice.
+
+The instrument named above could not have answered it: `sqpDebugState` is written only after a report
+*returns*, inside the loop body a failed fetch `continue`s past, so on both zero-yield nights
+`GET /advertising/sqp/debug` would have served a stale sample from days earlier.
 
 **3.5 · Runs take 40 minutes to 3.5 hours** and ~~two~~ **three** were auto-swept as stale after
 2.3 h. 🔴 **Corrected (KT.1b, 2026-08-12):** the third is the 2026-08-11 run, which the §3 table
