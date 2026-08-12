@@ -1959,3 +1959,35 @@ above.
 Every write records `AdTarget.id`, `createdAt`, the **opening bid** and the evidence — so HV.5's
 cohort can answer *"did this batch work?"* without reconstructing an opening bid after Bid rules
 have moved it. A written keyword is an HV.5 cohort row from the moment it exists.
+
+---
+
+# HV.5a — the live write is still pending
+
+**Checked 2026-08-12 with `apps/api/scripts/_hv-5a-verify.mts` (read-only, re-runnable).**
+
+| | |
+|---|---|
+| keyword in `DE_Exact_3_Keywords` | **none** |
+| negatives for `motorradjacke 4xl` | **0** |
+| `create_keyword` audit rows since 12 Aug 12:00Z | **0** |
+| the destination HV.4 stored | still present — `campaign cmpedj38b04xdoj01g9mxye1y → DE_Exact_3_Keywords`, `EXACT`, `negateAtSource: true` |
+
+The sandbox blocked both routes to executing it (the authenticated `POST`, and navigating the UI to
+the confirm dialog), which is correct for an unattended money-spending action. The script above
+reports "not yet" cleanly and verifies all five DoD points the moment it lands, so this section can
+be completed without re-deriving anything.
+
+## 🔴 What the check found instead, and it is the whole case for HV.4 in one row
+
+There is already a `motorradjacke 4xl` keyword, and it is **both** of the defects HV.4 closes,
+sitting in the data since June:
+
+```
+created 2026-06-28   ad group DE_Auto_Close   campaign DE_Auto_Close   €0.60   EXACT   no externalTargetId
+```
+
+The engine promoted it **into the ad group that discovered it** — so `promotedElsewhere` was false
+and no isolation negative was ever created (§4.1) — and it **never reached Amazon** (§4.1 ①). For six
+weeks it has looked like a successful graduation in every count this system produces. It is the
+control case for the write that has not yet run: the same term, the same source, done the old way.
