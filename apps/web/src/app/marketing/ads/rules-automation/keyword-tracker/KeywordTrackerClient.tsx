@@ -420,8 +420,11 @@ export function KeywordTrackerClient() {
           )}
 
           {/* 🔴 A market with no list borrows nobody's. This is the state KT.1's `?? sets[0]`
-              hid by serving 97 Italian terms to Germany, Spain and France. */}
-          {!s?.list && !loading && (
+              hid by serving 97 Italian terms to Germany, Spain and France.
+              Gated on `!err`: when the read fails, `data` is null and this block would otherwise
+              assert "DE has no watchlist" — a fact the page does not have. Measured on prod during
+              an API redeploy, next to a "Failed to fetch" banner saying the opposite. */}
+          {!s?.list && !loading && !err && (
             <p className="h10-kt-blind">
               <AlertTriangle size={13} />
               <span>
@@ -560,6 +563,12 @@ export function KeywordTrackerClient() {
               <span className="h10-kt-empty">
                 {measured === 'no' && (data?.scope.resolved.keywordsMeasured ?? 0) > 0 ? (
                   <b>Every watched term has share data in this scope. Nothing is unmeasured.</b>
+                ) : err ? (
+                  // The same rule as the banner above: an unreachable API is not an empty watchlist.
+                  <>
+                    <b>Could not load the tracker.</b>
+                    <span>{err} — this says nothing about whether {market} has a watchlist or any data.</span>
+                  </>
                 ) : (data?.scope.resolved.keywordsWatched ?? 0) === 0 ? (
                   <>
                     <b>{data?.scope.list ? `“${data.scope.list.name}” has no terms to show.` : `${market} has no watchlist.`}</b>

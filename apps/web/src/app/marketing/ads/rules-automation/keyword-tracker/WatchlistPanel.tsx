@@ -75,7 +75,14 @@ export function WatchlistPanel({
   const call = async (url: string, init: RequestInit, describe: (j: Record<string, unknown>) => string) => {
     setBusy(true); setErr(null); setNote(null)
     try {
-      const r = await fetch(`${getBackendUrl()}${url}`, { headers: { 'Content-Type': 'application/json' }, ...init })
+      // 🔴 The JSON content-type goes on ONLY when there is a body. Fastify rejects a request that
+      // declares `application/json` and sends nothing with a 400 — which is how the first Delete
+      // button failed on prod: the confirmation was right, the request was malformed. Found by
+      // clicking it, which is the only way this class of defect surfaces.
+      const r = await fetch(`${getBackendUrl()}${url}`, {
+        ...init,
+        headers: init.body ? { 'Content-Type': 'application/json' } : undefined,
+      })
       const j = (await r.json()) as Record<string, unknown>
       if (!r.ok || j.ok === false) throw new Error(String(j.error ?? `Request failed (${r.status})`))
       setNote(describe(j))
@@ -136,7 +143,7 @@ export function WatchlistPanel({
   const deleteList = async () => {
     if (!activeId) return
     const j = await call(`/api/advertising/keyword-watchlists/${activeId}`, {
-      method: 'DELETE', body: undefined,
+      method: 'DELETE',
     }, (res) => {
       const d = res.deleted as { name: string; terms: number; promoted: string | null }
       return `Deleted “${d.name}” and its ${num(d.terms)} term${d.terms === 1 ? '' : 's'}.${d.promoted ? ` ${market} now opens on “${d.promoted}”.` : ''}`
