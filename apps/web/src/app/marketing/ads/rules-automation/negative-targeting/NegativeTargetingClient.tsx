@@ -110,8 +110,9 @@ export function NegativeTargetingClient() {
   const view = params.get('view') === 'terms' ? 'terms' : 'negations'
   const match = (params.get('match') ?? 'all') as NegMatchType | 'all'
   const level = (params.get('level') ?? 'all') as 'AD_GROUP' | 'CAMPAIGN' | 'all'
-  const state = (params.get('state') ?? 'all') as 'live' | 'paused' | 'archived' | 'all'
+  const state = (params.get('state') ?? 'all') as 'live' | 'paused' | 'archived' | 'inert' | 'all'
   const amazon = (params.get('amazon') ?? 'all') as 'yes' | 'no' | 'all'
+  const blocking = (params.get('blocking') ?? 'all') as 'yes' | 'no' | 'all'
   const attribution = (params.get('attribution') ?? 'all') as NegationRow['attribution'] | 'all'
   const q = params.get('q') ?? ''
   const focus = params.get('focus')
@@ -149,7 +150,7 @@ export function NegativeTargetingClient() {
     for (const [k, v] of Object.entries({ line: scope.line, portfolio: scope.portfolio, campaign: scope.campaign, adGroup: scope.adGroup, q })) {
       if (v) p.set(k, v)
     }
-    for (const [k, v] of Object.entries({ match, level, state, amazon, attribution })) {
+    for (const [k, v] of Object.entries({ match, level, state, amazon, attribution, blocking })) {
       if (v && v !== 'all') p.set(k, v)
     }
     void fetch(`${getBackendUrl()}/api/advertising/negatives?${p.toString()}`, { cache: 'no-store' })
@@ -161,7 +162,7 @@ export function NegativeTargetingClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [market, view, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, match, level, state, amazon, attribution, reloadTick])
+  }, [market, view, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, match, level, state, amazon, attribution, blocking, reloadTick])
 
   const rows = (data?.rows ?? []) as NegationRow[]
   const termRows = (data?.rows ?? []) as TermRow[]
@@ -319,14 +320,30 @@ export function NegativeTargetingClient() {
     return bits.join(' · ')
   })()
 
-  /** The census strip. Each count is a filter, and each one is computed over the full filtered set
-   *  in the route — never in this client from a page of rows. */
+  /**
+   * The census strip. Each count is a filter, and each one is computed over the full filtered set
+   * in the route — never in this client from a page of rows.
+   *
+   * 🔴 Every cell's `apply` must reproduce that cell's own number. Two of them did not, and both
+   * were found by clicking on production rather than by reading the code:
+   *
+   *   · "blocking now" applied `state=live&amazon=yes`, which checks the campaign and the Amazon
+   *     id but not the target's own status — 1,004 rows against a count of 942, the difference
+   *     being the 62 ARCHIVED targets in enabled campaigns. It now sends `blocking=yes`, which
+   *     runs the same `isBlockingNow` predicate the count runs.
+   *   · "in a paused campaign" counted paused OR archived (1,014) and applied `state=paused`
+   *     (1,013). It now sends `state=inert`.
+   *
+   * A cell whose number and whose filter disagree is worse than no cell: it teaches the operator
+   * that the strip is approximate.
+   */
+  const CLEAR = { match: 'all', level: 'all', state: 'all', amazon: 'all', attribution: 'all', blocking: 'all' }
   const strip: Array<{ key: string; n: number; label: string; tip: string; on: boolean; apply: () => void; tone?: string }> = census ? [
     {
       key: 'negations', n: census.negations, label: census.negations === 1 ? 'negative' : 'negatives',
-      tip: 'Every AdTarget row with isNegative = true in this scope.',
-      on: match === 'all' && level === 'all' && state === 'all' && amazon === 'all' && attribution === 'all' && view === 'negations',
-      apply: () => push({ view: 'negations', match: 'all', level: 'all', state: 'all', amazon: 'all', attribution: 'all' }),
+      tip: 'Every AdTarget row with isNegative = true in this scope. Click to clear every filter.',
+      on: match === 'all' && level === 'all' && state === 'all' && amazon === 'all' && attribution === 'all' && blocking === 'all' && view === 'negations',
+      apply: () => push({ view: 'negations', ...CLEAR }),
     },
     {
       key: 'terms', n: census.terms, label: census.terms === 1 ? 'term' : 'terms',
@@ -335,18 +352,18 @@ export function NegativeTargetingClient() {
     },
     {
       key: 'blocking', n: census.blockingNow, label: 'blocking now',
-      tip: 'Target enabled AND campaign enabled AND confirmed at Amazon. All three. This is the live number.',
-      on: state === 'live' && amazon === 'yes', apply: () => push({ view: 'negations', state: 'live', amazon: 'yes' }), tone: 'on',
+      tip: 'Target enabled AND campaign enabled AND confirmed at Amazon. All three, or it is blocking nothing. This is the live number.',
+      on: blocking === 'yes', apply: () => push({ view: 'negations', ...CLEAR, blocking: 'yes' }), tone: 'live',
     },
     {
       key: 'inert', n: census.inInertCampaign, label: 'in a paused campaign',
       tip: 'Sitting in a campaign that is paused or archived. They block nothing, and a count that mixes them with live ones is not an answer to "what am I blocking".',
-      on: state === 'paused', apply: () => push({ view: 'negations', state: 'paused', amazon: 'all' }), tone: 'muted',
+      on: state === 'inert', apply: () => push({ view: 'negations', ...CLEAR, state: 'inert' }), tone: 'muted',
     },
     {
       key: 'split', n: census.notAtAmazon, label: 'never confirmed at Amazon',
       tip: 'No externalTargetId. Amazon has never acknowledged these; they are counted by every screen and honoured by no auction.',
-      on: amazon === 'no', apply: () => push({ view: 'negations', amazon: 'no', state: 'all' }), tone: 'warn',
+      on: amazon === 'no', apply: () => push({ view: 'negations', ...CLEAR, amazon: 'no' }), tone: 'warn',
     },
   ] : []
 
@@ -572,7 +589,7 @@ function EmptyState({ loading, data, q, push }: { loading: boolean; data: Payloa
       <b>{num(data.census.negations)} negatives are in this scope — the filters hide all of them.</b>
       <span>
         {q ? <>Nothing matches “{q}”. </> : null}
-        <button type="button" className="lnk" onClick={() => push({ q: '', match: 'all', level: 'all', state: 'all', amazon: 'all', attribution: 'all' })}>Clear the filters</button>
+        <button type="button" className="lnk" onClick={() => push({ q: '', match: 'all', level: 'all', state: 'all', amazon: 'all', attribution: 'all', blocking: 'all' })}>Clear the filters</button>
       </span>
     </span>
   )

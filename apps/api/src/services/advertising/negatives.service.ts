@@ -292,9 +292,25 @@ export interface NegRequest extends NegScopeRequest {
   q?: string | null
   match?: NegMatchType | 'all' | null
   level?: NegLevel | 'all' | null
-  /** campaign state */
-  state?: 'live' | 'paused' | 'archived' | 'all' | null
+  /**
+   * Campaign state. `inert` is "anything that is not ENABLED" — paused OR archived — and it exists
+   * because the census counts those together (`inInertCampaign`) and a strip cell has to be able to
+   * apply the filter that reproduces its own number. Account-wide that is 1,013 paused + 1 archived;
+   * a cell reading 1,014 that filtered to 1,013 would be off by one campaign nobody could find.
+   */
+  state?: 'live' | 'paused' | 'archived' | 'inert' | 'all' | null
   amazon?: 'yes' | 'no' | 'all' | null
+  /**
+   * 🔴 The three-condition intersection, as a filter.
+   *
+   * `state=live&amazon=yes` is NOT the same set: it checks the campaign and the Amazon id but not
+   * the target's own status, so it returns 1,004 where `blockingNow` counts 942 — the 62 ARCHIVED
+   * targets sitting in enabled campaigns. Measured on prod by clicking the census cell.
+   *
+   * The count and the filter must run the same predicate, which is why this exists rather than a
+   * composition of the other two.
+   */
+  blocking?: 'yes' | 'no' | 'all' | null
   attribution?: NegAttribution | 'all' | null
   sort?: NegSortKey | null
   dir?: 'asc' | 'desc'
@@ -449,6 +465,10 @@ export async function getNegatives(req: NegRequest): Promise<NegPayload> {
     if (req.state === 'live' && r.campaignStatus !== 'ENABLED') return false
     if (req.state === 'paused' && r.campaignStatus !== 'PAUSED') return false
     if (req.state === 'archived' && r.campaignStatus !== 'ARCHIVED') return false
+    if (req.state === 'inert' && r.campaignStatus === 'ENABLED') return false
+    // The same `blockingNow` the census counted — not a re-derivation of it.
+    if (req.blocking === 'yes' && !r.blockingNow) return false
+    if (req.blocking === 'no' && r.blockingNow) return false
     return true
   })
 

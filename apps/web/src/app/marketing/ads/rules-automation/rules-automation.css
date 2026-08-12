@@ -1508,7 +1508,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ng-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
 .h10-ng-cell.warn.on b, .h10-ng-cell.warn.on span { color: #7a4812; }
 .h10-ng-cell.muted b { color: #667080; }
-.h10-ng-cell.on b { color: #10457f; }
+/* The live tone. Named `live`, not `on`: `on` is the SELECTED class on the same element, and a tone
+   called `on` made the "blocking now" cell render permanently selected — measured on prod, where
+   two of five cells claimed to be the active filter at once. */
+.h10-ng-cell.live b { color: #14724d; }
+.h10-ng-cell.live.on { border-color: #14724d; background: #e7f5ed; }
+.h10-ng-cell.live.on b, .h10-ng-cell.live.on span { color: #0f5b3d; }
 
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
 /* `.h10-am-grid td.nm .t` sets #1f6fde at (0,3,1) because every other consumer of this grid makes
@@ -1551,7 +1556,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* Spread — the blast radius, on the row, before you act on it. */
 .h10-ng-spread { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; padding: 2px 6px; background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums; }
 .h10-ng-spread:hover { background: #e8f1fd; border-color: #1f6fde; }
-.h10-ng-spread > :first-child, .h10-ng-spread { font-size: 12px; font-weight: 800; color: #1c2530; }
+.h10-ng-spread { font-size: 12px; font-weight: 800; color: #1c2530; }
 .h10-ng-spread i { font-style: normal; font-size: 10px; font-weight: 600; color: #667080; }
 
 /* ── grid chrome ────────────────────────────────────────────────────────────────────────────── */
