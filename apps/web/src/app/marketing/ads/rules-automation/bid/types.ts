@@ -53,6 +53,41 @@ export interface BidTargetRow {
   cpcCents: number | null
   /** null, never 0, when there were no sales */
   acos: number | null
+
+  // ── BID.S2 ────────────────────────────────────────────────────────────────────────────────────
+  /** 🔴 `null` = no floor DECLARED, which is not the same claim as a floor of zero. Every campaign
+   *  is in the first state (0 of 220 declare one) and none is in the second. */
+  minBidCents: number | null
+  maxBidCents: number | null
+  bidder: BidderKind
+  /** the schedule's resolved GROUP name; null unless bidder === 'schedule' */
+  bidderName: string | null
+  suppressedFromBidCents: number | null
+  inMinBidWindow: boolean
+  lastAuditedCents: number | null
+  lastAuditedAt: string | null
+  /** the live bid disagrees with the newest audited value */
+  unrecorded: boolean
+  /** bid × (1 + placement%) × strategy uplift. null when nothing lifts it — never a copy of Bid. */
+  effectiveMaxCpcCents: number | null
+  placementPct: number
+  biddingStrategy: string | null
+}
+
+export type BidderKind = 'schedule' | 'goal' | 'manual' | 'none'
+
+export const BIDDER_LABEL: Record<BidderKind, string> = {
+  schedule: 'Schedule',
+  goal: 'Goal',
+  manual: 'Manual',
+  none: 'No bidder',
+}
+
+export interface BidSeriesPoint {
+  at: string
+  to: number
+  from: number | null
+  delivered: string | null
 }
 
 export interface BidCampaignRow {
@@ -71,6 +106,15 @@ export interface BidCampaignRow {
   orders: number
   cpcCents: number | null
   acos: number | null
+  // ── BID.S2 ────────────────────────────────────────────────────────────────────────────────────
+  minBidCents: number | null
+  maxBidCents: number | null
+  bidder: BidderKind
+  bidderName: string | null
+  /** how many of this campaign's targets sit above its own declared ceiling */
+  outOfBand: number
+  placementPct: number
+  biddingStrategy: string | null
 }
 
 export interface BidFacet { value: string; count: number }
@@ -106,6 +150,8 @@ export interface BidGridPayload {
     band: BidFacet[]
     measured: BidFacet[]
   }
+  /** BID.S2 — sparkline points by target id, oldest first. Absent for a row that never changed. */
+  series: Record<string, BidSeriesPoint[]>
   rows: BidTargetRow[] | BidCampaignRow[]
   total: number
   truncated: boolean

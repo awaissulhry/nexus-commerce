@@ -2983,3 +2983,61 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-plc-census { grid-template-columns: 1fr; }
   .h10-plc-lanesplit { grid-template-columns: 1fr; }
 }
+
+/* ── BID.S2 — the four columns that make a bid legible ─────────────────────────────────────────
+   Appended at EOF, `h10-bd-*` only (the prefix BID.S0 already owns). Source order beats
+   specificity in this stylesheet, so anything overriding an earlier rule goes at the END. */
+
+/* ── Band ──────────────────────────────────────────────────────────────────────────────────────
+   🔴 "not set" and "€0.00" are different claims. Every campaign is in the first state (0 of 220
+   declare a floor) and none is in the second, so the muted italic is the common rendering and it
+   must not read as a value. */
+.h10-bd-band { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; font-size: 11.5px; color: #1c2530; }
+.h10-bd-band.none { font-style: italic; font-weight: 600; color: #667080; }
+.h10-bd-band b { font-weight: 700; }
+.h10-bd-band .cap { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+/* The bar only appears when BOTH ends are declared — a half-open interval has no position to mark. */
+.h10-bd-band .rail { position: relative; width: 46px; height: 4px; border-radius: 2px; background: #e3e7ec; flex: none; }
+.h10-bd-band .rail i { position: absolute; top: -2px; width: 2px; height: 8px; border-radius: 1px; background: #1f6fde; transform: translateX(-1px); }
+.h10-bd-band.out b { color: #a02c2c; font-weight: 800; }
+.h10-bd-band.out .rail i { background: #a02c2c; }
+
+/* ── Bidder ────────────────────────────────────────────────────────────────────────────────────
+   `No bidder` is the page's largest finding, so it is the one value that carries a colour. */
+.h10-bd-bidder { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 700; color: #1c2530; }
+.h10-bd-bidder.sched { color: #10457f; }
+.h10-bd-bidder.goal { color: #14724d; }
+.h10-bd-bidder.manual { color: #55606d; }
+.h10-bd-bidder.none { padding: 1px 7px; border-radius: 5px; background: #fdeee9; color: #9a3412; font-weight: 800; font-size: 10.5px; letter-spacing: .02em; }
+
+/* ── History sparkline ─────────────────────────────────────────────────────────────────────────
+   🔴 An inline <svg> is display:inline by default and sits on the text baseline, which pushes the
+   row 4px taller than its neighbours. `display:block` inside a sized inline-flex span fixes the
+   baseline without changing the row height. */
+.h10-bd-spark { display: inline-flex; align-items: center; width: 88px; height: 22px; }
+.h10-bd-spark svg { display: block; width: 88px; height: 22px; overflow: visible; }
+.h10-bd-spark svg path { stroke: #1f6fde; stroke-width: 1.4px; }
+.h10-bd-spark svg .dot { fill: #1f6fde; }
+.h10-bd-spark svg line { stroke: #c8cfd8; stroke-width: 1px; }
+/* Nothing was ever written. A dotted rule, not a flat line — a flat line is a claim of stability. */
+.h10-bd-spark.none svg line { stroke: #d6dbe2; }
+/* The curve is what we INTENDED; Amazon refused at least one of these writes. */
+.h10-bd-spark.failed svg path { stroke: #c2410c; stroke-dasharray: 3 2; }
+.h10-bd-spark.failed svg .dot { fill: #c2410c; }
+
+/* ── State chips ───────────────────────────────────────────────────────────────────────────────
+   Three tones, not nine colours: `bad` costs money or cannot be trusted, `warn` needs a decision,
+   `mute` is context. Nine distinct colours would be a legend nobody reads. */
+.h10-bd-states { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.h10-bd-chip { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.h10-bd-chip.bad { background: #fdeee9; color: #9a3412; }
+.h10-bd-chip.warn { background: #fff6e8; color: #8a5316; }
+.h10-bd-chip.mute { background: #f1f4f8; color: #55606d; }
+
+/* ── Effective max CPC ─────────────────────────────────────────────────────────────────────────
+   A derived ceiling, so it is quieter than Bid — which is a fact Amazon holds. */
+.h10-bd-eff { display: inline-flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; color: #1c2530; }
+.h10-bd-eff i { font-style: normal; font-size: 9.5px; font-weight: 800; color: #8a5316; }
+
+/* Campaigns view: how many bids sit above this campaign's own ceiling. */
+.h10-bd-oob { font-variant-numeric: tabular-nums; font-weight: 800; color: #9a3412; }

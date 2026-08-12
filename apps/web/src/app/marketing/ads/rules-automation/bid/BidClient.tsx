@@ -47,8 +47,12 @@ import { BidScopeBar, type BidScopeValue, type ScopeOptionsPayload } from './Bid
 import { useCursorPoll } from '../_shared/useCursorPoll'
 import {
   BAND_LABEL, BID_BANDS,
-  type BidCampaignRow, type BidGridPayload, type BidTargetRow, type BidView,
+  type BidCampaignRow, type BidGridPayload, type BidTargetRow, type BidView, type BidderKind,
 } from './types'
+import {
+  resolveBidStates, hasBidState, BID_STATE_KEYS, BID_STATE_LABEL, type BidStateKey,
+} from './bidState'
+import { BidSpark } from './BidSpark'
 import { NO_WRITE_ACTIONS, type BidSlotProps } from './slot-contract'
 import { BidSections } from './BidSections'
 // Interim, until S7 replaces it: rendered exactly as the tab rendered it, so nothing is lost in the
@@ -98,12 +102,16 @@ export function BidClient() {
   const sortParam = params.get('sort') ?? ''
   const windowParam = params.get('window') ?? DEFAULT_WINDOW
 
-  // 🔴 Reserved for later sections. Parsed into the slot contract from day one and read by NOBODY
-  // in S0, so a link someone shares today survives the section that gives it meaning.
-  //   bidder= (S6) · state= (S2) · target= (S3)
+  // BID.S2 — `state=` was reserved by S0 and is now live. It filters on the UNCAPPED chip list:
+  // see `hasBidState`, and the reason in its comment.
+  const stateParam = params.get('state') ?? ''
+  const state = (BID_STATE_KEYS as readonly string[]).includes(stateParam) ? (stateParam as BidStateKey) : null
+
+  // 🔴 Still reserved, read by NOBODY, so a link shared today survives the section that gives it
+  // meaning: bidder= (S6) · target= (S3).
   const reserved = {
     bidder: params.get('bidder'),
-    state: params.get('state'),
+    state: stateParam || null,
     target: params.get('target'),
   }
 
@@ -185,8 +193,30 @@ export function BidClient() {
     baseline: (data?.cursor ?? null) as unknown as Record<string, unknown> | null,
   })
 
-  const rows = view === 'targets' ? ((data?.rows ?? []) as BidTargetRow[]) : []
+  const allRows = view === 'targets' ? ((data?.rows ?? []) as BidTargetRow[]) : []
   const campaigns = view === 'campaigns' ? ((data?.rows ?? []) as BidCampaignRow[]) : []
+
+  /**
+   * BID.S2 — the state filter runs HERE, not on the server: the vocabulary is a client module so
+   * that S3–S9 can import the same resolver, and a second copy in the API would be exactly the
+   * "two answers to one question" the resolver exists to prevent.
+   *
+   * 🔴 Counts are computed over `allRows` with the state filter EXCLUDED — the same
+   * exclude-your-own-dimension rule the server applies to its facets. A chip that advertised a
+   * count it could not deliver is the NEG.1 defect, and it does not stop being that defect because
+   * the arithmetic moved to the browser.
+   */
+  const stateCounts = useMemo(() => {
+    const m = {} as Record<BidStateKey, number>
+    for (const k of BID_STATE_KEYS) m[k] = 0
+    for (const r of allRows) for (const k of BID_STATE_KEYS) if (hasBidState(r, k)) m[k] += 1
+    return m
+  }, [allRows])
+
+  const rows = useMemo(
+    () => (state ? allRows.filter((r) => hasBidState(r, state)) : allRows),
+    [allRows, state],
+  )
   const census = data?.census ?? null
 
   const slotProps: BidSlotProps = {
@@ -219,11 +249,17 @@ export function BidClient() {
       tip: 'KEYWORD 1,982 · PRODUCT 759 · AUTO 123 · and four audience/category forms. A bid decision on an exact keyword and one on a product target are not the same decision, which is why these cannot share a chip.',
       render: (r) => <span className="h10-bd-kind">{r.kind.replace(/_/g, ' ').toLowerCase()}</span>,
       sortValue: (r) => r.kind,
+      // BID.S2 — hidden by default to make room for Band/Bidder/History/State. Kind is already a
+      // filter chip with counts, so the column was restating a control the operator just used.
+      defaultHidden: true,
     },
     {
       key: 'adGroup', label: 'Ad group', metric: false,
       render: (r) => <span className="h10-bd-ag" title={r.adGroupName}>{r.adGroupName}</span>,
       sortValue: (r) => r.adGroupName.toLowerCase(),
+      // BID.S2 — hidden by default; the ad group is visible in the Campaign cell's context and in
+      // the drawer S3 adds. Customize brings it back and `storageKey` remembers that.
+      defaultHidden: true,
     },
     {
       key: 'campaign', label: 'Campaign', metric: false,
@@ -252,12 +288,49 @@ export function BidClient() {
       sortValue: (r) => r.bidCents, filterValue: (r) => r.bidCents / 100,
       total: (vis) => (vis.length ? `${eur(Math.min(...vis.map((r) => r.bidCents)))}–${eur(Math.max(...vis.map((r) => r.bidCents)))}` : ''),
     },
+    // ── BID.S2 — the four columns that turn a list of numbers into a decision ───────────────────
+    {
+      key: 'band', label: 'Band', metric: false,
+      tip: 'The floor and ceiling declared on this target\'s CAMPAIGN, where the write gate reads them. 🔴 "not set" is not a floor of zero — no campaign in the account declares a floor at all (0 of 220), and 82 declare a ceiling. Read-only here; S5 owns the editor.',
+      render: (r) => <BandCell r={r} />,
+      sortValue: (r) => r.maxBidCents ?? -1,
+    },
+    {
+      key: 'bidder', label: 'Bidder', metric: false,
+      tip: 'Who moves this campaign\'s bids: a rank schedule, a target-ACoS goal, an operator in the last 60 days, or nobody. 41 of the 86 enabled campaigns have no bidder, 26 of them spent money last month, and their write gates are open.',
+      render: (r) => <BidderCell kind={r.bidder} name={r.bidderName} />,
+      sortValue: (r) => `${r.bidder}:${r.bidderName ?? ''}`,
+    },
+    {
+      key: 'history', label: 'History', metric: false,
+      tip: 'Every recorded bid change in 60 days, oldest left. Drawn as steps because a bid holds its value until something writes a new one — a sloped line would show a drift that never happened. Only 607 of 2,944 enabled targets have any change at all; the rest show a dotted rule, which means "never written", not "steady".',
+      render: (r) => <BidSpark points={data?.series?.[r.id]} label={r.label} format={eur} />,
+      sortValue: (r) => data?.series?.[r.id]?.length ?? -1,
+    },
+    {
+      key: 'state', label: 'State', metric: false,
+      tip: 'At most two, most decision-changing first. The three floor states are mutually exclusive: "Suppressed" remembers what to restore, "Min-bid window" is a schedule that will restore it, and "At floor · no restore" is neither — nothing on record says what that bid was.',
+      render: (r) => <StateCell r={r} />,
+      sortValue: (r) => resolveBidStates(r)[0]?.key ?? 'zzz',
+    },
+    {
+      key: 'effCpc', label: 'Eff. max CPC',
+      tip: 'The most one click can cost: bid × placement multiplier × bidding strategy. "Down only" (193 campaigns) never raises a bid; "up and down" can add 100% at top of search. Blank where nothing lifts the bid — this column never restates Bid.',
+      render: (r) => <EffCpcCell r={r} />,
+      sortValue: (r) => r.effectiveMaxCpcCents ?? -1,
+      filterValue: (r) => (r.effectiveMaxCpcCents ?? 0) / 100,
+      // Derived, not a fact Amazon holds. Off by default; Customize turns it on.
+      defaultHidden: true,
+    },
     {
       key: 'impressions', label: 'Impr',
       tip: 'From AmazonAdsDailyPerformance, never the AdTarget columns — those are zero on all 3,154 rows. A row reading "not served" got no impressions in this window; that is a measurement, not a gap.',
       render: (r) => (r.measured ? num(r.impressions) : NOT_SERVED),
       sortValue: (r) => (r.measured ? r.impressions : -1), filterValue: (r) => r.impressions,
       total: (vis) => num(vis.reduce((s, r) => s + r.impressions, 0)),
+      // BID.S2 — hidden by default. Clicks, CPC, Spend and ACoS carry the story; impressions are
+      // the one metric an operator reads only after deciding something is wrong.
+      defaultHidden: true,
     },
     {
       key: 'clicks', label: 'Clicks',
@@ -285,7 +358,7 @@ export function BidClient() {
       sortValue: (r) => r.acos ?? -1, filterValue: (r) => (r.acos ?? 0) * 100,
       total: (vis) => { const s = vis.reduce((a, r) => a + r.salesCents, 0); return s > 0 ? pct(vis.reduce((a, r) => a + r.spendCents, 0) / s) : '—' },
     },
-  ], [])
+  ], [data?.series])
 
   // ── campaign columns ──────────────────────────────────────────────────────────────────────────
   const campaignColumns: GridColumn<BidCampaignRow>[] = useMemo(() => [
@@ -305,9 +378,36 @@ export function BidClient() {
       sortValue: (r) => r.targets, filterValue: (r) => r.targets,
       total: (vis) => num(vis.reduce((s, r) => s + r.targets, 0)),
     },
+    // ── BID.S2 — the two campaign-grain facts, at the grain they are enforced at ────────────────
+    {
+      key: 'bidder', label: 'Bidder', metric: false,
+      tip: 'Who moves this campaign\'s bids. Measured over the 86 enabled campaigns: schedule 33 · goal 0 · manual 12 · no bidder 41.',
+      render: (r) => <BidderCell kind={r.bidder} name={r.bidderName} />,
+      sortValue: (r) => `${r.bidder}:${r.bidderName ?? ''}`,
+    },
+    {
+      key: 'band', label: 'Band', metric: false,
+      tip: 'The floor and ceiling the write gate enforces, declared on this campaign. 0 of 220 declare a floor; 82 declare a ceiling, at 80¢, 90¢ or 190¢.',
+      render: (r) => (
+        r.minBidCents == null && r.maxBidCents == null
+          ? <span className="h10-bd-band none" title="Nothing declared on this campaign — not a band of zero.">not set</span>
+          : <span className="h10-bd-band half" title={`${r.minBidCents != null ? `Floor ${eur(r.minBidCents)}` : 'No floor'} · ${r.maxBidCents != null ? `Ceiling ${eur(r.maxBidCents)}` : 'No ceiling'}`}>
+            <i className="cap">{r.maxBidCents != null ? 'max' : 'min'}</i><b>{eur((r.maxBidCents ?? r.minBidCents)!)}</b>
+          </span>
+      ),
+      sortValue: (r) => r.maxBidCents ?? -1,
+    },
+    {
+      key: 'outOfBand', label: 'Above ceiling',
+      tip: 'How many of this campaign\'s bids sit above its own declared ceiling. The gate refuses a write outside the band but never pulls an existing bid in, so these are frozen: nothing may raise them and nothing is lowering them. 56 across the account.',
+      render: (r) => (r.maxBidCents == null ? <span className="h10-bd-nd" title="No ceiling declared, so nothing can be above it.">—</span>
+        : r.outOfBand > 0 ? <span className="h10-bd-oob">{num(r.outOfBand)}</span> : <span className="h10-bd-nd">0</span>),
+      sortValue: (r) => r.outOfBand, filterValue: (r) => r.outOfBand,
+      total: (vis) => num(vis.reduce((s, r) => s + r.outOfBand, 0)),
+    },
     {
       key: 'bidRange', label: 'Bid range',
-      tip: 'The lowest and highest bid OBSERVED on these targets — not a policy. The campaign floor and ceiling are a different pair of numbers and they arrive in S5.',
+      tip: 'The lowest and highest bid OBSERVED on these targets — not a policy. The campaign floor and ceiling are the Band column beside this one, and they are a different pair of numbers.',
       render: (r) => (
         r.bidMinCents == null ? NO_VALUE
           : <span className="h10-bd-range">{eur(r.bidMinCents)}<i>–</i>{eur(r.bidMaxCents ?? r.bidMinCents)}</span>
@@ -384,6 +484,15 @@ export function BidClient() {
           { value: 'no', label: `Never served (${num(f?.measured.find((x) => x.value === 'no')?.count ?? 0)})` },
         ],
       },
+      {
+        // BID.S2 — `?state=`, reserved by S0 and now live. Counts come from the same uncapped
+        // predicate the filter uses, so every option delivers exactly the number it advertises.
+        key: '__state', label: 'State', kind: 'select', placeholder: 'Any state', wide: true,
+        options: [
+          { value: '', label: 'Any state' },
+          ...BID_STATE_KEYS.map((k) => ({ value: k, label: `${BID_STATE_LABEL[k]} (${num(stateCounts[k] ?? 0)})` })),
+        ],
+      },
       { key: 'bid', label: 'Bid', kind: 'range', unit: '€' },
       { key: 'spend', label: 'Spend', kind: 'range', unit: '€' },
       { key: 'acos', label: 'ACoS', kind: 'range', unit: '%' },
@@ -395,12 +504,12 @@ export function BidClient() {
   // numeric ranges. Bridging them here rather than inside AdsDataGrid keeps that component
   // untouched apart from the additive sort callback.
   const initialFilters = useMemo(() => ({
-    __status: status, __kind: kind, __match: match, __band: band, __measured: measured,
-  }), [status, kind, match, band, measured])
+    __status: status, __kind: kind, __match: match, __band: band, __measured: measured, __state: stateParam,
+  }), [status, kind, match, band, measured, stateParam])
 
   const onFilterChange = useCallback((next: Record<string, unknown>) => {
     const s = (k: string) => (typeof next[k] === 'string' ? (next[k] as string) : '')
-    push({ status: s('__status'), kind: s('__kind'), match: s('__match'), band: s('__band'), measured: s('__measured') })
+    push({ status: s('__status'), kind: s('__kind'), match: s('__match'), band: s('__band'), measured: s('__measured'), state: s('__state') })
   }, [push])
 
   const activeTab = rulesTabByKey('bid')
@@ -452,8 +561,12 @@ export function BidClient() {
 
   const csv = () => {
     const head = view === 'targets'
-      ? ['Target', 'Match', 'Kind', 'Ad group', 'Campaign', 'Campaign status', 'Market', 'Bid EUR', 'Band', 'Measured', 'Impressions', 'Clicks', 'CPC EUR', 'Spend EUR', 'Sales EUR', 'ACoS %', 'Target name derived']
-      : ['Campaign', 'Market', 'Status', 'Targets', 'Measured', 'Bid min EUR', 'Bid max EUR', 'Impressions', 'Clicks', 'Spend EUR', 'Sales EUR', 'ACoS %']
+      ? ['Target', 'Match', 'Kind', 'Ad group', 'Campaign', 'Campaign status', 'Market', 'Bid EUR', 'Bid band', 'Measured', 'Impressions', 'Clicks', 'CPC EUR', 'Spend EUR', 'Sales EUR', 'ACoS %', 'Target name derived',
+        // BID.S2 — the export carries every new column, and the STATE list uncapped: a
+        // spreadsheet has no width problem, so truncating to two there would lose data for
+        // no reason. `Floor EUR` is blank when none is declared, never 0.
+        'Floor EUR', 'Ceiling EUR', 'Bidder', 'Bidder name', 'Recorded changes 60d', 'Last audited EUR', 'Unrecorded change', 'Eff max CPC EUR', 'Placement %', 'Bidding strategy', 'State']
+      : ['Campaign', 'Market', 'Status', 'Bidder', 'Bidder name', 'Above ceiling', 'Targets', 'Measured', 'Bid min EUR', 'Bid max EUR', 'Impressions', 'Clicks', 'Spend EUR', 'Sales EUR', 'ACoS %']
     const cell = (v: unknown) => {
       const s = v == null ? '' : String(v)
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -464,8 +577,17 @@ export function BidClient() {
         r.measured ? r.impressions : '', r.measured ? r.clicks : '',
         r.cpcCents == null ? '' : (r.cpcCents / 100).toFixed(2),
         r.measured ? (r.spendCents / 100).toFixed(2) : '', r.measured ? (r.salesCents / 100).toFixed(2) : '',
-        r.acos == null ? '' : (r.acos * 100).toFixed(1), r.derived ? 'yes' : 'no'])
-      : campaigns.map((r) => [r.name, r.market, r.status, r.targets, r.measured,
+        r.acos == null ? '' : (r.acos * 100).toFixed(1), r.derived ? 'yes' : 'no',
+        r.minBidCents == null ? '' : (r.minBidCents / 100).toFixed(2),
+        r.maxBidCents == null ? '' : (r.maxBidCents / 100).toFixed(2),
+        r.bidder, r.bidderName ?? '',
+        data?.series?.[r.id]?.length ?? 0,
+        r.lastAuditedCents == null ? '' : (r.lastAuditedCents / 100).toFixed(2),
+        r.unrecorded ? 'yes' : 'no',
+        r.effectiveMaxCpcCents == null ? '' : (r.effectiveMaxCpcCents / 100).toFixed(2),
+        r.placementPct || '', r.biddingStrategy ?? '',
+        resolveBidStates(r, Number.MAX_SAFE_INTEGER).map((c) => c.label).join(' | ')])
+      : campaigns.map((r) => [r.name, r.market, r.status, r.bidder, r.bidderName ?? '', r.outOfBand, r.targets, r.measured,
         r.bidMinCents == null ? '' : (r.bidMinCents / 100).toFixed(2),
         r.bidMaxCents == null ? '' : (r.bidMaxCents / 100).toFixed(2),
         r.impressions, r.clicks, (r.spendCents / 100).toFixed(2), (r.salesCents / 100).toFixed(2),
@@ -744,6 +866,82 @@ export function BidClient() {
         )}
       />
     </div>
+  )
+}
+
+/**
+ * BID.S2 — the band, and the bid's position inside it.
+ *
+ * 🔴 Three renderings, because three things are true of different rows and only one of them is
+ * "here is a range":
+ *
+ *   · **both ends set** — a bar with the bid's position marked. No campaign is in this state today.
+ *   · **one end set** (82 campaigns, ceiling only) — the number and the word, no bar. Inventing a
+ *     bar for a half-open interval means choosing an arbitrary other end and drawing it.
+ *   · **neither** — "not set", muted. NOT "€0.00 – €0.00", which is a floor of zero: a different
+ *     and much stronger claim than the absence of one, and the gap S5 exists to close.
+ */
+function BandCell({ r }: { r: BidTargetRow }) {
+  const { minBidCents: lo, maxBidCents: hi, bidCents: bid } = r
+  if (lo == null && hi == null) {
+    return <span className="h10-bd-band none" title="No floor and no ceiling declared on this campaign. Not a band of zero — nothing is declared, so the write gate has nothing to enforce and the only floors in play are the engine's own constants.">not set</span>
+  }
+  if (lo != null && hi != null) {
+    const posRaw = (bid - lo) / Math.max(1, hi - lo)
+    const pos = Math.max(0, Math.min(1, posRaw))
+    return (
+      <span className={`h10-bd-band${bid > hi || bid < lo ? ' out' : ''}`} title={`Allowed ${eur(lo)} – ${eur(hi)}; this bid is ${eur(bid)}.`}>
+        <span className="rail"><i style={{ left: `${(pos * 100).toFixed(1)}%` }} /></span>
+        <b>{eur(lo)}–{eur(hi)}</b>
+      </span>
+    )
+  }
+  // One end only. Say which end it is — a bare number here would read as the other one.
+  const out = hi != null && bid > hi
+  return (
+    <span className={`h10-bd-band half${out ? ' out' : ''}`} title={hi != null
+      ? `Ceiling ${eur(hi)}, no floor declared. This bid is ${eur(bid)}${out ? ' — above the ceiling. The gate refuses writes outside the band but never pulls an existing bid in.' : '.'}`
+      : `Floor ${eur(lo!)}, no ceiling declared. This bid is ${eur(bid)}.`}>
+      <i className="cap">{hi != null ? 'max' : 'min'}</i><b>{eur((hi ?? lo)!)}</b>
+    </span>
+  )
+}
+
+/** Who owns this campaign's bids. `none` is loud on purpose — it is the page's largest finding. */
+function BidderCell({ kind, name }: { kind: BidderKind; name: string | null }) {
+  if (kind === 'none') {
+    return <span className="h10-bd-bidder none" title="No rank schedule, no target-ACoS goal, and no operator has moved a bid in this campaign in 60 days. Nothing automated will change this bid. 41 of the 86 enabled campaigns are in this position and 26 of them spent money last month.">No bidder</span>
+  }
+  if (kind === 'schedule') {
+    return <span className="h10-bd-bidder sched" title={`Bid by the rank schedule “${name}”. It floors bids at 00:00 Rome and restores them at 08:00.`}>{name ?? 'Schedule'}</span>
+  }
+  if (kind === 'goal') {
+    return <span className="h10-bd-bidder goal" title="Bid by the target-ACoS optimiser. Set on 0 of 220 campaigns today — this value is reachable and currently unused.">Goal</span>
+  }
+  return <span className="h10-bd-bidder manual" title="An operator moved a bid in this campaign in the last 60 days, and nothing automated owns it.">Manual</span>
+}
+
+/** At most two chips, most decision-changing first. The vocabulary lives in `bidState.ts`. */
+function StateCell({ r }: { r: BidTargetRow }) {
+  const chips = resolveBidStates(r)
+  if (chips.length === 0) return <span className="h10-bd-nd" title="Nothing notable about this bid's state.">—</span>
+  return (
+    <span className="h10-bd-states">
+      {chips.map((c) => <span key={c.key} className={`h10-bd-chip ${c.tone}`} title={c.title}>{c.label}</span>)}
+    </span>
+  )
+}
+
+/** The most one click can cost. Blank rather than a copy of Bid when nothing lifts it. */
+function EffCpcCell({ r }: { r: BidTargetRow }) {
+  if (r.effectiveMaxCpcCents == null) {
+    return <span className="h10-bd-nd" title="No placement multiplier and a strategy that cannot raise a bid, so the most a click can cost is the bid itself.">—</span>
+  }
+  return (
+    <span className="h10-bd-eff" title={`Bid ${eur(r.bidCents)}${r.placementPct > 0 ? ` × +${r.placementPct}% placement` : ''}${r.biddingStrategy === 'AUTO_FOR_SALES' ? ' × up-and-down bidding (up to +100% at top of search)' : ''} ⇒ at most ${eur(r.effectiveMaxCpcCents)} per click. The write gate binds the BASE bid, not this number.`}>
+      {eur(r.effectiveMaxCpcCents)}
+      {r.placementPct > 0 && <i>+{r.placementPct}%</i>}
+    </span>
   )
 }
 
