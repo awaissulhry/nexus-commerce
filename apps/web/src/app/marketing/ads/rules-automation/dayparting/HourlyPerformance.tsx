@@ -23,6 +23,7 @@ import { CHART_METRICS } from '../_schedule/scheduleConfig'
 import { metricVal, type RawCell } from '../_schedule/heatMetrics'
 import { selectionToWindows, selectionHourCount } from './selectionToWindows'
 import { AddToScheduleModal, type ScheduleChoice } from './AddToScheduleModal'
+import { useRdData } from './_rd/RdData'
 import { getBackendUrl } from '@/lib/backend-url'
 
 /**
@@ -68,24 +69,18 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
   const [savingTpl, setSavingTpl] = useState(false)
   const [tplMsg, setTplMsg] = useState('')
   const [addOpen, setAddOpen] = useState(false) // RDX/D2
-  const [targets, setTargets] = useState<Array<{ key: string; name: string }>>([])
+  // RD.P0 — the target library comes from the page's data layer. This component had its own
+  // `/rank-targets` fetch, which was the page's SECOND request for the same five rows.
+  const { targets: targetMap } = useRdData()
+  const targets = useMemo(
+    () => Object.values(targetMap).map((t) => ({ key: t.key, name: t.name })),
+    [targetMap],
+  )
   // Selection only makes sense over a grid that is actually showing data.
   const selectable = hasData
   const selWindows = useMemo(() => selectionToWindows(sel, selTarget), [sel, selTarget])
   const selHours = useMemo(() => selectionHourCount(selWindows), [selWindows])
 
-  useEffect(() => {
-    let alive = true
-    void fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return
-        const items = (Array.isArray(j?.items) ? j.items : []) as Array<{ key?: string; name?: string }>
-        setTargets(items.filter((t) => t.key).map((t) => ({ key: String(t.key), name: String(t.name ?? t.key) })))
-      })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
   const targetOpts = useMemo(
     () => (targets.length ? targets : [{ key: 'own-top', name: 'Own Top of Search' }]).map((t) => ({ value: t.key, label: t.name })),
     [targets],
