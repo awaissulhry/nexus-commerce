@@ -1175,3 +1175,146 @@ The URL contract carries `?sort=`/`?dir=`, and `AdsDataGrid` **reads them and ne
 back** — KT's open defect, shared by nine pages. The page therefore does not claim sorting is
 linkable and the grid was not touched. `?minOrders=`, `?minSpend=` and `?window=` are read and
 carried but have no controls until HV.2.
+
+---
+
+# HV.1c — HV.0 verified at runtime
+
+**Measured 2026-08-12 09:55 UTC with `apps/api/scripts/_hv-1c-verify.mts`.** Read-only.
+
+## The cron line
+
+```
+2026-08-12T06:30  SUCCESS  neg=0/8 grad=0/14 dryRun=true      ← first run after HV.0
+2026-08-11T06:30  SUCCESS  neg=8/8 grad=14/14 dryRun=false
+2026-08-10T06:30  SUCCESS  neg=9/9 grad=14/14 dryRun=false
+…six more, identical
+```
+
+**`dryRun=true`, and the applied counts fell to `0/8` and `0/14`** — it still finds 8 negative and
+14 graduation candidates and now applies none of them. Exactly the intended shape: the engine keeps
+reporting what it *would* do, which is what HV.1 renders and what HV.7 will turn into a queue.
+
+## The half that actually matters
+
+| | |
+|---|---|
+| `AdvertisingActionLog` rows by `automation:auto-harvest`, all time | 240 |
+| **created since the HV.0 deploy boundary (2026-08-12T01:00Z)** | **0** |
+| `AdTarget` rows created since that boundary — negative / positive | **0 / 0** |
+| `NEXUS_ADS_AUTO_HARVEST_ARMED` | **(unset)** → `envEnabled(…)` = `false` |
+| `previewHarvest({})` | negatives 8 · graduations 14 · productNegatives 2 · productGraduations 3 — unchanged |
+
+The audit log is the only place a write is visible, because the cron summary counts candidates
+processed rather than writes made (the HV.0 correction). It shows nothing. **The engine is disarmed
+and still fully sighted.**
+
+## The script that was crashing
+
+`_hv-page-wiring.mts` §8 is fixed: `CronRun` has **`jobName`**, not `name`, and carries
+**`outputSummary`** (a string) rather than `result`/`durationMs`, neither of which exists on the
+model. The script exited 1 before printing anything in §8; sections 1–7 were unaffected, and
+`_hv-page-forensics.mts` §4 always had it right — which is why the data was reachable and nobody
+noticed this block had never once run.
+
+The job list in that block was also wrong in a way that outlived the crash — see HV.2a.
+
+---
+
+# HV.2a — the ingest is not stalled, and HV.1 named the wrong job
+
+**Measured 2026-08-12 with `apps/api/scripts/_hv-2a-ingest.mts`.** Read-only. **No fix applied, and
+none is needed.**
+
+## 🔴 Correction 5 — this one is HV.1's own, not the study's
+
+HV.1 recorded, in three places, that *"`ads-v1-export-ingest` has returned `ingested=0 rows=0` on
+every run since 2026-08-11T01:52"* and offered it as the explanation for `AmazonAdsSearchTerm` being
+two days old. **Both halves are wrong.**
+
+1. **That job does not carry search terms.** `ads-v1-export-ingest` (`ads-sync.job.ts:604`) drains
+   `AmazonAdsExportJob` — the v1 unified export of **structure** data: campaigns, ad groups,
+   targets, ads. The search-term chain is a different pipeline:
+   **`ads-report-create-st` → `ads-report-poll` → `ads-report-ingest`.**
+2. **`rows=0` there means "caught up", not "broken".** Jobs matching that cron's own `WHERE`
+   (COMPLETED · url present · `rowsIngested=0` · `fileSize ≥ 100` · url unexpired): **0**. There was
+   nothing to ingest. It also reported `ingested=4 rows=428` at 08:22 the same morning, so it was
+   not even continuously zero.
+
+**The wrong version, kept:** the reasoning was "the freshest ads feed is stale and the only ads
+ingest cron I can see is returning zero, so that cron is the cause." Both observations were true;
+the join between them was invented. The lesson is the one this programme keeps relearning —
+*grep for the reader.* I matched a job by its plausible name instead of by what it writes.
+
+## There is no stall. The lag is a metronome.
+
+Per calendar date, when its rows were **first** written (`MIN(createdAt) − date`), over 27 dates:
+
+| | |
+|---|---|
+| min | **1.1 d** |
+| median | **1.1 d** |
+| p90 | **1.1 d** |
+| max | **1.1 d** |
+
+Zero variance. `ads-report-create-st` runs at 01:30 UTC and requests `yesterday()`; the rows land at
+01:52–02:22 UTC. Every date, every day.
+
+**HV.1's "2 days old" was the trough of a daily sawtooth, not a stall.** HV.1 measured at ~00:20 UTC
+on 2026-08-12 — before that morning's 01:52 delivery — so `MAX(date)` was 2026-08-10 and the floored
+age read 2. Ninety minutes later it was 1. All three ads feeds are currently at `MAX(date) =
+2026-08-11`, one day old:
+
+| feed | rows | MAX(date) | newest row written |
+|---|---|---|---|
+| `AmazonAdsSearchTerm` | 11,026 | 2026-08-11 | 2026-08-12T01:52 |
+| `AmazonAdsDailyPerformance` | 42,597 | 2026-08-11 | 2026-08-12T02:23 |
+| `AmazonAdsPlacementReport` | 4,699 | 2026-08-11 | 2026-08-12T02:07 |
+
+**Consequence for the page:** the age line is already computed rather than constant, so it was right
+on the day and is right now. What it must not do is call the number a problem. One day is this
+feed's floor and it hits it every single day.
+
+## 🔴 But there IS a real defect here, and it is bigger than the one HV.1 imagined
+
+`ads-report-create-st` requests **`yesterday()` only, once, and never re-requests a date.**
+`orders7d` and `sales7dCents` are **seven-day attribution windows** — and we snapshot them after
+about **one** day, then freeze them forever.
+
+Conversion rate by how old the data is when we look at it:
+
+| data age | days | clicks | orders | CVR |
+|---|---|---|---|---|
+| **0–2 days** | 2 | 479 | **1** | **0.21%** |
+| 3–7 days | 5 | 1,065 | 14 | 1.31% |
+| 8–14 days | 7 | 752 | 19 | **2.53%** |
+| 15–30 days | 13 | 2,077 | 35 | 1.69% |
+
+2026-08-11 carries **236 clicks and 0 orders**. That is not what happened; it is what Amazon could
+attribute within a day. **The freshest days are under-counted by roughly an order of magnitude, and
+because the date is never re-requested the number is never corrected.**
+
+This is a genuine data-loss defect and it is **not mine to fix** — it lives in
+`runSearchTermReportCycle` / `ads-report-create-st`, which §5 of this session's brief puts
+off-limits, and any repair costs Amazon report quota on a feed four pages depend on.
+
+**The smallest change that would fix it, for you to decide, not for me to apply:** have
+`ads-report-create-st` request a trailing window (`yesterday() − 7d … yesterday()`) instead of a
+single day, and let the existing upsert overwrite the stale rows. That is one call-site change to
+the `{ startDate, endDate }` it already accepts, and it multiplies the daily report volume by ~7 for
+this one report type. **I have not touched it.**
+
+*(Unrelated but visible in the same registry, and pointed at whoever owns SQP: `AmazonReportRun`
+holds **118 FATAL** Brand-Analytics SQP runs in the last 7 days and 15 reports requested >6 h ago
+that never completed. That is the 16-day-stale feed Keyword Tracker and Share of Voice read. Not
+this page's, recorded only so it is not lost.)*
+
+## What this changes for HV.2
+
+- **Do not add a latency skip.** Measured: skipping 0/1/2/3 days leaves candidates at
+  **17/17/17/17** (at 2+ orders) and **92/92/92/91** (at 1+). It changes nothing, because the
+  freshest days are exactly the ones under-attribution keeps out of the candidate set anyway. It
+  would cost real data and buy no measurable accuracy. **This contradicts the session brief's
+  expectation that "a latency skip is probably right".**
+- The window default stays **60 days**, and the reconciliation of the two engines' windows stays
+  HV.8's.
