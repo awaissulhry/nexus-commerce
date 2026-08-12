@@ -154,16 +154,34 @@ export function NegAttention({ scope, push }: NegSlotProps) {
             <div className="h10-nga-list">
               <h4>Blocking conflicts <span className="ct">{num(data.conflicts.total)}</span></h4>
               {data.conflicts.total === 0 ? (
-                <p className="h10-nga-zero">
-                  <Check size={13} />
+                <p className={`h10-nga-zero${d.blockingNegations === 0 ? ' none' : ''}`}>
+                  {d.blockingNegations === 0 ? <Info size={13} /> : <Check size={13} />}
                   <span>
-                    {/* A detector that finds nothing states its own denominator. */}
-                    <b>0 of {num(d.blockingNegations)} blocking negatives are in conflict</b> in the
-                    last {data.window.days} days.{' '}
-                    {data.conflicts.overlapsRelaxedUnscoped > 0
-                      ? <>The check ran: {num(data.conflicts.overlapsRelaxedUnscoped)} ad group{data.conflicts.overlapsRelaxedUnscoped === 1 ? '' : 's'} did overlap a negation of the same term, and {data.conflicts.overlapsRelaxedUnscoped === 1 ? 'it was' : 'each was'} excluded for a stated reason.</>
-                      : <>🔴 No overlap was found at any strictness, which usually means the join found nothing rather than that there is nothing to find.</>}
-                    {data.conflicts.totalUnscoped > data.conflicts.total && <> <b>{num(data.conflicts.totalUnscoped)} elsewhere</b> outside this scope.</>}
+                    {/* 🔴 Four empty states, and "0 of 0" is one of them. A denominator of zero
+                        means there was NOTHING TO CHECK — a different fact from "we checked and
+                        found nothing", and framing it as a clean result would be a lie by
+                        arithmetic. Found on production under a campaign scope whose negations are
+                        all local-only, so none of them blocks. */}
+                    {d.blockingNegations === 0 ? (
+                      <>
+                        <b>Nothing to check here.</b> This scope holds no blocking negation at all
+                        {d.negations > 0 && <> — its {num(d.negations)} negation{d.negations === 1 ? '' : 's'} {d.negations === 1 ? 'is' : 'are'} archived, unconfirmed at Amazon, or in a campaign that is not enabled</>}
+                        , so there is nothing a conflict could be found against.
+                        {d.blockingNegationsUnscoped > 0 && <> The account has {num(d.blockingNegationsUnscoped)} blocking negations elsewhere.</>}
+                      </>
+                    ) : (
+                      <>
+                        {/* A detector that finds nothing states its own denominator. */}
+                        <b>0 of {num(d.blockingNegations)} blocking negatives are in conflict</b> in the
+                        last {data.window.days} days.{' '}
+                        {data.conflicts.overlapsRelaxed > 0
+                          ? <>The check ran: {num(data.conflicts.overlapsRelaxed)} ad group{data.conflicts.overlapsRelaxed === 1 ? '' : 's'} in this scope did overlap a negation of the same term, and {data.conflicts.overlapsRelaxed === 1 ? 'it was' : 'each was'} excluded for a stated reason.</>
+                          : data.conflicts.overlapsRelaxedUnscoped > 0
+                            ? <>The check ran — {num(data.conflicts.overlapsRelaxedUnscoped)} overlap{data.conflicts.overlapsRelaxedUnscoped === 1 ? '' : 's'} exist account-wide, none of them in this scope.</>
+                            : <>🔴 No overlap was found at any strictness, which usually means the join found nothing rather than that there is nothing to find.</>}
+                        {data.conflicts.totalUnscoped > data.conflicts.total && <> <b>{num(data.conflicts.totalUnscoped)} elsewhere</b> outside this scope.</>}
+                      </>
+                    )}
                   </span>
                 </p>
               ) : (

@@ -3482,6 +3482,10 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-nga-zero { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 9px; font-size: 12px; line-height: 1.6; color: #14724d; }
 .h10-nga-zero svg { flex: none; margin-top: 3px; }
 .h10-nga-zero b { font-weight: 800; }
+/* "Nothing to check" is not "nothing wrong" — neutral, not green, so an absence of subjects
+   cannot be mistaken for a clean bill of health. */
+.h10-nga-zero.none { background: #f1f4f8; border-color: #e3e7ec; color: #55606d; }
+.h10-nga-zero.none b { color: #1c2530; }
 .h10-nga-note, .h10-nga-thresh { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11px; line-height: 1.55; color: #667080; }
 .h10-nga-note svg, .h10-nga-thresh svg { flex: none; margin-top: 2px; }
 .h10-nga-note b { font-weight: 800; color: #1c2530; }
