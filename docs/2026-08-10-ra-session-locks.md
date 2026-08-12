@@ -91,6 +91,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/ads-mutation.service.ts` | NEG.3b (optional `actionType` override on `updateAdTargetWithSync`, defaulted to current behaviour) | 2026-08-12 | **claimed** |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
+| `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **claimed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT /advertising/harvest-policy`, additive; paths disjoint from `keyword-harvest`, the watchlist CRUD, `bid-grid`, `share-of-voice-page`, `placement-grid`) | 2026-08-12 | **claimed** |
+| `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
 | `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
@@ -159,9 +162,9 @@ at all.
 | `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files: `rank-runtime` has **zero** hits, so it collides with nothing, including PLC.1's `/advertising/placements/cursor` and the 20 `/advertising/rank-*` paths already in the 600 KB file |
 | `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **claimed** — the page must derive Mode from the engine's own spec mapping rather than a second copy that is free to drift; nothing else in the engine is touched |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **claimed** |
-| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.1 (two sort keys on the EXISTING `share-of-voice-page` route; no new route) | 2026-08-12 | **claimed** — hunk-staged, not file-staged |
-| `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
-| `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lack) | 2026-08-12 | **claimed** — HV.1/BID.S0/BSP.0/PLC.0 all released; file verified clean before claiming |
+| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.1 (two sort keys on the EXISTING `share-of-voice-page` route) | 2026-08-12 | **released** — landed `2f620b8ef`, hunk-staged past a PLC.1 session's four uncommitted hunks |
+| `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — landed `858a21ae6`, 51 lines, staged as a rebuilt BLOB not a hunk; see §5's new trap |
+| `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lacked) | 2026-08-12 | **released** — landed `f4bc68eb7`. **All ten routed tabs are now covered**; `?tab=automations` and `?tab=dayparting` are fixed too — see §4 |
 
 **Two findings from KT.1 that bind every page in this section:**
 
@@ -273,6 +276,30 @@ isolation with `git worktree add --detach <tmp> HEAD` plus `tsc` there.
 `next.config.js`). SOV.0 did not take it: `next.config.js` is claimed by HV.1 *and* BID.S0 with
 uncommitted hunks, and it is not among SOV.0's briefed files.
 
+🔴 **An EOF-append can be staged as a hunk that swallows the block above it. SOV.1, 2026-08-12.**
+`rules-automation.css` now has five sessions' blocks stacked at EOF, and they abut. Staging mine with
+`git apply --cached` of the filtered hunk produced **124 insertions and 95 deletions** — the hunk's
+context had merged my 50 lines with an AR session's and a PLC session's uncommitted appends. The
+filter that works for a route file (drop the hunks that are not yours) does not work here, because
+there is only ONE hunk and it is shared.
+
+What worked: rebuild the file content instead of diffing it — `git show HEAD:<file>` piped to a
+buffer, append only your block, `git hash-object -w`, `git update-index --cacheinfo`. Then verify
+with `git diff --cached HEAD -- <file> | grep '^+' | grep -oE 'h10-[a-z]+-' | sort -u` that exactly
+one prefix appears.
+
+🔴 **And the trap inside that fix: `git show HEAD:` goes stale.** I built the blob, another session
+committed to the same file, and my commit then carried **51 deletions of their committed CSS**. It
+was caught by reading `git show --stat HEAD` immediately after committing and amended before the
+push, but it would have reverted a shipped page's styles. **Rebuild the blob from the CURRENT parent
+and check the commit's own stat before pushing — an insertions-only append must show 0 deletions.**
+
+🔴 **The shared INDEX is clobbered by concurrent sessions, mid-commit.** Three times this session a
+`git add` / `git update-index` was verified with `git diff --cached`, and the entry was gone by the
+time `git commit` ran a second later — the commit silently carried fewer files than staged. **Check
+`git show --stat HEAD` after every commit**, and prefer staging and committing in a single shell
+invocation rather than as two steps.
+
 **NEG.1 finding that binds every routed tab, `next.config.js`.** NEG.1 added a
 `has: [{ type: 'query', key: 'tab', … }]` redirect for `?tab=negative-targeting`, because
 `RulesAutomationClient.tsx:91-94` resolves a **routed** `?tab=` to `'rules'` — so the moment a tab
@@ -377,6 +404,28 @@ Two things to know if you take it:
   emit → URL is an infinite loop, and it is not obvious from reading either half on its own.
 
 Verified on prod: back and forward restore the view, the filter chips and the sorted column.
+
+**SOV.1 closed the `?tab=` redirect gap for ALL TEN routed tabs, 2026-08-12.** Measured on prod
+first, by reading each status: `bid` · `keyword-harvest` · `negative-targeting` · `budget-schedules`
+· `placement` returned 308; **`automations` · `dayparting` · `share-of-voice` · `keyword-tracker`
+returned 200 and rendered Apply Rules.** All four added. Two were SOV.1's own; `automations` and
+`dayparting` were taken because the hand-off above offers `?tab=dayparting` to whoever holds the
+config, every claim on the file was released, and leaving a known wrong-page bug inside the array
+being edited is worse than the scope it widens. `/marketing/advertising/share-of-voice` also now
+points at the route rather than chaining through `?tab=`.
+
+**The derived rule is still the right answer and still blocked on the same thing** — the routed-key
+list must be lifted out of `'use client'` `_shared/tabs.tsx` into a plain `.mjs`. What changed: the
+literal list is now **complete** rather than three-quarters complete, so the twelfth pass can do the
+lift against a correct list, and any session flipping a new tab adds exactly one entry.
+
+**SOV.1 → whoever next holds `AdsDataGrid`.** `?page=` is the last URL param on Share of Voice that
+does not round-trip, for exactly the reason `?sort=` did not before BID.S0: the grid keeps `page` in
+local state and exposes no callback. The fix is BID.S0's shape exactly — an additive
+`onPageChange?: (page: number) => void` fired from the three `setPage` sites, plus an inbound
+re-sync keyed on a `page` **number primitive**, the whole thing gated on the callback so existing
+consumers are provably untouched. One file, nine pages. Not taken here: it is not a Share-of-Voice
+type and SOV.1 does not hold that file.
 
 **BID.S0 finding, shared layer.** `automations/ScopeForm.tsx` is the rule-scope **binding editor**
 (it ends in a write), not a page filter bar, so it cannot be reused as one. The page scope bar has
