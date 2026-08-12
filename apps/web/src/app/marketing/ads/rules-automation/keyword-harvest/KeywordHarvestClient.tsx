@@ -47,6 +47,7 @@ import { HarvestScopeBar, type HvScope, type ScopeOptionsPayload } from './Harve
 import {
   NO_WRITE_ACTIONS,
   type HarvestRow, type HvCensus, type HvFreshness, type HvGrain, type HvSlotProps, type HvStatus,
+  type HvCriteriaState, type HvAttrition,
 } from './slot-contract'
 // The seven sections that follow. Each renders null until its session lands; each takes the same
 // typed props, so a later section is one file and one import line. Nobody restructures this client.
@@ -79,6 +80,8 @@ interface Payload {
   }
   window: { days: number; since: string; until: string }
   thresholds: { minOrders: number; minSpendEur: number }
+  criteria: HvCriteriaState
+  attrition: HvAttrition
   freshness: HvFreshness
   census: HvCensus
   facets: {
@@ -137,7 +140,12 @@ export function KeywordHarvestClient() {
   // Read here so a link can carry them; the CONTROLS that move them are HV.2. `?minOrders=` is the
   // one that matters — the whole finding of the study is that the threshold decides whether this
   // tab has any content.
+  // HV.2 — the FILTER half. Absent means "use the policy in force for this scope", which the
+  // server resolves; it never means a hard-coded default in this client.
   const minOrders = params.get('minOrders')
+  const minClicks = params.get('minClicks')
+  const maxAcos = params.get('maxAcos')
+  const matched = params.get('matched')
   const minSpend = params.get('minSpend')
   const windowParam = params.get('window')
 
@@ -177,7 +185,8 @@ export function KeywordHarvestClient() {
     const p = new URLSearchParams({ market })
     for (const [k, v] of Object.entries({
       line: scope.line, portfolio: scope.portfolio, campaign: scope.campaign, adGroup: scope.adGroup,
-      q, minOrders: minOrders ?? '', minSpend: minSpend ?? '', window: windowParam ?? '',
+      q, minOrders: minOrders ?? '', minClicks: minClicks ?? '', maxAcos: maxAcos ?? '',
+      matched: matched ?? '', minSpend: minSpend ?? '', window: windowParam ?? '',
     })) {
       if (v) p.set(k, v)
     }
@@ -193,7 +202,7 @@ export function KeywordHarvestClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [canFetch, market, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, status, kind, minOrders, minSpend, windowParam, reloadTick])
+  }, [canFetch, market, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, status, kind, minOrders, minClicks, maxAcos, matched, minSpend, windowParam, reloadTick])
 
   const rows = data?.rows ?? []
   const census = data?.census ?? null
@@ -203,11 +212,9 @@ export function KeywordHarvestClient() {
     scope: { market, ...scope, boundBy: s?.boundBy ?? null },
     census,
     rows,
-    thresholds: {
-      minOrders: data?.thresholds.minOrders ?? 2,
-      minSpendEur: data?.thresholds.minSpendEur ?? 15,
-      windowDays: data?.window.days ?? 60,
-    },
+    criteria: data?.criteria ?? null,
+    attrition: data?.attrition ?? null,
+    minSpendEur: data?.thresholds.minSpendEur ?? 15,
     freshness: data?.freshness ?? null,
     loading,
     push,
@@ -220,12 +227,24 @@ export function KeywordHarvestClient() {
     // Write the resolved market in explicitly. Without this, a link shared while `?market=` was
     // absent renders whatever market the OPENER last worked in — a different page under one URL.
     next.set('market', market)
+    // 🔴 HV.2 — and the resolved CRITERIA, for the same reason and a sharper one: an absent
+    // `?minOrders=` means "whatever policy is in force", and the policy can be edited by someone
+    // else between sending the link and opening it. A shared link has to be a snapshot of what the
+    // sender was looking at, not a query that re-resolves.
+    if (data) {
+      const c = data.criteria.inForce
+      next.set('minOrders', String(c.minOrders))
+      next.set('minClicks', String(c.minClicks))
+      next.set('maxAcos', c.maxAcosPct == null ? 'none' : String(c.maxAcosPct))
+      next.set('window', String(c.windowDays))
+      next.set('matched', c.excludeExactMatched ? 'harvestable' : 'all')
+    }
     const url = `${window.location.origin}${window.location.pathname}?${next.toString()}`
     void navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
     }).catch(() => { /* clipboard denied — the URL bar still carries every filter */ })
-  }, [params, market])
+  }, [params, market, data])
 
   const onExport = useCallback(() => {
     // The retiring console offers CSV on this exact data and this tab did not.
@@ -376,7 +395,7 @@ export function KeywordHarvestClient() {
   const strip: Array<{ key: string; n: number; label: string; tip: string; on: boolean; apply: () => void; tone?: string }> = census ? [
     {
       key: 'all', n: census.candidates, label: census.candidates === 1 ? 'candidate' : 'candidates',
-      tip: `Search terms with at least ${data?.thresholds.minOrders} orders in the last ${data?.window.days} days, in this scope. Click to clear every filter.`,
+      tip: `Search terms meeting every criterion above, in this scope. Click to clear the status and kind filters.`,
       on: status === 'all' && kind === 'all',
       apply: () => push({ status: 'all', kind: 'all' }),
     },
@@ -439,8 +458,11 @@ export function KeywordHarvestClient() {
         <div className="h10-hv-lede">
           <p>
             <b>
-              {num(census.candidates)} candidate{census.candidates === 1 ? '' : 's'} meet the threshold
-              ({data.thresholds.minOrders}+ order{data.thresholds.minOrders === 1 ? '' : 's'}, {data.window.days} days)
+              {num(census.candidates)} candidate{census.candidates === 1 ? '' : 's'} meet the criteria
+              ({data.criteria.inForce.minOrders}+ order{data.criteria.inForce.minOrders === 1 ? '' : 's'}
+              {data.criteria.inForce.minClicks > 0 && <>, {data.criteria.inForce.minClicks}+ clicks</>}
+              {data.criteria.inForce.maxAcosPct != null && <>, ACoS ≤ {data.criteria.inForce.maxAcosPct}%</>}
+              , {data.criteria.inForce.windowDays} days)
             </b>
             {census.byKind.product > 0 && <> — {num(census.byKind.keyword)} search term{census.byKind.keyword === 1 ? '' : 's'} and {num(census.byKind.product)} product target{census.byKind.product === 1 ? '' : 's'}</>}.{' '}
             {census.newByKind.keyword === 0 && census.byKind.keyword > 0 ? (
@@ -455,13 +477,26 @@ export function KeywordHarvestClient() {
 
           {/* 🔴 The tautology, stated rather than buried. Without this the count above reads as a
               finding about the account when for some rows it is the definition of the input. */}
-          {census.exactMatchedOnly > 0 && (
+          {/* 🔴 This sentence has to know whether the criterion is on. With `excludeExactMatched`
+              active those rows are NOT in `candidates` at all, so quoting them as a fraction of it
+              would describe rows the grid is not showing. */}
+          {data.criteria.inForce.excludeExactMatched ? (
             <p className="sub">
               <Info size={12} />
               <span>
-                {num(census.exactMatchedOnly)} of {num(census.candidates)} got <b>every</b> order from an EXACT match — the harvest read
-                has no match-type filter, so those rows are offering to create the very keyword that produced the traffic.
-                The other {num(census.candidates - census.exactMatchedOnly)} matched via phrase, broad or auto targeting and are genuine discoveries.
+                Terms whose <b>every</b> order came from an EXACT match are excluded: the harvest read has no match-type
+                filter, so those rows offer to create the very keyword that produced the traffic. Everything below arrived
+                through phrase, broad or auto targeting — a looser match than the one it would create.{' '}
+                <button type="button" className="lnk" onClick={() => push({ matched: 'all' })}>Show them anyway</button>
+              </span>
+            </p>
+          ) : census.exactMatchedOnly > 0 && (
+            <p className="sub">
+              <Info size={12} />
+              <span>
+                {num(census.exactMatchedOnly)} of {num(census.candidates)} got <b>every</b> order from an EXACT match — those rows
+                are offering to create the very keyword that produced the traffic.{' '}
+                <button type="button" className="lnk" onClick={() => push({ matched: 'harvestable' })}>Exclude them</button>
               </span>
             </p>
           )}
@@ -642,11 +677,20 @@ function EmptyState({
   if (data.census.candidates === 0) {
     return (
       <span className="h10-hv-empty">
-        <b>No term reached {data.thresholds.minOrders} orders in {data.window.days} days.</b>
+        <b>Nothing in this scope meets all five criteria.</b>
         <span>
-          {num(data.scope.resolved.campaignsWithTerms)} campaigns have search-term data here — nothing in them cleared the threshold.
-          {data.thresholds.minOrders > 1 && (
-            <> Try <button type="button" className="lnk" onClick={() => push({ minOrders: String(data.thresholds.minOrders - 1) })}>{data.thresholds.minOrders - 1}+ order{data.thresholds.minOrders - 1 === 1 ? '' : 's'}</button>.</>
+          {num(data.scope.resolved.campaignsWithTerms)} campaigns have search-term data here, and{' '}
+          {num(data.attrition.base)} {data.attrition.base === 1 ? 'term' : 'terms'} converted at least once — every one was
+          removed by a criterion.{' '}
+          {/* 🔴 Name the criterion that did the most damage, and offer to relax THAT one. A generic
+              "try widening your filters" makes the operator guess which of five to touch. */}
+          {(() => {
+            const worst = [...data.attrition.steps].sort((a, b) => b.removed - a.removed)[0]
+            if (!worst || worst.removed === 0) return null
+            return <><b>“{worst.label}”</b> removed the most ({num(worst.removed)}).</>
+          })()}
+          {data.criteria.inForce.minOrders > 1 && (
+            <> Try <button type="button" className="lnk" onClick={() => push({ minOrders: String(data.criteria.inForce.minOrders - 1) })}>{data.criteria.inForce.minOrders - 1}+ order{data.criteria.inForce.minOrders - 1 === 1 ? '' : 's'}</button>.</>
           )}
         </span>
       </span>

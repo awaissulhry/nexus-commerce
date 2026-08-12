@@ -98,6 +98,54 @@ export interface HvFreshness {
   rows: number
 }
 
+/** HV.2 — the five criteria that decide what counts as a candidate. */
+export interface HarvestCriteria {
+  minOrders: number
+  minClicks: number
+  /** null = no ceiling. NOT 0 — a 0% ceiling would admit nothing. */
+  maxAcosPct: number | null
+  windowDays: number
+  excludeExactMatched: boolean
+}
+
+export type HvPolicyGrain = 'account' | 'market' | 'line' | 'portfolio' | 'campaign' | 'adGroup'
+
+/**
+ * The criteria in force, and where each half came from.
+ *
+ * 🔴 `inForce` is what the grid applied. `policy.criteria` is what would apply with no URL
+ * override at all. They differ exactly on `overridden`. Keeping the two apart in the contract is
+ * what stops a later section rendering a temporary filter as if it were a saved decision.
+ */
+export interface HvCriteriaState {
+  inForce: HarvestCriteria
+  policy: {
+    criteria: HarvestCriteria
+    source: HvPolicyGrain | 'default'
+    sourceScopeId: string | null
+    hasOwn: boolean
+    saveGrain: HvPolicyGrain
+    saveScopeId: string | null
+    updatedAt: string | null
+    updatedBy: string | null
+  }
+  overridden: string[]
+}
+
+/**
+ * What each criterion removed, in the order they were applied.
+ *
+ * `removedNew` is the count of removals whose status was `new` — the only status representing a
+ * keyword that does not exist yet, which is the point of the page. It exists because the shipped
+ * defaults remove the account's ONE genuinely-new candidate, and a criteria bar that took the
+ * page's only real finding off the screen without saying so would be worse than no bar.
+ */
+export interface HvAttrition {
+  base: number
+  baseLabel: string
+  steps: Array<{ key: string; label: string; removed: number; remaining: number; removedNew: number }>
+}
+
 export interface HvScopeState {
   market: string
   line: string
@@ -116,12 +164,15 @@ export interface HvSlotProps {
   census: HvCensus | null
   rows: HarvestRow[]
   /**
-   * Read from the URL in HV.1 and displayed; the CONTROLS that move them are HV.2. They are in
-   * the contract from day one because the entire finding of the study is that the threshold
-   * decides whether this tab has any content — so every section reasons about the same numbers,
-   * and a link can carry them before anything can change them.
+   * HV.2 — the criteria in force, the stored policy behind them, and which the URL is overriding.
+   * Every later section reasons about these same numbers: HV.3's destination and HV.4's write must
+   * act on exactly the candidate set the operator was looking at when they decided.
    */
-  thresholds: { minOrders: number; minSpendEur: number; windowDays: number }
+  criteria: HvCriteriaState | null
+  /** What each criterion removed. HV.2's own bar renders it; later sections may cite it. */
+  attrition: HvAttrition | null
+  /** The negation threshold, which this page never controls — Negative Targeting owns it (D4). */
+  minSpendEur: number
   freshness: HvFreshness | null
   loading: boolean
   /** patch the URL — the single writer of page state, so every view stays linkable */
