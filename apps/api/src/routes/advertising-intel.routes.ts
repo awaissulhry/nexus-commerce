@@ -1572,6 +1572,25 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  /**
+   * RD.P2 — the campaign-grain runtime the Rank & Dayparting page has never had.
+   *
+   * `/advertising/rank-schedule-groups` returns group AGGREGATES only, so the page could say what a
+   * schedule holds but never that one row of eleven campaigns contains four different fates. This
+   * returns both grains from ONE derivation: the group rows are a roll-up of the campaign rows, so
+   * an aggregate cannot drift from its own members and switching grain costs no round-trip.
+   *
+   * Path checked with `grep -a` against BOTH route files before adding it — a duplicate
+   * registration here is a boot crash, not a warning.
+   */
+  fastify.get('/advertising/rank-runtime', async (_request, reply) => {
+    // The engine moves these rows every 15 minutes, so a short cache is honest and a long one is
+    // not. Matches the group endpoint's own max-age.
+    reply.header('Cache-Control', 'private, max-age=5')
+    const { getRankRuntime } = await import('../services/advertising/rank-runtime.service.js')
+    return getRankRuntime()
+  })
 }
 
 export default advertisingIntelRoutes
