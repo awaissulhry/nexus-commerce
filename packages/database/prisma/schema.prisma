@@ -16095,3 +16095,49 @@ model AdsHarvestPolicy {
   @@unique([scopeGrain, scopeId, kind])
   @@index([kind, scopeGrain])
 }
+
+/// HV.3 — where a graduated keyword goes. One row per (scope × match type).
+///
+/// 🔴 Why it matters more than it looks: `applyHarvest` creates the keyword at
+/// `args.destinations?.[matchType] ?? sourceAdGroup`, and fires the H.3 isolation
+/// negative ONLY when the destination differs from the source. So an absent
+/// destination means the keyword is created back in the ad group that discovered
+/// it AND the source is never negated — one defect, not two. Only the SP Super
+/// Wizard has ever populated that map.
+///
+/// Resolution is the same as `AdsHarvestPolicy`: most specific wins whole,
+/// adGroup → campaign → portfolio → line → market → account, no merging.
+///
+/// A separate table rather than a `kind` row on `AdsHarvestPolicy` because that
+/// one is unique per scope and holds a criteria set, while this needs one row per
+/// (scope × matchType) and carries an ad-group reference. See the migration header.
+///
+/// Ships EMPTY. Measured 2026-08-12: the by-product resolver finds a destination
+/// for 287 of 287 sources but a UNIQUE one for only 38 — median 5 candidates, max
+/// 21 — so it can only ever offer a ranked shortlist. The operator picks; this
+/// remembers.
+model AdsHarvestDestination {
+  id String @id @default(cuid())
+
+  /// account | market | line | portfolio | campaign | adGroup
+  scopeGrain String
+  /// '*' for account; else marketplace code | Product.id | externalPortfolioId | Campaign.id | AdGroup.id
+  scopeId    String @default("*")
+  /// EXACT | PHRASE | BROAD | PRODUCT — the target type being CREATED, and the key
+  /// of applyHarvest's `destinations` map.
+  matchType  String
+
+  /// AdGroup.id — applyHarvest's map holds LOCAL ids, not external ones.
+  adGroupId String
+
+  /// Whether promoting from this scope also negates the term in its source ad group.
+  /// Defaults true: that is the published practice and the whole point of the funnel.
+  negateAtSource Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String
+
+  @@unique([scopeGrain, scopeId, matchType])
+  @@index([adGroupId])
+}
