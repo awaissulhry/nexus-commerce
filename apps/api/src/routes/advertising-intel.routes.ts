@@ -19,6 +19,10 @@ import {
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
 } from '../services/advertising/bid-grid.service.js'
 import {
+  getBudgetGrid, getBudgetCursorForRequest, BUD_MARKETS, BUD_MARKET_ALL, BUD_STATES,
+  type BudState, type BudStatusFilter, type BudView,
+} from '../services/advertising/budget-grid.service.js'
+import {
   getPlacementGrid, PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, LANE_BY_KEY,
   type PlcLaneKey, type PlcSortKey,
 } from '../services/advertising/placement-grid.service.js'
@@ -677,6 +681,102 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const out = await getBidCursorForRequest({
       market, line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
+    })
+    // No cache at all: a cached cursor is a cursor that cannot detect a change, which is its only job.
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
+  // ── BUD.1 — the Budget Rules page's one read ────────────────────────
+  //
+  // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1, HV.1, BID.S0 and SOV.0
+  // are: that file is ~600 KB, the default `grep` in this repo (ugrep) returns NOTHING on it so a
+  // duplicate is easy to miss, and a duplicate route registration is a BOOT CRASH, not a warning.
+  // `grep -a` for `budget-grid` across both route files returned nothing before this was added.
+  //
+  // One call carries the resolved scope, the census over the FULL scope, the facets, the rows and
+  // the poll cursor — so the page can state what it is showing without a second fetch, and no
+  // number it renders is ever computed from a page of rows.
+  //
+  // 🔴 Read-only, and it will stay read-only. BUD.1 shows the ratchet; it does not stop it. The
+  // guardrails that stop it are BUD.2 and they are POSTs of their own.
+  fastify.get('/advertising/budget-grid', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    // `all` is accepted and is the page default: a budget total and a floor count both sum honestly
+    // across markets, and every row carries its own market.
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === BUD_MARKET_ALL ? BUD_MARKET_ALL : raw.toUpperCase()
+    if (market !== BUD_MARKET_ALL && !BUD_MARKETS.includes(market as (typeof BUD_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${BUD_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    const windowDays = oneOf(q.window, ['7', '30', '60'] as const)
+
+    // portfolio ⇄ campaign exclusivity (campaign wins) is enforced inside the service's
+    // `resolveScope`, which the cursor endpoint below also calls — so the two cannot resolve
+    // different scopes from the same query string. Passed through raw here on purpose.
+    const out = await getBudgetGrid({
+      market,
+      product: q.product || null,
+      portfolio: q.portfolio || null,
+      campaign: q.campaign || null,
+      view: (oneOf(q.view, ['campaigns', 'rules'] as const) ?? 'campaigns') as BudView,
+      status: (oneOf(q.status, ['enabled', 'paused', 'archived', 'all'] as const) ?? 'enabled') as BudStatusFilter,
+      state: oneOf(q.state, BUD_STATES) as BudState | null,
+      q: q.q || null,
+      windowDays: windowDays ? Number(windowDays) : 7,
+      sort: q.sort || null,
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+      limit: Math.max(1, Math.min(5000, Number(q.limit ?? 5000))),
+    })
+    // Short private cache. The base is a scan of the campaign graph joined to the budget audit log
+    // and one grouped read of the daily performance table.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── BUD.1 — the poll cursor ─────────────────────────────────────────
+  //
+  // 🔴 It does NOT report `Campaign.updatedAt`, and that is the whole design. Measured 2026-08-12:
+  // that column moved in 7 distinct minutes in 24 hours (219 rows, one burst of 200 from the
+  // campaign-settings resync) against 6 AD_BUDGET_UPDATE writes in 48 hours — so a cursor built on
+  // it would raise the "changed" banner more often wrongly than rightly, which is how an operator
+  // learns to ignore it. There is no `budgetUpdatedAt` column, so the fingerprint is the VALUE:
+  // Σ Campaign.dailyBudget over the scope. See the service header.
+  //
+  // Takes `view` because the two views render different numbers: a rules-view cursor watching the
+  // budget sum would never move, and a campaigns-view cursor watching executions would move every
+  // 15 minutes over numbers that view does not show. Same `view` on both sides ⇒ identical key sets
+  // ⇒ `useCursorPoll`'s structural equality works with no change to the shared hook.
+  //
+  // Separate endpoint rather than a `?cursorOnly=1` on the read above, so it cannot accidentally
+  // acquire that handler's expensive parts later. Not SSE: that bus carries 0.21% of writes and is
+  // blind to `budget-manager-cron`, which made 1,164 of the 2,386 budget changes.
+  fastify.get('/advertising/budget-grid/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === BUD_MARKET_ALL ? BUD_MARKET_ALL : raw.toUpperCase()
+    if (market !== BUD_MARKET_ALL && !BUD_MARKETS.includes(market as (typeof BUD_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${BUD_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    // 🔴 `status` is forwarded, and it must be. The grid defaults to ENABLED (86 campaigns,
+    // €318.57/day); without this the cursor summed all 220 (€8,768.57) and would have gone stale on
+    // a PAUSED campaign moving. A cursor describing a different row set from the page is a banner
+    // that fires for changes you cannot see.
+    const out = await getBudgetCursorForRequest({
+      market,
+      product: q.product || null,
+      // portfolio ⇄ campaign exclusivity is enforced in the service, in the one function the grid
+      // and the cursor share, so the two cannot resolve different scopes from the same query string.
+      portfolio: q.portfolio || null,
+      campaign: q.campaign || null,
+      view: (q.view === 'rules' ? 'rules' : 'campaigns') as BudView,
+      status: (oneOf(q.status, ['enabled', 'paused', 'archived', 'all'] as const) ?? 'enabled') as BudStatusFilter,
     })
     // No cache at all: a cached cursor is a cursor that cannot detect a change, which is its only job.
     reply.header('Cache-Control', 'no-store')
