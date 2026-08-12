@@ -63,6 +63,26 @@ const nextConfig = {
         destination: '/marketing/ads/rules-automation/bid',
         permanent: true,
       },
+      // BUD.1 — the same, for Budget Rules. Verified on prod immediately before flipping the tab:
+      // `?tab=budget` returned 200 (correct then — it was not routed), while `?tab=bid`,
+      // `?tab=negative-targeting` and `?tab=keyword-harvest` returned an opaque redirect. Without
+      // this entry, flipping `routed: true` turns every existing `?tab=budget` link into a silent
+      // render of Apply Rules.
+      //
+      // ⚠ This is the FOURTH copy of one rule, and RD.P0 has already measured that the pattern does
+      // not scale: `?tab=automations`, `?tab=dayparting` and `?tab=keyword-tracker` are all still
+      // returning 200 and rendering the wrong page on prod right now, because each session has to
+      // remember this separately and three did not. The generic form derived from
+      // `RULES_TABS.filter(t => t.routed)` supersedes all of them and needs the routed-key list
+      // lifted into a plain `.mjs` both this CommonJS config and the `'use client'` tabs module can
+      // read. Left as a hand-off in locks §4 rather than taken here: a session is scoped to one
+      // page, and fixing three other pages' links is not this page's change to make.
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'budget' }],
+        destination: '/marketing/ads/rules-automation/budget',
+        permanent: true,
+      },
       // BSP.0 — same mechanism, same shape, for Budget Pacing & Schedules. One literal entry rather
       // than the derived rule §4 of the locks doc proposes: deriving it needs the routed-key list
       // lifted out of `_shared/tabs.tsx` into a `.mjs` this CommonJS config can require, and four

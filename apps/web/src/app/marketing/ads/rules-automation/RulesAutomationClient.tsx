@@ -340,21 +340,6 @@ export function RulesAutomationClient() {
           filtersDefaultOpen={false}
           emptyLabel="No campaigns found."
         />
-      ) : tab === 'budget' ? (
-        <RuleListTab
-          noun="Budget Rule"
-          seed={[]}
-          liveType="budget"
-          editHref={(id) => `/marketing/ads/rules-automation/builder/budget?ruleId=${id}`}
-          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/budget' }}
-          emptyNode={(
-            <span className="h10-rr-empty">
-              <NoDataIllus size={104} />
-              <b>Create a Budget Rule to generate suggestions for a campaign!</b>
-              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> Create Rule</a>
-            </span>
-          )}
-        />
       ) : tab === 'bid' ? (
         <RuleListTab
           noun="Bid Rule"

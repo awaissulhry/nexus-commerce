@@ -2444,3 +2444,168 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    whole when SOV.5's drawer makes the query a real link. */
 .h10-am-grid td.nm .h10-sov-q .t { cursor: default; }
 .h10-am-grid td.nm .h10-sov-q .t:hover { text-decoration: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   BUD.1 — Budget Rules (h10-bud-*)
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+
+   Appended at EOF, `h10-bud-*` only, disjoint from every other family in this file (`grep -c
+   h10-bud` returned 0 before this block). Source order beats specificity in this stylesheet, so an
+   override belongs at the END of what it overrides — which is what the first-column rule at the
+   bottom of this block is doing.
+
+   No dark block. The app shell pins `color-scheme: light` under this subtree, so a
+   prefers-color-scheme rule would paint dark cards inside a permanently light page. Hard-coded hex
+   only, reused verbatim from the BID.S0 and NEG.1 blocks above, which shipped with zero contrast
+   failures — the ratios here are inherited rather than re-guessed.
+
+   The page gutter inside `.h10-rules-page` is ZERO, not 24px: `h10-main`'s 30px padding IS the
+   gutter. Re-measured for this page on prod at 1280, where `.h10-hdr`, `.h10-rules-tabs`,
+   `.h10-bd-scope` and `.h10-am-card` all sit at x=96 w=1154. Every block below is `margin: Npx 0`.
+
+   Height budget: the scope bar and the census together must add ≤120px to the 138px header+tabs
+   baseline. The two are sized here to 52 + 64 = 116px at rest; the note rows below them are
+   conditional and are not part of the resting height. */
+
+/* ── scope bar ─────────────────────────────────────────────────────────────────────────────── */
+.h10-bud-scope { margin: 14px 0 0; padding: 8px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-bud-scoperow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.h10-bud-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+.h10-bud-field { display: flex; flex-direction: column; gap: 3px; }
+.h10-bud-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
+.h10-bud-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-bud-clear:hover { background: #e8f1fd; color: #1c2530; }
+
+/* ── the sentences ─────────────────────────────────────────────────────────────────────────── */
+.h10-bud-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-bud-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-bud-note b { font-weight: 800; color: #1c2530; }
+.h10-bud-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 4px; border-radius: 4px; background: #fdeed5; color: #7a4512; }
+.h10-bud-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-bud-note.bad svg { color: #8a5316; }
+.h10-bud-note.bad b { color: #7a4512; }
+.h10-bud-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: #55606d; }
+.h10-bud-said b { font-weight: 800; color: #1c2530; }
+
+/* ── census — SIX cells, and every one of them clicks ──────────────────────────────────────────
+   The brief's rule: a number that cannot be clicked into the rows behind it is not shipped. The
+   money cell sorts the grid by the column it sums, which is the only honest reproduction available
+   for a total — there is no filter that returns "the rows adding up to €X". */
+.h10-bud-census { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 12px 0 0; }
+.h10-bud-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 10px 11px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; text-align: left; cursor: pointer; }
+.h10-bud-cell:hover { border-color: #1f6fde; }
+.h10-bud-cell b { font-size: 19px; font-weight: 800; line-height: 1.15; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bud-cell span { font-size: 11px; font-weight: 600; line-height: 1.3; color: #55606d; }
+.h10-bud-cell.on { border-color: #1f6fde; background: #e8f1fd; }
+.h10-bud-cell.on b, .h10-bud-cell.on span { color: #10457f; }
+/* The two cells that carry the finding. #8a5316 on #fff is 5.6:1; on #fff6e8 it is 5.2:1. */
+.h10-bud-cell.bad b { color: #8a5316; }
+.h10-bud-cell.muted b { color: #667080; }
+
+/* ── campaign row cells ────────────────────────────────────────────────────────────────────── */
+.h10-bud-camp { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.h10-bud-camp .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-bud-camp .fl, .h10-bud-rule .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
+.h10-bud-camp .fl.off, .h10-bud-rule .fl.off { background: #f1f4f8; color: #55606d; }
+.h10-bud-rule { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.h10-bud-rule .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A rule that changes budgets on its own and only ever lowers them. The one flag on this page that
+   is meant to stop the eye. */
+.h10-bud-rule .fl.cut { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-bud-mkt { font-size: 11.5px; font-weight: 700; color: #55606d; }
+
+/* The budget itself, and the floor flag that explains why a trim does nothing to it. */
+.h10-bud-amt { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bud-amt.floor { color: #8a5316; }
+.h10-bud-amt i { flex: none; font-style: normal; padding: 1px 5px; border-radius: 5px; background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+
+.h10-bud-util { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; }
+.h10-bud-util.hi { color: #8a5316; }
+/* "7-day avg" rides the number itself, because the averaging window IS the caveat and a tooltip
+   nobody opens is not where a caveat belongs. */
+.h10-bud-util i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
+
+.h10-bud-moved { display: inline-flex; flex-direction: column; gap: 1px; min-width: 0; }
+.h10-bud-moved b { font-size: 11.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bud-moved i { font-style: normal; font-size: 10px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-bud-moved em { font-style: normal; font-size: 9.5px; font-weight: 800; color: #8a5316; text-transform: uppercase; letter-spacing: .02em; }
+
+.h10-bud-delta { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 800; color: #1c2530; }
+.h10-bud-delta.down { color: #8a5316; }
+.h10-bud-delta.up { color: #14724d; }
+.h10-bud-delta i { font-style: normal; font-size: 9.5px; font-weight: 600; opacity: .85; }
+
+.h10-bud-w, .h10-bud-still, .h10-bud-ref, .h10-bud-wrote { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; }
+.h10-bud-w i, .h10-bud-still i, .h10-bud-ref i, .h10-bud-wrote i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
+.h10-bud-wrote.hot { color: #8a5316; font-weight: 800; }
+
+/* The gate. "cut only locally" is the whole correction on this page, so it is a word, not a tick. */
+.h10-bud-gate { font-size: 11px; font-weight: 800; }
+.h10-bud-gate.on { color: #14724d; }
+.h10-bud-gate.off { color: #8a5316; }
+
+.h10-bud-rules { background: none; border: 0; padding: 0; font: inherit; font-weight: 800; color: #1f6fde; text-decoration: underline; cursor: pointer; font-variant-numeric: tabular-nums; }
+
+/* ── rule row cells ────────────────────────────────────────────────────────────────────────── */
+.h10-bud-lvl { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.h10-bud-lvl.off { background: #f1f4f8; color: #55606d; }
+.h10-bud-lvl.observe { background: #f1f4f8; color: #55606d; }
+.h10-bud-lvl.propose { background: #e8f1fd; color: #10457f; }
+/* AUTO is the only level that reaches a budget without being asked. */
+.h10-bud-lvl.auto { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-bud-pctc { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.h10-bud-pctc.cut { color: #8a5316; }
+.h10-bud-pctc.raise { color: #14724d; }
+.h10-bud-pctc i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
+.h10-bud-trig { font-size: 11px; color: #55606d; }
+.h10-bud-cond { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #55606d; }
+.h10-bud-scopec { font-size: 11px; font-weight: 700; color: #55606d; }
+/* Every one of the six rules is account-wide, and that is the defect the column exists to show. */
+.h10-bud-scopec.wide { color: #8a5316; }
+.h10-bud-when { font-size: 11px; color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-bud-ns { font-size: 10.5px; font-style: italic; color: #667080; }
+.h10-bud-nd { color: #667080; }
+
+/* ── grid chrome ───────────────────────────────────────────────────────────────────────────── */
+.h10-bud-win { display: inline-flex; align-items: center; gap: 8px; }
+.h10-bud-select { font: inherit; font-size: 11.5px; font-weight: 600; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 8px; }
+.h10-bud-search input { font: inherit; font-size: 11.5px; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 9px; width: 230px; }
+.h10-bud-search input:focus { outline: 2px solid #1f6fde; outline-offset: -1px; border-color: #1f6fde; }
+/* The grain segment. Its own class rather than `.h10-svt-seg`, which carries a `margin: … 24px`
+   that would inset it past every other block on this page — see the gutter note at the top. */
+.h10-bud-seg { display: inline-flex; padding: 2px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 8px; }
+.h10-bud-seg .seg { padding: 4px 12px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-bud-seg .seg.on { background: #fff; color: #1c2530; box-shadow: 0 1px 2px rgba(28, 37, 48, .12); }
+.h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bud-stale:hover { background: #fdeed5; }
+.h10-bud-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
+.h10-bud-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-bud-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-bud-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #1f6fde; text-decoration: underline; cursor: pointer; }
+
+/* ── the provisional rule list's heading ───────────────────────────────────────────────────── */
+.h10-bud-prov { margin: 26px 0 0; }
+.h10-bud-prov h2 { display: flex; flex-direction: column; gap: 3px; margin: 0 0 4px; font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-bud-prov h2 i { font-style: normal; font-size: 11.5px; font-weight: 600; line-height: 1.55; color: #667080; }
+
+/* ── 🔴 the RULES view's first column, LAST so it wins ──────────────────────────────────────────
+   `ads.css:695` paints `.h10-am-grid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
+   underlines on hover, because every other consumer makes that column a link. In the CAMPAIGNS
+   view it really is an `<a>` and keeps the blue it has earned. In the RULES view it is not a link
+   yet — BUD.3 makes it open the rule record — so all three halves of the promise are undone here
+   at (0,3,2), scoped to `.h10-bud-rule span.t` so the campaign view is untouched. A blue name that
+   does nothing when clicked is a promise the page cannot keep. */
+.h10-am-grid td.nm .h10-bud-rule span.t { color: #1c2530; font-weight: 700; cursor: default; }
+.h10-am-grid td.nm .h10-bud-rule span.t:hover { text-decoration: none; }
+
+/* Six cells need more room than five. Below 1400 they go to three-up rather than shrinking the
+   number, because the number is the point. */
+@media (max-width: 1400px) {
+  .h10-bud-census { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+  .h10-bud-scoperow { gap: 10px; }
+  .h10-bud-field { flex: 1 1 190px; }
+  .h10-bud-census { grid-template-columns: repeat(2, 1fr); }
+  .h10-bud-search input { width: 100%; }
+}

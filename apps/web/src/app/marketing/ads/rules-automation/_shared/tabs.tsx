@@ -69,7 +69,18 @@ export const RULES_TABS: RulesTab[] = [
     routed: true,
     subtitle: 'What you are blocking, where, and who decided',
   },
-  { key: 'budget', label: 'Budget' },
+  // BUD.1 — its own page, and relabelled. The tab used to render a rule list whose column edits
+  // changed React state only and whose Delete removed a row while the rule survived — showing
+  // neither the 2,386 budget changes in 60 days nor the two AUTO rules cutting −15%/−20% of the
+  // CURRENT value every 15 minutes with no cooldown and no floor but Amazon's €1. "Budget Rules"
+  // rather than "Budget", because tab 4 is now "Budget Pacing & Schedules" and the two answer
+  // different questions: that one decides how much money exists, this one decides what may spend it.
+  {
+    key: 'budget',
+    label: 'Budget Rules',
+    routed: true,
+    subtitle: 'What may change a budget, by how much, and what it actually did',
+  },
   { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, subtitle: 'Hold a rank, on a schedule, across many campaigns' },
   // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
   // `BudgetSchedule` table has never held a row and its executor has ticked 4,909 times over
