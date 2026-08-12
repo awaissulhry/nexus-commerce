@@ -2537,7 +2537,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-delta { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 800; color: #1c2530; }
 .h10-bud-delta.down { color: #8a5316; }
 .h10-bud-delta.up { color: #14724d; }
-.h10-bud-delta i { font-style: normal; font-size: 9.5px; font-weight: 600; opacity: .85; }
+/* 🔴 No `opacity` here. It was `.85`, which composites #14724d on white to 4.34:1 against the 4.5
+   this 9.5px text needs — measured on the deployed page, not guessed, because getComputedStyle
+   reports the DECLARED colour and would have said 5.1:1 and passed. The size and weight already
+   separate this from the number above it; the opacity was buying nothing and costing AA. */
+.h10-bud-delta i { font-style: normal; font-size: 9.5px; font-weight: 600; }
 
 .h10-bud-w, .h10-bud-still, .h10-bud-ref, .h10-bud-wrote { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; }
 .h10-bud-w i, .h10-bud-still i, .h10-bud-ref i, .h10-bud-wrote i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
