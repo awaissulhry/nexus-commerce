@@ -156,24 +156,24 @@ export function BudgetScopeBar({
         <span className="cap">Portfolio</span>
         {/* Choosing a portfolio clears the campaign: they are mutually exclusive under AND, and
             leaving a stale campaign selected would silently win over the portfolio just chosen. */}
-        <H10Select options={pfOpts} value={scope.portfolio} onChange={(v) => set({ portfolio: v, campaign: '' })} ariaLabel="Portfolio" width={200} />
+        <H10Select options={pfOpts} value={scope.portfolio} onChange={(v) => set({ portfolio: v, campaign: '' })} ariaLabel="Portfolio" width={168} />
       </span>
 
       <span className="h10-bsp-field">
         <span className="cap">Campaign</span>
-        <H10Select options={campOpts} value={scope.campaign} onChange={(v) => set({ campaign: v, portfolio: v ? '' : scope.portfolio })} ariaLabel="Campaign" width={240} searchable />
+        <H10Select options={campOpts} value={scope.campaign} onChange={(v) => set({ campaign: v, portfolio: v ? '' : scope.portfolio })} ariaLabel="Campaign" width={200} searchable />
       </span>
 
       <span className="h10-bsp-field">
         <span className="cap">Product line</span>
-        <H10Select options={lineOpts} value={scope.line} onChange={(v) => set({ line: v, campaign: '' })} ariaLabel="Product line" width={200} />
+        <H10Select options={lineOpts} value={scope.line} onChange={(v) => set({ line: v, campaign: '' })} ariaLabel="Product line" width={168} />
       </span>
 
       <span className="h10-bsp-field">
         <span className="cap">Window</span>
         {/* Weeks, because `/advertising/dayparting/heatmap` counts whole weeks so every weekday
             carries equal samples. A rolling day count would reintroduce the bias it avoids. */}
-        <H10Select options={WEEK_OPTIONS} value={String(weeks)} onChange={(v) => onWeeks(Number(v))} ariaLabel="Time window" width={110} />
+        <H10Select options={WEEK_OPTIONS} value={String(weeks)} onChange={(v) => onWeeks(Number(v))} ariaLabel="Time window" width={96} />
       </span>
 
       {narrowed && (

@@ -2061,7 +2061,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* ── the scope spine ─────────────────────────────────────────────────────────────────────────── */
 /* Captions sit INLINE before each select rather than above it: stacked caps cost 14px per field
    and the whole chrome budget for the two pinned bars is 120px. */
-.h10-bsp-spine { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 12px; }
+.h10-bsp-spine { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 5px 12px; }
 .h10-bsp-lbl { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
 .h10-bsp-field { display: inline-flex; align-items: center; gap: 6px; }
 .h10-bsp-field .cap { font-size: 11px; font-weight: 700; color: #667080; white-space: nowrap; }
@@ -2072,7 +2072,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-reach .dim { color: #667080; }
 
 /* ── the pinned pacing band ─────────────────────────────────────────────────────────────────── */
-.h10-bsp-band { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 5px 12px; border-top: 1px solid #eef1f5; }
+.h10-bsp-band { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid #eef1f5; }
 .h10-bsp-band.broke { background: #fdecea; border-top-color: #f5c6c2; border-radius: 0 0 9px 9px; }
 .h10-bsp-bandmsg { padding: 8px 0; font-size: 12px; line-height: 1.5; color: #55606d; }
 .h10-bsp-bandmsg b { font-weight: 800; color: #1c2530; }
@@ -2086,15 +2086,15 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    DECLARED colour and an opacity-dimmed chip cannot be contrast-checked without compositing. */
 .h10-bsp-chip {
   display: flex; flex-direction: column; gap: 2px; min-width: 124px;
-  padding: 4px 9px 5px; background: #fff; border: 1px solid #e3e7ec; border-radius: 8px;
+  padding: 3px 9px 4px; background: #fff; border: 1px solid #e3e7ec; border-radius: 8px;
   font: inherit; text-align: left; cursor: pointer;
 }
 .h10-bsp-chip:hover { border-color: #c2c9d3; background: #fbfcfe; }
 .h10-bsp-chip.on { border-color: #1f6fde; background: #f5f9ff; box-shadow: inset 0 0 0 1px #1f6fde; }
-.h10-bsp-chip .hd { display: flex; align-items: baseline; gap: 6px; line-height: 14px; }
+.h10-bsp-chip .hd { display: flex; align-items: baseline; gap: 6px; line-height: 13px; }
 .h10-bsp-chip .hd b { font-size: 12px; font-weight: 800; color: #1c2530; letter-spacing: .02em; }
 .h10-bsp-chip .hd i { font-style: normal; font-size: 10.5px; font-weight: 700; }
-.h10-bsp-chip .amt { font-size: 11.5px; font-weight: 700; color: #1c2530; line-height: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-bsp-chip .amt { font-size: 11.5px; font-weight: 700; color: #1c2530; line-height: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-bsp-chip .amt s { text-decoration: none; color: #98a2b3; }
 .h10-bsp-chip .amt em { font-style: normal; font-weight: 700; color: #667080; }
 .h10-bsp-bar { display: block; width: 100%; margin-top: 2px; }
