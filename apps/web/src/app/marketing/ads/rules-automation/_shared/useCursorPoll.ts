@@ -50,10 +50,37 @@
  * ── The lift, done ──────────────────────────────────────────────────────────────────────────────
  *
  * BUD.1, 2026-08-12: moved here from `bid/`, no signature altered, Bid verified unchanged on prod
- * afterwards. Placement and Rank can take it as-is. A page adopting it owes exactly one thing —
- * a cursor whose fields actually move when ITS subject moves, measured rather than assumed. Bid's
- * measurement rejected the audit log as load-bearing; Budget's rejected the row timestamp. Copying
- * a sibling's cursor shape without re-measuring is the one way to misuse this hook.
+ * afterwards. Placement and Rank can take it as-is.
+ *
+ * ── 🔴 THE CURSOR CONTRACT (RA.SPINE S2, ratified 2026-08-12) ───────────────────────────────────
+ *
+ * This replaces the substrate spec's §1.3 — a single account-wide `GET /advertising/pulse` returning
+ * ledger cursors, polled by one provider and shared by every open page. **That design is withdrawn
+ * as falsified**, and the measurement that falsified it is the one above: at 00:30 Rome on
+ * 2026-08-12, `max(AdTarget.updatedAt)` and the newest `AdvertisingActionLog` row were **134 minutes
+ * apart**, because `ads-keyword-bid-resync` writes `bidCents` from Amazon's value and leaves no
+ * ledger row at all. A ledger cursor would have sat reporting "nothing changed" through every bid
+ * edit an operator made in Seller Central. One account-wide cursor cannot be honest about eleven
+ * different subjects, because the tables that move are not the same tables.
+ *
+ * What replaces it, and what a page adopting this hook owes:
+ *
+ *   **Each page brings its own cursor, over fields that actually move when ITS subject moves, and
+ *   it measures that rather than assuming it.**
+ *
+ * The two existing callers reached OPPOSITE conclusions from the same question, which is the proof
+ * that the question has to be asked per page:
+ *
+ *   · **Bid** rejected the audit log as load-bearing and keys on `{ targetsAt, loggedAt, n }`,
+ *     where `targetsAt = max(AdTarget.updatedAt)` carries the weight.
+ *   · **Budget** rejected the row timestamp and keys on a *value* fingerprint, because
+ *     `Campaign.updatedAt` fires ~7×/day against ~3 real budget changes and would light the banner
+ *     more often wrongly than rightly.
+ *
+ * Neither could have used the other's shape. **Copying a sibling's cursor without re-measuring is
+ * the one way to misuse this hook** — it produces a page that feels live and is lying, which is
+ * strictly worse than a page that is visibly stale. `n` is the third field on Bid's because neither
+ * timestamp moves on a create or a delete; ask that question too.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -67,7 +94,24 @@ export interface CursorPollOptions<C> {
   baseline: C | null
   /** how often to check, in ms. 45 s: fast enough to notice an engine tick, cheap enough to ignore */
   intervalMs?: number
-  /** false while a write is in flight or a drawer is open — S3 and S4 will use this */
+  /**
+   * 🔴 Pass `false` while a WRITE IS IN FLIGHT or a DRAWER IS OPEN. (RA.SPINE S2.)
+   *
+   * The hook never refetches on its own — rule 1 — so this is not about rows moving. It is about
+   * the two moments when even the *offer* is wrong:
+   *
+   *   · **A write in flight.** The page is holding an optimistic value. A tick landing mid-flight
+   *     reads the pre-write cursor, sets `stale`, and invites the operator to refresh away their
+   *     own uncommitted edit — the banner blames the server for the operator's own keystroke.
+   *     Re-enable when the write settles, not when it is sent.
+   *   · **A drawer or inspector is open.** The subject on screen is one row, and `check()` fires on
+   *     `window.focus` — so clicking back into the tab from another window pops a banner over an
+   *     open panel about rows the operator is not currently looking at.
+   *
+   * Disabling stops the interval AND the focus/visibility listeners, so no tick can arrive at all;
+   * it does not merely suppress the banner. The last cursor read is kept, so re-enabling does not
+   * re-announce a change that was already on screen.
+   */
   enabled?: boolean
 }
 

@@ -15,11 +15,46 @@
  * Pure and React-free on purpose: every rule below is a case in `urlState.vitest.test.ts`. The
  * edge cases the brief asks for (`?weeks=abc`, `?weeks=999`, `?market=ZZ`, `?open=garbage`) are
  * cheaper to pin as assertions than to re-click on production after every later section lands.
+ *
+ * ── 🔴 RA.SPINE, 2026-08-12 — the SPINE moved out; this page's own params stayed ─────────────────
+ *
+ * `market` · `portfolio` · `campaign` · `line` and every rule about them (the `'all'` sentinel, the
+ * mutual exclusion, "absent means the documented default", the round trip, the canonical rewrite)
+ * now live in `_shared/adsScope.ts` — because eleven pages were each carrying their own copy, and
+ * this file's copy was the one the shared module was generalised FROM.
+ *
+ * **Nothing about this page's behaviour changed**, which is the whole point: `urlState.vitest.test.ts`
+ * is unmodified and still passes, and it is the proof rather than the intention. What is left here
+ * is what is genuinely this page's — `weeks`, `month`, `metric`, `section`, `open` — and the two
+ * hooks (`writeOwn` / `OWN_KEYS`) that carry them through a spine edit.
+ *
+ * ⚠ Those two hooks are not optional. A param the spine does not know about and the page does not
+ * declare survives a page load and then vanishes the first time any control moves — the symptom
+ * appears one interaction after the cause. Pinned in `adsScope.vitest.test.ts`.
  */
 
+import {
+  ALL_MARKETS, MARKETS as SPINE_MARKETS, MARKET_ANY,
+  adsScopeNeedsNormalising, parseAdsScope, patchAdsScope, writeAdsScope,
+  type AdsScopePolicy,
+} from '../_shared/adsScope'
+
 /** The four production Amazon Ads markets. `all` is the account-wide view and the default. */
-export const MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
-export const DEFAULT_MARKET = 'all'
+export const MARKETS = SPINE_MARKETS
+export const DEFAULT_MARKET = ALL_MARKETS
+
+/**
+ * What this page's URL carries, declared once.
+ *
+ * `date`, `sort`, `search`, `paged`, `row` and `drawers` are all absent, and that is deliberate:
+ * every spine param past the four grains is opt-in, so adopting the shared module cannot give this
+ * page a `?q=` or a `?sort=` it never had. Budget Pacing speaks whole WEEKS, not a date range —
+ * see `DEFAULT_WEEKS` — so it takes no date policy at all.
+ */
+const POLICY: AdsScopePolicy = { market: MARKET_ANY }
+
+/** This page's own params. The spine's normalisation check must count these too, or it loops. */
+const OWN_KEYS = ['weeks', 'month', 'metric', 'section', 'open'] as const
 /**
  * 🔴 Weeks, not days, and not a date range.
  *
@@ -96,26 +131,14 @@ export interface BspUrlState {
   open: BspOpen | null
 }
 
-/** A grain value that is absent, empty or the `all` sentinel is "not narrowed". */
-const grain = (v: string | null): string => (!v || v === 'all' ? '' : v)
-
 /**
  * Parse and normalise, in one pass, never throwing.
  *
- * Ordering matters in exactly one place: `campaign` is resolved before `portfolio` is dropped, so
- * the mutual-exclusion rule can see both. Everything else is independent.
+ * The four grains — and the `'all'` sentinel, and the campaign-beats-portfolio rule that used to
+ * sit here — come from `parseAdsScope`. What follows is this page's own vocabulary.
  */
 export function parseUrlState(params: URLSearchParams): BspUrlState {
-  const rawMarket = params.get('market')
-  const market = rawMarket && (MARKETS as readonly string[]).includes(rawMarket) ? rawMarket : DEFAULT_MARKET
-
-  const campaign = grain(params.get('campaign'))
-  const portfolioRaw = grain(params.get('portfolio'))
-  // 🔴 Mutually exclusive, and campaign wins. Under AND — which is what `ruleMatchesScope` does and
-  // therefore what the reach count must mean — holding both is either redundant (the campaign is in
-  // that portfolio, so the portfolio adds nothing) or contradictory (it is not, and nothing can
-  // match). Campaign is the more specific of the two, so it is the one that survives.
-  const portfolio = campaign ? '' : portfolioRaw
+  const { market, portfolio, campaign, line } = parseAdsScope(params, POLICY)
 
   // Number('') is 0 and Number('abc') is NaN, so both the empty and the malformed case fall to the
   // default through the same guard. Non-integers ('8.5') are rejected rather than floored: the
@@ -138,7 +161,7 @@ export function parseUrlState(params: URLSearchParams): BspUrlState {
     market,
     portfolio,
     campaign,
-    line: grain(params.get('line')),
+    line,
     weeks,
     month,
     metric,
@@ -178,17 +201,28 @@ export const serialiseOpen = (o: BspOpen | null): string => (o ? `${o.kind}:${o.
  */
 export function serialiseUrlState(s: BspUrlState): string {
   const p = new URLSearchParams()
-  if (s.market !== DEFAULT_MARKET) p.set('market', s.market)
-  if (s.portfolio) p.set('portfolio', s.portfolio)
-  if (s.campaign) p.set('campaign', s.campaign)
-  if (s.line) p.set('line', s.line)
+  writeAdsScope(p, { ...s, preset: '', start: '', end: '', q: '', sort: '', dir: 'desc', page: 1, row: '', drawer: '' }, POLICY)
+  writeOwn(p, s)
+  return p.toString()
+}
+
+/**
+ * This page's own params, written after the spine's so the key order is what it always was.
+ *
+ * Split out because it is needed twice — once from a parsed state (`serialiseUrlState`) and once
+ * from raw params mid-patch (`writeOwnRaw`) — and two copies of "which of these is a default" is
+ * exactly the drift this whole session exists to remove.
+ */
+function writeOwn(p: URLSearchParams, s: BspUrlState): void {
   if (s.weeks !== DEFAULT_WEEKS) p.set('weeks', String(s.weeks))
   if (s.month !== currentMonthUTC()) p.set('month', s.month)
   if (s.metric !== DEFAULT_METRIC) p.set('metric', s.metric)
   if (s.section) p.set('section', s.section)
   if (s.open) p.set('open', serialiseOpen(s.open))
-  return p.toString()
 }
+
+/** The hook `patchAdsScope` and `adsScopeNeedsNormalising` call, so a spine edit keeps these five. */
+const writeOwnRaw = (raw: URLSearchParams, out: URLSearchParams): void => writeOwn(out, parseUrlState(raw))
 
 /**
  * Apply a patch of raw string values to the current query string and return the normalised result.
@@ -205,14 +239,9 @@ export function serialiseUrlState(s: BspUrlState): string {
  * param to this page is two edits here (parse + serialise), not one `params.get()` in a section.
  */
 export function patchUrlState(current: URLSearchParams, patch: Record<string, string>): string {
-  const next = new URLSearchParams(current.toString())
-  for (const [k, v] of Object.entries(patch)) {
-    if (!v) next.delete(k)
-    else next.set(k, v)
-  }
-  // Round-trip through the parser so the address bar shows the form the page actually used. A
+  // Round-trips through the parser so the address bar shows the form the page actually used. A
   // contradictory pair the operator typed by hand is normalised the moment they touch any control.
-  return serialiseUrlState(parseUrlState(next))
+  return patchAdsScope(current, patch, POLICY, writeOwnRaw)
 }
 
 /**
@@ -223,9 +252,5 @@ export function patchUrlState(current: URLSearchParams, patch: Record<string, st
  * identical — does not trigger a navigation on every load.
  */
 export function needsNormalising(current: URLSearchParams): boolean {
-  const known = new Set(['market', 'portfolio', 'campaign', 'line', 'weeks', 'month', 'metric', 'section', 'open'])
-  const mine = [...current.entries()].filter(([k]) => known.has(k))
-  const canonical = [...new URLSearchParams(serialiseUrlState(parseUrlState(current))).entries()]
-  const norm = (xs: Array<[string, string]>) => xs.map(([k, v]) => `${k}=${v}`).sort().join('&')
-  return norm(mine) !== norm(canonical)
+  return adsScopeNeedsNormalising(current, POLICY, OWN_KEYS, writeOwnRaw)
 }

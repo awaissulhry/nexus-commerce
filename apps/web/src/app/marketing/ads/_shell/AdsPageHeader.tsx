@@ -50,7 +50,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
-  showLearn = true, showDataSync = true, showDateRange = true, showChangeLog = false, primaryAction, channel = 'amazon',
+  showLearn = true, showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
@@ -84,6 +84,26 @@ export function AdsPageHeader({
   // CBN — per-page header tailoring (Rules & Automation hides Learn/Data-Sync/Date
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showLearn?: boolean; showDataSync?: boolean; showDateRange?: boolean
+  /**
+   * RA.SPINE S5 (additive; defaults `true`, so every existing page is byte-identical).
+   *
+   * The market picker was the one control here with no off switch, and that is a defect at eleven
+   * pages rather than at one. Each of the ten Rules & Automation pages currently passes a
+   * `markets: string[]` derived from **whichever campaigns happened to load** — which is the exact
+   * defect `AdsMarketplaceProvider` was written about: *"each analytics page kept its own local
+   * market filter … so nothing agreed with anything else."* A page's picker can therefore be
+   * missing DE simply because DE had no rows in that page's current window.
+   *
+   * Those ten wire to the provider in their OWN sessions; this prop is what makes that possible,
+   * because a page moving its market control into a scope bar of its own must be able to stop
+   * rendering the header's — otherwise it ships two controls for one fact, which is precisely what
+   * sank the reverted RA scope bar (`7db1a4ed6`).
+   *
+   * ⚠ Off means the page owns the market elsewhere and says so. It does not mean the page has no
+   * market: a header with no picker and no scope bar leaves the operator unable to see which market
+   * they are reading, which is worse than a picker built from the wrong list.
+   */
+  showMarket?: boolean
   /** Opt in on pages that own or receive recorded changes. Off everywhere else by default. */
   showChangeLog?: boolean
   primaryAction?: HeaderPrimary
@@ -129,14 +149,17 @@ export function AdsPageHeader({
 
         {showDateRange && <DateRangePicker value={shownRange} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
-        {/* market / account selector — shared with the campaign builders (APS.2a) */}
-        <MarketSelect
-          markets={marketOptions}
-          value={market}
-          onChange={onMarketChange}
-          allowAll
-          brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
-        />
+        {/* market / account selector — shared with the campaign builders (APS.2a).
+            `showMarket` is off only for a page that owns the control elsewhere — see the prop. */}
+        {showMarket && (
+          <MarketSelect
+            markets={marketOptions}
+            value={market}
+            onChange={onMarketChange}
+            allowAll
+            brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
+          />
+        )}
 
         {/* Primary: a single button (e.g. "+ Rule") when primaryAction is set,
             otherwise the Action ▾ dropdown. */}

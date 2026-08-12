@@ -1,3 +1,8 @@
+// RA.SPINE S3 — the routed Rules & Automation tabs, in the one format this CommonJS config can
+// read. See that file's header for why it exists and why it is a `.cjs` and not the `.mjs` the
+// hand-off note below guessed.
+const { tabRedirects } = require('./src/app/marketing/ads/rules-automation/_shared/rulesTabRoutes.cjs');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -30,121 +35,33 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      // ── NEG.1 — the Negative Targeting tab became its own route ────────────
+      // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
-      // `RulesAutomationClient.tsx:91-94` resolves an unknown OR ROUTED `?tab=`
-      // to 'rules'. So the moment a tab is flipped to `routed: true`, every
-      // existing `?tab=<key>` link silently renders Apply Rules instead — no
-      // 404, no message, just the wrong page. This is a real 308 rather than a
-      // one-line `redirect()` stub for the reason the ACR.6 block below gives.
+      // `RulesAutomationClient.tsx:99` resolves an unknown OR ROUTED `?tab=` to 'rules'. So the
+      // moment a tab is flipped to `routed: true`, every existing `?tab=<key>` link silently
+      // renders Apply Rules instead — no 404, no message, just the wrong page. These are real 308s
+      // rather than one-line `redirect()` stubs for the reason the ACR.6 block below gives.
       //
-      // FIRST in the array, and matched on `has` rather than on the path, so it
-      // cannot be swallowed by anything later.
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'negative-targeting' }],
-        destination: '/marketing/ads/rules-automation/negative-targeting',
-        permanent: true,
-      },
-      // HV.1 — the same, for Keyword Harvest. One entry per routed tab; the block above explains
-      // why each is needed and why `check-link-targets.mjs` cannot catch a missing one (RulesTabs
-      // builds its href in a function call rather than a literal).
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'keyword-harvest' }],
-        destination: '/marketing/ads/rules-automation/keyword-harvest',
-        permanent: true,
-      },
-      // BID.S0 — same mechanism, same shape. `?tab=bid` predates the route and is the URL every
-      // existing link to the Bid tab uses; without this it silently renders Apply Rules.
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'bid' }],
-        destination: '/marketing/ads/rules-automation/bid',
-        permanent: true,
-      },
-      // BUD.1 — the same, for Budget Rules. Verified on prod immediately before flipping the tab:
-      // `?tab=budget` returned 200 (correct then — it was not routed), while `?tab=bid`,
-      // `?tab=negative-targeting` and `?tab=keyword-harvest` returned an opaque redirect. Without
-      // this entry, flipping `routed: true` turns every existing `?tab=budget` link into a silent
-      // render of Apply Rules.
+      // NEG.1, HV.1, BID.S0, BUD.1, BSP.0 and PLC.0 each hand-wrote one, and BUD.1's own comment
+      // recorded that the pattern does not scale: four MORE tabs were routed with no entry, so
+      // `?tab=automations`, `?tab=dayparting`, `?tab=keyword-tracker` and `?tab=share-of-voice` all
+      // sat on production returning 200 and rendering Apply Rules. **SOV.1 fixed those four**
+      // (`f4bc68eb7`, landed mid-session) as four more literals — the seventh, eighth, ninth and
+      // tenth copies of one rule.
       //
-      // ⚠ This is the FOURTH copy of one rule, and RD.P0 has already measured that the pattern does
-      // not scale: `?tab=automations`, `?tab=dayparting` and `?tab=keyword-tracker` are all still
-      // returning 200 and rendering the wrong page on prod right now, because each session has to
-      // remember this separately and three did not. The generic form derived from
-      // `RULES_TABS.filter(t => t.routed)` supersedes all of them and needs the routed-key list
-      // lifted into a plain `.mjs` both this CommonJS config and the `'use client'` tabs module can
-      // read. Left as a hand-off in locks §4 rather than taken here: a session is scoped to one
-      // page, and fixing three other pages' links is not this page's change to make.
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'budget' }],
-        destination: '/marketing/ads/rules-automation/budget',
-        permanent: true,
-      },
-      // BSP.0 — same mechanism, same shape, for Budget Pacing & Schedules. One literal entry rather
-      // than the derived rule §4 of the locks doc proposes: deriving it needs the routed-key list
-      // lifted out of `_shared/tabs.tsx` into a `.mjs` this CommonJS config can require, and four
-      // sessions hold that file right now.
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'budget-schedules' }],
-        destination: '/marketing/ads/rules-automation/budget-schedules',
-        permanent: true,
-      },
-      // PLC.0 — same mechanism, same shape, for Placement.
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'placement' }],
-        destination: '/marketing/ads/rules-automation/placement',
-        permanent: true,
-      },
-      // ── SOV.1 — the LAST FOUR, and the pattern closes here ─────────────────
+      // So this is not that fix; it is the collapse the file's own hand-off note asked for. The ten
+      // destinations are IDENTICAL to SOV.1's — the derived output was diffed against the committed
+      // config entry by entry, and `rulesTabRoutes.vitest.test.ts` pins all ten. What changes is
+      // that the ELEVENTH cannot be forgotten: the guard fails when a tab is routed in `tabs.tsx`
+      // with no entry here, and when an entry points at a directory with no `page.tsx`.
       //
-      // Measured on prod 2026-08-12, immediately before adding these, by fetching each routed tab's
-      // `?tab=` and reading the status: `bid`, `keyword-harvest`, `negative-targeting`,
-      // `budget-schedules` and `placement` all returned 308; **`automations`, `dayparting`,
-      // `share-of-voice` and `keyword-tracker` all returned 200 and rendered Apply Rules.**
+      // ⚠ `?tab=rules` is deliberately still absent — `/apply-rules` is uncommitted in another
+      // session, and a 308 to a route that is not in the bundle is a hard 404. See `PENDING`.
       //
-      // Two of those four are SOV.1's own (`share-of-voice` is this page; `keyword-tracker` is named
-      // in the same brief). The other two are not, and are taken anyway: locks §4 hands
-      // `?tab=dayparting` to "whoever takes it — it is one line inside the rule you are already
-      // writing", every prior claim on this file is released, and leaving a known wrong-page bug in
-      // the exact array being edited is worse than the scope it widens. Four one-line entries.
-      //
-      // ⚠ Still the literal form, now ten copies of one rule. The derived version
-      // (`RULES_TABS.filter(t => t.routed)`) remains the right answer and remains blocked on the
-      // same thing RD.P0 priced: this config is CommonJS evaluated at build time and
-      // `_shared/tabs.tsx` is a `'use client'` TSX module, so the routed-key list has to be lifted
-      // into a plain `.mjs` both can read. That is a `tabs.tsx` edit, which SOV.1 does not hold.
-      // What HAS changed: with these four, every routed tab is covered, so the list is complete
-      // rather than three-quarters complete — the next session to flip a tab adds one entry, and
-      // the twelfth pass can do the lift against a list that is finally correct.
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'share-of-voice' }],
-        destination: '/marketing/ads/rules-automation/share-of-voice',
-        permanent: true,
-      },
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'keyword-tracker' }],
-        destination: '/marketing/ads/rules-automation/keyword-tracker',
-        permanent: true,
-      },
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'automations' }],
-        destination: '/marketing/ads/rules-automation/automations',
-        permanent: true,
-      },
-      {
-        source: '/marketing/ads/rules-automation',
-        has: [{ type: 'query', key: 'tab', value: 'dayparting' }],
-        destination: '/marketing/ads/rules-automation/dayparting',
-        permanent: true,
-      },
+      // ⚠ Order is load-bearing: these are literal-path rules and must stay ahead of anything
+      // parameterised. They match on `has` rather than on the path, so their order among themselves
+      // does not matter and nothing later can swallow them.
+      ...tabRedirects(),
 
       // Phase 4 (2026-05-06): /pim/review → /catalog/organize.
       // Page does catalog organization, not a review queue; renamed
