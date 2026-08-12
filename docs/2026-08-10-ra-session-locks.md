@@ -93,11 +93,11 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `packages/database/prisma/schema.prisma` | KT.2 (`KeywordWatchlist` + `KeywordWatchlistTerm`, additive) | 2026-08-12 | **released** — landed `cae154aec` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | KT.2 (watchlist CRUD, additive) | 2026-08-12 | **released** — landed `cae154aec` |
 | `…/rules-automation/rules-automation.css` | KT.2 (`h10-kt-*` at EOF) | 2026-08-12 | **released** — EOF-append only; diffed before each commit, every hunk mine |
-| `apps/api/src/routes/advertising-intel.routes.ts` | BID.S0 (`GET /advertising/bid-grid` + `/bid-grid/cursor`, additive) | 2026-08-12 | **claimed** — route names disjoint from HV.1's `keyword-harvest` and KT.2's watchlist CRUD, so no duplicate registration |
-| `…/rules-automation/_shared/tabs.tsx` | BID.S0 (`bid` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's |
-| `…/rules-automation/rules-automation.css` | BID.S0 (`h10-bd-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
-| `apps/web/next.config.js` | BID.S0 (one `?tab=bid` redirect, same shape as NEG.1's) | 2026-08-12 | **claimed** — disjoint `has` value from HV.1's |
-| `apps/web/src/app/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | BID.S0 (`onSortChange` + `defaultSort` re-sync, additive) | 2026-08-12 | **claimed** — see §4 |
+| `apps/api/src/routes/advertising-intel.routes.ts` | BID.S0 (`GET /advertising/bid-grid` + `/bid-grid/cursor`, additive) | 2026-08-12 | **released** — landed `b4655efd0`; both routes 401-verified on prod |
+| `…/rules-automation/_shared/tabs.tsx` | BID.S0 (`bid` → `routed: true` + subtitle) | 2026-08-12 | **released** — landed `313828494` |
+| `…/rules-automation/rules-automation.css` | BID.S0 (`h10-bd-*` at EOF) | 2026-08-12 | **released** — the main block landed `313828494`; 🔴 the one-line `.derived` override landed inside PLC.0's `341d08e31`, not in a BID.S0 commit (see §5, now observed in both directions) |
+| `apps/web/next.config.js` | BID.S0 (one `?tab=bid` redirect, same shape as NEG.1's) | 2026-08-12 | **released** — landed `313828494`; verified on prod: `?tab=bid` → 308 → `/bid`, and `?tab=budget` still 200 |
+| `apps/web/src/app/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | BID.S0 (`onSortChange` + `onFilterChange` + seed re-sync, additive) | 2026-08-12 | **released** — landed `313828494`. Re-sync is GATED on the callbacks, so the ~20 existing grids are untouched. Back/forward verified on prod. See §4 |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `keyword-watchlist.service.ts` + `…/keyword-tracker/*` | KT.2 (per-market watchlists) | 2026-08-12 | **released** — `cae154aec` · `421b6d002` · `6d50a6783` · `b78ae2655` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.0 (`GET /advertising/share-of-voice-page`, additive) | 2026-08-12 | **claimed** — path disjoint from HV.1's `keyword-harvest`, KT.2's watchlist CRUD and BID.S0's `bid-grid`; and from the EXISTING `GET /advertising/share-of-voice` in `advertising.routes.ts:7284`, which stays serving its CSV |
 | `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's and BID.S0's |
@@ -111,12 +111,12 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **released** — landed `a993fe6bb` (data layer + scope) · `2381486b0` (URL) · `b1bfe40b2` (slots + stylesheet) |
 | `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **released** — landed `a993fe6bb` + `2381486b0`. Still exactly one importer; it now reads `dayparting/_rd/*`, so it is this page's file in everything but its path |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P0 (§2 rows + two §4 hand-offs) | 2026-08-12 | **released** — `a9ec018d2` + this commit |
-| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.0 (`GET /advertising/placements`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files first. Disjoint from HV.1's `keyword-harvest`, BID.S0's `bid-grid`, KT.2's watchlist CRUD and SOV.0's `share-of-voice-page`; and from the two EXISTING `/advertising/campaigns/:id/placements` routes (`advertising.routes.ts:564`, `:635`), which are a different path and stay as they are |
-| `…/rules-automation/_shared/tabs.tsx` | PLC.0 (`placement` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — ONE entry, disjoint from BID.S0's and SOV.0's |
-| `…/rules-automation/RulesAutomationClient.tsx` | PLC.0 (drop the `placement` branch only) | 2026-08-12 | **claimed** — every other branch byte-identical; disjoint from SOV.0's `share-of-voice` branch |
-| `…/rules-automation/rules-automation.css` | PLC.0 (`h10-plc-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
-| `apps/web/next.config.js` | PLC.0 (one `?tab=placement` redirect, same shape as NEG.1's and BID.S0's) | 2026-08-12 | **claimed** — disjoint `has` value |
-| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | PLC.0 (`dateRange?` — the existing date control becomes optionally CONTROLLED, additive) | 2026-08-12 | **claimed** — see §4 |
+| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.0 (`GET /advertising/placements`, additive) | 2026-08-12 | **released** — landed `de61254f8`; prod-verified with the 401-vs-404 trick (`401 {"required":"ads.view"}`) before the web deploy went out.
+| `…/rules-automation/_shared/tabs.tsx` | PLC.0 (`placement` → `routed: true` + subtitle; then the active-tab scroll in `c04fc5b3f` — see §4) | 2026-08-12 | **released** — landed `341d08e31` + `c04fc5b3f`.
+| `…/rules-automation/RulesAutomationClient.tsx` | PLC.0 (drop the `placement` branch only) | 2026-08-12 | **released** — landed `341d08e31`.
+| `…/rules-automation/rules-automation.css` | PLC.0 (`h10-plc-*` at EOF) | 2026-08-12 | **released** — landed `341d08e31` + `c04fc5b3f`, EOF-appended only, no `.dark` block. ⚠ `341d08e31` also carries NEG.2's, BSP.0's, SOV.0's and BID.S0b's uncommitted blocks — named in that commit's own message rather than swept silently.
+| `apps/web/next.config.js` | PLC.0 (one `?tab=placement` redirect, same shape as NEG.1's and BID.S0's) | 2026-08-12 | **released** — landed `341d08e31`.
+| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | PLC.0 (`dateRange?` — the existing date control becomes optionally CONTROLLED, additive) | 2026-08-12 | **released** — landed `341d08e31`; prod-verified: `?preset=custom&start=…&end=…` renders in the header's own label.
 
 **RD.P0 holds nothing in §3, by construction.** The Rank & Dayparting foundation is web-only and
 page-local: no route (so `advertising.routes.ts` and `advertising-intel.routes.ts` are untouched and
@@ -252,6 +252,27 @@ the picker — the back button — updates the button label but not the highligh
 popover is reopened. Not fixed here because it is a second behaviour change to a control 49 pages
 render, and the label (which is what you read) is correct in every case.
 
+**PLC.0 → every session, two things measured on prod that bind all eleven pages, 2026-08-12.**
+
+🔴 **1. The tab bar hides the tab you are standing on.** At innerWidth 1380, on `/placement`:
+`.h10-rules-tabs` `scrollWidth 1642` against `clientWidth 1254` — **388px of overflow** — with the
+active tab at L=1355 against a bar ending at 1350. The bar also hides its scrollbar
+(`ads.css:2063-2064`), so nothing signals that more tabs exist. **Placement, Share of Voice and
+Keyword Tracker are all in that dead zone**, which is the last three routed pages. `RulesTabs` now
+scrolls the active tab into view on mount (`c04fc5b3f`) — `scrollLeft` on the container, never
+`scrollIntoView`, because the shell scrolls `main.flex-1.overflow-auto` and an element-level scroll
+walks up to it and jumps the whole page on load. Deliberately the minimum; the edge fade, the four
+clusters and keyboard scroll remain substrate S6.
+
+🔴 **2. The section's link blue fails AA on the page ground.** The ground behind every band is
+`.h10-shell`'s **#f4f6f9**, not white — `.h10-rules-page`, `.h10-main` and the `<p>` wrappers are
+all transparent. `#1f6fde` is 4.79:1 on white and **4.42:1 on #f4f6f9**. So every `.lnk` that sits
+on the page ground rather than inside a white card is below AA: `.h10-kt-note .lnk`,
+`.h10-ng-note .lnk`, `.h10-hv-*`, `.h10-bd-*` and the rest. PLC.0 uses **#1a61c6** (5.33:1 on the
+ground, 5.88:1 on white) for its own on-ground link and left the others alone — they are other
+sessions' blocks. `getComputedStyle` reports the DECLARED colour and calls all of them a pass;
+composite against the real ancestor background instead.
+
 **PLC.0 → the twelfth pass, on `?page=`.** `AdsDataGrid` holds `page`, `rowsPerPage` and `search`
 in private `useState` with no seed and no callback (`:225-226`, `:582`). BID.S0 closed the sort half
 of this; the pager half is still shut, so `?page=<n>` — which the substrate spec names in the
@@ -268,6 +289,20 @@ same handler, and a re-sync effect keyed on **`defaultSort?.key` / `defaultSort?
 (never the object — every consumer passes an inline literal, and an effect on the object identity
 would loop forever). Consumers that pass neither prop are untouched. Take it if your page needs a
 linkable sort; it is not a Bid-page type.
+
+**SHIPPED, `313828494` — and it is `onFilterChange` too.** The filter half had the same hole:
+`initialFilters` could seed the panel and nothing could read a change back, so a page could be
+linked *into* a filtered view and never linked *out of* one. Both callbacks are now on
+`AdsDataGridProps`, and **the re-sync is gated on their presence** — pass neither and the component
+behaves byte-identically, which is why the ~20 existing grids needed no audit.
+
+Two things to know if you take it:
+- The filter re-sync **merges** the seed into the live state rather than replacing it, or the
+  numeric ranges an operator typed vanish the moment the URL changes.
+- The outward emit is suppressed for one tick after an inbound seed. Without that, URL → seed →
+  emit → URL is an infinite loop, and it is not obvious from reading either half on its own.
+
+Verified on prod: back and forward restore the view, the filter chips and the sorted column.
 
 **BID.S0 finding, shared layer.** `automations/ScopeForm.tsx` is the rule-scope **binding editor**
 (it ends in a write), not a page filter bar, so it cannot be reused as one. The page scope bar has
@@ -442,6 +477,14 @@ raised a ceiling or armed a schedule.
   session can ship half of it. (2) The `git diff` check before touching a §3 file must also ask
   *"does this hunk reference anything untracked?"* — a hunk that is textually someone else's is
   obvious; a hunk that is textually yours but depends on a file only you have is not.
+- 🔴 **It has now happened twice, and the second time it ran the OTHER way.** The note above is
+  NEG.1 sweeping KT.1b's lines outward. On 2026-08-12 BID.S0's one-line `h10-bd-*` CSS append was
+  swept *inward* by **PLC.0's `341d08e31`**, and BID.S0's own commit two minutes later reported
+  "2 files changed" because git had nothing left to record for the stylesheet. Nothing broke again
+  — EOF-append, disjoint selectors — but note the second-order hazard: **a session can believe its
+  CSS did not ship.** Before concluding a shared-file change is missing, `git show HEAD:<file> |
+  grep <your selector>` rather than trusting your own commit's file list. Six sessions appended to
+  this stylesheet tonight; the convention is holding, the attribution is not.
 - **An untracked file can block every session's push.** The DS-conformance ratchet greps comments
   too — a comment can fail it.
 - 🔴 **Vercel does not always build your commit, and `vercel ls` showing "Ready" is not proof it
