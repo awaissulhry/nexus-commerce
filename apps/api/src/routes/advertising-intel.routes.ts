@@ -23,8 +23,9 @@ import {
   type BudState, type BudStatusFilter, type BudView,
 } from '../services/advertising/budget-grid.service.js'
 import {
-  getPlacementGrid, PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, LANE_BY_KEY,
-  type PlcLaneKey, type PlcSortKey,
+  getPlacementGrid, getPlacementCursorForRequest,
+  PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, PLC_FLAG_KEYS, LANE_BY_KEY,
+  type PlcLaneKey, type PlcSortKey, type PlcFlagKey,
 } from '../services/advertising/placement-grid.service.js'
 import { getShareOfVoice, SOV_MARKETS, SOV_WEEKS } from '../services/advertising/share-of-voice.service.js'
 import { envEnabled } from '../utils/env-flag.js'
@@ -432,6 +433,50 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── NEG.3 — retire a negative ───────────────────────────────────────
+  //
+  // 🔴 THE ONLY WRITE ON THIS PAGE, AND IT IS IRREVERSIBLE AT AMAZON. Archive is the only removal
+  // Amazon offers for a negative keyword, and archive is terminal. There is no un-archive route
+  // here and there must never be one.
+  //
+  // POST rather than PATCH because it is not a field edit: it is a decision with a record. The
+  // body carries the ids, the operator's reason, and an explicit `confirm` — a retirement must not
+  // be reachable by a stray request that merely got the URL right.
+  //
+  // RBAC: a POST under /api/advertising falls past the read-only rule to
+  // `RW(F.adsView, F.adsCampaignsManage, pfx('/api/advertising'))`, so it requires
+  // `ads.campaigns.manage`, not `ads.view`. That is the correct authority for a write that reaches
+  // Amazon and it is deliberately NOT widened.
+  fastify.post('/advertising/negatives/retire', async (request, reply) => {
+    const body = (request.body ?? {}) as { adTargetIds?: unknown; reason?: unknown; confirm?: unknown }
+    const ids = Array.isArray(body.adTargetIds) ? body.adTargetIds.map(String).filter(Boolean) : []
+    if (ids.length === 0) {
+      reply.status(400)
+      return { error: 'adTargetIds is required and must be a non-empty array', code: 'ids_required' }
+    }
+    // A bound, not a policy. The per-scope ceiling is undecided (NEG.3 §9) and this is NOT it —
+    // it only stops a single request asking for more writes than an operator could review.
+    if (ids.length > 200) {
+      reply.status(400)
+      return { error: `${ids.length} ids in one request; the cap is 200. This is a request bound, not a spend ceiling — no per-scope ceiling exists yet.`, code: 'too_many' }
+    }
+    if (body.confirm !== true) {
+      reply.status(400)
+      return { error: 'confirm:true is required — archiving a negative at Amazon cannot be undone', code: 'confirm_required' }
+    }
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    const { retireNegatives } = await import('../services/advertising/negatives-retire.service.js')
+    const out = await retireNegatives({
+      adTargetIds: ids,
+      actor: `user:${userId}` as never,
+      retireReason: typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim().slice(0, 500) : null,
+    })
+    // 🔴 Always 200 with per-row outcomes, never a single pass/fail status. 72 writes have 72
+    // independent failure modes, and an HTTP status cannot carry five outcome classes.
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
   // ── BID.S0 — the Bid page's one read ────────────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1 and NEG.1 are: a duplicate route
@@ -580,6 +625,9 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       start: q.start || null,
       end: q.end || null,
       lane: (oneOf(q.lane, Object.keys(LANE_BY_KEY) as PlcLaneKey[]) ?? 'all') as PlcLaneKey | 'all',
+      // PLC.1 — the flag filter narrows ROWS. It never narrows a count, exactly as `?q=` and
+      // `?lane=` do not: the census answers "what is true in this scope", not "what am I looking at".
+      flag: (oneOf(q.flag, PLC_FLAG_KEYS) ?? 'all') as PlcFlagKey | 'all',
       q: q.q || null,
       sort: oneOf(q.sort, PLC_SORT_KEYS) as PlcSortKey | null,
       dir: q.dir === 'asc' ? 'asc' : 'desc',
@@ -588,6 +636,36 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // 660 lane rows over one grouped scan of the placement report; the engine moves the lever
     // every 15 minutes and the report lands once a day.
     reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── PLC.1 — the poll cursor ─────────────────────────────────────────────
+  //
+  // Three cheap aggregates, ~100 bytes, meant to be hit every 45 s by every open tab. The grid read
+  // above is not. A separate endpoint rather than a `?cursorOnly=1` on it, so it cannot quietly
+  // acquire the expensive parts of that handler later — BID.S0's reasoning, adopted whole.
+  //
+  // 🔴 It is NOT a copy of Bid's cursor, and `useCursorPoll`'s header names copying one as the sole
+  // way to misuse the hook. Bid watches `AdTarget.updatedAt` because an hourly resync moves a bid
+  // and writes no audit row; no `AdTarget` moves when a placement multiplier changes. This watches
+  // `CampaignBidHistory` over the three lane fields — the one row-per-changed-lane record that both
+  // the engine and the manual PATCH write through — plus the engine's held-target tally, because
+  // the plan switching hour changes every governed campaign's multiplier and this page prints it.
+  // See `PlcCursor` in the service for the measurement behind each field.
+  //
+  // Uncached on purpose: a cursor behind a 60 s cache is a cursor that lies for 60 s.
+  fastify.get('/advertising/placements/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === PLC_MARKET_ALL ? PLC_MARKET_ALL : raw.toUpperCase()
+    if (market !== PLC_MARKET_ALL && !PLC_MARKETS.includes(market as (typeof PLC_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${PLC_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const out = await getPlacementCursorForRequest({
+      market, line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
+    })
+    reply.header('Cache-Control', 'no-store')
     return out
   })
 
@@ -651,7 +729,11 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       // control where no pixel moves does not go on the page (RA plan §3.0).
       kind: oneOf(q.kind, ['keyword', 'asin', 'all'] as const),
       q: q.q || null,
-      sort: oneOf(q.sort, ['query', 'volume', 'rank', 'share', 'asins'] as const),
+      // SOV.1 — `clickShare` and `delta` join the list. Both are share-shaped, so the service sinks
+      // low-confidence rows below confident ones when either is the sort key: the top of a
+      // share-descending page is otherwise `sappnetta knee spider nero`, 50.00% of FOUR market
+      // impressions, followed by five typos.
+      sort: oneOf(q.sort, ['query', 'volume', 'rank', 'share', 'clickShare', 'delta', 'asins'] as const),
       dir: q.dir === 'asc' ? 'asc' : 'desc',
       limit: q.limit ? Number(q.limit) : undefined,
       offset: q.offset ? Number(q.offset) : undefined,
