@@ -2831,3 +2831,54 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-ar-tools { flex-wrap: wrap; gap: 8px; }
   .h10-ar-search input { width: 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   SOV.1 — the Δ, click share, and the colour scale.
+
+   Appended at EOF under `h10-sov-*`, after SOV.0's block, for the same three reasons: source order
+   beats specificity in this file, there is no `.dark` block (the shell pins `color-scheme: light`),
+   and every margin is `… 0 0` because the page gutter is ZERO — SOV.0 measured every block flush at
+   96→2046 and a `margin: … 24px` would be the only staggered thing on the page.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the summary strip: the weighted/median pair and the scope Δ ─────────────────────────────── */
+.h10-sov-summary { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin: 8px 0 0; padding: 0; }
+.h10-sov-stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 7px 12px; border: 1px solid #e3e7ec; border-radius: 8px; background: #fff; }
+.h10-sov-stat i { font-style: normal; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: #667080; }
+.h10-sov-stat b { font-size: 15px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.h10-sov-stat b.up { color: #1c6b3f; }
+.h10-sov-stat b.down { color: #a33a3a; }
+.h10-sov-stat b.none { font-size: 12px; font-weight: 700; color: #8a5316; }
+.h10-sov-stat em { font-style: normal; font-size: 10.5px; color: #667080; font-variant-numeric: tabular-nums; }
+
+/* ── the Δ cell ─────────────────────────────────────────────────────────────────────────────────
+   Percentage POINTS, and a movement that rounds away is still a movement: the client renders
+   `<0.01pt` rather than `0.00pt` for the smallest non-zero |Δ| in the data (0.0015pt in IT). */
+.h10-sov-delta { font-variant-numeric: tabular-nums; font-weight: 700; color: #55606d; }
+.h10-sov-delta.up { color: #1c6b3f; }
+.h10-sov-delta.down { color: #a33a3a; }
+.h10-sov-delta.flat { color: #667080; }
+/* A Δ on a row whose denominator is too small to rank by is muted, exactly like its share. */
+.h10-sov-delta.thin { color: #9099a6; font-weight: 600; }
+
+/* ── the colour scale ───────────────────────────────────────────────────────────────────────────
+   Calibrated against the MEASURED distribution, not 0–100% and not Pacvue's 10% alone: p50 is
+   1.34–2.35% across the four markets and p90 is ~4.8%, so the resolution lives between 0 and 5%
+   with one distinct step above 10%. A 0–100% ramp would render this page one flat colour.
+
+   🔴 `.thin` beats every band because it comes LAST: a low-confidence row is muted regardless of
+   value, so 50.00%-of-4-impressions can never be the brightest thing on screen. */
+.h10-sov-share.b1 { color: #8b93a1; }
+.h10-sov-share.b2 { color: #55606d; }
+.h10-sov-share.b3 { color: #1c2530; }
+.h10-sov-share.b4 { color: #10457f; }
+.h10-sov-share.b5 { color: #0a3a6b; background: #e8f1fd; border-radius: 5px; padding: 1px 6px; }
+.h10-sov-share.thin { color: #9099a6; font-weight: 600; background: none; padding: 0; }
+
+/* ── the stated sort floor ──────────────────────────────────────────────────────────────────── */
+.h10-sov-win i.floor { background: #fff6e8; color: #8a5316; }
+
+@media (max-width: 1200px) {
+  .h10-sov-summary { gap: 6px; }
+  .h10-sov-stat { padding: 6px 10px; }
+}
