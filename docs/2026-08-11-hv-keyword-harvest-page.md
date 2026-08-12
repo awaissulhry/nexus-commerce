@@ -1608,3 +1608,141 @@ If it is ever revisited, the **prerequisite is a unique constraint plus an upser
   8–14 d bucket fail to overlap; every other pair does. The brief's correction stands — the lag is
   identical in every bucket, so a maturation artefact would render CVR flat, and this gradient is
   not evidence of one either way.
+
+---
+
+# HV.3 — built
+
+**Landed 2026-08-12** in three commits, in deploy order: `23271de07` (migration) → `f5522c406`
+(API) → `28ab5273e` (web). Verified on production at 1728px and at a real 896px viewport, against a
+Vercel deployment whose **commit SHA is `28ab527`** — checked, not its status.
+
+## The one thing this session exists to print
+
+`applyHarvest` creates the keyword at `args.destinations?.[gm] ?? srcAg?.id` (:123) and fires the
+H.3 isolation negative **only** when `promotedElsewhere` (:133). So no destination means the keyword
+is created back in the ad group that discovered it **and** the source is never negated. Measured on
+prod with nothing stored — **7 of 8 candidates**:
+
+> **WOULD NOT NEGATE AT SOURCE** — No, no destination is set, so the keyword would be created back
+> in *"BROAD ONLY"*, the ad group that discovered it. `applyHarvest` negates the source only when
+> the keyword lands elsewhere, so that ad group would keep competing for this term.
+
+Store a destination and the same row prints:
+
+> **WOULD NEGATE AT SOURCE** — Yes, the keyword would be created in *"Exact Only"*, so
+> *"BROAD ONLY"* gets a negative-exact for this term in the same transaction.
+
+`census.destinations.wouldNegate` moves **1 → 8**. Both sentences are composed server-side, so the
+grid, the picker and every later section cannot phrase them three ways.
+
+## 🔴 The resolver proposes a shortlist and never a destination
+
+The brief recommended by-product as the *proposal*. Measured across **all 289 ad groups**
+(`_hv-3-destination.mts`):
+
+| target | resolves | **unique** | ambiguous | median | max |
+|---|---|---|---|---|---|
+| EXACT | 287 / 287 | **38 (13%)** | 249 | 5 | **21** |
+| PHRASE | 284 / 287 | 48 | 236 | 4 | 14 |
+| BROAD | 287 / 287 | 51 | 236 | 5 | 17 |
+
+Tightening the product key from the product **line** to the exact **ASIN** moves it 35 → 38 of 287.
+This account advertises the same ASINs across many overlapping campaigns, so *"the manual
+keyword-targeted ad group for this product in this market whose role is EXACT"* is five to
+twenty-one ad groups.
+
+**A resolver that returns nine answers is a shortlist, not a proposal.** On today's 8 candidates,
+7 are `resolved-ambiguous` and exactly 1 is `resolved-unique`. The page therefore renders
+**"9 possible — choose"** rather than naming one of nine as if it had been proposed. The picker is
+the primary path; the resolver ranks. That is the reverse of the brief, and the table above is why.
+
+Ranking, in order: already holds this term · campaign enabled · role from the **name** rather than
+the majority fallback · name for stability. Every option carries its own `why` string, server-side
+(C9).
+
+## Destination-relative status, beside the source-relative one
+
+HV.1's `status` asks *"does this keyword exist where the traffic came from?"* — a fact about the
+account. The new one asks *"would promoting create anything?"* — a fact about a **decision**, and
+undecidable until a destination exists.
+
+| value | meaning | today |
+|---|---|---|
+| `undecided` | several ad groups could hold it, nobody has chosen | **7** |
+| `no-destination` | nothing resolves — not promotable | 0 |
+| `will-create` | the destination holds no exact keyword for this term | 0 |
+| `already-at-destination` | it does, confirmed at Amazon | **1** |
+| `destination-local-only` | it does, but it never reached Amazon | 0 |
+| `would-duplicate` | 🔴 the destination doesn't, but another ad group does | 0 |
+
+**Both are on screen.** HV.1's value is unchanged and keeps its column; an operator who read the
+page yesterday can still see why a row is where it is.
+
+⚠️ `would-duplicate` is 0 only because 7 rows are undecided. Measured against a *resolved*
+destination in `_hv-3-destination.mts`, **4 of 8 would create a second exact keyword** — one for a
+term that already exists as EXACT in **10** other ad groups. The picker shows that per row before
+the choice is made: *"This term already has an exact keyword in 7 other ad groups … Promoting into
+a different one makes them compete with each other."*
+
+## The matrix, and what was reused
+
+`RuleRowSel` (`campaign-builder/sp-super-wizard/LaunchStep.tsx:34`) is the account's existing
+matrix vocabulary and maps 1:1 onto `applyHarvest`'s `HarvestPlan`, so HV.3 stores against the same
+shape rather than inventing a second one. **The `HarvestRules` component itself was not reused** —
+it is bound to `SpwCampaign[]` and a two-tab harvest/negative model.
+
+*(Two corrections to the brief: the component is at `ads/_shared/HarvestRules.tsx`, not
+`rules-automation/_shared/`; and `RuleRowSel` lives in `LaunchStep.tsx`, not in it.)*
+
+`gatherProductAdGroups` gained **one `export` keyword** — no behaviour change, nothing else in
+`ads-keyword-funnel.service.ts` touched — so this page and the funnel cannot disagree about which
+ad groups advertise a product.
+
+## `AdsHarvestDestination` — a second table, argued
+
+`AdsHarvestPolicy` is unique on `(scopeGrain, scopeId, kind)`: **one row per scope**, holding a
+criteria set. A destination map needs **one row per (scope × matchType)** and carries an ad-group
+reference plus the negate flag. Forcing it into `kind` would mean JSON-blobbing the map
+(unqueryable, and HV.4 must join it) or inventing `kind = 'dest:EXACT'` — a compound discriminator,
+the same mistake as `AdsRuleSuggestion.proposedKey` being a bare action type. Same five grains, same
+most-specific-wins-whole resolution, **ships empty**.
+
+An **AUTO ad group is refused at save time**: a destination that cannot hold a keyword makes the
+funnel loop structurally impossible, and failing here is far more legible than failing inside HV.4's
+write.
+
+## The orphaned funnel — linked, not rebuilt
+
+*"No destination exists"* is **`not permitted`**, not `not measured`, and it links to the existing
+funnel builder with the product already in hand. `launchProductFunnel` **creates real campaigns**;
+HV.3 does not call it, embed it, retire it or modify it.
+
+## What was measured
+
+| | |
+|---|---|
+| destination resolution proven | **11 checks**, 0 failures: every row matching an independent resolve, census summing to the candidate count, a stored override beating the resolver, a market override beating the account one while `market=all` keeps the account one, AUTO refused, `"all"` refused, absent-row removal refused, table left empty |
+| the §4.1 coupling, on screen | **7 `no` · 1 `yes`**, and 8 `yes` once a destination is stored |
+| geometry at 1728 / 896 | every block flush at 96→1698 / 96→866, **dLeft = dRight = 0**; the summary reflows 4→2 |
+| contrast, opacity composited | **127 nodes, 0 failures** |
+| first column | `rgb(28,37,48)`, `cursor: default` — still not a link |
+| overflow | body never scrolls horizontally; the grid scrolls inside its own container (2168 in 1600) |
+
+Scripts: `_hv-3-destination.mts` (coverage and the cross-product), `_hv-3-endpoint.mts` (the 11
+checks, creates rows and removes every one).
+
+## 🔴 A trap for the next UI in this section
+
+**Ad group names repeat across campaigns.** `"Exact Only"` exists in several, and the picker's first
+two options are both called it. Every destination is rendered **campaign › ad group**; a name-only
+picker would be ambiguous at the exact moment of choosing.
+
+## What HV.4 inherits
+
+- `AdsHarvestDestination`, resolved through the same chain, as its `destinations` map.
+- `wouldNegateAtSource` already decided per row — HV.4 enforces it rather than recomputing it.
+- The **clamp of the destination's campaign** on every option (IT €0.80 · DE €1.90 · ES €0.90),
+  which is the ceiling its opening bid must expect.
+- `no-destination` rows are **not promotable** and HV.4 must refuse them; the page already says so.
+- The five bid constants and the promotion/isolation coupling remain HV.4's and HV.8's.

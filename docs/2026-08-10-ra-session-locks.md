@@ -94,10 +94,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
-| `packages/database/prisma/schema.prisma` | HV.3 (`AdsHarvestDestination`, additive — one new model, nothing altered) | 2026-08-12 | **claimed** |
-| `apps/api/src/routes/advertising-intel.routes.ts` | HV.3 (`GET`/`PUT`/`DELETE /advertising/harvest-destination`, additive) | 2026-08-12 | **claimed** |
-| `apps/api/src/services/advertising/ads-keyword-funnel.service.ts` | HV.3 (**one `export` keyword** on `gatherProductAdGroups` — no behaviour change, nothing else touched) | 2026-08-12 | **claimed** |
-| `…/rules-automation/rules-automation.css` | HV.3 (`h10-hv-*` at EOF, extending HV.1/HV.2's block) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `packages/database/prisma/schema.prisma` | HV.3 (`AdsHarvestDestination`, additive) | 2026-08-12 | **released** — landed `23271de07` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.3 (`GET`/`PUT`/`DELETE /advertising/harvest-destination`, additive) | 2026-08-12 | **released** — landed `f5522c406` |
+| `apps/api/src/services/advertising/ads-keyword-funnel.service.ts` | HV.3 (**one `export` keyword** on `gatherProductAdGroups`) | 2026-08-12 | **released** — landed `f5522c406`; no behaviour change, nothing else in the file touched |
+| `…/rules-automation/rules-automation.css` | HV.3 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `28ab5273e`, EOF-append only, every hunk diffed and mine |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
 | `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
