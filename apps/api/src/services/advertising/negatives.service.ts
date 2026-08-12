@@ -591,3 +591,363 @@ export async function getNegatives(req: NegRequest): Promise<NegPayload> {
     },
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// NEG.2 — the term context: everywhere one term is blocked, and what it earns.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// One derivation, four consumers. NEG.3's removal confirm needs `performance` and `remainder`;
+// NEG.4's detectors need `overlap` and `history`; the Automations inbox card needs the same
+// summary; the drawer needs all of it. Three separate derivations of "what does this term do"
+// would disagree, and the one that disagreed would be the one on the confirm dialog.
+//
+// 🔴 IT RETURNS FACTS, NOT VERDICTS. There is no `isConflict` boolean and there will not be one:
+// whether an overlap is a conflict, or a dark 120-day earner is a suppressed earner, is a
+// threshold decision that belongs to NEG.4. Hard-coding a policy here would force that section
+// to fight this one.
+//
+// ── 🔴 The join this section lives or dies on ────────────────────────────────────────────────
+//
+// `AmazonAdsSearchTerm.adGroupId` is an **external Amazon id** (`schema.prisma:3231`).
+// `AdTarget` reaches its ad group through a **local cuid**, and carries the external id one hop
+// away at `adGroup.externalAdGroupId`. Joining local-to-external yields `overlap = 0` for every
+// term in the account, forever — and reads exactly like good news.
+//
+// Measured 2026-08-12 (`scripts/_neg2-probe.mts`), deliberately computing both:
+//
+//     term              overlap (external↔external)   the WRONG join (external↔local)
+//     giacca moto                     0                            0
+//     saponette moto                  1                            1  ← the only term that differs
+//     xavia                           0                            0
+//
+// The wrong join returns 0 for **every** term including the one true live conflict in the
+// account. That is why `_neg2-termcontext.mts` asserts `saponette moto → overlap.length === 1`:
+// a fixture that would pass with the join broken is not a test.
+//
+// Campaign-level negations are excluded from the overlap set, and not because they are awkward:
+// they hang off *an* ad group in our schema for FK reasons only, so their `externalAdGroupId` is
+// not a place Amazon blocks anything. All 22 of them also carry no Amazon id at all.
+
+/** 30 · 60 · 120 days. Anything else falls back to 30. */
+const TERM_WINDOWS = [30, 60, 120] as const
+/** The fixed long window for the suppressed-earner case. Matches `_neg-page-conflict.mts:108`. */
+const HISTORY_DAYS = 120
+
+export interface TermProtection {
+  term: string
+  mode: string
+  /** EXACT · PREFIX · CONTAINS — the resolved semantics, after the isPrefix fallback */
+  matchType: string
+  /** null = every market / every campaign. All ten live rows are unrestricted. */
+  marketplace: string | null
+  campaignId: string | null
+  reason: string | null
+}
+
+export interface TermNegation {
+  id: string
+  level: NegLevel
+  campaignId: string
+  campaignName: string
+  campaignStatus: string
+  adGroupId: string
+  adGroupName: string
+  /** the id Amazon knows this ad group by — the ONLY key `runsIn` can be compared against */
+  externalAdGroupId: string | null
+  market: string
+  status: string
+  atAmazon: boolean
+  blockingNow: boolean
+  addedAt: string
+  attribution: NegAttribution
+  attributionLabel: string
+  match: NegMatchType
+  matchRaw: string
+  /** whether this negation falls inside the scope the page is currently showing */
+  inScope: boolean
+  /** true when this ad group also took impressions for the term in the window */
+  overlaps: boolean
+}
+
+export interface TermTraffic {
+  externalAdGroupId: string
+  adGroupName: string | null
+  campaignName: string | null
+  impressions: number
+  clicks: number
+  spendCents: number
+  orders: number
+  salesCents: number
+  /** true when this ad group ALSO carries a negation of the term — the actual finding */
+  negated: boolean
+}
+
+export interface TermPerformance {
+  impressions: number
+  clicks: number
+  spendCents: number
+  orders: number
+  salesCents: number
+  /** spend ÷ sales, or null when there are no sales — never 0, which would read as "free" */
+  acos: number | null
+}
+
+export interface TermContext {
+  term: { key: string; display: string; protectedBy: TermProtection[] }
+  /** the SAME numbers the grid's spread chip shows — local ad-group ids, every negation */
+  spread: { rows: number; adGroups: number; campaigns: number; markets: string[] }
+  /**
+   * The ad groups a traffic comparison can actually be made against: ad-group-scoped negations
+   * only, counted by EXTERNAL id. Differs from `spread.adGroups` whenever the term carries a
+   * campaign-level negation, which is why both are returned rather than one being chosen.
+   */
+  comparable: { negatedAdGroups: number; campaignLevel: number; campaignLevelAtAmazon: number }
+  negations: TermNegation[]
+  window: { days: number; since: string }
+  performance: TermPerformance
+  runsIn: TermTraffic[]
+  /**
+   * The intersection, at the AD GROUP grain — one entry per ad group that both negates the term
+   * and took impressions for it.
+   *
+   * 🔴 `overlap.length` is NOT the number of writes an operator would make to clear it.
+   * `overlapRows` is. Measured 2026-08-12: `saponette moto` overlaps in ONE ad group which holds
+   * TWO negation rows for it (`_PHRASE` and `_EXACT`), because a single ad group can negate the
+   * same term at more than one match type. Reporting "1" over two writes is the defect class this
+   * page exists to stop, so both numbers are returned and NEG.3's confirm must use `overlapRows`.
+   */
+  overlap: TermTraffic[]
+  /** negation ROWS sitting in an overlapping ad group — always ≥ `overlap.length`. */
+  overlapRows: number
+  history: { days: number; impressions: number; clicks: number; spendCents: number; orders: number; salesCents: number }
+  remainder: { inScope: number; total: number; remainderRows: number; remainderCampaigns: number; scopeIsWholeAccount: boolean }
+}
+
+/**
+ * Does a protection cover this term? Mirrors `ads-write-gate.ts:322-327` exactly, including the
+ * `matchType ?? (isPrefix ? 'PREFIX' : 'EXACT')` fallback.
+ *
+ * Exported so the badge cannot drift from the enforcement. A drawer that says "protected" about a
+ * term the gate would happily negate is worse than no badge.
+ */
+export function protectionsCovering(
+  term: string,
+  protections: Array<{ term: string; mode: string; matchType: string | null; isPrefix: boolean; marketplace: string | null; campaignId: string | null; reason: string | null }>,
+): TermProtection[] {
+  const key = normaliseNegTerm(term)
+  if (!key) return []
+  return protections
+    .filter((p) => p.mode === 'WHITELIST')
+    .filter((p) => {
+      const t = normaliseNegTerm(p.term)
+      const mode = p.matchType ?? (p.isPrefix ? 'PREFIX' : 'EXACT')
+      if (mode === 'CONTAINS') return key.includes(t)
+      if (mode === 'PREFIX') return key.startsWith(t)
+      return key === t
+    })
+    .map((p) => ({
+      term: p.term,
+      mode: p.mode,
+      matchType: p.matchType ?? (p.isPrefix ? 'PREFIX' : 'EXACT'),
+      marketplace: p.marketplace,
+      campaignId: p.campaignId,
+      reason: p.reason,
+    }))
+}
+
+export interface TermContextRequest extends NegScopeRequest {
+  term: string
+  window?: number | null
+}
+
+export async function getTermContext(req: TermContextRequest): Promise<TermContext | null> {
+  const key = normaliseNegTerm(req.term)
+  if (!key) return null
+  const windowDays = TERM_WINDOWS.includes(Number(req.window) as (typeof TERM_WINDOWS)[number]) ? Number(req.window) : 30
+  const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
+  const since120 = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000)
+
+  // Every negation of this term, ACCOUNT-WIDE and regardless of market. The drawer's whole job is
+  // to show everywhere it is blocked; the scope decides what is highlighted, never what is read.
+  // Fetched by the normalised key rather than by `expressionValue`, because our negatives carry
+  // mixed case (`AIRMESH pant`, `giacca MOSS`) and an equality filter would miss them.
+  const candidates = await prisma.adTarget.findMany({
+    where: { isNegative: true },
+    select: {
+      id: true, kind: true, expressionType: true, expressionValue: true, negativeLevel: true,
+      status: true, externalTargetId: true, createdAt: true,
+      adGroup: {
+        select: {
+          id: true, name: true, externalAdGroupId: true,
+          campaign: { select: { id: true, name: true, marketplace: true, status: true, portfolioId: true } },
+        },
+      },
+    },
+  })
+  const mine = candidates.filter((n) => normaliseNegTerm(n.expressionValue) === key)
+  if (mine.length === 0) return null
+
+  // The scope, resolved exactly as the grid resolves it, so `inScope` and the grid agree by
+  // construction rather than by two implementations happening to match.
+  const [campaigns, negAdGroups, products, ads, protections] = await Promise.all([
+    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true }, orderBy: { name: 'asc' } }),
+    prisma.adGroup.findMany({ where: { targets: { some: { isNegative: true } } }, select: { id: true, name: true, campaignId: true } }),
+    req.line ? prisma.product.findMany({ select: { id: true, parentId: true } }) : Promise.resolve([]),
+    req.line ? prisma.adProductAd.findMany({ where: { productId: { not: null } }, select: { productId: true, adGroup: { select: { campaignId: true } } } }) : Promise.resolve([]),
+    prisma.adKeywordProtection.findMany({ select: { term: true, mode: true, matchType: true, isPrefix: true, marketplace: true, campaignId: true, reason: true } }),
+  ])
+  const scope = resolveNegScope(
+    {
+      campaigns,
+      adGroups: negAdGroups,
+      products,
+      ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId),
+    },
+    req,
+  )
+  const scopeCampaigns = new Set(scope.campaignIds)
+  const scopeAdGroups = scope.adGroupIds ? new Set(scope.adGroupIds) : null
+  // "The whole account" means the market grain over every production market with nothing narrower.
+  const scopeIsWholeAccount = scope.boundBy === 'market' && req.market === NEG_MARKET_ALL
+
+  // Attribution — oldest-first, first log wins, same rule the inventory uses.
+  const logs = await prisma.advertisingActionLog.findMany({
+    where: { entityId: { in: mine.map((n) => n.id) }, actionType: { in: ['create_negative_keyword', 'create_negative_product_target'] } },
+    select: { entityId: true, userId: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const logByEntity = new Map<string, { userId: string | null }>()
+  for (const l of logs) if (l.entityId && !logByEntity.has(l.entityId)) logByEntity.set(l.entityId, { userId: l.userId })
+
+  // ── traffic, at the (query, EXTERNAL adGroupId) grain ────────────────────────────────────────
+  const perAg = await prisma.amazonAdsSearchTerm.groupBy({
+    by: ['adGroupId'],
+    where: { date: { gte: since }, query: key },
+    _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
+  })
+  // Name the external ad groups. A traffic row we cannot name is still a fact and is kept — the
+  // name is missing because the ad group is not in our mirror, which is worth seeing, not hiding.
+  const trafficExtIds = perAg.map((r) => r.adGroupId)
+  const named = trafficExtIds.length
+    ? await prisma.adGroup.findMany({
+      where: { externalAdGroupId: { in: trafficExtIds } },
+      select: { externalAdGroupId: true, name: true, campaign: { select: { name: true } } },
+    })
+    : []
+  const nameByExt = new Map(named.map((g) => [g.externalAdGroupId ?? '', { adGroupName: g.name, campaignName: g.campaign?.name ?? null }]))
+
+  // 🔴 The overlap set: EXTERNAL ids from ad-group-scoped negations only.
+  const negatedExtIds = new Set(
+    mine.filter((n) => n.negativeLevel !== 'CAMPAIGN').map((n) => n.adGroup?.externalAdGroupId).filter((x): x is string => !!x),
+  )
+
+  const runsIn: TermTraffic[] = perAg.map((r) => ({
+    externalAdGroupId: r.adGroupId,
+    adGroupName: nameByExt.get(r.adGroupId)?.adGroupName ?? null,
+    campaignName: nameByExt.get(r.adGroupId)?.campaignName ?? null,
+    impressions: r._sum.impressions ?? 0,
+    clicks: r._sum.clicks ?? 0,
+    spendCents: Math.round(Number(r._sum.costMicros ?? 0n) / 10000),
+    orders: r._sum.orders7d ?? 0,
+    salesCents: r._sum.sales7dCents ?? 0,
+    negated: negatedExtIds.has(r.adGroupId),
+  })).sort((a, b) => b.impressions - a.impressions)
+  const overlap = runsIn.filter((r) => r.negated)
+  const overlapExtIds = new Set(overlap.map((r) => r.externalAdGroupId))
+
+  const performance: TermPerformance = runsIn.reduce((a, r) => ({
+    impressions: a.impressions + r.impressions,
+    clicks: a.clicks + r.clicks,
+    spendCents: a.spendCents + r.spendCents,
+    orders: a.orders + r.orders,
+    salesCents: a.salesCents + r.salesCents,
+    acos: null,
+  }), { impressions: 0, clicks: 0, spendCents: 0, orders: 0, salesCents: 0, acos: null as number | null })
+  performance.acos = performance.salesCents > 0 ? performance.spendCents / performance.salesCents : null
+
+  const hist = await prisma.amazonAdsSearchTerm.aggregate({
+    where: { date: { gte: since120 }, query: key },
+    _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
+  })
+
+  // ── the negations ────────────────────────────────────────────────────────────────────────────
+  const negations: TermNegation[] = mine.map((n) => {
+    const mt = normaliseMatchType(n.expressionType, n.kind)
+    const attr = attributionOf(logByEntity.get(n.id) ?? null)
+    const campaignStatus = n.adGroup?.campaign?.status ?? null
+    const localAgId = n.adGroup?.id ?? ''
+    const campaignId = n.adGroup?.campaign?.id ?? ''
+    const inScope = scopeAdGroups ? scopeAdGroups.has(localAgId) : scopeCampaigns.has(campaignId)
+    const level: NegLevel = n.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
+    return {
+      id: n.id,
+      level,
+      campaignId,
+      campaignName: n.adGroup?.campaign?.name ?? '—',
+      campaignStatus: String(campaignStatus ?? '—'),
+      adGroupId: localAgId,
+      adGroupName: n.adGroup?.name ?? '—',
+      externalAdGroupId: n.adGroup?.externalAdGroupId ?? null,
+      market: n.adGroup?.campaign?.marketplace ?? '—',
+      status: String(n.status),
+      atAmazon: n.externalTargetId != null,
+      blockingNow: isBlockingNow({ status: String(n.status), externalTargetId: n.externalTargetId, campaignStatus }),
+      addedAt: n.createdAt.toISOString(),
+      attribution: attr.kind,
+      attributionLabel: attr.label,
+      match: mt.type,
+      matchRaw: mt.raw,
+      inScope,
+      // A campaign-level row can never overlap: its ad group is an FK convenience, not a place
+      // Amazon blocks anything.
+      overlaps: n.negativeLevel !== 'CAMPAIGN' && !!n.adGroup?.externalAdGroupId && overlapExtIds.has(n.adGroup.externalAdGroupId),
+    }
+  }).sort((a, b) => Number(b.inScope) - Number(a.inScope) || Number(b.blockingNow) - Number(a.blockingNow) || a.campaignName.localeCompare(b.campaignName))
+
+  const inScopeCount = negations.filter((n) => n.inScope).length
+  const outOfScope = negations.filter((n) => !n.inScope)
+  const campLevel = mine.filter((n) => n.negativeLevel === 'CAMPAIGN')
+
+  return {
+    term: {
+      key,
+      // The stored spelling of the most recent row — what an operator will recognise.
+      display: mine.map((n) => n.expressionValue).sort()[0] ?? key,
+      protectedBy: protectionsCovering(key, protections),
+    },
+    spread: {
+      rows: mine.length,
+      // Local ad-group ids over EVERY negation — deliberately the same computation the grid's
+      // spread chip uses, so the chip you clicked and the drawer it opened cannot disagree.
+      adGroups: new Set(mine.map((n) => n.adGroup?.id).filter(Boolean)).size,
+      campaigns: new Set(mine.map((n) => n.adGroup?.campaign?.id).filter(Boolean)).size,
+      markets: [...new Set(mine.map((n) => n.adGroup?.campaign?.marketplace).filter((x): x is string => !!x))].sort(),
+    },
+    comparable: {
+      negatedAdGroups: negatedExtIds.size,
+      campaignLevel: campLevel.length,
+      campaignLevelAtAmazon: campLevel.filter((n) => n.externalTargetId != null).length,
+    },
+    negations,
+    window: { days: windowDays, since: since.toISOString() },
+    performance,
+    runsIn,
+    overlap,
+    overlapRows: negations.filter((n) => n.overlaps).length,
+    history: {
+      days: HISTORY_DAYS,
+      impressions: hist._sum.impressions ?? 0,
+      clicks: hist._sum.clicks ?? 0,
+      spendCents: Math.round(Number(hist._sum.costMicros ?? 0n) / 10000),
+      orders: hist._sum.orders7d ?? 0,
+      salesCents: hist._sum.sales7dCents ?? 0,
+    },
+    remainder: {
+      inScope: inScopeCount,
+      total: negations.length,
+      remainderRows: outOfScope.length,
+      remainderCampaigns: new Set(outOfScope.map((n) => n.campaignId).filter(Boolean)).size,
+      scopeIsWholeAccount,
+    },
+  }
+}

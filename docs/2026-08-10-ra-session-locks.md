@@ -80,6 +80,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/RulesAutomationClient.tsx` | NEG.1 (drop the `negative-targeting` branch only) | 2026-08-12 | **released** |
 | `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **released** — appended at EOF only |
 | `…/rules-automation/rules-automation.css` | KT.1b (3 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **released** — see §5's new trap: these lines shipped inside NEG.1's `1df95d678`, not in a KT.1b commit |
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.2 (`GET /advertising/negatives/term-context`, additive) | 2026-08-12 | **released** |
+| `…/rules-automation/rules-automation.css` | NEG.2 (`h10-ngd-*` at EOF) | 2026-08-12 | **claimed** — appended at EOF only, disjoint prefix from NEG.1's `h10-ng-*` |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **claimed** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
@@ -100,10 +103,20 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's and BID.S0's |
 | `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **claimed** — the `keyword-tracker` branch is already gone; `SovTrackerTab`'s import goes with this branch since it was its last caller |
 | `…/rules-automation/rules-automation.css` | SOV.0 (`h10-sov-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `…/rules-automation/_shared/tabs.tsx` | BSP.0 (`budget-schedules` → `routed: true` + label + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's, BID.S0's and SOV.0's |
+| `…/rules-automation/RulesAutomationClient.tsx` | BSP.0 (drop the `budget-schedules` branch only) | 2026-08-12 | **claimed** — `BudgetScheduleTab`'s import goes with it; verified it was its only caller. Disjoint from SOV.0's `share-of-voice` branch |
+| `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | **claimed** — disjoint `has` value from HV.1's and BID.S0's |
 
 | `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **claimed** — the page's own directory |
 | `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **claimed** — exactly ONE importer (this page's client), but it sits in the shared `tabs/` dir, so it is recorded rather than assumed |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P0 (§2 rows + two §4 hand-offs) | 2026-08-12 | **claimed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.0 (`GET /advertising/placements`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files first. Disjoint from HV.1's `keyword-harvest`, BID.S0's `bid-grid`, KT.2's watchlist CRUD and SOV.0's `share-of-voice-page`; and from the two EXISTING `/advertising/campaigns/:id/placements` routes (`advertising.routes.ts:564`, `:635`), which are a different path and stay as they are |
+| `…/rules-automation/_shared/tabs.tsx` | PLC.0 (`placement` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — ONE entry, disjoint from BID.S0's and SOV.0's |
+| `…/rules-automation/RulesAutomationClient.tsx` | PLC.0 (drop the `placement` branch only) | 2026-08-12 | **claimed** — every other branch byte-identical; disjoint from SOV.0's `share-of-voice` branch |
+| `…/rules-automation/rules-automation.css` | PLC.0 (`h10-plc-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
+| `apps/web/next.config.js` | PLC.0 (one `?tab=placement` redirect, same shape as NEG.1's and BID.S0's) | 2026-08-12 | **claimed** — disjoint `has` value |
+| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | PLC.0 (`dateRange?` — the existing date control becomes optionally CONTROLLED, additive) | 2026-08-12 | **claimed** — see §4 |
 
 **RD.P0 holds nothing in §3, by construction.** The Rank & Dayparting foundation is web-only and
 page-local: no route (so `advertising.routes.ts` and `advertising-intel.routes.ts` are untouched and
@@ -211,6 +224,34 @@ session's push is held** — the same shape as the KT.1b note above, three files
 so the next session to see a red push knows it is not theirs. Not touched: it is HV.1's directory
 and it is obviously mid-flight. Retrying.
 
+**PLC.0 → every session whose page keeps a date control, 2026-08-12.** `AdsPageHeader` declares
+`rangePreset` and `onRangePreset` in its props type and **never destructures either** (`:52-53`
+against `:60`), so those two props are dead: the only callback that fires is `onDateRange(start,
+end)`. Worse for a linkable page, the header owns the range in its own `useState` seeded to the last
+7 days (`:76`), so a page arriving on `?preset=last30` or `?start=…&end=…` renders a header label
+that disagrees with its own grid — two controls for one fact, which is the defect that sank the
+reverted scope bar.
+
+PLC.0 is adding one strictly additive prop: `dateRange?: { start: Date; end: Date }`. Passed, the
+header renders that range and keeps calling `onDateRange` on change (controlled); omitted, the
+header keeps its own state and is **byte-identical for all 49 pages**. `DateRangePicker` already
+takes `value` as a prop — the header simply never let a parent reach it. Take it if your page's
+window has to survive a copied link.
+
+⚠ One residue, stated rather than fixed: `DateRangePicker` seeds its *calendar highlight* from
+`value` at mount only (`:60`, `useState(() => …)`), so a range change that does not originate from
+the picker — the back button — updates the button label but not the highlighted days until the
+popover is reopened. Not fixed here because it is a second behaviour change to a control 49 pages
+render, and the label (which is what you read) is correct in every case.
+
+**PLC.0 → the twelfth pass, on `?page=`.** `AdsDataGrid` holds `page`, `rowsPerPage` and `search`
+in private `useState` with no seed and no callback (`:225-226`, `:582`). BID.S0 closed the sort half
+of this; the pager half is still shut, so `?page=<n>` — which the substrate spec names in the
+per-page vocabulary — **cannot round-trip on any page in this section**. PLC.0 therefore does not
+emit `?page=` rather than emit a param that does not restore the view, and works around the search
+half by owning its own `?q=` input and filtering server-side. Same additive shape as `onSortChange`
+would close it: `initialPage?` + `onPageChange?`.
+
 **BID.S0 → every session that renders an `AdsDataGrid`, 2026-08-12.** `AdsDataGrid` accepts
 `defaultSort` but exposes **no sort callback** — `onSort` (`AdsDataGrid.tsx:351`) is internal — so a
 header click cannot reach the URL and `?sort=` cannot round-trip on any page that uses it. BID.S0 is
@@ -288,6 +329,30 @@ is a one-file job for whoever holds the config.
 **RD.P0 did not touch `next.config.js`.** HV.1 (**held**) and BID.S0 (**claimed**) both hold it in
 §2 and neither has released, so the rule above is a hand-off, not a change. `?tab=dayparting` stays
 broken until one of you takes it — it is one line inside the rule you are already writing.
+
+**BSP.0 → the twelfth pass, 2026-08-12. The scope bar is now forked FIVE times.**
+`BudgetScopeBar` joins `KeywordScopeBar`, `NegativeScopeBar`, `HarvestScopeBar` and `BidScopeBar`.
+Same refusal, same reason as BID.S0's finding above: the BSP.0 brief asked for
+`automations/ScopeForm.tsx` to be promoted to `_shared/` with an additive `mode: 'filter'` prop, and
+it cannot be. Two facts settle it, and the second is the one the brief missed:
+
+1. `ScopeForm` is a **binding editor** — its value type is `{scope*Id}` and it ends in a
+   "Bind this scope" button that writes to a rule. A `mode` prop would not convert it.
+2. 🔴 **Its component consumer is `automations/RuleDetail.tsx:167`, not `AutomationsClient`.**
+   `AutomationsClient.tsx:36` imports only its *types*. So "move the file and update one import"
+   is actually two edits inside another page's directory, which §1.1 reserves to that session.
+
+Five forks is past the point where the twelfth pass should discover it. The extraction is real work
+— the five differ in what they resolve reach *with* (BID.S0 uses the server's `resolveScopeReach`
+via its own grid payload; the other four, including this one, compute the same intersection
+client-side off `/advertising/scope-options` because they have no server payload to carry it). Any
+extracted bar must keep both paths or it will silently change what four pages count.
+
+**BSP.0 took `?tab=budget-schedules` in `next.config.js`, one entry, not the derived rule.** The
+hand-off above prices the derived version at a `.mjs` lift of the routed-key list out of
+`_shared/tabs.tsx` — four sessions hold that file right now, so BSP.0 added its own literal entry
+alongside NEG.1's, HV.1's and BID.S0's rather than restructure a file three other sessions are
+mid-edit on. `?tab=dayparting` and `?tab=keyword-tracker` remain broken and remain unclaimed.
 
 ---
 

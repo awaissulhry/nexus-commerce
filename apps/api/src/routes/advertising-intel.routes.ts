@@ -12,7 +12,7 @@ import prisma from '../db.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
-import { getNegatives, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
+import { getNegatives, getTermContext, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
 import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
 import {
   getBidGrid, getBidCursorForRequest, BID_MARKETS, BID_MARKET_ALL, BID_BANDS,
@@ -384,6 +384,46 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
     // Short private cache. The base is 2,059 rows joined up to the campaign graph and it changes
     // only when an ingest ticks or an operator acts.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── NEG.2 — one term, everywhere it is blocked, and what it earns ───
+  // The single owner of "what does this term do". NEG.3's removal confirm needs `performance` and
+  // `remainder`; NEG.4's detectors need `overlap` and `history`. Both consume this and must not
+  // re-derive it — three derivations would disagree, and the one that disagreed would be the one
+  // on the confirm dialog.
+  //
+  // 🔴 Returns facts, not verdicts. There is deliberately no `isConflict` boolean: whether an
+  // overlap is a conflict is a threshold decision that belongs to NEG.4.
+  fastify.get('/advertising/negatives/term-context', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const term = (q.term ?? '').trim()
+    if (!term) {
+      reply.status(400)
+      return { error: 'term is required', code: 'term_required' }
+    }
+    const rawMarket = (q.market ?? '').trim()
+    const market = rawMarket.toLowerCase() === NEG_MARKET_ALL || !rawMarket ? NEG_MARKET_ALL : rawMarket.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const out = await getTermContext({
+      term,
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      window: q.window ? Number(q.window) : null,
+    })
+    if (!out) {
+      // A term with no negation is not an error — it is one of the drawer's four empty states, and
+      // it has to be distinguishable from a failed read.
+      reply.status(404)
+      return { error: 'no negation of that term exists', code: 'term_not_negated', term }
+    }
     reply.header('Cache-Control', 'private, max-age=60')
     return out
   })
