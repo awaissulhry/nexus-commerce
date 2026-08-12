@@ -124,6 +124,20 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/routes/advertising-intel.routes.ts` | PLC.1 (`GET /advertising/placements/cursor`, additive) | 2026-08-12 | **claimed** — `grep -a`ed both route files; the path is disjoint from every registered route including PLC.0's own `/advertising/placements` (Fastify treats the two as distinct) and from BID.S0's `/advertising/bid-grid/cursor` |
 | `…/rules-automation/rules-automation.css` | PLC.1 (`h10-plc-*` at EOF, flags + census strip) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
 
+| `apps/api/src/routes/advertising-intel.routes.ts` | BUD.1 (`GET /advertising/budget-grid` + `/budget-grid/cursor`, additive) | 2026-08-12 | **released** — landed `97c960b55`, both 401-verified on prod. Paths disjoint from HV.1's, KT.2's, BID.S0's and SOV.0/1's; `grep -a budget-grid` returned nothing across BOTH route files first |
+| `…/rules-automation/_shared/tabs.tsx` | BUD.1 (`budget` → `routed: true` + relabel "Budget Rules" + subtitle) | 2026-08-12 | **released** — landed `c9d564cf9`, hunk verified sole occupant with `git diff -U0` before staging |
+| `…/rules-automation/RulesAutomationClient.tsx` | BUD.1 (drop the `budget` branch only) | 2026-08-12 | **released** — landed `c9d564cf9`. 🔴 NO import became unused: `RuleListTab` / `NoDataIllus` / `Plus` are still used by the default branch, so unlike SOV.0 there was no import to remove with it |
+| `…/rules-automation/rules-automation.css` | BUD.1 (`h10-bud-*` at EOF) | 2026-08-12 | **released** — landed `c9d564cf9`, EOF-append only, prefix had 0 prior hits, every class checked against the stylesheet in BOTH directions |
+| `apps/web/next.config.js` | BUD.1 (one `?tab=budget` redirect) | 2026-08-12 | **released** — landed `c9d564cf9`. ⚠ SOV.1 now claims this file for the generic rule — **do not add a second `?tab=budget` entry**, see §4 |
+| `…/rules-automation/_shared/useCursorPoll.ts` (from `bid/`) | BUD.1 (the promotion BID.S0 pre-blessed) | 2026-08-12 | **released** — landed `f076e20ad`, alone and first. Moved unchanged; one importer, updated; Bid verified unchanged on prod afterwards |
+
+**BUD.1 held nothing that another session held at the same time**, and every shared file carried
+exactly one hunk when it was staged — verified with `git diff -U0` per file rather than assumed.
+The `useCursorPoll` promotion was sequenced FIRST and ALONE, with `bid/` verified clean immediately
+beforehand, so the window in which another session's directory carried an uncommitted line of mine
+was minutes rather than hours. That is the §5 trap pointing outward, and it is the one this
+document has now recorded six times in the other direction.
+
 **RD.P0 holds nothing in §3, by construction.** The Rank & Dayparting foundation is web-only and
 page-local: no route (so `advertising.routes.ts` and `advertising-intel.routes.ts` are untouched and
 there is no duplicate-registration risk), no `tabs.tsx`, no `rules-automation.css`, no
@@ -507,6 +521,28 @@ behind while Postgres stayed correct). `/advertising/rank-schedule-groups` resol
 on the **container** clock (`scheduleNowInTz`, `new Date()`). Measured skew right now is 0 minutes,
 so the list's `Now holding` column is correct **by luck**. Any endpoint answering "what is held right
 now" should take `SELECT now()` as its clock, as `GET /advertising/rank-runtime` does.
+
+**BUD.1 → SOV.1, 2026-08-12 — `?tab=budget` is already done; do not add a second entry.** SOV.1
+claims `next.config.js` for "the `?tab=` redirects the four routed tabs still lack". `budget` is no
+longer one of them: BUD.1 landed its entry in `c9d564cf9`. The tabs still genuinely missing a
+redirect are `automations`, `dayparting` and `keyword-tracker`. If you take RD.P0's generic
+`RULES_TABS.filter(t => t.routed)` form, it **supersedes** my literal entry and mine should be
+deleted in the same commit rather than left beside it — two rules with the same `has` value is a
+duplicate, not a fallback.
+
+**BUD.1 → BUD.2 and the BSP session, 2026-08-12 — the write gate does not do what its name implies,
+and one census number depends on knowing that.** `updateCampaignWithSync` writes the local
+`Campaign.dailyBudget` with **no gate call**; `checkAdsWriteGate` runs later, in
+`ads-sync.worker.ts:356`, at dispatch, and marks the queue row `SKIPPED`. So `liveBidWritesEnabled`
+does not protect a campaign from a budget cut — it makes the campaign **diverge** from Amazon.
+Measured: all 488 `AD_BUDGET_UPDATE` rows that read `amazonResponseStatus = 'PENDING'` are in fact
+488 `WRITE_GATE_DENIED` outbound rows, 122 each on the four MOSS campaigns, every one of them an
+identical €10.00 → €1.00 cut whose local value was back at €10.00 by the next tick. That field is
+stamped at enqueue and never corrected when the worker skips, so **`OutboundSyncQueue.syncStatus`
+is the only truth about whether a write reached Amazon** — `amazonResponseStatus` is not.
+The budget study's §3 reading of those 488 rows ("queued to Amazon but the local value has not
+settled") is wrong, and the corrected mechanism is a closed loop that cannot converge rather than a
+settling delay.
 
 ---
 
