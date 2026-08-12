@@ -144,6 +144,9 @@ export function KeywordHarvestClient() {
   // HV.4 — the candidates queued for the confirm dialog. Repeated params, because a candidate id
   // is `market|campaign|adGroup|term` and a term may contain a comma or a pipe.
   const confirm = params.getAll('confirm')
+  // HV.5 — the second view. `?view=` was reserved in HV.1's contract for exactly this: the cohort
+  // is a VIEW on this page, not a route and not a twelfth page.
+  const view = params.get('view') === 'harvested' ? 'harvested' : 'candidates'
   // Read here so a link can carry them; the CONTROLS that move them are HV.2. `?minOrders=` is the
   // one that matters — the whole finding of the study is that the threshold decides whether this
   // tab has any content.
@@ -515,14 +518,30 @@ export function KeywordHarvestClient() {
           ordering was written for sections that REPORT; this one is the only one that CONTROLS,
           so it belongs above the thing it controls. Everything else about the seam is unchanged:
           same typed props, same file, one import line. */}
-      <HvThresholds {...slotProps} />
+      {/* Two questions, one page: which terms have earned a keyword, and did the last batch work.
+          A segmented control rather than a tab, because the scope, market and header above it apply
+          to both — a tab would imply a different page. */}
+      <div className="h10-hv-viewseg" role="tablist" aria-label="View">
+        {([['candidates', 'Candidates'], ['harvested', 'Harvested']] as const).map(([v, label]) => (
+          <button
+            key={v} type="button" role="tab" aria-selected={view === v}
+            className={`seg ${view === v ? 'on' : ''}`}
+            onClick={() => push({ view: v === 'candidates' ? '' : v })}
+            title={v === 'candidates'
+              ? 'Search terms that have earned their own keyword'
+              : 'What happened to every keyword this account harvested'}
+          >{label}</button>
+        ))}
+      </div>
 
-      {resolution && <p className="h10-hv-said"><b>{resolution}</b></p>}
+      {view === 'candidates' && <HvThresholds {...slotProps} />}
+
+      {view === 'candidates' && resolution && <p className="h10-hv-said"><b>{resolution}</b></p>}
 
       {err && <p className="h10-hv-blind"><AlertTriangle size={13} /><span>{err}</span></p>}
 
       {/* ── The census sentence. Every value computed; none hard-coded. ─────────────────────── */}
-      {census && data && (
+      {view === 'candidates' && census && data && (
         <div className="h10-hv-lede">
           <p>
             <b>
@@ -612,7 +631,7 @@ export function KeywordHarvestClient() {
         </div>
       )}
 
-      {census && (
+      {view === 'candidates' && census && (
         <div className="h10-hv-census" role="group" aria-label="What is in this scope">
           {strip.map((c) => (
             <button
@@ -627,6 +646,7 @@ export function KeywordHarvestClient() {
         </div>
       )}
 
+      {view === 'candidates' && (
       <AdsDataGrid<HarvestRow>
         rows={rows}
         loading={loading}
@@ -676,11 +696,14 @@ export function KeywordHarvestClient() {
         emptyNode={<EmptyState loading={loading} data={data} err={err} q={q} status={status} kind={kind} push={push} />}
         reportLabel={data?.freshness.newestTermDate ? `search terms through ${dayMonth(data.freshness.newestTermDate)}` : undefined}
       />
+      )}
+
+      {/* HV.5 — the second view. One file, one import line, as the contract promised. */}
+      <HvCohort {...slotProps} />
 
       {/* ── The sections that follow the grid. Every one still renders null today. ──────────── */}
       <HvDestination {...slotProps} />
       <HvPromote {...slotProps} />
-      <HvCohort {...slotProps} />
 
       <HvActors {...slotProps} />
       {/* Interim until HV.6/HV.7: the rule list exactly as the tab rendered it, so the move off
