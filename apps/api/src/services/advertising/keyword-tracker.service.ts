@@ -340,7 +340,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // KT.1b — the period groupBy and the three freshness probes depend on nothing but `market`, so
   // they belong in this batch rather than in two more serial round trips. Measured: that ordering
   // alone was most of a 6.6s first paint.
-  const [campaigns, ads, protections, sets, periodGroups, sqpLatest, stLatest, plLatest] = await Promise.all([
+  const [campaigns, ads, watchlists, periodGroups, sqpLatest, stLatest, plLatest] = await Promise.all([
     // KT.1b — `status` joins the select so an ARCHIVED campaign stops inflating the market's
     // campaign count (1 of IT's 150 is archived). See `resolveScope`: it is excluded from the
     // market set but still resolvable by an explicit ?campaign= pick, because the campaign picker
@@ -352,10 +352,12 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
       select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
     }),
-    prisma.adKeywordProtection.findMany({ where: { mode: 'WHITELIST' }, select: { term: true, marketplace: true } }),
-    prisma.keywordCoverageSet.findMany({
-      select: { id: true, name: true, marketplace: true, portfolioId: true, enabled: true },
-      orderBy: { name: 'asc' },
+    // KT.2 — the watchlists this market owns. `KeywordCoverageSet` is no longer read here at all:
+    // it is the coverage engine's arming switch (see keyword-watchlist.service.ts's header) and the
+    // tracker now has its own entity. It survives only as an import source, behind the CRUD routes.
+    prisma.keywordWatchlist.findMany({
+      select: { id: true, marketplace: true, name: true, isDefault: true, source: true, _count: { select: { terms: true } } },
+      orderBy: [{ marketplace: 'asc' }, { isDefault: 'desc' }, { name: 'asc' }],
     }),
     prisma.searchQueryPerformance.groupBy({ by: ['startDate'], where: { marketplace: market }, _count: { _all: true } }),
     prisma.searchQueryPerformance.findFirst({
@@ -390,19 +392,35 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     q.campaign ? prisma.campaign.findUnique({ where: { id: q.campaign }, select: { id: true, name: true } }) : null,
   ])
 
-  // ── the watchlist: the coverage set's terms + the protected whitelist terms ──
-  // KT.1 reads the list that exists. It becomes a real editable object in KT.2 — no new table here.
-  const chosenSet = q.list
-    ? sets.find((s) => s.id === q.list) ?? null
-    : sets.find((s) => s.marketplace === market) ?? sets[0] ?? null
-  const setTerms = chosenSet
-    ? await prisma.keywordCoverageTerm.findMany({ where: { setId: chosenSet.id }, select: { term: true } })
+  // ── the watchlist ──────────────────────────────────────────────────────────
+  // 🔴 KT.2 killed `?? sets[0]`. That fallback served one Italian list to all four markets, and
+  // measured, only 8 of its 97 terms have EVER had a DE row (3 in ES, 3 in FR) — so DE/ES/FR's
+  // near-empty grids were a wrong-list artefact, not a data gap. A market with no watchlist now
+  // resolves to NOTHING and says so; it never borrows another market's terms.
+  const marketLists = watchlists.filter((w) => w.marketplace === market)
+  const chosenList = q.list
+    // A list id from another market is refused rather than silently honoured — the same rule the
+    // scope spine applies to a campaign id from the wrong market.
+    ? marketLists.find((w) => w.id === q.list) ?? null
+    : marketLists.find((w) => w.isDefault) ?? marketLists[0] ?? null
+  /** true when the operator asked for a list that exists but belongs to another market */
+  const listRejected = !!q.list && !chosenList && watchlists.some((w) => w.id === q.list)
+
+  const listTerms = chosenList
+    ? await prisma.keywordWatchlistTerm.findMany({
+      where: { watchlistId: chosenList.id },
+      select: { term: true, isBranded: true },
+      orderBy: { term: 'asc' },
+    })
     : []
 
-  const protectedTerms = [...new Set(protections.filter((p) => !p.marketplace || p.marketplace === market).map((p) => norm(p.term)))]
-  const isBranded = (term: string) => protectedTerms.some((p) => term.includes(p))
+  // KT.2 — branded is now a STORED per-term flag, classified on write by a function that honours
+  // AdKeywordProtection's matchType and marketplace. Nothing is re-derived on read, so an operator
+  // who flips one term keeps that decision.
+  const brandedByTerm = new Map(listTerms.map((t) => [norm(t.term), t.isBranded]))
+  const isBranded = (term: string) => brandedByTerm.get(term) ?? false
 
-  const watchlist = [...new Set([...setTerms.map((t) => norm(t.term)), ...protectedTerms])].sort()
+  const watchlist = [...new Set(listTerms.map((t) => norm(t.term)))].sort()
   const visibleTerms = includeBranded ? watchlist : watchlist.filter((t) => !isBranded(t))
 
   // ── the view's ONE period ──────────────────────────────────────────────────
@@ -538,13 +556,23 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       portfolio: portfolioRow ? { id: portfolioRow.externalPortfolioId, name: portfolioRow.name } : null,
       campaign: campaignRow ? { id: campaignRow.id, name: campaignRow.name } : null,
       /**
-       * `enabled` is the fact KT.1 fetched, returned and never said out loud: the one coverage set
-       * on prod is `enabled: false`. Nothing filters on it and nothing should here — filtering
-       * would blank the page — but a page that reads a disabled list has to say so.
+       * KT.2 — a `KeywordWatchlist`, this market's own. `enabled` is deliberately ABSENT: it was
+       * never a display flag, it is the coverage engine's arming switch, and this entity has no
+       * such column. `source` replaces it as the honest thing to say about a list — where its
+       * terms came from.
        */
-      list: chosenSet
-        ? { id: chosenSet.id, name: chosenSet.name, marketplace: chosenSet.marketplace, terms: setTerms.length, enabled: chosenSet.enabled }
+      list: chosenList
+        ? {
+          id: chosenList.id,
+          name: chosenList.name,
+          marketplace: chosenList.marketplace,
+          terms: listTerms.length,
+          isDefault: chosenList.isDefault,
+          source: chosenList.source,
+        }
         : null,
+      /** true when ?list= named a real list belonging to a DIFFERENT market — the UI must say so */
+      listRejected,
       resolved: {
         campaigns: scope.campaignIds.length,
         asins: scope.asins.length,
@@ -597,6 +625,13 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     },
     rows: page,
     total: filtered.length,
-    lists: sets.map((s) => ({ id: s.id, name: s.name, marketplace: s.marketplace, enabled: s.enabled })),
+    /**
+     * KT.2 — this was returned by KT.1, typed by the client, and rendered nowhere. It is now the
+     * picker's data source: every list for THIS market (the other markets' lists are deliberately
+     * not offered — switching market is how you reach them).
+     */
+    lists: marketLists.map((w) => ({
+      id: w.id, name: w.name, marketplace: w.marketplace, isDefault: w.isDefault, source: w.source, terms: w._count.terms,
+    })),
   }
 }
