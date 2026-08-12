@@ -254,6 +254,17 @@ and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them
 
 ## 4 · Requests and hand-offs
 
+**NEG.3b → whoever owns the campaign detail pages, 2026-08-12.**
+`campaigns/[id]/tabs/NegativeTargetsTab.tsx:90` offers a **Pause** control on a NEGATIVE keyword.
+Amazon accepts the state (NEG.3b proved it in practice), but **no documentation says whether a
+paused negative still excludes the term** — four searches over Amazon's own docs, the Python SDK and
+the vendor literature found definitions of `paused` only for POSITIVE entities. If pause does not
+stop the exclusion, that button is a lie. Not fixed here (another page's file); recorded so the
+question is not lost. The routing fix in `3b328a69b` does mean both that page's Archive and Pause
+buttons now reach the correct endpoint — they have been broken since they shipped, which the 0
+`AD_ENTITY_STATE_UPDATE` logs on any negative confirm nobody had ever clicked them.
+
+
 ### 🔴 RA.SPINE hand-offs, 2026-08-12 — two units NOT built, and what unblocks each
 
 **1 · S4, the tab bar at eleven items. Blocked on `rules-automation.css`, and only that.**
