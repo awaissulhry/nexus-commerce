@@ -3495,3 +3495,91 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-nga-bad b { font-weight: 800; }
 
 @media (max-width: 900px) { .h10-nga-tabs { grid-template-columns: 1fr; } }
+
+/* ── HV.4 — the paired write: the selection action and the confirm dialog ─────────────────────
+   Appended at EOF under `h10-hv-*`. No `.dark` block.
+
+   🔴 The dialog is rendered INSIDE `.h10-rules-page`, not portalled to `document.body`. That is
+   deliberate: `.h10-shell` pins `color-scheme: light` with hard-coded hex, and a DS component
+   portalled to the body escapes that pin and renders dark inside a permanently light page. It also
+   keeps it under the same stacking context as the grid, so it cannot fight `H10Select`'s portalled
+   popover at z-index 200 — this dialog contains no select, by design. */
+
+.h10-hv-promote { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #1f6fde; border: 1px solid #1f6fde; border-radius: 7px; font-size: 12px; font-weight: 700; color: #fff; cursor: pointer; }
+.h10-hv-promote:hover { background: #10457f; border-color: #10457f; }
+
+.h10-hv-wmodal { position: fixed; inset: 0; z-index: 150; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(18, 26, 36, .45); }
+.h10-hv-wmodal .card { width: min(920px, 100%); max-height: 86vh; overflow-y: auto; background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 16px 18px; box-shadow: 0 18px 48px rgba(18, 26, 36, .22); }
+.h10-hv-wmodal .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.h10-hv-wmodal .hd b { font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-hv-wmodal .x { padding: 4px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 6px; color: #55606d; cursor: pointer; line-height: 0; }
+.h10-hv-wmodal .x:hover { background: #e8f1fd; color: #10457f; }
+.h10-hv-wmodal .load { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #55606d; }
+.h10-hv-wmodal .bad { display: flex; align-items: center; gap: 7px; padding: 9px 11px; background: #fdecec; border: 1px solid #f0c9c9; border-radius: 8px; font-size: 12px; color: #9a2c2c; }
+.h10-hv-wmodal .spin { animation: h10hvspin 1s linear infinite; }
+@keyframes h10hvspin { to { transform: rotate(360deg); } }
+
+/* D4 — the sentence, before anything happens */
+.h10-hv-wmodal .say { padding: 12px 14px; background: #e8f1fd; border-radius: 10px; margin: 0 0 12px; }
+.h10-hv-wmodal .say p { margin: 0; font-size: 13px; line-height: 1.65; color: #10457f; }
+.h10-hv-wmodal .say p + p { margin-top: 9px; }
+.h10-hv-wmodal .say b { font-weight: 800; color: #0d3763; }
+.h10-hv-wmodal .say .note { font-size: 11.5px; color: #55606d; }
+.h10-hv-wmodal .say .note code { padding: 0 4px; border-radius: 4px; background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.h10-hv-wmodal .rev { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-wmodal .rev svg { flex: none; margin-top: 3px; }
+.h10-hv-wmodal .rev b { font-weight: 800; color: #7a4812; }
+.h10-hv-wmodal .lnk { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #10457f; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+
+/* one row per candidate — what would happen to each, or why it cannot */
+.h10-hv-wmodal .rowlist { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.h10-hv-wmodal .rowlist li { display: grid; grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1.2fr) auto auto; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #e3e7ec; border-radius: 8px; }
+.h10-hv-wmodal .rowlist li.no { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); background: #fbfcfd; }
+.h10-hv-wmodal .rowlist .t { font-size: 12.5px; font-weight: 700; color: #1c2530; min-width: 0; }
+.h10-hv-wmodal .rowlist .t i { display: block; font-style: normal; font-size: 10.5px; font-weight: 600; color: #667080; }
+.h10-hv-wmodal .rowlist .arrow { color: #a8b0ba; }
+.h10-hv-wmodal .rowlist .dest { font-size: 12px; font-weight: 700; color: #1c2530; min-width: 0; }
+.h10-hv-wmodal .rowlist .dest i { display: block; font-style: normal; font-size: 10.5px; font-weight: 600; color: #667080; }
+.h10-hv-wmodal .rowlist .bid { text-align: right; font-variant-numeric: tabular-nums; }
+.h10-hv-wmodal .rowlist .bid b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-hv-wmodal .rowlist .bid i { display: block; font-style: normal; font-size: 10px; color: #667080; }
+.h10-hv-wmodal .rowlist .bid i.clamp { color: #8a5316; font-weight: 700; }
+.h10-hv-wmodal .rowlist .neg { padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+.h10-hv-wmodal .rowlist .neg.yes { background: #e7f5ed; color: #14724d; }
+.h10-hv-wmodal .rowlist .neg.no { background: #fff6e8; color: #8a5316; }
+.h10-hv-wmodal .rowlist .why { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.55; color: #8a5316; }
+.h10-hv-wmodal .rowlist .why svg { flex: none; margin-top: 2px; }
+.h10-hv-wmodal .rowlist .why b { font-weight: 800; color: #7a4812; }
+.h10-hv-wmodal .rowlist .why i { font-style: normal; color: #667080; }
+
+.h10-hv-wmodal .act { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.h10-hv-wmodal .cancel { padding: 8px 14px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 8px; font-size: 12.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-wmodal .cancel:hover { background: #e8f1fd; color: #10457f; }
+.h10-hv-wmodal .go { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #1f6fde; border: 1px solid #1f6fde; border-radius: 8px; font-size: 12.5px; font-weight: 800; color: #fff; cursor: pointer; }
+.h10-hv-wmodal .go:hover:not(:disabled) { background: #10457f; border-color: #10457f; }
+.h10-hv-wmodal .go:disabled { opacity: .55; cursor: default; }
+
+/* C7 — three outcomes, never one "done" */
+.h10-hv-wmodal .sum { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.h10-hv-wmodal .sum b { padding: 4px 11px; border-radius: 7px; font-size: 12.5px; font-weight: 800; }
+.h10-hv-wmodal .sum b.ok { background: #e7f5ed; color: #14724d; }
+.h10-hv-wmodal .sum b.ref { background: #fff6e8; color: #8a5316; }
+.h10-hv-wmodal .sum b.fail { background: #fdecec; color: #9a2c2c; }
+.h10-hv-wmodal .sum i { font-style: normal; font-size: 11px; color: #667080; }
+.h10-hv-wmodal .outs { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.h10-hv-wmodal .outs li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; padding: 8px 11px; border: 1px solid #e3e7ec; border-radius: 8px; font-size: 12px; }
+.h10-hv-wmodal .outs li.refused { background: #fffaf2; }
+.h10-hv-wmodal .outs li.failed { background: #fdf5f5; }
+.h10-hv-wmodal .outs .t { font-weight: 700; color: #1c2530; }
+.h10-hv-wmodal .outs .d { color: #55606d; line-height: 1.55; }
+.h10-hv-wmodal .outs .d b { font-weight: 800; }
+.h10-hv-wmodal .outs .d b.ok { color: #14724d; }
+.h10-hv-wmodal .outs .d b.warn { color: #8a5316; }
+.h10-hv-wmodal .outs .d b.ref { color: #8a5316; }
+.h10-hv-wmodal .outs .d b.fail { color: #9a2c2c; }
+.h10-hv-wmodal .outs .d b.muted { color: #667080; font-weight: 600; }
+.h10-hv-wmodal .outs .d i { font-style: normal; font-size: 10.5px; color: #667080; }
+
+@media (max-width: 900px) {
+  .h10-hv-wmodal .rowlist li, .h10-hv-wmodal .rowlist li.no, .h10-hv-wmodal .outs li { grid-template-columns: 1fr; }
+}

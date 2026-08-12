@@ -45,7 +45,8 @@ import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { HarvestScopeBar, type HvScope, type ScopeOptionsPayload } from './HarvestScopeBar'
 import {
-  NO_WRITE_ACTIONS,
+  // 🔴 NO_WRITE_ACTIONS is gone: HV.4 supplies the selection action, which is what the seam was
+  // holding open. `onRowClick` still patches the URL rather than mutating anything.
   type HarvestRow, type HvCensus, type HvFreshness, type HvGrain, type HvSlotProps, type HvStatus,
   type HvCriteriaState, type HvAttrition,
 } from './slot-contract'
@@ -53,7 +54,7 @@ import {
 // typed props, so a later section is one file and one import line. Nobody restructures this client.
 import { HvThresholds } from './HvThresholds'
 import { HvDestination, DestName, DEST_STATUS_LABEL, DEST_STATUS_TIP } from './HvDestination'
-import { HvPromote } from './HvPromote'
+import { HvPromote, promoteSelectionActions } from './HvPromote'
 import { HvCohort } from './HvCohort'
 import { HvActors } from './HvActors'
 import { HvQueue } from './HvQueue'
@@ -140,6 +141,9 @@ export function KeywordHarvestClient() {
   // HV.3 — how the destination resolved, and the self-competition filter.
   const dest = params.get('dest') ?? 'all'
   const competing = params.get('competing') ?? ''
+  // HV.4 — the candidates queued for the confirm dialog. Repeated params, because a candidate id
+  // is `market|campaign|adGroup|term` and a term may contain a comma or a pipe.
+  const confirm = params.getAll('confirm')
   // Read here so a link can carry them; the CONTROLS that move them are HV.2. `?minOrders=` is the
   // one that matters — the whole finding of the study is that the threshold decides whether this
   // tab has any content.
@@ -223,6 +227,7 @@ export function KeywordHarvestClient() {
     loading,
     push,
     row,
+    confirm,
     reload: () => setReloadTick((n) => n + 1),
   }
 
@@ -642,11 +647,16 @@ export function KeywordHarvestClient() {
         firstSortValue={(r) => r.termKey}
         columns={columns}
         defaultSort={{ key: 'orders', dir: 'desc' }}
-        /* 🔴 No selection and no row action in HV.1. HV.4 supplies both through the contract, so
-           the promote path ships without opening this file. Hidden, not disabled: there is no
-           greyed Approve button here waiting for a session that has not happened. */
-        selectable={false}
-        selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
+        /* 🔴 HV.4 — the grid becomes selectable, and this is the first control on the page that
+           spends money. The action does not write: it queues the selection into the URL, so the
+           confirm dialog it opens is a LINK someone can review before anyone acts (§4.11). */
+        selectable
+        selectionActions={promoteSelectionActions((queued) => {
+          const next = new URLSearchParams(params.toString())
+          next.delete('confirm')
+          for (const id of queued) next.append('confirm', id)
+          router.replace(`?${next.toString()}`, { scroll: false })
+        })}
         /* HV.3 — a row opens its destination picker. This is NOT a write action: it patches the
            URL, so "look at this one" is a link. NO_WRITE_ACTIONS still supplies HV.4's row menu. */
         onRowClick={(r: HarvestRow) => push({ row: r.termKey })}

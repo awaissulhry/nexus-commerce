@@ -238,6 +238,15 @@ export interface HvSlotProps {
   push: (patch: Record<string, string>) => void
   /** the candidate the URL is focused on (`?row=<term>`), or null. HV.3 opens its panel from this. */
   row: string | null
+  /**
+   * HV.4 — the candidates the URL has queued for the confirm dialog (`?confirm=` repeated).
+   *
+   * In the URL rather than in component state so a confirm is deep-linkable: "look at what this
+   * would do" is a link someone can review before anyone spends money. Repeated params, not a
+   * delimited string — a candidate id is `market|campaign|adGroup|term` and a term may contain a
+   * comma or a pipe.
+   */
+  confirm: string[]
   /** re-run the page's read after a write lands. HV.4 onward call it; HV.1 never does. */
   reload: () => void
 }
