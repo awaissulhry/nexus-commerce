@@ -439,6 +439,36 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── NEG.4 — attention: what is wrong right now ──────────────────────
+  //
+  // Three lists, each a count that can reach zero. 🔴 Detector A's correct answer is currently 0,
+  // and a broken query returns 0 too — so the payload carries `overlapsRelaxed` (the same join
+  // WITHOUT the blocking predicate) and `coverage.searchTermRows` beside it. A zero in either of
+  // those means the read failed, not that the account is clean, and the page says so rather than
+  // rendering an empty box.
+  //
+  // Read-only. It owns the THRESHOLDS; `term-context` owns the FACTS and ships no verdict.
+  fastify.get('/advertising/negatives/attention', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const { getAttention } = await import('../services/advertising/negatives-attention.service.js')
+    const out = await getAttention({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      window: q.window ? Number(q.window) : null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
   // ── NEG.3 — retire a negative ───────────────────────────────────────
   //
   // 🔴 THE ONLY WRITE ON THIS PAGE, AND IT IS IRREVERSIBLE AT AMAZON. Archive is the only removal
