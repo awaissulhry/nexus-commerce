@@ -108,9 +108,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
 | `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
 
-| `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **claimed** — the page's own directory |
-| `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **claimed** — exactly ONE importer (this page's client), but it sits in the shared `tabs/` dir, so it is recorded rather than assumed |
-| `docs/2026-08-10-ra-session-locks.md` | RD.P0 (§2 rows + two §4 hand-offs) | 2026-08-12 | **claimed** |
+| `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **released** — landed `a993fe6bb` (data layer + scope) · `2381486b0` (URL) · `b1bfe40b2` (slots + stylesheet) |
+| `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **released** — landed `a993fe6bb` + `2381486b0`. Still exactly one importer; it now reads `dayparting/_rd/*`, so it is this page's file in everything but its path |
+| `docs/2026-08-10-ra-session-locks.md` | RD.P0 (§2 rows + two §4 hand-offs) | 2026-08-12 | **released** — `a9ec018d2` + this commit |
 | `apps/api/src/routes/advertising-intel.routes.ts` | PLC.0 (`GET /advertising/placements`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files first. Disjoint from HV.1's `keyword-harvest`, BID.S0's `bid-grid`, KT.2's watchlist CRUD and SOV.0's `share-of-voice-page`; and from the two EXISTING `/advertising/campaigns/:id/placements` routes (`advertising.routes.ts:564`, `:635`), which are a different path and stay as they are |
 | `…/rules-automation/_shared/tabs.tsx` | PLC.0 (`placement` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — ONE entry, disjoint from BID.S0's and SOV.0's |
 | `…/rules-automation/RulesAutomationClient.tsx` | PLC.0 (drop the `placement` branch only) | 2026-08-12 | **claimed** — every other branch byte-identical; disjoint from SOV.0's `share-of-voice` branch |
@@ -380,6 +380,33 @@ hand-off above prices the derived version at a `.mjs` lift of the routed-key lis
 alongside NEG.1's, HV.1's and BID.S0's rather than restructure a file three other sessions are
 mid-edit on. `?tab=dayparting` and `?tab=keyword-tracker` remain broken and remain unclaimed.
 
+**RD.P0 → P1–P7, 2026-08-12 — what the foundation guarantees, so no later section re-derives it.**
+
+- **One data layer**, `dayparting/_rd/RdData` — `useRdData()` inside `<RdDataProvider>`. Four
+  requests, down from five with `/rank-schedule-groups` fetched twice. Do not add a fetch to a
+  section; add a field here. It keeps `error` instead of swallowing it, and `refresh()` is the seam
+  a cursor poll lands on — **not** the SSE bus, which carries 0.21% of writes.
+- **Two grains, typed.** `RdGroupRow` is real today. `RdCampaignRow`'s identity half is real today
+  (all 45 campaigns under rank control resolve name, market, portfolio, line and schedule); its
+  `runtime` half — mode · placement · goal · signal · ceiling — is `null` and belongs to P2's
+  endpoint. The field names come from the approved structure doc, so P2 widens rather than invents.
+- **Scope is derived and set-valued**, `dayparting/_rd/scope`. Never read
+  `RankScheduleGroup.marketplace`: it is null on **9 of 16** groups, two of which resolve to DE, so
+  a stored-column filter hides DE groups from a DE filter. `groupMatchesScope` takes anything with
+  a `.scope`, and 17 tests pin the precedence.
+- **The URL is the state**, `dayparting/_rd/useRdUrlState`. `?market= &portfolio= &product=
+  &campaign= &grain= &row= &drawer= &tile=`. Filters `replace`, opening a row `push`es. Defaults are
+  absent from the URL and unknown params survive a filter click.
+- **`RdSection` is the geometry contract.** Mount inside it and a section cannot acquire a
+  horizontal inset — the gutter here is 0, not 24px. It gives each section an id (`#rd-p2`).
+- **Page-scoped CSS**, `rank-dayparting.css`, prefix `rd-*`, plus the four DS stylesheets (verified
+  namespaced under `.h10-ds-*`, so they restyle nothing). `rules-automation.css` is inside the
+  builder boundary — do not append to it from this page.
+
+Measured on prod after the change: sections at x=96 w=1602 with no stagger, 16 rows, and all five
+builder entry points byte-identical. Nothing in P0 changed engine behaviour, edited a `RankTarget`,
+raised a ceiling or armed a schedule.
+
 ---
 
 ## 5 · Traps this repo has already paid for
@@ -426,6 +453,20 @@ mid-edit on. `?tab=dayparting` and `?tab=keyword-tracker` remain broken and rema
   yours was skipped, land another commit that touches the tree to force a build.
 - **Two Next dev servers in one repo fight over `.next`** ("Another write batch or compaction is
   already active") and pages render blank. Kill one or clear `.next/dev`.
+- 🔴 **The `commit --only` trap also runs INWARD: another session can stage a file into the shared
+  index while you are working.** The two instances recorded above are both about your commit
+  sweeping up someone else's *working-tree* changes. Measured 2026-08-12 by RD.P0: a `git add` of
+  five explicit paths came back with **six** staged files — `_schedule/BudgetScheduleTab.tsx`, a
+  125-line deletion, had been staged by another session in the seconds in between. So a plain
+  `git commit` (no paths) is **not** the safe alternative to `commit --only` — it commits the whole
+  index, including whatever another session has just put there. Check `git diff --cached
+  --name-only` immediately before every commit and pass explicit paths, whichever form you use.
+- **A `2>/dev/null` on a CLI that writes to stderr manufactures a zero.** `vercel ls` prints its
+  deployment table to **stderr**, so `npx vercel ls 2>/dev/null | grep -c "Queued\|Building"`
+  returns 0 whatever is happening, and a deploy-wait loop exits immediately claiming everything has
+  settled. Same failure class as the `.catch(() => [])` the study warns about, one layer out: the
+  check reports "nothing pending" when what it means is "I read nothing at all". Verify a zero from
+  any CLI poll against a second reader before acting on it.
 - **Local dev hits the PROD API** unless `NEXT_PUBLIC_API_URL` is set. Running the API locally needs
   `NEXUS_WEB_ORIGINS` to include your web port — CORS allow-lists only `:3000`, and any other port
   silently returns data the browser refuses to read. The page renders **empty with no console
