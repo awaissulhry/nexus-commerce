@@ -239,6 +239,32 @@ one flat colour. Pacvue's *"84 brands compete for the top 10 keywords, none exce
 is **corroborated** as a ceiling — it just cannot be the whole scale. `.thin` is declared last so it
 beats every band on source order.
 
+### 4.3 🔴 Two defects the deployed page showed that the code did not
+
+Both found by loading prod, neither visible to `tsc`, the tests or the probes — which all exercise
+the **service**, and both defects live above it.
+
+**1. `AdsDataGrid` was overruling the server's sort.** The service ranks low-confidence rows last;
+the grid then re-sorts client-side from `sortValue`, which knew only about the share. So
+share-descending still opened with `sappnetta knee spider nero` — 50.00% of four market impressions
+— muted, and first. The styling was right, the stated floor was right, and the order was wrong.
+
+A single scalar cannot express "last in whichever direction you are sorting", because the meaning of
+"last" flips. `sink()` reads `dir` from the URL — the value the grid was seeded with — and pushes
+low-confidence rows to the far end by ±1000, beyond any share (0..1) or Δ in points. Applied to all
+three share-shaped columns, each with its own confidence flag.
+
+*This is the same shape as SOV.0's `toFixed(2)` defect and the third instance of one lesson:*
+**a decision correctly made in the data layer can be undone by the component that renders it.**
+The probes could not have caught either — they call the service directly.
+
+**2. "no comparable prior week" was two different facts.** At `?market=FR&weeks=4` the strip read
+*"no comparable prior week"* directly beneath a header reading *"Δ VS THE WEEK OF 12 JUL (14D
+EARLIER)"*. Both from the same render, contradicting each other. There are two distinct absences —
+`prior.asOf` is null (no earlier week qualifies) versus `prior.asOf` exists but the intersection is
+empty (the week is fine; no query measured now appears in it). FR is the second. It now reads
+**"no query in both weeks"** with *"0 of 1 measured queries appear in both"* beneath it.
+
 ---
 
 ## 5 · The band's pair of numbers
@@ -328,7 +354,15 @@ leaving a known wrong-page bug inside the exact array being edited is worse than
 Also corrected: `/marketing/advertising/share-of-voice` pointed at `?tab=share-of-voice`, which then
 needed a second hop. It now points at the route.
 
-⚠ Still the literal form — now **ten** copies of one rule. The derived version
+✅ **Superseded within the hour, and correctly.** An RA.SPINE S3 session lifted the routed-key list
+into `_shared/rulesTabRoutes.cjs` (a `.cjs`, not the `.mjs` the hand-off guessed — `apps/web` has no
+`"type": "module"`), replaced all ten literal entries with a derived `tabRedirects()`, and added a
+two-direction guard test plus a `PENDING` map so a tab cannot be redirected to a route that is not
+yet committed. Their list covers all **eleven** routed tabs. SOV.1's four literals are on
+`origin/main` and prod is correct today; theirs removes them cleanly. `next.config.js` was left
+entirely to that session from the moment their edit appeared in the tree.
+
+⚠ *(Superseded — retained for the record.)* Still the literal form — **ten** copies of one rule. The derived version
 (`RULES_TABS.filter(t => t.routed)`) remains right and remains blocked on lifting the routed-key list
 out of `'use client'` `_shared/tabs.tsx` into a `.mjs` this CommonJS config can require. What changed
 is that the list is now **complete** rather than three-quarters complete, so the twelfth pass can do
