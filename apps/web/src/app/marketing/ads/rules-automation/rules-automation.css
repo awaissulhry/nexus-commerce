@@ -3778,3 +3778,14 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
    ratchet, the link guard and the build all pass and the section simply renders unseparated. */
 .h10-ngp-fwd { margin: 4px 0 0; }
 .h10-ngp-bwd { margin: 22px 0 0; padding: 16px 0 0; border-top: 2px solid #eef1f5; }
+
+/* 🔴 The delete control rendered as an EMPTY blue box on prod. `.h10-am-btn` carries
+   `padding: 7px 13px` — a text button's padding — so inside this list's 28px icon-only column the
+   content box collapsed and the 12px <Trash2> was laid out at width 0. Height was still 12, so the
+   svg existed, was visible, had opacity 1 and a stroke colour, and passed every check: tsc, the
+   ratchet, the class↔stylesheet sweep and the build. Only LOOKING at it finds this.
+   Scoped to this list so the shared button class is unchanged everywhere else. */
+.h10-ngp-plist .h10-am-btn.bulk {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; flex: none;
+}
