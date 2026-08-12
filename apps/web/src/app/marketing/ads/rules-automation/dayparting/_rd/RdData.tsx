@@ -29,7 +29,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
-import type { RdCampaignRow, RdGroupRow, RdTargetMeta } from './types'
+import type { RdCampaignRow, RdCampaignRuntime, RdGroupRow, RdGroupRuntime, RdTargetMeta } from './types'
 import { EMPTY_RUNTIME } from './types'
 
 /** Built-in keys + the builder's palette, so a row renders before /rank-targets lands. */
@@ -52,6 +52,10 @@ export interface RdData {
   productLines: Array<{ id: string; label: string }>
   /** Every marketplace the ACCOUNT advertises in — what the header's switch offers. */
   markets: string[]
+  /** RD.P2 — the group grain's roll-up, keyed by group id. A SPREAD, never an average. */
+  groupRuntime: Map<string, RdGroupRuntime>
+  /** The clock the runtime was resolved against, and its skew from this process. */
+  clock: { source: string; skewMinutes: number } | null
   loading: boolean
   /**
    * Set when a request failed. Sections must distinguish this from an empty account: rendering
@@ -75,7 +79,7 @@ async function getJson(path: string): Promise<Json> {
 }
 
 export function RdDataProvider({ children }: { children: ReactNode }) {
-  const [raw, setRaw] = useState<{ groups: Json; targets: Json; scope: Json; members: Json } | null>(null)
+  const [raw, setRaw] = useState<{ groups: Json; targets: Json; scope: Json; members: Json; runtime: Json } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
@@ -86,14 +90,17 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
     let alive = true
     ;(async () => {
       try {
-        const [groups, targets, scope, members] = await Promise.all([
+        const [groups, targets, scope, members, runtime] = await Promise.all([
           getJson('/api/advertising/rank-schedule-groups'),
           getJson('/api/advertising/rank-targets'),
           getJson('/api/advertising/scope-options'),
           getJson('/api/advertising/rank-schedule-groups/memberships'),
+          // RD.P2 — the campaign grain. Both grains come from ONE derivation server-side, so the
+          // group roll-up below can never disagree with the members it summarises.
+          getJson('/api/advertising/rank-runtime'),
         ])
         if (!alive) return
-        setRaw({ groups, targets, scope, members })
+        setRaw({ groups, targets, scope, members, runtime })
         setError(null)
       } catch (e) {
         // Kept, not swallowed. The old grid caught this and set rows to [], which rendered
@@ -215,11 +222,41 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
     // resolve a name, market, portfolio, line and schedule. `runtime` stays empty until P2's
     // endpoint exists, because mode, band, live placement, goal-vs-actual, signal age and ceiling
     // state cannot be derived client-side from anything this page can already read.
+    // RD.P2 — runtime by campaign, and the group roll-up, both from /rank-runtime.
+    const runtimeByCampaign = new Map<string, RdCampaignRuntime & { lastEvaluatedAt: string | null; lastApplied: string | null; scheduleEnabled: boolean | null }>()
+    for (const r of arr(raw?.runtime?.['campaigns'])) {
+      const cid = String(r.campaignId ?? '')
+      if (!cid) continue
+      runtimeByCampaign.set(cid, {
+        mode: (r.mode ?? null) as RdCampaignRuntime['mode'],
+        placement: (r.livePlacement ?? null) as RdCampaignRuntime['placement'],
+        goal: (r.goal ?? null) as RdCampaignRuntime['goal'],
+        signal: (r.signal ?? null) as RdCampaignRuntime['signal'],
+        ceiling: (r.ceiling ?? null) as RdCampaignRuntime['ceiling'],
+        activeTargetKey: r.activeTargetKey ? String(r.activeTargetKey) : null,
+        band: (r.band ?? null) as RdCampaignRuntime['band'],
+        canChase: !!r.canChase,
+        canConverge: r.canConverge !== false,
+        cannotConvergeReason: r.cannotConvergeReason ? String(r.cannotConvergeReason) : null,
+        eventName: r.eventName ? String(r.eventName) : null,
+        lastEvaluatedAt: r.lastEvaluatedAt ? String(r.lastEvaluatedAt) : null,
+        lastApplied: r.lastApplied ? String(r.lastApplied) : null,
+        scheduleEnabled: typeof r.scheduleEnabled === 'boolean' ? r.scheduleEnabled : null,
+      })
+    }
+    const groupRuntime = new Map<string, RdGroupRuntime>()
+    for (const g of arr(raw?.runtime?.['groups'])) {
+      const gid = String(g.groupId ?? '')
+      if (gid) groupRuntime.set(gid, g as unknown as RdGroupRuntime)
+    }
+    const clock = (raw?.runtime?.['clock'] ?? null) as RdData['clock']
+
     const groupById = new Map(groups.map((g) => [g.id, g]))
     const campaigns: RdCampaignRow[] = [...memberOf.entries()].map(([campaignId, m]) => {
       const c = campaignById.get(campaignId)
       const g = groupById.get(m.groupId)
       const portfolioId = c?.portfolioId ?? null
+      const rt = runtimeByCampaign.get(campaignId)
       return {
         campaignId,
         campaignName: c?.name ?? campaignId,
@@ -230,10 +267,11 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
         status: c?.status ?? null,
         groupId: m.groupId,
         groupName: g?.name ?? m.groupName,
-        // The member AdSchedule's own switch is not exposed per campaign by any endpoint the page
-        // reads, so it is null rather than guessed from the group's. P2's endpoint carries it.
-        scheduleEnabled: null,
-        runtime: { ...EMPTY_RUNTIME },
+        // P0 left this null because no endpoint carried it. /rank-runtime does.
+        scheduleEnabled: rt?.scheduleEnabled ?? null,
+        lastEvaluatedAt: rt?.lastEvaluatedAt ?? null,
+        lastApplied: rt?.lastApplied ?? null,
+        runtime: rt ?? { ...EMPTY_RUNTIME },
       }
     }).sort((a, b) => a.campaignName.localeCompare(b.campaignName))
 
@@ -241,7 +279,7 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
       scopeCampaigns.map((c) => (c.marketplace ? String(c.marketplace) : '')).filter(Boolean),
     )].sort()
 
-    return { groups, campaigns, targets, portfolioNames, productLines, markets, loading, error, refresh }
+    return { groups, campaigns, targets, portfolioNames, productLines, markets, groupRuntime, clock, loading, error, refresh }
   }, [raw, loading, error, refresh])
 
   return <RdDataContext.Provider value={value}>{children}</RdDataContext.Provider>

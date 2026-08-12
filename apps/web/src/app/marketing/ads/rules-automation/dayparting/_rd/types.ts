@@ -82,43 +82,90 @@ export interface RdGroupRow {
 }
 
 /**
- * The runtime half of a campaign row — **P2 owns every field here.**
+ * The runtime half of a campaign row — **filled by P2's `GET /advertising/rank-runtime`.**
  *
- * The names and shapes come from the approved structure doc (§P2 Mode / Goal vs actual, §P4 Signal,
- * §P5 ceiling), so P2 inherits a contract rather than a guess. P2 may WIDEN any member as the
- * endpoint takes shape; renaming one is a change to this file and to whatever reads it.
+ * P0 declared these five members with the names the approved structure doc uses and left them
+ * null, saying P2 may WIDEN a member but not rename one. That is what happened: the shapes below
+ * are the endpoint's, the five names are P0's.
  *
- * Every field is `null` in P0 and no section renders one. They are computed server-side from
- * `biasBand()` and `cpcCapPct()` — the engine's own pure functions — because a second copy in the
- * web app would drift from the engine that actually decides.
+ * Every value is derived SERVER-SIDE from the engine's own functions (`biasBand`, `cpcCapPct`,
+ * `applyTargetOverrides`, `toSpec`) against the DATABASE clock, so a column here cannot disagree
+ * with the loop that actually decides.
  */
+export type RdModeKind =
+  | 'not-running' | 'governed-elsewhere' | 'nothing-held' | 'dangling-target'
+  | 'min-bid' | 'capped-base' | 'capped-floor' | 'all-out' | 'chasing' | 'holding'
+
+export interface RdMode { kind: RdModeKind; label: string; detail: string }
+
+export interface RdCeiling {
+  capPct: number | null
+  /** The base bid alone already exceeds the ceiling — no multiplier can rescue it. */
+  baseAlone: boolean
+  /** True when the ceiling, not the target, is deciding the placement. */
+  binding: boolean
+  maxCpcCents: number | null
+  maxBaseBidCents: number | null
+  label: string
+}
+
+export interface RdGoal {
+  targetPct: number | null
+  actualPct: number | null
+  /** False when the controller never reads this goal — two causes, and `deadReason` says which. */
+  live: boolean
+  deadReason: string | null
+}
+
+export type RdSignalKind = 'top-is' | 'sqp' | 'none-by-design' | 'no-signal' | 'no-coverage' | 'not-applicable'
+
+export interface RdSignal {
+  kind: RdSignalKind
+  /** The lane the ACTIVE target drives, not the group's baseline. */
+  lane: string | null
+  valuePct: number | null
+  ageDays: number | null
+  rows: number | null
+  label: string
+}
+
 export interface RdCampaignRuntime {
-  /** `Holding 150%` · `Chasing 55% IS` · `Capped 0% by €1.50 CPC`. */
-  mode: { kind: 'holding' | 'chasing' | 'capped'; label: string } | null
-  /** Live placement multipliers. Top and Rest are mutually exclusive search positions. */
+  mode: RdMode | null
+  /** Live placement multipliers off `Campaign.dynamicBidding`. */
   placement: { top: number | null; rest: number | null; product: number | null } | null
-  /** The goal and what is achieved — **null where no goal is live**, which is the honest state on
-   *  29 of 33 campaigns. Printing a dead goal as live is the lie the page currently tells. */
-  goal: { targetPct: number | null; actualPct: number | null; unit: string } | null
-  /** Lane, age, and volume against the trailing norm. Age alone is insufficient: the newest SQP
-   *  week is a collapsed partial that any pure age guard would pass. */
-  signal: { lane: string; ageDays: number | null; rows: number | null; norm: number | null } | null
-  /** The CPC ceiling's verdict. `baseAlone` = the base bid alone already exceeds the ceiling, so
-   *  no multiplier can rescue it — it deserves its own words on the row. */
-  ceiling: { capPct: number | null; baseAlone: boolean; reason: string } | null
+  goal: RdGoal | null
+  signal: RdSignal | null
+  ceiling: RdCeiling | null
+  /** What the schedule resolves to at this hour, and the band the controller would move in. */
+  activeTargetKey: string | null
+  band: { floor: number; ceiling: number } | null
+  canChase: boolean
+  /** False when this campaign can never reach its own goal. Drives Health's new state. */
+  canConverge: boolean
+  cannotConvergeReason: string | null
+  /** Set while a dated event is overriding the weekly plan. */
+  eventName: string | null
 }
 
 export const EMPTY_RUNTIME: RdCampaignRuntime = {
   mode: null, placement: null, goal: null, signal: null, ceiling: null,
+  activeTargetKey: null, band: null, canChase: false, canConverge: true,
+  cannotConvergeReason: null, eventName: null,
 }
 
-/**
- * One advertised campaign under rank control.
- *
- * The identity half is real today. The runtime half is `EMPTY_RUNTIME` until P2 ships
- * the campaign-grain endpoint (structure doc §4: "one endpoint returning per-campaign: resolved
- * target, mode, band, live placement, signal + age, ceiling state, last run").
- */
+/** The group grain, rolled up from its members — a SPREAD, never an average. */
+export interface RdGroupRuntime {
+  groupId: string
+  members: number
+  modeCounts: Array<{ kind: RdModeKind; count: number }>
+  /** `8 capped · 2 all-out`, or one word when every member agrees. */
+  modeSummary: string
+  mixed: boolean
+  cannotConverge: number
+  goalsLive: number
+  signalSummary: string
+}
+
 export interface RdCampaignRow {
   /** Local `Campaign.id`. */
   campaignId: string
@@ -135,5 +182,8 @@ export interface RdCampaignRow {
   groupName: string | null
   /** The member `AdSchedule` row's own switch, which is not the group's. */
   scheduleEnabled: boolean | null
+  /** Last engine tick for THIS campaign, and the key it stamped. */
+  lastEvaluatedAt: string | null
+  lastApplied: string | null
   runtime: RdCampaignRuntime
 }

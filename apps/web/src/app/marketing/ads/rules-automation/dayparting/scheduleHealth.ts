@@ -17,6 +17,10 @@ export interface HealthInput {
   failedWrites: number
   governedElsewhere: number
   membersTotal: number
+  /** RD.P2 — members that can never reach their own goal. 0 when nothing is wrong. */
+  cannotConverge?: number
+  /** The engine's own reason, for the tooltip. */
+  cannotConvergeReason?: string | null
 }
 
 /**
@@ -27,6 +31,7 @@ export const STALE_AFTER_MS = 40 * 60 * 1000
 
 export function scheduleHealth(input: HealthInput, now: number = Date.now()): Health {
   const { enabled, lastEvaluatedAt, failedWrites, governedElsewhere, membersTotal } = input
+  const cannotConverge = input.cannotConverge ?? 0
 
   // Failures outrank everything, including Paused: a schedule paused *because* it was failing
   // must not hide why. The Status column already says Paused, so nothing is lost.
@@ -47,6 +52,31 @@ export function scheduleHealth(input: HealthInput, now: number = Date.now()): He
   }
   if (governedElsewhere > 0) {
     return { tone: 'warn', label: `${governedElsewhere} governed elsewhere`, detail: `${governedElsewhere} of ${membersTotal} campaigns are governed by a Rank Director family plan and are not controlled by this schedule.` }
+  }
+  /**
+   * RD.P2 — the state the page most needed and did not have.
+   *
+   * Placed here deliberately, and the position IS the policy:
+   *
+   *  · BELOW `Governed elsewhere`, because a campaign a family plan owns is not this schedule's to
+   *    converge — saying "cannot converge" about a row it never evaluates would be false.
+   *  · ABOVE `Never run` and `Stale`, because those are TRANSIENT — a schedule armed two minutes
+   *    ago reaches its first tick in fifteen, and a stale cron is fixed by the next tick. Cannot
+   *    converge is a CONFIG fault that no amount of waiting repairs: the ceiling equals the floor,
+   *    or the CPC ceiling pins the placement below its own floor, or the base bid alone defeats the
+   *    ceiling. Ranking a transient above a permanent fault buries the permanent one, which is
+   *    exactly how 29 open-loop campaigns spent months reading `OK`.
+   */
+  if (cannotConverge > 0) {
+    const all = cannotConverge >= membersTotal
+    return {
+      tone: 'warn',
+      label: all ? 'Cannot converge' : `${cannotConverge} cannot converge`,
+      detail: input.cannotConvergeReason
+        ?? (all
+          ? 'This schedule is running and can never reach its goal. Open the Campaigns grain to see which ceiling is deciding.'
+          : `${cannotConverge} of ${membersTotal} campaigns here can never reach their goal. Open the Campaigns grain to see which.`),
+    }
   }
   if (!lastEvaluatedAt) {
     return { tone: 'muted', label: 'Never run', detail: 'No evaluation recorded yet. A schedule armed within the last 15 minutes has simply not reached its first tick.' }

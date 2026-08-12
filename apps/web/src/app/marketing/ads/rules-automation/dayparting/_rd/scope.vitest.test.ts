@@ -29,6 +29,7 @@ const group = (over: Partial<RdGroupRow['scope']>, id = 'g1'): RdGroupRow => ({
 const campaign = (over: Partial<RdCampaignRow>): RdCampaignRow => ({
   campaignId: 'c1', campaignName: 'c1', marketplace: 'IT', portfolioId: null, portfolioName: null,
   productLineIds: [], status: 'ENABLED', groupId: 'g1', groupName: 'g1', scheduleEnabled: null,
+  lastEvaluatedAt: null, lastApplied: null,
   runtime: { ...EMPTY_RUNTIME }, ...over,
 })
 

@@ -20,6 +20,9 @@ import { WeekShape } from '../dayparting/WeekShape'
 import { TemplateLibrary } from '../dayparting/TemplateLibrary'
 import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
 import { useRdData } from '../dayparting/_rd/RdData'
+import { GrainSwitch } from '../dayparting/_rd/GrainSwitch'
+import { ModeSpreadCell, SignalCell } from '../dayparting/_rd/RuntimeCells'
+import type { RdGroupRuntime } from '../dayparting/_rd/types'
 import { useRdUrlState } from '../dayparting/_rd/useRdUrlState'
 import { GRAIN_LABEL, boundBy, groupMatchesScope } from '../dayparting/_rd/scope'
 import type { RdGroupScope } from '../dayparting/_rd/types'
@@ -44,6 +47,9 @@ interface RankRow {
   // RD.P0 — all four derived scope sets, so the row can be narrowed by any grain and not just by
   // market. `marketplaces` above stays because the Market COLUMN renders it.
   scope: RdGroupScope
+  // RD.P2 — the campaign grain rolled up. Null while /rank-runtime is in flight, or for a group
+  // holding no campaigns.
+  runtime: RdGroupRuntime | null
 }
 // RD.P0 — the RankTarget palette (and its built-in fallbacks) moved to the page's data layer, so
 // the week strip, the drawer and every later section colour a key the same way.
@@ -54,7 +60,7 @@ export function RankGoalsList() {
   // RD.P0 — the three fetches this component used to own (groups · rank-targets · portfolios) come
   // from the page's one data layer now, so `/rank-schedule-groups` is no longer requested twice per
   // page load and every later section reads the same rows this grid does.
-  const { groups, targets: tmetaState, loading, refresh } = useRdData()
+  const { groups, targets: tmetaState, loading, refresh, groupRuntime, campaigns, clock } = useRdData()
   // RD.P0 — scope AND the open drawer come from the URL, so a schedule someone is looking at is a
   // link rather than a description of where to click.
   const { state: url, set: setUrl } = useRdUrlState()
@@ -89,6 +95,7 @@ export function RankGoalsList() {
         // RDX/B1 — the DERIVED market set, not the stored scalar, which is null on 9 of 16 groups.
         marketplaces: g.scope.marketplaces,
         scope: g.scope,
+        runtime: groupRuntime.get(g.id) ?? null,
         windowsRaw: g.windowsRaw,
         spendCents: g.performance.costCents,
         salesCents: g.performance.salesCents,
@@ -100,10 +107,12 @@ export function RankGoalsList() {
           failedWrites: g.failedWrites,
           governedElsewhere: g.governedElsewhere,
           membersTotal: g.membersTotal,
+          // RD.P2 — the state this column most needed: running, and unable to reach its goal.
+          cannotConverge: groupRuntime.get(g.id)?.cannotConverge ?? 0,
         }),
       }
     }))
-  }, [groups, tmetaState])
+  }, [groups, tmetaState, groupRuntime])
 
   // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
   // the affected row(s) if the PATCH fails.
@@ -175,6 +184,34 @@ export function RankGoalsList() {
           )
           : <span className="h10-rg-none" title="No window is open and no baseline is set, so this schedule holds nothing right now.">—</span>
       ),
+    },
+    {
+      // RD.P2 — a SPREAD, never one collapsed word. "IT AIRMESH: 8 capped · 2 all-out" is the
+      // sentence the page could not say: one row hid eleven campaigns with four different fates.
+      key: 'mode', label: 'Mode', metric: false, sortable: true, sortValue: (r) => r.runtime?.modeSummary ?? 'zz',
+      tip: 'What the controller will actually do this hour across this schedule\u2019s campaigns. Where they disagree, every state is listed.',
+      render: (r) => (r.runtime
+        ? <ModeSpreadCell summary={r.runtime.modeSummary} mixed={r.runtime.mixed} members={r.runtime.members} />
+        : <span className="rd-none">\u2014</span>),
+    },
+    {
+      key: 'goal', label: 'Goal vs actual', metric: false, sortable: true,
+      sortValue: (r) => -(r.runtime?.goalsLive ?? -1),
+      tip: 'How many of this schedule\u2019s campaigns have a goal the controller actually reads. A dash means none do.',
+      render: (r) => {
+        if (!r.runtime) return <span className="rd-none">\u2014</span>
+        if (r.runtime.goalsLive === 0) {
+          return <span className="rd-goal dead" title="No campaign in this schedule has a goal the controller reads \u2014 every one of them either holds a fixed placement or is all-out."><span className="v">\u2014</span><span className="was">no goal is read</span></span>
+        }
+        return <span className="rd-goal" title={`${r.runtime.goalsLive} of ${r.runtime.members} campaigns are chasing a live goal.`}><b>{r.runtime.goalsLive}</b><span className="vs">of</span><span className="v">{r.runtime.members}</span><span className="unit">live</span></span>
+      },
+    },
+    {
+      key: 'signal', label: 'Signal', metric: false, sortable: true, sortValue: (r) => r.runtime?.signalSummary ?? 'zz',
+      tip: 'The feedback lane the ACTIVE targets drive across this schedule. "No signal" and "no coverage" are different problems.',
+      render: (r) => (r.runtime
+        ? <SignalCell signal={{ kind: r.runtime.signalSummary.includes('coverage') ? 'no-coverage' : r.runtime.signalSummary.includes('no signal') ? 'no-signal' : 'top-is', lane: null, valuePct: null, ageDays: null, rows: null, label: r.runtime.signalSummary }} />
+        : <span className="rd-none">\u2014</span>),
     },
     {
       // RDX/B1 — the column that makes the header's market switch mean something. Multi-market
@@ -346,6 +383,7 @@ export function RankGoalsList() {
           <a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Create Rank Schedule</a>
         </span>
       )}
+      toolbarLeft={<GrainSwitch schedules={rows.length} campaigns={campaigns.length} skewMinutes={clock?.skewMinutes ?? null} />}
       toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
       /* RDX/E1 — a plain row click opens the forward view ("what is this about to do"), which is
          the more useful default; the explicit Activity button still opens the history it names. */

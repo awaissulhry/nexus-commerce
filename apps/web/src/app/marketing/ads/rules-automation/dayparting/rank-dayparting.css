@@ -53,3 +53,51 @@
 .rd-sec + .rd-sec {
   margin-top: 16px;
 }
+
+/* ── RD.P2 · the four runtime columns ────────────────────────────────────────────────────────
+   Tone carries meaning here, so the palette is deliberate rather than decorative:
+     bad   = act now (the base bid alone defeats the ceiling; a dangling target holds nothing)
+     warn  = the ceiling is deciding instead of the target
+     allout= climbing, unbounded except by CPC — its own colour because it is neither a healthy
+             closed loop nor a fault, and colouring it green would repeat the "Chasing" lie
+     ok    = a real closed loop, or a live signal
+     hold  = working as configured, but not pursuing anything
+   Contrast checked against the DS surface token, not by eye. */
+.rd-mode, .rd-sig, .rd-ceil {
+  display: inline-block; max-width: 100%;
+  font-size: 11.5px; font-weight: 600; line-height: 1.35;
+  padding: 3px 8px; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rd-mode.ok,    .rd-sig.ok    { color: #0a5c36; background: #dcf3e7; }
+.rd-mode.hold                 { color: #4a5560; background: #eef1f5; }
+.rd-mode.warn,  .rd-sig.warn, .rd-ceil.warn { color: #8a5a00; background: #fdf3d3; }
+.rd-mode.bad,   .rd-sig.bad,  .rd-ceil.bad  { color: #a3211a; background: #fbdedb; }
+.rd-mode.muted, .rd-sig.muted, .rd-ceil.muted { color: #6b7480; background: #f4f6f9; }
+.rd-mode.allout { color: #6b2fb3; background: #efe6fb; }
+.rd-mode.mixed  { color: #1f4e8c; background: #e3edfb; }
+
+/* Goal vs actual. The dead state is the point of the column: a dash, plus the goal it is NOT
+   pursuing, so the row says "there is a number here and nothing reads it". */
+.rd-goal { display: inline-flex; align-items: baseline; gap: 4px; font-size: 12px; white-space: nowrap; }
+.rd-goal b { font-weight: 700; color: #16202b; }
+.rd-goal .vs { color: #8b95a1; font-size: 10.5px; }
+.rd-goal .v { color: #32404f; }
+.rd-goal .unit { color: #8b95a1; font-size: 10.5px; }
+.rd-goal.dead .v { color: #8b95a1; font-weight: 700; }
+.rd-goal.dead .was { color: #8a5a00; font-size: 10.5px; }
+
+/* Live placement — three fixed slots so the column reads as a row of lanes, not a sentence. */
+.rd-place { display: inline-flex; gap: 6px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.rd-place .s { color: #32404f; }
+.rd-place .s em { color: #8b95a1; font-style: normal; font-weight: 700; margin-right: 2px; }
+.rd-place .s.off { color: #b3bcc6; }
+.rd-place .s.zero { color: #a3211a; font-weight: 700; }
+
+/* The one dash this page uses, so "nothing here" looks the same in every column. */
+.rd-none { color: #b3bcc6; }
+
+/* The grain switch sits in the grid toolbar rather than above the card: it selects what the grid
+   is showing, so putting it anywhere else would separate the control from the thing it controls. */
+.rd-grain { display: inline-flex; align-items: center; gap: 10px; }
+.rd-grain .rd-clock { color: #8b95a1; font-size: 11px; white-space: nowrap; }

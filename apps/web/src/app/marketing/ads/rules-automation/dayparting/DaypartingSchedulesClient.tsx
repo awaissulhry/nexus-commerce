@@ -19,7 +19,7 @@ import { useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
-import { RankGoalsList } from '../tabs/RankGoalsList'
+import { RankGrid } from './RankGrid'
 import { HourlyPerformance, type ScopeOption } from './HourlyPerformance'
 import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
@@ -97,7 +97,7 @@ function DaypartingSchedulesBody() {
           the list is group-grained and every defect the study measured is campaign-grained.
           (P3's row inspector and P4's signal columns land inside this section.) */}
       <RdSection id="p2">
-        <RankGoalsList />
+        <RankGrid />
       </RdSection>
 
       {/* P5 · Guardrails & scope ceilings — spend ceilings per scope, refusals made visible. */}
