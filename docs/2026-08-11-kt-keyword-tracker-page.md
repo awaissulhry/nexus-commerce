@@ -1380,3 +1380,120 @@ FR ~0.5 s.
 `sort`/`dir` still never written to the URL (needs an `AdsDataGrid` sort callback, nine pages);
 `sort=asins` accepted with no matching column; `reportPeriod` unguarded (all 15,075 rows are `WEEK`);
 `sqpImpressionShareForAsins` still has no recency guard — the RD study owns that one.
+
+---
+
+## KT.3 — built
+
+**Shipped and verified on production 2026-08-12.** Session slug `kt3`.
+Measured with `_kt3-columns.mts` (the design) and `_kt3-verify.mts` (the result), both read-only.
+
+**Two columns and an export — eight columns, not the nine the brief allowed.** Keyword · Market ·
+Market volume · Market rank · Our best ASIN's share · **Δ share (pp)** · **Spend · that week** ·
+As of. No new lines, no new filters, no new chrome.
+
+### Stop conditions — all four hold
+
+| | |
+|---|---|
+| a new SQP period | no — still 2026-07-26 |
+| any market on a truncated week | no — IT/DE 19 Jul (655/364 rows), ES/FR 12 Jul (443/42), all `complete` |
+| `AdTarget` carrying money | no — n=2,129, spend 0, sales 0, impressions 0. Control: `AmazonAdsSearchTerm` n=11,026, €7,463.60, so the zero is a measurement |
+| a Δ exceeding its own share | none, in any market |
+
+### 🔴 Orders is not a column — the brief's own test disqualified it
+
+§4.2 recommended Spend **and** Orders. Measured, in the week each grid reads:
+
+| market | orders that week | orders over 30 d |
+|---|---|---|
+| IT | **2** | 6 |
+| DE | **6** | 24 |
+| ES | **1** | 3 |
+| FR | **0** | 0 |
+
+**Nine non-zero cells in the entire product**, 33 over 30 days across 133 terms. That is exactly the
+near-empty column §4.2 says to report rather than ship. Orders ride in the Spend cell's tooltip
+instead, and the grid stops at eight columns.
+
+### Δ — the gap travels with the number
+
+| market | measured | **Δ** | 7 d | 14 d | 21 d | 28 d | 35 d+ | no earlier week |
+|---|---|---|---|---|---|---|---|---|
+| IT | 97 | **78** | 69 | 3 | 0 | 2 | 4 | 19 |
+| DE | 10 | 9 | 8 | 0 | 0 | 0 | 1 | 1 |
+| ES | 6 | 6 | 4 | 0 | 0 | 2 | 0 | 0 |
+| FR | 3 | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
+
+Bounding the search to the 42-day lookback changes nothing (78/9/6/3 either way), so the prior period
+is taken unbounded — the same rule KT.1b uses for last-seen dates.
+
+**9 of the 96 spans are not a week.** The clearest case is DE's `motorradjacke herren winter`:
+**3.36 % → 0.10 %, a −3.26 pp move over 35 days.** Labelled "vs last week" it would be wrong by 28
+days, which is the defect class this page keeps removing — so every row prints its span (`−3.26` ·
+`35d`), neutral at 7 days and amber beyond.
+
+Unit is percentage points, stated in the header. Up is better, in the section's existing
+`up`/`down`/`flat` vocabulary rather than a new one. A measured row with no earlier week says **"no
+earlier week"** — a fifth blank with its own meaning, distinct from the three share blanks. A row
+with no share carries no Δ at all (verified: **0** blank-share rows with a Δ in any market).
+
+### Spend — the share's own week, not 30 days
+
+| market | terms | paid in 30 d | **paid in the share week** | neither |
+|---|---|---|---|---|
+| IT | 97 | 65 · €444.69 | **46 · €135.59** | 32 |
+| DE | 21 | 13 · €597.62 | **10 · €170.73** | 8 |
+| ES | 7 | 1 · €32.90 | **1 · €12.39** | 6 |
+| FR | 8 | 2 · €31.51 | **2 · €4.48** | 6 |
+
+The 30-day window is thicker — and wrong. A 19 Jul share beside 30 days of spend invites *"we spent
+€444 and only got 0.7 %"*, where the two numbers describe different periods. Same-week coverage is
+47 % of measured rows in IT and 48 % in DE, which is enough to be worth a column; the header names
+the window so the row reads as one observation.
+
+Stated in the tooltip, because the row must not imply otherwise: **`AmazonAdsSearchTerm` has no ASIN
+column**, so this is spend on the *term* while the share beside it is one *ASIN's*.
+
+### 🔴 `topOfSearchIS` is not a column
+
+| market | campaigns in scope | with a reading | avg IS |
+|---|---|---|---|
+| IT | 149 | **54** | 25.40 % |
+| DE | 38 | 8 | 27.64 % |
+| ES | 10 | 1 | 7.69 % |
+| FR | 22 | 2 | 14.91 % |
+
+Campaign-grain. On a market grid every row would carry one average of many campaigns; under a
+campaign scope, the identical number on every row. **A column whose value does not vary by row is not
+a column** — the same test that keeps Organic Rank off this page, applied from the other side. It
+joins the reach line as a scope fact, with its date recorded as a **lag** (the IS column stops
+exactly one day behind the placement report it rides on) and its honest denominator (65 of the 81
+campaigns with any placement row).
+
+### Blanks sort last, in both directions
+
+32 IT rows have no spend, 19 no Δ. With nulls as zero, "spend ascending" would surface 32 terms we
+never paid for instead of the cheapest one we did. `nullsLast` is pure, with 5 tests — 4 of them
+written against the naive null-as-zero version first. Verified on prod: ascending opens €0.20,
+descending €38.26, blanks last either way.
+
+### The export keeps its bounds
+
+An export travels and the page does not go with it, so the preamble carries the market, the
+watchlist, **the period the grid reads and its age**, the truncation flag, and **`share measured
+across 18 of 250 advertised ASINs`** — plus one line each stating that the share column is a single
+ASIN's and the spend column is per term.
+
+All four blank states export as their **words**: a spreadsheet flattens `never measured`, `no row
+this week`, `not measurable here` and a real `0.00 %` to the same empty cell otherwise. Full filtered
+set, never the visible page. `buildCsv` is a pure `.ts` module (the web runner cannot import a
+`.tsx`) with 7 tests, one seen to fail first.
+
+### Recorded, not fixed
+
+`sort`/`dir` still never written to the URL — and KT.3 makes that claim worse, since the two new
+sortable columns are the ones an operator would most want to share a view of. `sort=asins` still
+accepted with no matching column; `reportPeriod` unguarded; `sqpImpressionShareForAsins` has no
+recency guard (the RD study owns it). **Observed only, shared, not touched: the rule-type tab bar now
+overflows and clips `Apply Rules` at the left edge** after other sessions added routed tabs.
