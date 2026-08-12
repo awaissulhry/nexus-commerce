@@ -554,6 +554,8 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    // 🔴 Not a truthiness test — see the note on minClicks below.
+    const numOrNull = (v: string | undefined) => (v != null && v !== '' ? Number(v) : null)
 
     const out = await getKeywordHarvest({
       market,
@@ -561,12 +563,21 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       portfolio: q.portfolio ?? null,
       campaign: q.campaign ?? null,
       adGroup: q.adGroup ?? null,
-      // Read in HV.1 so a link can carry them; the CONTROLS that move them are HV.2. The whole
-      // finding of the study is that the threshold decides whether this tab has any content, so a
-      // link has to be able to say which threshold it was looking at.
-      windowDays: q.window ? Number(q.window) : null,
-      minOrders: q.minOrders ? Number(q.minOrders) : null,
-      minSpendEur: q.minSpend ? Number(q.minSpend) : null,
+      // HV.2 — the FILTER half. Absent means "use the policy in force for this scope", which the
+      // service resolves; it never means a hard-coded default here.
+      //
+      // 🔴 `!= null && !== ''`, NOT a truthiness test. `minClicks=0` is a legitimate value that
+      // says "no click floor for this view", and `q.minClicks ? …` would read it as absent and
+      // silently hand back the policy's 3. Found on prod by checking that the count moved when
+      // the param did: it did not, and `overridden` said `(none)` while the URL said otherwise.
+      windowDays: numOrNull(q.window),
+      minOrders: numOrNull(q.minOrders),
+      minClicks: numOrNull(q.minClicks),
+      // 'none' is a value, not an absence: it clears the ceiling for this view, and is the only
+      // way a link can distinguish "no ceiling" from "whatever the policy says".
+      maxAcosPct: q.maxAcos === 'none' ? 'none' : numOrNull(q.maxAcos),
+      matched: oneOf(q.matched, ['all', 'harvestable'] as const),
+      minSpendEur: numOrNull(q.minSpend),
       status: oneOf(q.status, ['new', 'already-exact-here', 'exact-elsewhere', 'local-only', 'all'] as const) as HvStatus | 'all' | null,
       kind: oneOf(q.kind, ['keyword', 'product', 'all'] as const) as HvKind | 'all' | null,
       q: q.q ?? null,
