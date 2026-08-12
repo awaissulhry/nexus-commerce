@@ -82,6 +82,17 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | KT.1b (3 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **released** — see §5's new trap: these lines shipped inside NEG.1's `1df95d678`, not in a KT.1b commit |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
 
+| `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **claimed** — the page's own directory |
+| `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **claimed** — exactly ONE importer (this page's client), but it sits in the shared `tabs/` dir, so it is recorded rather than assumed |
+| `docs/2026-08-10-ra-session-locks.md` | RD.P0 (§2 rows + two §4 hand-offs) | 2026-08-12 | **claimed** |
+
+**RD.P0 holds nothing in §3, by construction.** The Rank & Dayparting foundation is web-only and
+page-local: no route (so `advertising.routes.ts` and `advertising-intel.routes.ts` are untouched and
+there is no duplicate-registration risk), no `tabs.tsx`, no `rules-automation.css`, no
+`next.config.js`, no schema, no `AdsDataGrid`. One consequence worth copying: with no API change,
+every unit is a single Vercel deploy and the two-deploy ordering trap does not apply to this session
+at all.
+
 **Two findings from KT.1 that bind every page in this section:**
 
 1. 🔴 **The page gutter is ZERO, not 24px.** Measured on prod at 1728px: `.h10-hdr`,
@@ -150,6 +161,66 @@ function call rather than a literal.
 🔴 **`?tab=keyword-tracker` has that bug live right now** — KT.1 flipped the tab and no redirect was
 added. It is one entry of the same shape, and it belongs to whoever owns KT; not fixed here because
 a session is scoped to one page.
+
+**RD.P0 → the twelfth pass, 2026-08-12 — the scope bar is now FOUR, and its CSS is what blocks
+the extraction.** BID.S0's finding above counted three. This page needs a fourth (market ·
+portfolio · product line · campaign), which makes the duplication worth stating as a number:
+`KeywordScopeBar.tsx` and `NegativeScopeBar.tsx` are the same file — `inMarket`, `lineOpts`,
+`pfOpts`, `campOpts`, the cascade, the most-specific-wins note, comment for comment — differing only
+in the class prefix and NEG's fifth ad-group grain.
+
+**RD.P0 deliberately shipped NO bar.** Authoring the canonical one here would mean the session with
+the least information about the other three choosing the shape all four inherit, and the moment a
+`_shared/` filename is taken the reconciliation either adopts a design chosen blind or renames across
+four pages. Four honest forks are a better starting state than one premature abstraction. This page
+ships the *contract* instead — URL params, a resolution module and a data layer that honour them —
+and leaves the control to P2, by which time one more session will have reported in.
+
+🔴 **The precondition nobody has named yet: the CSS.** `h10-kt-scope` and `h10-ng-scope` are both
+defined in `rules-automation.css` — the one stylesheet nine pages share, and the file three sessions
+are currently queuing EOF-appends against. An extracted `RaScopeBar` would still have to put its
+selectors there, so the extraction does not actually reduce contention until the component has a
+stylesheet of its own that it imports directly (the pattern `_schedule/DaypartingHeatmap.tsx` →
+`dayparting.css` already uses). **Give the bar a CSS home outside `rules-automation.css` first;
+the component extraction is the easy half.**
+
+**RD.P0 → NEG.1 / HV.1 / BID.S0 / SOV.0, 2026-08-12 — one generic `next.config.js` rule supersedes
+all four per-tab redirects, and three tabs are broken on prod right now.** The per-tab entry NEG.1
+introduced is correct and is not scaling: it has to be remembered by each session separately, and
+three of them have not been. Measured on prod 2026-08-12 by fetching each `?tab=` with
+`redirect: 'manual'` (an opaque `status: 0` is the redirect; `200` is the silent wrong page):
+
+| routed tab | `?tab=` on prod |
+|---|---|
+| `negative-targeting` · `bid` | redirects ✅ |
+| `keyword-harvest` | 200 — entry is committed but not yet deployed |
+| **`automations` · `dayparting` · `keyword-tracker`** | **200 → renders Apply Rules** 🔴 |
+
+**Three of six routed tabs silently land on the wrong page.** All of them are subsumed by one rule
+derived from `RULES_TABS`:
+
+```js
+...RULES_TABS.filter((t) => t.routed).map((t) => ({
+  source: RULES_BASE,
+  has: [{ type: 'query', key: 'tab', value: t.key }],
+  destination: `${RULES_BASE}/${t.key}`,
+  permanent: true,
+})),
+```
+
+It must filter on `routed === true` and nothing else: `?tab=budget`, `?tab=placement`,
+`?tab=share-of-voice` and the rest are the correct, deliberate contract for non-routed tabs, so a
+blanket `?tab=*` redirect would break the majority to fix the minority.
+
+**The catch to price in before taking it:** `next.config.js` is CommonJS evaluated by Node at build
+time and `_shared/tabs.tsx` is a `'use client'` TSX module — the config **cannot import it**. Making
+the rule genuinely derived needs the routed-key list lifted into a plain `.mjs` both sides can read;
+otherwise it is a second copy of the list and the drift just moves. That is the whole cost, and it
+is a one-file job for whoever holds the config.
+
+**RD.P0 did not touch `next.config.js`.** HV.1 (**held**) and BID.S0 (**claimed**) both hold it in
+§2 and neither has released, so the rule above is a hand-off, not a change. `?tab=dayparting` stays
+broken until one of you takes it — it is one line inside the rule you are already writing.
 
 ---
 
