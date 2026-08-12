@@ -32,6 +32,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps, NegationRow } from './slot-contract'
@@ -94,9 +95,13 @@ const classOf = (n: { atAmazon: boolean; status: string }): RowClass =>
  * URL does not carry.
  */
 export function NegRemoval({ scope, push, reload }: NegSlotProps) {
-  const params = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
-  const retireId = params?.get('retire') ?? null
-  const retireTerm = params?.get('retireTerm') ?? null
+  // 🔴 `useSearchParams`, not `window.location.search`. Reading the raw location at render is not
+  // reactive under the App Router's soft navigation: `router.replace` updated the URL and this
+  // component re-rendered from a stale `window.location`, so the dialog never opened. Caught by
+  // clicking Archive on production — the URL gained `?retire=…` and nothing appeared.
+  const params = useSearchParams()
+  const retireId = params.get('retire')
+  const retireTerm = params.get('retireTerm')
   const open = !!(retireId || retireTerm)
 
   const [ctx, setCtx] = useState<TermContext | null>(null)
