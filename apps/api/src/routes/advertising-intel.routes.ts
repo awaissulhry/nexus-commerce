@@ -22,6 +22,7 @@ import {
   getPlacementGrid, PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, LANE_BY_KEY,
   type PlcLaneKey, type PlcSortKey,
 } from '../services/advertising/placement-grid.service.js'
+import { getShareOfVoice, SOV_MARKETS, SOV_WEEKS } from '../services/advertising/share-of-voice.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
@@ -542,6 +543,77 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // Short private cache, as the neighbouring reads use. The base is 220 campaigns expanded to
     // 660 lane rows over one grouped scan of the placement report; the engine moves the lever
     // every 15 minutes and the report lands once a day.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── SOV.0 — the Share of Voice page's one read ──────────────────────
+  //
+  // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1, BID.S0, HV.1 and PLC.0
+  // are: that file is ~600 KB, the repo's default `grep` (ugrep) returns NOTHING on it so a
+  // duplicate is easy to miss, and a duplicate route registration is a BOOT CRASH, not a warning.
+  //
+  // 🔴 The path is `share-of-voice-PAGE`, deliberately. `GET /advertising/share-of-voice` already
+  // exists at `advertising.routes.ts:7284` and still serves the old tab and its CSV. That route is
+  // NOT replaced here and NOT touched: `ads-impression-share.service.ts` behind it is imported by
+  // `buildSovBidContexts`, so retiring it is SOV.7's problem, not SOV.0's. `grep -a`ed both files:
+  // `share-of-voice-page` appears in neither.
+  //
+  // Nor is this a variant of that route. It reads a different table for a different quantity: the
+  // old one divides a query's impressions by 498,606 `AmazonAdsSearchTerm` impressions against a
+  // real campaign-grain total of 1,765,323 (28.2%), because Amazon's search-term report returns
+  // only CLICKED queries and 76% of our impressions are on product detail pages. This one reads
+  // `SearchQueryPerformance` — the whole market's counts against ours.
+  //
+  // One call carries the resolved scope, the chosen period and why, both feeds' freshness, the
+  // census over the FULL filtered set and the facets — so the page can state what it is showing
+  // without a second fetch, and no count it renders is ever computed from a page of rows.
+  fastify.get('/advertising/share-of-voice-page', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    // 🔴 No `all`. Share is a per-market quantity — impression share, market volume and market rank
+    // are all per-marketplace, and `veste moto homme` in FR is a different row from the same string
+    // in DE. There is no honest way to add them, so this refuses rather than merges. Same answer as
+    // the Keyword Tracker, and the opposite of Negatives/Harvest/Placement, where every number is a
+    // count or a EUR amount and sums honestly.
+    const market = (q.market ?? '').toUpperCase()
+    if (!SOV_MARKETS.includes(market as (typeof SOV_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${SOV_MARKETS.join('/')}`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    const weeks = Number(q.weeks)
+
+    const out = await getShareOfVoice({
+      market,
+      line: q.line || null,
+      portfolio: q.portfolio || null,
+      campaign: q.campaign || null,
+      // 'all' is the DEFAULT here and the list is a filter, not the population — the deliberate
+      // inverse of the Keyword Tracker, which defaults to its list. A market view shows the market.
+      list: q.list || null,
+      // How far back the view may reach for its ONE period, in weeks. Not a trend window: SOV.0
+      // renders one period, and this decides which. Measured: at 4, ES and FR have no complete week
+      // inside the bound and both fall to the truncated-week branch.
+      weeks: (SOV_WEEKS as readonly number[]).includes(weeks) ? weeks : null,
+      // branded=1 includes our own brand terms; absent or 0 excludes them. The SOV study measured
+      // 0.37% branded and recommended defaulting it ON; the Keyword Tracker measured `xavia` at
+      // 5.45% against a market volume of 3 and defaults it off. KT is right — tiny volumes let
+      // brand terms flatter the page — so both pages default it off.
+      branded: q.branded === '1' || q.branded === 'true',
+      // Honoured, but NOT rendered as a control: measured 2026-08-12, `SearchQueryPerformance` holds
+      // 0 ASIN-shaped queries in all four markets, all-time. The 643 of 5,383 the study counts are
+      // on the AD side (`AmazonAdsSearchTerm`), which this page does not read until SOV.2. A
+      // control where no pixel moves does not go on the page (RA plan §3.0).
+      kind: oneOf(q.kind, ['keyword', 'asin', 'all'] as const),
+      q: q.q || null,
+      sort: oneOf(q.sort, ['query', 'volume', 'rank', 'share', 'asins'] as const),
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+      limit: q.limit ? Number(q.limit) : undefined,
+      offset: q.offset ? Number(q.offset) : undefined,
+    })
+    // Short private cache: one grouped scan of SQP joined to the campaign/ad graph, and both feeds
+    // underneath move once a night at most.
     reply.header('Cache-Control', 'private, max-age=60')
     return out
   })
