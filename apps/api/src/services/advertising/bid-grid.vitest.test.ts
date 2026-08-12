@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { bandOf, BID_BANDS, type BidBand } from './bid-grid.service.js'
+import { bandOf, labelFor, BID_BANDS, type BidBand } from './bid-grid.service.js'
 
 describe('bandOf', () => {
   it('is total over every bid a target can hold', () => {
@@ -56,5 +56,42 @@ describe('bandOf', () => {
     const reachable = new Set<BidBand>()
     for (let c = 0; c <= 400; c++) reachable.add(bandOf(c))
     expect([...reachable].sort()).toEqual([...BID_BANDS].sort())
+  })
+})
+
+describe('labelFor', () => {
+  it('never returns a blank, for any combination present in the account', () => {
+    // The 256 expressionless rows, by (kind, match) as measured 2026-08-12.
+    const live: Array<[string, string]> = [
+      ['AUTO', 'SEARCH_CLOSE_MATCH'], ['AUTO', 'SEARCH_LOOSE_MATCH'],
+      ['AUTO', 'PRODUCT_SUBSTITUTES'], ['AUTO', 'PRODUCT_COMPLEMENTS'],
+      ['AUTO', 'PRODUCT_SIMILAR'], ['AUTO', 'SEARCH_RELATED_TO_YOUR_BRAND'],
+      ['AUTO', 'SEARCH_RELATED_TO_YOUR_LANDING_PAGES'],
+      ['PRODUCT_CATEGORY', 'UNKNOWN'], ['PRODUCT_AUDIENCE', 'PRODUCT_EXACT'],
+      ['AUDIENCE', 'UNKNOWN'], ['PRODUCT_CATEGORY_AUDIENCE', 'UNKNOWN'],
+      // and the shape nobody has yet: something new from Amazon
+      ['SOMETHING_NEW', 'ALSO_NEW'],
+    ]
+    for (const [kind, match] of live) {
+      const { label, derived } = labelFor('', kind, match)
+      expect(label.trim(), `${kind}/${match} produced a blank identity`).not.toBe('')
+      expect(derived).toBe(true)
+    }
+  })
+
+  it('prefers what Amazon stores, and does not call it derived', () => {
+    expect(labelFor('motorrad jacke herren', 'KEYWORD', 'EXACT')).toEqual({ label: 'motorrad jacke herren', derived: false })
+    expect(labelFor('B00KS3SUGU', 'PRODUCT', 'PRODUCT_EXACT')).toEqual({ label: 'B00KS3SUGU', derived: false })
+  })
+
+  it('treats whitespace as absent — a row of spaces is a blank column', () => {
+    expect(labelFor('   ', 'AUTO', 'PRODUCT_SUBSTITUTES')).toEqual({ label: 'Substitutes', derived: true })
+    expect(labelFor(null, 'AUTO', 'SEARCH_CLOSE_MATCH')).toEqual({ label: 'Close match', derived: true })
+  })
+
+  it('falls back to the kind rather than inventing a group the match cannot support', () => {
+    // 53 rows store UNKNOWN. Naming one of those "Close match" would be a guess presented as a fact.
+    expect(labelFor('', 'AUDIENCE', 'UNKNOWN').label).toBe('Audience')
+    expect(labelFor('', 'PRODUCT_CATEGORY', 'UNKNOWN').label).toBe('Category target')
   })
 })

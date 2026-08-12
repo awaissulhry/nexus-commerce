@@ -99,9 +99,54 @@ export interface BidGridRequest {
   limit: number
 }
 
+/**
+ * 🔴 256 of 3,154 targets (8.1%) carry an EMPTY `expressionValue`, and they hold €608.56 of 30-day
+ * spend — 18% of the account's total. They are the auto-targeting groups (AUTO 175) and the
+ * audience/category forms (PRODUCT_CATEGORY 32 · PRODUCT_AUDIENCE 28 · AUDIENCE 14 ·
+ * PRODUCT_CATEGORY_AUDIENCE 7). None of them has a text expression, because none of them IS one:
+ * a "substitutes" target is identified by its targeting group, exactly as Seller Central names it.
+ *
+ * Found by looking at the deployed grid, where 21 of the first 100 rows had a blank identity
+ * column — including the 7th-largest spender on the page. A blank there is not cosmetic: that
+ * column is the sort key, the search key, and the thing S3 will hang the bid curve off.
+ *
+ * Derived on the SERVER so the grid, the CSV export, the search and every later section say the
+ * same words. `text` stays raw beside it, so a consumer can always tell a derived label from one
+ * Amazon actually stores.
+ */
+const AUTO_GROUP_LABEL: Record<string, string> = {
+  SEARCH_CLOSE_MATCH: 'Close match',
+  SEARCH_LOOSE_MATCH: 'Loose match',
+  PRODUCT_SUBSTITUTES: 'Substitutes',
+  PRODUCT_COMPLEMENTS: 'Complements',
+  SEARCH_RELATED_TO_YOUR_BRAND: 'Related to your brand',
+  SEARCH_RELATED_TO_YOUR_LANDING_PAGES: 'Related to your landing pages',
+  PRODUCT_SIMILAR: 'Similar products',
+  PRODUCT_EXACT: 'Exact product',
+}
+const KIND_LABEL: Record<string, string> = {
+  AUTO: 'Auto targeting',
+  PRODUCT_CATEGORY: 'Category target',
+  PRODUCT_CATEGORY_AUDIENCE: 'Category audience',
+  PRODUCT_AUDIENCE: 'Product audience',
+  AUDIENCE: 'Audience',
+}
+
+/** The row's identity. Never blank — but never invented precision either: where the match type
+ *  says nothing (`UNKNOWN`, 53 rows) it falls back to the kind rather than guessing a group. */
+export function labelFor(text: string | null, kind: string, match: string): { label: string; derived: boolean } {
+  const t = (text ?? '').trim()
+  if (t) return { label: t, derived: false }
+  return { label: AUTO_GROUP_LABEL[match] ?? KIND_LABEL[kind] ?? kind.replace(/_/g, ' ').toLowerCase(), derived: true }
+}
+
 export interface BidTargetRow {
   id: string
   text: string
+  /** `text` when Amazon stores one; otherwise the targeting group's name. Never blank. */
+  label: string
+  /** true when `label` was derived because there is no expression to show */
+  derived: boolean
   kind: string
   match: string
   bidCents: number
@@ -304,11 +349,16 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     const salesCents = p ? (p._sum.sales7dCents ?? 0) : 0
     const clicks = p ? (p._sum.clicks ?? 0) : 0
     const c = t.adGroup.campaign
+    const kind = t.kind || 'UNKNOWN'
+    const match = t.expressionType || 'UNKNOWN'
+    const { label, derived } = labelFor(t.expressionValue, kind, match)
     return {
       id: t.id,
       text: t.expressionValue,
-      kind: t.kind || 'UNKNOWN',
-      match: t.expressionType || 'UNKNOWN',
+      label,
+      derived,
+      kind,
+      match,
       bidCents: t.bidCents,
       band: bandOf(t.bidCents),
       status: String(t.status),
@@ -338,8 +388,10 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
   const pMatch = (r: BidTargetRow) => req.match.length === 0 || req.match.includes(r.match)
   const pBand = (r: BidTargetRow) => !req.band || r.band === req.band
   const pMeasured = (r: BidTargetRow) => req.measured === 'all' || (req.measured === 'yes' ? r.measured : !r.measured)
+  // Searches the LABEL, not the raw text: otherwise the 256 rows with no expression are
+  // unreachable by the one control an operator uses to find a row they can see on screen.
   const pQ = (r: BidTargetRow) => !needle
-    || r.text.toLowerCase().includes(needle)
+    || r.label.toLowerCase().includes(needle)
     || r.campaignName.toLowerCase().includes(needle)
     || r.adGroupName.toLowerCase().includes(needle)
 
@@ -413,7 +465,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
   // ── sort ──────────────────────────────────────────────────────────────────────────────────────
   const sign = req.dir === 'asc' ? 1 : -1
   const targetSort: Record<string, (r: BidTargetRow) => number | string | null> = {
-    target: (r) => r.text.toLowerCase(), match: (r) => r.match, kind: (r) => r.kind,
+    target: (r) => r.label.toLowerCase(), match: (r) => r.match, kind: (r) => r.kind,
     adGroup: (r) => r.adGroupName.toLowerCase(), campaign: (r) => r.campaignName.toLowerCase(),
     market: (r) => r.market, bid: (r) => r.bidCents, impressions: (r) => r.impressions,
     clicks: (r) => r.clicks, cpc: (r) => r.cpcCents, spend: (r) => r.spendCents, acos: (r) => r.acos,
