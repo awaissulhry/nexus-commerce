@@ -9,20 +9,60 @@
 import prisma from '../../db.js'
 
 export interface NgramRow {
-  gram: string; n: 1 | 2; terms: number
+  gram: string; n: 1 | 2
+  /**
+   * 🔴 NOT the number of search terms a negation of this gram would block. Measured 2026-08-12:
+   * `moto protezioni` reports **61** here and only **13** queries actually contain that phrase.
+   *
+   * The tokenizer strips stop words BEFORE pairing (line ~62), so "giacca moto con protezioni"
+   * yields the 2-gram `moto protezioni` even though those words are not adjacent in the query.
+   * For a 1-gram the two counts agree; for a 2-gram this over-reports by up to 4.7×.
+   *
+   * Anything offering an ACTION must count contiguous token matches itself — see
+   * `negatives-ngrams.service.ts`, which does, and puts that number on the row instead.
+   */
+  terms: number
   impressions: number; clicks: number; costCents: number; orders: number; salesCents: number
   acos: number | null; roas: number | null
 }
 
 const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'di', 'da', 'il', 'la', 'le', 'e', 'per', 'con', 'der', 'die', 'das', 'und'])
 
-export async function analyzeNgrams(opts: { windowDays?: number; minCostCents?: number } = {}): Promise<{ windowDays: number; winning: NgramRow[]; wasteful: NgramRow[] }> {
+/**
+ * NEG.6 — the scope filter. Additive: every field is optional and absent means "account-wide",
+ * which is exactly what this function did before, so the standalone `GET /advertising/ngrams`
+ * caller is byte-identical.
+ *
+ * 🔴 It exists because an account-wide number under a narrowed heading is a lie, and the data says
+ * so loudly. Measured 2026-08-12 over 60 days: `homologué` (€72.47) is **100% FR**, `protezioni`
+ * (€134.32) is **100% IT**. Showing either under an "IT · GALE line" heading would attribute spend
+ * to a market that never spent it.
+ *
+ * `campaignIds`/`adGroupIds` are **EXTERNAL** Amazon ids, because that is what
+ * `AmazonAdsSearchTerm` stores. Passing local ids returns zero rows forever and looks exactly like
+ * a quiet account — the caller maps them (see `negatives-ngrams.service.ts`).
+ */
+export interface NgramScope {
+  windowDays?: number
+  minCostCents?: number
+  marketplace?: string | null
+  /** EXTERNAL Amazon campaign ids. */
+  campaignIds?: string[] | null
+  /** EXTERNAL Amazon ad-group ids. */
+  adGroupIds?: string[] | null
+}
+
+export async function analyzeNgrams(opts: NgramScope = {}): Promise<{ windowDays: number; winning: NgramRow[]; wasteful: NgramRow[] }> {
   const windowDays = opts.windowDays ?? 60
   const minCost = opts.minCostCents ?? 300
   const since = new Date(Date.now() - windowDays * 86400_000)
+  const where: Record<string, unknown> = { date: { gte: since } }
+  if (opts.marketplace) where.marketplace = opts.marketplace
+  if (opts.campaignIds) where.campaignId = { in: opts.campaignIds }
+  if (opts.adGroupIds) where.adGroupId = { in: opts.adGroupIds }
   const rows = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query'],
-    where: { date: { gte: since } },
+    where,
     _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
   })
 

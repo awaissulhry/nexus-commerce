@@ -262,6 +262,13 @@ followed rather than recorded after the fact.
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.5 (absorb `ProtectedTermsPanel` — its render + import removed, nothing restructured) | 2026-08-12 | **released** — landed `7c9b92698`; the panel FILE stays, see §4 |
 | `…/rules-automation/ProtectedTermsPanel.tsx` | NEG.5 — **NOT TOUCHED, claim withdrawn.** 🔴 The brief assumed the negative-targeting client was its only caller. It is not: `control-room/GuardrailsTab.tsx:197` mounts it too, deliberately (its own comment calls it "a second MOUNT and not a second copy"). Deleting the file is a build break on a page NEG.5 does not own, and editing it changes the Control Room's rendering without that programme's knowledge. NEG.5 removes only the render + import from ITS OWN client; the file and the ACR mount stay. See §4 | 2026-08-12 | **released** |
 
+| `apps/api/src/services/advertising/ads-ngram.service.ts` | NEG.6 (`marketplace` + campaign/ad-group filter on `analyzeNgrams`, additive — absent = today's account-wide behaviour) | 2026-08-13 | **released** — plus a doc comment on `NgramRow.terms`, which over-reports a 2-gram's reach by up to 4.7× |
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.6 (`GET /advertising/negatives/wasteful-words` + `POST /advertising/negatives/negate-gram`, additive) | 2026-08-13 | **released** — `grep -a`ed BOTH route files: both paths had **zero** hits |
+| `apps/api/src/routes/advertising.routes.ts` | NEG.6 (`marketplace` forwarded on the EXISTING `GET /advertising/ngrams`; **no new route registered** — `grep -a` confirms still exactly one `fastify.get('/advertising/ngrams'`) | 2026-08-13 | **released** |
+| `…/rules-automation/rules-automation.css` | NEG.6 (`h10-ngw-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `apps/web/next.config.js` | NEG.6 (one `/marketing/advertising/ngrams` redirect, literal path) | 2026-08-13 | **claimed** |
+| `…/marketing/advertising/ngrams/*` | NEG.6 (delete `NgramClient.tsx` + `page.tsx` after the redirect is live and verified; `grep -r` finds **no importer** outside its own directory) | 2026-08-13 | **claimed** |
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |

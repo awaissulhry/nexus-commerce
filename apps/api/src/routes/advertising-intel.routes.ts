@@ -592,6 +592,79 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── NEG.6 — wasteful words: the n-grams, scoped and safe to act on ──
+  //
+  // The n-gram surface has worked since AX.11 and was orphaned on its own route with no scope and
+  // no action. This adds both.
+  //
+  // 🔴 The row's `catches` is a CONTIGUOUS TOKEN match, not `NgramRow.terms`. The tokenizer strips
+  // stop words before pairing, so `moto protezioni` reports 61 terms while only 13 queries contain
+  // that phrase — a 4.7× overstatement on the exact number a confirm dialog would quote.
+  fastify.get('/advertising/negatives/wasteful-words', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const { getWastefulWords } = await import('../services/advertising/negatives-ngrams.service.js')
+    const out = await getWastefulWords({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      window: q.window ? Number(q.window) : null,
+    })
+    reply.header('Cache-Control', 'private, max-age=120')
+    return out
+  })
+
+  // ── NEG.6 — negate one gram as a negative phrase ────────────────────
+  //
+  // 🔴 THE ONLY CREATE PATH ON THIS PAGE, and one decision replaces up to 195 term-level ones.
+  //
+  // The service re-runs every safety rail server-side before writing. The UI disabling the button
+  // is a courtesy; this is the enforcement — a stale page, a hand-made request, or a gram that
+  // became unsafe between render and click all arrive here and are refused with the rail named.
+  //
+  // One gram per request. No bulk: `gram` is a string, not an array, and that is deliberate.
+  //
+  // RBAC: a POST under /api/advertising requires `ads.campaigns.manage`, not `ads.view`.
+  fastify.post('/advertising/negatives/negate-gram', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const gram = typeof b.gram === 'string' ? b.gram.trim() : ''
+    if (!gram) { reply.status(400); return { error: 'gram is required', code: 'gram_required' } }
+    if (b.confirm !== true) {
+      reply.status(400)
+      return { error: 'confirm:true is required — a negative phrase cannot be undone at Amazon, only archived', code: 'confirm_required' }
+    }
+    const rawMarket = typeof b.market === 'string' ? b.market.trim() : ''
+    const market = rawMarket.toLowerCase() === NEG_MARKET_ALL || !rawMarket ? NEG_MARKET_ALL : rawMarket.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    const { negateGram } = await import('../services/advertising/negatives-ngrams.service.js')
+    const out = await negateGram({
+      gram,
+      market,
+      line: typeof b.line === 'string' ? b.line : null,
+      portfolio: typeof b.portfolio === 'string' ? b.portfolio : null,
+      campaign: typeof b.campaign === 'string' ? b.campaign : null,
+      adGroup: typeof b.adGroup === 'string' ? b.adGroup : null,
+      window: typeof b.window === 'number' ? b.window : null,
+      actor: `user:${userId}`,
+    })
+    // 🔴 Always 200 with per-ad-group outcomes when the write ran; a single status cannot carry
+    // four outcome classes across 27 ad groups. A pre-write refusal is a 400 with its rail.
+    if (!out.ok) reply.status(400)
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
   // ── BID.S0 — the Bid page's one read ────────────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1 and NEG.1 are: a duplicate route
