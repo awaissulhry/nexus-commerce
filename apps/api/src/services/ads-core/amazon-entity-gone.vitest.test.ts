@@ -157,3 +157,60 @@ describe('WF.1 isContradictoryOrphan', () => {
     expect(isContradictoryOrphan(orphanReasonFrom(liveErr), 'AUTO')).toBe(true)
   })
 })
+
+// ── NEG.3 — the orphan trap, one entity class over ───────────────────────────────────────────
+//
+// DL.3 asks "did the error come from an endpoint that cannot own this entity?" and answers it from
+// `kind`. That is not enough for a NEGATIVE keyword, which is also kind=KEYWORD: before the NEG.3
+// routing fix, archiving one PUT to /sp/keywords, Amazon answered `entityNotFoundError` at
+// `$.keywords[0].keywordId`, and this detector saw keyword-shaped error + KEYWORD kind = no
+// contradiction = GONE. The row would then be orphaned, `orphanedAt` blocks every non-forced
+// write, and `isContradictoryOrphan` could not clear it for the same reason. Live at Amazon, dead
+// here, permanently unwritable — the WF.1 deadlock on a new entity class.
+describe('NEG.3 — a negative row is not gone just because /sp/keywords could not find it', () => {
+  const NOT_FOUND = '{"errorType":"entityNotFoundError","message":"not found","location":"$.keywords[0].keywordId"}'
+
+  it('🔴 a POSITIVE-keyword-shaped miss on a NEGATIVE row is a routing fault, not a deletion', () => {
+    expect(isEntityGoneError(NOT_FOUND, { kind: 'KEYWORD', isNegative: true })).toBe(false)
+  })
+  it('…and the same error on a POSITIVE keyword still means gone, exactly as before', () => {
+    expect(isEntityGoneError(NOT_FOUND, { kind: 'KEYWORD', isNegative: false })).toBe(true)
+    expect(isEntityGoneError(NOT_FOUND, { kind: 'KEYWORD' })).toBe(true)
+  })
+  it('a miss from the NEGATIVE endpoint on a negative row IS a real deletion', () => {
+    // Once routing is correct, Amazon's "not found" is about its inventory again — and must be
+    // believed, or a genuinely deleted negative would be retried forever.
+    const negMiss = '{"errorType":"entityNotFoundError","location":"$.negativeKeywords[0].keywordId"}'
+    expect(isEntityGoneError(negMiss, { kind: 'KEYWORD', isNegative: true })).toBe(true)
+  })
+  it('a campaign-negative miss on a negative row is also believed', () => {
+    const campMiss = '{"errorType":"entityNotFoundError","location":"$.campaignNegativeKeywords[0].keywordId"}'
+    expect(isEntityGoneError(campMiss, { kind: 'KEYWORD', isNegative: true })).toBe(true)
+  })
+  it('🔴 substring care: $.negativeKeywords must not be read as $.keywords', () => {
+    // `"$.negativekeywords".includes("$.keywords")` is false only because of the `$.`; the check
+    // does not rely on that — the negative shape is tested first and wins.
+    const negMiss = '{"errorType":"entityNotFoundError","location":"$.negativeKeywords[0].keywordId"}'
+    expect(isEntityGoneError(negMiss, { kind: 'KEYWORD', isNegative: false })).toBe(false) // positive row, negative endpoint = our fault
+  })
+  it('a targeting-clause miss on a negative product target is a routing fault too', () => {
+    const tgtMiss = '{"errorType":"entityNotFoundError","location":"$.targetingClauses[0].targetId"}'
+    expect(isEntityGoneError(tgtMiss, { kind: 'PRODUCT', isNegative: true })).toBe(false)
+  })
+})
+
+describe('NEG.3 — isContradictoryOrphan can withdraw a mark made before the routing fix', () => {
+  it('🔴 a negative stamped with a POSITIVE keyword miss is self-contradictory', () => {
+    expect(isContradictoryOrphan('Amazon reports this entity no longer exists (keyword 1428)', 'KEYWORD', true)).toBe(true)
+  })
+  it('a negative stamped with a NEGATIVE miss is NOT contradictory — that mark is supported', () => {
+    expect(isContradictoryOrphan('Amazon reports this entity no longer exists (negativekeyword 1428)', 'KEYWORD', true)).toBe(false)
+  })
+  it('a POSITIVE keyword stamped with a keyword miss stays orphaned, exactly as before', () => {
+    expect(isContradictoryOrphan('Amazon reports this entity no longer exists (keyword 1428)', 'KEYWORD', false)).toBe(false)
+    expect(isContradictoryOrphan('Amazon reports this entity no longer exists (keyword 1428)', 'KEYWORD')).toBe(false)
+  })
+  it('the DL.1/WF.1 case is untouched: an AUTO target stamped with a keyword miss is contradictory', () => {
+    expect(isContradictoryOrphan('Amazon reports this entity no longer exists (keyword 1428)', 'AUTO')).toBe(true)
+  })
+})

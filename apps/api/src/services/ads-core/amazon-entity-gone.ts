@@ -24,7 +24,7 @@
  */
 export function isEntityGoneError(
   err: string | null | undefined,
-  opts?: { kind?: string | null },
+  opts?: { kind?: string | null; isNegative?: boolean | null },
 ): boolean {
   if (!err) return false
   const e = err.toLowerCase()
@@ -40,7 +40,7 @@ export function isEntityGoneError(
   // Amazon names the location it looked in ($.keywords[0].keywordId /
   // $.targetingClauses[0].targetId). When that contradicts the entity's own kind, the miss says
   // something about OUR request, not about Amazon's inventory — so refuse to conclude "gone".
-  if (mentionsWrongEndpointFor(e, opts?.kind)) return false
+  if (mentionsWrongEndpointFor(e, opts?.kind, opts?.isNegative)) return false
 
   // Amazon v3 batch responses: {"errorType":"entityNotFoundError", …}
   if (e.includes('entitynotfounderror')) return true
@@ -60,15 +60,37 @@ export function isEntityGoneError(
  * `kind` is AdTarget.kind. KEYWORD ids live under /sp/keywords; PRODUCT and AUTO ids live under
  * /sp/targets. A keyword-shaped miss for a product target (or the reverse) is a routing fault.
  *
+ * NEG.3 — and `isNegative` is the third axis, because a NEGATIVE keyword is also `kind = KEYWORD`
+ * and its id is also not a `/sp/keywords` keywordId: it lives under /sp/negativeKeywords or
+ * /sp/campaignNegativeKeywords. Before the NEG.3 routing fix, a positive-keyword-shaped miss on a
+ * negative row was indistinguishable from a genuine deletion — same kind, same error shape, no
+ * contradiction to read — so the first archive of a negative would have orphaned it permanently.
+ *
+ * Substring care: `$.negativekeywords` does NOT contain `$.keywords` (the `$.` prevents it), but
+ * `keywordid` matches both, so the negative shape is tested FIRST and wins.
+ *
  * Silent on an absent/unknown kind — this must only ever SUPPRESS a false positive, never invent
  * one, and callers that cannot supply a kind keep the previous behaviour exactly.
  */
-function mentionsWrongEndpointFor(lowerErr: string, kind?: string | null): boolean {
+function mentionsWrongEndpointFor(lowerErr: string, kind?: string | null, isNegative?: boolean | null): boolean {
   const k = (kind ?? '').toUpperCase()
   if (k !== 'KEYWORD' && k !== 'PRODUCT' && k !== 'AUTO') return false
 
-  const keywordShaped = lowerErr.includes('keywordid') || lowerErr.includes('$.keywords')
-  const targetShaped = lowerErr.includes('targetid') || lowerErr.includes('targetingclauses') || lowerErr.includes('$.targets')
+  // Does Amazon's message name a NEGATIVE surface? Covers `$.negativeKeywords[0]`,
+  // `$.campaignNegativeKeywords[0]`, `negativeKeywordId` and `$.negativeTargetingClauses[0]`.
+  const negativeShaped = /negativekeyword|negativetarget|campaignnegative/.test(lowerErr)
+  const keywordShaped = !negativeShaped && (lowerErr.includes('keywordid') || lowerErr.includes('$.keywords'))
+  const targetShaped = !negativeShaped && (lowerErr.includes('targetid') || lowerErr.includes('targetingclauses') || lowerErr.includes('$.targets'))
+
+  if (isNegative === true) {
+    // A negative's id is owned by a negative endpoint. Anything POSITIVE-shaped is our routing
+    // fault, not Amazon's inventory, and must never be read as deletion.
+    if (keywordShaped || targetShaped) return true
+    return false
+  }
+
+  // A POSITIVE row can never legitimately be missed by a negative endpoint either.
+  if (negativeShaped) return true
 
   // Only decide when the error points at exactly one of the two.
   if (keywordShaped === targetShaped) return false
@@ -95,14 +117,28 @@ function mentionsWrongEndpointFor(lowerErr: string, kind?: string | null): boole
  * next write goes to the CORRECT endpoint now, and if the entity really is gone the worker
  * re-orphans it with an accurate reason. The system re-derives the truth either way.
  */
-export function isContradictoryOrphan(orphanReason: string | null | undefined, kind: string | null | undefined): boolean {
+export function isContradictoryOrphan(
+  orphanReason: string | null | undefined,
+  kind: string | null | undefined,
+  isNegative?: boolean | null,
+): boolean {
   const k = (kind ?? '').toUpperCase()
   if (k !== 'KEYWORD' && k !== 'PRODUCT' && k !== 'AUTO') return false
   const r = (orphanReason ?? '').toLowerCase()
   if (!r) return false
   // orphanReasonFrom stamps the entityType Amazon named, e.g. "(keyword 1428…)".
-  const saysKeyword = /\bkeyword\b/.test(r)
-  const saysTarget = /\btarget(ing)?(clause)?\b/.test(r)
+  const saysNegative = /negativekeyword|negativetarget|campaignnegative|negative keyword|negative target/.test(r)
+  const saysKeyword = !saysNegative && /\bkeyword\b/.test(r)
+  const saysTarget = !saysNegative && /\btarget(ing)?(clause)?\b/.test(r)
+
+  // NEG.3 — a NEGATIVE row orphaned for a missing POSITIVE keyword/target records the pre-NEG.3
+  // routing fault, exactly as an AUTO target orphaned for a missing keyword recorded DL.1's. It
+  // can never clear itself, for the same reason: the mark blocks the write whose success would
+  // remove it. Withdraw the unsupported conclusion; the next write goes to the correct endpoint,
+  // and if the entity really is gone the worker re-orphans it with an accurate reason.
+  if (isNegative === true) return saysKeyword || saysTarget
+  if (saysNegative) return true // a POSITIVE row orphaned for a missing negative — same fault, mirrored
+
   if (saysKeyword === saysTarget) return false // names both or neither → no contradiction to read
   return k === 'KEYWORD' ? saysTarget : saysKeyword
 }

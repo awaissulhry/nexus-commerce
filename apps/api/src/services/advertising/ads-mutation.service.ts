@@ -946,6 +946,8 @@ export async function updateAdTargetWithSync(args: {
       orphanedAt: true,
       orphanReason: true, // WF.1 — needed to tell a real orphan from a routing artefact
       kind: true,
+      isNegative: true,   // NEG.3 — the third routing axis; a negative's id is not a /sp/keywords id
+      negativeLevel: true,
       adGroup: {
         select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true } } },
       },
@@ -969,7 +971,7 @@ export async function updateAdTargetWithSync(args: {
     // such a mark can never clear itself — it blocks the very write whose success would remove it.
     // Withdraw the unsupported conclusion and let this write go to the now-correct endpoint; if
     // the entity really is gone, the worker re-orphans it with an accurate reason.
-    if (isContradictoryOrphan(existing.orphanReason, existing.kind)) {
+    if (isContradictoryOrphan(existing.orphanReason, existing.kind, existing.isNegative)) {
       await prisma.adTarget.update({ where: { id: args.adTargetId }, data: { orphanedAt: null, orphanReason: null } })
       logger.info('[ads-mutation] cleared a self-contradictory orphan mark — re-testing against Amazon', {
         adTargetId: args.adTargetId, kind: existing.kind, was: existing.orphanReason,

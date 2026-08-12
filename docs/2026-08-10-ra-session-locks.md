@@ -82,6 +82,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | KT.1b (3 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **released** — see §5's new trap: these lines shipped inside NEG.1's `1df95d678`, not in a KT.1b commit |
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.2 (`GET /advertising/negatives/term-context`, additive) | 2026-08-12 | **released** |
 | `…/rules-automation/rules-automation.css` | NEG.2 (`h10-ngd-*` at EOF) | 2026-08-12 | **released** — appended at EOF only; 🔴 the 130 lines landed inside PLC.0's `341d08e31`, not in a NEG.2 commit (see §5's `commit --only` trap, now observed in both directions) |
+| `apps/api/src/services/advertising/ads-api-client.ts` | NEG.3 (negative-aware `updateTarget` routing, additive descriptor) | 2026-08-12 | **released** |
+| `apps/api/src/workers/ads-sync.worker.ts` | NEG.3 (pass the routing descriptor; 2 select sites) | 2026-08-12 | **released** |
+| `apps/api/src/services/ads-core/amazon-entity-gone.ts` | NEG.3 (`isNegative` axis on the orphan guard) | 2026-08-12 | **released** |
+| `apps/api/src/services/advertising/ads-mutation.service.ts` | NEG.3 (select `isNegative`; pass it to `isContradictoryOrphan`) | 2026-08-12 | **released** |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
@@ -117,6 +121,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | PLC.0 (`h10-plc-*` at EOF) | 2026-08-12 | **released** — landed `341d08e31` + `c04fc5b3f`, EOF-appended only, no `.dark` block. ⚠ `341d08e31` also carries NEG.2's, BSP.0's, SOV.0's and BID.S0b's uncommitted blocks — named in that commit's own message rather than swept silently.
 | `apps/web/next.config.js` | PLC.0 (one `?tab=placement` redirect, same shape as NEG.1's and BID.S0's) | 2026-08-12 | **released** — landed `341d08e31`.
 | `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | PLC.0 (`dateRange?` — the existing date control becomes optionally CONTROLLED, additive) | 2026-08-12 | **released** — landed `341d08e31`; prod-verified: `?preset=custom&start=…&end=…` renders in the header's own label.
+| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.1 (`GET /advertising/placements/cursor`, additive) | 2026-08-12 | **claimed** — `grep -a`ed both route files; the path is disjoint from every registered route including PLC.0's own `/advertising/placements` (Fastify treats the two as distinct) and from BID.S0's `/advertising/bid-grid/cursor` |
+| `…/rules-automation/rules-automation.css` | PLC.1 (`h10-plc-*` at EOF, flags + census strip) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
 
 **RD.P0 holds nothing in §3, by construction.** The Rank & Dayparting foundation is web-only and
 page-local: no route (so `advertising.routes.ts` and `advertising-intel.routes.ts` are untouched and

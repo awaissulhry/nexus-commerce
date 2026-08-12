@@ -201,8 +201,16 @@ async function dispatchToAmazon(
       // DL.1 — the kind decides the endpoint: keyword ids live under /sp/keywords, product and
       // auto target ids under /sp/targets. One indexed read, negligible beside the HTTP call it
       // precedes, and it is what stops product/auto bid writes being rejected forever.
-      const t = await prisma.adTarget.findUnique({ where: { id: payload.entityId }, select: { kind: true } })
-      const res = await updateTarget(ctx, payload.externalId, patch, t?.kind ?? null)
+      // NEG.3 — `kind` alone is not enough. A NEGATIVE keyword is also kind=KEYWORD and its id
+      // lives under /sp/negativeKeywords, not /sp/keywords. Selecting the two extra columns is
+      // free on a read this query already makes.
+      const t = await prisma.adTarget.findUnique({
+        where: { id: payload.entityId },
+        select: { kind: true, isNegative: true, negativeLevel: true },
+      })
+      const res = await updateTarget(ctx, payload.externalId, patch, {
+        kind: t?.kind ?? null, isNegative: t?.isNegative ?? false, negativeLevel: t?.negativeLevel ?? null,
+      })
       return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
     }
     if (payload.entityType === 'PRODUCT_AD') {
@@ -260,10 +268,12 @@ async function stampEntitySync(
   // DL.3 — a target's kind decides which endpoint legitimately owns it, so a "not found" from the
   // other endpoint must not be read as deletion. Only AD_TARGET has a kind; everything else keeps
   // the previous behaviour.
-  const targetKind = payload.entityType === 'AD_TARGET'
-    ? (await prisma.adTarget.findUnique({ where: { id: payload.entityId }, select: { kind: true } }))?.kind ?? null
+  // NEG.3 — the orphan decision needs the same third axis the routing does: a positive-shaped
+  // miss against a NEGATIVE row is our routing fault, not Amazon's inventory.
+  const targetRow = payload.entityType === 'AD_TARGET'
+    ? await prisma.adTarget.findUnique({ where: { id: payload.entityId }, select: { kind: true, isNegative: true } })
     : null
-  const gone = status === 'FAILED' && isEntityGoneError(error, { kind: targetKind })
+  const gone = status === 'FAILED' && isEntityGoneError(error, { kind: targetRow?.kind ?? null, isNegative: targetRow?.isNegative ?? false })
   const orphanPatch = gone
     ? { orphanedAt: new Date(), orphanReason: orphanReasonFrom(error) }
     : status === 'SUCCESS'

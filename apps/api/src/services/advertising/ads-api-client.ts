@@ -1175,17 +1175,69 @@ export interface TargetPatch {
  * `kind` comes from AdTarget.kind. It is optional and falls back to the keyword path, which is the
  * previous behaviour — an unknown kind therefore cannot become a NEW failure mode, and keyword
  * targets (the overwhelming majority, and the ones that already worked) are untouched.
+ *
+ * ── NEG.3 — the same bug, one entity class over, caught before it fired ──────────────────────
+ *
+ * DL.1 fixed the split between keywords and targeting clauses. It did not know about NEGATIVES,
+ * because nothing had ever pushed a state to one: measured on prod 2026-08-12, **0 of the 23
+ * `AD_ENTITY_STATE_UPDATE` logs are on a negative and 0 negatives have ever been enqueued for an
+ * outbound write.** That is the only reason `orphanedAt` is still 0 across all 2,059 of them.
+ *
+ * A negative keyword has `kind = 'KEYWORD'`, so it took the `/sp/keywords` branch — but its id is
+ * not a keywordId there. It lives under `/sp/negativeKeywords` (ad-group scope) or
+ * `/sp/campaignNegativeKeywords` (campaign scope), which is exactly where
+ * `ads-negative-kw.service.ts:61-65` creates it. The first archive would have gone to the wrong
+ * endpoint, Amazon would have answered `entityNotFoundError` at `$.keywords[0].keywordId`, and
+ * `isEntityGoneError` would have READ THAT AS PROOF THE NEGATIVE IS GONE — because the error is
+ * keyword-shaped and the kind genuinely is KEYWORD, so DL.3's guard sees no contradiction. The
+ * worker would set `orphanedAt`, which blocks every future non-forced write to the row, and
+ * `isContradictoryOrphan` could not clear it for the same reason. Net effect: **live at Amazon,
+ * dead in our database, permanently unwritable** — the WF.1 deadlock on a new entity class.
+ *
+ * So the route is decided by `(kind, isNegative, negativeLevel)`, not by `kind` alone:
+ *
+ *   KEYWORD · positive              → PUT /sp/keywords                 (unchanged)
+ *   PRODUCT | AUTO · positive       → PUT /sp/targets                  (unchanged, DL.1)
+ *   KEYWORD · negative · AD_GROUP   → PUT /sp/negativeKeywords
+ *   KEYWORD · negative · CAMPAIGN   → PUT /sp/campaignNegativeKeywords
+ *   PRODUCT · negative              → PUT /sp/negativeTargets
+ *
+ * The descriptor form is additive: a bare `kind` string still works and still means "positive",
+ * so every existing caller is byte-identical.
  */
+
+/** NEG.3 — what decides the endpoint. A bare string is accepted and means a POSITIVE target. */
+export interface TargetRoute {
+  kind?: string | null
+  isNegative?: boolean | null
+  negativeLevel?: string | null
+}
+
 export async function updateTarget(
   ctx: ClientContext,
   externalTargetId: string,
   patch: TargetPatch,
-  kind?: string | null,
+  kindOrRoute?: string | null | TargetRoute,
 ): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
+  const route: TargetRoute = typeof kindOrRoute === 'string'
+    ? { kind: kindOrRoute }
+    : (kindOrRoute ?? { kind: null })
   // PRODUCT (ASIN/category targeting) and AUTO (close/loose/complements/substitutes) are
   // targeting clauses. Anything else — including a null kind — keeps the keyword path.
-  const k = (kind ?? '').toUpperCase()
-  const isTargetingClause = k === 'PRODUCT' || k === 'AUTO'
+  const k = (route.kind ?? '').toUpperCase()
+  const isNegative = route.isNegative === true
+  const level = (route.negativeLevel ?? '').toUpperCase()
+  const isTargetingClause = !isNegative && (k === 'PRODUCT' || k === 'AUTO')
+
+  // NEG.3 — the negative endpoints. Paths and mimes are the SAME constants the create path uses;
+  // spelling them a second time is how two halves of one feature drift apart.
+  const negRoute: { path: string; mime: string; key: string; label: string } | null = !isNegative
+    ? null
+    : k === 'PRODUCT'
+      ? { path: '/sp/negativeTargets', mime: 'application/vnd.spNegativeTargetingClause.v3+json', key: 'negativeTargetingClauses', label: 'negativeTargets' }
+      : level === 'CAMPAIGN'
+        ? { path: '/sp/campaignNegativeKeywords', mime: 'application/vnd.spCampaignNegativeKeyword.v3+json', key: 'campaignNegativeKeywords', label: 'campaignNegativeKeywords' }
+        : { path: '/sp/negativeKeywords', mime: 'application/vnd.spNegativeKeyword.v3+json', key: 'negativeKeywords', label: 'negativeKeywords' }
 
   if (adsMode() === 'sandbox') {
     logger.info('[ADS-SANDBOX] updateTarget', {
@@ -1193,9 +1245,30 @@ export async function updateTarget(
       externalTargetId,
       patch,
       kind: k || null,
-      route: isTargetingClause ? '/sp/targets' : '/sp/keywords',
+      isNegative,
+      negativeLevel: level || null,
+      route: negRoute ? negRoute.path : isTargetingClause ? '/sp/targets' : '/sp/keywords',
     })
-    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch, route: isTargetingClause ? 'targets' : 'keywords' } }
+    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch, route: negRoute ? negRoute.label : isTargetingClause ? 'targets' : 'keywords' } }
+  }
+
+  if (negRoute) {
+    // A negative carries no bid, so only `state` travels. Sending a bid to these endpoints is a
+    // 400 waiting to happen, and silently dropping one here is better than inventing a field
+    // Amazon does not accept for the entity.
+    const v3Negative: Record<string, unknown> = { keywordId: externalTargetId }
+    if (k === 'PRODUCT') { delete v3Negative.keywordId; v3Negative.targetId = externalTargetId }
+    if (patch.state) v3Negative.state = patch.state.toUpperCase()
+    const response = await liveCall<unknown>({
+      ...ctx,
+      method: 'PUT',
+      path: negRoute.path,
+      body: { [negRoute.key]: [v3Negative] },
+      contentType: negRoute.mime,
+      acceptHeader: negRoute.mime,
+    })
+    const parsed = v3BatchResult(response, negRoute.key)
+    return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
   }
 
   if (isTargetingClause) {
