@@ -1499,3 +1499,112 @@ sentinel), `_hv-2a-ingest.mts`, `_hv-1c-verify.mts`.
   shared slot contract, so it acts on exactly the candidate set the operator was looking at.
 - **HV.8** repairs the rule path so the engines evaluate the same numbers. Until then the gap is
   rendered on the page rather than hidden.
+
+---
+
+# HV.3a — the re-request experiment is refused, and the answer came free
+
+**Measured 2026-08-12 with `_hv-3a-maturity.mts` and `_hv-3a-maturity2.mts`. Read-only. Zero Amazon
+quota spent. No window, schedule or job was changed.**
+
+## 🔴 The stop condition fired, and it retracts my own HV.2a recommendation
+
+The brief's experiment — re-request 3–5 past dates and diff — **cannot be run without corrupting the
+table**, which is the case §3.3 said to stop and report:
+
+| | |
+|---|---|
+| `AmazonAdsSearchTerm` unique constraint | **none** — three plain indexes and nothing else |
+| ingest write mode (`ads-reports.service.ts:611`) | **`createMany`** — INSERT |
+| its idempotence | `deleteMany({ where: { reportRunId: job.id } })` — **scoped to one job id** |
+| natural-key groups already holding >1 row | **145** |
+
+Its own comment states the design: *"Natural key is wide … clearing by `reportRunId` avoids needing
+a composite unique constraint."* A re-request creates a **new** job id, so the delete matches
+nothing and the insert lands a **second full copy** of every row for that date. Every consumer —
+`previewHarvest`, `keyword-harvest.service.ts`, the rule evaluator — reads through `groupBy` +
+`_sum`, so the affected dates would silently **double** in clicks, spend, orders and sales, with
+nothing anywhere to dedupe them.
+
+**🔴 This retracts the "smallest fix" I recommended in `## HV.2a`.** I wrote:
+
+> *"have `ads-report-create-st` request a trailing window (`yesterday() − 7d … yesterday()`) instead
+> of a single day, and let the existing upsert overwrite the stale rows. That is one call-site
+> change … and it multiplies the daily report volume by ~7."*
+
+**Both halves are wrong.**
+
+1. **There is no upsert to overwrite with.** The search-term path inserts. That change would have
+   added six duplicate copies of the previous six days, every day — within a week the table is ~7×
+   its true size and every number on this page is ~7× wrong. I recommended it without checking the
+   write mode.
+2. **The cost was not 7× requests.** `runSearchTermReportCycle` (`ads-reports.service.ts:1080`)
+   loops profiles × adProducts and issues **one** `createReportJob` per pair *regardless of window*.
+   A 7-day window is the **same 4 requests/day**, each returning ~7× the rows. The real cost is
+   ingest volume and duplication, not quota.
+
+**The wrong version is kept here deliberately.** It was the more plausible reading — `AmazonAdsDaily
+Performance` *does* upsert, on `(profileId, adProduct, entityType, entityId, date)`, and I
+generalised from the neighbouring feed instead of reading the one I was recommending a change to.
+
+## The question, answered at zero cost
+
+`AmazonAdsDailyPerformance` is upserted and its upsert sets `reportedAt: new Date()` while leaving
+`createdAt` at first write — so **`reportedAt − date` is the maturity of the number currently
+stored**. And `ads-report-gapfill` re-requests **daily performance only**, never search terms. That
+is a controlled comparison production has already run:
+
+| group | cells | orders ratio | clicks ratio | **normalised** |
+|---|---|---|---|---|
+| daily-perf observed ≤ 3 d (both feeds immature) | 178 | 1.029 | 1.024 | **1.005** |
+| daily-perf observed > 3 d (**matured**) | **8** | 1.429 | 1.036 | **1.379** |
+
+*(normalised = orders ratio ÷ clicks ratio, so the coverage difference between the two feeds cancels
+and only the attribution difference remains. Clicks do not mature — a clicks ratio of 1.02–1.04 in
+both groups is the control that says the two feeds saw the same traffic.)*
+
+**+37.3%, on 8 cells and a difference of 3 orders.** Directionally consistent with truncation and
+statistically worthless. The first pass reported **−10%** and was contaminated: several gapfilled
+cells carry **zero clicks** where the search-term feed has hundreds (the gap was "healed" by writing
+an empty day), one carries **−1 clicks**, and a cluster of June IT dates shows a click ratio of
+~2.0 against the ~1.02 everywhere else. Both passes are recorded; only the cleaned one is evidence.
+
+## 🔴 The number that decides — and it decides against the change
+
+Order counts are integers and the threshold is 2. An uplift only matters if it moves a term from 1
+order to 2:
+
+| orders uplift | effective threshold | candidates |
+|---|---|---|
+| ×1.00 | 2+ | **8** |
+| ×1.10 | 2+ | **8** |
+| ×1.25 | 2+ | **8** |
+| ×1.50 | 2+ | **8** |
+| ×2.00 | 1+ | 32 |
+
+**The page is insensitive to any uplift below 2×.** The measured candidate is 1.37× on three orders
+of evidence.
+
+## Recommendation
+
+**Do not change the window.** The `yesterday()` behaviour downgrades from a defect to a **documented
+property**: `orders7d` is a seven-day attribution window read after ~26 hours, identically for every
+date, and the account's own cross-feed comparison cannot distinguish the resulting loss from noise.
+
+If it is ever revisited, the **prerequisite is a unique constraint plus an upsert on
+`AmazonAdsSearchTerm`** — not a window change. Doing the window first is the corrupting order.
+
+## Also found, recorded and not chased
+
+- **`sales1dCents` and `sales14dCents` are never written** — 0 non-zero of 42,571 SP rows. The
+  upsert computes `sales7dCents` and `sales14dCents` but the 14-day value resolves to 0 for SP, and
+  `sales1dCents` is not in the write at all. Two dead columns, and the reason the sharpest available
+  instrument (7d ÷ 1d on one row) does not exist.
+- **`ads-report-ingest` reports `stranded=4` on every tick.** Unassigned, as instructed.
+- **145 natural-key duplicate groups** already exist in `AmazonAdsSearchTerm`. Pre-existing, small
+  against 11,026 rows, and not this session's to clean.
+- **The CVR gradient, with Wilson 95% intervals**: 0–2 d `0.04–1.17%` · 3–7 d `0.78–2.19%` ·
+  8–14 d `1.62–3.91%` · 15–30 d `1.15–2.19%` · 31–40 d `0.83–1.98%`. Only the freshest and the
+  8–14 d bucket fail to overlap; every other pair does. The brief's correction stands — the lag is
+  identical in every bucket, so a maturation artefact would render CVR flat, and this gradient is
+  not evidence of one either way.
