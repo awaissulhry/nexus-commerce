@@ -233,8 +233,8 @@ followed rather than recorded after the fact.
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.3b (fill the write seam — 4 lines, no restructuring) | 2026-08-12 | **released** |
 
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.4 (`GET /advertising/negatives/attention`, additive) | 2026-08-12 | **released** |
-| `…/rules-automation/rules-automation.css` | NEG.4 (`h10-nga-*` at EOF) | 2026-08-12 | **claimed** |
-| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.4 (import only) | 2026-08-12 | **claimed** |
+| `…/rules-automation/rules-automation.css` | NEG.4 (`h10-nga-*` at EOF) | 2026-08-12 | **released** |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.4 (import only) | 2026-08-12 | **released** |
 
 ## 3 · Shared files — claim before editing
 

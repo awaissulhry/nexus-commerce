@@ -3426,3 +3426,68 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-hv-picker .opts .pick { grid-template-columns: minmax(0, 1fr) auto; }
   .h10-hv-picker .opts .why { display: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   NEG.4 — attention (h10-nga-*)
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+   EOF append; source order beats specificity here. No dark block — the shell pins light. Palette
+   matches the neighbouring blocks. Disjoint from h10-ng-* / h10-ngd-* / h10-ngr-*. */
+
+.h10-nga { margin: 16px 0 0; padding: 14px 16px; background: #fff; border: 1px solid #e3e7ec; border-radius: 11px; }
+.h10-nga-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.h10-nga-head h3 { margin: 0; font-size: 14px; font-weight: 800; color: #1c2530; }
+.h10-nga-head p { margin: 0; font-size: 12px; color: #55606d; }
+.h10-nga-head p b { font-weight: 800; color: #1c2530; }
+.h10-nga-win { margin-left: 5px; padding: 2px 7px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 6px; font: inherit; font-size: 11px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-nga-win.on { background: #e8f1fd; border-color: #1f6fde; color: #10457f; }
+
+.h10-nga-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0 0; }
+.h10-nga-tabs .cell { display: flex; flex-direction: column; gap: 1px; align-items: flex-start; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; text-align: left; cursor: pointer; }
+.h10-nga-tabs .cell b { font-size: 20px; font-weight: 800; line-height: 1.15; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-nga-tabs .cell span { font-size: 11.5px; font-weight: 600; color: #55606d; }
+/* Zero is a RESULT here, so it is green rather than grey — grey reads as "not measured". */
+.h10-nga-tabs .cell.ok { background: #e7f5ed; border-color: #bfe0cd; }
+.h10-nga-tabs .cell.ok b { color: #14724d; }
+.h10-nga-tabs .cell.warn { background: #fff6e8; border-color: #f0dcbe; }
+.h10-nga-tabs .cell.warn b { color: #8a5316; }
+.h10-nga-tabs .cell.hot { background: #fdeeee; border-color: #e8c4c4; }
+.h10-nga-tabs .cell.hot b { color: #8a2020; }
+.h10-nga-tabs .cell.on { outline: 2px solid #1f6fde; outline-offset: -2px; }
+
+.h10-nga-list { margin: 14px 0 0; }
+.h10-nga-list h4 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: 11.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
+.h10-nga-list h4 .ct { padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 11px; letter-spacing: 0; text-transform: none; }
+.h10-nga-list h4 .sub { font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #667080; }
+
+.h10-nga-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.h10-nga-rows li { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 9px; }
+.h10-nga-rows .t { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.h10-nga-rows .lnk { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; font-weight: 800; color: #1c2530; cursor: pointer; }
+.h10-nga-rows .lnk:hover { color: #1f6fde; text-decoration: underline; }
+.h10-nga-rows .t em { font-style: normal; padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10px; font-weight: 800; }
+.h10-nga-rows .t em.mk { background: #e8f1fd; color: #10457f; }
+.h10-nga-rows .t em.thin { background: #fff6e8; color: #8a5316; }
+.h10-nga-rows .sc { font-size: 11px; color: #667080; }
+.h10-nga-rows .m { font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-nga-rows .three { font-size: 11px; color: #667080; font-variant-numeric: tabular-nums; }
+.h10-nga-rows .three b { font-weight: 800; color: #1c2530; }
+/* The question, not a claim: what removing it MIGHT recover. */
+.h10-nga-rows .q { font-size: 11.5px; font-style: italic; color: #8a5316; }
+.h10-nga-act { align-self: flex-start; margin-top: 3px; padding: 3px 9px; background: #fff; border: 1px solid #e3e7ec; border-radius: 6px; font: inherit; font-size: 11px; font-weight: 800; color: #8a2020; cursor: pointer; }
+.h10-nga-act:hover { background: #fdeeee; border-color: #d99; }
+/* Hidden, not disabled, is the page's law — so a locked row states the reason instead of showing
+   a button that would silently refuse. */
+.h10-nga-locked { align-self: flex-start; margin-top: 3px; font-size: 10.5px; font-style: italic; color: #667080; }
+
+.h10-nga-zero { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 9px; font-size: 12px; line-height: 1.6; color: #14724d; }
+.h10-nga-zero svg { flex: none; margin-top: 3px; }
+.h10-nga-zero b { font-weight: 800; }
+.h10-nga-note, .h10-nga-thresh { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11px; line-height: 1.55; color: #667080; }
+.h10-nga-note svg, .h10-nga-thresh svg { flex: none; margin-top: 2px; }
+.h10-nga-note b { font-weight: 800; color: #1c2530; }
+.h10-nga-msg { margin: 0; font-size: 12.5px; color: #55606d; }
+.h10-nga-bad { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 10px 12px; background: #fdeeee; border: 1px solid #e8c4c4; border-radius: 9px; font-size: 12px; line-height: 1.6; color: #8a2020; }
+.h10-nga-bad svg { flex: none; margin-top: 3px; }
+.h10-nga-bad b { font-weight: 800; }
+
+@media (max-width: 900px) { .h10-nga-tabs { grid-template-columns: 1fr; } }
