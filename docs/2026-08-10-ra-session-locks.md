@@ -81,6 +81,25 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **released** — appended at EOF only |
 | `…/rules-automation/rules-automation.css` | KT.1b (3 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **released** — see §5's new trap: these lines shipped inside NEG.1's `1df95d678`, not in a KT.1b commit |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
+| `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
+| `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
+| `…/rules-automation/RulesAutomationClient.tsx` | HV.1 (drop the `keyword-harvest` branch only) | 2026-08-12 | **released** — landed `46cba4968`; `share-of-voice` branch untouched |
+| `…/rules-automation/rules-automation.css` | HV.1 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `46cba4968`, appended at EOF only, every hunk diffed and mine |
+| `apps/web/next.config.js` | HV.1 (one `?tab=keyword-harvest` redirect, same shape as NEG.1's) | 2026-08-12 | **released** — landed `46cba4968` |
+| `packages/database/prisma/schema.prisma` | KT.2 (`KeywordWatchlist` + `KeywordWatchlistTerm`, additive) | 2026-08-12 | **released** — landed `cae154aec` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | KT.2 (watchlist CRUD, additive) | 2026-08-12 | **released** — landed `cae154aec` |
+| `…/rules-automation/rules-automation.css` | KT.2 (`h10-kt-*` at EOF) | 2026-08-12 | **released** — EOF-append only; diffed before each commit, every hunk mine |
+| `apps/api/src/routes/advertising-intel.routes.ts` | BID.S0 (`GET /advertising/bid-grid` + `/bid-grid/cursor`, additive) | 2026-08-12 | **claimed** — route names disjoint from HV.1's `keyword-harvest` and KT.2's watchlist CRUD, so no duplicate registration |
+| `…/rules-automation/_shared/tabs.tsx` | BID.S0 (`bid` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's |
+| `…/rules-automation/rules-automation.css` | BID.S0 (`h10-bd-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `apps/web/next.config.js` | BID.S0 (one `?tab=bid` redirect, same shape as NEG.1's) | 2026-08-12 | **claimed** — disjoint `has` value from HV.1's |
+| `apps/web/src/app/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | BID.S0 (`onSortChange` + `defaultSort` re-sync, additive) | 2026-08-12 | **claimed** — see §4 |
+| `apps/api/src/services/advertising/keyword-tracker.service.ts` + `keyword-watchlist.service.ts` + `…/keyword-tracker/*` | KT.2 (per-market watchlists) | 2026-08-12 | **released** — `cae154aec` · `421b6d002` · `6d50a6783` · `b78ae2655` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.0 (`GET /advertising/share-of-voice-page`, additive) | 2026-08-12 | **claimed** — path disjoint from HV.1's `keyword-harvest`, KT.2's watchlist CRUD and BID.S0's `bid-grid`; and from the EXISTING `GET /advertising/share-of-voice` in `advertising.routes.ts:7284`, which stays serving its CSV |
+| `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's and BID.S0's |
+| `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **claimed** — the `keyword-tracker` branch is already gone; `SovTrackerTab`'s import goes with this branch since it was its last caller |
+| `…/rules-automation/rules-automation.css` | SOV.0 (`h10-sov-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
 
 | `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **claimed** — the page's own directory |
 | `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **claimed** — exactly ONE importer (this page's client), but it sits in the shared `tabs/` dir, so it is recorded rather than assumed |
@@ -151,6 +170,30 @@ to hit a red push knows it is not theirs: the pre-push builds the whole TREE, so
 in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors — `since` and
 `pickTermPeriod` undefined — were present at 01:20 and gone by 01:35, so this is active work.)
 
+  **↳ RESOLVED (KT.2, 2026-08-12).** All three were mid-edit states of KT.1b, which has since
+  shipped: `apps/web` and `apps/api` both build clean and 29 KT tests pass. Nothing is outstanding on
+  those files.
+
+- 🔴 **To whoever owns the Family Cockpit (`…/portfolios/[id]/FamilyCockpitClient.tsx`) — from KT.2,
+  2026-08-12.** That page's coverage-set toggle calls `PATCH /advertising/coverage-sets/:id
+  { enabled }` and says nothing about what enabling does. Measured: the ACR coverage engine is
+  **scheduled daily at 07:10 and has run six nights** (`mode=observe sets=0`), and it selects
+  `{ enabled: true }` sets — so that toggle is what starts nightly evaluation of a set's terms, and at
+  `NEXUS_COVERAGE_ENGINE_MODE=auto` those decisions become real keyword-bid writes through
+  `updateAdTargetWithSync`. All 97 terms of the one existing set already carry a `leadAsin`, the
+  engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
+  not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
+  can no longer be the thing that arms it.
+
+**HV.1 ⇄ KT.2, 2026-08-12 — two sessions on `advertising-intel.routes.ts` and
+`rules-automation.css` at the same time.** Both claims are live and I am proceeding rather than
+blocking, because both pairs are provably disjoint: the routes are `GET /advertising/keyword-harvest`
+vs the watchlist CRUD (no duplicate path ⇒ no boot crash), and the CSS is EOF-appended under
+`h10-hv-*` vs `h10-kt-*` (no shared selector). **Neither of us can safely `git commit --only` those
+two files while the other's hunks are uncommitted** — that is §5's trap, which already misattributed
+three lines inside `1df95d678`. I will `git diff` both before committing and, if KT.2's hunks are
+present, stage only my own rather than sweeping theirs under an HV message.
+
 **NEG.1 finding that binds every routed tab, `next.config.js`.** NEG.1 added a
 `has: [{ type: 'query', key: 'tab', … }]` redirect for `?tab=negative-targeting`, because
 `RulesAutomationClient.tsx:91-94` resolves a **routed** `?tab=` to `'rules'` — so the moment a tab
@@ -161,6 +204,30 @@ function call rather than a literal.
 🔴 **`?tab=keyword-tracker` has that bug live right now** — KT.1 flipped the tab and no redirect was
 added. It is one entry of the same shape, and it belongs to whoever owns KT; not fixed here because
 a session is scoped to one page.
+
+**BID.S0 blocked on HV.1, 2026-08-12 02:5x.** `keyword-harvest/page.tsx:12` imports
+`./KeywordHarvestClient`, which does not exist yet, so the pre-push web build fails and **every
+session's push is held** — the same shape as the KT.1b note above, three files along. Recorded only
+so the next session to see a red push knows it is not theirs. Not touched: it is HV.1's directory
+and it is obviously mid-flight. Retrying.
+
+**BID.S0 → every session that renders an `AdsDataGrid`, 2026-08-12.** `AdsDataGrid` accepts
+`defaultSort` but exposes **no sort callback** — `onSort` (`AdsDataGrid.tsx:351`) is internal — so a
+header click cannot reach the URL and `?sort=` cannot round-trip on any page that uses it. BID.S0 is
+adding two strictly additive things: an optional `onSortChange?: (s | null) => void` fired from that
+same handler, and a re-sync effect keyed on **`defaultSort?.key` / `defaultSort?.dir` primitives**
+(never the object — every consumer passes an inline literal, and an effect on the object identity
+would loop forever). Consumers that pass neither prop are untouched. Take it if your page needs a
+linkable sort; it is not a Bid-page type.
+
+**BID.S0 finding, shared layer.** `automations/ScopeForm.tsx` is the rule-scope **binding editor**
+(it ends in a write), not a page filter bar, so it cannot be reused as one. The page scope bar has
+now been forked three times — `KeywordScopeBar`, `NegativeScopeBar`, `BidScopeBar` — same structure,
+same comments. The *server* resolver is genuinely shared and under-used: `resolveScopeReach()` in
+`ads-scope-reach.ts` already resolves market × portfolio × campaign × product → campaign ids with
+`applied` / `notes` / `contradiction`, and it is what the rule evaluator enforces with. **A page that
+resolves scope any other way is answering a different question from the one the gate answers.**
+The twelfth pass should extract the bar and point it at that resolver.
 
 **RD.P0 → the twelfth pass, 2026-08-12 — the scope bar is now FOUR, and its CSS is what blocks
 the extraction.** BID.S0's finding above counted three. This page needs a fourth (market ·
@@ -245,8 +312,27 @@ broken until one of you takes it — it is one line inside the rule you are alre
   but the git history now attributes them wrongly, and had the other session's lines been mid-edit
   the commit would have shipped a broken stylesheet for nine pages. **Before `commit --only` on a
   file in §3, `git diff` it and check every hunk is yours.**
+- 🔴 **`git add` is the same trap as `git commit --only`, and it fires OUTWARD — it can push a
+  `main` that does not build.** Measured 2026-08-12. HV.1 added an import line to
+  `advertising-intel.routes.ts` for a service file that was still untracked. KT.2 then committed
+  that shared file with `--only`, sweeping the import in — so `6d50a6783` was pushed carrying an
+  import of a module that **does not exist in the repo**, and the API build from `origin/main`
+  could not have succeeded. The pre-push hook builds the working **TREE**, where the file existed,
+  so it went green. Repaired minutes later by `b32262393`, the commit that adds the service.
+  **Two rules follow.** (1) An import of a NEW file and that file must land in the SAME commit —
+  if you are adding both, `git add` the new file the moment you write the import, so no other
+  session can ship half of it. (2) The `git diff` check before touching a §3 file must also ask
+  *"does this hunk reference anything untracked?"* — a hunk that is textually someone else's is
+  obvious; a hunk that is textually yours but depends on a file only you have is not.
 - **An untracked file can block every session's push.** The DS-conformance ratchet greps comments
   too — a comment can fail it.
+- 🔴 **Vercel does not always build your commit, and `vercel ls` showing "Ready" is not proof it
+  built YOURS.** Measured 2026-08-12: HV.1's web commit `46cba4968` was pushed green, the newest
+  production deployment read `● Ready`, and the new route still 404'd — because that deployment had
+  cloned `b78ae26`, the commit before it, and **no build was ever queued for `46cba4968`**. When
+  several sessions push within minutes, a deploy already in flight can absorb the trigger. Check
+  the deployment's actual commit (`vercel inspect --logs | grep Commit`), not its status, and if
+  yours was skipped, land another commit that touches the tree to force a build.
 - **Two Next dev servers in one repo fight over `.next`** ("Another write batch or compaction is
   already active") and pages render blank. Kill one or clear `.next/dev`.
 - **Local dev hits the PROD API** unless `NEXT_PUBLIC_API_URL` is set. Running the API locally needs
