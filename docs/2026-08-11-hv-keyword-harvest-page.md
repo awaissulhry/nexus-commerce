@@ -2286,3 +2286,57 @@ Ordered by live victims first, then blast radius, then latent:
 5. **The median CPC** is **€0.39**, not €0.46, over 7,460 clicked rows in 60 days.
 6. **§1.1's bucketing boundary** has no instance — see above.
 7. **§1.3's `negateCampaign` figures** are AD_GROUP **2,037 / 2,017**, not 2,034 / 2,014.
+
+## Verified on prod
+
+Against Vercel deployment `12a7v6n6i`, cloned **`Commit: 75cc7b3`** — the SHA checked, not the
+status. API on Railway `bb4b5acd5`, which contains `a6eedca49`.
+
+**404 text nodes swept for contrast, 0 failures** — 202 at 1728 and 202 at a real 892 viewport, with
+opacity composited and the element's **own** background as the ground, the detail panel open in
+both. Panel flush to the page card at `dL = dR = 0` at both widths · the header stacks and the
+stated-vs-executed columns collapse to one at 892, so the media query genuinely fires · the grid
+scrolls inside `.h10-am-grid` (1634 into 730) · no horizontal body scroll at either width · first
+column `rgb(28, 37, 48)` with `cursor: default`, matching the candidates grid above it.
+
+🔴 **The first sweep reported 3 failures and all three were the probe's fault, not the page's.** Two
+were `disabled` pagination arrows, which WCAG 1.4.3 exempts. The third was the active page pill:
+my `bgOf` walked straight to the parent, so white-on-blue was measured against white and scored
+1.00. **A contrast probe that skips the element's own background invents a failure on anything that
+paints its own ground** — the mirror of the composite-the-opacity trap this programme already
+records.
+
+### Three defects the endpoint proof could not see
+
+All three had correct data and were wrong on screen; none would have failed a test.
+
+1. 🔴 **A rule's description ran off the right edge of the viewport.** The shared grid puts
+   `white-space: nowrap` on its sticky first column and leaves the cell `overflow: visible`, so
+   Automations' marketing copy — up to 309 characters — laid out **1,572px wide inside a 360px
+   cell**, reaching x=1748 on a 1728px screen and clipping mid-word on four of nine rows. Now
+   bounded to the cell and clamped to two lines: max width 272 in a 300px cell, **0 escapes**.
+2. 🔴 **Every row carried a selection checkbox that does nothing.** `AdsDataGrid`'s `selectable`
+   defaults to **true** and it was never passed. Nine controls leading nowhere, on a panel whose
+   own closed state exists to avoid exactly that. `selectable={false}` — 0 checkboxes, and the grid
+   now carries `.nosel`.
+3. `cursor: default` on the first column. Measured: the candidates grid's `.t` is `default`, this
+   was `auto`.
+
+### Rendered, and confirmed against production data
+
+The engine's row reads **Propose / at its ceiling**, `wrote 218 → landed 9`, `found 22 (14 to
+graduate · 8 to negate)`, and its detail carries all three sentences the unit was built for:
+
+> `NEXUS_ADS_AUTO_HARVEST_ARMED` is unset — it previews every night and applies nothing. The account
+> dial is a ceiling over every actor, and it is not what is holding this one down — this flag is.
+
+> ⚠ The Control Room lists this engine as **AUTO**. … The Control Room therefore lists this engine
+> **ABOVE what it can actually do.** Handed to that programme — this page changes nothing.
+
+> Its last run reported `neg=0/8 grad=0/14 dryRun=true` on 12 Aug 2026. Those are candidates
+> **processed**, not writes made — the engine's own summary counts both the same way.
+
+🔴 **The registry disagreement is measured on prod, not inferred.** Locally the registry reports
+`OFF` for an unrelated reason (`NEXUS_ENABLE_AMAZON_ADS_CRON` is unset in a dev `.env`), which is
+why the sentence is derived from the comparison at render time rather than written once — it says
+"ABOVE" only because production says `AUTO`.
