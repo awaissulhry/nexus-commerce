@@ -18,6 +18,10 @@ import {
   getBidGrid, getBidCursorForRequest, BID_MARKETS, BID_MARKET_ALL, BID_BANDS,
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
 } from '../services/advertising/bid-grid.service.js'
+import {
+  getPlacementGrid, PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, LANE_BY_KEY,
+  type PlcLaneKey, type PlcSortKey,
+} from '../services/advertising/placement-grid.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
@@ -481,6 +485,63 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // Short private cache. The base is a 60-day grouped scan of 10,826 search-term rows joined to
     // the full positive/negative target set, and it changes only when the five-minute export
     // ingest lands a new day.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── PLC.0 — the Placement page's one read ───────────────────────────
+  //
+  // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1, BID.S0 and HV.1 are:
+  // that file is ~600 KB, the default `grep` in this repo (ugrep) returns NOTHING on it so a
+  // duplicate is easy to miss, and a duplicate route registration is a BOOT CRASH, not a warning.
+  // `grep -a`ed both files before adding this: `/advertising/placements` appears in neither, and
+  // the two routes that look like it — `GET`/`PATCH /advertising/campaigns/:id/placements`
+  // (`advertising.routes.ts:564`, `:635`) — are a different path and are left alone.
+  //
+  // Not a list-shaped variant of that per-campaign route either: its main `groupBy` carries **no
+  // date filter at all**, so it returns LIFETIME totals for one campaign whose id you must already
+  // know. This page's question is account-wide and windowed.
+  //
+  // One call carries the resolved scope, the counts over the FULL scope, the engine's own stamped
+  // receipt and the rows — so the page can state what it is showing without a second fetch, and no
+  // number it renders is ever computed from a page of rows.
+  //
+  // Read-only, and it stays read-only: the multiplier edit, the pin and the ledger are P1–P7,
+  // each a write of its own.
+  fastify.get('/advertising/placements', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    // `all` is accepted here and refused on the Keyword Tracker. Everything this page shows is
+    // either a per-campaign fact (a campaign belongs to exactly one market) or a EUR amount, and
+    // all four markets bill in EUR — so a merged view sums nothing dishonestly.
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === PLC_MARKET_ALL ? PLC_MARKET_ALL : raw.toUpperCase()
+    if (market !== PLC_MARKET_ALL && !PLC_MARKETS.includes(market as (typeof PLC_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${PLC_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+
+    const out = await getPlacementGrid({
+      market,
+      line: q.line || null,
+      portfolio: q.portfolio || null,
+      campaign: q.campaign || null,
+      // Server date vocabulary only. A `DateRangePicker` key must never reach here — the two
+      // vocabularies share `today` and `yesterday` and nothing else, so forwarding one hits
+      // `resolveRange`'s `default:` branch and returns seven days under a "Last 30 days" label
+      // (substrate spec §1.2.5). The client sends resolved dates for anything it picked.
+      preset: q.preset || null,
+      start: q.start || null,
+      end: q.end || null,
+      lane: (oneOf(q.lane, Object.keys(LANE_BY_KEY) as PlcLaneKey[]) ?? 'all') as PlcLaneKey | 'all',
+      q: q.q || null,
+      sort: oneOf(q.sort, PLC_SORT_KEYS) as PlcSortKey | null,
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+    })
+    // Short private cache, as the neighbouring reads use. The base is 220 campaigns expanded to
+    // 660 lane rows over one grouped scan of the placement report; the engine moves the lever
+    // every 15 minutes and the report lands once a day.
     reply.header('Cache-Control', 'private, max-age=60')
     return out
   })
