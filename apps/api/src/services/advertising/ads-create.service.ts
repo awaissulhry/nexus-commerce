@@ -188,7 +188,16 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
   return { id: ag.id, externalAdGroupId: externalId }
 }
 
-export interface NewKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bidEur: number; userId?: string }
+export interface NewKeyword {
+  adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bidEur: number; userId?: string
+  /**
+   * HV.4 (C9) — WHY this keyword was created. `audit()` has always accepted evidence and this
+   * caller has always passed none, so every one of the 218 keywords the harvest engine wrote
+   * carries a row with no reasoning. A harvest write has perfect evidence and now supplies it.
+   * Optional, so every existing caller is unchanged.
+   */
+  evidence?: AdWriteEvidence | null
+}
 export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string; externalTargetId: string | null }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
@@ -225,7 +234,13 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
     }
   }
   const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: Math.round(input.bidEur * 100), status: 'ENABLED', externalTargetId: externalId } })
-  await audit('create_keyword', 'AD_TARGET', t.id, { keywordText: input.keywordText, matchType: input.matchType, externalId }, input.userId)
+  // 🔴 `reachedAmazon` is `externalId != null`, and the payload says so explicitly rather than
+  // leaving a reader to infer it from a null. 209 of the engine's 218 graduations reported success
+  // and do not exist at Amazon; an audit row that does not distinguish the two is how that stayed
+  // invisible for three months.
+  await audit('create_keyword', 'AD_TARGET', t.id,
+    { keywordText: input.keywordText, matchType: input.matchType, externalId, reachedAmazon: externalId != null },
+    input.userId, {}, 'SUCCESS', input.evidence ?? null)
   return { id: t.id, externalTargetId: externalId }
 }
 

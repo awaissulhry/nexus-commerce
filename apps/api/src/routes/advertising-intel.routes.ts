@@ -15,6 +15,7 @@ import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-t
 import { getNegatives, getTermContext, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
 import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
 import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
+import { planPromotion, promoteCandidates } from '../services/advertising/harvest-promote.service.js'
 import {
   loadDestinationGraph, resolveStoredDestinations, rankDestinations, listHarvestDestinations,
   saveHarvestDestination, deleteHarvestDestination, HV_CREATE_TYPES,
@@ -911,6 +912,49 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       reply.status(err.code === 'not_found' ? 404 : 400)
       return { ok: false, error: err.message ?? 'could not remove the destination', code: err.code ?? 'bad_request' }
     }
+  })
+
+  // ── HV.4 — the paired write ─────────────────────────────────────────
+  //
+  // 🔴 The first route on this page that spends money. GET plans it (nothing is written); POST
+  // executes exactly that plan. They share `planPromotion`, so the sentence the dialog states and
+  // the number written cannot diverge.
+  //
+  // This arms no automation. HV.0 stands: ads-auto-harvest stays propose-only and the five rules
+  // stay at PROPOSE. `ads-graduation.ts` caps AUTOMATIONS; an operator pressing a button is a
+  // different actor.
+  fastify.get('/advertising/harvest-promote', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
+    // Repeated `?ids=` params, not a delimited string: a candidate id is
+    // `market|campaign|adGroup|term` and a search term may itself contain a comma or a pipe.
+    const rawIds = (request.query as { ids?: string | string[] }).ids
+    const ids = (Array.isArray(rawIds) ? rawIds : rawIds ? [rawIds] : []).filter(Boolean)
+    if (ids.length === 0) { reply.status(400); return { error: 'ids is required', code: 'ids_required' } }
+    if (ids.length > 200) { reply.status(400); return { error: `${ids.length} candidates in one request; the cap is 200`, code: 'too_many' } }
+    return planPromotion({ market, candidateIds: ids, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null })
+  })
+
+  fastify.post('/advertising/harvest-promote', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const ids = Array.isArray(b.ids) ? b.ids.map(String).filter(Boolean) : []
+    if (ids.length === 0) { reply.status(400); return { ok: false, error: 'ids is required', code: 'ids_required' } }
+    if (ids.length > 200) { reply.status(400); return { ok: false, error: `${ids.length} candidates in one request; the cap is 200. This is a request bound, not a spend ceiling.`, code: 'too_many' } }
+    // Structural writes that create a keyword AND a negative on Amazon. An explicit confirm is
+    // required, in the body, so a stray POST cannot spend money.
+    if (b.confirm !== true) { reply.status(400); return { ok: false, error: 'confirm:true is required — this creates keywords and negatives on Amazon', code: 'confirm_required' } }
+    const raw = String(b.market ?? '').trim()
+    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    const out = await promoteCandidates({
+      market, candidateIds: ids, userId,
+      line: (b.line as string) ?? null, portfolio: (b.portfolio as string) ?? null,
+      campaign: (b.campaign as string) ?? null, adGroup: (b.adGroup as string) ?? null,
+    })
+    // 🔴 Always 200 with per-row outcomes, never a single pass/fail. N writes have N independent
+    // failure modes and an HTTP status cannot carry three outcome classes (C7).
+    return { ok: true, ...out }
   })
 
   // ── BID.S0 — the poll cursor ────────────────────────────────────────

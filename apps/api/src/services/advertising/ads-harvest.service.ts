@@ -15,6 +15,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { createNegative, type NegativeMatchType } from './ads-negative-kw.service.js'
+import type { AdWriteEvidence } from './ads-evidence.js'
 import { createKeywordLocal, createNegativeKeywordCampaignLocal, createTargetLocal, createNegativeProductTargetLocal } from './ads-create.service.js'
 // NEG.0(a) — enforced HERE rather than at applyHarvest's five callers, for the reason the write
 // gate gives about itself: a protection only some callers honour is not a protection. The five are
@@ -78,6 +79,44 @@ export async function previewHarvest(opts: { windowDays?: number; minSpendCents?
   return { negatives, graduations, productNegatives, productGraduations, windowDays }
 }
 
+/**
+ * HV.4 — one row per candidate the caller asked for, so a bulk write reports N outcomes rather
+ * than one number. Additive: every counter below is unchanged, and `ads-auto-harvest.service.ts:48`
+ * and `ads-recommendations.service.ts:171/173` read only those.
+ *
+ * 🔴 `reachedAmazon` is `externalTargetId != null` — never "we called create". 209 of the engine's
+ * 218 graduations reported success and do not exist at Amazon, because `createKeywordLocal` writes
+ * the local row and the audit row whether or not the push landed. That is the defect this field
+ * exists to make impossible to repeat.
+ *
+ * `outcome` is three of C7's four words. "proposed" cannot occur here: this path only runs when an
+ * operator has already decided.
+ */
+export interface HarvestOutcome {
+  query: string
+  matchType: string
+  sourceAdGroupId: string | null
+  destinationAdGroupId: string | null
+  targetId: string | null
+  externalTargetId: string | null
+  reachedAmazon: boolean
+  /** null when no isolation negative was attempted — see `negateReason` for why */
+  negative: {
+    attempted: boolean
+    scope: 'AD_GROUP' | 'CAMPAIGN'
+    targetId: string | null
+    externalTargetId: string | null
+    reachedAmazon: boolean
+    refusal?: { deniedAt: string; reason: string }
+    error?: string
+  } | null
+  /** the sentence explaining the negative's presence or absence, composed once, server-side */
+  negateReason: string
+  outcome: 'acted' | 'refused' | 'failed'
+  refusal?: { deniedAt: string; reason: string }
+  error?: string
+}
+
 export interface HarvestApplyResult {
   negativesAdded: number
   keywordsGraduated: number
@@ -89,6 +128,8 @@ export interface HarvestApplyResult {
   negativesProtected: number
   /** The refusals in full. A count nobody can read back to a term is a silent skip with a number on it. */
   protectedTerms: Array<{ term: string; path: 'wasteful' | 'isolation'; reason: string }>
+  /** HV.4 — per-candidate outcomes. Empty for callers that do not ask for graduations. */
+  outcomes: HarvestOutcome[]
 }
 // AT.4b — per-(external)-ad-group match-type plan from a wizard rule's `sources`.
 // Absent → the original defaults (graduate EXACT, negate NEGATIVE_EXACT). H.5 adds the product flags:
@@ -99,8 +140,37 @@ export type HarvestPlan = Record<string, { graduate?: string[]; negate?: string[
 // that hosts that match type in the same product group (e.g. EXACT → the Exact campaign). A graduated
 // keyword is created there instead of back in the source ad group. Absent → graduate in source (the
 // standalone "Auto harvest & negate" template, unchanged).
-export async function applyHarvest(args: { negatives?: HarvestCandidate[]; graduations?: Array<HarvestCandidate & { bidEur?: number }>; productNegatives?: HarvestCandidate[]; productGraduations?: Array<HarvestCandidate & { bidEur?: number }>; userId?: string; plan?: HarvestPlan; destinations?: Record<string, string>; protectConverting?: boolean; protectDays?: number }): Promise<HarvestApplyResult> {
-  const result: HarvestApplyResult = { negativesAdded: 0, keywordsGraduated: 0, isolationNegativesAdded: 0, productsGraduated: 0, productNegativesAdded: 0, errors: [], negativesProtected: 0, protectedTerms: [] }
+export async function applyHarvest(args: {
+  negatives?: HarvestCandidate[]
+  graduations?: Array<HarvestCandidate & { bidEur?: number; evidence?: AdWriteEvidence | null }>
+  productNegatives?: HarvestCandidate[]
+  productGraduations?: Array<HarvestCandidate & { bidEur?: number }>
+  userId?: string
+  plan?: HarvestPlan
+  destinations?: Record<string, string>
+  protectConverting?: boolean
+  protectDays?: number
+  /** HV.4 — AD_GROUP for operator-initiated promotions; defaults to CAMPAIGN for existing callers. */
+  negateScope?: 'AD_GROUP' | 'CAMPAIGN'
+}): Promise<HarvestApplyResult> {
+  const result: HarvestApplyResult = { negativesAdded: 0, keywordsGraduated: 0, isolationNegativesAdded: 0, productsGraduated: 0, productNegativesAdded: 0, errors: [], negativesProtected: 0, protectedTerms: [], outcomes: [] }
+
+  /**
+   * 🔴 HV.4 — the isolation negative's SCOPE, and the account decided this.
+   *
+   * Measured 2026-08-12: AD_GROUP-scoped negatives 2,037, of which **2,017 reached Amazon (99%)**;
+   * CAMPAIGN-scoped negatives 20, of which **0 reached Amazon (0%)**, newest 2026-06-24. Every
+   * campaign-scoped negative this account has ever created failed. NEG.0(b) repaired the
+   * missing-`marketplace` cause so it may work now, but it has never once been observed to.
+   *
+   * Functionally the isolation negative's job is to stop THE SOURCE AD GROUP competing with the
+   * keyword we just created. Campaign scope blocks the term across every ad group in that
+   * campaign — broader than the job, and if a destination ever shares the source's campaign it
+   * would negate the very keyword being created.
+   *
+   * Default stays CAMPAIGN so the two existing callers are byte-identical; HV.4 passes AD_GROUP.
+   */
+  const negScope: 'AD_GROUP' | 'CAMPAIGN' = args.negateScope ?? 'CAMPAIGN'
 
   // NEG.0(a) — one read for the whole batch, then a pure decision per term.
   //
@@ -153,6 +223,32 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
     return negMatches.length
   }
 
+  /**
+   * HV.4 — the same write, at AD_GROUP scope. `createNegative` has always supported it; nothing in
+   * this account has ever used it from the harvest path, which is why all 20 campaign-scoped rows
+   * failed while the 2,037 ad-group ones succeeded.
+   *
+   * Returns the created rows so the caller can report `reachedAmazon` per negative rather than a
+   * count that cannot be read back to a term.
+   */
+  const negateAdGroup = async (externalCampaignId: string, externalAdGroupId: string, query: string, planNegate?: string[]) => {
+    const negMatches = planNegate?.length ? planNegate : ['EXACT']
+    const camp = await prisma.campaign.findFirst({ where: { externalCampaignId }, select: { marketplace: true } })
+    if (!camp?.marketplace) throw new Error(`no local campaign (or no marketplace) for externalCampaignId=${externalCampaignId} — cannot resolve a connection for the write gate`)
+    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } })
+    const out: Array<{ matchType: string; externalTargetId: string | null; denied?: { deniedAt: string; reason: string } }> = []
+    for (const nm of negMatches) {
+      if (nm !== 'EXACT' && nm !== 'PHRASE') throw new Error(`unsupported negative match type "${nm}" — Amazon SP accepts EXACT and PHRASE only`)
+      const matchType: NegativeMatchType = nm === 'EXACT' ? 'NEGATIVE_EXACT' : 'NEGATIVE_PHRASE'
+      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: query, matchType, scope: 'AD_GROUP', marketplace: camp.marketplace })
+      // 🔴 A refusal is not a failure (C7). It is returned, with the gate's own words, rather than
+      // thrown — the promotion half may well have succeeded and the operator has to see both.
+      if (r.denied) { out.push({ matchType: nm, externalTargetId: null, denied: { deniedAt: String(r.denied.deniedAt), reason: String(r.denied.reason) } }); continue }
+      out.push({ matchType: nm, externalTargetId: r.externalNegativeKeywordId ?? null })
+    }
+    return out
+  }
+
   for (const n of args.negatives ?? []) {
     const refused = refusalFor(n.query)
     if (refused) { recordRefusal(n.query, 'wasteful', refused); continue }
@@ -170,13 +266,15 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
       // Bid = derived from observed CPC (cost/clicks) or a sensible default.
       const bidEur = g.bidEur ?? (g.clicks > 0 ? Math.max(0.05, g.costCents / g.clicks / 100) : 0.5)
       const gradMatches = args.plan?.[g.externalAdGroupId]?.graduate?.length ? args.plan[g.externalAdGroupId].graduate! : ['EXACT']
+      const made: Array<{ matchType: string; destAdGroupId: string; targetId: string; externalTargetId: string | null }> = []
       for (const gm of gradMatches) {
         // H.2 — route into the destination campaign that hosts this match type (EXACT → Exact
         // campaign), not back into the source. Fall back to the source ad group when no destination
         // of that kind exists (back-compat / standalone template).
         const destAdGroupId = args.destinations?.[gm] ?? srcAg?.id
         if (!destAdGroupId) { result.errors.push(`grad "${g.query}" (${gm}): no destination/local ad group`); continue }
-        await createKeywordLocal({ adGroupId: destAdGroupId, keywordText: g.query, matchType: gm as 'EXACT' | 'PHRASE' | 'BROAD', bidEur, userId: args.userId })
+        const k = await createKeywordLocal({ adGroupId: destAdGroupId, keywordText: g.query, matchType: gm as 'EXACT' | 'PHRASE' | 'BROAD', bidEur, userId: args.userId, evidence: g.evidence ?? null })
+        made.push({ matchType: gm, destAdGroupId, targetId: k.id, externalTargetId: k.externalTargetId })
       }
       result.keywordsGraduated++
 
@@ -185,6 +283,12 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
       // the source row's negate plan (default EXACT). createNegative is idempotent + write-gated, so a
       // recurring tick won't pile up duplicates and nothing pushes live while gated.
       const promotedElsewhere = !!srcAg && gradMatches.some((gm) => { const d = args.destinations?.[gm]; return !!d && d !== srcAg.id })
+      let negOutcome: HarvestOutcome['negative'] = null
+      // The §4.1 sentence, in the no-destination case. HV.3 renders the same wording before the
+      // write; this records it after, so the two cannot drift.
+      let negateReason = promotedElsewhere
+        ? 'The keyword landed elsewhere, so the source was negated.'
+        : `No negative was created: the keyword was created in the ad group that discovered it, so applyHarvest's isolation negative does not fire.`
       if (promotedElsewhere) {
         // 🔴 NEG.0(a), the awkward case: a graduated term converted by definition, so the literal
         // reading of "never negate a term that converted" refuses every isolation negation. Applied
@@ -193,13 +297,54 @@ export async function applyHarvest(args: { negatives?: HarvestCandidate[]; gradu
         // has ever run this service (ads-auto-harvest) passes no `destinations`, so
         // `promotedElsewhere` is false for it.
         const refused = refusalFor(g.query)
-        if (refused) recordRefusal(g.query, 'isolation', refused)
+        if (refused) { recordRefusal(g.query, 'isolation', refused); negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, refusal: { deniedAt: 'protect_converting', reason: refused.reason } }; negateReason = `The isolation negative was refused: ${refused.reason}` }
         else {
-          try { result.isolationNegativesAdded += await negateCampaign(g.externalCampaignId, g.query, args.plan?.[g.externalAdGroupId]?.negate) }
-          catch (e) { result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`) }
+          try {
+            if (negScope === 'AD_GROUP') {
+              const rows = await negateAdGroup(g.externalCampaignId, g.externalAdGroupId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
+              const landed = rows.filter((r) => r.externalTargetId != null)
+              const denied = rows.find((r) => r.denied)
+              result.isolationNegativesAdded += rows.length
+              negOutcome = { attempted: true, scope: 'AD_GROUP', targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
+              negateReason = denied?.denied
+                ? `The keyword was created, but the negative was refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
+                : `The keyword landed elsewhere, so this term was negated in its source ad group.`
+            } else {
+              result.isolationNegativesAdded += await negateCampaign(g.externalCampaignId, g.query, args.plan?.[g.externalAdGroupId]?.negate)
+              negOutcome = { attempted: true, scope: 'CAMPAIGN', targetId: null, externalTargetId: null, reachedAmazon: false }
+              negateReason = `The keyword landed elsewhere, so this term was negated at campaign scope.`
+            }
+          } catch (e) {
+            negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, error: (e as Error).message }
+            negateReason = `The keyword was created, but the negative failed: ${(e as Error).message}`
+            result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`)
+          }
         }
       }
-    } catch (e) { result.errors.push(`grad "${g.query}": ${(e as Error).message}`) }
+
+      // 🔴 One outcome row per candidate. `reachedAmazon` is the external id, never the call.
+      const first = made[0]
+      result.outcomes.push({
+        query: g.query,
+        matchType: first?.matchType ?? (gradMatches[0] ?? 'EXACT'),
+        sourceAdGroupId: srcAg?.id ?? null,
+        destinationAdGroupId: first?.destAdGroupId ?? null,
+        targetId: first?.targetId ?? null,
+        externalTargetId: first?.externalTargetId ?? null,
+        reachedAmazon: !!first && first.externalTargetId != null,
+        negative: negOutcome,
+        negateReason,
+        outcome: made.length === 0 ? 'failed' : 'acted',
+      })
+    } catch (e) {
+      result.errors.push(`grad "${g.query}": ${(e as Error).message}`)
+      result.outcomes.push({
+        query: g.query, matchType: 'EXACT', sourceAdGroupId: null, destinationAdGroupId: null,
+        targetId: null, externalTargetId: null, reachedAmazon: false, negative: null,
+        negateReason: 'Nothing was written, so no negative was attempted.',
+        outcome: 'failed', error: (e as Error).message,
+      })
+    }
   }
 
   // ── H.5 — product-target harvesting (ASIN candidates) ──────────────────────────────
