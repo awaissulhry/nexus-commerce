@@ -3078,18 +3078,18 @@ model AmazonAdsProfile {
 /// `dailySpendCapCents`, `acosCapPct`. Those are coverage-engine intent. Half-populating them
 /// here is exactly how two surfaces come to disagree about what automation is trying to do.
 model KeywordWatchlist {
-  id String @id @default(cuid())
+  id          String  @id @default(cuid())
   /// IT | DE | ES | FR. One market per list — volume, rank and share are per-marketplace
   /// quantities, and serving one market's list to another is the defect KT.2 exists to fix
   /// (measured: only 8 of the 97 Italian terms have EVER had a DE row; 3 in ES; 3 in FR).
   marketplace String
   name        String
   /// The list this market opens on. There is no cross-market fallback, by design.
-  isDefault Boolean @default(false)
+  isDefault   Boolean @default(false)
   /// Provenance of the terms, for the honesty line on the page:
   /// coverage-set-import | bid-keywords | sqp | manual | import
-  source    String  @default("manual")
-  createdBy String?
+  source      String  @default("manual")
+  createdBy   String?
 
   createdAt DateTime               @default(now())
   updatedAt DateTime               @updatedAt
@@ -3106,17 +3106,17 @@ model KeywordWatchlistTerm {
   watchlist   KeywordWatchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
   /// Lowercased, whitespace-collapsed — the same normalisation `AdKeywordProtection` stores and
   /// the same the tracker joins SQP on. Stored normalised so the join can never disagree.
-  term String
+  term        String
   /// STORED, not derived. KT.1 recomputed "is this our brand" on every read with a blanket
   /// substring sweep; `AdKeywordProtection` carries `matchType` (EXACT | PREFIX | CONTAINS) and a
   /// nullable `marketplace`, and the sweep honoured neither. It is seeded from the honoured
   /// classifier and then owned by the operator, who can flip one term without editing a
   /// protection rule that also gates negative-keyword harvesting.
-  isBranded Boolean @default(false)
+  isBranded   Boolean          @default(false)
   /// Where this specific term came from, when it differs from the list's own source.
-  addedFrom String?
-  notes     String?
-  createdAt DateTime @default(now())
+  addedFrom   String?
+  notes       String?
+  createdAt   DateTime         @default(now())
 
   @@unique([watchlistId, term])
   @@index([watchlistId, isBranded])
@@ -16040,4 +16040,58 @@ model AgentFindingRun {
 
   @@id([findingId, runId])
   @@index([runId])
+}
+
+/// HV.2 — the graduation thresholds, as a stored and attributable policy.
+///
+/// They live today as two constants in a service file with no UI anywhere
+/// (`ads-harvest.service.ts:41-42`) plus `CONVERTING_MIN_ORDERS` in the
+/// evaluator's env. Measured on prod 2026-08-12, the threshold is the single
+/// value that decides whether the Keyword Harvest tab has any content at all:
+/// minOrders 1 → 92 candidates (58 new) · 2 → 17 (1 new) · 3 → 8 (0 new).
+///
+/// Resolution is most-specific-wins and the first row found wins WHOLE:
+/// adGroup → campaign → portfolio → line → market → account. There is no
+/// field-level merge across levels, deliberately — merging would make "which
+/// number is actually in force" unanswerable, which is the exact failure this
+/// control exists to remove.
+///
+/// 🔴 `scopeId` is NOT nullable; the account row uses the sentinel '*'. Postgres
+/// treats NULLs as DISTINCT inside a unique index, so a nullable key would
+/// accept two account rows and the resolver would pick one arbitrarily.
+///
+/// What this does NOT bind, as of HV.2: `ads-auto-harvest` (propose-only since
+/// HV.0) still reads `previewHarvest`'s own constants, and the five harvest
+/// rules still read their own action args. HV.4 makes the write path read this
+/// table; HV.8 repairs the rule path. The page says so on screen.
+model AdsHarvestPolicy {
+  id String @id @default(cuid())
+
+  /// account | market | line | portfolio | campaign | adGroup
+  scopeGrain String
+  /// '*' for account; else marketplace code | Product.id | externalPortfolioId | Campaign.id | AdGroup.id
+  scopeId    String @default("*")
+  /// 'graduate' only, here. 'negate' is reserved for Negative Targeting (D4) so NEG
+  /// does not have to migrate this table later; HV.2 never writes one.
+  kind       String @default("graduate")
+
+  minOrders           Int
+  minClicks           Int
+  /// null = no ceiling. A candidate with orders but NO attributed sales has no ACoS
+  /// and is KEPT — excluding on a missing measurement is the blank-is-not-a-zero failure.
+  maxAcosPct          Int?
+  windowDays          Int
+  /// Exclude candidates whose EVERY order arrived via an EXACT match. `previewHarvest`
+  /// has no match-type filter, so those rows offer to create the keyword that produced
+  /// the traffic — 5 of 17 at the default threshold.
+  excludeExactMatched Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// A threshold is a money decision. An unattributable one is the class of row this
+  /// programme has twice had to reverse-engineer from a cron summary.
+  updatedBy String
+
+  @@unique([scopeGrain, scopeId, kind])
+  @@index([kind, scopeGrain])
 }
