@@ -114,6 +114,13 @@ export interface WastefulGram {
   isSizeToken: boolean
   isAsinShaped: boolean
   marketSplit: Array<{ market: string; costCents: number }>
+  /**
+   * The highest-spending queries this gram actually catches — capped at 8, with `catches` as the
+   * true total beside it. These are real search terms, so each one can open NEG.2's drawer; the
+   * GRAM cannot, because a gram is not a term and `?focus=protezioni` would open an empty drawer
+   * for a term that was never negated.
+   */
+  sampleTerms: Array<{ term: string; clicks: number; costCents: number; orders: number }>
   /** the four rails, resolved */
   blockedBy: BlockReason[]
   collisions: GramCollision[]
@@ -294,6 +301,17 @@ export async function getWastefulWords(req: WastefulWordsRequest): Promise<Waste
     const marketMap = new Map<string, number>()
     for (const r of hits) marketMap.set(r.marketplace, (marketMap.get(r.marketplace) ?? 0) + Math.round(Number(r._sum.costMicros ?? 0n) / 10000))
 
+    // The terms behind the gram, folded from (query × ad group) to one row per query.
+    const perQuery = new Map<string, { term: string; clicks: number; costCents: number; orders: number }>()
+    for (const r of hits) {
+      const prev = perQuery.get(r.query) ?? { term: r.query, clicks: 0, costCents: 0, orders: 0 }
+      prev.clicks += r._sum.clicks ?? 0
+      prev.costCents += Math.round(Number(r._sum.costMicros ?? 0n) / 10000)
+      prev.orders += r._sum.orders7d ?? 0
+      perQuery.set(r.query, prev)
+    }
+    const sampleTerms = [...perQuery.values()].sort((a, b) => b.costCents - a.costCents).slice(0, 8)
+
     const blockedBy: BlockReason[] = []
     if (bare.length < GRAM_FLOOR.minChars || isAsin || catches < GRAM_FLOOR.minCatches) blockedBy.push('below-floor')
     if (collisions.length > 0) blockedBy.push('winning-collision')
@@ -311,6 +329,7 @@ export async function getWastefulWords(req: WastefulWordsRequest): Promise<Waste
       negatedAsWholeTerm: negTermSet.has(key),
       isSizeToken: isSize, isAsinShaped: isAsin,
       marketSplit: [...marketMap].map(([market, costCents]) => ({ market, costCents })).sort((a, b) => b.costCents - a.costCents),
+      sampleTerms,
       blockedBy, collisions, convertingTerms, protectedBy,
       actionable: blockedBy.length === 0,
     }

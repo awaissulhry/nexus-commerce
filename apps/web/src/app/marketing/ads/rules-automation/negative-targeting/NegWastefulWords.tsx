@@ -48,7 +48,9 @@ interface WastefulGram {
   inNegatedPhrases: number; negatedAsWholeTerm: boolean
   isSizeToken: boolean; isAsinShaped: boolean
   marketSplit: Array<{ market: string; costCents: number }>
-  sampleTerms: Array<{ term: string; clicks: number; costCents: number; orders: number }>
+  /** 🔴 optional on purpose: web and API deploy separately, so a UI that hard-reads a field the
+   *  API has not shipped yet crashes the section the moment a row is expanded. */
+  sampleTerms?: Array<{ term: string; clicks: number; costCents: number; orders: number }>
   blockedBy: BlockReason[]
   collisions: Collision[]
   convertingTerms: ConvertingTerm[]
@@ -337,11 +339,15 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                       {open[w.gram] && (
                         <span className="terms">
                           <em className="hd">
-                            Top {Math.min(w.sampleTerms.length, 8)} of the <b>{num(w.catches)}</b>{' '}
-                            {w.catches === 1 ? 'term' : 'terms'} this word blocks, by spend
-                            {w.catchesLoose > w.catches && <> · {num(w.catchesLoose - w.catches)} more contain it inside a longer word and would <b>not</b> be blocked</>}
+                            {(w.sampleTerms ?? []).length === 0
+                              ? <>The terms behind this word are not available from this API build.</>
+                              : <>
+                                  Top {Math.min((w.sampleTerms ?? []).length, 8)} of the <b>{num(w.catches)}</b>{' '}
+                                  {w.catches === 1 ? 'term' : 'terms'} this word blocks, by spend
+                                  {w.catchesLoose > w.catches && <> · {num(w.catchesLoose - w.catches)} more contain it inside a longer word and would <b>not</b> be blocked</>}
+                                </>}
                           </em>
-                          {w.sampleTerms.map((t) => (
+                          {(w.sampleTerms ?? []).map((t) => (
                             <span key={t.term} className="t">
                               <button type="button" className="lnk" onClick={() => push({ focus: t.term })}>{t.term}</button>
                               <i>{eur(t.costCents)} · {num(t.clicks)} clicks{t.orders > 0 ? ` · ${t.orders} orders` : ''}</i>
