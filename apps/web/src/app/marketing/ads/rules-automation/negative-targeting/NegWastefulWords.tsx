@@ -47,6 +47,7 @@ interface WastefulGram {
   adGroups: number; adGroupsWritable: number; adGroupsAlreadyNegated: number
   inNegatedPhrases: number; negatedAsWholeTerm: boolean
   isSizeToken: boolean; isAsinShaped: boolean
+  floorFailures?: string[]
   marketSplit: Array<{ market: string; costCents: number }>
   /** 🔴 optional on purpose: web and API deploy separately, so a UI that hard-reads a field the
    *  API has not shipped yet crashes the section the moment a row is expanded. */
@@ -332,7 +333,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                           {w.collisions.length > 0 && <>Part of <b>{w.collisions.map((c) => `“${c.gram}” (ROAS ${c.roas.toFixed(1)})`).join(', ')}</b>. </>}
                           {w.convertingTerms.length > 0 && <>Would catch <b>{w.convertingTerms.length}</b> converting {w.convertingTerms.length === 1 ? 'term' : 'terms'} worth <b>{eur(w.convertingTerms.reduce((a, t) => a + t.salesCents, 0))}</b>. </>}
                           {w.protectedBy.length > 0 && <>Contains the protected term <b>{w.protectedBy[0].term}</b>, so the write gate would refuse it. </>}
-                          {w.blockedBy.includes('below-floor') && <>Below the floor of {d.floor.minChars} characters and {d.floor.minCatches} terms{w.isAsinShaped ? ', and it is an ASIN rather than a word' : ''}. </>}
+                          {w.blockedBy.includes('below-floor') && <>Below the floor: {(w.floorFailures ?? []).join(', ') || `under ${d.floor.minChars} characters or ${d.floor.minCatches} terms`}. </>}
                           {w.blockedBy.includes('not-allowlisted') && <>No campaign running it is on the live-write allowlist. </>}
                         </span>
                       )}

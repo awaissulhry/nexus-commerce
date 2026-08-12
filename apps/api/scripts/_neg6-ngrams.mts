@@ -123,6 +123,18 @@ if (aa) {
   truthy('🔴 `aa` is NOT actionable', !aa.actionable, aa.blockedBy.join(','))
   truthy('`aa` is excluded by LENGTH, not by term count', aa.catches >= p.floor.minCatches, `catches ${aa.catches}`)
 }
+// 🔴 the floor must say WHICH condition failed — "below the floor of 3 characters" is false of a
+// 13-character gram, and it was on screen for three of them.
+const floorBlocked = p.wasteful.filter((w) => w.blockedBy.includes('below-floor'))
+truthy('every below-floor gram names its actual failure', floorBlocked.every((w) => w.floorFailures.length > 0))
+for (const w of floorBlocked) console.log(`     ${w.gram.padEnd(22)} ${w.floorFailures.join(' · ')}`)
+const longGram = floorBlocked.find((w) => w.gram.replace(/\s/g, '').length >= p.floor.minChars)
+truthy('a gram over the character floor is NOT told it is under it',
+  !longGram || longGram.floorFailures.every((f) => !f.includes('character')),
+  longGram ? `${longGram.gram}: ${longGram.floorFailures.join(', ')}` : 'none present')
+// 🔴 blockedBy[0] is the headline the UI prints — it must be the most serious rail, not the first added.
+if (aa) truthy('🔴 `aa` leads with its most serious reason, not the floor',
+  aa.blockedBy[0] === 'converting-terms', aa.blockedBy.join(','))
 const asins = p.wasteful.filter((w) => w.isAsinShaped)
 console.log(`     ASIN-shaped grams: ${asins.map((w) => w.gram).join(', ') || '—'}`)
 truthy('every ASIN-shaped gram is blocked', asins.every((w) => !w.actionable))

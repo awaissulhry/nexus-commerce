@@ -36,10 +36,18 @@
  *
  *   1. winning-gram collision — 2 today (`alpinestar` ⊂ `moto alpinestars` ROAS 15.9, `aa` ⊂ `aaa`
  *      ROAS 13.1). BLOCKS the action, with the reason, rather than warning.
- *   2. converting terms — listed with their sales; blocks if any. Structurally zero, stated as such.
+ *   2. converting terms — listed with their sales; blocks if any. See the note above on why this
+ *      only ever fires on the loose set.
  *   3. protected-term collision — `xavia` is both the top winning gram AND protected. BLOCKS.
- *   4. the gram floor — min length 3, min 5 catching terms, and not ASIN-shaped. `aa` (2 chars,
- *      30 terms) fails on length; `b0cy2s7zgy` and `b092qrxwzn` fail as ASINs.
+ *   4. the gram floor — min 3 chars, min 5 catching terms, not ASIN-shaped. `aa` (2 chars, 30
+ *      terms) fails on LENGTH; `uomo stagioni` (13 chars, 0 catches) fails on TERM COUNT;
+ *      `b0cy2s7zgy` and `b092qrxwzn` fail as ASINs. Which condition failed is carried in
+ *      `floorFailures` and printed — "below the floor of 3 characters" is false of a 13-character
+ *      gram, and it is the sentence an operator has to trust to accept the refusal.
+ *
+ * `blockedBy` is ordered MOST SERIOUS FIRST because the UI shows `blockedBy[0]` as the headline
+ * reason. `aa` fails all three of protected/converting/collision plus the floor, and "it is below
+ * the floor" is the least informative of them.
  *
  * Read-only apart from `negateGram`, which routes through `createNegative` — the same gate, the
  * same idempotency probe, the same evidence stamp NEG.3 and HV.4 established. Nothing new.
@@ -113,6 +121,8 @@ export interface WastefulGram {
   /** §5 — a size token is a catalogue gap; labelled, and sorted below real waste */
   isSizeToken: boolean
   isAsinShaped: boolean
+  /** which floor condition(s) failed, in words — never "the floor" as one undifferentiated thing */
+  floorFailures: string[]
   marketSplit: Array<{ market: string; costCents: number }>
   /**
    * The highest-spending queries this gram actually catches — capped at 8, with `catches` as the
@@ -312,11 +322,21 @@ export async function getWastefulWords(req: WastefulWordsRequest): Promise<Waste
     }
     const sampleTerms = [...perQuery.values()].sort((a, b) => b.costCents - a.costCents).slice(0, 8)
 
+    // 🔴 WHICH floor condition failed, not "the floor" as one undifferentiated thing. Telling an
+    // operator that `uomo stagioni` — thirteen characters — is "below the floor of 3 characters"
+    // is simply false, and it is the sentence they would have to trust to accept the refusal.
+    const floorFailures: string[] = []
+    if (bare.length < GRAM_FLOOR.minChars) floorFailures.push(`it is ${bare.length} characters, under the ${GRAM_FLOOR.minChars}-character minimum`)
+    if (isAsin) floorFailures.push('it is an ASIN, not a word')
+    if (catches < GRAM_FLOOR.minCatches) floorFailures.push(`it blocks ${catches} ${catches === 1 ? 'term' : 'terms'}, under the ${GRAM_FLOOR.minCatches}-term minimum`)
+
+    // 🔴 Ordered MOST SERIOUS FIRST, because the UI shows `blockedBy[0]` as the headline reason.
+    // `aa` fails all three; "it is below the floor" is the least of them and was what showed.
     const blockedBy: BlockReason[] = []
-    if (bare.length < GRAM_FLOOR.minChars || isAsin || catches < GRAM_FLOOR.minCatches) blockedBy.push('below-floor')
-    if (collisions.length > 0) blockedBy.push('winning-collision')
-    if (convertingTerms.length > 0) blockedBy.push('converting-terms')
     if (protectedBy.length > 0) blockedBy.push('protected-term')
+    if (convertingTerms.length > 0) blockedBy.push('converting-terms')
+    if (collisions.length > 0) blockedBy.push('winning-collision')
+    if (floorFailures.length > 0) blockedBy.push('below-floor')
     if (ags.size === 0) blockedBy.push('no-ad-groups')
     else if (writable === 0) blockedBy.push('not-allowlisted')
 
@@ -327,7 +347,7 @@ export async function getWastefulWords(req: WastefulWordsRequest): Promise<Waste
       adGroups: ags.size, adGroupsWritable: writable, adGroupsAlreadyNegated: alreadyNegated,
       inNegatedPhrases: [...negTermSet].filter((t) => t.includes(key)).length,
       negatedAsWholeTerm: negTermSet.has(key),
-      isSizeToken: isSize, isAsinShaped: isAsin,
+      isSizeToken: isSize, isAsinShaped: isAsin, floorFailures,
       marketSplit: [...marketMap].map(([market, costCents]) => ({ market, costCents })).sort((a, b) => b.costCents - a.costCents),
       sampleTerms,
       blockedBy, collisions, convertingTerms, protectedBy,
