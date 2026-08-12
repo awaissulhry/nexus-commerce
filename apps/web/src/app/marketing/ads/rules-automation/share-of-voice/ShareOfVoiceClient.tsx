@@ -59,6 +59,13 @@ const WEEKS = [4, 8, 13] as const
 const DEFAULT_WEEKS = 8
 
 type RowState = 'measured' | 'not-covered' | 'no-row-this-period' | 'never-measured'
+/**
+ * SOV.1 — the Δ's own state, on its own axis. A row is `measured` for share and `delta-no-prior`
+ * for its Δ at the same time, so this cannot be a fifth `RowState`. Measured on prod: a comparable
+ * prior week exists for only 18–28% of rows, so the REASON a Δ is blank is most of what the column
+ * says.
+ */
+type DeltaState = 'delta-measured' | 'delta-no-prior' | 'delta-not-applicable'
 
 interface Row {
   query: string
@@ -69,6 +76,18 @@ interface Row {
   ourImpressions: number | null
   /** 0..1, or null. null and 0 mean different things and are never rendered the same way. */
   share: number | null
+  /** absent (`undefined`) while the API deploy is still rolling — a commit is TWO deploys */
+  marketClicks?: number | null
+  ourClicks?: number | null
+  clickShare?: number | null
+  priorShare?: number | null
+  /** percentage POINTS, never a percentage of a percentage */
+  deltaPt?: number | null
+  deltaState?: DeltaState
+  /** the market denominator is below the period's median — too small for its share to mean anything */
+  lowConfidence?: boolean
+  /** the same test on the CLICK denominator, which is two orders of magnitude smaller */
+  lowConfidenceClicks?: boolean
   asinsCompeting: number
   state: RowState
   lastSeen: string | null
@@ -98,6 +117,18 @@ interface Payload {
     truncated: boolean; rejected: Array<{ start: string; rows: number }>
     weeks: number; lookbackDays: number; ktLookbackDays: number
     completenessRatio: number; baselinePeriods: number
+    /**
+     * The week the Δ compares against. `gapDays` is NOT always 7 — see the band.
+     *
+     * OPTIONAL on purpose: a commit is TWO deploys, and this client can reach production before the
+     * API that serves these fields. Marking them optional makes `tsc` refuse any access that would
+     * throw in that window, rather than leaving it to be discovered on the live page.
+     */
+    prior?: {
+      asOf: string | null; ageDays: number | null; rows: number; gapDays: number | null
+      reason: 'comparable' | 'no-older-period' | 'all-older-excluded'
+    }
+    excludedPeriods?: Array<{ asOf: string; rows: number; reason: 'all-zero' | 'below-threshold' }>
   }
   freshness: {
     sqp: { latest: string | null; ageDays: number | null }
@@ -106,7 +137,23 @@ interface Payload {
   census: {
     total: number; measured: number; noRowThisPeriod: number; neverMeasured: number
     notCovered: number; realZeros: number; noMarketTotal: number
+    deltaMeasured?: number; deltaNoPrior?: number
+    lowConfidence?: number; lowConfidenceClicks?: number
   }
+  /** the scope-level Δ, over the intersection of both weeks only. Optional — see `prior`. */
+  scopeDelta?: {
+    queries: number; nowShare: number | null; priorShare: number | null
+    deltaPt: number | null; withoutPrior: number
+  }
+  /** the weighted / median pair. Neither ever ships alone — the gap between them IS the finding. */
+  shareSummary?: {
+    queries: number; ourImpressions: number; marketImpressions: number
+    weighted: number | null; medianQuery: number | null
+  }
+  /** why cart-add and purchase share are a stated line rather than two permanently empty columns */
+  funnelCoverage?: { queries: number; clicks: number; cartAdds: number; purchases: number }
+  confidenceFloor?: number
+  confidenceFloorClicks?: number
   facets: {
     branded: number; asinLike: number
     byList: Array<{ id: string; name: string; terms: number; isDefault: boolean; source: string }>
@@ -127,6 +174,30 @@ const num = (n: number) => n.toLocaleString('en-IE')
  * "we hold none of this market" are different findings and must never share a rendering.
  */
 const sharePct = (v: number) => (v > 0 && v * 100 < 0.005 ? '<0.01%' : `${(v * 100).toFixed(2)}%`)
+/**
+ * 🔴 The SAME guard, on the Δ. A formatter can reintroduce a collapse the data layer refuses to
+ * make, and this is the second place it would have: measured on prod, the smallest non-zero |Δ| is
+ * **0.0015pt** in IT, 0.0029 in DE and 0.0032 in FR — every one of which `toFixed(2)` renders as
+ * `0.00pt`, the exact string a genuine "no change" produces. A movement that rounds away is still a
+ * movement, and it must not be dressed as stillness.
+ */
+const deltaPt = (v: number) => {
+  if (v === 0) return '0.00pt'
+  const sign = v > 0 ? '+' : '−'
+  const abs = Math.abs(v)
+  return abs < 0.005 ? `${sign}<0.01pt` : `${sign}${abs.toFixed(2)}pt`
+}
+/**
+ * The colour band for a share, calibrated against this account's MEASURED distribution rather than
+ * a 0–100% ramp or Pacvue's 10% ceiling alone.
+ *
+ * Measured 2026-08-12 across the four default views: p50 IT 1.80% · DE 1.34% · ES 2.35% · FR 0.54%;
+ * p90 4.76% / 4.76% / 4.92% / 4.44%; and above 10% there are 5 rows in IT, 1 in ES and 0 in DE/FR.
+ * So the resolution has to live between 0 and ~5%, with a distinct treatment for the rare row above
+ * 10%. Pacvue's "84 brands compete for the top 10 keywords, none exceeding 10% paid SOV" is
+ * corroborated by that ceiling — it just cannot be the whole scale.
+ */
+const shareBand = (v: number) => (v >= 0.10 ? 'b5' : v >= 0.05 ? 'b4' : v >= 0.02 ? 'b3' : v >= 0.005 ? 'b2' : 'b1')
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
@@ -254,6 +325,9 @@ export function ShareOfVoiceClient() {
   const p = data?.period
   const f = data?.freshness
   const c = data?.census
+  const sd = data?.scopeDelta
+  const ss = data?.shareSummary
+  const fc = data?.funnelCoverage
 
   const columns: GridColumn<Row>[] = useMemo(() => [
     {
@@ -294,7 +368,21 @@ export function ShareOfVoiceClient() {
               </span>
             )
           }
-          return <span className="h10-sov-share">{sharePct(r.share)}</span>
+          // 🔴 The colour band, and the low-confidence override. Calibrated against this
+          // account's MEASURED distribution, not a 0–100% ramp: IT p50 is 1.80%, p90 4.76%, and
+          // only 5 of 480 rows clear 10% — a linear 0–100% scale renders the page one flat colour.
+          // A low-confidence row is muted REGARDLESS of its value, because `sappnetta knee spider
+          // nero` at 50.00% is 2 impressions of 4 and must never be the brightest thing on screen.
+          return (
+            <span
+              className={`h10-sov-share ${r.lowConfidence ? 'thin' : shareBand(r.share)}`}
+              title={r.lowConfidence
+                ? `${num(r.ourImpressions ?? 0)} of only ${num(r.marketImpressions ?? 0)} market impressions — below this week's median of ${num(data?.confidenceFloor ?? 0)}, so this percentage is too small a sample to rank by.`
+                : `${num(r.ourImpressions ?? 0)} of ${num(r.marketImpressions ?? 0)} market impressions`}
+            >
+              {sharePct(r.share)}
+            </span>
+          )
         }
         // Three blanks, three sentences. A blank that means four things is worse than no column.
         if (r.state === 'not-covered') {
@@ -310,6 +398,68 @@ export function ShareOfVoiceClient() {
       },
       sortValue: (r) => r.share ?? -1,
       filterValue: (r) => (r.share ?? 0) * 100,
+    },
+    {
+      key: 'delta', label: 'Δ vs prior week',
+      tip: 'The change in market impression share against the nearest COMPARABLE earlier week, in percentage points — 1.71% to 1.83% is +0.12pt, not "+7%". Most rows have no comparable prior week: Brand Analytics reports on a fixed ten ASINs per market and the queries they surface change week to week.',
+      render: (r) => {
+        // Four rows in five have no Δ, so the REASON is most of what this column says. Three
+        // renderings, never one blank standing for all of them.
+        if (r.deltaState === 'delta-measured' && r.deltaPt != null) {
+          const dir = r.deltaPt > 0 ? 'up' : r.deltaPt < 0 ? 'down' : 'flat'
+          return (
+            <span
+              className={`h10-sov-delta ${dir}${r.lowConfidence ? ' thin' : ''}`}
+              title={`${sharePct(r.priorShare ?? 0)} in the week of ${p?.prior?.asOf ? dayMonth(p.prior.asOf) : '—'} → ${sharePct(r.share ?? 0)} now`}
+            >
+              {deltaPt(r.deltaPt)}
+            </span>
+          )
+        }
+        if (r.deltaState === 'delta-no-prior') {
+          return (
+            <span
+              className="h10-sov-nm"
+              title={`This query is measured this week but has no row in ${p?.prior?.asOf ? `the week of ${dayMonth(p.prior.asOf)}` : 'the comparable prior week'}, so there is nothing to compare it against. Not a zero change.`}
+            >
+              no prior week
+            </span>
+          )
+        }
+        return <span className="h10-sov-nd">—</span>
+      },
+      sortValue: (r) => r.deltaPt ?? Number.NEGATIVE_INFINITY,
+      filterValue: (r) => r.deltaPt ?? 0,
+    },
+    {
+      key: 'clickShare', label: 'Click share',
+      tip: 'Of everyone who clicked ANY result for this query, the fraction who clicked us. Beside impression share it answers the one question impression share cannot: we are on the page — are we being chosen? A query with 2% impression share and 0.5% click share is a creative or price problem; 2% and 4% is a bidding opportunity.',
+      render: (r) => {
+        if (r.state !== 'measured') return <span className="h10-sov-nd">—</span>
+        // 🔴 `undefined` and `null` are not the same thing HERE either, for one deploy's worth of
+        // time: `undefined` means this client is newer than the API serving it (a commit is TWO
+        // deploys), `null` means Amazon reported no market clicks to divide by. Rendering the
+        // deploy gap as "no market clicks" would be the page stating a fact it does not have.
+        if (r.clickShare === undefined) return <span className="h10-sov-nd">—</span>
+        if (r.clickShare === null) {
+          return <span className="h10-sov-nm" title="Amazon reported no market clicks for this query in this week, so there is nothing to divide by. This is not a zero share.">no market clicks</span>
+        }
+        // 🔴 Its OWN confidence flag. The click denominator is two orders of magnitude below the
+        // impression one — IT's median is 17 clicks against 370 impressions — so the impression
+        // flag would leave "25.00% click share" (1 of 4) looking authoritative.
+        return (
+          <span
+            className={`h10-sov-share ${r.lowConfidenceClicks ? 'thin' : shareBand(r.clickShare)}`}
+            title={r.lowConfidenceClicks
+              ? `${num(r.ourClicks ?? 0)} of only ${num(r.marketClicks ?? 0)} market clicks — below this week's median of ${num(data?.confidenceFloorClicks ?? 0)}, so this percentage is too small a sample to rank by.`
+              : `${num(r.ourClicks ?? 0)} of ${num(r.marketClicks ?? 0)} market clicks`}
+          >
+            {r.clickShare === 0 ? '0.00%' : sharePct(r.clickShare)}
+          </span>
+        )
+      },
+      sortValue: (r) => r.clickShare ?? -1,
+      filterValue: (r) => (r.clickShare ?? 0) * 100,
     },
     {
       key: 'asins', label: 'ASINs competing',
@@ -440,6 +590,84 @@ export function ShareOfVoiceClient() {
                 <b>Coverage</b>
                 {' '}{num(s?.resolved.asinsWithSqpRows ?? 0)} of {num(s?.resolved.asins ?? 0)} scoped ASINs measured this week
                 <i title="Brand Analytics is requested for ten ASINs per market per run and the set does not rotate, so a market-share number describes those ASINs and no others.">{num(s?.resolved.asinsWithSqpRowsEver ?? 0)} ever</i>
+              </span>
+            </p>
+          )}
+
+          {/* 🔴 SOV.1 — the pair of numbers, and the scope-level Δ. Both always rendered.
+              The weighted figure and the median per-query figure DISAGREE by 1.6–3.8× on this
+              account, and the gap is the finding: we hold a couple of percent of hundreds of tiny
+              queries and almost nothing of the big ones. Showing only the median would flatter the
+              account; showing only the weighted figure would hide where we actually win. */}
+          {ss && p && (
+            <p className="h10-sov-summary">
+              <span className="h10-sov-stat">
+                <i>Our share of all measured demand</i>
+                <b>{ss.weighted == null ? '—' : sharePct(ss.weighted)}</b>
+                <em title={`${num(ss.ourImpressions)} of ${num(ss.marketImpressions)} market impressions across the ${num(ss.queries)} measured queries in this view`}>
+                  {num(ss.ourImpressions)} of {num(ss.marketImpressions)}
+                </em>
+              </span>
+              <span className="h10-sov-stat">
+                <i>Median query share</i>
+                <b>{ss.medianQuery == null ? '—' : sharePct(ss.medianQuery)}</b>
+                <em title="The middle row's share. Higher than the weighted figure because our share is concentrated in small queries.">across {num(ss.queries)} queries</em>
+              </span>
+              {/* The scope Δ names its POPULATION before its value. An intersection is not a
+                  filter: comparing this week's total against last week's over two different query
+                  sets is a headline number that moves when nothing changed. */}
+              <span className="h10-sov-stat">
+                <i>
+                  Δ vs {p.prior?.asOf ? <>the week of {dayMonth(p.prior.asOf)}</> : 'a prior week'}
+                  {p.prior?.gapDays != null && p.prior.gapDays !== 7 && <> ({p.prior.gapDays}d earlier)</>}
+                </i>
+                {sd && sd.deltaPt != null ? (
+                  <b className={sd.deltaPt > 0 ? 'up' : sd.deltaPt < 0 ? 'down' : undefined}>{deltaPt(sd.deltaPt)}</b>
+                ) : (
+                  <b className="none">no comparable prior week</b>
+                )}
+                <em title={sd && sd.queries > 0
+                  ? `Computed over the ${num(sd.queries)} queries measured in BOTH weeks within this scope — never across two different query populations. ${num(sd.withoutPrior)} measured queries have no row in the prior week and are excluded from both sides.`
+                  : 'No earlier week is comparable: every older period is either too thin to use or carries a zero our-side count on every row.'}>
+                  {sd && sd.queries > 0
+                    ? <>{sharePct(sd.priorShare ?? 0)} → {sharePct(sd.nowShare ?? 0)} on {num(sd.queries)} queries in both</>
+                    : <>nothing to compare</>}
+                </em>
+              </span>
+            </p>
+          )}
+
+          {/* Why two columns are missing. Stated once, in a full sentence, rather than shipped as
+              two permanently-`—` columns — an empty column is a promise, a missing one is a
+              decision. Cart-adds and purchases are genuinely sparse at query × ASIN × week grain;
+              this is NOT the parser defect, because clicks parse fine in the same rows. */}
+          {fc && fc.queries > 0 && (
+            <p className="h10-sov-note">
+              <Info size={13} />
+              <span>
+                Click data covers <b>{num(fc.clicks)} of {num(fc.queries)}</b> measured queries here.
+                Cart-add data exists on <b>{num(fc.cartAdds)}</b> and purchase data on <b>{num(fc.purchases)}</b>,
+                so neither is a column — both are in the row drawer instead.
+              </span>
+            </p>
+          )}
+
+          {/* The Δ's baseline skipped a week, and the operator should be told which and why. Today
+              this is unreachable — a nearer week always qualifies first — so it is a guard that
+              says so if the feed ever stalls into the corrupted May/June range. */}
+          {(p?.excludedPeriods?.length ?? 0) > 0 && (
+            <p className="h10-sov-note">
+              <Info size={13} />
+              <span>
+                The Δ skipped{' '}
+                {p!.excludedPeriods!.map((e, i) => (
+                  <span key={e.asOf}>
+                    {i > 0 ? ', ' : ''}<b>{dayMonth(e.asOf)}</b>{' '}
+                    ({e.reason === 'all-zero'
+                      ? `every one of its ${num(e.rows)} rows reports zero impressions for us — a known ingest defect, not a collapse`
+                      : `only ${num(e.rows)} rows, too thin to compare against`})
+                  </span>
+                ))}{' '}and compared against {p!.prior?.asOf ? dayMonth(p!.prior.asOf) : 'nothing'} instead.
               </span>
             </p>
           )}
@@ -640,6 +868,22 @@ export function ShareOfVoiceClient() {
                 {c && (
                   <i title={`${num(c.measured)} measured · ${num(c.notCovered)} outside Brand Analytics coverage · ${num(c.noRowThisPeriod)} with no row this week · ${num(c.neverMeasured)} never measured · ${num(c.realZeros)} real zeros`}>
                     {num(c.measured)}/{num(c.total)} measured
+                  </i>
+                )}
+                {/* 🔴 The sort floor, STATED. Sorting by a share without it puts `sappnetta knee
+                    spider nero` first — 50.00% of four market impressions — while the five queries
+                    above 10% share carry 0.01% of the demand. Nothing is hidden; small denominators
+                    rank below confident ones and say so. */}
+                {c && (sort === 'share' || sort === 'clickShare' || sort === 'delta') && (
+                  <i
+                    className="floor"
+                    title={sort === 'clickShare'
+                      ? `Ranked below the rest: ${num(c.lowConfidenceClicks ?? 0)} queries with fewer than ${num(data?.confidenceFloorClicks ?? 0)} market clicks — the median for this week. A share of 1 click in 4 is not a share.`
+                      : `Ranked below the rest: ${num(c.lowConfidence ?? 0)} queries with fewer than ${num(data?.confidenceFloor ?? 0)} market impressions — the median for this week. Their percentages are real but the sample is too small to rank by.`}
+                  >
+                    {sort === 'clickShare'
+                      ? <>below {num(data?.confidenceFloorClicks ?? 0)} clicks: ranked last</>
+                      : <>below {num(data?.confidenceFloor ?? 0)} impressions: ranked last</>}
                   </i>
                 )}
                 {p.asOf && (

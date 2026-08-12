@@ -100,6 +100,51 @@ const nextConfig = {
         destination: '/marketing/ads/rules-automation/placement',
         permanent: true,
       },
+      // ── SOV.1 — the LAST FOUR, and the pattern closes here ─────────────────
+      //
+      // Measured on prod 2026-08-12, immediately before adding these, by fetching each routed tab's
+      // `?tab=` and reading the status: `bid`, `keyword-harvest`, `negative-targeting`,
+      // `budget-schedules` and `placement` all returned 308; **`automations`, `dayparting`,
+      // `share-of-voice` and `keyword-tracker` all returned 200 and rendered Apply Rules.**
+      //
+      // Two of those four are SOV.1's own (`share-of-voice` is this page; `keyword-tracker` is named
+      // in the same brief). The other two are not, and are taken anyway: locks §4 hands
+      // `?tab=dayparting` to "whoever takes it — it is one line inside the rule you are already
+      // writing", every prior claim on this file is released, and leaving a known wrong-page bug in
+      // the exact array being edited is worse than the scope it widens. Four one-line entries.
+      //
+      // ⚠ Still the literal form, now ten copies of one rule. The derived version
+      // (`RULES_TABS.filter(t => t.routed)`) remains the right answer and remains blocked on the
+      // same thing RD.P0 priced: this config is CommonJS evaluated at build time and
+      // `_shared/tabs.tsx` is a `'use client'` TSX module, so the routed-key list has to be lifted
+      // into a plain `.mjs` both can read. That is a `tabs.tsx` edit, which SOV.1 does not hold.
+      // What HAS changed: with these four, every routed tab is covered, so the list is complete
+      // rather than three-quarters complete — the next session to flip a tab adds one entry, and
+      // the twelfth pass can do the lift against a list that is finally correct.
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'share-of-voice' }],
+        destination: '/marketing/ads/rules-automation/share-of-voice',
+        permanent: true,
+      },
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'keyword-tracker' }],
+        destination: '/marketing/ads/rules-automation/keyword-tracker',
+        permanent: true,
+      },
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'automations' }],
+        destination: '/marketing/ads/rules-automation/automations',
+        permanent: true,
+      },
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'dayparting' }],
+        destination: '/marketing/ads/rules-automation/dayparting',
+        permanent: true,
+      },
 
       // Phase 4 (2026-05-06): /pim/review → /catalog/organize.
       // Page does catalog organization, not a review queue; renamed
@@ -159,7 +204,10 @@ const nextConfig = {
       { source: '/marketing/advertising/automation/:id', destination: '/marketing/ads/rules-automation', permanent: true },
       { source: '/marketing/advertising/automation', destination: '/marketing/ads/rules-automation', permanent: true },
       { source: '/marketing/advertising/dayparting', destination: '/marketing/ads/rules-automation/dayparting', permanent: true },
-      { source: '/marketing/advertising/share-of-voice', destination: '/marketing/ads/rules-automation?tab=share-of-voice', permanent: true },
+      // SOV.1 — pointed at the route rather than at `?tab=share-of-voice`. It still worked via the
+      // entry added above, but as a two-hop chain through a query param that only exists to be
+      // redirected away from. One hop, and the legacy URL now names the page it means.
+      { source: '/marketing/advertising/share-of-voice', destination: '/marketing/ads/rules-automation/share-of-voice', permanent: true },
 
       // The five optimiser engines feed the ranked Recommendations inbox; the
       // account-level planner is now a panel on that same page (ACR.6/R3).
