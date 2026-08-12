@@ -934,7 +934,7 @@ function EmptyState({
         <span>
           {unmeasurable
             ? flag === 'inverted'
-              ? <>An inversion needs at least {num(data.flags.inverted.minClicks)} clicks on two lanes before a ROAS is allowed to decide anything, and none of the {num(data.counts.campaigns)} campaigns here clears that over {data.range.days} days. Widen the date range — this is “we could not check”, not “nothing is wrong”.</>
+              ? <>An inversion needs at least {num(data.flags.inverted.minClicks)} clicks on two lanes before a ROAS is allowed to decide anything, and none of the {num(data.counts.campaigns)} campaigns here clears that over {data.range.days} day{data.range.days === 1 ? '' : 's'}. Widen the date range — this is “we could not check”, not “nothing is wrong”.</>
               : <>A decorative goal is a property of a plan, and nothing here has one.</>
             : <>All {num(stat.of)} {FLAG_DENOM_LABEL[flag]} are clear. That is a real zero, not a gap.</>}
           {' '}<button type="button" className="lnk" onClick={() => push({ flag: 'all' })}>Show every campaign</button>

@@ -3041,3 +3041,14 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 
 /* Campaigns view: how many bids sit above this campaign's own ceiling. */
 .h10-bd-oob { font-variant-numeric: tabular-nums; font-weight: 800; color: #9a3412; }
+
+/* 🔴 PLC.1 — the campaign cell must WRAP once it carries chips.
+   Measured on prod at 1728px: `td.nm` is 360px and a row with two chips laid out to 376px and
+   410px, so the second chip rendered past the sticky column's right edge and over the Market
+   column — `.h10-plc-camp` was `flex-wrap: nowrap` and both it and the `td` are `overflow:
+   visible`, so nothing clipped it and nothing revealed it either. PLC.0 shipped one chip per row
+   and never hit it; PLC.1 puts up to three on a row.
+   Later in the file than PLC.0's `.h10-plc-camp`, so source order carries it. */
+.h10-plc-camp { flex-wrap: wrap; row-gap: 3px; }
+/* The name yields first — it has an ellipsis and the chips do not. */
+.h10-plc-camp .t { flex: 0 1 auto; min-width: 0; }
