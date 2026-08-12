@@ -254,7 +254,7 @@ followed rather than recorded after the fact.
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.5 (`GET /advertising/negatives/protections` + `POST`/`DELETE /advertising/negatives/review`, additive) | 2026-08-12 | **released** — `grep -a`ed BOTH route files: `negatives/protections` and `negatives/review` have **zero** hits, so they collide with nothing, including PLC.1's `/advertising/placements/cursor` and RD.P2's `/advertising/rank-runtime` |
 | `apps/api/src/routes/advertising.routes.ts` | NEG.5 (`matchType` accepted on the EXISTING `POST /advertising/keyword-protections` — one field, defaulted to today's `isPrefix` behaviour; **no new route registered**) | 2026-08-12 | **released** — the existing handler gained one optional field; `grep -a` confirms still exactly one `fastify.post('/advertising/keyword-protections'` |
 | `…/rules-automation/rules-automation.css` | NEG.5 (`h10-ngp-*` at EOF) | 2026-08-12 | **released** — EOF-append only. 🔴 **The `commit --only` trap fired a FOURTH time, and again in the sweeping direction**: the ~150-line `h10-ngp-*` block was swept into HV.5's `5b856db0d`, not a NEG.5 commit. Only the 5-line `.h10-ngp-fwd`/`.h10-ngp-bwd` follow-up landed in mine. Nothing broke — dead CSS on main for the length of one commit — but the block's provenance is here, not in its commit message. See §5 |
-| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.5 (absorb `ProtectedTermsPanel` — delete its render + import, 2 lines) | 2026-08-12 | **claimed** |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.5 (absorb `ProtectedTermsPanel` — its render + import removed, nothing restructured) | 2026-08-12 | **released** — landed `7c9b92698`; the panel FILE stays, see §4 |
 | `…/rules-automation/ProtectedTermsPanel.tsx` | NEG.5 — **NOT TOUCHED, claim withdrawn.** 🔴 The brief assumed the negative-targeting client was its only caller. It is not: `control-room/GuardrailsTab.tsx:197` mounts it too, deliberately (its own comment calls it "a second MOUNT and not a second copy"). Deleting the file is a build break on a page NEG.5 does not own, and editing it changes the Control Room's rendering without that programme's knowledge. NEG.5 removes only the render + import from ITS OWN client; the file and the ACR mount stay. See §4 | 2026-08-12 | **released** |
 
 ## 3 · Shared files — claim before editing
@@ -282,6 +282,25 @@ and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them
 ---
 
 ## 4 · Requests and hand-offs
+
+**NEG.5 → whoever owns the Ads Control Room, 2026-08-12.**
+`control-room/GuardrailsTab.tsx:197` mounts `ProtectedTermsPanel`, and NEG.5's brief assumed the
+Negative Targeting page was that component's only caller. It is not, so **the file was NOT deleted**
+— only its render and import were removed from `negative-targeting/NegativeTargetingClient.tsx`,
+which the ACR mount is unaffected by.
+
+Two things that programme may want, neither of them NEG.5's to do:
+
+1. 🔴 **The Control Room's copy still carries defect (a)**: `ProtectedTermsPanel.tsx:56-62` catches a
+   failed fetch into `setItems([])`, so an API outage renders as *"No protected terms yet"* **plus**
+   the red *"Nothing is protected. Auto harvest & negate is enabled…"* alarm. An empty whitelist and
+   an offline API are the same pixels, and the more alarming reading is the wrong one. NEG.5's
+   replacement renders loading · loaded-and-empty · failed-to-load as three different things.
+2. The panel there cannot create a `CONTAINS` protection *in its UI* — it only offers a "Prefix"
+   checkbox. The **API** now accepts `matchType` (additive, `ef3602fbd`), so the fix is a control,
+   not a route. All ten live protections are CONTAINS; anything added from that panel is weaker.
+
+`ProtectedTermsPanel.tsx` is **unclaimed and untouched** by NEG.5 — take it freely.
 
 **NEG.3b → whoever owns the campaign detail pages, 2026-08-12.**
 `campaigns/[id]/tabs/NegativeTargetsTab.tsx:90` offers a **Pause** control on a NEGATIVE keyword.
