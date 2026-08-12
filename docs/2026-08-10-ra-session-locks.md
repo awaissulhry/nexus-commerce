@@ -98,6 +98,11 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` | SQP.1 (the `rows=` reader now tries `errorMessage` too; `structuralFailures` comment) | 2026-08-12 | **released** — 🔴 see §5's new trap: a zero-row run's summary MOVED field |
 | `…/keyword-tracker/KeywordTrackerClient.tsx` | SQP.1 (the `failed=5` sentence, now that it is no longer true) | 2026-08-12 | **released** — copy only |
 | `apps/api/src/index.ts` | SQP.1 (one comment naming the decoy flag) | 2026-08-12 | **released** — comment only |
+| `packages/database/prisma/schema.prisma` | SQP.2 (`SqpReportRequest`, additive — one new model at EOF, nothing altered) | 2026-08-12 | **released** — landed `4adce9354` |
+| `apps/api/src/services/advertising/sqp-async.service.ts` + `jobs/sqp-collect.job.ts` | SQP.2 (the request/collect split) | 2026-08-12 | **released** — NEW files |
+| `apps/api/src/jobs/sqp-ingest.job.ts` | SQP.2 (async request pass by default; `NEXUS_SQP_SYNCHRONOUS_INGEST` reverts) | 2026-08-12 | **released** |
+| `apps/api/src/services/sp-api-reports.service.ts` | SQP.2 (`getSpApiClient` exported — additive, nothing else touched) | 2026-08-12 | **released** |
+| `apps/api/src/index.ts` + `jobs/cron-registry.ts` | SQP.2 (register + manually trigger `sqp-collect`) | 2026-08-12 | **released** — 3 lines each |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
@@ -396,6 +401,15 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**SQP.2 → every session, 2026-08-12 — an SP-API report document does NOT expire 72h after you asked.**
+The retention window runs from when Amazon CREATED the document, and for a queued report that is
+hours after the request. Measured: documents requested **170.5h**, 89h and 64h earlier all downloaded
+fine, and nothing 404'd at any age. So never compute expiry from `requestedAt` — a collector that
+does will retire requests whose documents are still sitting there, which is the exact data loss it
+exists to prevent. Conclude expiry only from a real 404, and treat age as a warning. (The same
+measurement kills the idea that pacing requests protects against expiry: it does not, and history
+already contained a paced 40-report run — 5.2 min apart — that still took 14.6h to drain.)
 
 **SQP.1 → every session, 2026-08-12 — making a job FAIL moves its summary to another column.**
 `recordCronRun` persists `outputSummary` only on the success path and `errorMessage` only on the
