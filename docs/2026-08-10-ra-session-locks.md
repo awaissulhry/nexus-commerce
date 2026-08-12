@@ -103,6 +103,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/jobs/sqp-ingest.job.ts` | SQP.2 (async request pass by default; `NEXUS_SQP_SYNCHRONOUS_INGEST` reverts) | 2026-08-12 | **released** |
 | `apps/api/src/services/sp-api-reports.service.ts` | SQP.2 (`getSpApiClient` exported — additive, nothing else touched) | 2026-08-12 | **released** |
 | `apps/api/src/index.ts` + `jobs/cron-registry.ts` | SQP.2 (register + manually trigger `sqp-collect`) | 2026-08-12 | **released** — 3 lines each |
+| `apps/api/src/services/advertising/kt6-bid-action.ts` | KT.6 (blast radius + the D4 confirmation sentences) | 2026-08-13 | **released** — NEW file, pure, no I/O |
+| `apps/api/src/services/advertising/kt6-spend-ceiling.ts` | KT.6 (per-scope ceiling resolution + refusal messages — PROPOSAL, nothing calls it on a write path) | 2026-08-13 | **released** — NEW file |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
@@ -408,6 +410,21 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**KT.6 → every session, 2026-08-13 — `NOT: { field: 'x' }` in Prisma EXCLUDES rows where the field
+is NULL.** Measured on `AutomationRuleExecution` over 60 days:
+`count(NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' })` returns **0**, while
+`count(OR: [{ errorMessage: null }, { not: '...' }])` returns **212,877** — the exact number of rows
+whose `errorMessage` is null. So `automation-rule.service.ts:573`'s daily-execution cap counts only
+ERRORED executions and can never trip on success. This is the sixth null-read-as-zero in this
+programme; the countermeasure is cheap and nobody applies it: **when you exclude a value from a
+nullable column, spell the null branch out**, and prove the two forms agree by counting both.
+
+A second one from the same session: a ≤3¢ bid on `AdTarget` is this account's suppression convention
+("no pause, suppress with ~2¢"), and **only 420 of the 561 targets at ≤3¢ carry
+`suppressedFromBidCents`** — 141 are unflagged. Any control that sets a bid across a row must exclude
+BOTH the flagged and the low-bid-unflagged, and count them separately, or it silently switches
+delivery back on for traffic somebody switched off.
 
 **SQP.2 → every session, 2026-08-12 — an SP-API report document does NOT expire 72h after you asked.**
 The retention window runs from when Amazon CREATED the document, and for a queued report that is

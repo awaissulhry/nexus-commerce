@@ -1608,3 +1608,235 @@ rather than lingering.
 `sort`/`dir` still not written to the URL; `sort=asins` accepted with no matching column;
 `reportPeriod` unguarded; the rule-type tab bar still clips `Apply Rules` (shared — observed by KT.3,
 KT.5 and now KT.4, touched by none of them).
+
+---
+
+# KT.6 — measured, and the ceiling proposed. 🔴 The controls are NOT built.
+
+**2026-08-13. Status, stated plainly before anything else: the arithmetic, the refusal logic and all
+five §7 gate artefacts are built, tested and computed against prod. The API endpoint and the drawer
+controls are NOT built, and no write path exists. That is deliberate — §4 asks me to *propose* the
+ceiling object rather than ship it, and the operator's standing rule is approval before implementing
+anything that moves money. The design decisions below need answers before a surface is worth
+building on top of them.**
+
+## K1 · The stop conditions — all clear
+
+| §6 condition | measured 2026-08-13 |
+|---|---|
+| `RankTarget.maxBiasPct` still NULL | ✓ **0 of 5** set — `!canChase` still fires for every campaign |
+| `NEXUS_COVERAGE_ENGINE_MODE` unset | ✓ unset |
+| `liveBidWritesEnabled` still 82 | ✓ **82 of 220** |
+| `minBidCents` still unset | ✓ **0 of 220** — there is a ceiling and no floor |
+| `maxBidCents` on exactly the 82 | ✓ yes |
+| authority pins | ✓ **0 of 220** |
+| `giacca moto` still 100 targets / 53 campaigns | ✓ unchanged |
+
+So KT.6 is still acting alone, and the write gate is still the only chokepoint.
+
+## K2 · Three corrections to the brief
+
+**K2.1 · DE's and FR's widest rows are different terms.** The brief names
+`motorradjacke herren` (19 campaigns · 52 targets · 28 writable). Measured, DE's widest row is
+**`motorrad jacke herren` — 18 campaigns · 60 targets · 38 writable** (note the space). FR's is
+**`veste moto` — 9 campaigns · 17 targets · 2 writable**. IT and ES match the brief exactly.
+
+**K2.2 · "42 targets across 38 campaigns" is not a shape this row has.** `giacca moto`'s 42 writable
+targets sit in **17** campaigns, and once suppressions are excluded the action is **30 targets across
+5 campaigns**. 26 of those 30 are in one campaign — `IT_Exact_Gale_SV=2k+_Key=1` holds 26 duplicate
+EXACT targets for the same term at €0.34, which is self-competition inside a single campaign and is
+recorded here rather than fixed (it is a restructure, per §3.3).
+
+**K2.3 · The share is 18 days old, not 24 — depending on which end you measure.** The KT grid shows
+the week beginning 2026-07-19, which **ended 07-25, 18 days ago**; it *began* 24 days ago. The
+confirmation sentence uses the end of the week, because the question an operator is asking is "how
+old is the newest data behind this", and the data covers through the 25th. Stated either way, it is
+too old to justify a bid on its own, and the sentence says so.
+
+## K3 · The exclusions a control must survive, and one the brief did not name
+
+`Campaign.liveBidWritesEnabled` is the exclusion the brief is built around, and it is the biggest:
+58 of `giacca moto`'s 100 targets. But measuring the writable 42 turned up a second one that would
+have been a live defect:
+
+🔴 **12 of the 42 writable targets are suppressed, and only 9 of those carry the flag.** The house
+rule is *no pause — suppress with a ~2¢ bid*, so a control that sets one bid across a row would
+**silently switch delivery back on for traffic somebody switched off on purpose.**
+`suppressedFromBidCents` records 9 of them; the other 3 bid €0.02 with no flag at all. Account-wide
+the gap is larger: **561 positive keyword targets bid ≤3¢ and only 420 carry the flag — 141 unflagged.**
+
+So both categories are excluded by default and **counted separately** in the sentence: the flag is
+evidence, ≤3¢ is a convention, and merging them would hide the 141 the flag does not know about.
+Including them requires an explicit opt-in the operator has to tick.
+
+Four exclusions in total, each a refusal rather than a clamp, following the write gate's own
+precedent (*"clamping would rewrite an engine's intent without telling anyone"*): not write-enabled ·
+suppressed · above `Campaign.maxBidCents` · below KT.6's own €0.05 floor. Permission is checked
+**before** bounds, so an unwritable campaign is never reported as capped — reporting a ceiling breach
+on a campaign that was never writable would send the operator to fix the wrong thing.
+
+## K4 · 🔴 The spend ceiling — the proposal, and the measurement that shaped it
+
+### K4.1 · What exists today
+
+Of 51 `advertising` rules (the domain value is lowercase `advertising`, not `ADVERTISING` — a filter
+on the latter returns 0 and silently looks like "no rules"): **50 carry `maxDailyAdSpendCentsEur`,
+8 carry `maxValueCentsEur`, 8 carry `scopeMarketplace`, and 0 carry `scopePortfolioId`,
+`scopeCampaignId` or `scopeProductId`.** The ceiling exists per RULE and never per SCOPE, so the
+operator's ask — *a ceiling for portfolios, or certain campaigns, or certain markets* — cannot be
+expressed at all today. `Campaign.maxHourlySpendCentsEur` does not exist; a probe for it threw, which
+is how that was settled rather than assumed.
+
+### K4.2 · 🔴 The finding that changes the design: "spent today" is not knowable
+
+The operator's example refusal quotes *"€38.90 spent"*. **That number cannot currently be produced.**
+
+| source | state |
+|---|---|
+| `AmazonAdsDailyPerformance` | newest CAMPAIGN row is **2 days old** (2026-08-10). Today and yesterday hold **0 rows** |
+| an hourly ads-performance table | **does not exist** |
+| `Campaign.spend` | an unlabelled 30-day window — already disqualified in this programme |
+
+A ceiling compared against Amazon's spend would judge today's request against the day before
+yesterday, while reading as authoritative. So the proposal is:
+
+> **Compare against a nexus-side ledger of what this page has itself authorised today**, and show
+> Amazon's figure alongside it **labelled with its date**. That is the only number that is correct at
+> the moment of the refusal — which is the only moment that matters — and it answers the question the
+> ceiling is actually asked: *how much have I already committed?*
+
+The refusal message already carries the dated caveat, verbatim from the gate run:
+*"Amazon reports €82.73 of spend for 2026-08-10, which is the most recent day it has published — it
+is not today's figure."*
+
+### K4.3 · The object
+
+A small **additive** table, `AdSpendCeiling`, keyed by `(grain, scopeId)` with
+`grain ∈ {CAMPAIGN, PORTFOLIO, LINE, MARKET}` and a **nullable** `dailyCapCents`. Not built pending
+approval. Three properties, all tested:
+
+1. **Most specific wins**, and the refusal names which grain bound it: *"That is the campaign ceiling,
+   the most specific one set for this scope."*
+2. **A ceiling with no value is not a ceiling.** `dailyCapCents: null` resolves to a distinct
+   `NO_CEILING` verdict, never to an unlimited allowance, and a null row does **not** stop the walk
+   outward. Otherwise an operator could disable a market cap by opening a campaign control and saving
+   nothing — the opposite of what setting a ceiling means.
+3. **The commitment is an upper bound, stated as one.** `targets × bid`, described as "commits up to",
+   never "will spend". A bid is the most Amazon may charge per click; anything smarter needs a
+   click-rate estimate, and every € figure in this account is already an ACOS estimate without COGS.
+   A second layer of estimate under a refusal would make the refusal unfalsifiable.
+
+## K5 · What is actually refusing writes today — the 693,704 resolved
+
+The brief flags two unconfirmed numbers in different tables. Both are now named:
+
+| | |
+|---|---|
+| `AutomationRuleExecution` rows, 60 days | **906,581** |
+| … with `errorMessage = 'DAILY_CAP_EXCEEDED'` | **693,704** |
+| … with `errorMessage IS NULL` (successes) | **212,877** |
+| … with any other `errorMessage` | **0** |
+| `OutboundSyncQueue` SKIPPED, 60 days | **798**, and **all 798** carry an `ADS-WRITE-GATE-DENY` tag |
+
+So the study's 693,704 is correct and lives in `AutomationRuleExecution.errorMessage`. It is an
+**execution-count** cap (`maxExecutionsPerDay`), **not a spend cap** — which is why it cannot serve as
+the ceiling the operator asked for. The write gate's own denials are the 798.
+
+### K5.1 · 🔴 A defect found by spelling out the null branch
+
+`automation-rule.service.ts:573` counts today's executions with `NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' }`.
+Tested rather than assumed, over the same 60-day window:
+
+```
+count(NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' })                 =        0
+count(OR: [{ errorMessage: null }, { not: 'DAILY_CAP_EXCEEDED' }]) =  212,877
+rows with errorMessage IS NULL                                     =  212,877
+```
+
+Prisma's `NOT` **excludes** null-`errorMessage` rows. Since no execution carries any other error
+message, that predicate counts **zero, always** — so `maxExecutionsPerDay` can never trip on
+successful executions. Out of KT.6's scope to fix, and reported: it is the same null-read-as-zero
+class as SQP.1's "1,549 empty reports", and it is the sixth occurrence in this programme.
+
+## K6 · §7's gate artefacts
+
+All computed on prod through the real functions, not described. Full output: `_kt6-gate.mts`.
+
+**7.1 · `giacca moto` (IT) at €0.55** — matched **100** targets across **53** campaigns; **would
+change 30 across 5**; excluded 70 (58 not write-enabled in 36 campaigns · 9 suppressed-flagged ·
+3 suppressed-by-bid). `30 + 70 = 100` ✓. Every target listed with its current bid, proposed bid, match
+type and campaign ceiling; the five campaign names are `IT_Exact_Gale_SV=2k+_Key=1` (26),
+`IT_Phrase_Misano_Jacket`, `GALE EXACT IT`, `GALE BROAD IT`, `GALE PHRASE IT`.
+
+**7.5 · The sentence, verbatim:**
+
+> Propose setting the bid to €0.55 on 30 targets across 5 campaigns for "giacca moto" in IT. Nothing
+> changes until the proposal is approved. 58 further targets in 36 campaigns are not write-enabled and
+> will not change — that is the account's default-deny allowlist, not a failure here. 9 are recorded
+> as deliberately suppressed and 3 bid at or under €0.03 with no suppression flag, so they are left
+> alone — raising a suppressed bid would switch delivery back on for traffic that was switched off on
+> purpose. The impression share on this row is from a Brand Analytics week that ended 18 days ago, and
+> the feed cannot currently produce a fresher one — judge this on the bid and the spend, not on the
+> share. If approved, the change is undoable in one action for 24 hours afterwards.
+
+**7.2 · The refusal, exercised.** The action commits up to €16.50 (30 × €0.55).
+
+> Refused — the ceiling for the IT market is €40.00 per day and only €1.10 of €40.00 is left (€38.90
+> committed today, €16.50 requested). Amazon reports €82.73 of spend for 2026-08-10, which is the most
+> recent day it has published — it is not today's figure.
+
+With a campaign ceiling also set, the narrower one binds and says so. With nothing set: *"No spend
+ceiling is set for this scope, so this write is not being checked against a cap"* — never "unlimited".
+
+**7.3 · The undo window.** No second rollback is built; `rollbackByExecutionId` already reverses a
+whole execution inside a hard 24h window. `AdvertisingActionLog` holds 1,453 rows inside the window
+and 46,858 outside it. KT.6 owns two sentences — the open one states the remaining hours; the closed
+one says the change *"can no longer be reversed in one action; the bids would have to be set back by
+hand, and the values before the change are in the change log."*
+
+**7.4 · The same action outside Italy.** DE `motorrad jacke herren`: 60 matched → **30 in 5**. ES
+`chaqueta moto hombre`: 8 → **2 in 2**. FR `veste moto`: 17 → **2 in 2**. Each sentence names the
+unwritable remainder, so the page reads as constrained rather than broken.
+
+**3.1 · The unbid case.** **64 of 97** IT watched terms have zero keyword targets, verified. For
+`accessori moto` the control offers no bid change at all:
+
+> No campaign bids "accessori moto" in IT, so there is no bid to change. This term is on the watchlist
+> and is not being bought — the action here is to start bidding it, not to reprice it.
+
+And it must **not** offer a destination: 70 writable IT campaigns hold 70 MANUAL ad groups, so a
+keyword could go in 70 places and none is derivable. The honest action is a hand-off to Keyword
+Harvest, which already owns destination choice (HV.3: unique for 13% of sources, median 5
+candidates) — not a "create keyword here" button on this page.
+
+## K7 · Six zeros, because "never ran" and "nothing to do" must never render the same
+
+`nothingToDoSentence` has one branch per state: no campaign bids the term · nothing is write-enabled ·
+below the floor · above every ceiling · already at this bid · **every writable target is suppressed**.
+The sixth was added *after* the gate run rendered that case through the generic fallback — it is a
+specific, recoverable state with its own fix, and it deserved its own sentence.
+
+Two of the 26 tests were written failing first and seen to fail:
+- the "already at this bid" branch was **unreachable** on the widest real row, because its predicate
+  subtracted only the unwritable count and ignored the suppressed ones;
+- and the assertion that it *omits* the unwritable count was **the test being wrong**, not the code —
+  58 unwritable targets is a true and useful fact. The test now asserts which zero the sentence
+  **leads** with, since that is the one the operator reads as the answer.
+
+## K8 · What is built, and what is not
+
+**Built, tested, on prod data:** `kt6-bid-action.ts` (blast radius, the four exclusions, six zero
+sentences, the D4 confirmation) · `kt6-spend-ceiling.ts` (grain resolution, refusal messages,
+commitment) · 26 tests · `_kt6-surface.mts`, `_kt6-spend.mts`, `_kt6-suppress.mts`, `_kt6-gate.mts`,
+`_kt6-unbid.mts`.
+
+**Not built, pending approval:** the `AdSpendCeiling` table and migration · the read-only preview
+endpoint · the drawer controls · any write or queue path. Nothing in this session can move money:
+there is no code path from a click to `checkAdsWriteGate`, because none was written.
+
+**Deliberately not offered** (§3.3, unchanged): arming a `KEYWORD_RANK_BID` rule — and note that no
+rule in the account carries that trigger at all, on top of `KeywordRank` having 0 rows · consolidating
+a term's ASINs · anything touching negations.
+
+**Recorded, not fixed:** `sort`/`dir` still absent from the URL · `sort=asins` with no matching column ·
+`reportPeriod` unguarded · the rule-type tab bug on Apply Rules · and K5.1's cap defect.
