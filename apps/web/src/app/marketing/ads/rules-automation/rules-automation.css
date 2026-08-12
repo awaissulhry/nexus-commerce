@@ -4086,7 +4086,7 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-kt6-nums { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
 .h10-kt6-big { font-size: 19px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 .h10-kt6-of { font-size: 11px; font-weight: 600; color: #55606d; }
-.h10-kt6-sep { color: #a9b4c2; }
+.h10-kt6-sep { color: #55606d; } /* 1.96:1 at #a9b4c2 — it separates two numbers, so it is read, not decoration */
 .h10-kt6-commit { margin-left: auto; font-size: 11px; font-weight: 700; color: #1c2530; background: #e8f1fd; border: 1px solid #c5dcfa; border-radius: 4px; padding: 2px 7px; }
 .h10-kt6-say { margin: 0; font-size: 11.5px; line-height: 1.65; color: #1c2530; }
 
@@ -4122,7 +4122,9 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   width: 100%; padding: 9px 12px; font-size: 12px; font-weight: 800; cursor: pointer;
   color: #fff; background: #1a5fbe; border: 1px solid #1a5fbe; border-radius: 6px;
 }
-.h10-kt6-go:disabled { color: #6b7280; background: #eef1f5; border-color: #dde4ec; cursor: not-allowed; }
+/* 🔴 the DISABLED label measured 4.27:1 composited against #eef1f5 — and disabled is exactly when
+   the operator needs to read why nothing will happen. Darkened to clear AA. */
+.h10-kt6-go:disabled { color: #495260; background: #eef1f5; border-color: #dde4ec; cursor: not-allowed; }
 
 /* the confirm sits in the drawer's own flow, NOT fixed — a fixed overlay inside a portalled drawer
    renders behind it (KT.4's drawer-confirm trap) */
