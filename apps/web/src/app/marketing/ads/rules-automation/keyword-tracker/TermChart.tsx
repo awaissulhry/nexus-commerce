@@ -172,7 +172,13 @@ export function TermChart({
         <span className="k spend">spend (weekly total)</span>
         {shareWeeks < 3 && (
           <span className="note">
-            {shareWeeks === 0 ? 'no share reading' : `${shareWeeks} reading${shareWeeks === 1 ? '' : 's'} — too few to draw a line, so the point${shareWeeks === 1 ? '' : 's'} stand alone`}
+            {/* the verb agrees too — "the point stand alone" shipped once and was caught by reading
+                the rendered string, not the template */}
+            {shareWeeks === 0
+              ? 'no share reading'
+              : shareWeeks === 1
+                ? '1 reading — too few to draw a line, so the point stands alone'
+                : `${shareWeeks} readings — too few to draw a line, so the points stand alone`}
           </span>
         )}
         {gapCount > 0 && <span className="note">{gapCount} gap{gapCount === 1 ? '' : 's'} — the feed skipped {gapCount === 1 ? 'a week' : 'weeks'}, so the line breaks rather than joining across</span>}
