@@ -615,9 +615,22 @@ async function ingestSearchTermRows(
   currencyCode: string,
 ): Promise<number> {
   // Search-term ingest: delete any rows previously written by this job
-  // (re-ingest idempotency), then bulk-insert fresh. Natural key is wide
-  // (profileId, date, campaignId, adGroupId, query, matchType) — clearing
-  // by reportRunId avoids needing a composite unique constraint.
+  // (re-ingest idempotency), then bulk-insert fresh. Clearing by reportRunId
+  // avoids needing a composite unique constraint.
+  //
+  // 🔴 HV.4a — the natural key this comment used to name was WRONG, and the omission cost a
+  // session. It read "(profileId, date, campaignId, adGroupId, query, matchType)", which has 145
+  // apparent duplicates over 157 rows. It is missing `matchedKeywordId`: Amazon returns ONE ROW
+  // PER (query × matched keyword), so the same term in the same ad group on the same day
+  // legitimately appears two or three times with different clicks and cost, all in one report.
+  // Measured 2026-08-12 — adding that column gives 11,026 keys and **zero** duplicates, which is
+  // exactly the table's row count.
+  //
+  // The consequence is worth stating because it nearly went the other way: SUM over the shorter
+  // key is CORRECT and every consumer already does it. "De-duplicating" on it would discard real
+  // clicks and real spend, and a UNIQUE constraint on it would make this ingest unable to store
+  // Amazon's data. The full key is
+  // (profileId, date, campaignId, adGroupId, query, matchType, matchedKeywordId).
   if (rows.length > 0) {
     await prisma.amazonAdsSearchTerm.deleteMany({ where: { reportRunId: job.id } })
   }

@@ -1746,3 +1746,91 @@ picker would be ambiguous at the exact moment of choosing.
   which is the ceiling its opening bid must expect.
 - `no-destination` rows are **not promotable** and HV.4 must refuse them; the page already says so.
 - The five bid constants and the promotion/isolation coupling remain HV.4's and HV.8's.
+
+---
+
+# HV.4a — there are no duplicates, and the gate must not be built
+
+**Measured 2026-08-12 with `_hv-4a-dedupe.mts`. Read-only. The gate this unit was commissioned to
+build would have destroyed data, and is withdrawn.**
+
+## The finding
+
+| natural key | keys | duplicated | redundant rows |
+|---|---|---|---|
+| `(profileId, date, campaignId, adGroupId, query, matchType)` | 10,869 | 145 | 157 |
+| **+ `matchedKeywordId`** | **11,026** | **0** | **0** |
+
+**145 of 145 apparent duplicates are explained by more than one distinct `matchedKeywordId`.**
+Every copy shares the same `reportRunId` and the same `adProduct` — they arrive in **one report, in
+one insert batch**:
+
+```
+2026-08-06  saponette tuta moto  kwId=121627653693433  clicks=1  cost=160000
+2026-08-06  saponette tuta moto  kwId=14506252089301   clicks=1  cost=250000
+2026-08-06  saponette tuta moto  kwId=171002137928085  clicks=1  cost=180000
+```
+
+Same term, same ad group, same day, **served by three different keywords**. That is how Amazon's
+search-term report is shaped: one row per (query × matched keyword). 11,026 keys is exactly the
+table's row count, so nothing is duplicated at all.
+
+## 🔴 All three commissioned steps would have been damage
+
+1. **The read-side collapse** would have discarded real clicks and real spend.
+   `pantaloni moto uomo estivi` on 2026-08-10 would have gone from 5 clicks / €29.10 to
+   3 clicks / €18.50 — money genuinely spent, deleted from the page.
+2. **The `@@unique` migration** on that key would have made `ingestSearchTermRows` unable to store
+   Amazon's data, silently dropping rows on every future ingest.
+3. **The "blast radius"** — `motorrad jacke` 212 → 198 clicks, `saponette moto` 9 → 7 — is the
+   damage the *fix* would have done. **Orders never changed on any of the 8 candidates**, so no
+   candidate was ever manufactured by duplication, and the candidate set was never at risk.
+
+`SUM` over the shorter key is **correct**, and it is what every consumer already does.
+
+## The wrong version, kept
+
+The brief's premise, and my own first two probes, read *"same key, different metrics"* as
+re-ingestion. It was the more plausible reading and three separate facts supported it: the table
+genuinely has **no unique constraint**, the ingest genuinely does **delete-by-`reportRunId` then
+bulk-insert**, and **134 of 145** keys genuinely disagree on cost. What none of us did was ask
+*what else differs*.
+
+The reason it was so easy to believe is recorded in the code itself: `ingestSearchTermRows`'
+comment **named the natural key and omitted `matchedKeywordId`**. That comment is corrected in this
+commit, with the measurement beside it, so the next person to look does not spend a session
+rediscovering it.
+
+## Also answered, and both were moot
+
+- rows with `adGroupId = ''` (Amazon aggregating across ad groups): **0**
+- rows with `matchType = NULL`: **0** — so the NULL-escapes-a-unique-index trap did not apply either
+
+## The write pre-flight, which is what HV.4 actually needed
+
+Since the gate is withdrawn, the useful half of this unit is the pre-flight. For all **8**
+candidates, `checkAdsWriteGate` **allows both halves** — the keyword and the ad-group negative. The
+protection check is live and was proved firing rather than assumed:
+
+| term | verdict |
+|---|---|
+| `xavia` | 🔴 refused — `keyword_protected`, *"whitelisted against negation (Brand — 257 products)"* |
+| `giacca moto xavia` | 🔴 refused — CONTAINS matching works, not just prefix |
+| `gale jacket` | 🔴 refused — *"Family — 1,828 advertised products"* |
+| `motorradjacke herren sommer` | ✅ allowed |
+
+Ten WHITELIST terms exist, all `CONTAINS`, all markets: `air mesh · aireon · airmesh · gale ·
+misano · moss · regal · ventra · x-tuta · xavia`. None of the 8 current candidates contains one.
+
+## 🔴 And the number that decided HV.4's negation scope
+
+| scope | rows | **reached Amazon** |
+|---|---|---|
+| `AD_GROUP` | 2,037 | **2,017 (99%)** |
+| `CAMPAIGN` | 20 | **0 (0%)** — newest 2026-06-24 |
+
+**Every campaign-scoped negative this account has ever created failed to reach Amazon.** NEG.0(b)
+repaired the missing-`marketplace` cause, so it may work now — but it has never once been observed
+to. HV.4 therefore negates at **AD_GROUP** scope, in the source ad group. Checked separately: 0 of
+the 8 candidates has any shortlist entry inside its source campaign, so a campaign-scoped negative
+would not cancel its own promotion *today* — a latent trap, and a second reason to avoid it.
