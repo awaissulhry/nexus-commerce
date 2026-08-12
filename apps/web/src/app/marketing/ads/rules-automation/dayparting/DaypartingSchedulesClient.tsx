@@ -15,7 +15,7 @@
  *   · the scope contract (`_rd/scope`), four grains, most specific wins;
  *   · ordered section slots matching the approved structure doc §3.
  */
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -23,6 +23,7 @@ import { RankGoalsList } from '../tabs/RankGoalsList'
 import { HourlyPerformance, type ScopeOption } from './HourlyPerformance'
 import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
+import { useRdUrlState } from './_rd/useRdUrlState'
 
 export function DaypartingSchedulesClient() {
   return (
@@ -37,10 +38,12 @@ function DaypartingSchedulesBody() {
   // fetches this component used to own are gone: `/advertising/campaigns?limit=500` (markets) is
   // covered by `/scope-options`, and `/rank-schedule-groups` was being fetched here AND in the grid.
   const { groups, markets, refresh } = useRdData()
-  // U3 moves this into the URL (`?market=`). It stays local state for now so the switch keeps
-  // working exactly as it does today — it was a dead control until RDX/B1 and must not become one
-  // again on the way past.
-  const [market, setMarket] = useState('all')
+  // RD.P0 — the header's market switch writes `?market=`, and the URL is the only state. It is the
+  // one scope control the page ships: `?portfolio=`, `?product=` and `?grain=` are parsed and
+  // honoured, but their pickers wait for P2 rather than becoming a fourth copy of a scope bar three
+  // other sessions are already forking (locks §4).
+  const { state: url, set: setUrl } = useRdUrlState()
+  const market = url.market
 
   // DPS.4 — the heatmap can be narrowed to one schedule, so it needs the schedule names. Only
   // groups that actually hold campaigns can produce a heatmap, so empty ones are left out.
@@ -64,7 +67,7 @@ function DaypartingSchedulesBody() {
         subtitle={subtitle}
         markets={markets}
         market={market}
-        onMarketChange={setMarket}
+        onMarketChange={(m) => setUrl({ market: m })}
         // The rank schedules are the origin of almost every recorded change, so this is the page
         // where the account log is worth one click away.
         showChangeLog
@@ -84,7 +87,7 @@ function DaypartingSchedulesBody() {
       <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} />
       {/* RDX/C1 — the gap, stated between the evidence and the schedules that act on it. */}
       <CoveragePanel market={market} schedules={allSchedules} onChanged={refresh} />
-      <RankGoalsList market={market} />
+      <RankGoalsList />
     </div>
   )
 }

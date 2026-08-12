@@ -14,12 +14,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
-import { ScheduleActivityDrawer, type DrawerTab } from '../dayparting/ScheduleActivityDrawer'
+import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from '../dayparting/ScheduleActivityDrawer'
 import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
 import { WeekShape } from '../dayparting/WeekShape'
 import { TemplateLibrary } from '../dayparting/TemplateLibrary'
 import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
 import { useRdData } from '../dayparting/_rd/RdData'
+import { useRdUrlState } from '../dayparting/_rd/useRdUrlState'
+import { GRAIN_LABEL, boundBy, groupMatchesScope } from '../dayparting/_rd/scope'
+import type { RdGroupScope } from '../dayparting/_rd/types'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface RankRow {
@@ -38,20 +41,26 @@ interface RankRow {
   windowsRaw: unknown[]
   // RDX/B4 — 30-day totals across the member campaigns. ACoS is derived server-side from the sums.
   spendCents: number; salesCents: number; orders: number; acos: number | null
+  // RD.P0 — all four derived scope sets, so the row can be narrowed by any grain and not just by
+  // market. `marketplaces` above stays because the Market COLUMN renders it.
+  scope: RdGroupScope
 }
 // RD.P0 — the RankTarget palette (and its built-in fallbacks) moved to the page's data layer, so
 // the week strip, the drawer and every later section colour a key the same way.
 const eur = (cents: number) => (cents === 0 ? '\u2014' : `\u20ac${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`)
 const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?groupId=${id}` : ''}`
 
-export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
+export function RankGoalsList() {
   // RD.P0 — the three fetches this component used to own (groups · rank-targets · portfolios) come
   // from the page's one data layer now, so `/rank-schedule-groups` is no longer requested twice per
   // page load and every later section reads the same rows this grid does.
   const { groups, targets: tmetaState, loading, refresh } = useRdData()
+  // RD.P0 — scope AND the open drawer come from the URL, so a schedule someone is looking at is a
+  // link rather than a description of where to click.
+  const { state: url, set: setUrl } = useRdUrlState()
+  const market = url.market
   const [rows, setRows] = useState<RankRow[]>([])
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [activity, setActivity] = useState<{ id: string; name: string; tab: DrawerTab } | null>(null) // RDX/A4 + E1
   const [tplFor, setTplFor] = useState<string[] | null>(null) // F2 — bulk apply a template
 
   // Rows stay LOCAL state rather than a derived memo, because rename, delete and the optimistic
@@ -79,6 +88,7 @@ export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
         lastEvaluatedAt: g.lastEvaluatedAt,
         // RDX/B1 — the DERIVED market set, not the stored scalar, which is null on 9 of 16 groups.
         marketplaces: g.scope.marketplaces,
+        scope: g.scope,
         windowsRaw: g.windowsRaw,
         spendCents: g.performance.costCents,
         salesCents: g.performance.salesCents,
@@ -114,6 +124,18 @@ export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
     color: (k: string) => tmetaState[k]?.color ?? null,
     name: (k: string) => tmetaState[k]?.name ?? k,
   }), [tmetaState])
+
+  // RDX/A4 + E1, now URL-driven. Only opens on a row that actually exists, so a stale `?row=` from
+  // a deleted schedule renders the list rather than an empty drawer.
+  const activity = useMemo(() => {
+    if (!url.row) return null
+    const r = rows.find((x) => x.id === url.row)
+    return r ? { id: r.id, name: r.name, tab: (isDrawerTab(url.drawer) ? url.drawer : 'next24') as DrawerTab } : null
+  }, [rows, url.row, url.drawer])
+  // Opening and closing the inspector IS a navigation — pushed, so Back closes the drawer, which
+  // is what someone who just opened one will press. Filter changes stay on replace.
+  const openRow = useCallback((id: string, tab: DrawerTab) => setUrl({ row: id, drawer: tab }, { history: 'push' }), [setUrl])
+  const closeRow = useCallback(() => setUrl({ row: '', drawer: '' }, { history: 'push' }), [setUrl])
 
   // RDX/B2 — local reconciliation after a row action. The list already holds everything the row
   // needs, so a full refetch would only cost a round-trip and a flash of the loading state.
@@ -231,12 +253,20 @@ export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
   // purpose: it is a page-level scope that the heatmap above obeys too, not a column filter you
   // tick off in the Filters accordion. A group whose market can't be resolved is hidden by an
   // explicit market choice rather than leaking into every market.
+  // RD.P0 — the scope contract, not just the market. `groupMatchesScope` matches on the DERIVED
+  // sets, so a schedule holding one DE campaign answers yes to DE whatever its stored column says
+  // (that column is null on 9 of 16 groups), and the narrowest grain picked decides alone.
   const visibleRows = useMemo(
-    () => (!market || market === 'all' ? rows : rows.filter((r) => r.marketplaces.includes(market))),
-    [rows, market],
+    () => rows.filter((r) => groupMatchesScope(r, url)),
+    [rows, url],
   )
   // Schedules exist, but none in the chosen market — a different situation from an empty account.
   const narrowedToEmpty = !loading && rows.length > 0 && visibleRows.length === 0
+  // Name the grain that emptied the list, not always "market". Once `?portfolio=` or `?product=`
+  // can narrow, "No rank schedules in IT" over a portfolio filter would send the operator to the
+  // wrong control — and the market picker would show IT is not the problem.
+  const narrowedBy = boundBy(url)
+  const narrowedWhere = narrowedBy === 'market' ? market : `this ${GRAIN_LABEL[narrowedBy ?? 'market']}`
 
   const filters: GridFilter[] = useMemo(() => {
     const baselines = Array.from(new Set(rows.map((r) => r.baselineKey).filter(Boolean)))
@@ -259,7 +289,7 @@ export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
         <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
         {/* RDX/A4 — row click opens Activity too, but an explicit affordance keeps it discoverable
             next to Manage rather than relying on someone guessing the row is clickable. */}
-        <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setActivity({ id: r.id, name: r.name, tab: 'activity' }) }}><History size={11} /> Activity</button>
+        <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); openRow(r.id, 'activity') }}><History size={11} /> Activity</button>
       </span>
       {r.portfolioName && <span className="rg-pfbadge" title={`Portfolio schedule · ${r.portfolioName}`}>Portfolio · {r.portfolioName}</span>}
       <ScheduleRowActions row={r} onRenamed={renameRow} onDeleted={removeRow} />
@@ -299,15 +329,15 @@ export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
       searchValue={(r) => r.name}
       pagerCentered
       defaultSort={{ key: '__first', dir: 'asc' }}
-      emptyLabel={narrowedToEmpty ? `No rank schedules in ${market}.` : 'No rank schedules yet.'}
+      emptyLabel={narrowedToEmpty ? `No rank schedules in ${narrowedWhere}.` : 'No rank schedules yet.'}
       // RDX/B1 — "no schedules yet" would be a lie when the account has 16 and you simply picked a
       // market none of them serve, and offering "Create Rank Schedule" there points at the wrong
       // fix. Narrowed-to-empty gets its own copy, and no CTA.
       emptyNode={narrowedToEmpty ? (
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
-          <b>No rank schedules in {market}.</b>
-          <span className="sub">{rows.length} schedule{rows.length === 1 ? '' : 's'} exist in other markets — switch the market selector to see them.</span>
+          <b>No rank schedules in {narrowedWhere}.</b>
+          <span className="sub">{rows.length} schedule{rows.length === 1 ? '' : 's'} exist outside it — widen the scope to see them.</span>
         </span>
       ) : (
         <span className="h10-rr-empty">
@@ -319,9 +349,17 @@ export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
       toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
       /* RDX/E1 — a plain row click opens the forward view ("what is this about to do"), which is
          the more useful default; the explicit Activity button still opens the history it names. */
-      onRowClick={(r) => setActivity({ id: r.id, name: r.name, tab: 'next24' })}
+      onRowClick={(r) => openRow(r.id, 'next24')}
     />
-    {activity && <ScheduleActivityDrawer group={activity} palette={palette} initialTab={activity.tab} onClose={() => setActivity(null)} />}
+    {activity && (
+      <ScheduleActivityDrawer
+        group={activity}
+        palette={palette}
+        initialTab={activity.tab}
+        onTabChange={(t) => setUrl({ drawer: t })}
+        onClose={closeRow}
+      />
+    )}
     {tplFor && (
       <TemplateLibrary
         groupIds={tplFor}

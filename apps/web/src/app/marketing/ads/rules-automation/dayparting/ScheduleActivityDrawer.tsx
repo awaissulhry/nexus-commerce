@@ -26,15 +26,25 @@ import { Next24Preview } from './Next24Preview'
 
 export type DrawerTab = 'next24' | 'activity' | 'changes'
 
-export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', onClose }: {
+export const DRAWER_TABS: DrawerTab[] = ['next24', 'activity', 'changes']
+export const isDrawerTab = (v: string): v is DrawerTab => (DRAWER_TABS as string[]).includes(v)
+
+export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', onTabChange, onClose }: {
   group: { id: string; name: string }
   palette: TargetPalette
   /** Which panel to land on. The row's explicit "Activity" button opens its own tab, so the label
       someone clicked matches what they get; a plain row click gets the forward view. */
   initialTab?: DrawerTab
+  /** RD.P0 (additive) — fired when the operator switches panel, so the page can put the panel in
+      the URL. Without it `?drawer=` could only ever set the tab you LAND on, and a link copied
+      after clicking "Plan edits" would reopen on "Next 24 hours". */
+  onTabChange?: (tab: DrawerTab) => void
   onClose: () => void
 }) {
   const [tab, setTab] = useState<DrawerTab>(initialTab)
+  // The URL is allowed to drive the panel too (back/forward, or a link pasted into the open page).
+  useEffect(() => { setTab(initialTab) }, [initialTab])
+  const pick = useCallback((t: DrawerTab) => { setTab(t); onTabChange?.(t) }, [onTabChange])
 
   const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
@@ -50,9 +60,9 @@ export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', 
         </div>
 
         <div className="h10-act-tabs" role="tablist" aria-label="Schedule detail">
-          <button type="button" role="tab" aria-selected={tab === 'next24'} className={tab === 'next24' ? 'on' : ''} onClick={() => setTab('next24')}>Next 24 hours</button>
-          <button type="button" role="tab" aria-selected={tab === 'activity'} className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>Amazon changes</button>
-          <button type="button" role="tab" aria-selected={tab === 'changes'} className={tab === 'changes' ? 'on' : ''} onClick={() => setTab('changes')}>Plan edits</button>
+          <button type="button" role="tab" aria-selected={tab === 'next24'} className={tab === 'next24' ? 'on' : ''} onClick={() => pick('next24')}>Next 24 hours</button>
+          <button type="button" role="tab" aria-selected={tab === 'activity'} className={tab === 'activity' ? 'on' : ''} onClick={() => pick('activity')}>Amazon changes</button>
+          <button type="button" role="tab" aria-selected={tab === 'changes'} className={tab === 'changes' ? 'on' : ''} onClick={() => pick('changes')}>Plan edits</button>
         </div>
 
         <div className="h10-hist-b">

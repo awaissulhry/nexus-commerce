@@ -22,7 +22,7 @@
  * switch the header already renders — see `docs/2026-08-10-ra-session-locks.md` §4 for why the
  * fourth copy of the RA scope bar was not written here.
  */
-import type { RdCampaignRow, RdGroupRow } from './types'
+import type { RdCampaignRow, RdGroupScope } from './types'
 
 /** Which grain the operator picked, coarsest → narrowest. `market` is the header's switch. */
 export interface RdScope {
@@ -111,23 +111,37 @@ export function parseUrlState(sp: URLSearchParams | null): RdUrlState {
   }
 }
 
+/** True when this key/value pair is the default and should be absent from the URL. */
+function isDefault(key: keyof RdUrlState, value: string): boolean {
+  if (key === 'market') return isAllMarkets(value)
+  if (key === 'grain') return value === 'schedules'
+  return !value
+}
+
 /**
- * Serialise state back to a query string, dropping everything at its default.
+ * Apply a patch to the current query string.
  *
- * Dropping defaults is what keeps a shared link readable and what stops the back button from
- * walking through states that never differed. `market=all` is a default, not a value.
+ * Two rules, both of which matter more than they look:
+ *
+ * · **Defaults are deleted, not written.** `?market=all&grain=schedules` says nothing that a bare
+ *   URL does not, and a link that carries them is harder to read and harder to trust. It also stops
+ *   the history filling with states that never differed.
+ * · **Unknown params survive.** This patches the params that are actually there rather than
+ *   rebuilding from `RdUrlState`, so a param this module has never heard of — another section's,
+ *   an analytics tag, something a later P-section adds — is not silently dropped by a filter click.
  */
-export function urlStateToQuery(state: RdUrlState): string {
-  const sp = new URLSearchParams()
-  if (!isAllMarkets(state.market)) sp.set('market', state.market)
-  if (state.portfolio) sp.set('portfolio', state.portfolio)
-  if (state.product) sp.set('product', state.product)
-  if (state.campaign) sp.set('campaign', state.campaign)
-  if (state.grain !== 'schedules') sp.set('grain', state.grain)
-  if (state.row) sp.set('row', state.row)
-  if (state.drawer) sp.set('drawer', state.drawer)
-  if (state.tile) sp.set('tile', state.tile)
-  return sp.toString()
+export function applyUrlState(current: URLSearchParams, patch: Partial<RdUrlState>): string {
+  const next = new URLSearchParams(current.toString())
+  for (const [k, v] of Object.entries(patch) as Array<[keyof RdUrlState, string]>) {
+    if (isDefault(k, v)) next.delete(k)
+    else next.set(k, v)
+  }
+  return next.toString()
+}
+
+/** Build a fresh query string for a link — a deep link into this page from somewhere else. */
+export function urlStateToQuery(state: Partial<RdUrlState>): string {
+  return applyUrlState(new URLSearchParams(), state)
 }
 
 // ── Matching ───────────────────────────────────────────────────────────────────────────────────
@@ -139,7 +153,7 @@ export function urlStateToQuery(state: RdUrlState): string {
  * any of its member campaigns sits in. That is the only truthful answer for a row that aggregates
  * many campaigns: a schedule holding one DE campaign IS in DE, whatever its stored column says.
  */
-export function groupMatchesScope(row: RdGroupRow, scope: RdScope): boolean {
+export function groupMatchesScope(row: { scope: RdGroupScope }, scope: RdScope): boolean {
   switch (boundBy(scope)) {
     case 'campaign': return row.scope.campaignIds.includes(scope.campaign)
     case 'product': return row.scope.productLineIds.includes(scope.product)
