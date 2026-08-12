@@ -24,6 +24,19 @@ export interface RulesTab {
   label: string
   /** true once this tab has its own page under /rules-automation/<key> */
   routed?: boolean
+  /**
+   * 🔴 AR.S0 (additive) — the path segment, when it differs from `key`.
+   *
+   * `rulesTabHref` builds `${RULES_BASE}/${key}`, which is right for every tab whose route is named
+   * after its key. It is wrong for exactly one: `rules` is routed at `/apply-rules`, and renaming
+   * the key is not an option — `?tab=rules`, `RULE_TAB_ACTION_TYPES`, the index client's fallback
+   * and every `active="rules"` all read it, and two sessions renaming one key in one shared file is
+   * this programme's highest-collision edit.
+   *
+   * No other tab sets this, so every other href is byte-identical. Take it if your page's route
+   * ever needs to differ from its key; do not add a second mechanism.
+   */
+  path?: string
   /** shown under the page title when this tab is active */
   subtitle?: string
 }
@@ -34,7 +47,23 @@ export const RULES_BASE = '/marketing/ads/rules-automation'
 // rank-goal schedules (hold an impression share), not classic bid/pause dayparting — the old label
 // described the mode nobody uses.
 export const RULES_TABS: RulesTab[] = [
-  { key: 'rules', label: 'Apply Rules', subtitle: 'Create and manage rules for all of your campaigns' },
+  // AR.S0 — its own page, at /apply-rules. The tab used to render five columns copied from
+  // Helium 10, three of which are fiction: `Bid Rule` reads a field no API returns, `Budget Rule`
+  // renders a hard-coded "None", and `Min/Max Bid` reads `c.minMaxBid` — a key the payload does not
+  // contain — so it printed "None" on all 220 rows while `minBidCents`/`maxBidCents` sat unread in
+  // the same response. Every one of the five returned ONE identical value on all 220 rows, and the
+  // grid had no Status column at all.
+  //
+  // ⚠ `key` and `label` are deliberately unchanged. The route is `path`, not the key (see the
+  // `path` field above), and the bare `/rules-automation` still renders the index's own grid —
+  // whether it eventually redirects here is an open operator decision.
+  {
+    key: 'rules',
+    label: 'Apply Rules',
+    routed: true,
+    path: 'apply-rules',
+    subtitle: 'Which campaigns automation may write to, and what it is allowed to change',
+  },
   // RA.AUTO — one page for all 51 automations, with the type filter that replaces the five
   // action-type tabs below. Added rather than swapped: the tabs it supersedes are retired in
   // the session that owns them, once this page is live and verified (plan Part 6).
@@ -191,7 +220,8 @@ export function ruleBelongsToTab(actions: unknown, tabKey: string): boolean {
 
 /** Where clicking a tab goes. Routed tabs get a real path; the rest ride the index's ?tab= param. */
 export function rulesTabHref(tab: RulesTab): string {
-  if (tab.routed) return `${RULES_BASE}/${tab.key}`
+  // `tab.path ?? tab.key` — AR.S0. Only `rules` sets `path`, so every other href is unchanged.
+  if (tab.routed) return `${RULES_BASE}/${tab.path ?? tab.key}`
   return tab.key === 'rules' ? RULES_BASE : `${RULES_BASE}?tab=${tab.key}`
 }
 
