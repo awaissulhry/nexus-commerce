@@ -935,6 +935,15 @@ export async function updateAdTargetWithSync(args: {
   forceResync?: boolean // WC — push to Amazon even if the local value is unchanged (one-time re-sync of stale Amazon state)
   /** AX-IE.6 — tag this write as part of a revertible change set. */
   changeSetId?: string | null
+  /**
+   * NEG.3 — override the ledger's actionType.
+   *
+   * `actionType` is hard-coded to `syncType` here, so an archive and a bid change are the same
+   * row in `AdvertisingActionLog` and a retirement is indistinguishable from any other state
+   * update. Defaulted to the existing behaviour, so every other caller is byte-identical; the
+   * retire path passes `retire_negative` so NEG.8 has something to filter on.
+   */
+  actionType?: string | null
 }): Promise<MutationOutcome> {
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
@@ -1069,7 +1078,7 @@ export async function updateAdTargetWithSync(args: {
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
     actor: args.actor,
-    actionType: syncType,
+    actionType: args.actionType ?? syncType,
     entityType: 'AD_TARGET',
     evidence: args.evidence ?? null,
     entityId: args.adTargetId,

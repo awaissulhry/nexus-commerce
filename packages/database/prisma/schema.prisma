@@ -2892,6 +2892,16 @@ model AdTarget {
   orphanedAt   DateTime?
   orphanReason String?
 
+  /// NEG.3 — when WE retired this negative, and why.
+  ///
+  /// Never written by the sync. `updatedAt` is the last INGEST tick — measured 2026-08-12, all 62
+  /// already-archived negatives share one `updatedAt` day because the v1 export re-stamps every
+  /// matched row — so it can never answer "when was this retired". These two columns can, from the
+  /// moment they exist forward; they stay null for every pre-existing row rather than inventing a
+  /// date for the 62 that were archived on Amazon and mirrored in.
+  retiredAt    DateTime?
+  retireReason String?
+
   @@index([adGroupId, status])
   @@index([externalTargetId])
   @@index([adGroupId, isNegative])
