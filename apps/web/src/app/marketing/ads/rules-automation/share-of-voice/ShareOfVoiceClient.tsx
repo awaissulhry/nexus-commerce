@@ -353,9 +353,18 @@ export function ShareOfVoiceClient() {
     return bits.join(' · ')
   })()
 
-  /** A scope that reaches no measured ASIN is a RENDERED state naming which pair conflicts. */
-  const emptyScope = !!s && !loading && s.resolved.asins > 0 && s.resolved.asinsWithSqpRowsEver === 0
+  /**
+   * A scope that can measure nothing is a RENDERED state naming which pair conflicts — never a
+   * silently empty grid.
+   *
+   * 🔴 Keyed on `census.measured === 0`, not on `asinsWithSqpRowsEver === 0`. Measured on prod:
+   * portfolio "IT AIREON" holds 40 ASINs of which **2 have a Brand Analytics row ever and 0 in the
+   * week the grid renders**, so an `ever`-based test stayed silent on a view where all 480 rows read
+   * "outside coverage". The question the sentence answers is "can this view measure anything", and
+   * that is a fact about the rendered week.
+   */
   const noAsins = !!s && !loading && s.resolved.asins === 0
+  const emptyScope = !!s && !!c && !loading && !noAsins && c.total > 0 && c.measured === 0
 
   return (
     <div className="h10-rules-page">
@@ -499,11 +508,17 @@ export function ShareOfVoiceClient() {
                   </>
                 ) : (
                   <>
-                    <b>Brand Analytics reports on none of this scope’s {num(s!.resolved.asins)} ASINs.</b>{' '}
-                    The queries below are the {market} market’s — every one of them is real — but this{' '}
-                    {s!.boundBy} cannot be measured against them. Amazon returns Brand Analytics for
-                    ten ASINs per market per run and the set does not rotate, so this is a reporting
-                    gap, not an absence of demand.
+                    <b>
+                      Not one of this {s!.boundBy}’s {num(s!.resolved.asins)} ASINs has a Brand
+                      Analytics row in the week of {p?.asOf ? dayMonth(p.asOf) : 'this grid'}
+                      {(s!.resolved.asinsWithSqpRowsEver ?? 0) > 0
+                        ? ` — ${num(s!.resolved.asinsWithSqpRowsEver)} of them have one in some other week`
+                        : ', and none ever has'}.
+                    </b>{' '}
+                    The {num(c?.total ?? 0)} queries below are the {market} market’s and every one of
+                    them is real — but this {s!.boundBy} cannot be measured against them. Amazon
+                    returns Brand Analytics for ten ASINs per market per run and the set does not
+                    rotate, so this is a reporting gap, not an absence of demand.
                   </>
                 )}
               </span>

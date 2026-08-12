@@ -250,12 +250,62 @@ rows in a fresh week is a worse fact than a two-week-old full one.
 - **`market=all` or an unknown market** — `400 {code:'market_required'}` from the route; the page
   renders the "pick one market" panel with four one-click routes out.
 
-### 4.5 Geometry and colour, measured on prod, not by eye
+### 4.5 Geometry and colour, measured on the live page
 
-*(To be completed against the live deploy — see §7.1. The two known traps are pre-empted in code:
-every block uses `margin: … 0 0` rather than the `.h10-svt-seg` 24px pattern, and the first-column
-override is written at matching specificity, `.h10-am-grid td.nm .h10-sov-q .t`, at the END of the
-stylesheet.)*
+`getBoundingClientRect()` at `innerWidth: 2076`, every block against `.h10-am-card`:
+
+| element | left | right | aligned to the card |
+|---|---|---|---|
+| `.h10-hdr` | 96 | 2046 | ✅ |
+| `.h10-rules-tabs` | 96 | 2046 | ✅ |
+| `.h10-am-card` | 96 | 2046 | — |
+| `.h10-kt-scope` (the scope bar) | 96 | 2046 | ✅ |
+| `.h10-sov-said` (the reach sentence) | 96 | 2046 | ✅ |
+| `.h10-sov-band` | 96 | 2046 | ✅ |
+
+**Zero stagger.** The page gutter is `h10-main`'s 30px padding, exactly as KT.1 measured; every
+block in this page uses `margin: … 0 0` and none carries the `.h10-svt-seg` 24px pattern.
+
+`getComputedStyle` on `.h10-am-grid td.nm .h10-sov-q .t`: **`rgb(28, 37, 48)`** — `#1c2530`, not
+`#1f6fde`. The specificity override lands. `cursor: default` and no hover underline (after the fix
+in §4.6).
+
+### 4.6 🔴 Two defects the deployed page showed that the code did not
+
+Both found by measuring prod, neither visible to `tsc`, the tests, or a screenshot read at a glance.
+Fixed in `32dc3e585`, re-verified live.
+
+**1. `0.00%` meant two different things again.** `gilet refrigerante` holds **2 impressions of
+93,869** (0.0000213) and `hugo boss uomo` **1 of 48,699**. `toFixed(2)` rendered both as `0.00%` —
+the identical string a genuine zero produces. The API is built never to coalesce `null` and `0`
+because "we hold none of this market" is a finding; the **formatter then threw that away one layer
+up**. This is the `share()` defect reintroduced in presentation code, and it is worth recording as a
+general lesson: *a contract enforced at the data layer can be destroyed by a rounding call in a
+component.* Small non-zero shares now render **`<0.01%`**. 2 of 480 IT rows are affected; there are
+still **0 true zeros** in any market's rendered week.
+
+**2. The query cell still behaved like a link.** The colour override lands, but `ads.css:695`'s
+`cursor: pointer` and `:696`'s hover underline survive it, so the cell promised a click that does
+nothing. KT.1b named this as its own §3.4 and fixed it two lines below its colour rule; the same two
+lines are now appended here, and both get deleted whole when SOV.5's drawer makes the query real.
+
+**3. The "nothing measurable here" sentence was keyed on the wrong number** (fixed after the visual
+pass). It tested `asinsWithSqpRowsEver === 0`, but portfolio *IT AIREON* holds 40 ASINs of which **2
+have a row ever and 0 in the rendered week** — so an `ever`-based test stayed silent on a view where
+all 480 rows read "outside coverage". It now keys on `census.measured === 0`, which is the question
+the sentence actually answers, and names both numbers.
+
+### 4.7 Every view, confirmed in a browser on production
+
+| view | what was verified |
+|---|---|
+| `?market=IT` | 480 rows · 480/480 measured · week of 19 Jul · reach *"149 of 149 IT campaigns · 32 of 250 ASINs have Brand Analytics rows"* · band shows **Market data 19 Jul 24d, 655 rows vs 655 normal** beside **Ad data 10 Aug 2d** |
+| *(no `?market=`)* | rewritten to `?market=IT` — market is the one param written back |
+| a column-header click | URL became `?market=IT&sort=rank&dir=asc` — `sort`/`dir` round-trip |
+| `?market=ES&weeks=4` | 🔴 **the truncated-week banner renders** — *"The week of 26 Jul is incomplete: 71 rows where a normal ES week holds about 414"* with a working *"Look back 8 weeks instead"* link. KT.1b could verify this branch only by unit test |
+| `?market=IT&portfolio=190601227863497` | 0/480 measured · every row an amber **outside coverage** pill retaining market volume and rank · portfolio-blindness warning *"cannot see 95 of the 149 IT campaigns"* · coverage *"0 of 40 measured this week, 2 ever"* |
+| `?market=DE&list=…&branded=1` | 10 measured · **11 `no row this week`** carrying *last seen 12 Jul / 21 Jun / 28 Jun* at **31d, 52d, 59d** — unbounded by the 42-day lookback · **10 `never measured`**, muted, all carrying the BRAND badge · the list note names Keyword Tracker as the owner |
+| sort order | measured → not-covered → no-row-this-period → never-measured, confirmed by eye |
 
 ---
 
@@ -374,7 +424,16 @@ older, **larger** 07-12 (1,066 rows). That is correct behaviour — newest compl
 biggest — but it means the rendered week can hold fewer rows than the one before it, and any fixture
 quoted from "the latest data" needs its period named. Every table in this document names its period.
 
-### 6.5 One cross-page finding, not mine to fix
+### 6.5 The brief's own §7 traps were both real, and a third was not on the list
+
+The two layout traps the brief names were pre-empted and confirmed clean by measurement (§4.5). A
+**third** trap of the same family bit anyway and is worth adding to the section's list: `ads.css`
+sets three properties on `.h10-am-grid td.nm .t` — `color`, `cursor` **and** a `:hover`
+underline — and overriding the colour alone leaves a cell that still *behaves* like a link. KT.1b
+found this after KT.1 shipped; it is now two-for-two, so **any page whose first column is not a link
+needs all three overrides, not one.**
+
+### 6.6 One cross-page finding, not mine to fix
 
 `classifyBranded` flags **`regalo rinfresco taxi uomo`** as a brand term, because the protection
 `regal` is stored as `CONTAINS` and "regalo" is Italian for "gift". It is one of only two branded IT
