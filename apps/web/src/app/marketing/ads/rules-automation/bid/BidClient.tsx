@@ -585,27 +585,44 @@ export function BidClient() {
         </div>
       )}
 
-      {/* 🔴 The sentence that stops four rows in five reading as a broken page. Rendered whenever
-          the majority of the scope is unmeasured, which today is always. */}
-      {census && census.targets > 0 && census.measured / census.targets < 0.9 && (
-        <p className="h10-bd-note">
-          <Info size={12} />
-          <span>
-            <b>{num(census.targets - census.measured)} of {num(census.targets)} targets got no impressions
-            in the last {data?.window.days ?? 30} days</b>, so their metric columns read “not served”
-            rather than zero. Metrics come from the daily performance feed; a target that never
-            entered an auction has nothing to report, which is a different fact from one that was
-            served and earned nothing.
-          </span>
-        </p>
-      )}
+      {/* 🔴 The sentence that stops four rows in five reading as a broken page.
+          Counted off the `measured` facet, not the census: the facet excludes its own dimension and
+          applies every other filter, so its two numbers describe THE ROWS ON SCREEN. The census
+          describes the scope. Both are true and they are not the same set — see the band sentence
+          below for the same trap caught on production. */}
+      {(() => {
+        const yes = data?.facets.measured.find((m) => m.value === 'yes')?.count ?? 0
+        const no = data?.facets.measured.find((m) => m.value === 'no')?.count ?? 0
+        if (!data || no === 0 || no / Math.max(1, yes + no) < 0.1) return null
+        return (
+          <p className="h10-bd-note">
+            <Info size={12} />
+            <span>
+              <b>{num(no)} of the {num(yes + no)} targets in this view got no impressions in the
+              last {data.window.days} days</b>, so their metric columns read “not served” rather
+              than zero. Metrics come from the daily performance feed; a target that never entered
+              an auction has nothing to report, which is a different fact from one that was served
+              and earned nothing.
+            </span>
+          </p>
+        )
+      })()}
 
-      {/* The floor population is a clock reading. Say which clock. */}
+      {/* The floor population is a clock reading. Say which clock — and 🔴 say which DENOMINATOR.
+          The band facet excludes its own dimension but applies every other filter, so its count is
+          over the FILTERED view while the census above counts the SCOPE. Printed bare, the two read
+          as one set: with `?kind=AUTO` this line said "24 targets sit at €0.05 or below" directly
+          beneath a cell reading 2,944. A guard has to share the denominator of the value it
+          guards. */}
       {census && data && view === 'targets' && (data.facets.band.find((b) => b.value === '0-5')?.count ?? 0) > 0 && (
         <p className="h10-bd-note">
           <Info size={12} />
           <span>
-            <b>{num(data.facets.band.find((b) => b.value === '0-5')?.count ?? 0)} targets sit at €0.05 or below</b>{' '}
+            <b>
+              {num(data.facets.band.find((b) => b.value === '0-5')?.count ?? 0)} of
+              the {num(data.facets.band.reduce((s, b) => s + b.count, 0))} targets in this view sit
+              at €0.05 or below
+            </b>{' '}
             as of {clockLabel(new Date().toISOString())} Rome. That number is a clock reading, not a
             state: the rank engine floors bids at 00:00 and restores them at 08:00, and the
             population swings by hundreds overnight. What each of those bids MEANS — suppressed,
