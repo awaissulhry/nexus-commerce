@@ -3773,3 +3773,8 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 /* dates, in the cohort's two date columns */
 .h10-hv-dt { display: inline-flex; align-items: baseline; gap: 4px; font-size: 11.5px; color: #55606d; font-variant-numeric: tabular-nums; }
 .h10-hv-dt i { font-style: normal; font-size: 10px; color: #667080; }
+
+/* The two halves. Undefined until they were grepped for — an undefined class is silent: tsc, the
+   ratchet, the link guard and the build all pass and the section simply renders unseparated. */
+.h10-ngp-fwd { margin: 4px 0 0; }
+.h10-ngp-bwd { margin: 22px 0 0; padding: 16px 0 0; border-top: 2px solid #eef1f5; }

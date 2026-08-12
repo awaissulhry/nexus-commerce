@@ -47,7 +47,6 @@ import { NegRules } from './NegRules'
 import { NegRecord } from './NegRecord'
 // Interim, until NEG.5 and NEG.7 replace them: rendered exactly as the tab rendered them, so
 // nothing is lost in the move off `?tab=negative-targeting`.
-import { ProtectedTermsPanel } from '../ProtectedTermsPanel'
 import { RuleListTab } from '../tabs/RuleListTab'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 
@@ -539,13 +538,10 @@ export function NegativeTargetingClient() {
       <NegRemoval {...slotProps} />
       <NegAttention {...slotProps} />
 
+      {/* NEG.5 absorbed the interim `<ProtectedTermsPanel />` that stood here. 🔴 Its FILE is not
+          deleted: `control-room/GuardrailsTab.tsx:197` mounts it too — deliberately, per its own
+          comment — so removing it is a build break on a page this session does not own. */}
       <NegProtectedTerms {...slotProps} />
-      {/* Interim until NEG.5: the panel exactly as the tab rendered it, so the move loses nothing.
-          NEG.5 deletes this line and its import when it lands. It keeps its position above the
-          rules for the reason its own comment gives — those decide what gets negated, this decides
-          what never can be — and sits below the inventory, because the inventory is what you came
-          for. */}
-      <ProtectedTermsPanel />
 
       <NegWastefulWords {...slotProps} />
 
