@@ -275,7 +275,7 @@ followed rather than recorded after the fact.
 | `apps/api/src/routes/advertising.routes.ts` | NEG.6 (`marketplace` forwarded on the EXISTING `GET /advertising/ngrams`; **no new route registered** — `grep -a` confirms still exactly one `fastify.get('/advertising/ngrams'`) | 2026-08-13 | **released** |
 | `…/rules-automation/rules-automation.css` | NEG.6 (`h10-ngw-*` at EOF) | 2026-08-13 | **released** — one hunk, at EOF, diffed before committing; classes checked both directions, 40 used and 40 defined |
 | `apps/web/next.config.js` | NEG.6 (one `/marketing/advertising/ngrams` redirect, literal path) | 2026-08-13 | **released** |
-| `…/marketing/advertising/ngrams/*` | NEG.6 (delete `NgramClient.tsx` + `page.tsx` after the redirect is live and verified; `grep -r` finds **no importer** outside its own directory) | 2026-08-13 | **claimed** |
+| `…/marketing/advertising/ngrams/*` | NEG.6 (delete `NgramClient.tsx` + `page.tsx`) | 2026-08-13 | **released** — deleted only AFTER the redirect was verified live on prod (308 → `#wasteful-words`); `grep -r` found no importer outside its own directory, unlike NEG.5's `ProtectedTermsPanel` which is mounted twice. ⚠ `apps/web/.next/types/validator.ts` references the deleted page and makes `tsc` fail until `rm -rf apps/web/.next/types` — stale build output, not source |
 
 ### HV.6 — the actors panel, 2026-08-13
 
