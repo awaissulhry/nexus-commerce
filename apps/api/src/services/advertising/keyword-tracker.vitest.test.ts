@@ -17,7 +17,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({ default: {} }))
 
-const { resolveScope, chooseViewPeriod, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO } = await import('./keyword-tracker.service.js')
+const { resolveScope, chooseViewPeriod, projectCliff, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO } = await import('./keyword-tracker.service.js')
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`)
 
@@ -213,5 +213,56 @@ describe('chooseViewPeriod', () => {
   it('takes the newest qualifying period even when an older one is bigger', () => {
     // 07-19 (655) qualifies; 07-12 (1066) is bigger and must NOT win on size
     expect(chooseViewPeriod(IT, { now: NOW }).start).toEqual(D('2026-07-19'))
+  })
+})
+
+/**
+ * KT.5 — the cliff, as a date.
+ *
+ * Every expectation below is the measured prod shape on 2026-08-12 with `now` injected, so these
+ * pin the arithmetic rather than the calendar. The reason this needs a test at all: the answer is
+ * counter-intuitive. The gate never renders an empty grid, so a market does not "go blank" — it
+ * COLLAPSES to a thinner week first, and that earlier date is the one an operator needs. My own
+ * first measurement found only the second date and reported 26 days when the real answer was 19.
+ */
+describe('projectCliff', () => {
+  it('names the COLLAPSE date, not just the day nothing is in the window', () => {
+    // IT chooses 2026-07-19 (655 rows). 07-19 + 42d = 08-30, so on 08-31 it ages out and the only
+    // period left inside the window is the 8-row 07-26 week.
+    const c = projectCliff(IT, { now: NOW })
+    expect(c.collapseOn).toBe('2026-08-31')
+    expect(c.collapseToPeriod).toBe('2026-07-26')
+    // and the row count of the week it falls back to, so the warning can be concrete
+    expect(c.collapseToRows).toBe(8)
+    expect(c.blankOn).toBe('2026-09-07')
+  })
+
+  it('gives ES and FR an EARLIER collapse, because they are already reading an older week', () => {
+    // both chose 2026-07-12; + 42d = 08-23, so 08-24
+    for (const periods of [ES, FR]) {
+      expect(projectCliff(periods, { now: NOW }).collapseOn).toBe('2026-08-24')
+    }
+  })
+
+  it('all four markets lose every in-window week on the same day', () => {
+    for (const periods of [IT, DE, ES, FR]) {
+      expect(projectCliff(periods, { now: NOW }).blankOn).toBe('2026-09-07')
+    }
+  })
+
+  it('a complete week landing later moves both dates forward', () => {
+    const withFresh = [{ start: D('2026-08-09'), rows: 700 }, ...IT]
+    const c = projectCliff(withFresh, { now: NOW })
+    expect(c.collapseOn! > '2026-08-31').toBe(true)
+    expect(c.blankOn! > '2026-09-07').toBe(true)
+  })
+
+  it('no periods at all is not a crash', () => {
+    expect(projectCliff([], { now: NOW })).toEqual({ collapseOn: null, collapseToPeriod: null, collapseToRows: 0, blankOn: null })
+  })
+
+  it('the collapse date is derived from the LOOKBACK, not hard-coded', () => {
+    // a 56-day lookback pushes IT's collapse out by exactly the 14-day difference
+    expect(projectCliff(IT, { now: NOW, lookbackDays: 56 }).collapseOn).toBe('2026-09-14')
   })
 })

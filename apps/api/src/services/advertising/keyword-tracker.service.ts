@@ -277,6 +277,48 @@ export function chooseViewPeriod(
  * rendering the same string. A term the feed has never reported and a term the feed reported three
  * weeks ago are different problems with different fixes, so they are different states.
  */
+/**
+ * KT.5 — when does this view stop being current, as a DATE?
+ *
+ * "17 days old" as a caption tells an operator nothing they can act on. A named day does. Pure and
+ * separate so it can be tested against a fixed clock, and because the answer is not obvious: the gate
+ * never renders an empty grid, so there are TWO dates, and the FIRST is the one that matters.
+ *
+ *   collapseOn — the day the chosen period ages out of the lookback and the gate falls back to a
+ *                thinner week. The grid does not empty; it collapses to whatever that week holds,
+ *                loudly labelled. Measured today: IT and DE 2026-08-31 (IT drops to 2 of 97 terms,
+ *                DE to 0 of 21); ES and FR 2026-08-24 (ES 3 of 7, FR 0 of 8).
+ *   blankOn    — the day no period is inside the lookback at all. All four markets: 2026-09-07.
+ *
+ * Both assume the feed writes no further complete week. If one lands, both dates move forward.
+ */
+export function projectCliff(
+  periods: KtPeriodCandidate[],
+  opts: { lookbackDays?: number; ratio?: number; baselinePeriods?: number; now?: number; horizonDays?: number } = {},
+): { collapseOn: string | null; collapseToPeriod: string | null; collapseToRows: number; blankOn: string | null } {
+  const now = opts.now ?? Date.now()
+  const horizon = opts.horizonDays ?? 200
+  const today = new Date(now); today.setUTCHours(0, 0, 0, 0)
+  const base = chooseViewPeriod(periods, { ...opts, now: +today })
+  let collapseOn: string | null = null
+  let collapseToPeriod: string | null = null
+  let collapseToRows = 0
+  let blankOn: string | null = null
+  for (let d = 1; d <= horizon; d++) {
+    const when = +today + d * 86_400_000
+    const c = chooseViewPeriod(periods, { ...opts, now: when })
+    if (!collapseOn && (+(c.start ?? 0) !== +(base.start ?? 0) || c.reason !== base.reason)) {
+      collapseOn = iso(new Date(when))
+      collapseToPeriod = iso(c.start)
+      // free: the fallback week's row count is already in the candidate list, so the sentence can
+      // say "falls back to a week holding 8 rows against a normal 655" without another query
+      collapseToRows = c.rows
+    }
+    if (c.reason === 'outside-lookback') { blankOn = iso(new Date(when)); break }
+  }
+  return { collapseOn, collapseToPeriod, collapseToRows, blankOn }
+}
+
 export type KtRowState =
   /** a row in the view's period — the only state that carries a share */
   | 'measured'
@@ -284,6 +326,14 @@ export type KtRowState =
   | 'no-row-this-period'
   /** the feed has never reported this term in this market, at any period */
   | 'never-measured'
+  /**
+   * KT.5 — the feed DOES report this term in this period, but for none of the ASINs in the current
+   * scope. Invisible before KT.5 because the scope filter and the measurement were one query, so
+   * "no row" and "no covered ASIN of yours" collapsed. Measured: 0 instances at market scope in all
+   * four markets — and **72 of 97** under campaign `Gale Jacket Yellow Only`, every one of which the
+   * page was calling "no row this week" or "never measured".
+   */
+  | 'not-measurable-here'
 
 export interface KtRow {
   keyword: string
@@ -300,6 +350,22 @@ export interface KtRow {
   /** for `no-row-this-period`: the newest period this term DOES have, at any age. Else null. */
   lastSeen: string | null
   lastSeenAgeDays: number | null
+  /** KT.5 — WHICH of our ASINs the share is attributed to. The share is one ASIN's, not a family's. */
+  bestAsin: string | null
+  /**
+   * KT.5 — the sum of our ASINs' shares on this query, when more than one holds a row.
+   * 🔴 An UPPER BOUND, never a total: two of our ASINs can appear in one search, so the addends
+   * overlap. Measured across all four markets: 0 rows exceed 100%, largest ratio 4.05× (ES
+   * `chaqueta moto hombre invierno`, 0.37% → 1.50% over 6 ASINs). Never label it "our total share".
+   */
+  shareBound: number | null
+  /**
+   * KT.5 — do we actually advertise on this term, and does the feed cover the ASINs that do?
+   * `bestAsinAdvertisesTerm: false` is the attribution hazard: the share on screen comes from a
+   * product that is in none of the ad groups bidding the term. Measured: 7 such rows across the
+   * four markets, and 24 rows where ad coverage is 0.
+   */
+  ad: { bidOnTerm: boolean; adAsins: number; coveredAdAsins: number; bestAsinAdvertisesTerm: boolean } | null
   /** `state === 'measured'`. Kept so a client deployed before this field existed keeps working. */
   measured: boolean
   /** true when the term contains one of the AdKeywordProtection whitelist terms */
@@ -340,7 +406,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // KT.1b — the period groupBy and the three freshness probes depend on nothing but `market`, so
   // they belong in this batch rather than in two more serial round trips. Measured: that ordering
   // alone was most of a 6.6s first paint.
-  const [campaigns, ads, watchlists, periodGroups, sqpLatest, stLatest, plLatest] = await Promise.all([
+  const [campaigns, ads, watchlists, periodGroups, sqpLatest, stLatest, plLatest, ingestDays, recentRuns] = await Promise.all([
     // KT.1b — `status` joins the select so an ARCHIVED campaign stops inflating the market's
     // campaign count (1 of IT's 150 is archived). See `resolveScope`: it is excluded from the
     // market set but still resolvable by an explicit ?campaign= pick, because the campaign picker
@@ -366,6 +432,16 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     prisma.amazonAdsSearchTerm.findFirst({ where: { marketplace: market }, orderBy: { date: 'desc' }, select: { date: true } }),
     prisma.amazonAdsPlacementReport.findFirst({
       where: { marketplace: market, topOfSearchIS: { not: null } }, orderBy: { date: 'desc' }, select: { date: true },
+    }),
+    // KT.5 feed health — global, identical for every market and scope, and dependent on nothing.
+    // It belongs in this batch; as two later serial reads it cost two round trips per request.
+    prisma.$queryRawUnsafe<Array<{ day: string; rows: bigint }>>(
+      `select to_char("ingestedAt",'YYYY-MM-DD') as day, count(*)::bigint as rows
+       from "SearchQueryPerformance" where "ingestedAt" > now() - interval '14 days' group by 1 order by 1 desc`,
+    ),
+    prisma.cronRun.findMany({
+      where: { jobName: 'sqp-ingest' }, orderBy: { startedAt: 'desc' }, take: 8,
+      select: { startedAt: true, status: true, errorMessage: true, outputSummary: true },
     }),
   ])
 
@@ -433,21 +509,36 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // pulled from a week the rest of the grid is not on.
   const chosen = chooseViewPeriod(periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all })))
 
-  // ── the share rows: the watchlist, in that one period ──
-  const sqpRows = visibleTerms.length && chosen.start
-    ? await prisma.searchQueryPerformance.findMany({
-      where: {
-        marketplace: market,
-        startDate: chosen.start,
-        searchQuery: { in: visibleTerms },
-        ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
-      },
-      select: {
-        searchQuery: true, asin: true, startDate: true,
-        searchQueryVolume: true, searchQueryRank: true, impressionShare: true,
-      },
-    })
-    : []
+  // ── the share rows AND the ad graph, in one round ──
+  // KT.5 added the per-term ad-coverage read. Left serial it cost ~2s of a 4.5s first paint; neither
+  // query depends on the other's result, so they go together.
+  const [sqpRows, adTargets] = await Promise.all([
+    visibleTerms.length && chosen.start
+      ? prisma.searchQueryPerformance.findMany({
+        where: {
+          marketplace: market,
+          startDate: chosen.start,
+          searchQuery: { in: visibleTerms },
+          ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
+        },
+        select: {
+          searchQuery: true, asin: true, startDate: true,
+          searchQueryVolume: true, searchQueryRank: true, impressionShare: true,
+        },
+      })
+      : Promise.resolve([]),
+    visibleTerms.length
+      ? prisma.adTarget.findMany({
+        where: {
+          isNegative: false,
+          expressionType: { in: ['EXACT', 'PHRASE', 'BROAD'] },
+          expressionValue: { in: visibleTerms },
+          adGroup: { campaign: { marketplace: market, ...(scope.boundBy === 'market' ? {} : { id: { in: scope.campaignIds } }) } },
+        },
+        select: { expressionValue: true, adGroupId: true },
+      })
+      : Promise.resolve([]),
+  ])
 
   const byTerm = new Map<string, KtSqpRow[]>()
   for (const r of sqpRows) {
@@ -462,45 +553,111 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // "last seen 14 Jun" is a more useful sentence than "never measured" is a true one.
   const blankTerms = visibleTerms.filter((t) => !byTerm.has(t))
   const lastSeen = new Map<string, Date>()
+  /**
+   * KT.5 — the third blank state needs the SAME question asked WITHOUT the ASIN filter. Before this,
+   * the scope filter and the measurement were one query, so "the feed has no row for this term" and
+   * "the feed has a row but not for any ASIN you are scoped to" were indistinguishable. Measured: 0
+   * instances at market scope, **72 of 97** under one campaign. Only asked when the scope actually
+   * restricts ASINs — at market scope the two questions are the same question.
+   */
+  const coveredElsewhere = new Set<string>()
   if (blankTerms.length) {
-    const seen = await prisma.searchQueryPerformance.groupBy({
-      by: ['searchQuery'],
-      where: {
-        marketplace: market,
-        searchQuery: { in: blankTerms },
-        ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
-      },
-      _max: { startDate: true },
-    })
+    const [seen, anyAsin] = await Promise.all([
+      prisma.searchQueryPerformance.groupBy({
+        by: ['searchQuery'],
+        where: {
+          marketplace: market,
+          searchQuery: { in: blankTerms },
+          ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
+        },
+        _max: { startDate: true },
+      }),
+      scope.asinScoped && chosen.start
+        ? prisma.searchQueryPerformance.groupBy({
+          by: ['searchQuery'],
+          where: { marketplace: market, startDate: chosen.start, searchQuery: { in: blankTerms } },
+        })
+        : Promise.resolve([] as Array<{ searchQuery: string }>),
+    ])
     for (const s of seen) if (s._max.startDate) lastSeen.set(norm(s.searchQuery), s._max.startDate)
+    for (const a of anyAsin) coveredElsewhere.add(norm(a.searchQuery))
+  }
+
+  /**
+   * KT.5 — do we advertise on this term, and does the feed cover the ASINs that do?
+   *
+   * The attribution hazard, measured: `giacca moto 4 stagioni` renders 1.67% attributed to
+   * B0BMSJWW7L, which is in NONE of the 12 ad groups bidding that term — those hold 30 ASINs and SQP
+   * covers 0 of them. 7 such rows across the four markets; 24 rows at 0% ad coverage.
+   */
+  const adGroupsByTerm = new Map<string, Set<string>>()
+  const asinsByAdGroup = new Map<string, Set<string>>()
+  {
+    for (const t of adTargets) {
+      const k = norm(t.expressionValue)
+      const set = adGroupsByTerm.get(k) ?? new Set<string>()
+      set.add(t.adGroupId); adGroupsByTerm.set(k, set)
+    }
+    const groupIds = [...new Set([...adGroupsByTerm.values()].flatMap((x) => [...x]))]
+    if (groupIds.length) {
+      const groupAds = await prisma.adProductAd.findMany({
+        where: { adGroupId: { in: groupIds }, asin: { not: null } },
+        select: { adGroupId: true, asin: true },
+      })
+      for (const a of groupAds) {
+        const set = asinsByAdGroup.get(a.adGroupId) ?? new Set<string>()
+        set.add(a.asin!); asinsByAdGroup.set(a.adGroupId, set)
+      }
+    }
   }
 
   const rows: KtRow[] = visibleTerms.map((term) => {
     const inPeriod = byTerm.get(term) ?? []
     const branded = isBranded(term)
+    const groups = adGroupsByTerm.get(term)
+    const adAsins = groups ? new Set([...groups].flatMap((g) => [...(asinsByAdGroup.get(g) ?? [])])) : new Set<string>()
+
     if (!inPeriod.length) {
       const seen = lastSeen.get(term) ?? null
+      const state: KtRowState = coveredElsewhere.has(term)
+        ? 'not-measurable-here'
+        : seen ? 'no-row-this-period' : 'never-measured'
       return {
         keyword: term, marketplace: market,
         marketVolume: null, marketRank: null, impressionShare: null,
         asinsCompeting: 0, asOf: null, asOfAgeDays: null,
-        state: seen ? 'no-row-this-period' : 'never-measured',
+        state,
         lastSeen: iso(seen), lastSeenAgeDays: ageDays(seen),
+        bestAsin: null, shareBound: null,
+        ad: groups ? { bidOnTerm: true, adAsins: adAsins.size, coveredAdAsins: 0, bestAsinAdvertisesTerm: false } : null,
         measured: false, branded,
       }
     }
     // our BEST ASIN on this query — the one whose share we would be defending
     const best = inPeriod.reduce((a, b) => (b.impressionShare > a.impressionShare ? b : a))
+    const covered = new Set(inPeriod.map((r) => r.asin).filter((x): x is string => !!x))
+    // the SUM is an upper bound, not a total — two of our ASINs can share one impression
+    const bound = inPeriod.reduce((acc, r) => acc + r.impressionShare, 0)
     return {
       keyword: term, marketplace: market,
       marketVolume: best.searchQueryVolume,
       marketRank: best.searchQueryRank,
       impressionShare: best.impressionShare,
-      asinsCompeting: new Set(inPeriod.map((r) => r.asin).filter((x): x is string => !!x)).size,
+      asinsCompeting: covered.size,
       asOf: iso(chosen.start),
       asOfAgeDays: ageDays(chosen.start),
       state: 'measured',
       lastSeen: null, lastSeenAgeDays: null,
+      bestAsin: best.asin,
+      shareBound: covered.size > 1 ? bound : null,
+      ad: groups
+        ? {
+          bidOnTerm: true,
+          adAsins: adAsins.size,
+          coveredAdAsins: [...covered].filter((a) => adAsins.has(a)).length,
+          bestAsinAdvertisesTerm: !!best.asin && adAsins.has(best.asin),
+        }
+        : null,
       measured: true, branded,
     }
   })
@@ -547,6 +704,56 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   const measuredCount = rows.filter((r) => r.state === 'measured').length
   const noRowCount = rows.filter((r) => r.state === 'no-row-this-period').length
   const neverCount = rows.filter((r) => r.state === 'never-measured').length
+  const notHereCount = rows.filter((r) => r.state === 'not-measurable-here').length
+
+  /**
+   * 🔴 KT.5 — THE COVERAGE DENOMINATOR. The reach line printed "250 ASINs", which is the ASINs in
+   * SCOPE. Every share on this page is bounded by the ASINs Brand Analytics actually measures, and
+   * that is a far smaller number: measured 2026-08-12, in the week each market's grid reads —
+   * IT 18 of 250 · DE 13 of 57 · ES 14 of 30 · FR 4 of 91.
+   *
+   * Root cause is one constant: `ourAsinsForMarketplace(mkt, args.limit ?? 10)` at
+   * sqp.service.ts:242 requests the same 10 ASINs per market every night and never rotates, despite
+   * a code comment claiming the cron cycles coverage over days.
+   */
+  // Always filtered to the scope's ASINs — including at market scope, where `scope.asins` IS the set
+  // of advertised ASINs. Without that the numerator counted every covered ASIN in the market (19)
+  // against a denominator of advertised ones (250): it read as a coverage figure over a different
+  // population, and N was not a subset of M.
+  const coveredAsinsInWeek = chosen.start && scope.asins.length
+    ? (await prisma.searchQueryPerformance.groupBy({
+      by: ['asin'],
+      where: { marketplace: market, startDate: chosen.start, asin: { in: scope.asins } },
+    })).filter((r) => r.asin).length
+    : 0
+
+  /**
+   * KT.5 — feed health, derived from DATA, never from `CronRun.status`.
+   *
+   * A run can be green and dead at once: measured, the 2026-08-11 and 2026-08-12 runs both carry
+   * `status=SUCCESS` **and** `errorMessage="stale (auto-swept after 2.3h)"` **and** `rows=0`. Across
+   * all 72 runs, 14 carry a stale error while only 12 have a non-SUCCESS status — so two are green
+   * and dead. `ok=4 failed=5` has been constant since 2026-06-01 and can never signal anything: five
+   * of the nine markets the cron iterates (IE, NL, PL, SE, UK) have zero ChannelListing rows, so
+   * `ingestSqp` throws for them every night, forever. A sixth failure would be invisible.
+   */
+  const wroteByDay = new Map(ingestDays.map((r) => [r.day, Number(r.rows)]))
+  const midnight = new Date(); midnight.setUTCHours(0, 0, 0, 0)
+  let nightsSilent = 0
+  for (let d = 0; d < 14; d++) {
+    // an absent day is a ZERO, not a gap — counting zeros in the GROUP BY would always give 0
+    const day = new Date(+midnight - d * 86_400_000).toISOString().slice(0, 10)
+    if ((wroteByDay.get(day) ?? 0) === 0) nightsSilent++
+    else break
+  }
+  const claimedRows = recentRuns.map((r) => {
+    const m2 = /rows=(\d+)/.exec(r.outputSummary ?? '')
+    return m2 ? Number(m2[1]) : null
+  })
+  let nightsClaimingZero = 0
+  for (const n of claimedRows) { if (n === 0) nightsClaimingZero++; else break }
+  const greenAndDead = recentRuns.filter((r) => String(r.status) === 'SUCCESS' && !!r.errorMessage).length
+  const cliff = projectCliff(periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all })))
 
   return {
     scope: {
@@ -578,9 +785,15 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         asins: scope.asins.length,
         keywordsWatched: visibleTerms.length,
         keywordsMeasured: measuredCount,
-        /** the two blank states, separated — see KtRowState */
+        /** the blank states, separated — see KtRowState */
         keywordsNoRowThisPeriod: noRowCount,
         keywordsNeverMeasured: neverCount,
+        keywordsNotMeasurableHere: notHereCount,
+        /**
+         * 🔴 the honest denominator: of the `asins` in scope, how many the chosen week MEASURES.
+         * The reach line must say "share measured across N of M advertised ASINs", never "M ASINs".
+         */
+        asinsCovered: coveredAsinsInWeek,
       },
       /**
        * Stated whenever the portfolio grain is in play, because it is the grain with a hole in it:
@@ -613,6 +826,30 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       periodsUsed,
       newestAsOf: periodsUsed[0]?.start ?? null,
       oldestAsOf: periodsUsed[periodsUsed.length - 1]?.start ?? null,
+    },
+    /**
+     * KT.5 — one health block, so the page can carry ONE line that is quiet when the feed is
+     * behaving and loud when it is not. Derived from data; `CronRun.status` is never consulted.
+     */
+    feed: {
+      /** consecutive most-recent nights that wrote no SQP row at all */
+      nightsSilent,
+      /** consecutive most-recent runs whose own summary says rows=0 */
+      nightsClaimingZero,
+      /** runs in the last 8 that report SUCCESS while carrying an errorMessage */
+      greenAndDead,
+      lastRunAt: recentRuns[0]?.startedAt.toISOString() ?? null,
+      lastRunSummary: recentRuns[0]?.outputSummary ?? null,
+      lastRunError: recentRuns[0]?.errorMessage ?? null,
+      rowsWrittenPerNight: ingestDays.slice(0, 7).map((r) => ({ day: r.day, rows: Number(r.rows) })),
+      /**
+       * The five markets the cron iterates that can never succeed — 0 ChannelListing rows each, so
+       * `ok=4 failed=5` is a constant and a sixth failure would be invisible. Hard-coded because it
+       * is a property of which profiles are sandbox, not of today's data.
+       */
+      structuralFailures: ['IE', 'NL', 'PL', 'SE', 'UK'],
+      /** the dates this view stops being current — see projectCliff */
+      cliff,
     },
     freshness: {
       sqp: {
