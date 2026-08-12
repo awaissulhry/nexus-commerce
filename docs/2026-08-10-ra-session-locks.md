@@ -223,6 +223,9 @@ followed rather than recorded after the fact.
 
 ---
 
+| `…/rules-automation/rules-automation.css` | NEG.3b (`h10-ngr-*` + 2 `h10-ngd-*` entry points, at EOF) | 2026-08-12 | **released** |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.3b (fill the write seam — 4 lines, no restructuring) | 2026-08-12 | **released** |
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |

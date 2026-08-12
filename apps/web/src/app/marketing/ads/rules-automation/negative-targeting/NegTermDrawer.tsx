@@ -277,6 +277,14 @@ export function NegTermDrawer({ scope, push, focus, view }: NegSlotProps) {
               <h4>
                 Every negation <span className="ct">{num(data.negations.length)}</span>
                 {!data.remainder.scopeIsWholeAccount && <span className="sub">{num(data.remainder.inScope)} in your scope, shown first</span>}
+                {/* 🔴 Bulk is issued HERE, against N explicit negation ids — never from a grid
+                    selection over a term row. A term is not an Amazon object; every bulk action is
+                    N real writes reporting N outcomes. */}
+                {data.negations.some((n) => n.status !== 'ARCHIVED') && (
+                  <button type="button" className="h10-ngd-bulk" onClick={() => push({ retireTerm: data.term.key })}>
+                    Remove several…
+                  </button>
+                )}
               </h4>
               <ul className="h10-ngd-negs">
                 {data.negations.map((n) => (
@@ -299,6 +307,14 @@ export function NegTermDrawer({ scope, push, focus, view }: NegSlotProps) {
                     </span>
                     <span className="meta">
                       {dayMonth(n.addedAt)} · <span className={`by ${n.attribution}`}>{n.attributionLabel}</span>
+                      {/* NEG.3b — the removal entry point. Already-archived rows get no action:
+                          they were archived ON Amazon and mirrored in, so there is nothing to
+                          remove and a no-op logged as a retirement would be a false record. */}
+                      {n.status !== 'ARCHIVED' && (
+                        <button type="button" className="h10-ngd-rm" onClick={() => push({ retire: n.id })} title={n.atAmazon ? 'Archive this negation at Amazon — cannot be undone' : 'Remove our record; Amazon never confirmed this one'}>
+                          {n.atAmazon ? 'Archive' : 'Remove'}
+                        </button>
+                      )}
                     </span>
                   </li>
                 ))}

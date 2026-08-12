@@ -3150,3 +3150,100 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-kt-delta i.wide { background: #fff6e8; color: #8a5316; }
 
 .h10-kt-spend { font-variant-numeric: tabular-nums; font-weight: 600; color: #1c2530; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   NEG.3b — the retirement confirm (h10-ngr-*) and its two entry points in the drawer
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+
+   Appended at EOF: source order beats specificity here, so an override lives after what it
+   overrides. No dark block — the shell pins `color-scheme: light` under this subtree. Hard-coded
+   hex from the palette the neighbouring blocks use. `h10-ngr-*` is disjoint from NEG.1's
+   `h10-ng-*` and NEG.2's `h10-ngd-*`; every rule names its class exactly.
+
+   The dialog sits ABOVE the term drawer (z 1201) because it is opened from it and must not be
+   dismissable by a click that lands on the drawer behind it. */
+
+/* ── the drawer's two entry points ───────────────────────────────────────────────────────────── */
+.h10-ngd-rm { margin-left: 8px; padding: 1px 7px; background: #fff; border: 1px solid #e3e7ec; border-radius: 5px; font: inherit; font-size: 10px; font-weight: 800; color: #8a2020; cursor: pointer; }
+.h10-ngd-rm:hover { background: #fdeeee; border-color: #d99; }
+.h10-ngd-bulk { margin-left: auto; padding: 2px 8px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 6px; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; color: #55606d; cursor: pointer; }
+.h10-ngd-bulk:hover { background: #e8f1fd; color: #10457f; border-color: #1f6fde; }
+
+/* ── the dialog ──────────────────────────────────────────────────────────────────────────────── */
+.h10-ngr-back { position: fixed; inset: 0; z-index: 1300; background: rgba(28, 37, 48, .42); border: 0; padding: 0; cursor: pointer; }
+.h10-ngr {
+  position: fixed; z-index: 1301; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(620px, 94vw); max-height: 88vh; overflow-y: auto;
+  background: #fff; border: 1px solid #e3e7ec; border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(28, 37, 48, .22); padding: 0 20px 20px;
+}
+.h10-ngr-head { position: sticky; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 0 12px; background: #fff; border-bottom: 1px solid #e3e7ec; }
+.h10-ngr-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-ngr-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; color: #55606d; cursor: pointer; }
+.h10-ngr-close:hover:not(:disabled) { background: #e8f1fd; color: #10457f; }
+.h10-ngr-close:disabled { opacity: .5; cursor: not-allowed; }
+
+.h10-ngr-lede { margin: 14px 0 0; font-size: 13.5px; line-height: 1.6; color: #1c2530; }
+.h10-ngr-lede b { font-weight: 800; }
+.h10-ngr-facts { margin: 10px 0 0; padding: 10px 12px; background: #f1f4f8; border-radius: 9px; font-size: 12.5px; line-height: 1.65; color: #55606d; }
+.h10-ngr-facts b { font-weight: 800; color: #1c2530; }
+
+.h10-ngr-rem, .h10-ngr-warn, .h10-ngr-note, .h10-ngr-bad {
+  display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px;
+  border-radius: 8px; font-size: 12px; line-height: 1.6;
+}
+.h10-ngr-rem svg, .h10-ngr-warn svg, .h10-ngr-note svg, .h10-ngr-bad svg { flex: none; margin-top: 3px; }
+.h10-ngr-rem { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+/* Irreversibility is the loudest thing in this dialog, and it is the only red. */
+.h10-ngr-warn { background: #fdeeee; border: 1px solid #e8c4c4; color: #8a2020; }
+.h10-ngr-note { background: #f1f4f8; border: 1px solid #e3e7ec; color: #55606d; }
+.h10-ngr-bad { background: #fdeeee; border: 1px solid #e8c4c4; color: #8a2020; }
+.h10-ngr-rem b, .h10-ngr-warn b, .h10-ngr-bad b { font-weight: 800; }
+.h10-ngr-note b { font-weight: 800; color: #1c2530; }
+.h10-ngr-note code { padding: 0 3px; background: #e3e7ec; border-radius: 3px; font-size: 11px; }
+.h10-ngr-msg { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: #55606d; display: flex; align-items: center; gap: 7px; }
+.h10-ngr-msg b { font-weight: 800; color: #1c2530; }
+
+.h10-ngr-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
+.h10-ngr-pick .seg { padding: 5px 10px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font: inherit; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-ngr-pick .seg.on { background: #e8f1fd; border-color: #1f6fde; color: #10457f; }
+
+.h10-ngr-reason { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 0; }
+.h10-ngr-reason span { font-size: 11px; font-weight: 700; color: #667080; }
+.h10-ngr-reason input { padding: 8px 10px; background: #fff; border: 1px solid #e3e7ec; border-radius: 8px; font: inherit; font-size: 12.5px; color: #1c2530; }
+.h10-ngr-reason input:focus { outline: none; border-color: #1f6fde; }
+
+.h10-ngr-acts { display: flex; justify-content: flex-end; gap: 8px; margin: 16px 0 0; }
+
+/* ── the outcome report ──────────────────────────────────────────────────────────────────────── */
+.h10-ngr-sum { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.h10-ngr-sum .cell { display: flex; flex-direction: column; gap: 1px; padding: 8px 12px; border-radius: 9px; background: #f1f4f8; }
+.h10-ngr-sum .cell b { font-size: 17px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-ngr-sum .cell i { font-style: normal; font-size: 10.5px; font-weight: 700; color: #55606d; }
+.h10-ngr-sum .cell.retired { background: #e8f1fd; }
+.h10-ngr-sum .cell.retired b { color: #10457f; }
+.h10-ngr-sum .cell.local { background: #e7f5ed; }
+.h10-ngr-sum .cell.local b { color: #14724d; }
+/* 🔴 A refusal is a FACT, not an error, and must not look like a success that has not refreshed. */
+.h10-ngr-sum .cell.refused { background: #fff6e8; }
+.h10-ngr-sum .cell.refused b { color: #8a5316; }
+.h10-ngr-sum .cell.failed { background: #fdeeee; }
+.h10-ngr-sum .cell.failed b { color: #8a2020; }
+
+.h10-ngr-outcomes { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; max-height: 300px; overflow-y: auto; }
+.h10-ngr-outcomes li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; padding: 8px 11px; background: #fff; border: 1px solid #e3e7ec; border-radius: 9px; }
+.h10-ngr-outcomes li.refused { background: #fff6e8; border-color: #f0dcbe; }
+.h10-ngr-outcomes li.failed { background: #fdeeee; border-color: #e8c4c4; }
+.h10-ngr-outcomes .k { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 800; color: #55606d; white-space: nowrap; }
+.h10-ngr-outcomes li.refused .k { color: #8a5316; }
+.h10-ngr-outcomes li.failed .k { color: #8a2020; }
+.h10-ngr-outcomes .sc { font-size: 11.5px; font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngr-outcomes .rs { grid-column: 1 / -1; font-size: 10.5px; line-height: 1.5; color: #667080; }
+
+.h10-ngr .spin { animation: h10-ngr-spin 1s linear infinite; }
+@keyframes h10-ngr-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .h10-ngr { width: 96vw; }
+  .h10-ngr-sum .cell { flex: 1 1 40%; }
+}

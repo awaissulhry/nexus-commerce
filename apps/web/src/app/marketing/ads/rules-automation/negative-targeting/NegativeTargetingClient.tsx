@@ -34,13 +34,12 @@ import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { NegativeScopeBar, type NegScope, type ScopeOptionsPayload } from './NegativeScopeBar'
 import {
-  NO_WRITE_ACTIONS,
   type NegationRow, type TermRow, type NegCensus, type NegSlotProps, type NegGrain, type NegMatchType,
 } from './slot-contract'
 // The seven sections that follow. Each renders null until its session lands; each takes the same
 // typed props, so a later section is one file and one import line. Nobody restructures this client.
 import { NegTermDrawer } from './NegTermDrawer'
-import { NegRemoval } from './NegRemoval'
+import { NegRemoval, negWriteActions } from './NegRemoval'
 import { NegAttention } from './NegAttention'
 import { NegProtectedTerms } from './NegProtectedTerms'
 import { NegWastefulWords } from './NegWastefulWords'
@@ -489,8 +488,11 @@ export function NegativeTargetingClient() {
           selectable={false}
           /* NEG.3 supplies these. Declared in the contract on day one and passed as null here, so
              the removal and conflict sections ship without opening this file. */
-          selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
-          onRowClick={NO_WRITE_ACTIONS.onRowAction ?? undefined}
+          /* NEG.3b — the write seam NEG.1 declared on day one, now filled by NegRemoval.
+             `selectionActions` stays null on purpose: a bulk removal is issued from the drawer
+             against N explicit negation ids, never from a selection bar over a term row. */
+          selectionActions={negWriteActions(push).selectionActions ?? undefined}
+          onRowClick={negWriteActions(push).onRowAction ?? undefined}
           searchable
           searchPlaceholder="Search term, campaign or ad group…"
           searchValue={(r) => `${r.term} ${r.campaignName} ${r.adGroupName}`}
