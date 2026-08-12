@@ -170,9 +170,14 @@ export function checkCeiling(
   const remaining = cap - committed
 
   if (requestedCents > remaining) {
+    // Three phrasings, because one sentence cannot cover all three cases without reading oddly. The
+    // exercise run on prod produced "only €10.00 of €10.00 is left" with nothing committed — true,
+    // and confusing enough that it needed its own branch.
     const why = remaining <= 0
       ? `${money(cap)} is already fully committed`
-      : `only ${money(remaining)} of ${money(cap)} is left`
+      : committed === 0
+        ? `this request alone is over it`
+        : `only ${money(remaining)} of ${money(cap)} is left`
     return {
       verdict: 'REFUSED',
       message: `Refused — the ceiling for ${bound.label} is ${money(cap)} per day and ${why} (${money(committed)} committed today, ${money(requestedCents)} requested).${resolution.considered.length > 1 ? ` That is the ${bound.grain.toLowerCase()} ceiling, the most specific one set for this scope.` : ''}${dated}`,

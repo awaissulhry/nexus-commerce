@@ -22,6 +22,7 @@ import { createPortal } from 'react-dom'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TermChart, type TermPoint } from './TermChart'
+import { BidAction } from './BidAction'
 
 interface TermPayload {
   term: string
@@ -127,6 +128,11 @@ export function TermDrawer({
             <span>Brand Analytics has no row for this term in the week of {data.period ? dayMonth(data.period) : '—'}. The history below is everything it has ever reported.</span>
           </p>
         )}
+
+        {/* KT.6 — the only control on this page that can spend. Placed FIRST because it is now the
+            reason the drawer is opened; the read-only sections that follow are the evidence for it.
+            `unbid` comes from the payload the drawer already has, so no extra fetch decides the shape. */}
+        {data && <BidAction term={term} market={market} unbid={data.bid.unbid} />}
 
         {data && s && (
           <section className="h10-kt-drsec">

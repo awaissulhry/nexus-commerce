@@ -238,6 +238,15 @@ describe('checkCeiling — the refusal is specific, and names which ceiling boun
     expect(r.message).toContain('€25.00 left afterwards')
   })
 
+  it('does not say "only €X of €X is left" when nothing is committed', () => {
+    // Found by the prod exercise run, not by reading: with €0 committed and a €10 cap, the first
+    // version produced "only €10.00 of €10.00 is left", which is true and reads as a contradiction.
+    const r = checkCeiling(res, { committedCents: 0 }, 6000)
+    expect(r.verdict).toBe('REFUSED')
+    expect(r.message).toContain('this request alone is over it')
+    expect(r.message).not.toContain('€40.00 of €40.00')
+  })
+
   it('says "fully committed" rather than a negative remainder', () => {
     const r = checkCeiling(res, { committedCents: 4200 }, 100)
     expect(r.message).toContain('already fully committed')

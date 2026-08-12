@@ -4048,3 +4048,77 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-hva-head { flex-direction: column; }
   .h10-hva-dial { align-items: flex-start; }
 }
+
+/* ── KT.6 · the bid action, inside the KT.4 drawer ───────────────────────────────────────────────
+   🔴 Every colour is DECLARED, never inherited: the drawer portals to document.body and escapes the
+   page's light pin, so an inherited colour renders dark on a light panel. KT.4 paid for that once.
+   Appended at EOF per the section's convention — an override must sit at the END of what it
+   overrides, and source order beats specificity here. */
+.h10-kt6-row { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; }
+.h10-kt6-lab { font-size: 12px; font-weight: 700; color: #1c2530; }
+.h10-kt6-cur { font-size: 13px; font-weight: 700; color: #55606d; }
+.h10-kt6-in {
+  width: 76px; padding: 5px 8px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: #1c2530; background: #fff; border: 1px solid #c9d2de; border-radius: 5px;
+}
+.h10-kt6-in:focus { outline: 2px solid #1f6fde; outline-offset: -1px; border-color: #1f6fde; }
+.h10-kt6-spin { color: #55606d; }
+.h10-kt6-warn { margin: 0 0 9px; font-size: 11px; font-weight: 600; color: #9a3412; }
+
+.h10-kt6-check { display: flex; gap: 7px; align-items: flex-start; margin: 0 0 11px; cursor: pointer; }
+.h10-kt6-check input { margin-top: 2px; flex: 0 0 auto; }
+.h10-kt6-check span { font-size: 11px; line-height: 1.5; color: #1c2530; }
+.h10-kt6-check i { display: block; font-style: normal; color: #55606d; }
+
+/* the blast radius — the loudest thing in the drawer, because it is the thing that spends */
+.h10-kt6-radius { padding: 10px 12px; background: #f4f7fb; border: 1px solid #d8e2ef; border-radius: 6px; margin: 0 0 10px; }
+.h10-kt6-nums { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+.h10-kt6-big { font-size: 19px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-kt6-of { font-size: 11px; font-weight: 600; color: #55606d; }
+.h10-kt6-sep { color: #a9b4c2; }
+.h10-kt6-commit { margin-left: auto; font-size: 11px; font-weight: 700; color: #1c2530; background: #e8f1fd; border: 1px solid #c5dcfa; border-radius: 4px; padding: 2px 7px; }
+.h10-kt6-say { margin: 0; font-size: 11.5px; line-height: 1.65; color: #1c2530; }
+
+.h10-kt6-reasons { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.h10-kt6-reasons li { font-size: 10.5px; font-weight: 600; color: #55606d; background: #f1f4f8; border: 1px solid #dde4ec; border-radius: 4px; padding: 2px 7px; }
+.h10-kt6-reasons b { color: #1c2530; }
+
+.h10-kt6-hint { margin: 0 0 10px; font-size: 11px; color: #55606d; }
+.h10-kt6-hint button { font: inherit; font-weight: 700; color: #1a5fbe; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+
+/* three states, three colours — a refusal must not look like a note */
+.h10-kt6-blind, .h10-kt6-note, .h10-kt6-ok {
+  display: flex; gap: 7px; align-items: flex-start; margin: 0 0 10px; padding: 8px 10px;
+  border-radius: 5px; font-size: 11.5px; line-height: 1.6;
+}
+.h10-kt6-blind { color: #7f1d1d; background: #fef2f2; border: 1px solid #fecaca; }
+.h10-kt6-note  { color: #1c2530; background: #f6f8fb; border: 1px solid #dde4ec; }
+.h10-kt6-ok    { color: #14532d; background: #f0fdf4; border: 1px solid #bbf7d0; }
+.h10-kt6-blind svg, .h10-kt6-note svg, .h10-kt6-ok svg { flex: 0 0 auto; margin-top: 2px; }
+.h10-kt6-none { display: flex; gap: 7px; align-items: flex-start; margin: 0; padding: 9px 11px; border-radius: 5px; font-size: 11.5px; line-height: 1.65; color: #1c2530; background: #f6f8fb; border: 1px solid #dde4ec; }
+.h10-kt6-none svg { flex: 0 0 auto; margin-top: 2px; color: #55606d; }
+.h10-kt6-none b { display: block; margin-bottom: 3px; }
+
+.h10-kt6-det { margin: 0 0 10px; }
+.h10-kt6-det summary { font-size: 11px; font-weight: 700; color: #1a5fbe; cursor: pointer; }
+.h10-kt6-tbl { width: 100%; border-collapse: collapse; margin-top: 7px; font-size: 10.5px; }
+.h10-kt6-tbl th { text-align: left; padding: 4px 6px; font-weight: 700; color: #55606d; border-bottom: 1px solid #dde4ec; white-space: nowrap; }
+.h10-kt6-tbl td { padding: 4px 6px; color: #1c2530; border-bottom: 1px solid #eef2f7; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-kt6-tbl th.n, .h10-kt6-tbl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.h10-kt6-trunc { margin: 6px 0 0; font-size: 10.5px; color: #55606d; }
+
+.h10-kt6-go {
+  width: 100%; padding: 9px 12px; font-size: 12px; font-weight: 800; cursor: pointer;
+  color: #fff; background: #1a5fbe; border: 1px solid #1a5fbe; border-radius: 6px;
+}
+.h10-kt6-go:disabled { color: #6b7280; background: #eef1f5; border-color: #dde4ec; cursor: not-allowed; }
+
+/* the confirm sits in the drawer's own flow, NOT fixed — a fixed overlay inside a portalled drawer
+   renders behind it (KT.4's drawer-confirm trap) */
+.h10-kt6-confirm { padding: 11px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; }
+.h10-kt6-confirm p { margin: 0 0 9px; font-size: 11.5px; line-height: 1.65; color: #1c2530; }
+.h10-kt6-cbtns { display: flex; gap: 7px; }
+.h10-kt6-cbtns .yes { padding: 7px 12px; font-size: 11.5px; font-weight: 800; color: #fff; background: #b45309; border: 1px solid #b45309; border-radius: 5px; cursor: pointer; }
+.h10-kt6-cbtns .yes:disabled { opacity: .6; cursor: not-allowed; }
+.h10-kt6-cbtns .no { display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; font-size: 11.5px; font-weight: 700; color: #55606d; background: #fff; border: 1px solid #d8e2ef; border-radius: 5px; cursor: pointer; }
+.h10-kt6-foot { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: #55606d; }
