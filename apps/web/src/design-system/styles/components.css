@@ -1281,9 +1281,12 @@
 .h10-ds-burn { display: flex; flex-direction: column; gap: 6px; }
 .h10-ds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .h10-ds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); }
+/* The hue arrives as `--c` so the dash gradient survives; an inline `background` shorthand would
+   reset `background-image` and render every swatch solid. */
 .h10-ds-burn-key .ln { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
+.h10-ds-burn-key .ln.solid { background: var(--c); }
 /* The dashed marks repeat the line's own dash pattern, so the key reads as the chart does. */
-.h10-ds-burn-key .ln.dash { background-image: linear-gradient(90deg, currentColor 0 5px, transparent 5px 9px); }
+.h10-ds-burn-key .ln.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }
 .h10-ds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--surface-raised, #fff); border: 1px solid var(--border-default, #e3e7ec); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
 .h10-ds-burn-tip b { font-size: 11px; font-weight: 800; color: var(--text-primary); }
 .h10-ds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }

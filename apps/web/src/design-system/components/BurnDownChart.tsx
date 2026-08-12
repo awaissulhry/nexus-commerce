@@ -25,6 +25,7 @@
  * A legend is always rendered, so no series is identified by colour alone.
  */
 
+import type { CSSProperties } from 'react'
 import {
   ComposedChart, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -130,7 +131,10 @@ export function BurnDownChart({
               y={capValue}
               stroke={HUE_CAP}
               strokeDasharray="5 4"
-              label={{ value: capLabel ?? format(capValue), position: 'insideTopRight', fontSize: 10, fill: HUE_CAP }}
+              // Left, not right: a cumulative chart's lines END high, so a right-aligned label sits
+              // exactly where the actual and projected series arrive. The left of the plot is empty
+              // by construction — day 1 of a cumulative series is always at the bottom.
+              label={{ value: capLabel ?? format(capValue), position: 'insideTopLeft', fontSize: 10, fill: HUE_CAP }}
             />
           )}
 
@@ -144,12 +148,15 @@ export function BurnDownChart({
       </ResponsiveContainer>
 
       {/* Always present: four marks, three of which share two hues, so colour alone never identifies. */}
+      {/* 🔴 The hue goes in as a custom property, NOT as `background`. The shorthand resets
+          `background-image`, which is what draws the dash — so an inline `background` made every
+          swatch solid and left "Spent" and "Projected" (which share a hue by design) identical. */}
       <div className="h10-ds-burn-key">
-        <span><i className="ln solid" style={{ background: HUE_ACTUAL }} aria-hidden="true" />Spent</span>
-        <span><i className="ln dash" style={{ background: HUE_ACTUAL }} aria-hidden="true" />Projected</span>
-        <span><i className="ln dash" style={{ background: INK_REFERENCE }} aria-hidden="true" />Planned pace</span>
+        <span><i className="ln solid" style={{ '--c': HUE_ACTUAL } as CSSProperties} aria-hidden="true" />Spent</span>
+        <span><i className="ln dash" style={{ '--c': HUE_ACTUAL } as CSSProperties} aria-hidden="true" />Projected</span>
+        <span><i className="ln dash" style={{ '--c': INK_REFERENCE } as CSSProperties} aria-hidden="true" />Planned pace</span>
         {capValue != null && capValue > 0 && (
-          <span><i className="ln dash" style={{ background: HUE_CAP }} aria-hidden="true" />Cap</span>
+          <span><i className="ln dash" style={{ '--c': HUE_CAP } as CSSProperties} aria-hidden="true" />Cap</span>
         )}
       </div>
     </div>
