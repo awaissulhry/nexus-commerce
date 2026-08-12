@@ -71,6 +71,9 @@
  */
 
 import prisma from '../../db.js'
+// HV.2 — the stored criteria. Kept in its own module because HV.4 (the write path) and any later
+// engine repair must resolve the SAME policy this page renders, and a copy would drift.
+import { resolveHarvestPolicy, type HarvestCriteria, type HvPolicyGrain } from './harvest-policy.service.js'
 
 /** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
 export const HV_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
@@ -312,6 +315,39 @@ export interface HvPayload {
   window: { days: number; since: string; until: string }
   thresholds: { minOrders: number; minSpendEur: number }
   /**
+   * HV.2 — the criteria in force for this view, and where each half came from.
+   *
+   * `inForce` is what the grid actually applied. `policy` is what would apply with no URL
+   * overrides at all, plus which grain supplied it. `overridden` names the criteria the URL is
+   * currently changing, so the page can mark them and offer to save them.
+   */
+  criteria: {
+    inForce: HarvestCriteria
+    policy: {
+      criteria: HarvestCriteria
+      source: HvPolicyGrain | 'default'
+      sourceScopeId: string | null
+      /** a row exists at the most specific grain the operator picked → offer "update", not "create" */
+      hasOwn: boolean
+      /** the grain a Save would write to, given what is picked right now */
+      saveGrain: HvPolicyGrain
+      saveScopeId: string | null
+      updatedAt: string | null
+      updatedBy: string | null
+    }
+    overridden: string[]
+  }
+  /**
+   * Per-criterion attrition. **A single surviving count tells you nothing about which knob to
+   * turn** — this is what makes the controls legible rather than decorative.
+   */
+  attrition: {
+    base: number
+    baseLabel: string
+    /** `removedNew` is how many of that step's removals were `new` — see the note in applyCriteria */
+    steps: Array<{ key: string; label: string; removed: number; remaining: number; removedNew: number }>
+  }
+  /**
    * 🔴 Computed, never stated as a constant. The study said "1 day old"; one day later it was two,
    * because `ads-v1-export-ingest` has returned `ingested=0 rows=0` on every run since
    * 2026-08-11T01:52. A page that hard-codes the age is wrong within 24 hours.
@@ -331,8 +367,24 @@ export interface HvPayload {
 }
 
 export interface HvRequest extends HvScopeRequest {
+  /**
+   * 🔴 HV.2 — the FILTER, not the policy.
+   *
+   * Each of these is an override of the criterion the resolved policy supplies. Absent means "use
+   * the policy", never "use a hard-coded default" — the defaults live in
+   * `harvest-policy.service.ts` and are reached only when no policy row exists at any grain.
+   *
+   * The two are deliberately separate all the way down: a URL override changes this view and binds
+   * nothing, a policy changes the default for everyone in that scope. Composing them here rather
+   * than in the client means the server always knows which is which, and can say so.
+   */
   windowDays?: number | null
   minOrders?: number | null
+  minClicks?: number | null
+  /** `'none'` explicitly clears the ceiling for this view; absent leaves the policy's in place. */
+  maxAcosPct?: number | 'none' | null
+  /** 'harvestable' excludes candidates whose every order arrived via an EXACT match; 'all' keeps them. */
+  matched?: 'all' | 'harvestable' | null
   minSpendEur?: number | null
   status?: HvStatus | 'all' | null
   kind?: HvKind | 'all' | null
@@ -344,8 +396,10 @@ export interface HvRequest extends HvScopeRequest {
 export type HvSortKey = 'term' | 'market' | 'source' | 'impressions' | 'clicks' | 'spend' | 'orders' | 'sales' | 'acos' | 'cpc' | 'status' | 'negated' | 'kind'
 
 const MAX_ROWS = 2000
-const DEFAULT_WINDOW_DAYS = 60
-const DEFAULT_MIN_ORDERS = 2
+// 🔴 The graduation defaults moved to `harvest-policy.service.ts` (HV_DEFAULT_CRITERIA) so there is
+// ONE place a threshold is decided. Only the negation threshold stays here, and only because it is
+// used solely for the D4 census figure this page links out with — Negative Targeting owns the
+// control, and this page renders none.
 const DEFAULT_MIN_SPEND_EUR = 15
 
 const tally = <T, K extends string>(xs: T[], f: (x: T) => K | null): Array<{ value: K; count: number }> => {
@@ -358,9 +412,32 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   // 30 / 60 / 90 only. An arbitrary window would make two links incomparable, and the account
   // produces 14 double-order terms in SIXTY days — a 7-day harvest window here is a random-number
   // generator (page study §5.3).
-  const windowDays = [30, 60, 90].includes(Number(req.windowDays)) ? Number(req.windowDays) : DEFAULT_WINDOW_DAYS
-  const minOrders = req.minOrders != null && Number(req.minOrders) >= 1 ? Math.floor(Number(req.minOrders)) : DEFAULT_MIN_ORDERS
+  // 🔴 The policy first, then the URL on top of it. Order matters: the policy is the DEFAULT this
+  // view starts from, and every URL param is an explicit, temporary override of one of its fields.
+  // Resolving in the other direction would make a saved policy invisible whenever a link happened
+  // to carry a param.
+  const policy = await resolveHarvestPolicy({
+    market: req.market, line: req.line, portfolio: req.portfolio, campaign: req.campaign, adGroup: req.adGroup,
+  })
+  const pc = policy.criteria
+
+  const windowDays = [30, 60, 90].includes(Number(req.windowDays)) ? Number(req.windowDays) : pc.windowDays
+  const minOrders = req.minOrders != null && Number(req.minOrders) >= 1 ? Math.floor(Number(req.minOrders)) : pc.minOrders
+  const minClicks = req.minClicks != null && Number(req.minClicks) >= 0 ? Math.floor(Number(req.minClicks)) : pc.minClicks
+  // 'none' is how a view says "no ceiling" out loud. Without it, clearing the ceiling and never
+  // having had one would be the same URL, and a link could not carry the difference.
+  const maxAcosPct = req.maxAcosPct === 'none' ? null
+    : (req.maxAcosPct != null && Number(req.maxAcosPct) > 0 ? Math.floor(Number(req.maxAcosPct)) : pc.maxAcosPct)
+  const excludeExactMatched = req.matched === 'all' ? false : req.matched === 'harvestable' ? true : pc.excludeExactMatched
   const minSpendEur = req.minSpendEur != null && Number(req.minSpendEur) >= 0 ? Number(req.minSpendEur) : DEFAULT_MIN_SPEND_EUR
+
+  /** Which criteria this VIEW is overriding, so the page can mark them and offer to save them. */
+  const overridden: string[] = []
+  if (windowDays !== pc.windowDays) overridden.push('windowDays')
+  if (minOrders !== pc.minOrders) overridden.push('minOrders')
+  if (minClicks !== pc.minClicks) overridden.push('minClicks')
+  if (maxAcosPct !== pc.maxAcosPct) overridden.push('maxAcosPct')
+  if (excludeExactMatched !== pc.excludeExactMatched) overridden.push('excludeExactMatched')
   const minSpendCents = Math.round(minSpendEur * 100)
   const until = new Date()
   const since = new Date(until.getTime() - windowDays * 86_400_000)
@@ -567,7 +644,77 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
 
   // ── the candidate sets. Graduations are rows; wasteful negatives are counted and linked out
   // (D4) and never rendered here.
-  const graduationAggs = all.filter((a) => a.orders >= minOrders)
+  /**
+   * 🔴 The match-type criterion, stated once so the grid, the census and the attrition cannot
+   * drift apart.
+   *
+   * A term is harvestable only where it arrived through a LOOSER match than the one we would
+   * create: auto and product-expression → PHRASE/EXACT, BROAD → PHRASE/EXACT, PHRASE → EXACT.
+   * A term whose EVERY order arrived via EXACT is not harvestable as a keyword — the traffic came
+   * through the very keyword the row is offering to create.
+   *
+   * Aggregation reading, measured both ways before choosing (`_hv-2-criteria.mts`):
+   *   A "every order came via EXACT"  excludes 5 of 17 at 2+ orders, 12 of 92 at 1+   ← CHOSEN
+   *   B "any order came via EXACT"    excludes 6 / 13
+   *   C "no LOOSER match at all"      excludes 5 / 12
+   * A and C agree exactly. B is stricter by one row — `motorrad jacke`, EXACT=7 and BROAD=2 —
+   * and those two BROAD orders are precisely the looser-match evidence harvesting looks for.
+   * Discarding the term because it ALSO has a converting exact keyword throws away the signal.
+   * A is also what `exactMatchedOnly` already reports on every row, so the page stays coherent.
+   *
+   * ⚠ Product candidates are exempt. An ASIN's match type is TARGETING_EXPRESSION*, never a
+   * keyword match type, and the account's ONE genuinely-new candidate is a product target — a
+   * keyword rule must not silently exclude it.
+   */
+  const isHarvestableByMatch = (a: Agg): boolean => {
+    if (isAsinQuery(a.query)) return true
+    return !(a.orders > 0 && (a.byMatch.get('EXACT') ?? 0) === a.orders)
+  }
+  const acosOf = (a: Agg): number | null => (a.salesCents > 0 ? (a.costCents / a.salesCents) * 100 : null)
+
+  /**
+   * The criteria, applied in the order the operator reads them. Returns the survivors and the
+   * per-step attrition, because **a single surviving count tells you nothing about which knob to
+   * turn** — "17 → 12" is useless where "orders removes 0 · clicks removes 1 · ACoS removes 0 ·
+   * exact-matched removes 5" is a decision.
+   */
+  const applyCriteria = (list: Agg[], c: { minOrders: number; minClicks: number; maxAcosPct: number | null; excludeExactMatched: boolean }) => {
+    const steps: Array<{ key: string; label: string; removed: number; remaining: number; removedNew: number }> = []
+    let pool = list
+    const step = (key: string, label: string, keep: (a: Agg) => boolean) => {
+      const before = pool.length
+      const dropped = pool.filter((a) => !keep(a))
+      pool = pool.filter(keep)
+      // 🔴 How many of the rows this step removed were `new` — the only status that represents a
+      // keyword that does not exist yet, which is the entire point of the page.
+      //
+      // This is not decoration. Measured on prod 2026-08-12: the account holds exactly ONE
+      // genuinely-new candidate at 2+ orders, and the shipped `minClicks: 3` removes it (2 orders
+      // on 1 click). A criteria bar that silently took the page's only real finding off the screen
+      // would be the most expensive kind of honest-looking control. The operator gets told, on the
+      // step that did it, and can relax that one criterion to see it.
+      const removedNew = dropped.filter((a) => resolveStatus(a, isAsinQuery(a.query) ? 'product' : 'keyword').status === 'new').length
+      steps.push({ key, label, removed: before - pool.length, remaining: pool.length, removedNew })
+    }
+    step('minOrders', `${c.minOrders}+ order${c.minOrders === 1 ? '' : 's'}`, (a) => a.orders >= c.minOrders)
+    step('minClicks', c.minClicks > 0 ? `${c.minClicks}+ clicks` : 'any clicks', (a) => a.clicks >= c.minClicks)
+    step(
+      'maxAcosPct',
+      c.maxAcosPct == null ? 'no ACoS ceiling' : `ACoS ≤ ${c.maxAcosPct}%`,
+      // 🔴 A candidate with orders but NO attributed sales has no ACoS. It is KEPT. Excluding on a
+      // missing measurement is the blank-is-not-a-zero failure in filter form.
+      (a) => { if (c.maxAcosPct == null) return true; const v = acosOf(a); return v == null ? true : v <= c.maxAcosPct },
+    )
+    step('excludeExactMatched', c.excludeExactMatched ? 'arrived via a looser match' : 'any match type', (a) => (c.excludeExactMatched ? isHarvestableByMatch(a) : true))
+    return { pool, steps }
+  }
+
+  // The universe every criterion narrows: terms that converted at all inside this scope. Stated as
+  // the attrition's base so the first step's removal is legible instead of dwarfing the rest.
+  const converted = all.filter((a) => a.orders >= 1)
+  const current = { minOrders, minClicks, maxAcosPct, excludeExactMatched }
+  const applied = applyCriteria(converted, current)
+  const graduationAggs = applied.pool
   const rowsAll = graduationAggs.map(toRow)
 
   const negativeAggs = all.filter((a) => a.orders === 0 && a.costCents >= minSpendCents)
@@ -575,7 +722,11 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   const keywordNegatives = negativeAggs.filter((a) => !isAsinQuery(a.query))
 
   // ── the one-order view, computed over the same scope. This is the page's argument.
-  const oneOrder = all.filter((a) => a.orders >= 1 && !isAsinQuery(a.query)).map(toRow)
+  //
+  // 🔴 It holds every OTHER criterion at its current value and moves only `minOrders`, so the
+  // "At 1+ order" link on the page lands on exactly the count the sentence promised. Computing it
+  // over the raw set instead would make the link a lie the moment any other criterion was on.
+  const oneOrder = applyCriteria(converted, { ...current, minOrders: 1 }).pool.filter((a) => !isAsinQuery(a.query)).map(toRow)
   const withoutKeywordInSource = oneOrder.filter((r) => r.status !== 'already-exact-here')
   const oneSpend = withoutKeywordInSource.reduce((s, r) => s + r.metrics.spendCents, 0)
   const oneSales = withoutKeywordInSource.reduce((s, r) => s + r.metrics.salesCents, 0)
@@ -698,6 +849,28 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
     },
     window: { days: windowDays, since: since.toISOString(), until: until.toISOString() },
     thresholds: { minOrders, minSpendEur },
+    criteria: {
+      inForce: { minOrders, minClicks, maxAcosPct, windowDays, excludeExactMatched },
+      policy: {
+        criteria: pc,
+        source: policy.source,
+        sourceScopeId: policy.sourceScopeId,
+        hasOwn: policy.hasOwn,
+        // What a Save would write to: the narrowest grain the operator actually picked. Not
+        // `boundBy` — that is about which grain decided the ROWS, and the two differ whenever a
+        // coarser grain is also selected.
+        saveGrain: req.adGroup ? 'adGroup' : req.campaign ? 'campaign' : req.portfolio ? 'portfolio' : req.line ? 'line' : (req.market && req.market !== HV_MARKET_ALL) ? 'market' : 'account',
+        saveScopeId: req.adGroup || req.campaign || req.portfolio || req.line || (req.market !== HV_MARKET_ALL ? req.market : null),
+        updatedAt: policy.updatedAt,
+        updatedBy: policy.updatedBy,
+      },
+      overridden,
+    },
+    attrition: {
+      base: converted.length,
+      baseLabel: `term${converted.length === 1 ? '' : 's'} that converted at least once in this scope`,
+      steps: applied.steps,
+    },
     freshness: {
       newestTermDate: newest ? newest.toISOString() : null,
       ageDays,

@@ -14,6 +14,7 @@ import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-a
 import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
 import { getNegatives, getTermContext, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
 import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
+import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
 import {
   getBidGrid, getBidCursorForRequest, BID_MARKETS, BID_MARKET_ALL, BID_BANDS,
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
@@ -742,6 +743,64 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // underneath move once a night at most.
     reply.header('Cache-Control', 'private, max-age=60')
     return out
+  })
+
+  // ── HV.2 — the harvest policy ───────────────────────────────────────
+  //
+  // 🔴 The policy is NOT the filter. `GET /advertising/keyword-harvest` already returns the
+  // criteria in force for a view, because the view composes a stored policy with whatever the URL
+  // overrides. These three routes are about the STORED half only: what is saved, where, and by
+  // whom. Keeping them separate is what stops a URL override from ever looking like a decision.
+  fastify.get('/advertising/harvest-policy', async (request) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
+    const [resolved, all] = await Promise.all([
+      resolveHarvestPolicy({ market, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null }),
+      listHarvestPolicies(),
+    ])
+    // Every policy that exists, not just the one in force: the save dialog has to be able to say
+    // "you already have one at IT" before an operator creates a second at a narrower grain and
+    // wonders why nothing changed.
+    return { resolved, policies: all, defaults: HV_DEFAULT_CRITERIA }
+  })
+
+  fastify.put('/advertising/harvest-policy', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    try {
+      const saved = await saveHarvestPolicy({
+        scopeGrain: String(b.scopeGrain ?? '') as HvPolicyGrain,
+        scopeId: b.scopeId == null ? null : String(b.scopeId),
+        criteria: {
+          minOrders: Number(b.minOrders),
+          minClicks: Number(b.minClicks),
+          maxAcosPct: b.maxAcosPct == null || b.maxAcosPct === '' ? null : Number(b.maxAcosPct),
+          windowDays: Number(b.windowDays),
+          excludeExactMatched: b.excludeExactMatched !== false,
+        },
+        updatedBy: `user:${userId}`,
+      })
+      return { ok: true, saved }
+    } catch (e) {
+      const err = e as { code?: string; message?: string }
+      reply.status(400)
+      return { ok: false, error: err.message ?? 'could not save the policy', code: err.code ?? 'bad_request' }
+    }
+  })
+
+  // Removing an override is how a scope goes back to inheriting. Without it a saved policy would
+  // be permanent, which is the "cannot be undone" class of control this section keeps deleting.
+  fastify.delete('/advertising/harvest-policy', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    try {
+      const out = await deleteHarvestPolicy(String(q.scopeGrain ?? '') as HvPolicyGrain, q.scopeId ?? null)
+      return { ok: true, ...out }
+    } catch (e) {
+      const err = e as { code?: string; message?: string }
+      reply.status(err.code === 'not_found' ? 404 : 400)
+      return { ok: false, error: err.message ?? 'could not remove the policy', code: err.code ?? 'bad_request' }
+    }
   })
 
   // ── BID.S0 — the poll cursor ────────────────────────────────────────
