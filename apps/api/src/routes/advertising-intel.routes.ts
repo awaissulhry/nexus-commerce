@@ -13,6 +13,11 @@ import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from 
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
 import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
 import { getNegatives, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
+import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
+import {
+  getBidGrid, getBidCursorForRequest, BID_MARKETS, BID_MARKET_ALL, BID_BANDS,
+  type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
+} from '../services/advertising/bid-grid.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
@@ -375,6 +380,84 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // Short private cache. The base is 2,059 rows joined up to the campaign graph and it changes
     // only when an ingest ticks or an operator acts.
     reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── BID.S0 — the Bid page's one read ────────────────────────────────
+  //
+  // Here rather than in advertising.routes.ts for the reason KT.1 and NEG.1 are: a duplicate route
+  // in that 600 KB file is a boot crash, not a warning, and it sees heavy concurrent edits.
+  //
+  // Not a variant of `GET /advertising/targets`: that route caps at 2,000 rows against 3,154
+  // positive targets, has NO orderBy so the truncation is non-deterministic, filters by a single
+  // campaignId and by nothing else — no market, portfolio, product line or status — and has no
+  // aggregate for the campaign roll-up. See the service header.
+  //
+  // One call carries the resolved scope, the census over the FULL scope, facet counts that exclude
+  // their own dimension, the rows, and the poll cursor — so the page can state what it is showing
+  // without a second fetch, and no number it renders is computed from a page of rows.
+  fastify.get('/advertising/bid-grid', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === BID_MARKET_ALL ? BID_MARKET_ALL : raw.toUpperCase()
+    if (market !== BID_MARKET_ALL && !BID_MARKETS.includes(market as (typeof BID_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${BID_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    // Multi-valued chips arrive comma-separated. Deliberately NOT validated against an enum: the
+    // account holds 13 distinct expressionType values and 7 kinds, both sets grow when Amazon adds
+    // a targeting form, and a hard-coded list would silently drop rows behind a filter that looks
+    // complete. The service matches on equality, so an unknown value simply returns nothing.
+    const list = (v: string | undefined): string[] =>
+      (v ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    const windowDays = oneOf(q.window, ['7', '30', '60'] as const)
+    const out = await getBidGrid({
+      market,
+      line: q.line || null,
+      portfolio: q.portfolio || null,
+      campaign: q.campaign || null,
+      view: (oneOf(q.view, ['targets', 'campaigns'] as const) ?? 'targets') as BidView,
+      status: (oneOf(q.status, ['enabled', 'paused', 'archived', 'all'] as const) ?? 'enabled') as BidStatusFilter,
+      kind: list(q.kind),
+      match: list(q.match),
+      band: oneOf(q.band, BID_BANDS) as BidBand | null,
+      measured: (oneOf(q.measured, ['yes', 'no', 'all'] as const) ?? 'all') as BidMeasured,
+      q: q.q || null,
+      windowDays: windowDays ? Number(windowDays) : 30,
+      sort: q.sort || null,
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+      limit: Math.max(1, Math.min(5000, Number(q.limit ?? 5000))),
+    })
+    // Short private cache. The base is a full scan of the positive targets joined to the campaign
+    // graph and one grouped read of the daily performance table.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── BID.S0 — the poll cursor ────────────────────────────────────────
+  //
+  // Three cheap aggregates, ~100 bytes, meant to be hit every 45 s by every open tab. The grid read
+  // is not. Separate endpoint rather than a `?cursorOnly=1` on the one above so it cannot
+  // accidentally acquire the expensive parts of that handler later.
+  //
+  // 🔴 It reports `AdTarget.updatedAt`, not just the audit log, because the hourly inbound resync
+  // moves the bid and writes no audit row — measured 1h53m of drift between the two on 2026-08-12.
+  // See the service header. Not SSE: that bus carries 0.21% of writes.
+  fastify.get('/advertising/bid-grid/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === BID_MARKET_ALL ? BID_MARKET_ALL : raw.toUpperCase()
+    if (market !== BID_MARKET_ALL && !BID_MARKETS.includes(market as (typeof BID_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${BID_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const out = await getBidCursorForRequest({
+      market, line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
+    })
+    // No cache at all: a cached cursor is a cursor that cannot detect a change, which is its only job.
+    reply.header('Cache-Control', 'no-store')
     return out
   })
 
