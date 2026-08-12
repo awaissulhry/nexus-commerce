@@ -248,5 +248,36 @@ const q = await getPlacementGrid({
 })
 console.log(`  q=GALE → ${q.rows.length} rows over ${new Set(q.rows.map((r) => r.campaignId)).size} campaigns (a multiple of 3: ${q.rows.length % 3 === 0})`)
 
+/**
+ * 🔴 The search narrows the ROWS and must never narrow the COUNTS.
+ *
+ * Found by typing into the box on production, not here: with the counts computed over the searched
+ * set, `?q=zzzz` collapsed `campaigns` to 0 and the page told the operator to widen a scope that
+ * held 220. A count that moves when you type answers a different question from the one its label
+ * asks. Pinned in both directions — a matching search and a matching-nothing one.
+ */
+console.log('')
+const qNone = await getPlacementGrid({
+  market: PLC_MARKET_ALL, line: null, portfolio: null, campaign: null,
+  preset: 'custom', start, end, lane: 'all', q: 'zzzznothingmatchesthis', sort: null, dir: 'desc',
+})
+pass = check('q=GALE leaves `campaigns` alone', q.counts.campaigns, all.counts.campaigns) && pass
+pass = check('q=GALE leaves `carrying` alone', q.counts.carrying, all.counts.carrying) && pass
+pass = check('q=GALE leaves `unmanaged` alone', q.counts.unmanaged, all.counts.unmanaged) && pass
+pass = check('q=GALE sets matchedCampaigns', q.counts.matchedCampaigns, q.rows.length / 3) && pass
+pass = check('q=<no match> leaves `campaigns`', qNone.counts.campaigns, all.counts.campaigns) && pass
+pass = check('q=<no match> → 0 rows', qNone.rows.length, 0) && pass
+pass = check('q=<no match> → 0 matched', qNone.counts.matchedCampaigns, 0) && pass
+pass = check('q=<no match> keeps dataThrough', qNone.dataThrough, all.dataThrough) && pass
+console.log(`  → the empty grid can now say "220 campaigns in this scope, the search hides all of them" rather than "no campaigns in this scope"`)
+
+// The lane filter is the same rule: it narrows rows, never counts.
+const laneOnly = await getPlacementGrid({
+  market: PLC_MARKET_ALL, line: null, portfolio: null, campaign: null,
+  preset: 'custom', start, end, lane: 'rest', q: null, sort: null, dir: 'desc',
+})
+pass = check('lane=rest leaves `carrying` alone', laneOnly.counts.carrying, all.counts.carrying) && pass
+pass = check('lane=rest → one row per campaign', laneOnly.rows.length, all.counts.campaigns) && pass
+
 await prisma.$disconnect()
 console.log(`\n═══ ${pass ? 'ALL §5.5 CHECKS PASSED' : '🔴 AT LEAST ONE §5.5 CHECK FAILED — do not build UI on this'} — read-only, nothing written ═══\n`)

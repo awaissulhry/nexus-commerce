@@ -182,8 +182,11 @@ export interface PlcPayload {
    */
   dataThrough: string | null
   counts: {
+    /** the resolved SCOPE. Never moved by `?q=` — see the block above the needle. */
     campaigns: number
-    /** 🔴 hour-dependent — see `engine` below and the block above `readEngineReceipt` */
+    /** what `?q=` left of it. The only count the search touches. */
+    matchedCampaigns: number
+    /** 🔴 hour-dependent — see `engine` below */
     carrying: number
     /** 🔴 hour-dependent for the same reason: it is `carrying` ∩ governed */
     governed: number
@@ -469,12 +472,28 @@ export async function getPlacementGrid(req: PlcRequest): Promise<PlcPayload> {
     orderBy: { name: 'asc' },
   })
 
-  // The name filter is applied to the CAMPAIGN before the lanes are expanded, so a search always
-  // returns whole campaigns (three rows) rather than an arbitrary subset of one campaign's lanes.
+  /**
+   * 🔴 The search narrows the ROWS. It must never narrow the COUNTS.
+   *
+   * Caught by typing into the box on production, not by reading this file: with `?q=` matching
+   * nothing, `counts` were computed over the searched set, so the page read
+   * *"0 campaigns · 0 carrying a multiplier · 0 governed by nothing"* over a 220-campaign scope
+   * and offered "widen the scope" when the thing to clear was the search. A count that moves when
+   * you type is answering a different question from the one its label asks — the exact defect this
+   * page exists to remove, reproduced inside it.
+   *
+   * So: every count below is over `campaigns` (the resolved scope). Only `rows` and
+   * `matchedCampaigns` see the needle.
+   *
+   * The filter is applied to the CAMPAIGN before the lanes are expanded, so a search always returns
+   * whole campaigns — three rows — rather than an arbitrary subset of one campaign's lanes.
+   */
   const needle = (req.q ?? '').trim().toLowerCase()
   const matched = needle ? campaigns.filter((c) => c.name.toLowerCase().includes(needle)) : campaigns
 
-  const extIds = [...new Set(matched.map((c) => c.externalCampaignId).filter((x): x is string => !!x))]
+  // The report reads cover the whole SCOPE, not the search: `withReportRow` and `dataThrough` are
+  // statements about the scope's feed, and they must not move when you type either.
+  const extIds = [...new Set(campaigns.map((c) => c.externalCampaignId).filter((x): x is string => !!x))]
 
   // Every read below is unguarded on purpose — see the file header. A swallowed failure here
   // would render as "this account spends nothing on placement", which is a sentence no operator
@@ -569,16 +588,18 @@ export async function getPlacementGrid(req: PlcRequest): Promise<PlcPayload> {
   // The lane filter narrows what you are looking at; it does not change how many campaigns carry
   // a multiplier. A count that moved when you clicked "Top" would be answering a different
   // question from the one its label asks.
-  const carrying = matched.filter((c) => {
+  const carrying = campaigns.filter((c) => {
     const m = laneMultipliers(c.dynamicBidding)
     return PLC_LANES.some((l) => m[l] > 0)
   })
   const withReport = new Set(
-    matched.filter((c) => c.externalCampaignId && PLC_LANES.some((l) => metrics.has(`${c.externalCampaignId}|${l}`))).map((c) => c.id),
+    campaigns.filter((c) => c.externalCampaignId && PLC_LANES.some((l) => metrics.has(`${c.externalCampaignId}|${l}`))).map((c) => c.id),
   )
-  const governedInScope = matched.filter((c) => ownership.byCampaign.has(c.id))
+  const governedInScope = campaigns.filter((c) => ownership.byCampaign.has(c.id))
   const counts = {
-    campaigns: matched.length,
+    campaigns: campaigns.length,
+    /** how many of them the search left — the ONLY count the needle touches */
+    matchedCampaigns: matched.length,
     carrying: carrying.length,
     governed: carrying.filter((c) => ownership.byCampaign.has(c.id)).length,
     unmanaged: carrying.filter((c) => !ownership.byCampaign.has(c.id)).length,
