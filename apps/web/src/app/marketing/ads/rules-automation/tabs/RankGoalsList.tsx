@@ -19,9 +19,9 @@ import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
 import { WeekShape } from '../dayparting/WeekShape'
 import { TemplateLibrary } from '../dayparting/TemplateLibrary'
 import { scheduleHealth, relTime, type Health } from '../dayparting/scheduleHealth'
+import { useRdData } from '../dayparting/_rd/RdData'
 import { getBackendUrl } from '@/lib/backend-url'
 
-interface SchedWindow { targetKey?: string }
 interface RankRow {
   id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null
   windows: number; campaigns: number; enabled: boolean; portfolioId: string | null; portfolioName: string | null
@@ -39,96 +39,61 @@ interface RankRow {
   // RDX/B4 — 30-day totals across the member campaigns. ACoS is derived server-side from the sums.
   spendCents: number; salesCents: number; orders: number; acos: number | null
 }
-type TargetMeta = { name: string; color: string | null }
-
-// Fallbacks used until /rank-targets resolves (built-in keys + the builder palette colors).
-const FALLBACK: Record<string, TargetMeta> = {
-  'own-top': { name: 'Own Top of Search', color: '#0a7d48' },
-  'defend-top': { name: 'Defend Top', color: '#3aa873' },
-  'rest-of-search': { name: 'Rest of Search', color: '#e6b067' },
-  'pause': { name: 'Min bid', color: '#d97757' },
-  'own-top-allout': { name: 'Own Top — All-Out', color: '#b91c1c' },
-}
+// RD.P0 — the RankTarget palette (and its built-in fallbacks) moved to the page's data layer, so
+// the week strip, the drawer and every later section colour a key the same way.
 const eur = (cents: number) => (cents === 0 ? '\u2014' : `\u20ac${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`)
 const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?groupId=${id}` : ''}`
 
-export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: string; reloadSignal?: number } = {}) {
+export function RankGoalsList({ market = 'all' }: { market?: string } = {}) {
+  // RD.P0 — the three fetches this component used to own (groups · rank-targets · portfolios) come
+  // from the page's one data layer now, so `/rank-schedule-groups` is no longer requested twice per
+  // page load and every later section reads the same rows this grid does.
+  const { groups, targets: tmetaState, loading, refresh } = useRdData()
   const [rows, setRows] = useState<RankRow[]>([])
-  const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [activity, setActivity] = useState<{ id: string; name: string; tab: DrawerTab } | null>(null) // RDX/A4 + E1
   const [tplFor, setTplFor] = useState<string[] | null>(null) // F2 — bulk apply a template
-  // Applying a template rewrites the plan, so the Week shape and window count on screen go stale.
-  // A local counter alongside the parent's reloadSignal, so the list can refresh itself.
-  const [selfReload, setSelfReload] = useState(0)
-  // RDX/B3 — the resolved RankTarget palette, so the week strip colours cells by the same swatches
-  // the builder's paint grid uses. Seeded with FALLBACK so a row renders before /rank-targets lands.
-  const [tmetaState, setTmetaState] = useState<Record<string, TargetMeta>>(FALLBACK)
 
+  // Rows stay LOCAL state rather than a derived memo, because rename, delete and the optimistic
+  // enable/pause below all reconcile in place — a round-trip and a flash of the loading state for
+  // a fact the list already holds would be worse. `refresh()` re-seeds them from the server, which
+  // is also what correctly discards an optimistic flip the server then rejected.
   useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const [gj, tj, pj] = await Promise.all([
-          fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
-          fetch(`${getBackendUrl()}/api/advertising/rank-targets`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ items: [] })),
-          fetch(`${getBackendUrl()}/api/advertising/portfolios`, { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
-        ])
-        // real target name + color (falls back to built-in palette for any missing key)
-        const tmeta: Record<string, TargetMeta> = { ...FALLBACK }
-        const titems = (Array.isArray(tj?.items) ? tj.items : Array.isArray(tj) ? tj : []) as Array<{ key?: string; name?: string; color?: string | null }>
-        for (const t of titems) if (t.key) tmeta[t.key] = { name: String(t.name ?? t.key), color: t.color ?? null }
-        // portfolio id → name (the list returns { portfolios: [{ portfolioId, name }] })
-        const pmeta: Record<string, string> = {}
-        const praw = (pj?.portfolios ?? pj?.items ?? (Array.isArray(pj) ? pj : [])) as Array<{ portfolioId?: string | number; id?: string | number; name?: string }>
-        for (const p of Array.isArray(praw) ? praw : []) { const pid = String(p.portfolioId ?? p.id ?? ''); if (pid) pmeta[pid] = String(p.name ?? pid) }
-        const groups = (Array.isArray(gj?.items) ? gj.items : Array.isArray(gj) ? gj : []) as Array<Record<string, unknown>>
-        const mapped = groups.map((g): RankRow => {
-          const key = String(g.defaultTargetKey ?? '')
-          const meta = tmeta[key]
-          const wins = Array.isArray(g.windows) ? (g.windows as SchedWindow[]) : []
-          const pid = g.portfolioId ? String(g.portfolioId) : null
-          const members = Number(g.membersTotal ?? g.campaignCount ?? 0)
-          const activeKey = String(g.activeTargetKey ?? '')
-          const ameta = tmeta[activeKey]
-          const lastEvaluatedAt = g.lastEvaluatedAt ? String(g.lastEvaluatedAt) : null
-          return {
-            id: String(g.id),
-            name: String(g.name ?? 'Rank schedule'),
-            baseline: meta?.name ?? (key || '—'),
-            baselineKey: key,
-            baselineColor: meta?.color ?? null,
-            windows: wins.filter((w) => !!w?.targetKey).length,
-            campaigns: Number(g.campaignCount ?? 0),
-            enabled: g.enabled !== false,
-            portfolioId: pid,
-            portfolioName: pid ? (pmeta[pid] ?? pid) : null,
-            activeKey,
-            activeName: ameta?.name ?? (activeKey || '—'),
-            activeColor: ameta?.color ?? null,
-            lastEvaluatedAt,
-            marketplaces: Array.isArray(g.marketplaces) ? (g.marketplaces as string[]) : [],
-            windowsRaw: wins,
-            spendCents: Number((g.performance as { costCents?: number } | undefined)?.costCents ?? 0),
-            salesCents: Number((g.performance as { salesCents?: number } | undefined)?.salesCents ?? 0),
-            orders: Number((g.performance as { orders?: number } | undefined)?.orders ?? 0),
-            acos: (g.performance as { acos?: number | null } | undefined)?.acos ?? null,
-            health: scheduleHealth({
-              enabled: g.enabled !== false,
-              lastEvaluatedAt,
-              failedWrites: Number(g.failedWrites ?? 0),
-              governedElsewhere: Number(g.governedElsewhere ?? 0),
-              membersTotal: members,
-            }),
-          }
-        })
-        if (alive) { setRows(mapped); setTmetaState(tmeta) }
-      } catch { if (alive) setRows([]) }
-      finally { if (alive) setLoading(false) }
-    })()
-    return () => { alive = false }
-    // reloadSignal — bumped when C1 adds campaigns to a schedule, so member counts stay true.
-  }, [reloadSignal, selfReload])
+    setRows(groups.map((g): RankRow => {
+      const meta = tmetaState[g.defaultTargetKey]
+      const ameta = tmetaState[g.activeTargetKey]
+      return {
+        id: g.id,
+        name: g.name,
+        baseline: meta?.name ?? (g.defaultTargetKey || '—'),
+        baselineKey: g.defaultTargetKey,
+        baselineColor: meta?.color ?? null,
+        windows: g.windowCount,
+        campaigns: g.campaignCount,
+        enabled: g.enabled,
+        portfolioId: g.portfolioId,
+        portfolioName: g.portfolioName,
+        activeKey: g.activeTargetKey,
+        activeName: ameta?.name ?? (g.activeTargetKey || '—'),
+        activeColor: ameta?.color ?? null,
+        lastEvaluatedAt: g.lastEvaluatedAt,
+        // RDX/B1 — the DERIVED market set, not the stored scalar, which is null on 9 of 16 groups.
+        marketplaces: g.scope.marketplaces,
+        windowsRaw: g.windowsRaw,
+        spendCents: g.performance.costCents,
+        salesCents: g.performance.salesCents,
+        orders: g.performance.orders,
+        acos: g.performance.acos,
+        health: scheduleHealth({
+          enabled: g.enabled,
+          lastEvaluatedAt: g.lastEvaluatedAt,
+          failedWrites: g.failedWrites,
+          governedElsewhere: g.governedElsewhere,
+          membersTotal: g.membersTotal,
+        }),
+      }
+    }))
+  }, [groups, tmetaState])
 
   // Persisted group-level enable/pause (PATCH cascades to every member schedule). Optimistic; reverts
   // the affected row(s) if the PATCH fails.
@@ -364,8 +329,9 @@ export function RankGoalsList({ market = 'all', reloadSignal = 0 }: { market?: s
         palette={palette}
         onClose={() => setTplFor(null)}
         // A template rewrites the plan, so the list's Week shape and window count are stale until
-        // it reloads.
-        onApplied={() => { setSel(new Set()); setSelfReload((n) => n + 1) }}
+        // it reloads. RD.P0 — one refresh on the shared layer, so the sections above this grid see
+        // the rewritten plan too rather than only the row that triggered it.
+        onApplied={() => { setSel(new Set()); refresh() }}
       />
     )}
     </>
