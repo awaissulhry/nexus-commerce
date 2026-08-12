@@ -378,6 +378,127 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── KT.2 — the Keyword Tracker's watchlists, per market ─────────────
+  //
+  // 🔴 These endpoints never touch `KeywordCoverageSet`/`KeywordCoverageTerm` except to READ a set
+  // as an import source. That table is the ACR coverage engine's arming switch: the engine is
+  // scheduled daily at 07:10, has run six nights (mode=observe, sets=0), and at
+  // NEXUS_COVERAGE_ENGINE_MODE=auto it steps the bids of an ENABLED set's terms through
+  // `updateAdTargetWithSync` — a real write to Amazon. `ads-coverage-sets.service.ts` stays the
+  // only writer of those tables, and no route here exposes `enabled`.
+  //
+  // Reads map to ads.view and writes to ads.campaigns.manage through the generic /api/advertising
+  // rules in permissions-manifest.ts — no new permission, and verified by the RBAC coverage gate.
+
+  /** Every watchlist (optionally one market's), plus the coverage sets offered as import sources. */
+  fastify.get('/advertising/keyword-watchlists', async (request, reply) => {
+    const q = (request.query ?? {}) as { market?: string }
+    const market = q.market ? q.market.toUpperCase() : null
+    const { listWatchlists, coverageSetsAsImportSources } = await import('../services/advertising/keyword-watchlist.service.js')
+    const [items, importSources] = await Promise.all([
+      listWatchlists(market),
+      coverageSetsAsImportSources(market),
+    ])
+    reply.header('Cache-Control', 'no-store')
+    return { items, importSources }
+  })
+
+  /** One watchlist's terms, for the editor. */
+  fastify.get('/advertising/keyword-watchlists/:id/terms', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { watchlistTerms } = await import('../services/advertising/keyword-watchlist.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return { items: await watchlistTerms(id) }
+  })
+
+  fastify.post('/advertising/keyword-watchlists', async (request, reply) => {
+    const b = (request.body ?? {}) as { market?: string; name?: string; source?: string; isDefault?: boolean }
+    const market = (b.market ?? '').toUpperCase()
+    if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
+      reply.status(400); return { error: `market must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+    }
+    if (!b.name?.trim()) { reply.status(400); return { error: 'name is required', code: 'name_required' } }
+    const { createWatchlist } = await import('../services/advertising/keyword-watchlist.service.js')
+    try {
+      return { ok: true, watchlist: await createWatchlist({ marketplace: market, name: b.name, source: b.source, isDefault: b.isDefault }) }
+    } catch (e) {
+      // (marketplace, name) is unique — a duplicate is an operator mistake, not a 500.
+      reply.status(409); return { ok: false, error: `A list called "${b.name.trim()}" already exists in ${market}.`, code: 'duplicate_name', detail: (e as Error).message }
+    }
+  })
+
+  /** Rename, or make this market's default. */
+  fastify.patch('/advertising/keyword-watchlists/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { name?: string; isDefault?: boolean }
+    const { renameWatchlist, setDefaultWatchlist } = await import('../services/advertising/keyword-watchlist.service.js')
+    try {
+      if (b.name?.trim()) await renameWatchlist(id, b.name)
+      if (b.isDefault === true) await setDefaultWatchlist(id)
+      return { ok: true }
+    } catch (e) {
+      reply.status(400); return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  /** Delete a list and every term on it. The response says what went, so the UI can too. */
+  fastify.delete('/advertising/keyword-watchlists/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { deleteWatchlist } = await import('../services/advertising/keyword-watchlist.service.js')
+    try {
+      return { ok: true, deleted: await deleteWatchlist(id) }
+    } catch (e) {
+      reply.status(404); return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  /** Paste a list of terms. Normalised, deduped against the list, branded-classified on insert. */
+  fastify.post('/advertising/keyword-watchlists/:id/terms', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { terms?: string[] | string; addedFrom?: string }
+    const terms = Array.isArray(b.terms) ? b.terms : typeof b.terms === 'string' ? [b.terms] : []
+    if (!terms.length) { reply.status(400); return { ok: false, error: 'terms is required', code: 'terms_required' } }
+    const { addTerms } = await import('../services/advertising/keyword-watchlist.service.js')
+    try {
+      return { ok: true, result: await addTerms({ watchlistId: id, terms, addedFrom: b.addedFrom ?? 'manual' }) }
+    } catch (e) {
+      reply.status(404); return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  /** Remove terms by id. DELETE with a body, because the ids are a set, not a path segment. */
+  fastify.delete('/advertising/keyword-watchlists/:id/terms', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { termIds?: string[] }
+    const ids = Array.isArray(b.termIds) ? b.termIds : []
+    if (!ids.length) { reply.status(400); return { ok: false, error: 'termIds is required', code: 'term_ids_required' } }
+    const { removeTerms } = await import('../services/advertising/keyword-watchlist.service.js')
+    return { ok: true, ...(await removeTerms(id, ids)) }
+  })
+
+  /** Flip one term's branded flag — the operator owns the classification once it is stored. */
+  fastify.patch('/advertising/keyword-watchlists/:id/terms/:termId', async (request, reply) => {
+    const { id, termId } = request.params as { id: string; termId: string }
+    const b = (request.body ?? {}) as { isBranded?: boolean }
+    if (typeof b.isBranded !== 'boolean') { reply.status(400); return { ok: false, error: 'isBranded must be a boolean' } }
+    const { setTermBranded } = await import('../services/advertising/keyword-watchlist.service.js')
+    await setTermBranded(id, termId, b.isBranded)
+    return { ok: true }
+  })
+
+  /** COPY a coverage set's terms in. Copy, never reference — see the block comment above. */
+  fastify.post('/advertising/keyword-watchlists/:id/import', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { coverageSetId?: string }
+    if (!b.coverageSetId) { reply.status(400); return { ok: false, error: 'coverageSetId is required' } }
+    const { importFromCoverageSet } = await import('../services/advertising/keyword-watchlist.service.js')
+    try {
+      return { ok: true, result: await importFromCoverageSet({ watchlistId: id, coverageSetId: b.coverageSetId }) }
+    } catch (e) {
+      reply.status(404); return { ok: false, error: (e as Error).message }
+    }
+  })
+
   // ── Data Kiosk economics (Phase 2) ─────────────────────────────────
   // Per-SKU-day net proceeds after fees and ad spend, from SP-API Data Kiosk.
 

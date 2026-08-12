@@ -3049,6 +3049,69 @@ model AmazonAdsProfile {
   @@index([marketplace])
 }
 
+/// KT.2 — the Keyword Tracker's watchlist: the terms an operator chose to WATCH, per market.
+///
+/// 🔴 This exists because `KeywordCoverageSet` (right below) is not a list, it is an ARMING
+/// SWITCH. Measured on prod 2026-08-12: `ads-coverage-engine.service.ts` selects
+/// `{ enabled: true }` sets and, at `NEXUS_COVERAGE_ENGINE_MODE=auto`, steps their keyword bids
+/// through `updateAdTargetWithSync` — a real write to Amazon. That engine is scheduled daily at
+/// 07:10 and has run six nights (mode=observe, sets=0, so nothing has been written yet), the
+/// single existing set has `leadAsin` on all 97 of its terms, and `PATCH
+/// /advertising/coverage-sets/:id { enabled }` is wired to a button on the Family Cockpit. Two
+/// switches, both outside the Keyword Tracker, stand between that table and live bid changes.
+///
+/// So the tracker reads coverage sets as an IMPORT SOURCE ONLY — terms are copied out, never
+/// referenced — and this table carries no `enabled` flag, because nothing here should ever be
+/// one field away from arming a bid ladder.
+///
+/// Deliberately NOT on this model: `leadAsin`, `targetSharePct`, `isControl`,
+/// `dailySpendCapCents`, `acosCapPct`. Those are coverage-engine intent. Half-populating them
+/// here is exactly how two surfaces come to disagree about what automation is trying to do.
+model KeywordWatchlist {
+  id String @id @default(cuid())
+  /// IT | DE | ES | FR. One market per list — volume, rank and share are per-marketplace
+  /// quantities, and serving one market's list to another is the defect KT.2 exists to fix
+  /// (measured: only 8 of the 97 Italian terms have EVER had a DE row; 3 in ES; 3 in FR).
+  marketplace String
+  name        String
+  /// The list this market opens on. There is no cross-market fallback, by design.
+  isDefault Boolean @default(false)
+  /// Provenance of the terms, for the honesty line on the page:
+  /// coverage-set-import | bid-keywords | sqp | manual | import
+  source    String  @default("manual")
+  createdBy String?
+
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  terms     KeywordWatchlistTerm[]
+
+  @@unique([marketplace, name])
+  @@index([marketplace, isDefault])
+}
+
+/// KT.2 — one watched term. See `KeywordWatchlist`.
+model KeywordWatchlistTerm {
+  id          String           @id @default(cuid())
+  watchlistId String
+  watchlist   KeywordWatchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  /// Lowercased, whitespace-collapsed — the same normalisation `AdKeywordProtection` stores and
+  /// the same the tracker joins SQP on. Stored normalised so the join can never disagree.
+  term String
+  /// STORED, not derived. KT.1 recomputed "is this our brand" on every read with a blanket
+  /// substring sweep; `AdKeywordProtection` carries `matchType` (EXACT | PREFIX | CONTAINS) and a
+  /// nullable `marketplace`, and the sweep honoured neither. It is seeded from the honoured
+  /// classifier and then owned by the operator, who can flip one term without editing a
+  /// protection rule that also gates negative-keyword harvesting.
+  isBranded Boolean @default(false)
+  /// Where this specific term came from, when it differs from the list's own source.
+  addedFrom String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([watchlistId, term])
+  @@index([watchlistId, isBranded])
+}
+
 // Amazon-native portfolio (campaign grouping). Linked to Campaign via
 // Campaign.portfolioId (already exists as a string column).
 /// ACR.3 (Stage 2.1/3) — the curated keyword set a family DELIBERATELY covers.
