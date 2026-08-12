@@ -164,16 +164,31 @@ export function NegativeTargetingClient() {
     return () => { alive = false }
   }, [market, view, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, match, level, state, amazon, attribution, blocking, reloadTick])
 
-  const rows = (data?.rows ?? []) as NegationRow[]
-  const termRows = (data?.rows ?? []) as TermRow[]
+  /**
+   * 🔴 The grid renders the grain the PAYLOAD holds, never the grain the URL asks for.
+   *
+   * They disagree for exactly one render — the URL changes the instant you click Terms, and the
+   * rows arrive a second later. Reading the grain from the URL meant the term columns ran against
+   * negation rows for that render, and `num(r.rows)` on a row with no `rows` field threw
+   * `Cannot read properties of undefined (reading 'toLocaleString')`, taking the whole page to the
+   * error boundary — a blank screen, no census, no grid, no message. Caught on production by
+   * clicking the control, not by reading this file.
+   *
+   * The toggle still shows what you clicked (`view`); the grid shows what it actually has
+   * (`gridView`), with the grid's own loading state covering the gap. Two vocabularies for one
+   * fact is the recurring defect in this codebase, and the payload is the one that cannot lie.
+   */
+  const gridView = data?.view ?? view
+  const rows = (gridView === 'negations' ? (data?.rows ?? []) : []) as NegationRow[]
+  const termRows = (gridView === 'terms' ? (data?.rows ?? []) : []) as TermRow[]
   const census = data?.census ?? null
 
   const slotProps: NegSlotProps = {
     scope: { market, ...scope, boundBy: data?.scope.boundBy ?? null },
     census,
-    rows: view === 'negations' ? rows : [],
-    terms: view === 'terms' ? termRows : [],
-    view,
+    rows,
+    terms: termRows,
+    view: gridView,
     loading,
     push,
     focus,
@@ -348,7 +363,7 @@ export function NegativeTargetingClient() {
     {
       key: 'terms', n: census.terms, label: census.terms === 1 ? 'term' : 'terms',
       tip: 'Distinct terms, case-folded and whitespace-collapsed. A term is a view over negations, not an object Amazon holds.',
-      on: view === 'terms', apply: () => push({ view: 'terms' }),
+      on: view === 'terms', apply: () => push({ view: 'terms', ...CLEAR }),
     },
     {
       key: 'blocking', n: census.blockingNow, label: 'blocking now',
@@ -448,7 +463,7 @@ export function NegativeTargetingClient() {
         </p>
       )}
 
-      {view === 'negations' ? (
+      {gridView === 'negations' ? (
         <AdsDataGrid<NegationRow>
           rows={rows}
           loading={loading}
