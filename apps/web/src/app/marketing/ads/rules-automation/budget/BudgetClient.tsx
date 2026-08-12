@@ -42,7 +42,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Plus, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -686,50 +686,29 @@ export function BudgetClient() {
         </div>
       )}
 
-      {/* 🔴 The sentence the whole page exists to make unmissable. Rendered whenever a majority of
-          the scope is pinned at the floor, which today is always. */}
+      {/*
+        🔴 ONE block, not three. The first draft stacked the ratchet, the dead cap and the write-gate
+        divergence as three separate warnings totalling 225px above the grid — measured on prod — and
+        that is not "minimal teaching text", it is a wall an operator scrolls past. The ratchet and
+        the cap are one story (a compounding cut, and the brake that would have stopped it), so they
+        are one paragraph. The gate divergence is carried where it can be acted on instead: the
+        "a trim can still cut" census cell states the 28 / 24 / 4 split in its tooltip, and the
+        "Reaches Amazon" column says "cut only locally" on each of the four rows.
+      */}
       {census && census.campaigns > 0 && census.atFloor / census.campaigns > 0.5 && (
         <p className="h10-bud-note bad">
           <AlertTriangle size={12} />
           <span>
-            <b>{num(census.atFloor)} of {num(census.campaigns)} campaigns sit at Amazon&rsquo;s €1 minimum</b>, and{' '}
-            {census.rulesCutOnly > 0 && <>{census.rulesCutOnly === 1 ? 'a rule that only cuts is' : `${census.rulesCutOnly} rules that only cut are`} still running on their own. </>}
+            <b>{num(census.atFloor)} of {num(census.campaigns)} campaigns sit at Amazon&rsquo;s €1 minimum</b>
+            {census.rulesCutOnly > 0 && <>, and {census.rulesCutOnly === 1 ? 'a rule that only cuts is' : `${census.rulesCutOnly} rules that only cut are`} still running on their own</>}.
             Each applies its percentage to the <b>current</b> budget rather than to a baseline, every
-            15 minutes, with no cooldown — so ten applications of −20% leave a budget at 11% of where
-            it started. That is why these {num(census.atFloor)} are here, and it is also why the
-            trims now change nothing: they have consumed their own target space. The{' '}
-            {num(census.cuttable)} campaigns still above €1 are the entire reachable surface.
-          </span>
-        </p>
-      )}
-
-      {/* The cap is the only brake, and it is not connected. Stated where the refusal count is zero,
-          because a zero there reads as "nothing was refused" when it means "nothing can be". */}
-      {census && census.rulesActing > 0 && (
-        <p className="h10-bud-note bad">
-          <AlertTriangle size={12} />
-          <span>
-            <b>The daily execution cap is not enforced, for any rule.</b> The query that counts
-            today&rsquo;s executions excludes every successful one — it tests{' '}
-            <code>NOT (errorMessage = &lsquo;DAILY_CAP_EXCEEDED&rsquo;)</code>, which is NULL rather
-            than true for the null error message a success carries. Measured today: the predicate
-            returns <b>0</b> where the correct one returns the rule&rsquo;s full count, and one rule
-            with a cap of 5 has already run 5 times without being refused. No rule has been refused
-            since 2026-08-03. <b>There is currently no brake on the ratchet at all</b> — which is
-            what a &ldquo;Refused&rdquo; column of zeroes below actually means.
-          </span>
-        </p>
-      )}
-
-      {/* Two numbers that look like one. Only rendered where the gate has actually denied something. */}
-      {census && census.gateDenied > 0 && (
-        <p className="h10-bud-note">
-          <Info size={12} />
-          <span>
-            <b>{num(census.gateDenied)} of the {num(census.cuttable)} campaigns a trim can cut would not reach Amazon.</b>{' '}
-            The live-write gate runs at dispatch, not at the cut — so on those the local budget is
-            still lowered and still audited, and only the delivery is skipped. They are diverging
-            from Amazon, not protected from the rule.
+            15 minutes, with no cooldown — ten applications of −20% leave a budget at 11% of where it
+            started. The {num(census.cuttable)} campaigns still above €1 are the entire reachable
+            surface. <b>The daily execution cap is not stopping this</b>: the query counting
+            today&rsquo;s executions tests <code>NOT (errorMessage = &lsquo;DAILY_CAP_EXCEEDED&rsquo;)</code>,
+            which is NULL rather than true for the null a success carries, so it returns 0 where the
+            correct predicate returns the rule&rsquo;s full count — and nothing has been refused since
+            2026-08-03. That is what a &ldquo;Refused&rdquo; column of zeroes below means.
           </span>
         </p>
       )}
