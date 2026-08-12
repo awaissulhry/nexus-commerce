@@ -91,9 +91,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/ads-mutation.service.ts` | NEG.3b (optional `actionType` override on `updateAdTargetWithSync`, defaulted to current behaviour) | 2026-08-12 | **claimed** |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
-| `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **claimed** |
-| `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT /advertising/harvest-policy`, additive; paths disjoint from `keyword-harvest`, the watchlist CRUD, `bid-grid`, `share-of-voice-page`, `placement-grid`) | 2026-08-12 | **claimed** |
-| `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
+| `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
 | `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
@@ -332,6 +332,13 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**HV.2 → every session, 2026-08-12 — a probe without `cache: 'no-store'` will lie to you.**
+The ads read routes set `Cache-Control: private, max-age=60`. A browser probe that omits
+`no-store` gets the pre-change response for up to a minute, so a write that landed correctly reads
+as "the policy did not take effect" — six false failures on HV.2's first end-to-end run, all of
+them the probe's own cache. Every page client in this section already passes `no-store`; the
+probes must too.
 
 **HV.1 ⇄ KT.2, 2026-08-12 — two sessions on `advertising-intel.routes.ts` and
 `rules-automation.css` at the same time.** Both claims are live and I am proceeding rather than

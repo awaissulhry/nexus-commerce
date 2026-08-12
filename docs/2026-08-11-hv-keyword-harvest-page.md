@@ -1318,3 +1318,184 @@ this page's, recorded only so it is not lost.)*
   expectation that "a latency skip is probably right".**
 - The window default stays **60 days**, and the reconciliation of the two engines' windows stays
   HV.8's.
+
+---
+
+# HV.2 — built
+
+**Landed 2026-08-12** in four commits, in deploy order: `0534af3db` (migration) → `f2c0620de`
+(API) → `db7374d4b` (web) → `ab1892183` + `63d97ad2c` (two fixes found by measuring on prod).
+Verified on production, at 1728px and at a real 896px viewport.
+
+## What shipped
+
+**The filter and the policy, as two things with two labels and two verbs.** The criteria row moves
+the grid immediately and lives in the URL; the policy line below it is what is *saved* for a scope.
+The Save button appears only once the two differ — a save that would write what is already stored
+is a control that changes no pixel.
+
+`AdsHarvestPolicy` (additive migration): one row per `(scopeGrain, scopeId, kind)`, resolved
+`adGroup → campaign → portfolio → line → market → account`, **first row found wins whole**. No
+field-level merge across levels, deliberately: merging would make *"which number is actually in
+force"* unanswerable, which is the failure the control exists to remove.
+
+`GET`/`PUT`/`DELETE /advertising/harvest-policy` for the stored half only. DELETE exists because
+without it a saved policy would be permanent.
+
+## The criteria, and why each default is what it is
+
+| criterion | default | derivation |
+|---|---|---|
+| min orders | **2** | D2, unchanged. 1 → 92 candidates · 2 → 17 · 3 → 8 (at the 60-day window) |
+| min clicks | **3** | A **fluke guard**, not a volume gate. At 2+ orders it removes exactly one row: 2 orders on **1 click**, which at this account's 1.3–2.5% CVR is an attribution artefact. `≥10` would cut 5 of 14 and start removing plausible terms |
+| max ACoS | **45%** | 🔴 **Derived.** `Campaign.targetAcosPct` is **unset on all 220 campaigns**, so there is no configured target to inherit. 45% is the account's own blended ACoS on all search-term traffic over 60 days (€5,346.33 / €11,893.19). It reads: *do not harvest a term that performs worse than the average of what you already run* |
+| window | **60 days** | the account produces 17 double-order terms in *sixty* days |
+| match type | **exclude exact-matched** | see below |
+
+A candidate with orders but **no attributed sales** has no ACoS and is **kept**, never excluded —
+excluding on a missing measurement is the blank-is-not-a-zero failure in filter form. Measured: 0
+such rows today, but the branch is written and commented.
+
+## The match-type criterion, and the cross-product
+
+A term is harvestable only where it arrived through a **looser** match than the one we would
+create: auto and product expressions → phrase/exact, broad → phrase/exact, phrase → exact.
+
+**Both aggregation readings measured before choosing** (`_hv-2-criteria.mts`):
+
+| reading | excludes @2+ | @1+ |
+|---|---|---|
+| **A — every order came via EXACT** | **5 of 17** | **12 of 92** ← **chosen** |
+| B — any order came via EXACT | 6 | 13 |
+| C — no looser match at all | 5 | 12 |
+
+A and C agree exactly. B is stricter by one row — `motorrad jacke`, EXACT=7 and BROAD=2 — and those
+two BROAD orders are precisely the looser-match evidence harvesting looks for; discarding the term
+because it *also* has a converting exact keyword throws away the signal. A is also what
+`exactMatchedOnly` already reports per row, so the page stays coherent.
+
+**The cross-product, at 2+ orders (17 candidates), with the per-cell decision:**
+
+| matched via ↓ / status → | new | already-exact-here | exact-elsewhere | local-only |
+|---|---|---|---|---|
+| **looser-only** | **0** *(53 at 1+)* ✅ candidate | 7 ❌ nothing to create | **0** *(11 at 1+)* 🔴 **depends on destination — HV.3** | **1** ✅ the highest-value one |
+| **mixed (some EXACT)** | 0 | 1 ✅ candidate | 0 | 0 |
+| **EXACT-only** | 0 | 5 ❌ not harvestable | 0 | 0 |
+| **product** | **1** ✅ candidate | 2 ❌ | 0 | 0 |
+
+`exact-elsewhere` is the cell HV.2 does **not** decide: whether an EXACT keyword in a *different*
+ad group counts as covered depends on where the keyword would go, and HV.2 does not guess a
+destination. It keeps those rows and flags them; **HV.3 owns that cell.**
+
+**Product candidates are exempt from the match rule.** An ASIN's match type is
+`TARGETING_EXPRESSION*`, never a keyword match type, and the account's one genuinely-new candidate
+is a product target — a keyword rule must not silently exclude it.
+
+## Per-scope divergence — the mechanism ships, nothing is pre-populated
+
+| scope | cands @2 | cands @1 | med clicks | med ACoS |
+|---|---|---|---|---|
+| **ACCOUNT** | 14 | 86 | 3 | 1% |
+| IT | 5 | 38 | 6 | 3% |
+| DE | 8 | 40 | 1 | 1% |
+| ES | 1 | 4 | 5 | 3% |
+| FR | **0** | 4 | 9 | 6% |
+
+Ten portfolios: six hold ≤1 candidate at 2+, two have no data at all. **One account default,
+overrides available at five grains, none pre-populated.** The markets differ in shape but ES and FR
+have four candidates each — setting per-market numbers on four data points is fitting noise, and
+IT and DE, the only two with volume, want the same numbers. The table ships **empty**.
+
+## 🔴 No latency skip — this contradicts the session brief
+
+The brief expected one ("a latency skip is probably right"). Measured: skipping the provisional
+tail by **0 / 1 / 2 / 3 days** leaves candidates at **17 / 17 / 17 / 17** at 2+ orders and
+**92 / 92 / 92 / 91** at 1+. It changes nothing, because `ads-report-create-st` requests
+`yesterday()` once and never re-requests, so the freshest days carry a seven-day attribution window
+snapshotted after one day (HV.2a) and contribute almost no multi-order terms in the first place.
+A skip would discard real data to fix nothing. **No column was added for it**; if the ingest is ever
+repaired to re-request a trailing window, revisit — but not before the data would move.
+
+## What the page renders, today
+
+```
+COUNTS AS A CANDIDATE   Min orders 2   Min clicks 3   Max ACoS 45% [clear]   Window 30/60/90   Match type [harvestable|any]
+
+92 terms that converted at least once in this scope
+   2+ orders −75 · 57 new    3+ clicks −2 · 1 new    ACoS ≤ 45% −3    arrived via a looser match −4    → 8 candidates
+
+⚠ 57 behind “2+ orders”, 1 behind “3+ clicks” — 58 terms with no keyword anywhere are hidden by
+  these criteria. Those are the only rows that represent something to create.
+
+ⓘ In force here: 2+ orders · 3+ clicks · ACoS ≤ 45% · 60-day window · excluding exact-matched —
+  from the shipped default policy. No policy has been saved anywhere yet.
+```
+
+🔴 **`removedNew` is the line that justifies the whole bar.** The account holds exactly **one**
+genuinely-new candidate at 2+ orders and the shipped `minClicks: 3` removes it (2 orders on 1
+click). A criteria bar that quietly took the page's only real finding off the screen would be the
+most expensive kind of honest-looking control — so the step that did it says so, in words as well
+as a chip, and the operator can relax that one criterion.
+
+## What the policy binds — and what it does not
+
+Stated on the page, in the Save sentence and in the policy line:
+
+> These numbers decide **what this page proposes**. They change nothing else. `ads-auto-harvest` is
+> propose-only since HV.0 and still evaluates `previewHarvest`'s own constants
+> (`DEFAULT_MIN_ORDERS = 2`, `DEFAULT_MIN_SPEND_CENTS = 1500`); the five harvest rules still read
+> their own action args and `CONVERTING_MIN_ORDERS`. **HV.4** makes the write path read this
+> policy; **HV.8** repairs the rule path.
+
+No negation threshold control: Negative Targeting owns it (D4). `kind` is in the schema so NEG does
+not have to migrate the table later; HV.2 never writes a `negate` row.
+
+## 🔴 Two defects found by measuring on prod, not by looking
+
+**1 · Three of the five criteria were never wired into the route** (`63d97ad2c`). The service
+accepted all five and the client sent all five; the handler in between still passed only the two
+HV.1 knew about. `?minClicks=0`, `?matched=all` and `?maxAcos=none` all silently returned the
+policy's numbers while `criteria.overridden` said `(none)`. Nothing errored and every number on the
+page stayed internally consistent — which is exactly why the DoD's *"prove the live count for three
+criteria combinations"* exists and a screenshot would not have caught it.
+
+Also fixed there: `q.minClicks ? Number(…) : null` is a **truthiness** test, and `minClicks=0` is a
+legitimate value meaning *no click floor for this view* — it would have been read as absent.
+
+**2 · The criteria bar rendered 700px below the count it changes** (`ab1892183`). Measured: bar at
+y=1301, census at y=523, grid at y=603. It worked perfectly, in the wrong place — inherited from
+HV.1, where `HvThresholds` was a null-rendering stub in the seven-section list *below* the grid and
+position could not matter. **The seven-slot ordering was written for sections that REPORT; this is
+the only one that CONTROLS**, so it moved above the thing it controls. The seam is otherwise
+unchanged: same typed props, same file, one import line, other six untouched.
+
+**A third, recorded because it will bite the next probe:** the read route sets
+`Cache-Control: private, max-age=60`. A browser probe that omits `cache: 'no-store'` sees stale
+responses and reports policy changes as not taking effect — six false failures on the first run.
+The client already uses `no-store`; probes must too.
+
+## What was measured
+
+| | |
+|---|---|
+| criteria combinations proven on prod | **8**, all reconciling `base − Σremoved = candidates = total = rows`, **6 distinct counts** |
+| policy lifecycle proven on prod | **10 checks**, 0 failures: save at account → read back → market override wins for that market only → `market=all` does not inherit it → `hasOwn` correct → remove → falls back → remove again refused → table empty |
+| refusals proven | `"all"` as a market, `minOrders 0`, `window 45` |
+| geometry at 1728 / 896 | every block flush at 96→1698 / 96→866, **dLeft = dRight = 0**; census reflows 5→2 |
+| contrast, opacity composited | **96 nodes, 0 failures** |
+| first column | `rgb(28,37,48)`, `cursor: default` — still not a link |
+| overflow | body never scrolls horizontally; criteria row and attrition row never overflow; the wide grid scrolls inside its own container |
+
+Scripts: `_hv-2-criteria.mts` (the distributions and the cross-product), `_hv-2-endpoint.mts` (22
+checks, creates policy rows and removes every one), `_hv-2-policy-check.mts` (the unique-index
+sentinel), `_hv-2a-ingest.mts`, `_hv-1c-verify.mts`.
+
+## What HV.3 / HV.4 / HV.8 inherit
+
+- **HV.3** owns the `exact-elsewhere` cell of the cross-product — the one HV.2 refuses to decide —
+  and the destination that makes it decidable.
+- **HV.4** reads this policy on the write path (today nothing does), fixes the five bid constants,
+  and must couple promotion to its isolation negative. It inherits `criteria.inForce` through the
+  shared slot contract, so it acts on exactly the candidate set the operator was looking at.
+- **HV.8** repairs the rule path so the engines evaluate the same numbers. Until then the gap is
+  rendered on the page rather than hidden.
