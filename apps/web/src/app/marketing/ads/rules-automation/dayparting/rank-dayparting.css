@@ -38,3 +38,18 @@
   margin: 0;
   padding: 0;
 }
+
+/* The seam between two sections.
+   Measured on prod after the reorder: this gap was ZERO while every other gap on the page was
+   12–16px, so the grid card and the hourly panel butted together and read as a rendering fault.
+   The cause is that the page's blocks carry their rhythm on ONE side each and the reorder put the
+   two bare sides against each other — `.h10-am-card` has `margin: 16px 0 0` (top only) and
+   `.h10-dp-panel` has `margin: 0 0 12px` (bottom only). Before the reorder the panel came first and
+   its bottom margin did the work.
+   16px, because that is the page's dominant step (tabs→filters and filters→card are both 16). The
+   section has no padding or border, so this collapses with the first child's top margin rather than
+   adding to it — max(16, 0) — which is why the seam gets 16px and not 28. Vertical only: a
+   horizontal margin here is the 24px-stagger trap in the header comment. */
+.rd-sec + .rd-sec {
+  margin-top: 16px;
+}
