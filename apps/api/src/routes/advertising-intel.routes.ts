@@ -16,6 +16,7 @@ import { getNegatives, getTermContext, NEG_MARKETS, NEG_MARKET_ALL } from '../se
 import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
 import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
 import { planPromotion, promoteCandidates } from '../services/advertising/harvest-promote.service.js'
+import { getHarvestCohort } from '../services/advertising/harvest-cohort.service.js'
 import {
   loadDestinationGraph, resolveStoredDestinations, rankDestinations, listHarvestDestinations,
   saveHarvestDestination, deleteHarvestDestination, HV_CREATE_TYPES,
@@ -1032,6 +1033,52 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // 🔴 Always 200 with per-row outcomes, never a single pass/fail. N writes have N independent
     // failure modes and an HTTP status cannot carry three outcome classes (C7).
     return { ok: true, ...out }
+  })
+
+  // ── HV.5 — the harvested cohort ─────────────────────────────────────
+  //
+  // "Did the last batch work?" — the second half of the page's question. Read-only.
+  fastify.get('/advertising/harvest-cohort', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
+    if (market !== HV_MARKET_ALL && !HV_MARKETS.includes(market as (typeof HV_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${HV_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+    const out = await getHarvestCohort({
+      market,
+      outcome: oneOf(q.outcome, ['served', 'never-served', 'not-measured', 'local-only', 'all'] as const) as never,
+      actor: oneOf(q.actor, ['engine', 'operator', 'app-bulk', 'mirrored', 'all'] as const) as never,
+      since: q.since ?? null,
+      q: q.q ?? null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // 🔴 Pushes keywords that exist HERE and never reached Amazon. This SPENDS MONEY — a pushed
+  // keyword starts bidding. Same shape as HV.4's promote: confirm in the body, 200 with per-row
+  // outcomes, never a single pass/fail (C7).
+  fastify.post('/advertising/harvest-push', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const ids = Array.isArray(b.ids) ? b.ids.map(String).filter(Boolean) : []
+    if (ids.length === 0) { reply.status(400); return { ok: false, error: 'ids is required', code: 'ids_required' } }
+    if (ids.length > 200) { reply.status(400); return { ok: false, error: `${ids.length} keywords in one request; the cap is 200. This is a request bound, not a spend ceiling.`, code: 'too_many' } }
+    if (b.confirm !== true) { reply.status(400); return { ok: false, error: 'confirm:true is required — pushing a keyword makes it start bidding at Amazon', code: 'confirm_required' } }
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    const { pushExistingKeyword } = await import('../services/advertising/ads-create.service.js')
+    const outcomes: Array<{ adTargetId: string } & Awaited<ReturnType<typeof pushExistingKeyword>>> = []
+    for (const id of ids) outcomes.push({ adTargetId: id, ...(await pushExistingKeyword({ adTargetId: id, userId: `user:${userId}` })) })
+    return {
+      ok: true,
+      acted: outcomes.filter((o) => o.outcome === 'acted').length,
+      refused: outcomes.filter((o) => o.outcome === 'refused').length,
+      failed: outcomes.filter((o) => o.outcome === 'failed').length,
+      outcomes,
+    }
   })
 
   // ── BID.S0 — the poll cursor ────────────────────────────────────────

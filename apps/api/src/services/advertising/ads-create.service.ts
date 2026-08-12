@@ -21,7 +21,7 @@ import {
   createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
   type AdsRegion,
 } from './ads-api-client.js'
-import { checkAdsWriteGate } from './ads-write-gate.js'
+import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 
 async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
@@ -239,9 +239,77 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
   // and do not exist at Amazon; an audit row that does not distinguish the two is how that stayed
   // invisible for three months.
   await audit('create_keyword', 'AD_TARGET', t.id,
-    { keywordText: input.keywordText, matchType: input.matchType, externalId, reachedAmazon: externalId != null },
+    // 🔴 HV.5 — `bidCents` was missing here, which is a gap in HV.4's own work: the opening bid
+    // survived only in `AdTarget.bidCents`, so the moment a bid rule moved it the number this
+    // keyword was harvested AT was recoverable only from AD_BID_UPDATE's payloadBefore. HV.5's
+    // cohort needs the opening bid to answer "did it pay", and it must not be reconstructed from
+    // whatever `ad-rank-defend` last moved it to.
+    { keywordText: input.keywordText, matchType: input.matchType, externalId, reachedAmazon: externalId != null, bidCents: Math.round(input.bidEur * 100) },
     input.userId, {}, 'SUCCESS', input.evidence ?? null)
   return { id: t.id, externalTargetId: externalId }
+}
+
+/**
+ * HV.5 — push a keyword that exists HERE but never reached Amazon.
+ *
+ * 🔴 Why this cannot reuse `createKeywordLocal`, and why HV.4's write path does not fit the backlog:
+ * that function's H.1 idempotence check (`:206`) finds the existing row and **returns it without
+ * pushing**. A local-only keyword is a different object from a graduation — it already exists
+ * locally and needs a PUSH, not a create. Calling the harvest path on one silently no-ops.
+ *
+ * Measured 2026-08-12: 210 positive keywords carry no Amazon id, 209 of them written by
+ * `automation:auto-harvest`, and the write gate is `allowed: true, mode: live` in all four markets
+ * — so **156 of them are pushable today**. The other 54 are ASIN-shaped text stored as keywords
+ * (pre-H.5 legacy) and are refused here rather than left to Amazon to reject.
+ *
+ * Everything else is reused: the same `resolveCtx`, the same write gate, the same `createKeyword`
+ * client, the same audit path.
+ */
+export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null }): Promise<{
+  ok: boolean; externalTargetId: string | null; outcome: 'acted' | 'refused' | 'failed'
+  refusal?: { deniedAt: string; reason: string }; error?: string
+}> {
+  const t = await prisma.adTarget.findUnique({
+    where: { id: input.adTargetId },
+    select: {
+      id: true, kind: true, isNegative: true, expressionType: true, expressionValue: true, bidCents: true, externalTargetId: true,
+      adGroup: { select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } },
+    },
+  })
+  if (!t) return { ok: false, externalTargetId: null, outcome: 'failed', error: 'that keyword does not exist' }
+  if (t.isNegative || t.kind !== 'KEYWORD') return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'not_a_positive_keyword', reason: 'This is not a positive keyword.' } }
+  if (t.externalTargetId) return { ok: true, externalTargetId: t.externalTargetId, outcome: 'refused', refusal: { deniedAt: 'already_at_amazon', reason: 'This keyword already exists at Amazon.' } }
+  // 🔴 The 54. An ASIN is a product target, never a keyword; pushing one would be rejected by
+  // Amazon and it is a deletion, not a retry.
+  if (/^b0[a-z0-9]{8}$/i.test(t.expressionValue.trim())) {
+    return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'asin_as_keyword', reason: 'This is an ASIN stored as keyword text (pre-H.5 legacy). It is a product target, not a keyword, and must be deleted rather than pushed.' } }
+  }
+  const ag = t.adGroup
+  if (!ag?.externalAdGroupId || !ag.campaign?.externalCampaignId || !ag.campaign.marketplace) {
+    return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'connection', reason: 'The ad group or campaign has no Amazon id, so there is nowhere to push it to.' } }
+  }
+  const ctx = await resolveCtx(ag.campaign.marketplace)
+  if (!ctx) return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'connection', reason: `No active Amazon Ads connection for ${ag.campaign.marketplace}.` } }
+  const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: t.bidCents })
+  if (!gate.allowed) {
+    // 🔴 `apps/api`'s tsconfig is NOT strict, so `if (!gate.allowed)` does not narrow the
+    // discriminated union the way it would in `apps/web`. `Extract` names the exact variant
+    // instead of a bare `as any`, so a future refusal shape without a `reason` still fails here
+    // rather than rendering the string "undefined" to an operator.
+    const denied = gate as Extract<GateDecision, { allowed: false }>
+    return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: String(denied.deniedAt), reason: denied.reason } }
+  }
+
+  try {
+    const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: t.expressionValue, matchType: t.expressionType as 'EXACT' | 'PHRASE' | 'BROAD', bid: t.bidCents / 100, state: 'enabled' as const }
+    const r = ag.campaign.adProduct === 'SPONSORED_BRANDS' ? await createSbKeyword(ctx, args) : await createKeyword(ctx, args)
+    if (!r.externalId) return { ok: false, externalTargetId: null, outcome: 'failed', error: 'Amazon accepted the call but returned no id' }
+    await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: r.externalId, lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })
+    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r.externalId, reachedAmazon: true, bidCents: t.bidCents }, input.userId, {}, 'SUCCESS', input.evidence ?? null)
+    return { ok: true, externalTargetId: r.externalId, outcome: 'acted' }
+  } catch (e) {
+    return { ok: false, externalTargetId: null, outcome: 'failed', error: (e as Error).message }
+  }
 }
 
 export interface NewProductAd { adGroupId: string; sku?: string; asin?: string; productId?: string; userId?: string }
