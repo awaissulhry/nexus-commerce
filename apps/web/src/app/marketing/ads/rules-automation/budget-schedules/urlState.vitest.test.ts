@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseUrlState, parseOpen, serialiseUrlState, patchUrlState, needsNormalising,
+  currentMonthUTC, shiftMonth,
   DEFAULT_MARKET, DEFAULT_WEEKS, DEFAULT_METRIC,
 } from './urlState'
 
@@ -18,7 +19,7 @@ describe('parseUrlState — absent means the default', () => {
   it('renders the default view from an empty query', () => {
     expect(at('')).toEqual({
       market: DEFAULT_MARKET, portfolio: '', campaign: '', line: '',
-      weeks: DEFAULT_WEEKS, metric: DEFAULT_METRIC, section: null, open: null,
+      weeks: DEFAULT_WEEKS, month: currentMonthUTC(), metric: DEFAULT_METRIC, section: null, open: null,
     })
   })
 
@@ -175,5 +176,85 @@ describe('needsNormalising — rewrite once, and not on every load', () => {
 
   it('ignores params this page does not own, so another feature’s query is not stripped', () => {
     expect(needsNormalising(new URLSearchParams('utm_source=x'))).toBe(false)
+  })
+})
+
+
+describe('month — the money window', () => {
+  it('defaults to the current month computed in UTC, matching the server', () => {
+    const n = new Date()
+    const expected = `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, '0')}`
+    expect(at('').month).toBe(expected)
+    expect(currentMonthUTC()).toBe(expected)
+  })
+
+  it('rejects every malformed form and falls back to the current month', () => {
+    for (const bad of ['abc', '2026-13', '2026-00', '26-08', '2026-8', '2026-', '', '2026-012', '2026/08']) {
+      expect(at(`month=${bad}`).month).toBe(currentMonthUTC())
+    }
+  })
+
+  it('accepts a valid past and future month', () => {
+    expect(at('month=2026-07').month).toBe('2026-07')
+    expect(at('month=2026-09').month).toBe('2026-09')
+    expect(at('month=2025-01').month).toBe('2025-01')
+    expect(at('month=2026-12').month).toBe('2026-12')
+  })
+
+  it('omits the current month from the URL so "now" stays a bare link', () => {
+    expect(serialiseUrlState(at(`month=${currentMonthUTC()}`))).toBe('')
+    expect(needsNormalising(new URLSearchParams(`month=${currentMonthUTC()}`))).toBe(true)
+  })
+
+  it('keeps a non-current month and round-trips it', () => {
+    expect(serialiseUrlState(at('month=2026-07'))).toBe('month=2026-07')
+    expect(parseUrlState(new URLSearchParams('month=2026-07'))).toEqual(at('month=2026-07'))
+  })
+
+  it('rewrites a malformed month rather than leaving it in the address bar', () => {
+    expect(needsNormalising(new URLSearchParams('month=2026-13'))).toBe(true)
+    expect(serialiseUrlState(at('month=2026-13'))).toBe('')
+  })
+
+  it('cannot be written through patchUrlState if the parser would reject it', () => {
+    expect(patchUrlState(new URLSearchParams(''), { month: '2026-13' })).toBe('')
+    expect(patchUrlState(new URLSearchParams(''), { month: '2026-07' })).toBe('month=2026-07')
+  })
+
+  it('composes with the other params', () => {
+    const qs = 'market=IT&month=2026-07&weeks=12'
+    expect(serialiseUrlState(at(qs))).toBe('market=IT&weeks=12&month=2026-07')
+  })
+})
+
+describe('shiftMonth — the stepper', () => {
+  it('steps within a year', () => {
+    expect(shiftMonth('2026-08', 1)).toBe('2026-09')
+    expect(shiftMonth('2026-08', -1)).toBe('2026-07')
+  })
+
+  it('crosses the year boundary in both directions', () => {
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01')
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12')
+  })
+
+  it('steps by more than one month', () => {
+    expect(shiftMonth('2026-08', 5)).toBe('2027-01')
+    expect(shiftMonth('2026-08', -8)).toBe('2025-12')
+  })
+
+  it('round-trips, so the stepper cannot drift', () => {
+    let m = '2026-08'
+    for (let i = 0; i < 30; i++) m = shiftMonth(m, 1)
+    for (let i = 0; i < 30; i++) m = shiftMonth(m, -1)
+    expect(m).toBe('2026-08')
+  })
+
+  it('always produces a value the parser accepts', () => {
+    let m = '2026-01'
+    for (let i = 0; i < 24; i++) {
+      m = shiftMonth(m, 1)
+      expect(parseUrlState(new URLSearchParams(`month=${m}`)).month).toBe(m)
+    }
   })
 })

@@ -86,6 +86,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/workers/ads-sync.worker.ts` | NEG.3 (pass the routing descriptor; 2 select sites) | 2026-08-12 | **released** |
 | `apps/api/src/services/ads-core/amazon-entity-gone.ts` | NEG.3 (`isNegative` axis on the orphan guard) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/ads-mutation.service.ts` | NEG.3 (select `isNegative`; pass it to `isContradictoryOrphan`) | 2026-08-12 | **released** |
+| `packages/database/prisma/schema.prisma` | NEG.3 (`AdTarget.retiredAt` + `retireReason`, additive) | 2026-08-12 | **claimed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.3 (`POST /advertising/negatives/retire`, additive) | 2026-08-12 | **claimed** |
+| `apps/api/src/services/advertising/ads-mutation.service.ts` | NEG.3b (optional `actionType` override on `updateAdTargetWithSync`, defaulted to current behaviour) | 2026-08-12 | **claimed** |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
@@ -107,10 +110,13 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`, see §5 |
 | `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`. The `SovTrackerTab` IMPORT went with the branch (it was its last caller — an unused import fails the web build); the component FILE stays |
 | `…/rules-automation/rules-automation.css` | SOV.0 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — 🔴 the first block swept into PLC.0's `341d08e31`; the 2-line cursor override landed in my `32dc3e585` |
-| `…/rules-automation/_shared/tabs.tsx` | BSP.0 (`budget-schedules` → `routed: true` + label + subtitle) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
-| `…/rules-automation/RulesAutomationClient.tsx` | BSP.0 (drop the `budget-schedules` branch only) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
-| `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
-| `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `…/rules-automation/_shared/tabs.tsx` | BSP.0 (`budget-schedules` → `routed: true` + label + subtitle) | 2026-08-12 | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `…/rules-automation/RulesAutomationClient.tsx` | BSP.0 (drop the `budget-schedules` branch only) | 2026-08-12 | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `…/rules-automation/rules-automation.css` | BSP.1 (`h10-bsp-*` at EOF) | 2026-08-12 | **released** — EOF-append only, every hunk `git diff`-checked as mine before committing |
+| `apps/web/src/design-system/components/index.ts` | BSP.1 (one additive export: `BurnDownChart`) | 2026-08-12 | **released** — one line; the DS is shared app-wide but is not on §3's list, so this row exists rather than an unclaimed edit |
+| `apps/web/src/design-system/styles/components.css` | BSP.1 (`h10-ds-burn-*` at EOF) | 2026-08-12 | **released** — EOF-append only, new prefix, no existing selector touched |
 
 | `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **released** — landed `a993fe6bb` (data layer + scope) · `2381486b0` (URL) · `b1bfe40b2` (slots + stylesheet) |
 | `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **released** — landed `a993fe6bb` + `2381486b0`. Still exactly one importer; it now reads `dayparting/_rd/*`, so it is this page's file in everything but its path |
@@ -130,6 +136,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | BUD.1 (`h10-bud-*` at EOF) | 2026-08-12 | **released** — landed `c9d564cf9`, EOF-append only, prefix had 0 prior hits, every class checked against the stylesheet in BOTH directions |
 | `apps/web/next.config.js` | BUD.1 (one `?tab=budget` redirect) | 2026-08-12 | **released** — landed `c9d564cf9`. ⚠ SOV.1 now claims this file for the generic rule — **do not add a second `?tab=budget` entry**, see §4 |
 | `…/rules-automation/_shared/useCursorPoll.ts` (from `bid/`) | BUD.1 (the promotion BID.S0 pre-blessed) | 2026-08-12 | **released** — landed `f076e20ad`, alone and first. Moved unchanged; one importer, updated; Bid verified unchanged on prod afterwards |
+| `…/rules-automation/_shared/tabs.tsx` | AR.S0 (`rules` → `routed: true` + subtitle + **one additive optional `path?`**, see §4) | 2026-08-12 | **claimed** — `key: 'rules'` and the label "Apply Rules" are UNCHANGED and must stay so; only `routed`/`path`/`subtitle` are added |
+| `…/rules-automation/rules-automation.css` | AR.S0 (`h10-ar-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; prefix had 0 prior hits (`h10-arm-*` exists and is a different class family — CSS matches exactly, no collision); every hunk `git diff`ed before staging (§5) |
+| `apps/api/src/routes/advertising.routes.ts` | BID.S2 (`GET /advertising/bid-history` — four ADDITIVE query params on the EXISTING handler: `entityIds` · `field` · `perEntity` · `since`) | 2026-08-12 | **claimed** — 🔴 no new route: `grep -a "advertising/bid-history"` returns exactly ONE registration (`:10014`), and the change is inside it. Nothing else in the 600 KB file is touched |
+| `…/rules-automation/rules-automation.css` | BID.S2 (`h10-bd-*` at EOF — the four new columns, nine state chips, the sparkline) | 2026-08-12 | **claimed** — EOF-append only, same prefix BID.S0 already owns; every hunk `git diff`ed before staging (§5, which BID.S0 was on the wrong end of) |
 
 **BUD.1 held nothing that another session held at the same time**, and every shared file carried
 exactly one hunk when it was staged — verified with `git diff -U0` per file rather than assumed.
@@ -149,6 +159,9 @@ at all.
 | `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files: `rank-runtime` has **zero** hits, so it collides with nothing, including PLC.1's `/advertising/placements/cursor` and the 20 `/advertising/rank-*` paths already in the 600 KB file |
 | `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **claimed** — the page must derive Mode from the engine's own spec mapping rather than a second copy that is free to drift; nothing else in the engine is touched |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **claimed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.1 (two sort keys on the EXISTING `share-of-voice-page` route; no new route) | 2026-08-12 | **claimed** — hunk-staged, not file-staged |
+| `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lack) | 2026-08-12 | **claimed** — HV.1/BID.S0/BSP.0/PLC.0 all released; file verified clean before claiming |
 
 **Two findings from KT.1 that bind every page in this section:**
 
@@ -284,6 +297,14 @@ same shape in this file's history (KT.1b → NEG.1, HV.1 → BID.S0). Recorded o
 session to see a red push knows it is not theirs. Not touched: it is NEG.2's directory and it is
 obviously mid-flight. `tsc` with that one file excluded is clean, which is how PLC.0 confirmed its
 own files compile. Retrying.
+
+**PLC.1 blocked on AR.S0, 2026-08-12 ~10:2x.** `_shared/tabs.tsx` is mid-edit — an unterminated
+comment/JSDoc around `:31-33` introducing an additive `path?:` segment for `rules` → `/apply-rules`,
+so `tsc` and the pre-push web build fail and **every session's push is held**. Fourth instance of
+this shape (KT.1b → NEG.1, HV.1 → BID.S0, NEG.2 → PLC.0). Recorded only so the next session to see
+a red push knows it is not theirs. Not touched: PLC.0 finished with that file and PLC.1's brief
+explicitly forbids re-opening it. `tsc` with that one file excluded is clean, which is how PLC.1
+confirmed its own files compile. Retrying.
 
 **PLC.0 → every session whose page keeps a date control, 2026-08-12.** `AdsPageHeader` declares
 `rangePreset` and `onRangePreset` in its props type and **never destructures either** (`:52-53`
@@ -426,6 +447,23 @@ is a one-file job for whoever holds the config.
 §2 and neither has released, so the rule above is a hand-off, not a change. `?tab=dayparting` stays
 broken until one of you takes it — it is one line inside the rule you are already writing.
 
+**BSP.1 blocked on AR.S0, 2026-08-12 ~12:2x.** `_shared/tabs.tsx` has a syntax error mid-file
+(`TS1131` at :31, cascading through :32+) — an unterminated construct inside the new `AR.S0
+(additive) — the path segment` doc block. `tsc` and therefore the pre-push web build fail, so
+**every session's push is held**. Fourth instance of this shape (KT.1b → NEG.1, HV.1 → BID.S0,
+NEG.2 → PLC.0, now AR.S0 → BSP.1). Recorded only so the next session to see a red push knows it is
+not theirs. Not touched: it is a §3 shared file mid-flight and AR.S0 holds it. BSP.1's own files
+typecheck clean in isolation (`tsconfig` scoped to `budget-schedules/**` + `design-system/**`),
+which is how that was confirmed without editing anyone else's work. Retrying.
+
+**BSP.1 — the DS gained a chart, and the reason is a rule not a preference.** `PerformanceGraph` is
+**dual-axis** (`left`/`right`, two `YAxis`), and a burn-down's four series are all euros. Two
+y-scales on one unit is the single most misleading thing a chart can do, so BSP.1 added
+`design-system/components/BurnDownChart.tsx` — single-axis, no `right` prop, and it cannot grow one.
+Palette validated rather than eyeballed: the two identity-bearing marks (#1f6fde, #b3261e) are ΔE
+28.7 apart under deuteranopia and 33.5 for normal vision. The forecast deliberately reuses the
+actual series' hue and is separated by dash, because a projection is the same entity, not a new one.
+
 **🔴 BSP.0 — the `commit --only` trap fired again, and this time it shipped a broken tab to prod.**
 All four of BSP.0's shared-file edits — `_shared/tabs.tsx`, `RulesAutomationClient.tsx`,
 `rules-automation.css`, `next.config.js` — plus its own claim rows in §2 above, were swept into
@@ -521,7 +559,6 @@ behind while Postgres stayed correct). `/advertising/rank-schedule-groups` resol
 on the **container** clock (`scheduleNowInTz`, `new Date()`). Measured skew right now is 0 minutes,
 so the list's `Now holding` column is correct **by luck**. Any endpoint answering "what is held right
 now" should take `SELECT now()` as its clock, as `GET /advertising/rank-runtime` does.
-
 **BUD.1 → SOV.1, 2026-08-12 — `?tab=budget` is already done; do not add a second entry.** SOV.1
 claims `next.config.js` for "the `?tab=` redirects the four routed tabs still lack". `budget` is no
 longer one of them: BUD.1 landed its entry in `c9d564cf9`. The tabs still genuinely missing a
@@ -543,6 +580,29 @@ is the only truth about whether a write reached Amazon** — `amazonResponseStat
 The budget study's §3 reading of those 488 rows ("queued to Amazon but the local value has not
 settled") is wrong, and the corrected mechanism is a closed loop that cannot converge rather than a
 settling delay.
+
+🔴 **AR.S0 → every session that flips a tab, 2026-08-12. `routed: true` alone cannot point a tab at
+a route whose path differs from its key — and for `rules` it MUST.** `rulesTabHref()` builds
+`${RULES_BASE}/${tab.key}`, so setting `routed: true` on `{ key: 'rules' }` publishes a link to
+`/rules-automation/**rules**`, which does not exist. The route is `/apply-rules`, and renaming the
+key is exactly the change the brief forbids (two sessions renaming one key in one shared file is
+this programme's highest-collision edit, and `?tab=rules`, `RULE_TAB_ACTION_TYPES`, the index
+client's fallback and every `active="rules"` all read it).
+
+The fix is **one additive optional field**: `path?: string` on `RulesTab`, used by `rulesTabHref`
+when present. No existing tab sets it, so all eleven hrefs are byte-identical — verified by reading
+each one after the change. Take it if your page's route ever needs to differ from its key; do not
+add a second mechanism.
+
+⚠ **And `rules` is the one tab that must NOT get a `next.config.js` redirect.** `?tab=<key>` →
+Apply Rules is the *correct* behaviour for `rules` itself, and the bare `/rules-automation` route
+still renders the index's own grid. AR.S0 therefore touched `next.config.js` not at all. Whether the
+bare route eventually redirects to `/apply-rules` is an open operator decision, not a session's.
+
+**AR.S0 ⇄ PLC.1 on `rules-automation.css`, both claims live.** Proceeding rather than blocking, on
+the same reasoning HV.1 ⇄ KT.2 used: EOF-appended, `h10-ar-*` against `h10-plc-*`, no shared
+selector. Neither of us can safely `commit --only` that file while the other's hunks are
+uncommitted — I will `git diff` it and stage only my own.
 
 ---
 

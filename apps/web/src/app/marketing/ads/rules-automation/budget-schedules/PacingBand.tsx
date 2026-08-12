@@ -28,9 +28,10 @@
  * market is not in the spine.
  */
 
-import { ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
 import { ProgressBar } from '@/design-system/components'
 import type { BudgetManagerResult, BudgetPlanRow } from './slot-contract'
+import { currentMonthUTC, shiftMonth } from './urlState'
 
 const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 /** Compact form for the chips, where two full amounts would not fit in 1154px across four markets. */
@@ -44,14 +45,49 @@ const STATUS_LABEL: Record<BudgetPlanRow['status'], string> = {
   'no-budget': 'no cap',
 }
 
+/**
+ * BSP.1 — the month stepper lives HERE, not in the scope spine.
+ *
+ * The page has two windows and they are not the same thing: the spine's `weeks` is the PERFORMANCE
+ * window the hourly cube speaks, and `month` is the MONEY window a plan is keyed by. Putting both
+ * in one bar would invite an operator to read one as the other. The band is already the
+ * monthly-money surface — it prints `day 12/31` — so the month belongs to it.
+ *
+ * Measured: the band had 185px of spare horizontal room at 1280, and the stepper fits inside it
+ * without changing the band's height, which is load-bearing for the page's 120px chrome budget.
+ */
+function MonthStepper({ month, onMonth }: { month: string; onMonth: (m: string) => void }) {
+  const label = new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+    month: 'long', year: 'numeric', timeZone: 'UTC',
+  })
+  const isCurrent = month === currentMonthUTC()
+  return (
+    <div className="h10-bsp-month">
+      <button type="button" aria-label="Previous month" onClick={() => onMonth(shiftMonth(month, -1))}>
+        <ChevronLeft size={14} />
+      </button>
+      <b>{label}</b>
+      <button type="button" aria-label="Next month" onClick={() => onMonth(shiftMonth(month, 1))}>
+        <ChevronRight size={14} />
+      </button>
+      {/* A month that is not "now" must say so — every number beside it is then historical. */}
+      {!isCurrent && (
+        <button type="button" className="today" onClick={() => onMonth(currentMonthUTC())}>Today</button>
+      )}
+    </div>
+  )
+}
+
 export function PacingBand({
-  data, loading, error, market, onMarket, onOpenPlan,
+  data, loading, error, market, month, onMarket, onMonth, onOpenPlan,
 }: {
   data: BudgetManagerResult | null
   loading: boolean
   error: string | null
   market: string
+  month: string
   onMarket: (m: string) => void
+  onMonth: (m: string) => void
   onOpenPlan: (marketplace: string) => void
 }) {
   if (error) {
@@ -62,6 +98,7 @@ export function PacingBand({
         <span className="h10-bsp-bandmsg">
           <b>Pacing could not be loaded.</b> {error}
         </span>
+        <MonthStepper month={month} onMonth={onMonth} />
       </div>
     )
   }
@@ -70,6 +107,7 @@ export function PacingBand({
     return (
       <div className="h10-bsp-band">
         <span className="h10-bsp-bandmsg dim">Loading this month’s pacing…</span>
+        <MonthStepper month={month} onMonth={onMonth} />
       </div>
     )
   }
@@ -85,8 +123,11 @@ export function PacingBand({
     return (
       <div className="h10-bsp-band">
         <span className="h10-bsp-bandmsg">
-          <b>No monthly budget plans yet.</b> A plan sets the monthly cap a market paces against.
+          <b>No budget plan for this month.</b> A plan sets the monthly cap a market paces against.
         </span>
+        {/* The stepper renders in EVERY branch. Without it, stepping into a month with no plans
+            would remove the only control that steps back out of it. */}
+        <MonthStepper month={month} onMonth={onMonth} />
       </div>
     )
   }
@@ -132,6 +173,8 @@ export function PacingBand({
           )
         })}
       </div>
+
+      <MonthStepper month={month} onMonth={onMonth} />
 
       <div className="h10-bsp-sum">
         <span className="l">

@@ -16,6 +16,9 @@ export { MetricStrip, type MetricStripProps, type Metric } from './MetricStrip'
 export { HoverCard, type HoverCardProps } from './HoverCard'
 export { DateRangePicker, type DateRangePickerProps, type DateRange } from './DateRangePicker'
 export { PerformanceGraph, type PerformanceGraphProps, type ChartSeries } from './PerformanceGraph'
+// BSP.1 — single-axis cumulative chart. Separate from PerformanceGraph on purpose: that one is
+// dual-axis, and a burn-down's series are all one unit.
+export { BurnDownChart, type BurnDownChartProps, type BurnDownPoint } from './BurnDownChart'
 export { Heatmap, type HeatmapProps } from './Heatmap'
 export { DataGrid, type DataGridProps, type Column } from './DataGrid'
 export { ImageUpload, type ImageUploadProps, type ImageUploadCriterion } from './ImageUpload'

@@ -12,6 +12,7 @@
  * pages ended up with eleven vocabularies for one filter.
  */
 import type { BspMetric, BspOpen, BspUrlState } from './urlState'
+import type { CalendarDay } from './planMath'
 
 /** The `GET /advertising/budget-manager` row, verbatim from `ads-budget-manager.service.ts`. */
 export interface BudgetPlanRow {
@@ -99,3 +100,96 @@ export interface BspSlotProps {
   /** Pacing, shared with the pinned band so the page reads one number from one fetch. */
   pacing: { data: BudgetManagerResult | null; loading: boolean; error: string | null }
 }
+
+/** `GET /advertising/budget-manager/campaigns?marketplace=&month=` */
+export interface BmCampaignRow {
+  id: string
+  name: string
+  status: string
+  dailyBudgetCents: number
+  minCents: number | null
+  maxCents: number | null
+}
+export interface BmCampaignsResult {
+  marketplace: string
+  month: string
+  planId: string | null
+  campaigns: BmCampaignRow[]
+}
+
+/**
+ * `GET /advertising/budget-manager/enforcement?month=` — what the LIVE pacing engine would do right
+ * now, from the same pure function the cron runs every 30 minutes.
+ *
+ * ⚠ The endpoint takes **`month` only** — no `marketplace` (`advertising.routes.ts:7585-7590`
+ * passes `{ month: q.month }`). It returns every plan, so the page fetches once and filters by
+ * marketplace client-side.
+ *
+ * ⚠ It returns plans only where `autoPacing || stopOverSpend`, and `pacingNeeded` is false unless
+ * `projected > cap`. An absent plan therefore means "nothing armed", and an armed plan with no
+ * campaign changes means "ran and would do nothing" — two different sentences, neither of them
+ * "no data".
+ */
+export interface EnforcementCampaign {
+  id: string
+  name: string
+  currentDailyCents: number
+  targetDailyCents: number | null
+  deltaCents: number
+  clamp: 'min' | 'max' | 'floor' | null
+  suppress: boolean
+  restore: boolean
+  currentlySuppressed: boolean
+}
+export interface EnforcementPlan {
+  marketplace: string
+  month: string
+  capCents: number
+  mtdSpendCents: number
+  remainingBudgetCents: number
+  remainingDays: number
+  dayOfMonth: number
+  daysInMonth: number
+  autoPacing: boolean
+  stopOverSpend: boolean
+  capReached: boolean
+  todayTargetCents: number | null
+  campaigns: EnforcementCampaign[]
+}
+export interface EnforcementResult {
+  month: string
+  plans: EnforcementPlan[]
+  totals: { plans: number; budgetChanges: number; suppressing: number; restoring: number; netDeltaCents: number }
+}
+
+/** `GET /advertising/ads-mode` — whether a downstream campaign write reaches Amazon at all. */
+export interface AdsMode {
+  mode: string
+  liveWriteCount: number
+}
+
+/** The body `POST /advertising/budget-manager/plans` accepts. Idempotent by `(marketplace, month, tag)`. */
+export interface UpsertPlanBody {
+  id?: string
+  marketplace: string
+  month: string
+  tag?: string | null
+  monthlyBudgetCents?: number
+  autoPacing?: boolean
+  stopOverSpend?: boolean
+  calendar?: CalendarDay[]
+}
+
+/**
+ * How a write ended. `refused` is NOT `broke` — see `SectionShell`'s EmptyKind note.
+ *
+ * A 4xx is the server declining a value it understood; a 5xx or a thrown fetch is the system
+ * failing. Rendering the first as the second is what makes a working product look broken, which is
+ * the defect this programme exists to remove.
+ */
+export type WriteOutcome =
+  | { state: 'idle' }
+  | { state: 'saving' }
+  | { state: 'saved'; at: number }
+  | { state: 'refused'; message: string }
+  | { state: 'broke'; message: string }

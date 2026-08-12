@@ -54,6 +54,10 @@ import {
   MARKETS, SECTIONS, needsNormalising, parseUrlState, patchUrlState, serialiseOpen,
   type BspOpen, type BspSection,
 } from './urlState'
+import { PlanEditor } from './PlanEditor'
+import { CampaignLimitsModal } from './CampaignLimitsModal'
+import { usePlanWrites } from './usePlanWrites'
+import type { AdsMode, BmCampaignsResult, EnforcementResult } from './slot-contract'
 import { BudgetScopeBar, ScopeNote, resolveScope, type BspScopeValue } from './BudgetScopeBar'
 import { PacingBand } from './PacingBand'
 import { SectionShell, SectionPending } from './SectionShell'
@@ -149,11 +153,16 @@ export function BudgetSchedulesClient() {
   const [pacing, setPacing] = useState<BudgetManagerResult | null>(null)
   const [pacingLoading, setPacingLoading] = useState(true)
   const [pacingErr, setPacingErr] = useState<string | null>(null)
+  // Bumped after every confirmed write, so the band, the rail and the burn-down all re-read the
+  // SAME payload and cannot drift apart. One fetch, three surfaces.
+  const [reloadTick, setReloadTick] = useState(0)
+  const reloadPacing = useCallback(() => setReloadTick((n) => n + 1), [])
+
   useEffect(() => {
     let alive = true
     // Not scoped by market on purpose: the band shows every market at once and highlights the
     // selected one, so narrowing the fetch would empty three chips whenever a market is picked.
-    void fetch(`${getBackendUrl()}/api/advertising/budget-manager`, { cache: 'no-store' })
+    void fetch(`${getBackendUrl()}/api/advertising/budget-manager?month=${url.month}`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`The pacing request failed (${r.status}).`)
         return r.json()
@@ -162,7 +171,57 @@ export function BudgetSchedulesClient() {
       .catch((e) => { if (alive) { setPacingErr((e as Error).message); setPacing(null) } })
       .finally(() => { if (alive) setPacingLoading(false) })
     return () => { alive = false }
+  }, [url.month, reloadTick])
+
+  // ── what the live pacing engine would do right now ───────────────────────────────────────────
+  // ⚠ month-only: the endpoint takes no marketplace, so this is fetched once and filtered by market
+  // in the preview component.
+  const [enforcement, setEnforcement] = useState<EnforcementResult | null>(null)
+  const [enfLoading, setEnfLoading] = useState(true)
+  const [enfErr, setEnfErr] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    setEnfLoading(true)
+    void fetch(`${getBackendUrl()}/api/advertising/budget-manager/enforcement?month=${url.month}`, { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`The enforcement preview failed (${r.status}).`)
+        return r.json()
+      })
+      .then((d) => { if (alive) { setEnforcement(d as EnforcementResult); setEnfErr(null) } })
+      .catch((e) => { if (alive) { setEnfErr((e as Error).message); setEnforcement(null) } })
+      .finally(() => { if (alive) setEnfLoading(false) })
+    return () => { alive = false }
+  }, [url.month, reloadTick])
+
+  // Whether a downstream campaign write reaches Amazon at all. Read once.
+  const [adsMode, setAdsMode] = useState<AdsMode | null>(null)
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/ads-mode`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d) setAdsMode(d as AdsMode) })
+      .catch(() => { /* the mode line is omitted rather than guessed */ })
+    return () => { alive = false }
   }, [])
+
+  const writes = usePlanWrites(reloadPacing)
+
+  // ── the per-campaign limits modal ────────────────────────────────────────────────────────────
+  const [limitsOpen, setLimitsOpen] = useState(false)
+  const [campaigns, setCampaigns] = useState<BmCampaignsResult | null>(null)
+  const [campaignsLoading, setCampaignsLoading] = useState(false)
+  const planMarket = url.open?.kind === 'plan' ? url.open.id : null
+  useEffect(() => {
+    if (!limitsOpen || !planMarket) return
+    let alive = true
+    setCampaignsLoading(true)
+    void fetch(`${getBackendUrl()}/api/advertising/budget-manager/campaigns?marketplace=${planMarket}&month=${url.month}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d) setCampaigns(d as BmCampaignsResult) })
+      .catch(() => { /* the modal shows its own empty state */ })
+      .finally(() => { if (alive) setCampaignsLoading(false) })
+    return () => { alive = false }
+  }, [limitsOpen, planMarket, url.month, reloadTick])
 
   const reach = useMemo(() => resolveScope(options, url.market, scope), [options, url.market, scope.portfolio, scope.campaign, scope.line])
 
@@ -219,7 +278,9 @@ export function BudgetSchedulesClient() {
           loading={pacingLoading}
           error={pacingErr}
           market={url.market}
+          month={url.month}
           onMarket={(m) => push({ market: m, campaign: '' })}
+          onMonth={(m) => push({ month: m })}
           onOpenPlan={(mkt) => mkt && openRail({ kind: 'plan', id: mkt })}
         />
       </div>
@@ -251,10 +312,64 @@ export function BudgetSchedulesClient() {
           <InspectorRail
             open={url.open}
             onClose={() => push({ open: '' })}
-            pacing={pacing}
+            planBody={url.open.kind === 'plan' && pacing ? (
+              <PlanEditor
+                marketplace={url.open.id}
+                month={url.month}
+                pacing={pacing}
+                // null when this market has neither a plan nor spend this month — the editor then
+                // offers "set a monthly cap", which is the one thing that fixes that state.
+                row={pacing.rows.find((r) => r.marketplace === (url.open as BspOpen).id) ?? null}
+                enforcement={enforcement}
+                enforcementLoading={enfLoading}
+                enforcementError={enfErr}
+                adsMode={adsMode}
+                outcome={writes.outcome}
+                busy={writes.busy}
+                onSavePlan={(patch) => void writes.savePlan({
+                  marketplace: (url.open as BspOpen).id,
+                  month: url.month,
+                  // Idempotent by (marketplace, month, tag): sending the id when we have it, and
+                  // relying on the same key when we do not, so a save can never duplicate a plan.
+                  ...(pacing.rows.find((r) => r.marketplace === (url.open as BspOpen).id)?.id
+                    ? { id: pacing.rows.find((r) => r.marketplace === (url.open as BspOpen).id)?.id as string }
+                    : {}),
+                  ...patch,
+                })}
+                onDeletePlan={(id) => void writes.deletePlan(id)}
+                onResetOutcome={writes.reset}
+                onOpenLimits={() => setLimitsOpen(true)}
+              />
+            ) : undefined}
           />
         )}
       </div>
+
+      {planMarket && (
+        <CampaignLimitsModal
+          open={limitsOpen}
+          onClose={() => setLimitsOpen(false)}
+          marketplace={planMarket}
+          month={url.month}
+          rows={campaigns?.campaigns ?? []}
+          loading={campaignsLoading}
+          scope={reach}
+          busy={writes.busy}
+          onSave={async (edits) => {
+            // One request per changed campaign — the route takes a single limit at a time and
+            // creates the plan on demand if none exists.
+            for (const e of edits) {
+              const res = await writes.setCampaignLimit({
+                marketplace: planMarket, month: url.month,
+                campaignId: e.campaignId, minCents: e.minCents, maxCents: e.maxCents,
+              })
+              // `refused` and `broke` both carry a message; `idle`/`saving` cannot reach here, and
+              // the union has to be narrowed rather than assumed.
+              if (res.state === 'refused' || res.state === 'broke') throw new Error(res.message)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -24,12 +24,12 @@
  */
 
 import { useEffect, useRef, type ReactNode } from 'react'
-import { ChevronDown, AlertTriangle } from 'lucide-react'
+import { ChevronDown, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { EmptyState } from '@/design-system/components'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import type { BspSection } from './urlState'
 
-export type EmptyKind = 'nothing-made' | 'ran-nothing' | 'broke'
+export type EmptyKind = 'nothing-made' | 'ran-nothing' | 'broke' | 'refused'
 
 export function SectionEmpty({
   kind, noun, what, ranAt, error, since,
@@ -46,6 +46,26 @@ export function SectionEmpty({
   /** For `broke`: when it started failing, when that is known. */
   since?: string | null
 }) {
+  // 🔴 BSP.1 added this member, and it is deliberately NOT a shade of `broke`. A refusal is the
+  // system declining a value it understood — a 4xx, a gate, a cap. Counting refusals as failures is
+  // how 7,738 of 7,738 rule "failures" account-wide came to be cap refusals, making a working
+  // engine read as catastrophically broken.
+  //
+  // ⚠ Scope note for BSP.2-.7: the only refusals SOURCEABLE today are this page's own write
+  // responses. Cap refusals have written no execution row since 2026-08-04 — they publish into a
+  // five-minute ring buffer and nothing else — so a refusal panel fed from the database would
+  // render "0 refused" forever. Do not build one until refusals are persisted.
+  if (kind === 'refused') {
+    return (
+      <EmptyState
+        className="h10-bsp-empty refused"
+        icon={<ShieldAlert size={22} />}
+        title={`That was refused, not lost.`}
+        description={error ?? 'The server declined the value and nothing was changed.'}
+      />
+    )
+  }
+
   if (kind === 'broke') {
     return (
       <EmptyState

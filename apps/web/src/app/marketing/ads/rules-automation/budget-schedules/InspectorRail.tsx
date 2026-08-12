@@ -11,17 +11,15 @@
  * BESIDE the sections rather than over them, so an overlay would be the wrong thing even if the
  * portal were free.
  *
- * In BSP.0 every kind renders a titled placeholder naming the session that fills it. `plan:` also
- * links out to /marketing/ads/budget-manager, which owns the cap editor until BSP.1 migrates it —
- * so the read-only band still has somewhere honest to send an operator who wants to change a
- * number today.
+ * BSP.1 — `plan:` is no longer a placeholder: the client composes the real editor and passes it in
+ * as `planBody`. The rail stays a frame that knows what each kind is CALLED, not what it contains,
+ * so BSP.2/.4/.5 each fill one branch without touching this file's structure. The other three kinds
+ * still render a titled placeholder naming the session that owns them.
  */
 
-import { X, ExternalLink } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
 import type { BspOpen } from './urlState'
-import type { BudgetManagerResult } from './slot-contract'
-
-const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 /** What each rail kind is titled and which session builds it out. */
 const RAIL: Record<BspOpen['kind'], { title: (id: string) => string; session: string; what: string }> = {
@@ -48,14 +46,17 @@ const RAIL: Record<BspOpen['kind'], { title: (id: string) => string; session: st
 }
 
 export function InspectorRail({
-  open, onClose, pacing,
+  open, onClose, planBody,
 }: {
   open: BspOpen
   onClose: () => void
-  pacing: BudgetManagerResult | null
+  /**
+   * BSP.1 — the `plan:` editor, composed by the client because it owns the writes and the shared
+   * pacing fetch. The rail stays a frame: it knows what each kind is called, not what it contains.
+   */
+  planBody?: ReactNode
 }) {
   const def = RAIL[open.kind]
-  const plan = open.kind === 'plan' ? pacing?.rows.find((r) => r.marketplace === open.id) ?? null : null
 
   return (
     <aside className="h10-bsp-rail" aria-label={def.title(open.id)}>
@@ -67,28 +68,11 @@ export function InspectorRail({
       </div>
 
       <div className="h10-bsp-railbd">
-        {/* The one fact the rail can already state honestly, so a `plan:` rail is not empty on a
-            page whose whole subject is this number. Everything editable is BSP.1's. */}
-        {plan && (
-          <dl className="h10-bsp-railfacts">
-            <div><dt>Monthly cap</dt><dd>{plan.monthlyBudgetCents > 0 ? eur(plan.monthlyBudgetCents) : 'none set'}</dd></div>
-            <div><dt>Spent so far</dt><dd>{eur(plan.spendCents ?? 0)}</dd></div>
-            <div><dt>Projected finish</dt><dd className={plan.projectedOverspend ? 'bad' : ''}>{plan.forecastSpendCents != null ? eur(plan.forecastSpendCents) : '—'}</dd></div>
-            <div><dt>Auto-pacing</dt><dd>{plan.autoPacing ? 'on' : 'off'}</dd></div>
-            <div><dt>Stop over spend</dt><dd>{plan.stopOverSpend ? 'armed' : 'off'}</dd></div>
-            <div><dt>Campaign limits</dt><dd>{plan.campaignLimitCount || 'none'}</dd></div>
-          </dl>
-        )}
-
-        <div className="h10-bsp-pending">
-          <b>Not built yet — {def.session}.</b>
-          <span>{def.what}</span>
-        </div>
-
-        {open.kind === 'plan' && (
-          <a className="h10-bsp-raillink" href="/marketing/ads/budget-manager">
-            Edit this plan in Budget Manager <ExternalLink size={12} />
-          </a>
+        {open.kind === 'plan' && planBody ? planBody : (
+          <div className="h10-bsp-pending">
+            <b>Not built yet — {def.session}.</b>
+            <span>{def.what}</span>
+          </div>
         )}
       </div>
     </aside>

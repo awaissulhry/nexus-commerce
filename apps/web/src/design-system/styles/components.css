@@ -1274,3 +1274,18 @@
 .h10-ds-dp-nav button:hover { background: var(--h10-surface-hover); }
 .h10-ds-datefield-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
 .h10-ds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--color-primary); cursor: pointer; }
+
+/* ── BurnDownChart (BSP.1) ─────────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched.
+   The legend is always rendered, so no series is identified by colour alone. */
+.h10-ds-burn { display: flex; flex-direction: column; gap: 6px; }
+.h10-ds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.h10-ds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); }
+.h10-ds-burn-key .ln { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
+/* The dashed marks repeat the line's own dash pattern, so the key reads as the chart does. */
+.h10-ds-burn-key .ln.dash { background-image: linear-gradient(90deg, currentColor 0 5px, transparent 5px 9px); }
+.h10-ds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--surface-raised, #fff); border: 1px solid var(--border-default, #e3e7ec); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
+.h10-ds-burn-tip b { font-size: 11px; font-weight: 800; color: var(--text-primary); }
+.h10-ds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.h10-ds-burn-tip i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.h10-ds-burn-tip em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }

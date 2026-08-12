@@ -20,11 +20,6 @@
 /** The four production Amazon Ads markets. `all` is the account-wide view and the default. */
 export const MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
 export const DEFAULT_MARKET = 'all'
-export const DEFAULT_WEEKS = 8
-export const MIN_WEEKS = 1
-export const MAX_WEEKS = 26
-export const DEFAULT_METRIC = 'spend'
-
 /**
  * 🔴 Weeks, not days, and not a date range.
  *
@@ -34,6 +29,44 @@ export const DEFAULT_METRIC = 'spend'
  * exists to avoid. The sibling pages carry `?window=30d` for a rolling day count; this page
  * deliberately does not, because its window means something else.
  */
+export const DEFAULT_WEEKS = 8
+export const MIN_WEEKS = 1
+export const MAX_WEEKS = 26
+export const DEFAULT_METRIC = 'spend'
+
+/**
+ * 🔴 The MONEY window, and it is computed in UTC on purpose.
+ *
+ * This page has two windows and they are not the same thing: `weeks` is the PERFORMANCE window the
+ * hourly cube speaks, and `month` is the MONEY window an `AdBudgetPlan` is keyed by. `weeks` lives
+ * in the scope spine; `month` lives in the pinned band, because the band is the monthly-money
+ * surface and already prints `day 12/31`.
+ *
+ * The default must be the month the SERVER thinks it is, not the month Rome thinks it is.
+ * `ads-budget-manager.service.ts` derives everything from UTC — `currentMonth()` at :74 is
+ * `getUTCFullYear()/getUTCMonth()`, and `dayOfMonth` at :70 is `now.getUTCDate()`. Between 00:00
+ * and 02:00 Rome in summer, UTC is still the previous day, and on the 1st of a month that is a
+ * different MONTH. A Rome-based default would ask for a month the server has no plan rows for and
+ * render an empty band for two hours a night.
+ *
+ * Verified 2026-08-12 11:58 Rome = 09:58 UTC — same calendar day, so no divergence right now. The
+ * window is narrow, not absent, and this is the cheap side to be correct on.
+ */
+export const currentMonthUTC = (): string => {
+  const n = new Date()
+  return `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** `YYYY-MM`, months 01–12 only. `2026-13`, `2026-00`, `26-08` and `2026-8` are all rejected. */
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+
+/** Step a `YYYY-MM` by whole months, without ever constructing a local-time date. */
+export function shiftMonth(month: string, by: number): string {
+  const [y, m] = month.split('-').map(Number)
+  const idx = y * 12 + (m - 1) + by
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
+}
+
 export type BspMetric = 'spend' | 'clicks' | 'impressions' | 'orders'
 const METRICS: readonly BspMetric[] = ['spend', 'clicks', 'impressions', 'orders']
 
@@ -55,6 +88,8 @@ export interface BspUrlState {
   campaign: string
   line: string
   weeks: number
+  /** `YYYY-MM`. Defaults to the CURRENT month in UTC — see `currentMonthUTC`. */
+  month: string
   metric: BspMetric
   /** null when absent or unrecognised; a jump target, not persisted accordion state. */
   section: BspSection | null
@@ -88,6 +123,11 @@ export function parseUrlState(params: URLSearchParams): BspUrlState {
   const weeksRaw = Number(params.get('weeks'))
   const weeks = Number.isInteger(weeksRaw) && weeksRaw >= MIN_WEEKS && weeksRaw <= MAX_WEEKS ? weeksRaw : DEFAULT_WEEKS
 
+  // A malformed month falls back to the current one rather than throwing or rendering an empty
+  // band. `?month=2026-13` is not a month; it is a typo, and the default view is the honest answer.
+  const monthRaw = params.get('month')
+  const month = monthRaw && MONTH_RE.test(monthRaw) ? monthRaw : currentMonthUTC()
+
   const metricRaw = params.get('metric') as BspMetric | null
   const metric = metricRaw && METRICS.includes(metricRaw) ? metricRaw : DEFAULT_METRIC
 
@@ -100,6 +140,7 @@ export function parseUrlState(params: URLSearchParams): BspUrlState {
     campaign,
     line: grain(params.get('line')),
     weeks,
+    month,
     metric,
     section,
     open: parseOpen(params.get('open')),
@@ -142,6 +183,7 @@ export function serialiseUrlState(s: BspUrlState): string {
   if (s.campaign) p.set('campaign', s.campaign)
   if (s.line) p.set('line', s.line)
   if (s.weeks !== DEFAULT_WEEKS) p.set('weeks', String(s.weeks))
+  if (s.month !== currentMonthUTC()) p.set('month', s.month)
   if (s.metric !== DEFAULT_METRIC) p.set('metric', s.metric)
   if (s.section) p.set('section', s.section)
   if (s.open) p.set('open', serialiseOpen(s.open))
@@ -181,7 +223,7 @@ export function patchUrlState(current: URLSearchParams, patch: Record<string, st
  * identical — does not trigger a navigation on every load.
  */
 export function needsNormalising(current: URLSearchParams): boolean {
-  const known = new Set(['market', 'portfolio', 'campaign', 'line', 'weeks', 'metric', 'section', 'open'])
+  const known = new Set(['market', 'portfolio', 'campaign', 'line', 'weeks', 'month', 'metric', 'section', 'open'])
   const mine = [...current.entries()].filter(([k]) => known.has(k))
   const canonical = [...new URLSearchParams(serialiseUrlState(parseUrlState(current))).entries()]
   const norm = (xs: Array<[string, string]>) => xs.map(([k, v]) => `${k}=${v}`).sort().join('&')
