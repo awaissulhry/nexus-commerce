@@ -105,6 +105,11 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.3 (`GET`/`PUT`/`DELETE /advertising/harvest-destination`, additive) | 2026-08-12 | **released** — landed `f5522c406` |
 | `apps/api/src/services/advertising/ads-keyword-funnel.service.ts` | HV.3 (**one `export` keyword** on `gatherProductAdGroups`) | 2026-08-12 | **released** — landed `f5522c406`; no behaviour change, nothing else in the file touched |
 | `…/rules-automation/rules-automation.css` | HV.3 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `28ab5273e`, EOF-append only, every hunk diffed and mine |
+| `apps/api/src/services/advertising/ads-reports.service.ts` | HV.4a (comment correction only) | 2026-08-12 | **released** — landed `d5b039b26` |
+| `apps/api/src/services/advertising/ads-harvest.service.ts` | HV.4 (per-candidate outcomes + AD_GROUP-scoped isolation negative, additive) | 2026-08-12 | **released** — landed `d8df06367`; `negateScope` defaults to CAMPAIGN so both existing callers are byte-identical |
+| `apps/api/src/services/advertising/ads-create.service.ts` | HV.4 (optional `evidence` on `NewKeyword`, additive) | 2026-08-12 | **released** — landed `d8df06367` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.4 (`GET`/`POST /advertising/harvest-promote`, additive) | 2026-08-12 | **released** — landed `d8df06367` |
+| `…/rules-automation/rules-automation.css` | HV.4 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `6be25d22f`, EOF-append only, every hunk diffed and mine |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
 | `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
@@ -375,6 +380,16 @@ when the feed died. The fix reports itself as the absence of the problem. Two ru
 **a cron summary is an interface the moment anything parses it** (SQP.1 kept the token name `rows=`
 for this reason and added `parsed=` alongside rather than renaming), and **grep for readers of
 `outputSummary` before you make a handler throw.**
+
+**🔴 HV.4a → NEG, BID, PLC and anyone else reading `AmazonAdsSearchTerm`, 2026-08-12 — there is
+NO duplication hazard in that table, and "fixing" one would destroy data.** The table has no unique
+constraint and the ingest deletes-by-`reportRunId` then bulk-inserts, which looks alarming, and the
+ingest's own comment names a natural key that **omits `matchedKeywordId`**. Measured: on the key
+that comment names there are 145 duplicated keys over 157 rows; **adding `matchedKeywordId` gives
+11,026 keys and zero duplicates**, exactly the table's row count. Amazon returns ONE ROW PER
+(query × matched keyword), so the same term in one ad group on one day legitimately appears two or
+three times with different clicks and cost. **`SUM` over the shorter key is correct — do not
+de-duplicate, and do not add a unique constraint on it.** The comment is corrected in `d5b039b26`.
 
 **HV.2 → every session, 2026-08-12 — a probe without `cache: 'no-store'` will lie to you.**
 The ads read routes set `Cache-Control: private, max-age=60`. A browser probe that omits
