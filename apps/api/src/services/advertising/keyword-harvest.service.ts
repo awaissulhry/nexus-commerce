@@ -74,6 +74,11 @@ import prisma from '../../db.js'
 // HV.2 — the stored criteria. Kept in its own module because HV.4 (the write path) and any later
 // engine repair must resolve the SAME policy this page renders, and a copy would drift.
 import { resolveHarvestPolicy, type HarvestCriteria, type HvPolicyGrain } from './harvest-policy.service.js'
+// HV.3 — where a graduated keyword would go, and the §4.1 coupling that follows from it.
+import {
+  loadDestinationGraph, resolveStoredDestinations, resolveDestination,
+  type ResolvedDestination, type HvCreateType,
+} from './harvest-destination.service.js'
 
 /** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
 export const HV_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
@@ -238,6 +243,15 @@ export interface HarvestRow {
    * HV.4; this only states the fact.
    */
   negatedIn: { rows: number; blocking: number; campaignLevel: number }
+  /**
+   * HV.3 — where this candidate would go, how that was decided, and whether the source would be
+   * negated. `null` only when the row has no local ad group at all.
+   *
+   * 🔴 The destination is what decides the isolation negative: `applyHarvest` negates the source
+   * ONLY when the keyword lands elsewhere. So "promoted into the source" and "did not negate the
+   * source" are one fact, and it is computed here rather than inferred by the client.
+   */
+  destination: ResolvedDestination | null
 }
 
 export interface HvCensus {
@@ -296,6 +310,16 @@ export interface HvCensus {
    * grid.
    */
   negativeCandidates: { count: number; spendCents: number }
+  /** HV.3 — how the destination resolved across the whole candidate set, and the §4.1 coupling. */
+  destinations: {
+    stored: number
+    resolvedUnique: number
+    ambiguous: number
+    none: number
+    wouldNegate: number
+    wouldNotNegate: number
+    wouldDuplicate: number
+  }
   /** ASIN candidates, split the way `applyHarvest` splits them */
   productCandidates: { graduations: number; negatives: number }
 }
@@ -388,6 +412,10 @@ export interface HvRequest extends HvScopeRequest {
   minSpendEur?: number | null
   status?: HvStatus | 'all' | null
   kind?: HvKind | 'all' | null
+  /** HV.3 — filter by how the destination resolved */
+  dest?: 'all' | 'proposed' | 'overridden' | 'none' | null
+  /** HV.3 — only rows that would create a second exact keyword for a term already held elsewhere */
+  competing?: boolean | null
   q?: string | null
   sort?: HvSortKey | null
   dir?: 'asc' | 'desc'
@@ -533,6 +561,14 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   }
   const all = [...aggs.values()]
 
+  // ── HV.3 — the destination graph and any stored overrides, read once for the whole request.
+  // `loadDestinationGraph` is three reads; `resolveStoredDestinations` is one. Both are needed for
+  // every row, so hoisting them out of the row loop is the difference between 4 queries and 4×N.
+  const [destGraph, storedDest] = await Promise.all([
+    loadDestinationGraph(),
+    resolveStoredDestinations({ market: req.market, line: req.line, portfolio: req.portfolio, campaign: req.campaign, adGroup: req.adGroup }),
+  ])
+
   // ── repair 2: the existence join. Read account-wide, because `exact-elsewhere` is by definition
   // a question about ad groups outside the scope.
   const positives = await prisma.adTarget.findMany({
@@ -639,6 +675,15 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
       status,
       existing,
       negatedIn: neg,
+      // 🔴 HV.3. The create type is the tightest one the term has EARNED — the same ladder the
+      // looser-match criterion encodes: a keyword graduates to EXACT, an ASIN to a PRODUCT target.
+      destination: ag
+        ? resolveDestination({
+          graph: destGraph, stored: storedDest,
+          sourceAdGroupId: ag.id, sourceAdGroupName: ag.name,
+          term: a.query, kind, createType: (kind === 'product' ? 'PRODUCT' : 'EXACT') as HvCreateType,
+        })
+        : null,
     }
   }
 
@@ -765,6 +810,18 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
       singleOrder: singles.length,
       repeatedValues,
     },
+    // 🔴 HV.3 — the destination picture over the FULL candidate set, never a page of rows.
+    destinations: {
+      stored: rowsAll.filter((r) => r.destination?.source === 'stored').length,
+      resolvedUnique: rowsAll.filter((r) => r.destination?.source === 'resolved-unique').length,
+      ambiguous: rowsAll.filter((r) => r.destination?.source === 'resolved-ambiguous').length,
+      none: rowsAll.filter((r) => !r.destination || r.destination.source === 'none').length,
+      // The §4.1 coupling as two numbers: how many promotions would ALSO negate their source, and
+      // how many would silently leave the discovery ad group competing for the same term.
+      wouldNegate: rowsAll.filter((r) => r.destination?.wouldNegateAtSource).length,
+      wouldNotNegate: rowsAll.filter((r) => r.destination && !r.destination.wouldNegateAtSource).length,
+      wouldDuplicate: rowsAll.filter((r) => r.destination?.status === 'would-duplicate').length,
+    },
     negativeCandidates: { count: keywordNegatives.length, spendCents: keywordNegatives.reduce((s, a) => s + a.costCents, 0) },
     productCandidates: { graduations: rowsAll.filter((r) => r.kind === 'product').length, negatives: productNegatives.length },
   }
@@ -777,6 +834,8 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
     market: tally(rowsAll, (r) => r.market),
     targetingType: tally(rowsAll, (r) => (r.campaign.targetingType ?? 'unknown')),
     matchedVia: tally(rowsAll.flatMap((r) => r.matchedVia.map((m) => m.matchType)), (m) => m),
+    destination: tally(rowsAll, (r) => (r.destination?.source ?? 'none')),
+    destStatus: tally(rowsAll, (r) => (r.destination?.status ?? 'no-destination')),
   }
 
   // ── the row filters
@@ -784,6 +843,17 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   let rows = rowsAll
   if (req.status && req.status !== 'all') rows = rows.filter((r) => r.status === req.status)
   if (req.kind && req.kind !== 'all') rows = rows.filter((r) => r.kind === req.kind)
+  // HV.3 — `?dest=` filters by HOW the destination resolved, not by which one it is. "Show me
+  // everything nobody has decided yet" is the question this page gets asked.
+  if (req.dest && req.dest !== 'all') {
+    rows = rows.filter((r) => {
+      const s = r.destination?.source ?? 'none'
+      return req.dest === 'proposed' ? (s === 'resolved-unique' || s === 'resolved-ambiguous')
+        : req.dest === 'overridden' ? s === 'stored'
+        : s === 'none'
+    })
+  }
+  if (req.competing === true) rows = rows.filter((r) => r.destination?.status === 'would-duplicate')
   if (needle) rows = rows.filter((r) => `${r.term} ${r.campaign.name} ${r.adGroup.name}`.toLowerCase().includes(needle))
 
   const dir = req.dir === 'asc' ? 1 : -1

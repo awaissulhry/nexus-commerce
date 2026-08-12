@@ -64,7 +64,10 @@ function roleOf(name: string, targets: Array<{ expressionType: string; isNegativ
   return top === 'EXACT' || top === 'PHRASE' || top === 'BROAD' ? top : null
 }
 
-async function gatherProductAdGroups(productId: string) {
+// HV.3 — exported (one keyword; no behaviour change) so the Keyword Harvest page's destination
+// resolver reads the SAME product → ad-group walk this funnel does, rather than a second copy that
+// would drift. Nothing else in this file is touched by HV.3.
+export async function gatherProductAdGroups(productId: string) {
   const childRows = await prisma.product.findMany({ where: { parentId: productId }, select: { id: true } })
   const productIds = [...new Set([productId, ...childRows.map((c) => c.id)])]
   const ads = await prisma.adProductAd.findMany({ where: { productId: { in: productIds } }, select: { adGroupId: true } })

@@ -16,6 +16,11 @@ import { getNegatives, getTermContext, NEG_MARKETS, NEG_MARKET_ALL } from '../se
 import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
 import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
 import {
+  loadDestinationGraph, resolveStoredDestinations, rankDestinations, listHarvestDestinations,
+  saveHarvestDestination, deleteHarvestDestination, HV_CREATE_TYPES,
+  type HvDestGrain, type HvCreateType,
+} from '../services/advertising/harvest-destination.service.js'
+import {
   getBidGrid, getBidCursorForRequest, BID_MARKETS, BID_MARKET_ALL, BID_BANDS,
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
 } from '../services/advertising/bid-grid.service.js'
@@ -580,6 +585,9 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       minSpendEur: numOrNull(q.minSpend),
       status: oneOf(q.status, ['new', 'already-exact-here', 'exact-elsewhere', 'local-only', 'all'] as const) as HvStatus | 'all' | null,
       kind: oneOf(q.kind, ['keyword', 'product', 'all'] as const) as HvKind | 'all' | null,
+      // HV.3 — how the destination resolved, and the self-competition filter.
+      dest: oneOf(q.dest, ['all', 'proposed', 'overridden', 'none'] as const),
+      competing: q.competing === '1' ? true : null,
       q: q.q ?? null,
       sort: oneOf(q.sort, ['term', 'market', 'source', 'impressions', 'clicks', 'spend', 'orders', 'sales', 'acos', 'cpc', 'status', 'negated', 'kind'] as const) as HvSortKey | null,
       dir: q.dir === 'asc' ? 'asc' : 'desc',
@@ -811,6 +819,67 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       const err = e as { code?: string; message?: string }
       reply.status(err.code === 'not_found' ? 404 : 400)
       return { ok: false, error: err.message ?? 'could not remove the policy', code: err.code ?? 'bad_request' }
+    }
+  })
+
+  // ── HV.3 — the harvest destination ──────────────────────────────────
+  //
+  // 🔴 These three are the STORED override only. `GET /advertising/keyword-harvest` already returns
+  // the resolved destination on every row, because the destination is what decides whether the H.3
+  // isolation negative fires — it is a property of a candidate, not a separate lookup.
+  //
+  // Nothing here reaches Amazon. HV.4 owns the write.
+  fastify.get('/advertising/harvest-destination', async (request) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
+    const scope = { market, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null }
+    const [stored, all] = await Promise.all([resolveStoredDestinations(scope), listHarvestDestinations()])
+
+    // The picker's options for ONE source ad group. Supplied on demand rather than on every row of
+    // the grid: the shortlist is 5-21 ad groups per row and 8 rows of it is a payload nobody reads.
+    let shortlist: ReturnType<typeof rankDestinations> = []
+    if (q.sourceAdGroupId) {
+      const graph = await loadDestinationGraph()
+      const createType = (HV_CREATE_TYPES as string[]).includes(q.matchType ?? '') ? (q.matchType as HvCreateType) : 'EXACT'
+      shortlist = rankDestinations(graph, q.sourceAdGroupId, createType, q.term ?? '', q.kind === 'product' ? 'product' : 'keyword')
+    }
+    return { resolved: Object.fromEntries(stored), destinations: all, shortlist }
+  })
+
+  fastify.put('/advertising/harvest-destination', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    try {
+      const saved = await saveHarvestDestination({
+        scopeGrain: String(b.scopeGrain ?? '') as HvDestGrain,
+        scopeId: b.scopeId == null ? null : String(b.scopeId),
+        matchType: String(b.matchType ?? 'EXACT') as HvCreateType,
+        adGroupId: String(b.adGroupId ?? ''),
+        negateAtSource: b.negateAtSource !== false,
+        updatedBy: `user:${userId}`,
+      })
+      return { ok: true, saved }
+    } catch (e) {
+      const err = e as { code?: string; message?: string }
+      reply.status(400)
+      return { ok: false, error: err.message ?? 'could not save the destination', code: err.code ?? 'bad_request' }
+    }
+  })
+
+  fastify.delete('/advertising/harvest-destination', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    try {
+      const out = await deleteHarvestDestination(
+        String(q.scopeGrain ?? '') as HvDestGrain,
+        q.scopeId ?? null,
+        String(q.matchType ?? 'EXACT') as HvCreateType,
+      )
+      return { ok: true, ...out }
+    } catch (e) {
+      const err = e as { code?: string; message?: string }
+      reply.status(err.code === 'not_found' ? 404 : 400)
+      return { ok: false, error: err.message ?? 'could not remove the destination', code: err.code ?? 'bad_request' }
     }
   })
 
