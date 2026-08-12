@@ -639,17 +639,28 @@ export function ShareOfVoiceClient() {
                   Δ vs {p.prior?.asOf ? <>the week of {dayMonth(p.prior.asOf)}</> : 'a prior week'}
                   {p.prior?.gapDays != null && p.prior.gapDays !== 7 && <> ({p.prior.gapDays}d earlier)</>}
                 </i>
+                {/* 🔴 TWO different reasons a Δ is absent, and they had one message between them
+                    until prod showed it: at ?market=FR&weeks=4 the strip read "no comparable prior
+                    week" directly beneath a header naming 12 Jul. There IS a prior week there —
+                    what is missing is any query measured in both. A page built to stop one blank
+                    meaning four things cannot ship one sentence meaning two. */}
                 {sd && sd.deltaPt != null ? (
                   <b className={sd.deltaPt > 0 ? 'up' : sd.deltaPt < 0 ? 'down' : undefined}>{deltaPt(sd.deltaPt)}</b>
+                ) : p.prior?.asOf ? (
+                  <b className="none">no query in both weeks</b>
                 ) : (
                   <b className="none">no comparable prior week</b>
                 )}
                 <em title={sd && sd.queries > 0
                   ? `Computed over the ${num(sd.queries)} queries measured in BOTH weeks within this scope — never across two different query populations. ${num(sd.withoutPrior)} measured queries have no row in the prior week and are excluded from both sides.`
-                  : 'No earlier week is comparable: every older period is either too thin to use or carries a zero our-side count on every row.'}>
+                  : p.prior?.asOf
+                    ? `The week of ${dayMonth(p.prior.asOf)} is comparable, but not one of the ${num(c?.measured ?? 0)} queries measured here has a row in it — Brand Analytics reports on a fixed ten ASINs per market and the queries they surface change week to week.`
+                    : 'No earlier week is comparable: every older period is either too thin to use or carries a zero our-side count on every row.'}>
                   {sd && sd.queries > 0
                     ? <>{sharePct(sd.priorShare ?? 0)} → {sharePct(sd.nowShare ?? 0)} on {num(sd.queries)} queries in both</>
-                    : <>nothing to compare</>}
+                    : p.prior?.asOf
+                      ? <>0 of {num(c?.measured ?? 0)} measured queries appear in both</>
+                      : <>nothing to compare</>}
                 </em>
               </span>
             </p>
