@@ -71,9 +71,34 @@ export const RULES_TABS: RulesTab[] = [
   },
   { key: 'budget', label: 'Budget' },
   { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, subtitle: 'Hold a rank, on a schedule, across many campaigns' },
-  { key: 'budget-schedules', label: 'Budget Schedules' },
-  { key: 'placement', label: 'Placement' },
-  { key: 'share-of-voice', label: 'Share of Voice' },
+  // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
+  // `BudgetSchedule` table has never held a row and its executor has ticked 4,909 times over
+  // nothing — but budget still binds on 32.7% of campaign-days, so the subject is pacing and level,
+  // with the schedule as an instrument below it.
+  {
+    key: 'budget-schedules',
+    label: 'Budget Pacing & Schedules',
+    routed: true,
+    subtitle: 'Where the money goes, how fast, and whether it lasts the month',
+  },
+  // PLC.0 — its own page. The tab used to render a placement RULE list: 8 rules, all disabled,
+  // 0 successes ever, last activity 2026-08-03 — while the lever they describe moved 15,366 times
+  // in 60 days and no screen listed one campaign's three lanes side by side.
+  {
+    key: 'placement',
+    label: 'Placement',
+    routed: true,
+    subtitle: 'Which lane your ads show in, what each one is worth, and who put the multiplier there',
+  },
+  // SOV.0 — its own page. The tab used to render SovTrackerTab kind="sov": a [ Rules | Report ]
+  // segment whose Rules half is the DEFAULT view and can never render a row, over a column that
+  // divided by 28% of our real impressions.
+  {
+    key: 'share-of-voice',
+    label: 'Share of Voice',
+    routed: true,
+    subtitle: 'On the queries that matter, how much of each market do we hold?',
+  },
   // KT.1 — its own page. The tab used to render SovTrackerTab kind="tracker": a [ Rules | Report ]
   // segment over KeywordRank, a table with 0 rows, so all four columns read `#—` on every row.
   {

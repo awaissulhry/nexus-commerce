@@ -63,6 +63,23 @@ const nextConfig = {
         destination: '/marketing/ads/rules-automation/bid',
         permanent: true,
       },
+      // BSP.0 — same mechanism, same shape, for Budget Pacing & Schedules. One literal entry rather
+      // than the derived rule §4 of the locks doc proposes: deriving it needs the routed-key list
+      // lifted out of `_shared/tabs.tsx` into a `.mjs` this CommonJS config can require, and four
+      // sessions hold that file right now.
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'budget-schedules' }],
+        destination: '/marketing/ads/rules-automation/budget-schedules',
+        permanent: true,
+      },
+      // PLC.0 — same mechanism, same shape, for Placement.
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'placement' }],
+        destination: '/marketing/ads/rules-automation/placement',
+        permanent: true,
+      },
 
       // Phase 4 (2026-05-06): /pim/review → /catalog/organize.
       // Page does catalog organization, not a review queue; renamed

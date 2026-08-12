@@ -49,7 +49,7 @@ export interface HeaderAction { label: string; href?: string; onClick?: () => vo
 export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string; onClick?: () => void }
 
 export function AdsPageHeader({
-  title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange,
+  title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
   showLearn = true, showDataSync = true, showDateRange = true, showChangeLog = false, primaryAction, channel = 'amazon',
 }: {
   title: string; subtitle: string
@@ -59,6 +59,28 @@ export function AdsPageHeader({
   // optional: parent can observe the picked range; the header owns the state for now
   rangePreset?: string; onRangePreset?: (p: string) => void
   onDateRange?: (start: Date, end: Date) => void
+  /**
+   * PLC.0 (additive; default off) — make this control CONTROLLED.
+   *
+   * `onDateRange` could already read a change out; nothing could put one back in, because the
+   * range lives in this component's own `useState` seeded to the last 7 days. So a page whose
+   * window is in its URL — Placement arrives on `?preset=last30` or `?start=…&end=…` — rendered a
+   * header label that disagreed with its own grid. Two controls for one fact, which is the defect
+   * that sank the reverted scope bar.
+   *
+   * Passed: the header renders this range and still calls `onDateRange` on every change. Omitted:
+   * the header keeps its own state and every other page is byte-identical.
+   *
+   * ⚠ `DateRangePicker` seeds its calendar HIGHLIGHT from `value` at mount only, so a change that
+   * does not originate from the picker (the back button) moves the label — which is what you read
+   * — but not the highlighted days until the popover is reopened. Left alone deliberately: that is
+   * a second behaviour change to a control 49 pages render.
+   *
+   * ⚠ `rangePreset` / `onRangePreset` above are DEAD — declared here and never destructured. They
+   * are left in place rather than deleted because deleting a prop from a 49-page header is not
+   * this session's change to make; do not wire anything to them expecting a callback.
+   */
+  dateRange?: { start: Date; end: Date }
   // CBN — per-page header tailoring (Rules & Automation hides Learn/Data-Sync/Date
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showLearn?: boolean; showDataSync?: boolean; showDateRange?: boolean
@@ -73,7 +95,9 @@ export function AdsPageHeader({
   const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : '/marketing/ads/changelog'
   const [open, setOpen] = useState<'' | 'action'>('')
   const close = () => setOpen('')
-  const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
+  const [ownRange, setOwnRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
+  // Controlled when the parent passes one, uncontrolled otherwise — see the `dateRange` prop doc.
+  const shownRange = dateRange ?? ownRange
 
   // APS.2a — these pages pass a plain string[] of markets they saw in their own
   // data, and every one of those is selectable-as-a-filter. Widen to the shared
@@ -103,7 +127,7 @@ export function AdsPageHeader({
         )}
         {showDataSync && <button type="button" className="h10-hbtn ghost" onClick={onDataSync} disabled={syncing}><RefreshCw size={14} className={syncing ? 'spin' : ''} /> Data Sync</button>}
 
-        {showDateRange && <DateRangePicker value={dateRange} onChange={(s, e) => { setDateRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
+        {showDateRange && <DateRangePicker value={shownRange} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
         {/* market / account selector — shared with the campaign builders (APS.2a) */}
         <MarketSelect

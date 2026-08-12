@@ -1889,3 +1889,544 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-hv-field { flex: 1 1 190px; }
   .h10-hv-census { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   PLC.0 — Placement, its own page (/rules-automation/placement).
+
+   Appended at EOF, `h10-plc-*` only, and no `.dark` block: `.h10-shell` sets
+   `color-scheme: light` with hard-coded hex, so a dark block yields dark cards in a permanently
+   light shell. The one reused family is the shared grid's `h10-am-*` markup, overridden at the
+   very bottom of this block where it has to be.
+
+   Source order beats specificity in this file, so every override sits at the END of what it
+   overrides. Palette is the section's own — #1c2530 / #55606d / #667080 on #fff and #f1f4f8 —
+   reused rather than re-picked so nine pages stay one page.
+
+   The page gutter inside `.h10-rules-page` is ZERO, not 24px: `h10-main`'s 30px padding IS the
+   gutter, and every band sits at the same left edge as `.h10-am-card`. Nothing in this block
+   carries a horizontal margin. `.h10-svt-seg` (:523) carries `margin: 10px 24px 0` and is where
+   that 24px keeps getting copied from — which is why the lane control below is its own family
+   rather than a reuse of it.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the scope bar ───────────────────────────────────────────────────────────────────────────── */
+.h10-plc-scope { display: flex; flex-direction: column; gap: 7px; margin: 14px 0 0; padding: 11px 14px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
+.h10-plc-scoperow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.h10-plc-lbl { flex: 0 0 auto; align-self: center; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
+.h10-plc-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.h10-plc-field .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: #667080; }
+/* The lane narrows ROWS, not campaigns, so it is separated from the three campaign grains by a
+   rule rather than sitting fourth in the same funnel. */
+.h10-plc-sep { flex: 0 0 auto; align-self: stretch; width: 1px; min-height: 34px; background: #e3e7ec; }
+.h10-plc-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11.5px; font-weight: 600; color: #55606d; background: #f1f4f8; border: 0; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+.h10-plc-clear:hover { color: #1c2530; background: #e7ebf1; }
+
+/* ── the sentences under it ──────────────────────────────────────────────────────────────────── */
+.h10-plc-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-plc-said b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+
+.h10-plc-fresh { margin: 6px 0 0; font-size: 11.5px; line-height: 1.6; color: #55606d; }
+.h10-plc-fresh b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+/* The engine clause. Dotted underline because it carries a title that explains why the counts
+   above are a reading of this hour — an affordance, not decoration. */
+.h10-plc-eng { border-bottom: 1px dotted #aab3bf; cursor: help; }
+.h10-plc-fresh .lnk { font: inherit; font-size: inherit; font-weight: 700; color: #1f6fde; text-decoration: underline; }
+
+.h10-plc-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-plc-scope .h10-plc-note { margin: 0; }
+.h10-plc-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
+.h10-plc-note b { font-weight: 800; color: #1c2530; }
+
+.h10-plc-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-plc-blind svg { flex-shrink: 0; margin-top: 2px; }
+.h10-plc-blind b { font-weight: 800; color: #7a4512; }
+
+/* ── the toolbar: one search box and one lane control ────────────────────────────────────────── */
+.h10-plc-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.h10-plc-search { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #e3e7ec; border-radius: 7px; background: #fff; }
+.h10-plc-search svg { flex-shrink: 0; color: #667080; }
+.h10-plc-search input { font: inherit; font-size: 11.5px; color: #1c2530; background: transparent; border: 0; padding: 6px 0; width: 200px; }
+.h10-plc-search input:focus { outline: none; }
+.h10-plc-search:focus-within { outline: 2px solid #1f6fde; outline-offset: -1px; border-color: #1f6fde; }
+.h10-plc-search button { display: inline-flex; align-items: center; font: inherit; color: #667080; background: none; border: 0; padding: 0; cursor: pointer; }
+.h10-plc-search button:hover { color: #1c2530; }
+
+.h10-plc-lanes { display: inline-flex; gap: 4px; padding: 2px; background: #f1f4f8; border-radius: 9px; }
+.h10-plc-lanes .seg { font: inherit; font-size: 11.5px; font-weight: 600; color: #55606d; background: transparent; border: 0; border-radius: 7px; padding: 4px 11px; cursor: pointer; transition: background .12s, color .12s; }
+.h10-plc-lanes .seg:hover { color: #1c2530; }
+.h10-plc-lanes .seg.on { color: #1f6fde; background: #fff; box-shadow: 0 1px 3px rgba(20,28,38,.12); }
+
+.h10-plc-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: #667080; }
+.h10-plc-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-weight: 700; }
+
+/* ── the cells ───────────────────────────────────────────────────────────────────────────────── */
+.h10-plc-camp { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.h10-plc-camp .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-plc-camp .fl { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
+.h10-plc-camp .fl.warn { background: #fff6e8; color: #7a4512; }
+.h10-plc-camp .fl.bad { background: #fdecec; color: #9c2b2b; }
+
+.h10-plc-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
+
+.h10-plc-st { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; }
+.h10-plc-st.enabled { background: #e7f5ed; color: #14724d; }
+.h10-plc-st.paused { background: #f1f4f8; color: #55606d; }
+.h10-plc-st.archived { background: #f1f4f8; color: #667080; }
+
+.h10-plc-lane { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.h10-plc-lane.top { background: #eaf1fd; color: #14509c; }
+.h10-plc-lane.rest { background: #eef3f0; color: #1f5a44; }
+.h10-plc-lane.product { background: #f4f1f8; color: #4b3b78; }
+
+.h10-plc-mult { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-plc-mult.hot { color: #8a5316; }
+.h10-plc-roas { font-variant-numeric: tabular-nums; }
+.h10-plc-roas.good { color: #14724d; font-weight: 700; }
+.h10-plc-roas.bad { color: #9c2b2b; font-weight: 700; }
+.h10-plc-is { display: inline-flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; color: #1c2530; white-space: nowrap; }
+.h10-plc-is i { font-style: normal; padding: 1px 5px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10px; font-weight: 800; }
+
+/* 🔴 Four different absences, four different words. A shared glyph across them is exactly the
+   defect this page exists to remove — "0" and "we never looked" are not the same sentence. */
+.h10-plc-notset { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; cursor: help; }
+.h10-plc-nodel { padding: 1px 7px; border-radius: 5px; background: #fff6e8; color: #7a4512; font-size: 10.5px; font-weight: 700; cursor: help; }
+.h10-plc-nolane { padding: 1px 7px; border-radius: 5px; background: #f4f1f8; color: #4b3b78; font-size: 10.5px; font-weight: 700; cursor: help; }
+.h10-plc-nm { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; cursor: help; }
+.h10-plc-nd { color: #667080; cursor: help; }
+
+.h10-plc-own { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.h10-plc-own.none { background: #fff6e8; color: #7a4512; cursor: help; }
+.h10-plc-own.schedule, .h10-plc-own.plan { background: #eaf1fd; color: #14509c; text-decoration: none; }
+.h10-plc-own.schedule:hover, .h10-plc-own.plan:hover { text-decoration: underline; }
+
+.h10-plc-tot { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+
+.h10-plc-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
+.h10-plc-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-plc-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-plc-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #1f6fde; text-decoration: underline; cursor: pointer; }
+
+/* ── 🔴 the first column, LAST so it wins ──────────────────────────────────────────────────────
+   `ads.css:695` paints `.h10-am-grid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
+   underlines on hover — because every other consumer of this grid makes that column a link. Here
+   it is not one (P1 gives the row an inspector), so all three halves of that promise are undone at
+   (0,3,2). `!important` is not needed and would make this harder to delete when P1 lands. */
+.h10-am-grid td.nm .h10-plc-camp span.t { color: #1c2530; font-weight: 700; cursor: default; }
+.h10-am-grid td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
+
+@media (max-width: 1200px) {
+  .h10-plc-search input { width: 150px; }
+}
+@media (max-width: 900px) {
+  .h10-plc-scoperow { gap: 10px; }
+  .h10-plc-field { flex: 1 1 190px; }
+  .h10-plc-sep { display: none; }
+  .h10-plc-search input { width: 100%; }
+}
+
+/* ── BID.S0b — the derived target name ─────────────────────────────────────────────────────────
+   256 of 3,154 targets carry no `expressionValue`: the auto-targeting groups and the
+   audience/category forms. Their identity column was blank on the deployed page, including on
+   the 7th-largest spender. The label is now derived server-side, and marked as derived — an
+   operator must be able to tell "Substitutes" (a name we constructed) from "motorrad jacke"
+   (a string Amazon stores). Italic + a lighter weight, never a different colour: colour in this
+   column already means "is a link". */
+.h10-am-grid td.nm .h10-bd-target span.t.derived { font-style: italic; font-weight: 600; color: #55606d; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   BSP.0 — Budget Pacing & Schedules
+   Appended at EOF, `h10-bsp-*` prefix. Source order beats specificity in this file and an override
+   must sit at the END of what it overrides; nothing here overrides another page's selector.
+
+   The page gutter inside `.h10-rules-page` is ZERO — `h10-main`'s 30px padding IS the gutter, so
+   nothing below carries a horizontal margin of its own.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the two pinned bars ────────────────────────────────────────────────────────────────────────
+   Sticky inside MAIN.h10-main, which is the app shell's real scroller (NOT the window and NOT
+   `main.flex-1.overflow-auto`). That container carries `padding: 26px 30px`, so `top: 0` pins the
+   block at y=26 and rows would otherwise scroll visibly through the 26px above it — the negative
+   box-shadow paints that strip in the shell's own background (#f4f6f9) so they cannot.
+
+   z-index 25 clears the shared grid's sticky `thead th` (no z-index of its own) and its frozen
+   columns (z-index 3). The spine's H10Selects portal to document.body, so they are outside this
+   stacking context and cannot be clipped by the card. */
+.h10-bsp-pin {
+  position: sticky; top: 0; z-index: 25;
+  margin: 10px 0 0;
+  background: #fff; border: 1px solid #e3e7ec; border-radius: 10px;
+  box-shadow: 0 -26px 0 0 #f4f6f9, 0 3px 10px rgba(16, 24, 40, .05);
+}
+
+/* ── the scope spine ─────────────────────────────────────────────────────────────────────────── */
+/* Captions sit INLINE before each select rather than above it: stacked caps cost 14px per field
+   and the whole chrome budget for the two pinned bars is 120px. */
+.h10-bsp-spine { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 12px; }
+.h10-bsp-lbl { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+.h10-bsp-field { display: inline-flex; align-items: center; gap: 6px; }
+.h10-bsp-field .cap { font-size: 11px; font-weight: 700; color: #667080; white-space: nowrap; }
+.h10-bsp-clear { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-bsp-clear:hover { background: #e8f1fd; color: #1c2530; }
+.h10-bsp-reach { margin-left: auto; font-size: 12px; font-weight: 600; color: #55606d; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-bsp-reach b { font-weight: 800; color: #1c2530; }
+.h10-bsp-reach .dim { color: #667080; }
+
+/* ── the pinned pacing band ─────────────────────────────────────────────────────────────────── */
+.h10-bsp-band { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 5px 12px; border-top: 1px solid #eef1f5; }
+.h10-bsp-band.broke { background: #fdecea; border-top-color: #f5c6c2; border-radius: 0 0 9px 9px; }
+.h10-bsp-bandmsg { padding: 8px 0; font-size: 12px; line-height: 1.5; color: #55606d; }
+.h10-bsp-bandmsg b { font-weight: 800; color: #1c2530; }
+.h10-bsp-band.broke .h10-bsp-bandmsg { color: #7a1c16; }
+.h10-bsp-band.broke .h10-bsp-bandmsg b { color: #7a1c16; }
+.h10-bsp-bandmsg.dim { color: #667080; }
+
+.h10-bsp-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+/* A chip is a market selector AND a pacing readout. Unselected chips keep full-strength text — the
+   selection is carried by border and ground, never by opacity, because getComputedStyle reports the
+   DECLARED colour and an opacity-dimmed chip cannot be contrast-checked without compositing. */
+.h10-bsp-chip {
+  display: flex; flex-direction: column; gap: 2px; min-width: 124px;
+  padding: 4px 9px 5px; background: #fff; border: 1px solid #e3e7ec; border-radius: 8px;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.h10-bsp-chip:hover { border-color: #c2c9d3; background: #fbfcfe; }
+.h10-bsp-chip.on { border-color: #1f6fde; background: #f5f9ff; box-shadow: inset 0 0 0 1px #1f6fde; }
+.h10-bsp-chip .hd { display: flex; align-items: baseline; gap: 6px; line-height: 14px; }
+.h10-bsp-chip .hd b { font-size: 12px; font-weight: 800; color: #1c2530; letter-spacing: .02em; }
+.h10-bsp-chip .hd i { font-style: normal; font-size: 10.5px; font-weight: 700; }
+.h10-bsp-chip .amt { font-size: 11.5px; font-weight: 700; color: #1c2530; line-height: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-bsp-chip .amt s { text-decoration: none; color: #98a2b3; }
+.h10-bsp-chip .amt em { font-style: normal; font-weight: 700; color: #667080; }
+.h10-bsp-bar { display: block; width: 100%; margin-top: 2px; }
+
+.h10-bsp-chip.s-on-track .hd i { color: #146c43; }
+.h10-bsp-chip.s-over     .hd i { color: #b3261e; }
+.h10-bsp-chip.s-under    .hd i { color: #8a5316; }
+.h10-bsp-chip.s-no-budget .hd i { color: #55606d; }
+
+.h10-bsp-sum { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: #55606d; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-bsp-sum .l { display: inline-flex; align-items: baseline; gap: 5px; }
+.h10-bsp-sum b { font-weight: 800; color: #1c2530; }
+.h10-bsp-sum b.bad { color: #b3261e; }
+.h10-bsp-sum s { text-decoration: none; color: #c2c9d3; }
+.h10-bsp-plan { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-bsp-plan:hover { background: #e8f1fd; color: #10457f; border-color: #1f6fde; }
+
+/* ── the spine's explanation, OUTSIDE the sticky block ─────────────────────────────────────────
+   Inside, an appearing note would change the pinned block's height. Out here it scrolls with the
+   content, which is right: a sentence you read once should not follow you down the page. */
+.h10-bsp-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-bsp-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-bsp-note b { font-weight: 800; color: #1c2530; }
+.h10-bsp-note.bad { background: #fdecea; color: #7a1c16; }
+.h10-bsp-note.bad svg { color: #b3261e; }
+.h10-bsp-note.bad b { color: #7a1c16; }
+
+/* ── content + inspector rail ─────────────────────────────────────────────────────────────────
+   The rail is an in-flow COLUMN, not a DS Drawer: `Drawer` portals to document.body, which leaves
+   `.h10-shell`'s `color-scheme: light` pin and renders dark inside a permanently light page. The
+   layout wants it beside the sections anyway. */
+.h10-bsp-body { display: flex; align-items: flex-start; gap: 14px; }
+.h10-bsp-cols { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.h10-bsp-rail { flex: 0 0 320px; position: sticky; top: 112px; margin-top: 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-bsp-railhd { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eef1f5; }
+.h10-bsp-railhd b { flex: 1; min-width: 0; font-size: 13px; font-weight: 800; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-bsp-railhd button { display: inline-flex; padding: 4px; background: none; border: 0; border-radius: 6px; color: #667080; cursor: pointer; }
+.h10-bsp-railhd button:hover { background: #f1f4f8; color: #1c2530; }
+.h10-bsp-railbd { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.h10-bsp-railfacts { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.h10-bsp-railfacts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f1f4f8; }
+.h10-bsp-railfacts > div:last-child { border-bottom: 0; }
+.h10-bsp-railfacts dt { font-size: 11.5px; font-weight: 600; color: #55606d; }
+.h10-bsp-railfacts dd { margin: 0; font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bsp-railfacts dd.bad { color: #b3261e; }
+.h10-bsp-raillink { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 11px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 8px; font-size: 12px; font-weight: 700; color: #10457f; text-decoration: none; }
+.h10-bsp-raillink:hover { background: #e8f1fd; border-color: #1f6fde; }
+
+/* ── a section ────────────────────────────────────────────────────────────────────────────────── */
+.h10-bsp-sec { background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; scroll-margin-top: 120px; }
+.h10-bsp-sechd { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; background: none; border: 0; font: inherit; text-align: left; cursor: pointer; }
+.h10-bsp-sechd:hover { background: #fbfcfe; border-radius: 9px; }
+.h10-bsp-sechd .chev { flex: none; color: #98a2b3; transition: transform .15s ease; transform: rotate(-90deg); }
+.h10-bsp-sec.open .h10-bsp-sechd .chev { transform: rotate(0deg); }
+.h10-bsp-sechd .ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.h10-bsp-sechd .ttl b { font-size: 13.5px; font-weight: 800; color: #1c2530; }
+.h10-bsp-sechd .ttl i { font-style: normal; font-size: 12px; color: #55606d; }
+/* The owning session, on screen: an operator must never have to wonder whether an empty section is
+   broken or simply not built yet. */
+.h10-bsp-sechd .own { flex: none; padding: 2px 7px; background: #f1f4f8; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .03em; color: #55606d; }
+.h10-bsp-secbd { padding: 0 14px 14px; }
+
+.h10-bsp-pending { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: #f8fafc; border: 1px dashed #d8dde4; border-radius: 9px; }
+.h10-bsp-pending b { font-size: 12.5px; font-weight: 800; color: #1c2530; }
+.h10-bsp-pending span { font-size: 12px; line-height: 1.6; color: #55606d; }
+
+.h10-bsp-empty { padding: 22px 0; }
+.h10-bsp-empty.broke .ico { color: #b3261e; }
+
+/* ── responsive ────────────────────────────────────────────────────────────────────────────────
+   Below 1180 the rail cannot hold 320px beside a grid without squeezing the grid; it becomes a
+   full-width block above the sections instead of disappearing, because a rail the URL says is open
+   must be visible somewhere. */
+@media (max-width: 1180px) {
+  .h10-bsp-body { flex-direction: column; }
+  .h10-bsp-rail { flex: none; width: 100%; position: static; order: -1; }
+  .h10-bsp-cols { width: 100%; }
+}
+@media (max-width: 900px) {
+  .h10-bsp-reach, .h10-bsp-sum { margin-left: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   NEG.2 — the term drawer (h10-ngd-*)
+   ══════════════════════════════════════════════════════════════════════════════════════════════
+
+   Appended at EOF: source order beats specificity in this file, so an override has to live after
+   the block it overrides. No dark block — the shell pins `color-scheme: light` under this subtree
+   and a prefers-color-scheme rule would paint dark cards in a permanently light page. Hard-coded
+   hex from the palette the neighbouring blocks use. `h10-ngd-*` is disjoint from NEG.1's
+   `h10-ng-*`: every rule below names its class exactly, so nothing here leaks into that block. */
+
+/* The first column is interactive now that NEG.2 exists. NEG.1 stripped the shared grid's blue
+   because the cell promised a click it could not honour; the promise is real now, so the
+   affordance comes back as an underline on hover rather than as a colour that reads as a link at
+   rest. Matched at (0,4,1) to beat `.h10-am-grid td.nm .t` at (0,3,1). */
+.h10-am-grid td.nm .h10-ng-term .t.as-btn { color: #1c2530; font-weight: 700; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
+.h10-am-grid td.nm .h10-ng-term .t.as-btn:hover { color: #1f6fde; text-decoration: underline; }
+
+/* ── the shell ──────────────────────────────────────────────────────────────────────────────── */
+.h10-ngd-back { position: fixed; inset: 0; z-index: 1200; background: rgba(28, 37, 48, .34); border: 0; padding: 0; cursor: pointer; }
+.h10-ngd {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 1201;
+  width: min(720px, 92vw);
+  display: flex; flex-direction: column; gap: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: #fff; border-left: 1px solid #e3e7ec; box-shadow: -8px 0 28px rgba(28, 37, 48, .14);
+  padding: 0 20px 22px;
+}
+.h10-ngd-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 16px 0 12px; background: #fff; border-bottom: 1px solid #e3e7ec; }
+.h10-ngd-title h3 { margin: 0; font-size: 16px; font-weight: 800; color: #1c2530; word-break: break-word; }
+.h10-ngd-title p { margin: 3px 0 0; font-size: 12px; color: #55606d; }
+.h10-ngd-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; color: #55606d; cursor: pointer; }
+.h10-ngd-close:hover { background: #e8f1fd; color: #10457f; }
+
+.h10-ngd-sec { padding: 14px 0 0; }
+.h10-ngd-sec h4 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
+.h10-ngd-sec h4 .ct { padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 11px; letter-spacing: 0; text-transform: none; }
+.h10-ngd-sec h4 .sub { font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #667080; }
+
+/* ── the three numbers ──────────────────────────────────────────────────────────────────────── */
+.h10-ngd-three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.h10-ngd-three .cell { display: flex; flex-direction: column; gap: 1px; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-ngd-three .cell b { font-size: 20px; font-weight: 800; line-height: 1.15; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-ngd-three .cell i { font-style: normal; font-size: 11.5px; font-weight: 700; color: #55606d; }
+.h10-ngd-three .cell em { font-style: normal; font-size: 10.5px; line-height: 1.4; color: #667080; }
+.h10-ngd-three .cell.cool { background: #e7f5ed; border-color: #bfe0cd; }
+.h10-ngd-three .cell.cool b { color: #14724d; }
+.h10-ngd-three .cell.hot { background: #fff6e8; border-color: #f0dcbe; }
+.h10-ngd-three .cell.hot b { color: #8a5316; }
+
+.h10-ngd-lawnote { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 11.5px; line-height: 1.6; color: #55606d; }
+.h10-ngd-lawnote svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-ngd-lawnote b { font-weight: 800; color: #1c2530; }
+
+/* ── performance ────────────────────────────────────────────────────────────────────────────── */
+.h10-ngd-perf { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.h10-ngd-perf .m { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; background: #f1f4f8; border-radius: 8px; }
+.h10-ngd-perf .m b { font-size: 13.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-ngd-perf .m i { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .02em; color: #667080; }
+.h10-ngd-window { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: #667080; }
+.h10-ngd-hist { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-ngd-hist svg { flex: none; margin-top: 3px; }
+.h10-ngd-hist b { font-weight: 800; }
+
+/* ── where it runs ──────────────────────────────────────────────────────────────────────────── */
+.h10-ngd-runs, .h10-ngd-negs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.h10-ngd-runs li { display: flex; align-items: center; gap: 10px; padding: 8px 11px; background: #fff; border: 1px solid #e3e7ec; border-radius: 9px; }
+.h10-ngd-runs li.on { background: #fff6e8; border-color: #f0dcbe; }
+.h10-ngd-runs .nm { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.h10-ngd-runs .nm b { font-size: 12px; font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngd-runs .nm i { font-style: normal; font-size: 10.5px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngd-runs .unk { font-style: normal; font-size: 10px; font-weight: 700; color: #8a5316; }
+.h10-ngd-runs .ovl { flex: none; padding: 1px 6px; border-radius: 5px; background: #8a5316; color: #fff; font-size: 10px; font-weight: 800; }
+.h10-ngd-runs .mt { flex: none; font-size: 10.5px; color: #55606d; font-variant-numeric: tabular-nums; }
+
+/* ── every negation ─────────────────────────────────────────────────────────────────────────── */
+.h10-ngd-negs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; column-gap: 10px; padding: 8px 11px; background: #fff; border: 1px solid #e3e7ec; border-radius: 9px; }
+/* In-scope rows are visually distinct from the rest, because the remainder sentence below depends
+   on the operator seeing which is which. */
+.h10-ngd-negs li.ins { border-left: 3px solid #1f6fde; }
+.h10-ngd-negs li.out { background: #fbfcfd; border-left: 3px solid #e3e7ec; }
+.h10-ngd-negs li.ovl { background: #fff6e8; border-color: #f0dcbe; }
+.h10-ngd-negs .sc { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.h10-ngd-negs .sc b { font-size: 12px; font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngd-negs .sc b.camp { color: #10457f; }
+.h10-ngd-negs .sc i { font-style: normal; font-size: 10.5px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngd-negs .fl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.h10-ngd-negs .fl span { padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; }
+.h10-ngd-negs .fl .mt { background: #f1f4f8; color: #55606d; }
+.h10-ngd-negs .fl .mk { background: #f1f4f8; color: #55606d; }
+.h10-ngd-negs .fl .st.enabled { background: #e7f5ed; color: #14724d; }
+.h10-ngd-negs .fl .st.paused, .h10-ngd-negs .fl .st.archived { background: #f1f4f8; color: #667080; }
+.h10-ngd-negs .fl .am.yes { background: #e7f5ed; color: #14724d; }
+.h10-ngd-negs .fl .am.no { background: #fff6e8; color: #8a5316; }
+.h10-ngd-negs .fl .bl { background: #e8f1fd; color: #10457f; }
+.h10-ngd-negs .fl .ov { background: #8a5316; color: #fff; }
+.h10-ngd-negs .meta { grid-row: 1; grid-column: 2; text-align: right; font-size: 10.5px; color: #667080; white-space: nowrap; }
+.h10-ngd-negs .meta .by { font-weight: 700; color: #1c2530; }
+.h10-ngd-negs .meta .by.unattributed, .h10-ngd-negs .meta .by.actor-not-recorded { font-weight: 600; font-style: italic; color: #667080; }
+.h10-ngd-negs .meta .by.engine { color: #10457f; }
+
+/* ── the remainder sentence ─────────────────────────────────────────────────────────────────── */
+.h10-ngd-rem { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 10px 12px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 9px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-ngd-rem.ok { background: #f1f4f8; border-color: #e3e7ec; color: #55606d; }
+.h10-ngd-rem svg { flex: none; margin-top: 3px; }
+.h10-ngd-rem b { font-weight: 800; }
+.h10-ngd-rem.ok b { color: #1c2530; }
+
+.h10-ngd-prot { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 9px 11px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #14724d; }
+.h10-ngd-prot svg { flex: none; margin-top: 3px; }
+.h10-ngd-prot b { font-weight: 800; }
+.h10-ngd-msg { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: #55606d; }
+.h10-ngd-msg.sm { font-size: 11.5px; color: #667080; }
+.h10-ngd-msg b { font-weight: 800; color: #1c2530; }
+.h10-ngd-bad { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; color: #8a5316; }
+.h10-ngd-bad svg { flex: none; margin-top: 2px; }
+.h10-ngd-foot { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #e3e7ec; font-size: 11px; line-height: 1.6; color: #667080; }
+
+@media (max-width: 900px) {
+  .h10-ngd { width: 100vw; }
+  .h10-ngd-three { grid-template-columns: 1fr; }
+  .h10-ngd-perf { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   SOV.0 — Share of Voice, its own page.
+
+   Appended at EOF, `h10-sov-*` selectors only, exactly as the RA.AUTO, RA.GRAIN, KT.1, NEG.1 and
+   HV.1 blocks above. Three constraints this file imposes and this block obeys:
+
+     · Source order beats specificity here, so an override sits at the END of what it overrides.
+     · NO `.dark` block. `.h10-shell` pins `color-scheme: light` with hard-coded hex, so a dark
+       block yields dark cards in a permanently light shell.
+     · 🔴 The page gutter inside `.h10-rules-page` is ZERO, not 24px — `h10-main`'s 30px padding IS
+       the gutter, and `.h10-hdr` / `.h10-rules-tabs` / `.h10-am-card` all sit flush. A block styled
+       `margin: … 24px` (the pattern `.h10-svt-seg` carries) would be the only staggered thing on
+       the page. Every margin below is `… 0 0`. Verified with getBoundingClientRect against
+       `.h10-am-card`, not by eye.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the reach sentence ─────────────────────────────────────────────────────────────────────── */
+.h10-sov-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-sov-said b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+
+/* ── the band: two feeds, two ages, never one number ────────────────────────────────────────── */
+.h10-sov-band { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; padding: 0; }
+.h10-sov-feed { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid #e3e7ec; border-radius: 8px; background: #fff; font-size: 11.5px; line-height: 1.4; color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-sov-feed b { font-weight: 800; color: #1c2530; }
+.h10-sov-feed i { font-style: normal; padding: 2px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-weight: 700; font-size: 10.5px; }
+/* Age is a value, not an absence: fresh · ageing · stale, and stale still shows its number. */
+.h10-sov-feed.fresh b { color: #1c6b3f; }
+.h10-sov-feed.ageing b { color: #8a5316; }
+.h10-sov-feed.stale { border-color: #f0d9b5; background: #fff6e8; color: #8a5316; }
+.h10-sov-feed.stale b { color: #7a4512; }
+.h10-sov-feed.stale i { background: #f7e9d4; color: #7a4512; }
+
+/* ── notes and warnings ─────────────────────────────────────────────────────────────────────── */
+.h10-sov-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-sov-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
+.h10-sov-note b { font-weight: 800; color: #1c2530; }
+.h10-sov-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-sov-blind svg { flex-shrink: 0; margin-top: 2px; }
+.h10-sov-blind b { font-weight: 800; color: #7a4512; }
+.h10-sov-note .lnk, .h10-sov-blind .lnk, .h10-sov-empty .lnk { font: inherit; font-size: inherit; font-weight: 700; color: #1f6fde; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.h10-sov-blind .lnk { color: #7a4512; }
+
+/* ── the "pick one market" panel ────────────────────────────────────────────────────────────── */
+.h10-sov-pick { margin: 16px 0 0; padding: 22px 24px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; }
+.h10-sov-pick h3 { margin: 0 0 7px; font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-sov-pick p { margin: 0; max-width: 640px; font-size: 12.5px; line-height: 1.6; color: #55606d; }
+.h10-sov-pickrow { display: flex; gap: 8px; margin-top: 14px; }
+
+/* ── grid toolbar ───────────────────────────────────────────────────────────────────────────── */
+.h10-sov-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.h10-sov-search { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid #e3e7ec; border-radius: 7px; background: #fff; }
+.h10-sov-search svg { flex-shrink: 0; color: #667080; }
+.h10-sov-search input { width: 168px; border: 0; outline: 0; background: none; font: inherit; font-size: 11.5px; color: #1c2530; }
+.h10-sov-search input::placeholder { color: #9099a6; }
+.h10-sov-search .x { border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: #667080; cursor: pointer; }
+.h10-sov-search .x:hover { color: #1c2530; }
+.h10-sov-weeks { display: inline-flex; align-items: center; gap: 7px; }
+.h10-sov-weeks .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: #667080; }
+/* `.h10-svt-seg` carries `margin: … 24px`; inside the toolbar that would stagger it. Reset here,
+   at the END of the file, because source order beats specificity in this stylesheet. */
+.h10-sov-weeks .h10-svt-seg { margin: 0; padding: 2px; }
+.h10-sov-weeks .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
+.h10-sov-toggle { font: inherit; font-size: 11.5px; font-weight: 700; color: #55606d; background: #f1f4f8; border: 0; border-radius: 7px; padding: 6px 11px; cursor: pointer; }
+.h10-sov-toggle:hover { color: #1c2530; background: #e7ebf1; }
+.h10-sov-toggle.on { color: #1f6fde; background: #e8f1fd; }
+.h10-sov-listsel { font: inherit; font-size: 11.5px; font-weight: 700; color: #55606d; background: #f1f4f8; border: 0; border-radius: 7px; padding: 6px 9px; cursor: pointer; max-width: 260px; }
+.h10-sov-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: #667080; }
+.h10-sov-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-weight: 700; font-variant-numeric: tabular-nums; }
+.h10-sov-win i.bad { background: #fff6e8; color: #8a5316; }
+
+/* ── the first column ───────────────────────────────────────────────────────────────────────── */
+.h10-sov-q { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.h10-sov-q .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* 🔴 `.h10-am-grid td.nm .t` sets #1f6fde at specificity (0,3,1), so a page-level `.h10-sov-q .t`
+   (0,2,0) silently LOSES and the query renders blue, promising a click that does nothing. Every
+   other consumer of this grid makes column one a link, so it reads correctly there. Matched on
+   specificity rather than `!important`, so SOV.5 deletes one rule when the drawer makes it real. */
+.h10-am-grid td.nm .h10-sov-q .t { color: #1c2530; }
+.h10-sov-q .bd, .h10-sov-q .ls { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.h10-sov-q .bd { background: #f1f4f8; color: #55606d; }
+.h10-sov-q .ls { background: #e8f1fd; color: #10457f; }
+
+/* ── the one metric column, and its four blank-states ───────────────────────────────────────────
+   Four states, four treatments. A blank that means four things is worse than no column, and that
+   is exactly what the layer below produces: `share()` coalesces "no market total" and "we hold
+   none" into one `0`. This page reads an API that never does.
+     measured           a real percentage
+     measured, share 0  a FINDING — amber, with the market's size beside it. Not a blank.
+     not-covered        the market has this query, Brand Analytics does not cover our ASINs
+     no row this week / never measured   two different absences, two different sentences
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.h10-sov-share { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; }
+.h10-sov-share.zero { color: #8a5316; }
+.h10-sov-share i { font-style: normal; font-size: 10px; font-weight: 600; color: #8a5316; }
+.h10-sov-nc { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: #fff6e8; color: #8a5316; }
+.h10-sov-nm { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: #f1f4f8; color: #55606d; }
+.h10-sov-nm.muted { background: transparent; color: #9099a6; font-weight: 600; }
+.h10-sov-nd { color: #9099a6; }
+.h10-sov-mkt { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: #f1f4f8; color: #55606d; }
+.h10-sov-ac { font-variant-numeric: tabular-nums; font-weight: 700; color: #55606d; }
+.h10-sov-ac.many { color: #8a5316; }
+.h10-sov-age { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-sov-age i { font-style: normal; padding: 1px 5px; border-radius: 4px; background: #f1f4f8; color: #667080; font-size: 10px; font-weight: 700; }
+.h10-sov-age.fresh i { background: #e7f5ec; color: #1c6b3f; }
+.h10-sov-age.ageing i { background: #fff6e8; color: #8a5316; }
+.h10-sov-age.stale i { background: #fdeaea; color: #a33a3a; }
+
+/* ── empty state ────────────────────────────────────────────────────────────────────────────── */
+.h10-sov-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 580px; margin: 0 auto; padding: 8px 0; }
+.h10-sov-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-sov-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
+
+@media (max-width: 1200px) {
+  .h10-sov-band { gap: 6px; }
+  .h10-sov-search input { width: 130px; }
+}
+
+/* ── DS token pin ──────────────────────────────────────────────────────────────────────────────
+   `EmptyState` and `ProgressBar` read four custom properties. `.h10-shell` already pins three of
+   them (`--text-primary`, `--text-tertiary`, `--surface-sunken`) as part of the 56 it fixes to keep
+   this deliberately-light shell out of dark mode — but `--color-primary` and `--h10-wash-primary`
+   are NOT among them, so they would resolve from whatever `tokens.css` happens to say.
+
+   Pinned here on the elements themselves rather than trusting stylesheet order: a custom property
+   set on an ancestor wins over a lower one by proximity, not specificity, so this holds whichever
+   of `rules-automation.css` and `design-system/styles/*.css` the bundler emits second. */
+.h10-bsp-empty, .h10-bsp-bar {
+  --color-primary: #1f6fde;
+  --h10-wash-primary: #e8f1fd;
+}

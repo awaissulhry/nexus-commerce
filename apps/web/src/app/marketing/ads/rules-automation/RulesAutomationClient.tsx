@@ -30,8 +30,13 @@ import { RuleListTab } from './tabs/RuleListTab'
 // NEG.1 — ProtectedTermsPanel moved to the Negative Targeting page, which is now its own route.
 // It is rendered there exactly as it was rendered here, so the move loses nothing; NEG.5 replaces
 // it with the panel plus the whitelist audit.
-import { SovTrackerTab } from './tabs/SovTrackerTab'
-import { BudgetScheduleTab } from './_schedule/BudgetScheduleTab'
+// SOV.0 — `SovTrackerTab`'s import goes with the `share-of-voice` branch, because that branch was
+// its last caller: KT.1 had already removed the `keyword-tracker` one. The COMPONENT file stays.
+// Retiring it, `TrackerTab`, `ads-impression-share.service.ts` and `GET /advertising/share-of-voice`
+// belongs to whoever owns those components — `buildSovBidContexts` still imports the service, and
+// the old route still serves a CSV.
+// BSP.0 — Budget Pacing & Schedules is now its own route, and the grid moved with it into
+// `budget-schedules/SchedulesSection.tsx`. This branch was `BudgetScheduleTab`'s only caller.
 import { TAB_RULES } from './tabs/placeholderSeeds'
 
 // ── data (subset of the Ad Manager campaign shape; same endpoint) ──
@@ -335,10 +340,6 @@ export function RulesAutomationClient() {
           filtersDefaultOpen={false}
           emptyLabel="No campaigns found."
         />
-      ) : tab === 'share-of-voice' ? (
-        // KT.1 — `keyword-tracker` left this switch for its own route
-        // (…/rules-automation/keyword-tracker). Share of Voice still renders from here.
-        <SovTrackerTab kind="sov" />
       ) : tab === 'budget' ? (
         <RuleListTab
           noun="Budget Rule"
@@ -354,23 +355,6 @@ export function RulesAutomationClient() {
             </span>
           )}
         />
-      ) : tab === 'placement' ? (
-        <RuleListTab
-          noun="Placement Rule"
-          seed={[]}
-          liveType="placement"
-          editHref={(id) => `/marketing/ads/rules-automation/builder/placement?ruleId=${id}`}
-          onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/placement' }}
-          emptyNode={(
-            <span className="h10-rr-empty">
-              <NoDataIllus size={104} />
-              <b>Create a Placement Rule to optimize your placement bids!</b>
-              <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/placement"><Plus size={13} /> Create Rule</a>
-            </span>
-          )}
-        />
-      ) : tab === 'budget-schedules' ? (
-        <BudgetScheduleTab />
       ) : tab === 'bid' ? (
         <RuleListTab
           noun="Bid Rule"
