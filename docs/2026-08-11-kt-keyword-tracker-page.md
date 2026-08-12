@@ -1611,14 +1611,15 @@ KT.5 and now KT.4, touched by none of them).
 
 ---
 
-# KT.6 — measured, and the ceiling proposed. 🔴 The controls are NOT built.
+# KT.6 — the row can act now, in PROPOSE
 
-**2026-08-13. Status, stated plainly before anything else: the arithmetic, the refusal logic and all
-five §7 gate artefacts are built, tested and computed against prod. The API endpoint and the drawer
-controls are NOT built, and no write path exists. That is deliberate — §4 asks me to *propose* the
-ceiling object rather than ship it, and the operator's standing rule is approval before implementing
-anything that moves money. The design decisions below need answers before a surface is worth
-building on top of them.**
+**2026-08-13. Two phases in one day. First the measurement, the ceiling proposal and §7's five gate
+artefacts, then a stop for approval. Approval given, so the ceiling object, the proposal ledger, four
+endpoints and the drawer control all shipped and were verified by clicking on production.**
+
+**🔴 What is still true after all of it: nothing on this page writes to Amazon.** Every proposal is
+recorded as `PROPOSED` and there is no apply endpoint to call — applying is a live bid write that has
+to go through `checkAdsWriteGate`, and that is KT.7's ground. K9 below is the click-through evidence.
 
 ## K1 · The stop conditions — all clear
 
@@ -1823,16 +1824,75 @@ Two of the 26 tests were written failing first and seen to fail:
   58 unwritable targets is a true and useful fact. The test now asserts which zero the sentence
   **leads** with, since that is the one the operator reads as the answer.
 
-## K8 · What is built, and what is not
+## K8 · What shipped
 
-**Built, tested, on prod data:** `kt6-bid-action.ts` (blast radius, the four exclusions, six zero
-sentences, the D4 confirmation) · `kt6-spend-ceiling.ts` (grain resolution, refusal messages,
-commitment) · 26 tests · `_kt6-surface.mts`, `_kt6-spend.mts`, `_kt6-suppress.mts`, `_kt6-gate.mts`,
-`_kt6-unbid.mts`.
+**The arithmetic** — `kt6-bid-action.ts` (blast radius, four exclusions, six zero sentences, the D4
+confirmation) and `kt6-spend-ceiling.ts` (grain resolution, refusal messages, commitment). Pure, zero
+imports, **30 tests**.
 
-**Not built, pending approval:** the `AdSpendCeiling` table and migration · the read-only preview
-endpoint · the drawer controls · any write or queue path. Nothing in this session can move money:
-there is no code path from a click to `checkAdsWriteGate`, because none was written.
+**Two additive tables.** `AdSpendCeiling` (grain, scopeId, label, nullable `dailyCapCents`) and
+`KeywordBidProposal`, which freezes the blast radius *and* the confirmation sentence at proposal time
+so the record cannot drift from what was shown.
+
+**Four endpoints**, in a new `keyword-actions.routes.ts` — not `advertising-intel.routes.ts`, because
+another session had 13 uncommitted lines in it and `commit --only <path>` commits the working state,
+which would have swept their work. `GET preview` is read-only and is the same code path `POST propose`
+re-runs, so the sentence read and the sentence recorded cannot diverge. A refusal is **409**, not 400:
+the request was well formed and was refused.
+
+**The drawer control** (`BidAction.tsx`), placed first in the drawer because it is now the reason the
+drawer is opened. The confirmation is composed server-side and rendered verbatim; a client that
+re-phrased it could describe one thing while the ledger stored another.
+
+**Still not built, and deliberately:** any apply or queue path. `graduationCeiling` caps a
+keyword-creating action at PROPOSE, the approval covered shipping in PROPOSE, and there is no code
+path from a click to `checkAdsWriteGate` because none was written.
+
+## K9 · Verified by clicking, on production
+
+Every session in this programme found its worst defect after deploying. This one found four.
+
+**Two copy defects, visible only with the control open:**
+
+1. **The fallback bid was offered twice in one paragraph.** At €0.95 the nothing-to-do sentence ended
+   *"€0.80 would be accepted."* and the ceiling paragraph added *"€0.80 would be accepted
+   everywhere."* — same block, directly above a button offering the same value.
+2. 🔴 **The drawer showed two ages for the same week.** The KT.4 header renders *"week of 19 Jul (24d
+   old)"*, counting from the week's **start**; my sentence said *"ended 18 days ago"*, counting from
+   its **end**. Both true, six lines apart, reading as a contradiction. The sentence now names the
+   week — *"the Brand Analytics week of 19 Jul, which ended 18 days ago"* — so the two tie together.
+
+**Two contrast failures, measured composited inside the drawer's own stacking context:**
+
+3. The **disabled** button label was **4.27:1** against its own `#eef1f5` — and disabled is exactly
+   when the operator needs to read why nothing will happen. `#6b7280` → `#495260`, now 6.97:1.
+4. The `·` separating *"30 of 100 targets"* from *"5 of 53 campaigns"* was **1.96:1**. It separates two
+   numbers, so it is read, not decoration. `#a9b4c2` → `#55606d`, now 5.96:1. An intermediate
+   `#6b7686` still measured 4.29, which is why the value was computed rather than guessed.
+
+**Geometry**, same pass: the radius block and the button both inset **23px left / 22px right** inside
+the drawer, no zero-sized controls (the NEG.5 defect class), no horizontal body scroll.
+
+**The four states, clicked:**
+
+| clicked | result |
+|---|---|
+| `giacca moto` IT @ €0.55 | **30 of 100 targets · 5 of 53 campaigns · commits up to €16.50**, three exclusion chips, the details table showing €0.34 → €0.55 against a €0.80 cap |
+| the same at €0.95 | **0 of 100**, *"Nothing will change: every writable target … sits in a campaign whose bid ceiling is below €0.95"*, a one-click **Use €0.80 instead**, button reads *"Nothing to propose"* |
+| with a real €10 IT ceiling set | *"Refused — the ceiling for the IT market is €10.00 per day and **this request alone is over it** (€0.00 committed today, €16.50 requested). Amazon reports €82.73 of spend for 2026-08-10, which is the most recent day it has published — it is not today's figure."* Button reads **"Refused by the ceiling"** |
+| `veste moto` FR | **2 of 17 targets · 2 of 9 campaigns · commits up to €1.10**, with *"15 further targets in 7 campaigns are not write-enabled"* |
+| `accessori moto` IT (unbid) | no bid input at all — *"No campaign bids "accessori moto" in IT, so there is no bid to change … there are 70 writable candidates in IT with nothing to single one out. Choosing a destination is Keyword Harvest's job"* |
+
+**The API flow was also driven end to end before the UI shipped** (`_kt6-exercise.mts`, which cleans
+up after itself): NO_CEILING → REFUSED with the specific message → **a refusal records nothing** →
+a narrower-but-ambiguous campaign ceiling correctly does *not* bind → raised ceiling → ALLOWED →
+proposal recorded with 30 `targetIds` and a `confirmationText` **byte-identical to the preview**. Both
+tables returned to their starting counts, and that run is what produced copy defect (1)'s sibling:
+with nothing committed the refusal read *"only €10.00 of €10.00 is left"*, now three phrasings.
+
+**Close-out state:** `AdSpendCeiling` 0 rows · `KeywordBidProposal` 0 rows · `RankTarget.maxBiasPct`
+still null on all 5 · `liveBidWritesEnabled` still 82 of 220 · `minBidCents` still 0 of 220 ·
+`OutboundSyncQueue` unchanged. Nothing was left armed and nothing was left behind.
 
 **Deliberately not offered** (§3.3, unchanged): arming a `KEYWORD_RANK_BID` rule — and note that no
 rule in the account carries that trigger at all, on top of `KeywordRank` having 0 rows · consolidating

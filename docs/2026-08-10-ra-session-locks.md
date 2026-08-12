@@ -105,6 +105,12 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/index.ts` + `jobs/cron-registry.ts` | SQP.2 (register + manually trigger `sqp-collect`) | 2026-08-12 | **released** — 3 lines each |
 | `apps/api/src/services/advertising/kt6-bid-action.ts` | KT.6 (blast radius + the D4 confirmation sentences) | 2026-08-13 | **released** — NEW file, pure, no I/O |
 | `apps/api/src/services/advertising/kt6-spend-ceiling.ts` | KT.6 (per-scope ceiling resolution + refusal messages — PROPOSAL, nothing calls it on a write path) | 2026-08-13 | **released** — NEW file |
+| `apps/api/src/routes/keyword-actions.routes.ts` + `services/advertising/kt6-proposal.service.ts` | KT.6 (4 endpoints; preview/propose/proposals/ceilings) | 2026-08-13 | **released** — NEW files. Deliberately NOT `advertising-intel.routes.ts`: another session held 13 uncommitted lines there |
+| `packages/database/prisma/schema.prisma` | KT.6 (`AdSpendCeiling` + `KeywordBidProposal`, additive — two new models at EOF) | 2026-08-13 | **released** |
+| `apps/api/src/index.ts` | KT.6 (register `keywordActionsRoutes` — 3 lines) | 2026-08-13 | **released** |
+| `…/keyword-tracker/BidAction.tsx` | KT.6 (the bid control) | 2026-08-13 | **released** — NEW file |
+| `…/keyword-tracker/TermDrawer.tsx` | KT.6 (mount `BidAction` — 6 lines, no restructuring) | 2026-08-13 | **released** |
+| `…/rules-automation/rules-automation.css` | KT.6 (`h10-kt6-*` at EOF) | 2026-08-13 | **released** — EOF-append only; 27 classes used, 27 defined, none dead |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
