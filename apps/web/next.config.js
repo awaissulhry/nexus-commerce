@@ -99,6 +99,9 @@ const nextConfig = {
       { source: '/marketing/advertising/analytics', destination: '/marketing/ads/dashboard', permanent: true },
       { source: '/marketing/advertising/momentum', destination: '/marketing/ads/dashboard', permanent: true },
       { source: '/marketing/advertising/profit', destination: '/marketing/ads/dashboard', permanent: true },
+      // NEG.6 — the n-gram surface folded into Negative Targeting, which is the only place that can
+      // act on a word rather than merely report it. Literal path, ahead of any parameterised one.
+      { source: '/marketing/advertising/ngrams', destination: '/marketing/ads/rules-automation/negative-targeting#wasteful-words', permanent: true },
 
       // Campaigns — ids carry across unchanged, so a deep link still lands on
       // the same campaign rather than on a list.

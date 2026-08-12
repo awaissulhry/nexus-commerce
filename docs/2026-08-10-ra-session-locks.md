@@ -265,8 +265,8 @@ followed rather than recorded after the fact.
 | `apps/api/src/services/advertising/ads-ngram.service.ts` | NEG.6 (`marketplace` + campaign/ad-group filter on `analyzeNgrams`, additive — absent = today's account-wide behaviour) | 2026-08-13 | **released** — plus a doc comment on `NgramRow.terms`, which over-reports a 2-gram's reach by up to 4.7× |
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.6 (`GET /advertising/negatives/wasteful-words` + `POST /advertising/negatives/negate-gram`, additive) | 2026-08-13 | **released** — `grep -a`ed BOTH route files: both paths had **zero** hits |
 | `apps/api/src/routes/advertising.routes.ts` | NEG.6 (`marketplace` forwarded on the EXISTING `GET /advertising/ngrams`; **no new route registered** — `grep -a` confirms still exactly one `fastify.get('/advertising/ngrams'`) | 2026-08-13 | **released** |
-| `…/rules-automation/rules-automation.css` | NEG.6 (`h10-ngw-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
-| `apps/web/next.config.js` | NEG.6 (one `/marketing/advertising/ngrams` redirect, literal path) | 2026-08-13 | **claimed** |
+| `…/rules-automation/rules-automation.css` | NEG.6 (`h10-ngw-*` at EOF) | 2026-08-13 | **released** — one hunk, at EOF, diffed before committing; classes checked both directions, 40 used and 40 defined |
+| `apps/web/next.config.js` | NEG.6 (one `/marketing/advertising/ngrams` redirect, literal path) | 2026-08-13 | **released** |
 | `…/marketing/advertising/ngrams/*` | NEG.6 (delete `NgramClient.tsx` + `page.tsx` after the redirect is live and verified; `grep -r` finds **no importer** outside its own directory) | 2026-08-13 | **claimed** |
 
 ## 3 · Shared files — claim before editing
