@@ -264,6 +264,10 @@ export function HvActors({ scope, push }: HvSlotProps) {
         )}
         loading={loading}
         defaultSort={{ key: 'wrote', dir: 'desc' }}
+        // 🔴 The grid selects by default. This panel writes nothing and has no selection action, so
+        // a checkbox on every row is a control that looks live and is not — the exact defect the
+        // closed state of this section was shaped to avoid.
+        selectable={false}
         emptyNode={<ActorsEmpty loading={loading} err={err} data={data} />}
       />
 

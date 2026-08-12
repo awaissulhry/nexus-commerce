@@ -3976,10 +3976,17 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-hva-thesis b { color: #1c2530; font-weight: 800; }
 .h10-hva-thesis code { padding: 1px 5px; border-radius: 4px; background: #f1f4f8; font-size: 11px; color: #10457f; }
 
-/* First column: the actor, its type, and what it is for. */
-.h10-hva-name { display: inline-flex; flex-direction: column; gap: 1px; }
-.h10-hva-name b { font-size: 12.5px; font-weight: 800; color: #1c2530; }
-.h10-hva-name i { font-style: normal; font-size: 10.5px; color: #667080; line-height: 1.45; }
+/* First column: the actor, its type, and what it is for.
+   🔴 Measured on prod: the shared grid puts `white-space: nowrap` on its sticky first column and
+   leaves the cell `overflow: visible`, so a rule's `description` — Automations' marketing copy, up
+   to 309 characters — rendered 1,572px wide out of a 360px cell and ran off the right edge of a
+   1728px viewport, clipped mid-word. Both halves are pinned here: the flex column is bounded to
+   the cell, and the description wraps and clamps to two lines. The full text is one click away on
+   Automations, which is where it is written. `cursor: default` matches the candidates grid, whose
+   first column this panel sits directly beneath. */
+.h10-hva-name { display: flex; flex-direction: column; gap: 1px; max-width: 100%; min-width: 0; cursor: default; }
+.h10-hva-name b { font-size: 12.5px; font-weight: 800; color: #1c2530; white-space: normal; overflow-wrap: anywhere; }
+.h10-hva-name i { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 100%; font-style: normal; font-size: 10.5px; color: #667080; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; }
 .h10-hva-name .tag { align-self: flex-start; margin-top: 1px; padding: 0 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; background: #f1f4f8; color: #55606d; }
 .h10-hva-name .tag.engine { background: #e8f1fd; color: #10457f; }
 .h10-hva-name .tag.operator { background: #e7f5ed; color: #14724d; }
