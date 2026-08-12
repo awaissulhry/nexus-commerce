@@ -275,8 +275,8 @@ followed rather than recorded after the fact.
 
 | file / area | session | since | state |
 |---|---|---|---|
-| `apps/api/src/routes/advertising-intel.routes.ts` | HV.6 (`?actors=1` on the EXISTING `GET /advertising/keyword-harvest` — **no route registered**, so no duplicate-registration boot crash is possible) | 2026-08-13 | **claimed** |
-| `…/rules-automation/rules-automation.css` | HV.6 (`h10-hva-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.6 (`?actors=1` on the EXISTING `GET /advertising/keyword-harvest` — **no route registered**, so no duplicate-registration boot crash is possible) | 2026-08-13 | **released** — landed `a6eedca49` |
+| `…/rules-automation/rules-automation.css` | HV.6 (`h10-hva-*` at EOF) | 2026-08-13 | **released** — EOF-append only; `git diff` checked hunk by hunk, all 101 lines mine |
 
 Not claimed, and deliberately: `ads-control-room.service.ts` (§3 #7) is **read** by this session and
 not edited — see the hand-off in §4. `ads-autonomy.ts` (§3 #8) is likewise read-only here;

@@ -212,6 +212,16 @@ export interface HvScopeState {
   campaign: string
   adGroup: string
   boundBy: HvGrain | null
+  /**
+   * HV.6 — `?actors=1`, the governance panel open.
+   *
+   * In the URL and not in component state, for the same reason `?confirm=` is: "here is who else
+   * can write into this ad group, and what they will actually do" is a thing one person sends
+   * another. Absent is the documented default (closed) and never a stored preference.
+   */
+  actors: boolean
+  /** HV.6 — `?actor=<id>`, the one actor whose criteria and gaps are expanded. */
+  actor: string | null
 }
 
 /**

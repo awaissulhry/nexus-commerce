@@ -3947,3 +3947,104 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-ngw-list.win li { grid-template-columns: minmax(0, 1.6fr) 88px 76px; }
   .h10-ngw-list.win .sa { display: none; }
 }
+
+/* ── HV.6 · the actors panel ────────────────────────────────────────────────────────────────
+   Appended at EOF under `h10-hva-*`. No `.dark` block — anything painted there escapes the
+   light pin this section is rendered under. Every colour below is one of the five tokens the
+   rest of the page already uses (#1c2530 / #55606d / #667080 / #10457f / #8a5316), so the
+   contrast sweep that passed on HV.5 covers these too. */
+
+/* Closed: one line and an affordance, never a control that looks live and is not. */
+.h10-hva-shut { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 14px 0 0; padding: 10px 14px; border: 1px solid #e3e7ec; border-radius: 8px; background: #fff; }
+.h10-hva-shut > span { font-size: 11.5px; color: #55606d; line-height: 1.5; }
+.h10-hva-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; font-size: 12.5px; font-weight: 800; color: #10457f; cursor: pointer; }
+.h10-hva-toggle:hover { text-decoration: underline; }
+.h10-hva-toggle.on { color: #1c2530; }
+
+.h10-hva-wrap { margin: 14px 0 0; padding: 14px 16px 16px; }
+.h10-hva-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.h10-hva-lede { margin: 6px 0 0; font-size: 12px; color: #55606d; line-height: 1.6; }
+.h10-hva-lede b { color: #1c2530; font-weight: 800; }
+.h10-hva-dial { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.h10-hva-dial i { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
+.h10-hva-dial b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-hva-dial em { font-style: normal; font-size: 10.5px; font-weight: 800; color: #8a5316; }
+
+/* The finding the panel exists for. The one loud thing on a panel that spends nothing. */
+.h10-hva-thesis { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; padding: 10px 12px; border: 1px solid #f0d9b5; border-radius: 8px; background: #fff9f0; font-size: 12px; line-height: 1.65; color: #55606d; }
+.h10-hva-thesis > svg { flex: none; margin-top: 2px; color: #8a5316; }
+.h10-hva-thesis b { color: #1c2530; font-weight: 800; }
+.h10-hva-thesis code { padding: 1px 5px; border-radius: 4px; background: #f1f4f8; font-size: 11px; color: #10457f; }
+
+/* First column: the actor, its type, and what it is for. */
+.h10-hva-name { display: inline-flex; flex-direction: column; gap: 1px; }
+.h10-hva-name b { font-size: 12.5px; font-weight: 800; color: #1c2530; }
+.h10-hva-name i { font-style: normal; font-size: 10.5px; color: #667080; line-height: 1.45; }
+.h10-hva-name .tag { align-self: flex-start; margin-top: 1px; padding: 0 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; background: #f1f4f8; color: #55606d; }
+.h10-hva-name .tag.engine { background: #e8f1fd; color: #10457f; }
+.h10-hva-name .tag.operator { background: #e7f5ed; color: #14724d; }
+
+/* A level is never rendered without its ceiling (C2). */
+.h10-hva-lvl { display: inline-flex; flex-direction: column; gap: 0; }
+.h10-hva-lvl .lv { font-size: 12px; font-weight: 800; color: #55606d; }
+.h10-hva-lvl .lv.auto { color: #8a5316; }
+.h10-hva-lvl .lv.propose { color: #10457f; }
+.h10-hva-lvl .lv.off { color: #667080; }
+.h10-hva-lvl i { font-style: normal; font-size: 10px; color: #667080; }
+
+.h10-hva-scope { font-size: 11.5px; color: #55606d; }
+.h10-hva-found { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; }
+.h10-hva-found b { font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-hva-found i { font-style: normal; font-size: 10px; color: #667080; }
+.h10-hva-n { font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-hva-dash { font-size: 12.5px; color: #667080; cursor: help; }
+.h10-hva-landed { font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-hva-landed.short { color: #8a5316; cursor: help; }
+.h10-hva-ref { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; cursor: help; font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 800; color: #55606d; }
+.h10-hva-ref i { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
+
+.h10-hva-open { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid #e3e7ec; border-radius: 6px; background: #fff; font-size: 11px; font-weight: 700; color: #55606d; cursor: pointer; white-space: nowrap; }
+.h10-hva-open:hover { background: #f1f4f8; }
+.h10-hva-open.on { border-color: #cfe0f6; background: #e8f1fd; color: #10457f; }
+.h10-hva-open svg { flex: none; }
+
+/* Stated vs executed — the half nothing has ever rendered. */
+.h10-hva-detail { margin: 12px 0 0; padding: 12px 14px; border: 1px solid #e3e7ec; border-radius: 8px; background: #f8f9fb; }
+.h10-hva-detail .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 18px; }
+.h10-hva-detail h5 { margin: 0 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+.h10-hva-code { display: block; padding: 7px 9px; border: 1px solid #e3e7ec; border-radius: 6px; background: #fff; font-size: 11.5px; color: #10457f; overflow-x: auto; }
+.h10-hva-none { margin: 0; font-size: 11.5px; font-style: italic; color: #667080; line-height: 1.55; }
+.h10-hva-exec { margin: 0; padding: 0; list-style: none; }
+.h10-hva-exec li { padding: 4px 0; border-bottom: 1px solid #eef1f5; font-size: 11.5px; color: #55606d; line-height: 1.5; }
+.h10-hva-exec li:last-child { border-bottom: 0; }
+.h10-hva-exec li i { display: block; font-style: normal; font-size: 10px; color: #667080; }
+
+.h10-hva-held { margin: 10px 0 0; font-size: 11.5px; color: #55606d; line-height: 1.6; }
+.h10-hva-held b { color: #10457f; font-weight: 800; }
+.h10-hva-clash { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 11px; border: 1px solid #f0d9b5; border-radius: 7px; background: #fff9f0; font-size: 11.5px; line-height: 1.6; color: #55606d; }
+.h10-hva-clash > svg { flex: none; margin-top: 2px; color: #8a5316; }
+.h10-hva-clash b { color: #1c2530; font-weight: 800; }
+
+.h10-hva-gaps, .h10-hva-latent { margin: 10px 0 0; padding: 0; list-style: none; }
+.h10-hva-gaps li, .h10-hva-latent li { padding: 8px 0; border-top: 1px solid #eef1f5; }
+.h10-hva-gaps li b, .h10-hva-latent li b { font-size: 12px; font-weight: 800; color: #1c2530; }
+.h10-hva-gaps li .n, .h10-hva-latent li .n { margin-left: 7px; padding: 1px 6px; border-radius: 5px; background: #fff6e8; font-size: 10.5px; font-weight: 800; color: #8a5316; font-variant-numeric: tabular-nums; }
+.h10-hva-gaps li i, .h10-hva-latent li i { display: block; margin-top: 3px; font-style: normal; font-size: 11.5px; color: #55606d; line-height: 1.6; }
+.h10-hva-gaps li em, .h10-hva-latent li em { display: block; margin-top: 3px; font-style: normal; font-size: 10.5px; font-weight: 700; color: #667080; }
+
+.h10-hva-link { display: inline-flex; align-items: center; gap: 4px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: #10457f; }
+.h10-hva-link:hover { text-decoration: underline; }
+
+.h10-hva-foot { margin: 14px 0 0; }
+.h10-hva-h4 { margin: 14px 0 5px; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+.h10-hva-reach { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 11.5px; color: #55606d; line-height: 1.6; }
+.h10-hva-reach > svg { flex: none; margin-top: 2px; color: #667080; }
+.h10-hva-note { margin: 5px 0 0; font-size: 11.5px; color: #667080; line-height: 1.65; }
+.h10-hva-note code { padding: 1px 5px; border-radius: 4px; background: #f1f4f8; font-size: 11px; color: #10457f; }
+.h10-hva-note b { color: #55606d; font-weight: 800; }
+
+@media (max-width: 980px) {
+  .h10-hva-detail .cols { grid-template-columns: 1fr; gap: 12px; }
+  .h10-hva-head { flex-direction: column; }
+  .h10-hva-dial { align-items: flex-start; }
+}

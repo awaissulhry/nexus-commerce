@@ -220,7 +220,9 @@ export function KeywordHarvestClient() {
   const s = data?.scope
 
   const slotProps: HvSlotProps = {
-    scope: { market, ...scope, boundBy: s?.boundBy ?? null },
+    // HV.6 reads its own two params off the URL here rather than reaching for `params` itself, so
+    // the slot contract stays the only thing a section depends on.
+    scope: { market, ...scope, boundBy: s?.boundBy ?? null, actors: params.get('actors') === '1', actor: params.get('actor') },
     census,
     rows,
     criteria: data?.criteria ?? null,

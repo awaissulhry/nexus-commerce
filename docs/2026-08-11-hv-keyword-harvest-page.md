@@ -2112,3 +2112,177 @@ in this account has ever reached Amazon**: `AD_GROUP` 2,037 rows / **2,017 at Am
 - **HV.7** (the queue) gets the 155-keyword backlog already separated from the 54 that must never be
   pushed, and a wired action that runs nothing until someone chooses a batch.
 - **HV.8** gets `negateCampaign`'s 0-of-20 record, and the still-unrepaired rule path.
+
+---
+
+# HV.6 — built
+
+**READ-ONLY.** This unit changes no level, no rule and no code path. It renders a governance truth,
+and its whole value is that it can be trusted about what happens without itself making anything
+happen — HV.4's first live write is still pending.
+
+## The commissioned measurement does not reproduce, and that is the finding
+
+§4.3 asked for a table of condition leaves discarded by `ads-rule-adapter.service.ts`'s
+`translateConditions` — *"6 of 11 builder metrics dropped"*, per rule, with named victims. Run
+verbatim against the real stored bodies (`apps/api/scripts/_hv6-actors.mts`), it produces **no
+table, because the adapter never runs**:
+
+| measured over all **62** rules in the account | |
+|---|---|
+| builder-shaped (`isBuilderShapedAdsRule` → `a0.type ∈ BUILDER_SLUGS`) | **0** |
+| carrying any builder condition leaf (`{metric, op, value}`) | **0** |
+| condition leaves the adapter has ever discarded | **0** |
+
+Every rule here is **engine-native**: its conditions are already dot-path
+(`{"op":"gte","field":"searchTerm.orders","value":2}`), so `maybeTranslateAdsRule` returns `null`
+and the engine runs the stored body directly.
+
+🔴 **The 6-of-11 drop is real and confirmed exactly** — `METRICS_BASE` has 11, `SEARCHTERM_METRIC`
+maps 5, dropping `ACOS · ROAS · Impressions · CVR · CTR · CPC`, and a dropped AND-condition makes a
+rule **looser**. It has **zero victims today**. It is a landmine, not a leak: it fires on the first
+harvest rule anyone saves from the builder. So it renders under **`latent`** with its `0` stated
+plainly, rather than at the top of a table whose every row reads "0 affected" — which would argue
+that nothing is wrong.
+
+## The gap that IS live is a different, sharper one
+
+The constraints that actually bound this account's runs live in the **context builder** and in
+**action parameters**, and neither appears on any surface:
+
+| actor | what it says | what actually bounds the run |
+|---|---|---|
+| Auto match-type migration | `searchTerm.orders ≥ 2` | a 30-day window · `orders7d ≥ 2` as a `HAVING` clause · **the first 300 terms only** · BROAD/PHRASE only · a fixed **€0.60** bid |
+| Auto harvest & negate | **nothing** | `minOrders 2 · windowDays 60 · minSpend €10` · a fixed **€0.50** bid · negatives at **CAMPAIGN** scope |
+| Exact match discovery | **nothing** | `minOrders 3 · windowDays 30 · minSpend €5` · a fixed **€0.65** bid |
+| Daily automation digest | **nothing** | handler defaults throughout |
+
+🔴 **Two of the seven rules state no criteria at all.** Everything deciding what they touch lives in
+action parameters no surface renders. Reading the rule tells you nothing about what it would do.
+
+**The five bid constants, each traced to a reader:** `0.50` (`promote_to_exact` handler default,
+`:1066`) · `0.50` (`harvest_and_negate` handler default, `:907`/`:909`) · `0.60` (stored) · `0.65`
+(stored) · `0.75` (the adapter's dead branch). Measured **median observed CPC is €0.39** over 7,460
+clicked search-term rows in 60 days — **not €0.46**; the population is stated beside the number.
+
+## The sentence the panel exists for
+
+Every **rule** carrying `promote_to_exact` or `harvest_and_negate` is capped at PROPOSE by
+`ads-graduation.ts`, whose own comment says these actions create things that must be reaped by
+someone. **The engine performing the identical action had no ceiling applied to it at all** — it was
+gated only by a global switch on another page, shared with every other engine, until HV.0 added
+`NEXUS_ADS_AUTO_HARVEST_ARMED` on 2026-08-12. Seven rules held at Propose; one engine that was not.
+
+## Nine actors, and not one rule has ever written
+
+| actor | level | ceiling | proposed | refused (cap) | wrote | landed |
+|---|---|---|---|---|---|---|
+| **Harvest & negate** *(engine)* | Propose | Propose | — | — | **218** | **9** |
+| Auto harvest & negate | Propose | Propose | 6,453 | 33,366 | 0 | — |
+| Auto match-type migration | Propose | Propose | 6,529 | 6,821 | 0 | — |
+| Account-wide negative sync | Propose | Propose | 13,098 | 0 | 0 | — |
+| Daily automation digest | Propose | Propose | 6,382 | 33,448 | 0 | — |
+| Wasted keyword instant negate | Propose | Propose | 24,895 | 0 | 0 | — |
+| Exact match discovery engine | **Off** | Propose | 85 | 33,406 | 0 | — |
+| Harvest & negate search terms | **Off** | Propose | 128 | 33,361 | 0 | — |
+| **You** *(HV.4)* | Auto | Auto | — | — | 0 | — |
+
+🔴 **Seven rules, zero writes, ever.** Every `create_keyword` row in the account is `user:anonymous`
+(548), `automation:auto-harvest` (218 — the **cron**, not a rule) or `htest` (10). The engine's
+218 → 9 is the 209-keyword plumbing failure HV.5 measured, attributed to the actor that caused it.
+
+**The four words are four columns, never merged** (C7). A refusal is not a failure and a proposal is
+not an action. The engine and the operator render **dashes with reasons** rather than four zeroes —
+neither is an `AutomationRule`, so neither has an execution record, and `acted = 0` would be a lie
+in the other direction.
+
+## The null branch is worse than recorded
+
+`NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' }` returns **0 rows of 906,333** — not "some fewer". SQL
+`NULL <> 'X'` is NULL, so the terse form excludes *everything*. The `OR` form returns 212,629, and
+212,629 + 693,704 = 906,333 exactly. Every cap count on the panel renders as **history**: 693,704
+rows, oldest 2026-06-23, **newest 2026-08-03**. Never as a live brake.
+
+## 🔴 The engine registry reports a level it reads from nowhere
+
+`ads-control-room.service.ts:293` hardcodes `masterOff ? 'OFF' : 'AUTO'` for this engine and reads
+no flag — while its two neighbours in the same array do: `rank-defend` reads
+`NEXUS_ENABLE_RANK_DEFEND`, `budget-enforce` reads `NEXUS_BUDGET_ENFORCE_APPLY` and says *"computes,
+never applies"*. So the Control Room has been reporting a level the harvest engine cannot reach
+since HV.0 landed.
+
+**HV.6 renders the disagreement and fixes nothing** — that file belongs to the Control Room
+programme (locks §3 #7). Handed off in locks §4, with `ARMED_FLAG` exported so the fix has one
+literal to import rather than a second spelling of the string.
+
+## Conflicts render nothing, and say why
+
+**`GET /advertising/autonomy/conflicts` does not exist.** `grep -a` over both route files finds
+seven `/advertising/autonomy/*` routes and none is `conflicts`. What exists is
+`GET /advertising/campaigns/:id/keyword-conflicts` — **campaign grain**, answering a different
+question (RC3.2 cross-product rank collision). The only actor-vs-actor detector is
+`ruleText.ts:261 detectConflicts`: web-local, rule-vs-rule, matched on trigger + marketplace, and
+**blind to the engine** (not an `AutomationRule`) and to the operator.
+
+Per §4.4's own instruction, nothing is rendered and the absence is explained. A second detector
+would be worse than none.
+
+## Reach, on one denominator
+
+**86 of 220** campaigns are enabled and carry an Amazon id. The other **134 cannot be touched by any
+actor on this list** — a rule that looks broken is often pointed at one of them. Scoping the page to
+a market moves the denominator (IT: 150).
+
+**8 of 62 rules carry any scope, and all 8 are marketplace** — zero portfolio, zero campaign, zero
+product. So today the honest answer at almost every scope is *"every harvest actor can reach this"*,
+and the panel says that rather than implying precision it does not have.
+
+## The one-row bucketing rule from §1.1, pinned
+
+The brief's independent run gave **3 not-measured / 0 never-served** against HV.5's **2 / 1**, and
+attributed it to *"a row with a performance row carrying zero impressions versus no row at all"*.
+
+🔴 **That boundary case does not exist in this data.** All 9 harvested keywords that reached Amazon
+were re-bucketed under both rules and they agree exactly — because **no keyword has a performance
+row carrying zero impressions**. The row test cannot separate anything.
+
+The only row that can move is `saponette moto`, created **2026-08-10**, two days before the
+measurement, with no performance row. The real distinction is not about rows at all:
+
+> **A keyword is `never-served` only once it has been live long enough for the performance feed to
+> have covered it.** Before that it is `not measured`. The discriminator needs a **grace period**,
+> not a row test.
+
+HV.5's 2 / 1 is correct under a same-day feed; 3 / 0 is correct under a grace period of two days or
+more. Both readings are defensible and they differ on exactly one row, which is why the rule is
+pinned here rather than left to whoever counts next.
+
+## What HV.8 inherits, ordered
+
+Ordered by live victims first, then blast radius, then latent:
+
+| # | item | evidence |
+|---|---|---|
+| **1** | `negateCampaign` writes CAMPAIGN scope | 20 rows, **0 at Amazon**; AD_GROUP 2,017 of 2,037 |
+| **2** | The registry says AUTO for a propose-only engine | `ads-control-room.service.ts:293` |
+| **3** | `maxExecutionsPerDay` is not a brake | the terse filter returns **0 of 906,333** |
+| **4** | The auto-targeting blind spot on the rule path | **4,514** rows; `matchType` NULL is 0 rows, ever |
+| **5** | Two rules state no criteria at all | `conditions: []` on 2 of 7 |
+| **6** | The adapter's 6-of-11 metric drop | **latent** — 0 of 62 rules builder-shaped |
+| **7** | Five bid constants against a €0.39 median | traced to 5 readers |
+
+## Corrections to the brief, kept beside the right version
+
+1. **§4.3's premise.** `translateConditions` never runs; 0 of 62 rules are builder-shaped. The
+   defect is real and latent, not live.
+2. **§4.1's counts.** Match-type migration is **6,529 DRY_RUN + 6,821 capped**, not "6,101 DRY_RUN
+   + 6,821 FAILED" — and the capped rows are refusals, not failures.
+3. **§4.5's write share.** *"rules made 95 of 42,885 writes — 0.2%"* does not reproduce:
+   `AdvertisingActionLog` holds **48,311** rows, **35,206 (72.9%)** from `automation:*`. The 0.2%
+   figure describes a narrower population than it names.
+4. **§4.1's actor count.** Seven rules can create a keyword or a negative, not five —
+   `Wasted keyword instant negate` and `Account-wide negative sync` both create negatives, and the
+   second has the widest blast radius in the section (one term, every enabled campaign in a market).
+5. **The median CPC** is **€0.39**, not €0.46, over 7,460 clicked rows in 60 days.
+6. **§1.1's bucketing boundary** has no instance — see above.
+7. **§1.3's `negateCampaign` figures** are AD_GROUP **2,037 / 2,017**, not 2,034 / 2,014.
