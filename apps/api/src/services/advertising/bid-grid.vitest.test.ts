@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { bandOf, labelFor, BID_BANDS, type BidBand } from './bid-grid.service.js'
+import { bandOf, labelFor, effectiveMaxCpc, BID_BANDS, type BidBand } from './bid-grid.service.js'
 
 describe('bandOf', () => {
   it('is total over every bid a target can hold', () => {
@@ -93,5 +93,40 @@ describe('labelFor', () => {
     // 53 rows store UNKNOWN. Naming one of those "Close match" would be a guess presented as a fact.
     expect(labelFor('', 'AUDIENCE', 'UNKNOWN').label).toBe('Audience')
     expect(labelFor('', 'PRODUCT_CATEGORY', 'UNKNOWN').label).toBe('Category target')
+  })
+})
+
+describe('effectiveMaxCpc', () => {
+  it('rounds BEFORE comparing, so a tiny multiplier never restates the bid', () => {
+    // 2¢ × 1.01 = 2.02 → rounds to 2. Rounding after the `>` shipped a column that rendered
+    // €0.02 beside a Bid column reading €0.02. Caught on prod, not in review.
+    expect(effectiveMaxCpc(2, { strategy: 'LEGACY_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 1 }] }).cents).toBeNull()
+    expect(effectiveMaxCpc(2, { strategy: 'LEGACY_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 50 }] }).cents).toBe(3)
+  })
+
+  it('never returns a value equal to or below the bid', () => {
+    for (const bid of [1, 2, 3, 5, 17, 34, 232]) {
+      for (const pct of [0, 1, 2, 5, 25, 60, 100, 400]) {
+        for (const strategy of ['LEGACY_FOR_SALES', 'AUTO_FOR_SALES', undefined]) {
+          const r = effectiveMaxCpc(bid, { strategy, placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: pct }] })
+          if (r.cents != null) expect(r.cents, `bid=${bid} pct=${pct} ${strategy}`).toBeGreaterThan(bid)
+        }
+      }
+    }
+  })
+
+  it('down-only never lifts; up-and-down doubles at top of search', () => {
+    expect(effectiveMaxCpc(50, { strategy: 'LEGACY_FOR_SALES', placementBidding: [] }).cents).toBeNull()
+    expect(effectiveMaxCpc(50, { strategy: 'AUTO_FOR_SALES', placementBidding: [] }).cents).toBe(100)
+    // placement applies whatever the strategy is — Amazon multiplies the bid before the strategy
+    // ever sees it, which is the compounding hole the placement study measured at +300%.
+    expect(effectiveMaxCpc(50, { strategy: 'LEGACY_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 100 }] }).cents).toBe(100)
+    expect(effectiveMaxCpc(50, { strategy: 'AUTO_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 100 }] }).cents).toBe(200)
+  })
+
+  it('returns null rather than repeating the bid when nothing lifts it', () => {
+    expect(effectiveMaxCpc(34, {}).cents).toBeNull()
+    expect(effectiveMaxCpc(34, null).cents).toBeNull()
+    expect(effectiveMaxCpc(34, { placementBidding: [] }).cents).toBeNull()
   })
 })

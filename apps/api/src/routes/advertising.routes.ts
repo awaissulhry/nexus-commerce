@@ -10011,17 +10011,61 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AD.2: bid history feed ──────────────────────────────────────────
+  //
+  // BID.S2 — four ADDITIVE query params. With none of them present this handler behaves exactly as
+  // it did before, which matters: `ads-console/bulk/BulkOpsClient.tsx:79` calls it as
+  // `?limit=200` and reads `items`. (The page study recorded "nothing renders it" — that was
+  // wrong, and a non-additive change here would have broken the Bulk operations screen.)
+  //
+  //   entityIds=<csv>   many entities in one call, instead of one id or none
+  //   field=<csv>       e.g. `bid,defaultBid` — a bid curve must not plot a status change
+  //   perEntity=<n>     🔴 N points PER ENTITY, not N rows total
+  //   since=<iso>       window start; defaults to 60 days
+  //
+  // Why `perEntity` exists: 500 targets × 12 points is 6,000 rows, so a flat `limit` returns every
+  // point of the busiest few targets and nothing for the rest. On screen that is indistinguishable
+  // from "these keywords never changed" — which is true of 79% of rows, so the mistake would be
+  // invisible. The grouping is done by `getBidSeries`, the same function `GET /advertising/bid-grid`
+  // uses for its inline `series`, so there is one implementation of this and not two.
   fastify.get('/advertising/bid-history', async (request, reply) => {
     const q = request.query as {
       entityId?: string
+      entityIds?: string
       entityType?: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET'
       campaignId?: string
+      field?: string
+      perEntity?: string
+      since?: string
       limit?: string
     }
+
+    // Grouped mode — only when the caller asks for it by name.
+    if (q.entityIds) {
+      const ids = q.entityIds.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 500)
+      const { getBidSeries } = await import('../services/advertising/bid-grid.service.js')
+      const sinceDate = q.since ? new Date(q.since) : undefined
+      const series = await getBidSeries({
+        entityIds: ids,
+        perEntity: q.perEntity ? Number(q.perEntity) : undefined,
+        since: sinceDate && !Number.isNaN(sinceDate.getTime()) ? sinceDate : undefined,
+      })
+      reply.header('Cache-Control', 'private, max-age=30')
+      return { series, entities: Object.keys(series).length, requested: ids.length }
+    }
+
     const where: Record<string, unknown> = {}
     if (q.entityId) where.entityId = q.entityId
     if (q.entityType) where.entityType = q.entityType
     if (q.campaignId) where.campaignId = q.campaignId
+    // Additive: absent ⇒ every field, exactly as before.
+    if (q.field) {
+      const fields = q.field.split(',').map((s) => s.trim()).filter(Boolean)
+      if (fields.length) where.field = { in: fields }
+    }
+    if (q.since) {
+      const d = new Date(q.since)
+      if (!Number.isNaN(d.getTime())) where.changedAt = { gte: d }
+    }
     const limit = Math.min(Number(q.limit) || 100, 500)
     const items = await prisma.campaignBidHistory.findMany({
       where,

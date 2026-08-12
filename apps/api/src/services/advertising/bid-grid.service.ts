@@ -176,7 +176,35 @@ export interface BidTargetRow {
   orders: number
   cpcCents: number | null
   acos: number | null
+
+  // ── BID.S2 ────────────────────────────────────────────────────────────────────────────────────
+  /** The campaign's declared floor and ceiling. 🔴 `null` is "no floor declared", NOT "a floor of
+   *  zero" — measured 2026-08-12: `minBidCents` set on **0 of 220** campaigns and no campaign
+   *  declares 0, so every row is in the first state and none is in the second. S5 edits these. */
+  minBidCents: number | null
+  maxBidCents: number | null
+  /** Who owns this campaign's bids. Derived per campaign; S6 makes it assignable. */
+  bidder: BidderKind
+  /** The schedule's resolved name — the GROUP's name where it has one. null unless bidder=schedule. */
+  bidderName: string | null
+  /** The bid this target held before no-pause suppression floored it. null = not suppressed. */
+  suppressedFromBidCents: number | null
+  /** The campaign is inside a Min-bid window right now. */
+  inMinBidWindow: boolean
+  /** Newest audited value for this target, in cents, from CampaignBidHistory. null = never audited. */
+  lastAuditedCents: number | null
+  lastAuditedAt: string | null
+  /** 🔴 The live bid disagrees with the newest audited value — something moved it and left no row. */
+  unrecorded: boolean
+  /** bid × (1 + placement%) × strategy uplift, over the best lane. null when nothing lifts it. */
+  effectiveMaxCpcCents: number | null
+  /** The largest placement adjustment on the campaign, in percent. 0 when none. */
+  placementPct: number
+  /** LEGACY_FOR_SALES (down-only) · AUTO_FOR_SALES (up and down) · null */
+  biddingStrategy: string | null
 }
+
+export type BidderKind = 'schedule' | 'goal' | 'manual' | 'none'
 
 export interface BidCampaignRow {
   id: string
@@ -194,9 +222,31 @@ export interface BidCampaignRow {
   orders: number
   cpcCents: number | null
   acos: number | null
+  // ── BID.S2 ────────────────────────────────────────────────────────────────────────────────────
+  /** The declared band, at the grain it is enforced at. `null` = not declared. */
+  minBidCents: number | null
+  maxBidCents: number | null
+  bidder: BidderKind
+  bidderName: string | null
+  /** how many of this campaign's targets sit above its declared ceiling */
+  outOfBand: number
+  placementPct: number
+  biddingStrategy: string | null
 }
 
 export interface BidFacet { value: string; count: number }
+
+/** One point on a bid curve. Compact on purpose — 607 entities × 12 points travel in every read. */
+export interface BidSeriesPoint {
+  /** ISO instant of the change */
+  at: string
+  /** the value the write INTENDED, in cents */
+  to: number
+  /** the value it moved from, in cents; null when the row did not record one */
+  from: number | null
+  /** delivery, joined from AdvertisingActionLog: 'SUCCESS' | 'FAILED' | 'PENDING' | null */
+  delivered: string | null
+}
 
 export interface BidGridResult {
   scope: {
@@ -226,6 +276,19 @@ export interface BidGridResult {
     band: BidFacet[]
     measured: BidFacet[]
   }
+  /**
+   * BID.S2 — the sparkline data, keyed by target id, newest LAST.
+   *
+   * Only entities that actually have a point appear here: 607 of 2,944 ENABLED targets (20.6%)
+   * received a bid write in 60 days, so ~79% of rows are legitimately absent and the cell must
+   * render a "never changed" mark rather than an empty box or a flat line.
+   *
+   * 🔴 Carried in this payload rather than fetched per row because a CSV of 2,944 cuids is a 90 KB
+   * URL and one request per page of rows would fan out fifteen times. `GET /advertising/bid-history`
+   * gained `entityIds`/`perEntity` for the single-target case (S3's drawer) and both call the same
+   * `getBidSeries`, so there is one implementation, not two.
+   */
+  series: Record<string, BidSeriesPoint[]>
   rows: BidTargetRow[] | BidCampaignRow[]
   total: number
   truncated: boolean
@@ -276,6 +339,62 @@ async function resolveScope(req: BidGridRequest) {
   }
 }
 
+/**
+ * BID.S2 — the effective maximum CPC a bid can reach.
+ *
+ * Amazon multiplies the bid twice before the auction, and the page study's §8 names the hole this
+ * makes visible: our ceiling binds the BASE bid, not what the base bid can become.
+ *
+ *   1. the **placement adjustment** — `dynamicBidding.placementBidding[]`, 0–900%. Measured
+ *      2026-08-12: **172 of 220 campaigns** carry one, **68 of 86 ENABLED**, largest **+400%**.
+ *   2. the **bidding strategy** — `LEGACY_FOR_SALES` ("down only", 193 campaigns) never raises a
+ *      bid, so it contributes nothing. `AUTO_FOR_SALES` ("up and down", 7) may raise by up to
+ *      **100% on top-of-search** and **50% elsewhere**.
+ *
+ * 🔴 Neither factor lives where the brief said. `RankTarget` has **no `cpcCapPct`** (it carries
+ * `maxCpcCents`), and placement is not in `bidStrategyJson` — it is `dynamicBidding.placementBidding`,
+ * which is what `placement-grid.service.ts:254` reads. Two probes reported "0 campaigns" before the
+ * third looked in the right place; the first of those had a `.catch(() => [])` around a wrong field
+ * name, which is indistinguishable from a measurement of zero.
+ *
+ * Returns null when nothing lifts the bid, so the column renders "—" rather than repeating Bid on
+ * the 18 ENABLED campaigns that carry no multiplier. A column that restates another column on most
+ * rows is the Apply Rules defect, and it is the reason Suggested Bid was cut.
+ */
+const LANE_UPLIFT: Record<string, number> = {
+  PLACEMENT_TOP: 1.0,
+  PLACEMENT_REST_OF_SEARCH: 0.5,
+  PLACEMENT_PRODUCT_PAGE: 0.5,
+}
+export function effectiveMaxCpc(bidCents: number, dynamicBidding: unknown): { cents: number | null; placementPct: number; strategy: string | null } {
+  const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement?: string; percentage?: number }>; strategy?: string }
+  const strategy = typeof db.strategy === 'string' ? db.strategy : null
+  const lanes = Array.isArray(db.placementBidding) ? db.placementBidding : []
+  const canRaise = strategy === 'AUTO_FOR_SALES'
+  let best = 0
+  let bestPct = 0
+  for (const lane of lanes) {
+    const pct = Number(lane?.percentage)
+    if (!Number.isFinite(pct) || pct <= 0) continue
+    const uplift = canRaise ? (LANE_UPLIFT[String(lane.placement)] ?? 0.5) : 0
+    const cents = bidCents * (1 + pct / 100) * (1 + uplift)
+    if (cents > best) { best = cents; bestPct = pct }
+  }
+  // A strategy that can raise still lifts the bid on a lane with no placement adjustment.
+  if (canRaise && best === 0 && bidCents > 0) best = bidCents * (1 + LANE_UPLIFT.PLACEMENT_TOP)
+  // 🔴 Round BEFORE comparing. Rounding after it lets a small multiplier survive the `>` and then
+  // collapse onto the bid: a 2¢ bid with a +1% adjustment is 2.02 → rounds to 2 → the column
+  // renders €0.02 next to a Bid column reading €0.02. Caught by `_bid-s2-verify.mts` on prod.
+  // A ceiling equal to the bid is not a ceiling, and a column that restates its neighbour on some
+  // rows is the Apply Rules defect arriving by the back door.
+  const rounded = Math.round(best)
+  return {
+    cents: rounded > bidCents ? rounded : null,
+    placementPct: bestPct,
+    strategy,
+  }
+}
+
 /** Count occurrences of a key over rows, as a descending facet list. */
 function facet<T>(rows: T[], key: (r: T) => string): BidFacet[] {
   const m = new Map<string, number>()
@@ -300,6 +419,149 @@ const cmp = (a: number | string | null, b: number | string | null, sign: number)
   return sign * (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b)))
 }
 
+/**
+ * BID.S2 — the newest audited bid per target, for the drift check.
+ *
+ * One `DISTINCT ON` over the whole 22,642-row table rather than an `IN` list of up to 5,000 ids:
+ * the `[entityType, entityId, changedAt desc]` index serves it directly, and the result is small
+ * enough to filter in memory.
+ *
+ * 🔴 `newValue` is stored as a STRING for cross-type uniformity, and it holds CENTS — verified by
+ * probe against 400 audited targets (`newValue == bidCents` on 317, `newValue * 100 == bidCents`
+ * on 0). Do not assume; the neighbouring action-log budget fields are euros, which is exactly the
+ * mistake `reference_ads_action_log_budget_euros` records.
+ */
+/**
+ * BID.S2 — who owns each campaign's bids. Four values, read-only here; S6 makes it assignable.
+ *
+ * Measured 2026-08-12 over the 86 ENABLED campaigns: **schedule 33 · goal 0 · manual 12 · none 41**.
+ * The brief's "none: 53" is manual+none combined; the split matters, because a campaign a human
+ * touched last month and a campaign nobody has ever bid on are different problems.
+ *
+ * 🔴 `none` is the page's most important finding, not a tidy default: 41 ENABLED campaigns have no
+ * bidder, 26 of them spent €709.93 in 30 days, and their write gates are OPEN. Nothing is stopping
+ * a bidder from reaching them. Nothing is trying.
+ *
+ * The schedule's NAME resolves through to its group — `group?.name ?? name` — which is the rule
+ * `resolveOrigins` (`ads-changes.service.ts:111`) applies, and it applies it because *the operator
+ * thinks in named groups*. That function is not exported and takes `ChangeRow[]`, so it cannot be
+ * imported here; what is reused is its rule, not a second parser. No actor string is parsed on this
+ * path at all — `AdSchedule` and `AdvertisingActionLog.userId` are read directly.
+ */
+async function bidderByCampaign(): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
+  const since60 = new Date(Date.now() - 60 * 86400_000)
+  const [schedules, campaigns, manualLogs] = await Promise.all([
+    prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true, name: true, group: { select: { name: true } } } }),
+    prisma.campaign.findMany({ select: { id: true, dynamicBidding: true } }),
+    prisma.advertisingActionLog.findMany({
+      where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 }, userId: { not: null } },
+      select: { entityId: true },
+    }),
+  ])
+  // An operator's bid write names a TARGET; the bidder is a property of the CAMPAIGN, so resolve up.
+  const manualTargetIds = [...new Set(manualLogs.map((l) => l.entityId))]
+  const manualCampaigns = new Set(
+    manualTargetIds.length
+      ? (await prisma.adTarget.findMany({ where: { id: { in: manualTargetIds } }, select: { adGroup: { select: { campaignId: true } } } }))
+        .map((t) => t.adGroup.campaignId)
+      : [],
+  )
+  const bySchedule = new Map<string, string>()
+  for (const s of schedules) if (!bySchedule.has(s.campaignId)) bySchedule.set(s.campaignId, s.group?.name ?? s.name)
+
+  const out = new Map<string, { kind: BidderKind; name: string | null }>()
+  for (const c of campaigns) {
+    const sched = bySchedule.get(c.id)
+    if (sched) { out.set(c.id, { kind: 'schedule', name: sched }); continue }
+    // `dynamicBidding.targetAcos` is the correct field — `Campaign.targetAcosPct` is documented as a
+    // mistake. Set on 0 of 220 campaigns today, so `goal` is reachable and empty, not unreachable.
+    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+    const goal = db.targetAcos ?? db.targetACoS
+    if (typeof goal === 'number' && goal > 0) { out.set(c.id, { kind: 'goal', name: null }); continue }
+    out.set(c.id, manualCampaigns.has(c.id) ? { kind: 'manual', name: null } : { kind: 'none', name: null })
+  }
+  return out
+}
+
+async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: Date }>> {
+  const rows = await prisma.$queryRaw<Array<{ entityId: string; newValue: string | null; changedAt: Date }>>`
+    SELECT DISTINCT ON ("entityId") "entityId", "newValue", "changedAt"
+    FROM "CampaignBidHistory"
+    WHERE "entityType" = 'AD_TARGET' AND "field" IN ('bid', 'defaultBid')
+    ORDER BY "entityId", "changedAt" DESC`
+  const out = new Map<string, { cents: number; at: Date }>()
+  for (const r of rows) {
+    const n = Number(r.newValue)
+    if (Number.isFinite(n)) out.set(r.entityId, { cents: n, at: r.changedAt })
+  }
+  return out
+}
+
+/**
+ * BID.S2 — N points per entity, never N rows total.
+ *
+ * 🔴 The cap is per ENTITY on purpose. A flat `limit` over an ordered scan returns every point of
+ * the busiest few targets and nothing for the rest, which on screen reads as "these keywords never
+ * changed" — the single most misleading thing this column could say, given that 79% of rows
+ * genuinely never changed and the two cases would be indistinguishable.
+ *
+ * Delivery is joined from `AdvertisingActionLog` on (entityId, ±5 s): the two tables carry the same
+ * 1,667 rows over 48 h and their timestamps agree to the second, but only the log knows whether
+ * Amazon took the write. Today **0 AD_BID_UPDATE rows have failed in 7 days**, so the "did not
+ * land" mark renders on nothing — it is built because the page study's §1 case is nineteen recorded
+ * cuts on a bid that never moved, and that must be visible the day it recurs.
+ */
+export async function getBidSeries(opts: { entityIds: string[]; perEntity?: number; since?: Date }): Promise<Record<string, BidSeriesPoint[]>> {
+  const { entityIds } = opts
+  if (entityIds.length === 0) return {}
+  const perEntity = Math.max(1, Math.min(60, opts.perEntity ?? 12))
+  const since = opts.since ?? new Date(Date.now() - 60 * 86400_000)
+
+  const [hist, logs] = await Promise.all([
+    prisma.campaignBidHistory.findMany({
+      where: { entityType: 'AD_TARGET', entityId: { in: entityIds }, field: { in: ['bid', 'defaultBid'] }, changedAt: { gte: since } },
+      select: { entityId: true, oldValue: true, newValue: true, changedAt: true },
+      orderBy: { changedAt: 'desc' },
+    }),
+    prisma.advertisingActionLog.findMany({
+      where: { entityType: 'AD_TARGET', entityId: { in: entityIds }, actionType: 'AD_BID_UPDATE', createdAt: { gte: since } },
+      select: { entityId: true, createdAt: true, amazonResponseStatus: true },
+    }),
+  ])
+
+  const byEntityLogs = new Map<string, Array<{ at: number; status: string | null }>>()
+  for (const l of logs) {
+    const a = byEntityLogs.get(l.entityId) ?? []
+    a.push({ at: l.createdAt.getTime(), status: l.amazonResponseStatus })
+    byEntityLogs.set(l.entityId, a)
+  }
+  const deliveryFor = (entityId: string, at: Date): string | null => {
+    const a = byEntityLogs.get(entityId)
+    if (!a) return null
+    const t = at.getTime()
+    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status
+    return null
+  }
+
+  const out: Record<string, BidSeriesPoint[]> = {}
+  for (const h of hist) {
+    const bucket = out[h.entityId] ?? (out[h.entityId] = [])
+    if (bucket.length >= perEntity) continue // newest-first, so this keeps the most recent N
+    const to = Number(h.newValue)
+    if (!Number.isFinite(to)) continue
+    const from = Number(h.oldValue)
+    bucket.push({
+      at: h.changedAt.toISOString(),
+      to,
+      from: Number.isFinite(from) ? from : null,
+      delivered: deliveryFor(h.entityId, h.changedAt),
+    })
+  }
+  // Oldest first, so a consumer plots left-to-right without reversing.
+  for (const k of Object.keys(out)) out[k].reverse()
+  return out
+}
+
 export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
   const since = new Date(Date.now() - req.windowDays * 86400_000)
   const scope = await resolveScope(req)
@@ -318,10 +580,18 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     select: {
       id: true, expressionValue: true, expressionType: true, kind: true, bidCents: true, status: true,
       updatedAt: true,
+      // BID.S2 — the restore value the no-pause suppression remembered. null = not suppressed.
+      suppressedFromBidCents: true,
       adGroup: {
         select: {
           id: true, name: true,
-          campaign: { select: { id: true, name: true, marketplace: true, status: true } },
+          campaign: {
+            select: {
+              id: true, name: true, marketplace: true, status: true,
+              // BID.S2 — the band, the min-bid window, and the two factors behind effective CPC.
+              minBidCents: true, maxBidCents: true, bidsSuppressedAt: true, dynamicBidding: true,
+            },
+          },
         },
       },
     },
@@ -342,6 +612,9 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
   }) : []
   const pmap = new Map(perf.map((p) => [p.localEntityId, p]))
+
+  // BID.S2 — three reads that do not depend on each other, so they go together.
+  const [bidders, audited] = await Promise.all([bidderByCampaign(), lastAuditedByTarget()])
 
   const all: BidTargetRow[] = capped.map((t) => {
     const p = pmap.get(t.id)
@@ -379,6 +652,21 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
       // grid renders them differently.
       cpcCents: clicks > 0 ? spendCents / clicks : null,
       acos: p && salesCents > 0 ? spendCents / salesCents : null,
+      // ── BID.S2 ──────────────────────────────────────────────────────────────────────────────
+      minBidCents: c.minBidCents,
+      maxBidCents: c.maxBidCents,
+      bidder: bidders.get(c.id)?.kind ?? 'none',
+      bidderName: bidders.get(c.id)?.name ?? null,
+      suppressedFromBidCents: t.suppressedFromBidCents,
+      inMinBidWindow: c.bidsSuppressedAt != null,
+      lastAuditedCents: audited.get(t.id)?.cents ?? null,
+      lastAuditedAt: audited.get(t.id)?.at?.toISOString() ?? null,
+      // 🔴 By VALUE, never by `updatedAt`. Measured 2026-08-12: 2,442 of the 2,540 targets with no
+      // bid write in 60 days had `updatedAt` move within 2 hours, because the hourly resync writes
+      // `lastSyncedAt` on every row it sees and Prisma's @updatedAt follows. `updatedAt` is a sync
+      // heartbeat; comparing values is the only honest drift signal.
+      unrecorded: (() => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents })(),
+      ...(() => { const e = effectiveMaxCpc(t.bidCents, c.dynamicBidding); return { effectiveMaxCpcCents: e.cents, placementPct: e.placementPct, biddingStrategy: e.strategy } })(),
     }
   })
 
@@ -440,11 +728,19 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
           id: r.campaignId, name: r.campaignName, market: r.market, status: r.campaignStatus,
           targets: 0, measured: 0, bidMinCents: null, bidMaxCents: null,
           impressions: 0, clicks: 0, spendCents: 0, salesCents: 0, orders: 0, cpcCents: null, acos: null,
+          // BID.S2 — the band and the bidder are campaign facts, so they carry straight over.
+          minBidCents: r.minBidCents, maxBidCents: r.maxBidCents,
+          bidder: r.bidder, bidderName: r.bidderName, outOfBand: 0,
+          placementPct: r.placementPct, biddingStrategy: r.biddingStrategy,
         }
         m.set(r.campaignId, c)
       }
       c.targets += 1
       if (r.measured) c.measured += 1
+      // How many of this campaign's bids sit above its own declared ceiling. The gate DENIES a
+      // write outside the band; it never pulls an existing bid in, so these are frozen upward and
+      // nothing is lowering them.
+      if (r.maxBidCents != null && r.bidCents > r.maxBidCents) c.outOfBand += 1
       c.bidMinCents = c.bidMinCents == null ? r.bidCents : Math.min(c.bidMinCents, r.bidCents)
       c.bidMaxCents = c.bidMaxCents == null ? r.bidCents : Math.max(c.bidMaxCents, r.bidCents)
       c.impressions += r.impressions
@@ -469,10 +765,15 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     adGroup: (r) => r.adGroupName.toLowerCase(), campaign: (r) => r.campaignName.toLowerCase(),
     market: (r) => r.market, bid: (r) => r.bidCents, impressions: (r) => r.impressions,
     clicks: (r) => r.clicks, cpc: (r) => r.cpcCents, spend: (r) => r.spendCents, acos: (r) => r.acos,
+    // BID.S2. `band` sorts by the ceiling — the end an operator is actually watching, and the only
+    // one that is ever set. `bidder` sorts by name so the 41 un-bid campaigns cluster.
+    band: (r) => r.maxBidCents, bidder: (r) => `${r.bidder}:${r.bidderName ?? ''}`,
+    effCpc: (r) => r.effectiveMaxCpcCents,
   }
   const campaignSort: Record<string, (r: BidCampaignRow) => number | string | null> = {
     campaign: (r) => r.name.toLowerCase(), market: (r) => r.market, targets: (r) => r.targets,
     bidRange: (r) => r.bidMaxCents, spend: (r) => r.spendCents, sales: (r) => r.salesCents, acos: (r) => r.acos,
+    band: (r) => r.maxBidCents, bidder: (r) => `${r.bidder}:${r.bidderName ?? ''}`, outOfBand: (r) => r.outOfBand,
   }
 
   let rows: BidTargetRow[] | BidCampaignRow[]
@@ -486,6 +787,18 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
   }
   const total = rows.length
   if (rows.length > req.limit) rows = rows.slice(0, req.limit) as BidTargetRow[] | BidCampaignRow[]
+
+  // ── BID.S2 — the sparkline data, for the rows being returned ─────────────────────────────────
+  // Only the target view draws a curve, and only for the rows that made it past the filters and the
+  // limit — so the payload never carries points nothing can render.
+  //
+  // 🔴 A FIXED 60-day history window, deliberately not `since`. `?window=` is the METRIC window
+  // (S0's contract says so in as many words); wiring the curve to it would make the sparkline
+  // shorten when an operator switched the metric columns to 7 days, which reads as "this bid
+  // stopped moving" rather than "you changed a different control".
+  const series = req.view === 'targets'
+    ? await getBidSeries({ entityIds: (rows as BidTargetRow[]).map((r) => r.id), perEntity: 12 })
+    : {}
 
   // ── freshness + the poll cursor ───────────────────────────────────────────────────────────────
   const cursor = await getBidCursor(scope.campaignIds, noCampaigns)
@@ -507,6 +820,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     window: { days: req.windowDays, since: since.toISOString() },
     census,
     facets: { kind: kindFacet, match: matchFacet, band: bandFacet, measured: measuredFacet },
+    series,
     rows,
     total,
     truncated,
