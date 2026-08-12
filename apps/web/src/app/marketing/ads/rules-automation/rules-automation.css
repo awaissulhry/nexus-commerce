@@ -1623,7 +1623,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-wlrow { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: #f8fafc; font-size: 11.5px; }
 .h10-kt-wlrow.on { background: #e8f1fd; }
 .h10-kt-wlrow .nm { font: inherit; font-size: inherit; font-weight: 700; color: #1c2530; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-.h10-kt-wlrow .ct { color: #667080; font-variant-numeric: tabular-nums; }
+/* #667080 measures 4.95 on white and 4.39 on this row's #f8fafc — a fail. The same token passing
+   in one place and failing in another is why contrast is measured against the COMPOSITED
+   background rather than the palette. */
+.h10-kt-wlrow .ct { color: #55606d; font-variant-numeric: tabular-nums; }
 .h10-kt-wlrow .df { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: #14724d; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
 .h10-kt-wlnew { display: flex; gap: 7px; width: 100%; }
 .h10-kt-wlnew input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 12px; color: #1c2530; border: 1px solid #e3e7ec; border-radius: 8px; padding: 7px 10px; }

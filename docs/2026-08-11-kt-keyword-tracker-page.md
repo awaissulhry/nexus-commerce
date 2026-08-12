@@ -1110,3 +1110,120 @@ in the shared working tree, so their commit carries my lines under their message
 and the selectors are disjoint — but this is the `commit --only` hazard the locks doc §5 names,
 running in the direction it does not warn about: **not "my commit breaks", but "my change ships
 inside someone else's".** Recorded in the locks doc for the next session that shares this file.
+
+---
+
+## KT.2 — built
+
+**Shipped and verified on production 2026-08-12.** Session slug `kt2`.
+Measured with `_kt2-engine-state.mts` (the stop conditions), `_kt2-seed-candidates.mts` (the seed
+choice), `_kt2-verify.mts` (the result) — all read-only — plus `_kt2-seed-watchlists.mts`, the one
+writing script, idempotent and re-run to prove it.
+
+### 🔴 A stop condition tripped, and the answer was "build it harder"
+
+The brief said the coverage-engine hazard was latent because the engine is *"scheduled nowhere"*.
+It is scheduled. Measured:
+
+| | |
+|---|---|
+| `startCoverageEngineCron()` | called from `startAllAdvertisingCrons()` at `ads-sync.job.ts:798` |
+| schedule | `10 7 * * *` — daily at 07:10 |
+| `CronRun` rows named `ads-coverage-engine` | **6**, most recent 2026-08-11 07:10 |
+| every run's summary | `mode=observe sets=0 terms=0 up=0 down=0 applied=0` |
+| `NEXUS_COVERAGE_ENGINE_MODE` | **unset** → `observe`, so nothing has been written |
+| sets the engine would act on | **0** — the one set is `enabled: false` |
+| decisions ever logged | **none** (no `AdvertisingActionLog` row with a coverage `actionType`) |
+| terms already primed | **97 of 97** carry a `leadAsin`, the engine's precondition for acting |
+| who can arm it | `PATCH /advertising/coverage-sets/:id { enabled }`, wired to a button on the **Family Cockpit** |
+
+So the chain is: **one UI toggle** starts nightly evaluation of 97 terms, and **one env var** turns
+those decisions into real bid writes through `updateAdTargetWithSync`. Not latent — armed and
+observing. The operator confirmed proceeding as designed, which is the right call: an engine that
+already runs nightly makes the isolation *more* necessary, not less. The other two stop conditions
+hold — `ads-coverage-sets.service.ts` is still the only writer (4 write calls, one file), and no
+watchlist-shaped table exists (the keyword tables are `AdKeywordProtection`, `EbayKeyword`,
+`EbayNegativeKeyword`, `KeywordCoverageSet`, `KeywordCoverageTerm`, `KeywordRank`).
+
+### The four lists, and what the wrong one was costing
+
+Seeded per market, `bid ∩ SQP-90d` for the three markets with no curated list, IT's 97 curated terms
+copied. Each list also carries the 10 protected brand terms, flagged branded and hidden by default.
+
+| market | list | terms | source | **measured before** | **measured after** |
+|---|---|---|---|---|---|
+| IT | `IT — curated coverage` | 107 | the coverage set, copied | 97 of 97 | **97 of 97** |
+| DE | `DE — bid keywords we can measure` | 31 | bid ∩ SQP-90d | 2 of 97 | **10 of 21** |
+| ES | `ES — bid keywords we can measure` | 17 | bid ∩ SQP-90d | 0 of 97 | **6 of 7** |
+| FR | `FR — bid keywords we can measure` | 18 | bid ∩ SQP-90d | 0 of 97 | **3 of 8** |
+
+DE now opens on `motorrad jacke herren` — volume 6,028, market rank **#1**, our share 0.78 %, with
+**10 of our own ASINs** on it. ES on `chaqueta moto verano hombre` (4,943, #2). FR on
+`veste moto homme homologué` (1,669, #1). Those rows existed the whole time; the page was asking
+Amazon about Italian terms in Spain.
+
+**Why that seed and not a bigger one.** The candidate sources, measured per market:
+
+| market | bid keywords (enabled) | SQP 90d | SQP vol ≥ 500 | paid 30d | **bid ∩ SQP** |
+|---|---|---|---|---|---|
+| IT | 212 (197) | 3,013 | 71 | 1,017 | 83 |
+| DE | 41 (41) | 2,254 | 62 | 609 | 21 |
+| ES | 9 (9) | 1,950 | 19 | 201 | 7 |
+| FR | 37 (25) | 624 | 17 | 104 | 8 |
+
+`bid ∩ SQP` is the intersection where a row can actually carry volume, rank and share. Every SQP
+query in the market would be a **discovery** list, which §7.1 gives to Share of Voice. All bid
+keywords would open FR with 29 of 37 rows permanently blank. What the chosen seed does **not** cover
+is on the record: paid-but-SQP-blind queries — IT 610, DE 340, ES 62, FR 76.
+
+### What else changed
+
+- **`?? sets[0]` is deleted.** A market with no list resolves to nothing and says so, in amber, with
+  the measured reason it is not borrowing one. A `?list=` naming a real list from **another** market
+  is refused and explained (`listRejected: true`), not honoured — verified: DE + the IT list id
+  returns `list: null` and 0 rows.
+- **`enabled` is absent from the payload** in all four markets, and the new entity has no such
+  column. `source` replaces it as the honest thing to say about a list.
+- **`isBranded` is stored per term**, classified on write by a function that honours
+  `AdKeywordProtection.matchType` and its nullable `marketplace`. Measured: all ten protections are
+  `CONTAINS` with `marketplace = null`, so KT.1's blanket `includes()` sweep was **accidentally
+  correct** — honouring the columns changes zero classifications today. Honoured anyway, and tested
+  (10 tests, 3 seen to fail first), because right-by-coincidence is one `EXACT` row away from ending
+  and this answer is now persisted rather than recomputed away.
+- **The `lists` payload is alive**: a picker that round-trips `?list=`, rendered as a select only
+  when a market has more than one list — a one-option dropdown is a control where nothing moves.
+- **The editor** does add (paste, counted back), remove, copy-from-coverage-set, create, rename, set
+  default and delete, with D4 sentences on both destructive paths.
+- **The coverage set is untouched**: `updatedAt` still reads 2026-08-05, before this build.
+
+### Two defects found by clicking, not by reading
+
+1. **Delete returned 400.** The request helper set `Content-Type: application/json` on the bodyless
+   DELETE, and Fastify rejects that. The confirmation text was correct; the request was malformed.
+   This is the class of thing that survives tsc, review and a screenshot.
+2. **A failed read was reported as an empty watchlist.** With `data` null, both the banner and the
+   grid's empty state asserted "DE has no watchlist" — measured on prod during an API redeploy,
+   rendering directly beneath a "Failed to fetch" banner saying the opposite. Both are now gated on
+   there being no error.
+
+Verified by click on prod: create a list (the picker appears at two), paste `motorradjacke test kt2`
++ `xavia motorradjacke` → *"Added 2 terms · 1 classified as one of our brand terms and hidden by
+default"*, then delete the list from the confirmation that names it and counts its terms. The
+scratch list was removed; DE is back to one list and the picker correctly disappeared.
+
+Geometry re-measured on prod: the panel is flush with the grid card at **96→1698** of 1728, four
+lanes at 304/304/1568/1568, no horizontal scroll. Contrast composited against real backgrounds found
+**one failure** — the term count at `#667080` measures 4.95 on white and **4.39** on the row's
+`#f8fafc` tint. Darkened to `#55606d`. Every other new style passes.
+
+### Recorded, not fixed
+
+- `sort` / `dir` are still never written back to the URL (needs an `AdsDataGrid` sort callback,
+  shared by nine pages); `sort=asins` is still accepted with no matching column; `reportPeriod` is
+  still unguarded (all 15,075 SQP rows are `WEEK`).
+- 🔴 **Nothing on the Family Cockpit's coverage-set toggle says it arms a nightly bid ladder.** That
+  page belongs to another programme, so this session did not touch it — logged as a request in the
+  locks doc §4 instead.
+- The ASIN-coverage denominator, the summed-share bound, per-term ad coverage, the staleness cliff
+  and feed health → **KT.5**. Spend / clicks / top-of-search and the Δ column → **KT.3**. The
+  per-keyword history drawer → **KT.4**. Any write to a bid, rule or campaign → **KT.6**.
