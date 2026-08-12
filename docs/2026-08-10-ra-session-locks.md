@@ -145,8 +145,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/_shared/useCursorPoll.ts` (from `bid/`) | BUD.1 (the promotion BID.S0 pre-blessed) | 2026-08-12 | **released** — landed `f076e20ad`, alone and first. Moved unchanged; one importer, updated; Bid verified unchanged on prod afterwards |
 | `…/rules-automation/_shared/tabs.tsx` | AR.S0 (`rules` → `routed: true` + subtitle + **one additive optional `path?`**, see §4) | 2026-08-12 | **released** — landed `bd9d44b19`. `key: 'rules'` and the label "Apply Rules" are UNCHANGED. All eleven hrefs read back on prod after the deploy; only Apply Rules moved. ⚠ it broke the tree for a few minutes first — see §4 |
 | `…/rules-automation/rules-automation.css` | AR.S0 (`h10-ar-*` at EOF) | 2026-08-12 | **released** — landed `bd9d44b19`, 96 lines, no `.dark` block. 🔴 Staged as **HEAD + my block alone** via `git hash-object` + `git update-index --cacheinfo`, because KT.5's, BSP.1's and SOV.1's blocks were uncommitted in the shared tree — none of them is in my commit. That recipe is §5's answer when your block is no longer at EOF and `git apply --cached` has no clean context to land on |
-| `apps/api/src/routes/advertising.routes.ts` | BID.S2 (`GET /advertising/bid-history` — four ADDITIVE query params on the EXISTING handler: `entityIds` · `field` · `perEntity` · `since`) | 2026-08-12 | **claimed** — 🔴 no new route: `grep -a "advertising/bid-history"` returns exactly ONE registration (`:10014`), and the change is inside it. Nothing else in the 600 KB file is touched |
-| `…/rules-automation/rules-automation.css` | BID.S2 (`h10-bd-*` at EOF — the four new columns, nine state chips, the sparkline) | 2026-08-12 | **claimed** — EOF-append only, same prefix BID.S0 already owns; every hunk `git diff`ed before staging (§5, which BID.S0 was on the wrong end of) |
+| `apps/api/src/routes/advertising.routes.ts` | BID.S2 (`GET /advertising/bid-history` — four ADDITIVE params on the EXISTING handler) | 2026-08-12 | **released** — landed `d194cfa17`, 401-verified on prod. 🔴 The default path is byte-identical because it HAS a consumer: `ads-console/bulk/BulkOpsClient.tsx:79` reads `items`. The page study's "nothing renders it" was wrong |
+| `…/rules-automation/rules-automation.css` | BID.S2 (`h10-bd-*` at EOF) | 2026-08-12 | **released** — landed `89aa23bb4`, ONE hunk at EOF, `git diff -U0` confirmed sole occupant before staging; class↔stylesheet checked both ways, 0 orphans |
 
 **BUD.1 held nothing that another session held at the same time**, and every shared file carried
 exactly one hunk when it was staged — verified with `git diff -U0` per file rather than assumed.
@@ -244,6 +244,69 @@ and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them
 ---
 
 ## 4 · Requests and hand-offs
+
+### 🔴 RA.SPINE hand-offs, 2026-08-12 — two units NOT built, and what unblocks each
+
+**1 · S4, the tab bar at eleven items. Blocked on `rules-automation.css`, and only that.**
+The four clusters (Act ┊ Bid & Place ┊ Spend ┊ Terms), the edge fade, keyboard scrolling and the
+counts provider are specified in `2026-08-11-substrate-spec.md` §3 and are the substrate's last
+unit. They need `_shared/tabs.tsx` **and** `rules-automation.css`. `tabs.tsx` came free mid-session
+when AR.S0 committed; **the stylesheet did not** — it carried 119 uncommitted lines from at least
+two sessions (`h10-ar-*` ×51, `h10-kt-*` ×7) throughout, and later went into an unresolved merge
+conflict (`UU`) from a third. §1.3 says do not edit around a held file, so it was not.
+
+Whoever takes it: everything else is done and none of it constrains you. Two facts you inherit
+rather than re-derive:
+
+- **PLC.0's 388px is a BEFORE-number and is now stale twice over.** It was measured at
+  `innerWidth 1380` on `/placement` with ten routed tabs and five count badges. Since then SOV.1
+  and BUD.1 relabelled tabs ("Budget Rules", "Budget Pacing & Schedules") and `rules` became the
+  eleventh routed entry. **Re-measure on prod before choosing a treatment** — separators and fades
+  change the width again, so measure before AND after.
+- **The counts fetch is still eleven fetches, one per page.** `RulesTabs` fires
+  `GET /advertising/automation-rules` on mount and every one of the eleven pages mounts it. The
+  layout at `rules-automation/layout.tsx` persists across navigation inside the segment, so a
+  provider mounted there fetches once for a session rather than once per page. Keep the honesty
+  rule intact: only the five mapped tabs get a count, a blank is honest where `0` would read as
+  "nothing to do", and **a failed count must never blank the navigation**.
+
+**2 · The bare-index redirect and the index client's deletion. Unblocked as of `3a75485a7`.**
+RA.SPINE shipped the `?tab=` half — all eleven, derived from `_shared/rulesTabRoutes.cjs` — and held
+this half. The reason it was held has now expired: it was that `/apply-rules` was uncommitted, and
+AR.S0 committed it. What remains:
+
+- `/marketing/ads/rules-automation` → `/marketing/ads/rules-automation/automations`, preserving
+  query params (spec §2.2; the decision stands and is the operator's).
+- Repoint the four legacy paths that still target the bare index —
+  `/marketing/advertising/automation`, `…/automation/new`, `…/automation/library`,
+  `…/automation/analytics` — directly at `/automations`, or they each become a two-hop 308.
+  `rulesTabRoutes.vitest.test.ts` already fails on a redirect that chains into a `?tab=` URL; add
+  the bare-index case to that guard when you add the redirect.
+- **Then, and only then**, delete `RulesAutomationClient.tsx`, `tabs/placeholderSeeds.ts` and its
+  local `ComingSoon`. **Grep for a reader before each.** Verified 2026-08-12:
+  `tabs/NegativeTargetingTab.tsx` had zero importers and RA.SPINE deleted it;
+  **`tabs/RuleListTab.tsx` must SURVIVE — it has eight live callers** (Bid, Budget, Keyword
+  Harvest, Negative Targeting, NegRules, Automations' `HistoryDrawer`, Placement,
+  ScheduleActivityDrawer). `RuleImpactStrip` and `ProtectedTermsPanel` must survive too.
+
+### 🔴 A trap this session was on both ends of, within one hour
+
+RA.SPINE's twelve §2 claim rows were written, and were then **swept into AR.S0's `3a75485a7`** — the
+`commit --only` trap this document has now recorded seven times, and the first time it has been
+recorded by the session whose lines were taken. It cost nothing here (the rows are correct and are
+now in history), and it is noted only because the countermeasure is cheap and nobody is applying it:
+**`git diff -U0 <file>` before staging, and confirm every hunk is yours.** RA.SPINE did exactly that
+for its five shared code files — `next.config.js`, `AdsPageHeader.tsx`, `MarketplaceContext.tsx`,
+`useCursorPoll.ts`, `budget-schedules/urlState.ts` — and all five were clean. It did not do it for
+the markdown, which is where it got taken.
+
+Second half of the same hour, pointing the other way: **SOV.1 committed `next.config.js` while
+RA.SPINE held a claim on it** (`f4bc68eb7`), landing the four missing `?tab=` redirects as four more
+literals. Nothing was lost — SOV.1 staged hunks, so RA.SPINE's uncommitted `require()` line survived
+— and RA.SPINE's derived table was then diffed as a SET against the committed config (54 redirects
+each, zero differences either way) before it replaced them. **That diff is the thing to copy**: when
+someone lands in a file you hold, prove equivalence against what they shipped rather than against
+what you remember reading.
 
 **NEG.1 → KT.1b, 2026-08-12.** `…/keyword-tracker/KeywordTrackerClient.tsx:74` failed the web build
 at 01:40 — `'rowState' is declared but its value is never read`. Recorded only so the next session
@@ -453,6 +516,37 @@ local state and exposes no callback. The fix is BID.S0's shape exactly — an ad
 re-sync keyed on a `page` **number primitive**, the whole thing gated on the callback so existing
 consumers are provably untouched. One file, nine pages. Not taken here: it is not a Share-of-Voice
 type and SOV.1 does not hold that file.
+
+**BID.S2 → Placement, Rank, and anyone drawing a value over time, 2026-08-12.**
+`bid/BidSpark.tsx` is a **step** sparkline: inline SVG, no chart library, ~90 lines, and it names
+nothing Bid-specific. Take it; moving the file to `_shared/` is the whole promotion.
+
+Three things in it are the reason it exists rather than a `<polyline>`:
+
+- 🔴 **Step, not line.** A bid, a budget and a placement multiplier all HOLD their value until
+  something writes a new one. A sloped segment between two points draws a drift that never happened
+  — and on this account the real shape is a nightly square wave (`2 → 28 → 2 → 28 …`), which a
+  smoothed line renders as something else entirely.
+- 🔴 **"Never changed" is a MARK, not an empty cell.** 79% of Bid's rows have no point at all. Blank
+  reads as broken; a flat line reads as *stable*, which is a claim about a value nobody has ever
+  touched. It draws a dotted rule.
+- **An inline `<svg>` is `display:inline`** and sits on the text baseline, pushing the row taller
+  than its neighbours — `display:block` inside a sized inline-flex span.
+
+Two population traps that generalise: **a curve and a metric are different sets** (measured on Bid:
+247 rows have a curve and no metrics, 163 the reverse), and **the history window is not the metric
+window** — wiring the curve to `?window=` makes it shorten when someone changes the metric columns,
+which reads as "this stopped moving".
+
+**BID.S2 finding, `AdvertisingActionLog` / `CampaignBidHistory`.** For a bid, the two tables carry
+the SAME rows (1,667 each over 48 h, timestamps agreeing to the second). Only the action log knows
+whether Amazon took the write (`amazonResponseStatus`). If you need delivery state on a curve, join
+it; do not pick one table and assume.
+
+🔴 **And `AdTarget.updatedAt` cannot detect a change on ANY page.** The hourly keyword resync writes
+`lastSyncedAt` on every row it sees, so `@updatedAt` follows: 2,442 of the 2,540 targets with no bid
+write in 60 days had it move within two hours. It is the right INVALIDATION signal (it catches the
+unaudited path, which is why S0's cursor uses it) and the wrong DISPLAY signal. Compare values.
 
 **BID.S0 finding, shared layer.** `automations/ScopeForm.tsx` is the rule-scope **binding editor**
 (it ends in a write), not a page filter bar, so it cannot be reused as one. The page scope bar has
