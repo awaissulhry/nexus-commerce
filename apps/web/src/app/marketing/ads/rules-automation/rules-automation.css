@@ -3041,3 +3041,96 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 
 /* Campaigns view: how many bids sit above this campaign's own ceiling. */
 .h10-bd-oob { font-variant-numeric: tabular-nums; font-weight: 800; color: #9a3412; }
+
+/* 🔴 PLC.1 — the campaign cell must WRAP once it carries chips.
+   Measured on prod at 1728px: `td.nm` is 360px and a row with two chips laid out to 376px and
+   410px, so the second chip rendered past the sticky column's right edge and over the Market
+   column — `.h10-plc-camp` was `flex-wrap: nowrap` and both it and the `td` are `overflow:
+   visible`, so nothing clipped it and nothing revealed it either. PLC.0 shipped one chip per row
+   and never hit it; PLC.1 puts up to three on a row.
+   Later in the file than PLC.0's `.h10-plc-camp`, so source order carries it. */
+.h10-plc-camp { flex-wrap: wrap; row-gap: 3px; }
+/* The name yields first — it has an ellipsis and the chips do not. */
+.h10-plc-camp .t { flex: 0 1 auto; min-width: 0; }
+
+/* ── HV.2 — the criteria bar, the attrition, and the policy line ──────────────────────────────
+   Appended at EOF under `h10-hv-*`, extending HV.1's block above. Same palette, same reasons:
+   no `.dark` block (the shell pins `color-scheme: light`), `margin: Npx 0` because the page gutter
+   inside `.h10-rules-page` is ZERO, and every hex reused from the NEG.1/HV.1 blocks that already
+   measured clean on contrast. */
+
+.h10-hv-crit { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-hv-critrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+
+/* An OVERRIDDEN criterion is marked, because "this view only" and "saved for everyone" must never
+   look the same. The chip is text, not a colour alone. */
+.h10-hv-field.over .cap { color: #10457f; }
+.h10-hv-field .cap i { margin-left: 5px; padding: 0 4px; border-radius: 4px; background: #e8f1fd; color: #10457f; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+
+/* the number nudger */
+.h10-hv-step { display: inline-flex; align-items: stretch; border: 1px solid #e3e7ec; border-radius: 7px; overflow: hidden; background: #fff; }
+.h10-hv-step button { width: 24px; border: 0; background: #f1f4f8; color: #55606d; font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; }
+.h10-hv-step button:hover:not(:disabled) { background: #e8f1fd; color: #10457f; }
+.h10-hv-step button:disabled { color: #a8b0ba; cursor: default; }
+.h10-hv-step input { width: 46px; border: 0; text-align: center; font: inherit; font-size: 12.5px; font-weight: 700; color: #1c2530; font-variant-numeric: tabular-nums; background: transparent; }
+.h10-hv-step input::-webkit-outer-spin-button, .h10-hv-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.h10-hv-step input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.h10-hv-step em { display: flex; align-items: center; padding-right: 5px; font-style: normal; font-size: 11px; font-weight: 700; color: #667080; }
+.h10-hv-step.off input { color: #a8b0ba; }
+
+.h10-hv-acos { display: inline-flex; align-items: center; gap: 6px; }
+.h10-hv-ceil { padding: 4px 8px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-ceil:hover { background: #e8f1fd; color: #10457f; border-color: #1f6fde; }
+.h10-hv-ceil.off { background: #fff6e8; border-color: #f0dcbe; color: #8a5316; }
+
+/* the two segmented controls */
+.h10-hv-seg { display: inline-flex; border: 1px solid #e3e7ec; border-radius: 7px; overflow: hidden; }
+.h10-hv-seg .seg { padding: 5px 10px; border: 0; background: #fff; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-seg .seg + .seg { border-left: 1px solid #e3e7ec; }
+.h10-hv-seg .seg:hover { background: #f1f4f8; }
+.h10-hv-seg .seg.on { background: #e8f1fd; color: #10457f; }
+
+/* ── the attrition: what each criterion removed ───────────────────────────────────────────────
+   A single surviving count tells you nothing about which knob to turn. */
+.h10-hv-attr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed #e3e7ec; font-size: 11.5px; }
+.h10-hv-attr .base { color: #667080; }
+.h10-hv-attr .stp { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 8px; background: #f1f4f8; border-radius: 7px; }
+.h10-hv-attr .stp b { font-weight: 700; color: #1c2530; }
+.h10-hv-attr .stp i { font-style: normal; font-weight: 800; color: #8a5316; font-variant-numeric: tabular-nums; }
+.h10-hv-attr .stp.nil i { color: #667080; font-weight: 600; }
+/* A step that removed a NEW candidate is the one to look at: `new` is the only status that
+   represents something to create. */
+.h10-hv-attr .stp.new { background: #fff6e8; }
+.h10-hv-attr .stp.new em { font-style: normal; color: #7a4812; }
+.h10-hv-attr .out { margin-left: auto; padding: 3px 10px; background: #e8f1fd; border-radius: 7px; color: #10457f; font-weight: 700; }
+.h10-hv-attr .out b { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.h10-hv-critwarn { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; padding: 8px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-critwarn svg { flex: none; margin-top: 3px; }
+.h10-hv-critwarn b { font-weight: 800; color: #7a4812; }
+
+/* ── the policy line: what is saved, where it came from, and the one verb that changes it ───── */
+.h10-hv-pol { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 0; padding-top: 10px; border-top: 1px solid #e3e7ec; }
+.h10-hv-pol .txt { display: flex; align-items: flex-start; gap: 7px; flex: 1 1 420px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-hv-pol .txt svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-hv-pol .txt b { font-weight: 800; color: #1c2530; }
+.h10-hv-pol .act { display: inline-flex; align-items: center; gap: 8px; }
+.h10-hv-pol .ok { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: #14724d; }
+.h10-hv-save { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: #1f6fde; border: 1px solid #1f6fde; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #fff; cursor: pointer; }
+.h10-hv-save:hover:not(:disabled) { background: #10457f; border-color: #10457f; }
+.h10-hv-save:disabled { opacity: .6; cursor: default; }
+.h10-hv-unset { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-unset:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: #8a5316; }
+
+/* D4 — a save changes what every operator in that scope sees by default, so it gets a full
+   sentence rather than a tooltip. */
+.h10-hv-critsay { margin: 9px 0 0; padding: 8px 11px; background: #e8f1fd; border-radius: 8px; font-size: 12px; line-height: 1.65; color: #10457f; }
+.h10-hv-critsay b { font-weight: 800; color: #0d3763; }
+.h10-hv-critsay code { padding: 0 4px; border-radius: 4px; background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #10457f; }
+
+@media (max-width: 1200px) {
+  .h10-hv-attr .out { margin-left: 0; }
+}
+@media (max-width: 900px) {
+  .h10-hv-critrow { gap: 10px; }
+}
