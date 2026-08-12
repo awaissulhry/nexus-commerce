@@ -96,9 +96,11 @@ grain=portfolio     n   live      grain=portfolio        n   live
 ### 1.2 Three properties that bite anyone who assumes otherwise
 
 1. **Line rows OVERLAP.** A campaign advertises products from more than one line, so
-   Σ(per-line campaigns) = **224** against **220** campaigns. A line-grain total is a
-   double-counting total. The page states this at the control and carries it on the row
-   (`reachNote`), and **never prints a line-grain sum as an account total**.
+   Σ(the 13 real lines) = **224** against **220** campaigns; with the "advertising nothing" row the
+   14 rendered rows sum to **226 memberships**. A line-grain total is a double-counting total —
+   and so is *every* column on that grain: the grid's Enabled total reads **90** against the
+   account's 86, and Delivering **85** against 81. The page states this under the grid, carries a
+   `reachNote` on every row, and **never prints a line-grain sum as an account total**.
 2. **Two pairs of lines look like one line and are not.** `AIRMESH-JACKET` (17) vs
    `AIR-MESH-JACKET-MEN` (3); `normal-knee-slider` (6) vs `xavia-knee-slider` (5). This is an
    **open operator decision** (RA ledger). Both render separately with their own counts. **They are
@@ -293,11 +295,22 @@ reasoning.
   re-allowlist it** — the write is refused at `campaign_allowlist`, and the gate's own comment calls
   that "the intended trade". An ENABLED + NOT_DELIVERING + gate-shut row is exactly the shape that
   should be visible rather than quiet.
-- **Managed / Off-limits**, read-only, from `guardrail-grid.managed` — 82 of 220. Measured today:
-  **every one of the 82 is ENABLED**, so the gate is open on 82 of the 86 live campaigns and shut on
-  all 133 paused ones.
+- **Portfolio** and **Product lines** on the campaign row. These two are an addition to the brief's
+  four bullets, and they are named rather than smuggled: they are the *mapping between the grains*.
+  Without them an operator cannot tell why a campaign appears under a portfolio row, and the
+  148-of-220 no-portfolio fact — the single most important structural fact on this page — would be
+  visible only by switching grain. They are not metrics, not governance and not settings, so they
+  take nothing from S2, S3 or S4.
 - **an empty state per substrate §5.6** — four, not three, and **a refusal is never rendered as a
-  failure and never in the same colour**.
+  failure and never in the same colour**. Verified on prod: a `?campaign=…&portfolio=…` pair that
+  cannot both hold renders `.h10-ar-note.refused` at `rgb(238,242,255)` / `rgb(65,74,122)`, against
+  the failure state's amber, and names what would clear it.
+
+**Not rendered by S0, deliberately:** `Managed`, the bid bounds and the pins are **S2's** columns —
+the contract carries all three on `CampaignRow` and counts them on every `AggregateRow`, so S2 adds
+columns rather than a data layer. Measured today for whoever writes it: **82 of 220 managed, and
+every one of the 82 is ENABLED** (`managed ∩ ¬ENABLED = 0`), so the gate is open on 82 of the 86
+live campaigns and shut on all 133 paused ones.
 
 ### 6.1 The five legacy columns are NOT carried forward
 
@@ -371,6 +384,8 @@ Verified on production at `innerWidth 1728` after deploy (numbers in §10).
 | 7 | *(unstated)* | 🔴 **`Campaign.dailyBudget` is EUROS** among cents-named neighbours. §2.2. |
 | 8 | *(unstated)* | `IT-MOSS-JACKET` is the **only** aggregate row in the account where `managed` ≠ `live` (15 vs 19). Any code path that treats the two as interchangeable is wrong on exactly one row, which is the worst number of rows to be wrong on. |
 | 9 | *(unstated)* | All **82 managed campaigns are ENABLED** — `managed ∩ ¬ENABLED = 0`. So "82 of 220" is really "82 of the 86 live ones". |
+| 10 | *"Σ per-line = 224"* | True of the 13 real lines, and the **grid renders 14 rows**, so its total reads **226**. Both are right and they answer different questions; the page prints 226 and says what it is. The same over-count runs through every column on that grain — Enabled totals **90** against the account's 86 — which the brief's framing ("the sum") understates as a single-column problem. |
+| 11 | *(unstated)* | 🔴 A `/** … */` comment containing `**/anything**` **closes itself** on the `**/`. It cost one round-trip in `tabs.tsx`; `tsc` reports it as ~40 unrelated syntax errors starting several lines later, which is not obviously a comment problem. Write `` `/apply-rules` ``, not `**/apply-rules**`. |
 
 No scratch script was needed: everything above is one browser page-context read of three deployed
 endpoints, which is also the read the page itself performs — so the numbers in this document and the
@@ -382,22 +397,38 @@ numbers on the page cannot drift.
 
 Web `https://nexus-commerce-three.vercel.app` · API `https://nexusapi-production-b7bb.up.railway.app`
 
+Measured in the browser at `innerWidth 1728` after the deploy of `bd9d44b19`.
+
 | check | result |
 |---|---|
-| `grain=campaign` | **220 rows**, count text reads "Viewing 1-100 of 220 Campaigns" ✅ |
-| `grain=market` | **4 rows** — IT 150 · DE 38 · FR 22 · ES 10 ✅ |
-| `grain=portfolio` | **13 rows** — 12 portfolios + "No portfolio" 148; `IT MOSS JACKET` and `xyz` render n=0 ✅ |
-| `grain=line` | **14 rows** — 13 lines + "advertising nothing" 2; Σ = 224 ≠ 220, stated on the row ✅ |
-| Status | ENABLED 86 · PAUSED 133 · ARCHIVED 1 ✅ |
-| Delivery | read from the API in the same minute and compared against that ✅ |
-| governance totals | managed 82 · withMaxBid 82 · withMinBid 0 · pinned 0 · suppressed 0 ✅ |
+| `grain=campaign` | **220** — count text reads **"Viewing 1-100 of 220 Campaigns"** ✅ |
+| `grain=market` | **4 rows** — IT 150 · DE 38 · FR 22 · ES 10. Total row **220 · 86 · 81** ✅ |
+| `grain=portfolio` | **13 rows** — "No portfolio" 148 · IT AIREON 11 · Xavia GALE IT 11 · IT AIRMESH 10 · IT_Gale 9 · Moss_Jacket 7 · DE/ES/FR_Gale 6 · Auto_FBM… 3 · Misano_Jacket 3 · **`IT MOSS JACKET` 0 and `xyz` 0, both rendered with `—`**. Total row **220 · 86 · 81**, Σ = 220 ✅ |
+| `grain=line` | **14 rows** — 13 lines + "advertising nothing" 2. Total row **226 · 90 · 85** against an account of 220 · 86 · 81, with the over-count stated under the grid and a `reachNote` chip on all 14 ✅ |
+| Status | ENABLED **86** · PAUSED **133** · ARCHIVED **1** — the grid's own filter returns "Viewing 1-86 of 86 Campaigns" ✅ |
+| Delivery | read from the API in the same minute: **DELIVERING 81 · NOT_DELIVERING 138 · null 1**; the market grain's Delivering total reads 81 ✅ |
+| governance totals | managed **82** · withMaxBid **82** · withMinBid **0** · pinned **0** · suppressed **0** ✅ |
 | aggregate maths | every aggregate row recomputed from the campaign rows equals the grid's own figure ✅ |
-| URL round-trip | every param set → reload → identical view; link pasted into a fresh tab renders identically ✅ |
-| `marketplace=all` | never constructed — market never reaches the API from this page ✅ |
-| geometry | measured against `.h10-am-card` with `getBoundingClientRect()`, no horizontal overflow ✅ |
-| contrast | 0 failures across every text element, composited against the real ancestor background ✅ |
+| the ENABLED+shut flag | 5 campaigns are ENABLED and NOT_DELIVERING; **2** of them also have the gate shut, and the flag renders on exactly those 2 (`MOSS-Brand-SP-KW-TM`, `MOSS-Competitor-SP-KW-TM` — both IT-MOSS-JACKET, which is why that line is the one row where managed ≠ live) ✅ |
+| URL in | `?market=DE&status=ENABLED&sort=delivery&dir=asc&q=gale` pasted into a fresh tab → "DE · 38 of 220 campaigns", **3 rows**, matching the API's own filter of the same predicate exactly; the Delivery header renders sorted and the search box is seeded ✅ |
+| URL out | a header click writes `?sort=live&dir=asc`; a filter selection writes `?status=ENABLED`; **the back button restores the previous view** ✅ |
+| grain ⇄ sort | switching grain clears `?sort=`, and a `?sort=` naming a column the current grain does not have is dropped rather than rendered as a sorted header ✅ |
+| the refusal | `?campaign=…&portfolio=…` that cannot both hold renders `.refused` (indigo) not `.bad` (amber), in the note **and** the empty state, naming what clears it ✅ |
+| the placeholder | the Status filter's resting label reads **"All"**, and reads "Enabled" only once it is applying it ✅ |
+| the bare route | `/marketing/ads/rules-automation` still renders the index's own grid — five legacy columns, `RuleImpactStrip`, "Viewing 1-100 of 220 Campaigns" — untouched ✅ |
+| the tab | "Apply Rules" → `/marketing/ads/rules-automation/apply-rules`; all ten other hrefs unchanged ✅ |
+| `marketplace=all` | never constructed — no market value reaches the API from this page ✅ |
+| geometry | `.h10-hdr`, `.h10-rules-tabs`, `.h10-am-card` and `.h10-ar-said` all at **96 → 1698, width 1602**. No stagger. `documentElement.scrollWidth 1728` = `innerWidth 1728`, no horizontal overflow ✅ |
+| the first column | `.h10-ar-nm` computes to `rgb(28, 37, 48)` with `cursor: auto` — the shared grid's (0,3,1) blue did not reach it ✅ |
+| contrast | **0 failures in this page's own classes**, composited against the real ancestor background rather than trusting `getComputedStyle` ⚠️ — see below |
 
-*(Filled in from the post-deploy probe — see the closing section of this document.)*
+⚠ **The one honest qualification.** A composite sweep of every text node inside `.h10-rules-page`
+finds **10 failures, none of them in an `h10-ar-*` class**: `.eyebrow` (the app shell), `.h10-cd-tab
+on` (#1f6fde at **4.42:1** — the section-wide "link blue on the #f4f6f9 ground" that PLC.0 already
+recorded, in the tab bar all eleven pages render), `.h10-cd-tabn` (its count badges), and `.pgbtn` /
+`.lk` (`AdsDataGrid`'s pager and its "Learn More" footer, shared by ~20 grids). All five are shared
+chrome, all five pre-date this page, and all five are shared-layer fixes rather than AR.S0's. This
+page's own text passes at every size.
 
 ---
 

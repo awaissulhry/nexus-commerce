@@ -782,7 +782,8 @@ export function ApplyRulesClient() {
           <span>
             These {num(aggregates.length)} rows hold {num(aggregates.reduce((s, r) => s + r.n, 0))} campaign
             memberships across {num(scoped.length)} campaigns — a campaign advertising more than one product
-            line is counted under each. <b>This column does not add up to the account, and is not meant to.</b>
+            line is counted under each. <b>Every total on this grain over-counts, and is not meant to add up
+            to the account:</b> Enabled and Delivering carry the same duplication as Campaigns does.
           </span>
         </p>
       )}

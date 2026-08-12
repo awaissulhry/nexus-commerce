@@ -141,8 +141,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | BUD.1 (`h10-bud-*` at EOF) | 2026-08-12 | **released** — landed `c9d564cf9`, EOF-append only, prefix had 0 prior hits, every class checked against the stylesheet in BOTH directions |
 | `apps/web/next.config.js` | BUD.1 (one `?tab=budget` redirect) | 2026-08-12 | **released** — landed `c9d564cf9`. ⚠ SOV.1 now claims this file for the generic rule — **do not add a second `?tab=budget` entry**, see §4 |
 | `…/rules-automation/_shared/useCursorPoll.ts` (from `bid/`) | BUD.1 (the promotion BID.S0 pre-blessed) | 2026-08-12 | **released** — landed `f076e20ad`, alone and first. Moved unchanged; one importer, updated; Bid verified unchanged on prod afterwards |
-| `…/rules-automation/_shared/tabs.tsx` | AR.S0 (`rules` → `routed: true` + subtitle + **one additive optional `path?`**, see §4) | 2026-08-12 | **claimed** — `key: 'rules'` and the label "Apply Rules" are UNCHANGED and must stay so; only `routed`/`path`/`subtitle` are added |
-| `…/rules-automation/rules-automation.css` | AR.S0 (`h10-ar-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; prefix had 0 prior hits (`h10-arm-*` exists and is a different class family — CSS matches exactly, no collision); every hunk `git diff`ed before staging (§5) |
+| `…/rules-automation/_shared/tabs.tsx` | AR.S0 (`rules` → `routed: true` + subtitle + **one additive optional `path?`**, see §4) | 2026-08-12 | **released** — landed `bd9d44b19`. `key: 'rules'` and the label "Apply Rules" are UNCHANGED. All eleven hrefs read back on prod after the deploy; only Apply Rules moved. ⚠ it broke the tree for a few minutes first — see §4 |
+| `…/rules-automation/rules-automation.css` | AR.S0 (`h10-ar-*` at EOF) | 2026-08-12 | **released** — landed `bd9d44b19`, 96 lines, no `.dark` block. 🔴 Staged as **HEAD + my block alone** via `git hash-object` + `git update-index --cacheinfo`, because KT.5's, BSP.1's and SOV.1's blocks were uncommitted in the shared tree — none of them is in my commit. That recipe is §5's answer when your block is no longer at EOF and `git apply --cached` has no clean context to land on |
 | `apps/api/src/routes/advertising.routes.ts` | BID.S2 (`GET /advertising/bid-history` — four ADDITIVE query params on the EXISTING handler: `entityIds` · `field` · `perEntity` · `since`) | 2026-08-12 | **claimed** — 🔴 no new route: `grep -a "advertising/bid-history"` returns exactly ONE registration (`:10014`), and the change is inside it. Nothing else in the 600 KB file is touched |
 | `…/rules-automation/rules-automation.css` | BID.S2 (`h10-bd-*` at EOF — the four new columns, nine state chips, the sparkline) | 2026-08-12 | **claimed** — EOF-append only, same prefix BID.S0 already owns; every hunk `git diff`ed before staging (§5, which BID.S0 was on the wrong end of) |
 
@@ -654,6 +654,14 @@ is the only truth about whether a write reached Amazon** — `amazonResponseStat
 The budget study's §3 reading of those 488 rows ("queued to Amazon but the local value has not
 settled") is wrong, and the corrected mechanism is a closed loop that cannot converge rather than a
 settling delay.
+
+**AR.S0 owning the block PLC.1 and BSP.1 recorded above, 2026-08-12.** That `TS1131` at
+`_shared/tabs.tsx:31` was mine, and the cause is worth one line because it is not visible from the
+error: a `/** … */` doc comment containing **`**/apply-rules**`** closes itself on the `**/`, and
+`tsc` then reports ~40 syntax errors starting at the *next* declaration rather than at the comment.
+Both sessions were right to leave it alone and retry; it was fixed within minutes and `bd9d44b19`
+typechecks in isolation (`git worktree add --detach` + `tsc`, per §6.3). **Markdown emphasis around
+a path is a comment terminator — write it in backticks.**
 
 🔴 **AR.S0 → every session that flips a tab, 2026-08-12. `routed: true` alone cannot point a tab at
 a route whose path differs from its key — and for `rules` it MUST.** `rulesTabHref()` builds
