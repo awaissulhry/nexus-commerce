@@ -1638,3 +1638,105 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 @media (max-width: 900px) {
   .h10-kt-wlgrid { grid-template-columns: 1fr; }
 }
+
+/* ── BID.S0 — the Bid page ─────────────────────────────────────────────────────────────────────
+   Appended at EOF, `h10-bd-*` only, disjoint from every other family in this file. Source order
+   beats specificity in this stylesheet, so an override belongs at the END of what it overrides —
+   which is what the two grid rules at the bottom of this block are doing. */
+
+/* ── scope bar ─────────────────────────────────────────────────────────────────────────────── */
+.h10-bd-scope { margin: 14px 0 0; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-bd-scoperow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.h10-bd-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+.h10-bd-field { display: flex; flex-direction: column; gap: 4px; }
+.h10-bd-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
+.h10-bd-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-bd-clear:hover { background: #e8f1fd; color: #1c2530; }
+
+/* ── the sentences ─────────────────────────────────────────────────────────────────────────── */
+.h10-bd-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-bd-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-bd-note b { font-weight: 800; color: #1c2530; }
+.h10-bd-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-bd-note.bad svg { color: #8a5316; }
+.h10-bd-note.bad b { color: #7a4512; }
+.h10-bd-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: #55606d; }
+.h10-bd-said b { font-weight: 800; color: #1c2530; }
+
+/* ── census — five cells, two of which carry no click because no filter reproduces them ────── */
+.h10-bd-census { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 0; }
+.h10-bd-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 11px 13px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; text-align: left; cursor: pointer; }
+.h10-bd-cell:hover { border-color: #1f6fde; }
+.h10-bd-cell b { font-size: 20px; font-weight: 800; line-height: 1.15; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bd-cell span { font-size: 11.5px; font-weight: 600; line-height: 1.35; color: #55606d; }
+.h10-bd-cell.on { border-color: #1f6fde; background: #e8f1fd; }
+.h10-bd-cell.on b, .h10-bd-cell.on span { color: #10457f; }
+.h10-bd-cell.live b { color: #14724d; }
+.h10-bd-cell.muted b { color: #667080; }
+/* A cell you cannot click must not look like one you can. */
+.h10-bd-cell.flat { cursor: default; }
+.h10-bd-cell.flat:hover { border-color: #e3e7ec; }
+
+/* ── row cells ─────────────────────────────────────────────────────────────────────────────── */
+.h10-bd-target { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.h10-bd-target .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-bd-target .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
+.h10-bd-target .fl.off { background: #f1f4f8; color: #55606d; }
+.h10-bd-mt, .h10-bd-kind { font-size: 11.5px; color: #55606d; text-transform: capitalize; }
+.h10-bd-ag { display: inline-block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: #55606d; }
+.h10-bd-camp { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 260px; }
+.h10-bd-camp a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 700; color: #1f6fde; text-decoration: none; }
+.h10-bd-camp a:hover { text-decoration: underline; }
+/* The campaign is paused or archived, so nothing on this row is bidding for anything. */
+.h10-bd-camp i.off { flex: none; font-style: normal; padding: 1px 5px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.h10-bd-mkt { font-size: 11.5px; font-weight: 700; color: #55606d; }
+.h10-bd-bid { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bd-acos { font-variant-numeric: tabular-nums; }
+.h10-bd-acos.hi { color: #8a5316; font-weight: 800; }
+.h10-bd-tg { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: #1c2530; }
+.h10-bd-tg i { font-style: normal; font-size: 10px; font-weight: 600; color: #667080; }
+.h10-bd-range { font-variant-numeric: tabular-nums; color: #1c2530; }
+.h10-bd-range i { font-style: normal; color: #667080; padding: 0 2px; }
+/* 🔴 "not served" is a measurement, not a gap: no impressions in the window. It must not read as
+   a placeholder, and it must not read as zero. Italic + muted, and never the same glyph as "—",
+   which this page uses for a measured row with a zero denominator. */
+.h10-bd-ns { font-size: 10.5px; font-style: italic; color: #667080; }
+.h10-bd-nd { color: #667080; }
+
+/* ── grid chrome ───────────────────────────────────────────────────────────────────────────── */
+.h10-bd-win { display: inline-flex; align-items: center; gap: 8px; }
+.h10-bd-select { font: inherit; font-size: 11.5px; font-weight: 600; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 8px; }
+.h10-bd-search input { font: inherit; font-size: 11.5px; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 9px; width: 250px; }
+.h10-bd-search input:focus { outline: 2px solid #1f6fde; outline-offset: -1px; border-color: #1f6fde; }
+/* The cursor poll found a change. It offers; it never reorders the grid under a reading operator. */
+.h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bd-stale:hover { background: #fdeed5; }
+.h10-bd-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
+.h10-bd-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-bd-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-bd-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #1f6fde; text-decoration: underline; cursor: pointer; }
+
+/* ── the provisional rule list's heading ───────────────────────────────────────────────────── */
+.h10-bd-prov { margin: 26px 0 0; }
+.h10-bd-prov h2 { display: flex; flex-direction: column; gap: 3px; margin: 0 0 4px; font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-bd-prov h2 i { font-style: normal; font-size: 11.5px; font-weight: 600; line-height: 1.55; color: #667080; }
+
+/* ── 🔴 the first column, LAST so it wins ──────────────────────────────────────────────────────
+   `ads.css:695` paints `.h10-am-grid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and
+   `:696` underlines on hover — because every other consumer makes that column a link. In the
+   TARGETS view it is not a link yet (S3 makes it open the bid curve), so all three halves of the
+   promise are undone here at (0,3,2), matched on `span.t` so the CAMPAIGNS view — where the cell
+   really is an `<a>` — keeps the blue it has earned. KT.1 fixed the colour and left the pointer
+   and the underline, which is why this rule undoes all three. */
+.h10-am-grid td.nm .h10-bd-target span.t { color: #1c2530; font-weight: 700; cursor: default; }
+.h10-am-grid td.nm .h10-bd-target span.t:hover { text-decoration: none; }
+
+@media (max-width: 1200px) {
+  .h10-bd-census { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+  .h10-bd-scoperow { gap: 10px; }
+  .h10-bd-field { flex: 1 1 190px; }
+  .h10-bd-census { grid-template-columns: repeat(2, 1fr); }
+  .h10-bd-search input { width: 100%; }
+}

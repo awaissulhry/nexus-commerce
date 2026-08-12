@@ -43,7 +43,14 @@ export const RULES_TABS: RulesTab[] = [
     routed: true,
     subtitle: 'Every automation you have, what it can change, and the one control that decides',
   },
-  { key: 'bid', label: 'Bid' },
+  // BID.S0 — its own page. The tab used to render a bid RULE list and not one bid: 2,944 enabled
+  // targets carry a bid and no screen in the product listed them outside a single campaign.
+  {
+    key: 'bid',
+    label: 'Bid',
+    routed: true,
+    subtitle: 'What each target bids, why it is that number, and who decided',
+  },
   { key: 'keyword-harvest', label: 'Keyword Harvest' },
   // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
   // nothing else: 2,059 negatives existed and no screen anywhere in the product listed one.

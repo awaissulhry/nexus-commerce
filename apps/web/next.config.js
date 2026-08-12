@@ -46,6 +46,14 @@ const nextConfig = {
         destination: '/marketing/ads/rules-automation/negative-targeting',
         permanent: true,
       },
+      // BID.S0 — same mechanism, same shape. `?tab=bid` predates the route and is the URL every
+      // existing link to the Bid tab uses; without this it silently renders Apply Rules.
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'bid' }],
+        destination: '/marketing/ads/rules-automation/bid',
+        permanent: true,
+      },
 
       // Phase 4 (2026-05-06): /pim/review → /catalog/organize.
       // Page does catalog organization, not a review queue; renamed

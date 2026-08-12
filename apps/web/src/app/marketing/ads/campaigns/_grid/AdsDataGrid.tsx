@@ -151,6 +151,26 @@ export interface AdsDataGridProps<T> {
    *  field is focused. Only enable on ONE grid at a time (a document-level listener). */
   keyboardNav?: boolean
   onRowKey?: (row: T, key: string) => void
+  /**
+   * BID.S0 (additive; default off) — read the sort and the filters back OUT.
+   *
+   * `defaultSort` and `initialFilters` could already seed this grid from a URL; nothing could get
+   * a change back, because `onSort` is internal. So on every page using this grid, clicking a
+   * column header or a filter changed the view and not the address bar: the state was linkable
+   * inward and unlinkable outward, and a copied link reproduced the page you arrived at rather
+   * than the one you were looking at.
+   *
+   * Passing either callback also turns on **re-sync**: when the seed props change (the back
+   * button, a pasted link), the grid follows them. That is why the behaviour is gated on the
+   * callbacks rather than applied always — a consumer that passes neither is provably untouched,
+   * and the twenty-odd existing grids pass neither.
+   *
+   * 🔴 The re-sync keys off `defaultSort?.key` / `?.dir` **primitives**, never the object: every
+   * consumer passes an inline literal, so an effect depending on its identity would fire on every
+   * render forever.
+   */
+  onSortChange?: (sort: { key: string; dir: 'asc' | 'desc' } | null) => void
+  onFilterChange?: (filters: Record<string, unknown>) => void
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -175,6 +195,7 @@ export function AdsDataGrid<T>({
   reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, enabledFirst, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
+  onSortChange, onFilterChange,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -346,6 +367,45 @@ export function AdsDataGrid<T>({
     document.querySelector('.h10-am-grid tr.kbd-focus')?.scrollIntoView({ block: 'nearest' })
   }, [focusIdx])
 
+  // ── BID.S0 — URL-linkable sort + filters (additive; only for consumers that opted in) ──────────
+  //
+  // Inward: follow the seed props when they change, so the back button and a pasted link land on
+  // the view they describe. Keyed on PRIMITIVES — `defaultSort` is an inline literal at every call
+  // site, so an effect on the object would re-run on every render.
+  const dsKey = defaultSort?.key ?? ''
+  const dsDir = defaultSort?.dir ?? 'desc'
+  useEffect(() => {
+    if (!onSortChange) return
+    setSort(dsKey ? { key: dsKey, dir: dsDir } : null)
+    setUserSorted(!!dsKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dsKey, dsDir])
+
+  // Outward: emit when the filter state actually changed, never on mount, and never as an echo of
+  // an inbound seed — otherwise the URL update re-seeds the grid, which re-emits, forever.
+  const seededFilters = JSON.stringify(initialFilters ?? {})
+  const lastEmitted = useRef<string | null>(null)
+  const suppressEmit = useRef(false)
+  useEffect(() => {
+    if (!onFilterChange || !initialFilters) return
+    const merged = { ...fstate, ...initialFilters }
+    if (JSON.stringify(merged) === JSON.stringify(fstate)) return
+    // Merge rather than replace: the seed carries only the params the page puts in the URL, and
+    // replacing would silently drop whatever numeric ranges the operator had typed.
+    suppressEmit.current = true
+    setFstate(merged)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seededFilters])
+  useEffect(() => {
+    if (!onFilterChange) return
+    const s = JSON.stringify(fstate)
+    if (lastEmitted.current === null) { lastEmitted.current = s; return }
+    if (lastEmitted.current === s) return
+    lastEmitted.current = s
+    if (suppressEmit.current) { suppressEmit.current = false; return }
+    onFilterChange(fstate)
+  }, [fstate, onFilterChange])
+
   // SF.1 — `userSorted` distinguishes "the grid's default order" from "the operator asked for this
   // order". Third click clears the sort, which also drops back to the default (enabled-first) view.
   const onSort = (key: string) => {
@@ -353,6 +413,8 @@ export function AdsDataGrid<T>({
       sort?.key === key ? (sort.dir === 'asc' ? { key, dir: 'desc' } : null) : { key, dir: 'asc' }
     setSort(next)
     setUserSorted(next !== null)
+    // BID.S0 — additive. Undefined on every existing consumer.
+    onSortChange?.(next)
   }
   const sortIcon = (key: string) => (sort?.key === key
     ? (sort.dir === 'asc' ? <ChevronUp size={13} className="sa on" /> : <ChevronDown size={13} className="sa on" />)
