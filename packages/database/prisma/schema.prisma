@@ -16236,3 +16236,99 @@ model SqpReportRequest {
   @@index([marketplace, startDate])
   @@index([requestedAt])
 }
+
+/// KT.6 — a spend ceiling for a SCOPE, which is the thing that did not exist.
+///
+/// Measured 2026-08-13: of 51 `advertising` rules, 50 carry `maxDailyAdSpendCentsEur` and 8 carry
+/// `scopeMarketplace`, but 0 carry `scopePortfolioId`, `scopeCampaignId` or `scopeProductId`. So the
+/// ceiling existed per RULE and never per SCOPE, and the operator's ask — a cap for a market, a
+/// portfolio, a product line or one campaign — could not be expressed at all.
+///
+/// `dailyCapCents` is NULLABLE ON PURPOSE. A row with no value is a ceiling somebody opened and did
+/// not set; it resolves to NO_CEILING and says so, and it does NOT stop resolution walking outward to
+/// a broader scope. Treating an empty campaign ceiling as "unlimited here" would let an operator
+/// disable a market cap by saving a blank form, which is the opposite of what a ceiling is for.
+model AdSpendCeiling {
+  id String @id @default(cuid())
+
+  /// CAMPAIGN | PORTFOLIO | LINE | MARKET — narrowest first; the most specific one with a value wins.
+  grain String
+  /// 'IT' for MARKET · Product.id for LINE · Campaign.portfolioId for PORTFOLIO · Campaign.id for CAMPAIGN
+  scopeId String
+  /// What to call it in a refusal: "the IT market", "the GALE portfolio".
+  label String
+
+  /// null = no ceiling set. NOT unlimited. See the note above.
+  dailyCapCents Int?
+  enabled       Boolean @default(true)
+
+  note      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([grain, scopeId])
+  @@index([enabled])
+}
+
+/// KT.6 — one bid proposal raised from a Keyword Tracker row, and the ledger that makes
+/// "how much has this page committed today" answerable.
+///
+/// 🔴 Why a ledger at all: the ceiling has to compare a request against what is already committed, and
+/// measured, **Amazon's spend cannot answer that**. `AmazonAdsDailyPerformance`'s newest CAMPAIGN row
+/// is 2 days old, today and yesterday hold zero rows, there is no hourly table, and `Campaign.spend`
+/// is an unlabelled 30-day window. So the only number that is correct at the moment of the refusal is
+/// the one we keep ourselves. Amazon's figure is still shown beside it, labelled with its date.
+///
+/// It stores the blast radius AND the confirmation sentence as they were at proposal time, so the
+/// record cannot drift away from what the operator was actually shown. That is what makes a later
+/// change log and undo honest rather than reconstructed.
+model KeywordBidProposal {
+  id String @id @default(cuid())
+
+  marketplace       String
+  term              String
+  requestedBidCents Int
+
+  /// The blast radius when the proposal was raised. Frozen: bids move hourly.
+  matchedTargets      Int
+  matchedCampaigns    Int
+  actionableTargets   Int
+  actionableCampaigns Int
+  /// { not_write_enabled: 58, suppressed_flag: 9, … } — every exclusion, by reason.
+  excludedByReason    Json
+  /// Exactly which AdTarget ids would change, so applying cannot silently widen.
+  targetIds           Json
+  /// targets × bid. An upper bound per click-round, never a forecast.
+  commitmentCents     Int
+
+  /// The ceiling verdict at proposal time, and which grain bound it.
+  ceilingVerdict  String
+  ceilingGrain    String?
+  ceilingScopeId  String?
+  ceilingCapCents Int?
+  ceilingMessage  String
+  /// What was already committed today when this was raised.
+  committedCents  Int     @default(0)
+
+  /// Age in days of the SQP week the row's share came from. Measured 18 today.
+  shareAgeDays Int?
+  /// The exact sentence the operator was shown. Stored, not regenerated.
+  confirmationText String
+
+  /// PROPOSED | APPLIED | REFUSED | DISMISSED | EXPIRED
+  status     String    @default("PROPOSED")
+  proposedBy String?
+  proposedAt DateTime  @default(now())
+  decidedAt  DateTime?
+  decidedBy  String?
+  /// Set when applied, so `rollbackByExecutionId` can reverse the whole thing.
+  executionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([marketplace, status, proposedAt])
+  @@index([status, proposedAt])
+  @@index([term, marketplace])
+}

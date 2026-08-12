@@ -71,6 +71,8 @@ import marketingOsRoutes from "./routes/marketing-os.routes.js";
 import ebayAdsRoutes from "./routes/ebay-ads.routes.js";
 import advertisingRoutes from "./routes/advertising.routes.js";
 import advertisingIntelRoutes from "./routes/advertising-intel.routes.js";
+// KT.6 — the Keyword Tracker's action endpoints. A separate file: see its header.
+import keywordActionsRoutes from "./routes/keyword-actions.routes.js";
 import amazonAdsAuthRoutes from "./routes/amazon-ads-auth.routes.js";
 import reviewsRoutes from "./routes/reviews.routes.js";
 import brandBrainRoutes from "./routes/brand-brain.routes.js";
@@ -664,6 +666,7 @@ app.register(marketingOsRoutes, { prefix: '/api' });
 app.register(ebayAdsRoutes, { prefix: '/api' }); // E3 eBay ads console (reads)
 app.register(advertisingRoutes, { prefix: '/api' });
 app.register(advertisingIntelRoutes, { prefix: '/api' });
+app.register(keywordActionsRoutes, { prefix: '/api' });
 app.register(amazonAdsAuthRoutes, { prefix: '/api' });
 app.register(reviewsRoutes, { prefix: '/api' });
 app.register(brandBrainRoutes, { prefix: '/api' });
