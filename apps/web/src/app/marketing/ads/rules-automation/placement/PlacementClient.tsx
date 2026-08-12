@@ -49,12 +49,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Info, Search, X } from 'lucide-react'
+import { AlertTriangle, Info, RefreshCw, Search, X } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PlacementScopeBar, LANE_OPTIONS, type PlcScope, type PlcLaneKey, type ScopeOptionsPayload } from './PlacementScopeBar'
+import { useCursorPoll } from '../_shared/useCursorPoll'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -70,6 +71,26 @@ const DEFAULT_PRESET = 'last30'
 
 type LaneKey = PlcLaneKey
 type OwnerKind = 'schedule' | 'plan' | 'none'
+
+type FlagKey = 'inverted' | 'compounding' | 'unmanaged' | 'decorative'
+const FLAG_KEYS: readonly FlagKey[] = ['inverted', 'compounding', 'unmanaged', 'decorative']
+
+interface Inversion {
+  paidLaneKey: LaneKey; paidPct: number; paidRoas: number
+  bestLaneKey: LaneKey; bestPct: number; bestRoas: number
+}
+interface Decorative { targetKey: string; heldPct: number; targetISPct: number | null; acosCapPct: number | null }
+interface Chaseable { targetKey: string; floor: number; ceiling: number; allOut: boolean }
+
+interface RowFlags {
+  invertedEvaluable: boolean
+  inversion: Inversion | null
+  compounding: boolean
+  compoundingMultiple: number
+  unmanaged: boolean
+  decorative: Decorative[]
+  chaseable: Chaseable[]
+}
 
 interface Row {
   campaignId: string
@@ -94,6 +115,7 @@ interface Row {
   owner: OwnerKind
   ownerLabel: string | null
   hasReportRow: boolean
+  flags: RowFlags
 }
 
 interface Payload {
@@ -126,10 +148,34 @@ interface Payload {
     holding: Array<{ targetKey: string; campaigns: number }>
     lastEvaluatedAt: string | null
     governedAtZero: number
+    nowUtc: string
+    nowLocal: string
+    timezone: string
+    library: Array<{ targetKey: string; placement: string; heldPct: number; decorative: boolean }>
   }
+  flags: {
+    inverted: { n: number; of: number; minClicks: number; engineMaintained: number }
+    compounding: { n: number; of: number }
+    unmanaged: { n: number; of: number; live: number; paused: number; archived: number }
+    decorative: { n: number; of: number; withRealCeiling: number; allOutOnly: number; noneCanChase: number }
+  }
+  lanes: Array<{
+    laneKey: LaneKey; impressions: number; clicks: number; spendCents: number; salesCents: number
+    orders: number; impressionsPct: number | null; spendPct: number | null
+    roas: number | null; cpc: number | null; cvr: number | null
+  }>
+  cursor: PlcCursor
   lane: LaneKey | 'all'
+  flag: FlagKey | 'all'
   rows: Row[]
   total: number
+}
+
+/** The three fields the poll compares. See the service's `PlcCursor` for why these and not Bid's. */
+interface PlcCursor extends Record<string, unknown> {
+  placementAt: string | null
+  n: number
+  holding: string
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
@@ -158,6 +204,13 @@ const LANE_REPORT_LABEL: Record<LaneKey, string> = {
   product: 'Detail Page on-Amazon',
 }
 
+const FLAG_DENOM_SHORT: Record<FlagKey, string> = {
+  inverted: 'inverted campaigns',
+  compounding: 'compounding campaigns',
+  unmanaged: 'campaigns governed by nothing',
+  decorative: 'campaigns with a decorative goal',
+}
+
 const SORTABLE = [
   'campaign', 'market', 'status', 'lane', 'multiplier',
   'impressions', 'clicks', 'spend', 'roas', 'cpc', 'cvr', 'is', 'owner',
@@ -183,6 +236,9 @@ export function PlacementClient() {
   const lane = (['top', 'rest', 'product'] as const).includes(params.get('lane') as LaneKey)
     ? (params.get('lane') as LaneKey)
     : 'all'
+  const flag = (FLAG_KEYS as readonly string[]).includes(params.get('flag') ?? '')
+    ? (params.get('flag') as FlagKey)
+    : 'all'
   const preset = params.get('preset') ?? DEFAULT_PRESET
   const start = params.get('start') ?? ''
   const end = params.get('end') ?? ''
@@ -202,6 +258,8 @@ export function PlacementClient() {
   // is not. Local draft so typing does not push a history entry per keystroke.
   const [qDraft, setQDraft] = useState(q)
   useEffect(() => { setQDraft(q) }, [q])
+  // The cursor poll OFFERS a refresh; this is what taking it re-runs. It never fires on its own.
+  const [reloadTick, setReloadTick] = useState(0)
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -210,6 +268,7 @@ export function PlacementClient() {
         !v
         || (k === 'market' && v === DEFAULT_MARKET)
         || (k === 'lane' && v === 'all')
+        || (k === 'flag' && v === 'all')
         || (k === 'preset' && v === DEFAULT_PRESET)
         || (k === 'sort' && v === 'spend')
         || (k === 'dir' && v === 'desc')
@@ -237,6 +296,7 @@ export function PlacementClient() {
       if (v) p.set(k, v)
     }
     if (lane !== 'all') p.set('lane', lane)
+    if (flag !== 'all') p.set('flag', flag)
     // The server owns the date vocabulary. A custom range travels as explicit dates; anything else
     // travels as a server preset key. A `DateRangePicker` key never leaves this file.
     if (preset === 'custom' && start && end) { p.set('preset', 'custom'); p.set('start', start); p.set('end', end) }
@@ -251,12 +311,95 @@ export function PlacementClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [market, scope.line, scope.portfolio, scope.campaign, lane, preset, start, end, q, sort, dir])
+  }, [market, scope.line, scope.portfolio, scope.campaign, lane, flag, preset, start, end, q, sort, dir, reloadTick])
 
   const rows = data?.rows ?? []
   const s = data?.scope
   const c = data?.counts
   const engine = data?.engine
+
+  /**
+   * 🔴 The poll, and why the cursor is this page's own.
+   *
+   * `useCursorPoll`'s header names copying a sibling's cursor as the one way to misuse it. Bid
+   * watches `max(AdTarget.updatedAt)` because an hourly resync moves a bid and writes no audit
+   * row; no `AdTarget` moves when a placement multiplier changes — the lever is
+   * `Campaign.dynamicBidding`. Measured 2026-08-12: `Campaign.updatedAt` touched **219 of 220**
+   * campaigns in 24h, so watching it would light the banner far more often wrongly than rightly
+   * (BUD.1's finding, on its own subject). This watches `CampaignBidHistory` over the three lane
+   * fields — 1,208 writes in 24h over 28 campaigns — plus the engine's held-target tally, because
+   * the plan switching hour changes every governed campaign's multiplier in writes a `changedAt`
+   * watcher would never see.
+   *
+   * Writes are bursty: four times an hour, on the 15-minute cron boundary, and 7% of minutes carry
+   * all of them. 45 s is fast enough to notice a tick and cheap enough to ignore.
+   */
+  const pollParams = useMemo(() => {
+    const p: Record<string, string> = { market }
+    if (scope.line) p.line = scope.line
+    if (scope.portfolio) p.portfolio = scope.portfolio
+    if (scope.campaign) p.campaign = scope.campaign
+    return p
+  }, [market, scope.line, scope.portfolio, scope.campaign])
+
+  const { stale, check } = useCursorPoll<PlcCursor>({
+    url: `${getBackendUrl()}/api/advertising/placements/cursor`,
+    params: pollParams,
+    baseline: data?.cursor ?? null,
+    enabled: !loading,
+  })
+
+  /**
+   * The census strip. Each cell is a filter, each states its denominator, and none of them is ever
+   * computed from a page of rows — every number comes from the route, over the SCOPE.
+   *
+   * 🔴 A cell whose denominator is 0 does not print "0". `inverted` needs traffic to be computable
+   * and over a short window almost nothing clears 20 clicks on two lanes; "0 inverted" there is
+   * *"we could not check"* wearing the words of *"we checked"*. That cell switches to
+   * "not enough traffic to judge" and stops being a filter, because there is nothing to filter to.
+   */
+  const f = data?.flags
+  const census: Array<{
+    key: FlagKey; n: number; of: number; label: string; sub: string; tip: string
+    tone?: string; unknown?: boolean
+  }> = f && c ? [
+    {
+      key: 'inverted',
+      n: f.inverted.n, of: f.inverted.of,
+      label: 'inverted',
+      unknown: f.inverted.of === 0,
+      sub: f.inverted.of === 0
+        ? `no campaign has ${f.inverted.minClicks}+ clicks on two lanes in this window`
+        : `of ${num(f.inverted.of)} with enough traffic to judge${f.inverted.engineMaintained > 0 ? ` · ${f.inverted.engineMaintained} the engine maintains` : ''}`,
+      tip: `The highest multiplier sits on a lane a better-returning lane beats. Judged only where at least two lanes carry ${f.inverted.minClicks}+ clicks in this window, so a ROAS is allowed to decide something. Widen the date range to judge more campaigns.`,
+      tone: 'warn',
+    },
+    {
+      key: 'compounding',
+      n: f.compounding.n, of: f.compounding.of,
+      label: 'compounding',
+      sub: `of ${num(f.compounding.of)} on up-and-down bidding`,
+      tip: 'Amazon charges base × (1 + top %), and up-and-down bidding lets Amazon add up to another +100% at top of search on top of that — so a Top multiplier above 100% can reach 4× the base bid. 0 campaigns are in this state, which is exactly when a guardrail is cheapest to add.',
+    },
+    {
+      key: 'unmanaged',
+      n: f.unmanaged.n, of: f.unmanaged.of,
+      label: 'governed by nothing',
+      sub: `of ${num(f.unmanaged.of)} carrying a multiplier · ${num(f.unmanaged.live)} live, ${num(f.unmanaged.paused)} paused`,
+      tip: `Carries a multiplier and no rank schedule or plan steers it. The number that matters is the ${num(f.unmanaged.live)} live ones — a multiplier on a paused campaign spends nothing and is not a mistake to fix.`,
+      tone: 'warn',
+    },
+    {
+      key: 'decorative',
+      n: f.decorative.n, of: f.decorative.of,
+      label: 'decorative goal',
+      sub: f.decorative.of === 0
+        ? 'no campaign here is governed by an engine'
+        : `of ${num(f.decorative.of)} an engine governs · ${num(f.decorative.withRealCeiling)} have a real ceiling`,
+      unknown: f.decorative.of === 0,
+      tip: 'The plan names a top-of-search share and an ACoS cap that the controller returns before ever reading, because no ceiling is set above the placement %. The engine pins and stops. Fixing it is a change to the rank target, on Rank & Dayparting.',
+    },
+  ] : []
 
   /**
    * The header's date control is CONTROLLED from here, so the label and the grid can never
@@ -440,6 +583,8 @@ export function PlacementClient() {
     bits.push(`${num(c.unmanaged)} of those governed by nothing`)
     // The search is stated separately and never folded into the scope's numbers — see the service.
     if (q) bits.push(`showing ${num(c.matchedCampaigns)} matching “${q}”`)
+    // The flag is stated as a FILTER, never folded into the scope's numbers — same rule as `?q=`.
+    if (flag !== 'all') bits.push(`filtered to ${FLAG_DENOM_SHORT[flag]}`)
     return bits.join(' · ')
   })()
 
@@ -483,6 +628,10 @@ export function PlacementClient() {
 
       {/* Band 4 — freshness, plainly. The shared <FreshnessChip> is substrate S3 and does not
           exist yet; this is a sentence, not a component, and it says so in the locks doc. */}
+      {/* Band 4 — freshness, and freshness only. PLC.0 hung the engine clause off the end of this
+          sentence; PLC.1 gives the engine its own band below, because "what is the plan, on whose
+          clock" needed more than a clause and two statements of one fact is one too many. The
+          shared <FreshnessChip> is still substrate S3 and still does not exist. */}
       <p className="h10-plc-fresh">
         {data?.dataThrough ? (
           <>
@@ -492,31 +641,91 @@ export function PlacementClient() {
         ) : (
           <>No placement report has ever landed for the campaigns in this scope.</>
         )}
-        {engine && engine.goalSchedules > 0 && (
-          <>
-            {' · '}
-            {/* 🔴 The plan behind the number. `AdSchedule.lastApplied` is the receipt the engine
-                STAMPS after it decides — reading it is not the same thing as re-deriving which
-                target governs this hour, which is `resolveActiveTargetKey` and belongs to the
-                substrate. Without this clause the counts above read as instability. */}
-            <span
-              className="h10-plc-eng"
-              title="What the rank engine last recorded holding, read from its own receipt on each schedule. The multiplier a governed campaign carries changes with it, so these counts are a reading of this hour."
-            >
-              the rank engine holds <b>{num(engine.goalSchedules)}</b> schedule{engine.goalSchedules === 1 ? '' : 's'}
-              {engine.holding.length > 0 && (
-                <> — {engine.holding.map((h) => `${h.campaigns}× ${h.targetKey}`).join(', ')}</>
-              )}
-              {engine.governedAtZero > 0 && c && (
-                <>, so <b>{num(engine.governedAtZero)}</b> of the {num(c.governedTotal)} governed campaigns
-                {' '}carry nothing on any lane right now</>
-              )}
-            </span>
-            {' · '}
-            <a className="lnk" href={`${RULES_BASE}/dayparting`}>see the plan</a>
-          </>
-        )}
       </p>
+
+      {/* ── PLC.1 · the census. Every number is a filter, and every one states its denominator. ── */}
+      {census.length > 0 && (
+        <div className="h10-plc-census" role="group" aria-label="What is true in this scope">
+          {census.map((cell) => (
+            <button
+              key={cell.key}
+              type="button"
+              title={cell.tip}
+              className={`h10-plc-cell ${cell.tone ?? ''} ${flag === cell.key ? 'on' : ''} ${cell.unknown ? 'unknown' : ''}`}
+              aria-pressed={flag === cell.key}
+              disabled={cell.unknown}
+              onClick={() => push({ flag: flag === cell.key ? 'all' : cell.key })}
+            >
+              <span className="h10-plc-cellnum">
+                {cell.unknown
+                  ? <b>not enough traffic to judge</b>
+                  : <><b>{num(cell.n)}</b><i>of {num(cell.of)}</i></>}
+              </span>
+              <span className="h10-plc-celllab">{cell.label}</span>
+              <span className="h10-plc-cellsub">{cell.sub}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── the lane split — the inversion stated at scope level, recomputed every read ──────── */}
+      {data && data.lanes.some((l) => l.impressions > 0) && (
+        <div className="h10-plc-lanesplit" role="group" aria-label="Where the impressions and the money go">
+          {data.lanes.map((l) => (
+            <div className="h10-plc-lanebox" key={l.laneKey}>
+              <span className="h10-plc-lanehead">
+                <b>{LANE_LABEL[l.laneKey]}</b>
+                <i className={l.roas == null ? undefined : l.roas >= 2 ? 'good' : l.roas < 1 ? 'bad' : undefined}>
+                  {l.roas == null ? 'no spend' : `${l.roas.toFixed(2)}× ROAS`}
+                </i>
+              </span>
+              {/* Two bars, one row: share of impressions above share of spend. A lane whose spend
+                  bar dwarfs its impression bar is the inversion, visible without arithmetic. */}
+              <span className="h10-plc-lanebar" title={`${((l.impressionsPct ?? 0) * 100).toFixed(1)}% of impressions`}>
+                <span className="impr" style={{ width: `${(l.impressionsPct ?? 0) * 100}%` }} />
+              </span>
+              <span className="h10-plc-lanebar" title={`${((l.spendPct ?? 0) * 100).toFixed(1)}% of spend`}>
+                <span className="spend" style={{ width: `${(l.spendPct ?? 0) * 100}%` }} />
+              </span>
+              <span className="h10-plc-lanefoot">
+                <span><b>{((l.impressionsPct ?? 0) * 100).toFixed(1)}%</b> of impressions</span>
+                <span><b>{((l.spendPct ?? 0) * 100).toFixed(1)}%</b> of spend</span>
+                <span>{l.cpc == null ? '—' : eur2(l.cpc)} CPC</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── the hour, in the engine's own words and on the engine's own clock ───────────────── */}
+      {engine && engine.goalSchedules > 0 && c && (
+        <p className="h10-plc-hour">
+          <span>
+            <b>{num(engine.goalSchedules)}</b> campaign{engine.goalSchedules === 1 ? ' is' : 's are'} governed by a rank
+            schedule. Right now <span className="clock">{engine.nowLocal} {engine.timezone}</span> they hold{' '}
+            {engine.holding.map((h, i) => (
+              <span key={h.targetKey}>
+                {i > 0 ? ', ' : ''}<b>{num(h.campaigns)}× {h.targetKey}</b>
+              </span>
+            ))}
+            {engine.governedAtZero > 0 && (
+              <> — so <b>{num(engine.governedAtZero)}</b> of them carry no multiplier on any lane at this hour</>
+            )}
+            . Their plan also reaches{' '}
+            {engine.library.filter((l) => !engine.holding.some((h) => h.targetKey === l.targetKey))
+              .map((l) => `${l.targetKey} (${l.heldPct}%)`).join(', ') || 'nothing else'} at other hours,
+            {' '}<b>which is why the counts above are a reading of this hour and not a constant.</b>
+          </span>
+          <a className="lnk" href={`${RULES_BASE}/dayparting`}>See the plan →</a>
+          {/* 🔴 It OFFERS. It never refetches under someone reading — the one screen used to decide
+              whether a multiplier is wrong is not a screen that should reorder itself mid-sentence. */}
+          {stale && (
+            <button type="button" className="h10-plc-stale" onClick={() => { setReloadTick((n) => n + 1); check() }}>
+              <RefreshCw size={11} /> The engine has moved since this loaded — refresh
+            </button>
+          )}
+        </p>
+      )}
 
       {s?.contradiction && (
         <p className="h10-plc-blind">
@@ -547,8 +756,28 @@ export function PlacementClient() {
             {r.owner === 'none' && r.multiplierPct > 0 && (
               <span className="fl warn" title="This campaign carries a multiplier on this lane and no engine governs it. Whatever the number is, nothing will revisit it.">unmanaged</span>
             )}
-            {r.biddingStrategy === 'AUTO_FOR_SALES' && r.laneKey === 'top' && r.multiplierPct > 100 && (
-              <span className="fl bad" title="Up-and-down bidding can already double the top-of-search bid; a Top multiplier above 100% compounds on top of that. Measured 2026-08-11: 0 campaigns were in this state.">compounding</span>
+            {r.flags.compounding && r.laneKey === 'top' && (
+              <span className="fl bad" title={`Up-and-down bidding lets Amazon add up to another +100% at top of search on top of this multiplier. Worst case here: ${r.flags.compoundingMultiple.toFixed(2)}× the base bid (base × (1 + ${r.multiplierPct}%) × ${r.biddingStrategy === 'AUTO_FOR_SALES' ? 2 : 1}× strategy headroom).`}>compounding</span>
+            )}
+            {/* 🔴 The inversion chip renders on the PAID lane only. Repeating it on all three
+                would say "this row is inverted" of a row that is the victim, not the cause. */}
+            {r.flags.inversion && r.laneKey === r.flags.inversion.paidLaneKey && (
+              <span
+                className="fl inv"
+                title={`This is the highest multiplier among the lanes with enough traffic to judge, and it returns ${r.flags.inversion.paidRoas.toFixed(2)}× — while ${LANE_LABEL[r.flags.inversion.bestLaneKey]} at ${r.flags.inversion.bestPct}% returns ${r.flags.inversion.bestRoas.toFixed(2)}×.${r.owner === 'none' ? ' Nothing governs this campaign, so the multiplier is yours to change.' : ' An engine holds this — the fix is the rank target, on Rank & Dayparting, not this number.'}`}
+              >
+                inverted → {LANE_LABEL[r.flags.inversion.bestLaneKey].toLowerCase()} {r.flags.inversion.bestRoas.toFixed(1)}×
+              </span>
+            )}
+            {/* Once per campaign, on the lane the target actually drives, so three rows do not
+                each claim the same thing about the same plan. */}
+            {r.flags.decorative.length > 0 && r.laneKey === 'top' && (
+              <span
+                className="fl dec"
+                title={`${r.flags.decorative.map((d) => `“${d.targetKey}” holds ${d.heldPct}%${d.targetISPct != null ? `, aims at ${d.targetISPct}% top-of-search share` : ''}${d.acosCapPct != null ? ` under a ${d.acosCapPct}% ACoS cap` : ''}`).join('; ')}. No ceiling is set above the placement %, so the controller returns before it reads either number — the engine holds the % and stops.${r.flags.chaseable.length > 0 ? ` It can move on: ${r.flags.chaseable.map((ch) => `${ch.targetKey} (${ch.floor}→${ch.ceiling}%${ch.allOut ? ', all-out — ignores ACoS by design' : ''})`).join(', ')}.` : ' Nothing it can reach moves at all.'}`}
+              >
+                decorative goal
+              </span>
             )}
           </div>
         )}
@@ -604,11 +833,24 @@ export function PlacementClient() {
             </i>
           </span>
         ) : undefined}
-        emptyNode={<EmptyState loading={loading} data={data} q={q} lane={lane} push={push} />}
+        emptyNode={<EmptyState loading={loading} data={data} q={q} lane={lane} flag={flag} push={push} />}
         reportLabel={data?.dataThrough ? `Amazon placement report · through ${dayMonth(data.dataThrough)}` : undefined}
       />
     </div>
   )
+}
+
+const FLAG_EMPTY_LABEL: Record<FlagKey, string> = {
+  inverted: 'paying its highest multiplier into a worse-returning lane',
+  compounding: 'compounding an up-and-down bid with a Top multiplier over 100%',
+  unmanaged: 'carrying a multiplier no engine steers',
+  decorative: 'naming a goal its controller cannot read',
+}
+const FLAG_DENOM_LABEL: Record<FlagKey, string> = {
+  inverted: 'campaigns with enough traffic to judge',
+  compounding: 'campaigns on up-and-down bidding',
+  unmanaged: 'campaigns carrying a multiplier',
+  decorative: 'campaigns an engine governs',
 }
 
 /** "No delivery in this window" is not zero, and the two must never share a glyph. */
@@ -632,12 +874,13 @@ function NoValue({ reason }: { reason?: string }) {
  * above, because a campaign with no multiplier still has a row worth reading.
  */
 function EmptyState({
-  loading, data, q, lane, push,
+  loading, data, q, lane, flag, push,
 }: {
   loading: boolean
   data: Payload | null
   q: string
   lane: LaneKey | 'all'
+  flag: FlagKey | 'all'
   push: (p: Record<string, string>) => void
 }) {
   if (loading) return <span className="h10-plc-empty"><b>Loading…</b></span>
@@ -664,6 +907,37 @@ function EmptyState({
           Nothing here has a placement to show. Widen the scope — this account holds{' '}
           {num(data.scope.totalCampaigns)} campaigns in total.{' '}
           <button type="button" className="lnk" onClick={() => push({ market: 'all', line: '', portfolio: '', campaign: '' })}>Show all markets</button>
+        </span>
+      </span>
+    )
+  }
+
+  /**
+   * 🔴 PLC.1 — a flag that matches nothing is a FINDING, not a gap, and there are two of them.
+   *
+   * "No campaign in this scope is inverted" is good news and must read as such. "Not enough traffic
+   * to judge" is not news at all — it means the window is too short for the question — and
+   * conflating the two would be the same defect as a bare "0 inverted", one screen along.
+   */
+  if (flag !== 'all' && data.flags) {
+    const stat = data.flags[flag]
+    const unmeasurable = (flag === 'inverted' || flag === 'decorative') && stat.of === 0
+    return (
+      <span className="h10-plc-empty">
+        <b>
+          {unmeasurable
+            ? flag === 'inverted'
+              ? 'Not enough traffic in this window to judge any campaign.'
+              : 'No campaign in this scope is governed by an engine.'
+            : `No campaign in this scope is ${FLAG_EMPTY_LABEL[flag]}.`}
+        </b>
+        <span>
+          {unmeasurable
+            ? flag === 'inverted'
+              ? <>An inversion needs at least {num(data.flags.inverted.minClicks)} clicks on two lanes before a ROAS is allowed to decide anything, and none of the {num(data.counts.campaigns)} campaigns here clears that over {data.range.days} days. Widen the date range — this is “we could not check”, not “nothing is wrong”.</>
+              : <>A decorative goal is a property of a plan, and nothing here has one.</>
+            : <>All {num(stat.of)} {FLAG_DENOM_LABEL[flag]} are clear. That is a real zero, not a gap.</>}
+          {' '}<button type="button" className="lnk" onClick={() => push({ flag: 'all' })}>Show every campaign</button>
         </span>
       </span>
     )

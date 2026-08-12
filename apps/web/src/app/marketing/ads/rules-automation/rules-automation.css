@@ -2620,6 +2620,125 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-bud-search input { width: 100%; }
 }
 
+/* ── KT.5 — the coverage state, the share bound, and the one health line ──────────────────────
+   Appended at EOF, `h10-kt-*` only. Nothing new is a permanent line except `.quiet`; the rest are
+   marks on rows and cells that already existed. */
+
+/* The third blank state. Same pill as the other two — it is a blank, not a warning — but tinted so
+   "the scope excludes it" reads differently from "the feed has never seen it". */
+.h10-kt-nm.here { background: #eef2ff; color: #4a4f7a; }
+
+/* The share cell now carries two values: our best ASIN's share, and the family's upper bound. */
+.h10-kt-sharecell { display: inline-flex; align-items: baseline; gap: 6px; justify-content: flex-end; }
+.h10-kt-sharecell i { font-style: normal; font-size: 10px; font-weight: 700; color: #55606d; font-variant-numeric: tabular-nums; }
+/* A real number sourced from a product we are not advertising on the term. Amber, like the real
+   zero: the value is true, what it is evidence OF is not what the column implies. */
+.h10-kt-share.offterm { color: #8a5316; text-decoration: underline dotted 1px; text-underline-offset: 3px; }
+
+/* Folded into the keyword cell's chip row, beside `N OF OURS`. */
+.h10-kt-kw .nc { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; background: #fdeaea; color: #8a2020; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+
+/* The quiet half of the one new line. Same type as the reach line, dimmer, no icon: when the feed
+   is behaving this is furniture and must not compete with the numbers. */
+.h10-kt-said.quiet { margin-top: 6px; font-size: 11.5px; color: #667080; }
+
+/* ══ AR.S0 — Apply Rules, its own page ═════════════════════════════════════════════════════════
+   Appended at EOF, `h10-ar-*` only, no `.dark` block (`.h10-shell` pins `color-scheme: light` with
+   hard-coded hex, so a dark block yields dark cards in a permanently light shell).
+
+   Two measured constraints this block exists to respect:
+
+   🔴 1. The page gutter inside `.h10-rules-page` is **0, not 24px**. At innerWidth 1728 `.h10-hdr`,
+         `.h10-rules-tabs` and `.h10-am-card` all sit at 96→1698; `h10-main`'s 30px padding IS the
+         gutter. `.h10-svt-seg` (:523) carries `margin: 10px 24px 0` and is where that 24px gets
+         copied from, so it is zeroed under `.h10-ar-tools` below. Nothing here sets a horizontal
+         margin.
+
+   🔴 2. `.h10-am-grid td.nm .t` (ads.css:695) paints the first column #1f6fde at (0,3,1) with a
+         pointer cursor and a hover underline, because every other consumer makes that column a
+         link. This page's name cell is NOT a link — S7 makes it open the row drawer — so it does
+         not use `.t` at all and carries `.h10-ar-nm` instead. No specificity fight, no
+         `!important`, and nothing for a later session to have to delete.
+
+   🔴 3. The ground behind every band is `.h10-shell`'s #f4f6f9, not white. #1f6fde is 4.79:1 on
+         white and only 4.42:1 there, so every on-ground link uses **#1a61c6** (5.33:1 on the
+         ground, 5.88:1 on white). `getComputedStyle` reports the declared colour and calls both a
+         pass; composite against the real ancestor background instead. */
+
+/* ── the resolution sentence, on the page ground ──────────────────────────────────────────────── */
+.h10-ar-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-ar-said b { font-weight: 800; color: #1c2530; }
+/* The 300-second cache floor is furniture, not a warning — it is always true, so it never shouts. */
+.h10-ar-floor { color: #667080; text-decoration: underline dotted 1px; text-underline-offset: 3px; cursor: help; }
+
+/* One link treatment for every button-as-link on this page, on the ground and inside the card. */
+.h10-ar-lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #1a61c6; text-decoration: underline; cursor: pointer; }
+.h10-ar-lnk:hover { color: #16509f; }
+.h10-ar-lnk:focus-visible { outline: 2px solid #1a61c6; outline-offset: 2px; border-radius: 3px; }
+
+/* ── notes: a refusal is never the colour of a failure ────────────────────────────────────────── */
+.h10-ar-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-ar-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-ar-note b { font-weight: 800; color: #1c2530; }
+/* Broke — the read failed. Amber, and the only state on this page that is allowed to look wrong. */
+.h10-ar-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-ar-note.bad svg, .h10-ar-note.bad b { color: #8a5316; }
+.h10-ar-note.bad .h10-ar-lnk { color: #7a4512; }
+/* Refused — the scope cannot resolve. A refusal is not a failure: it is the system working, and it
+   gets its own colour so an operator never reads "this is broken" where the answer is "this asks
+   for two things that cannot both be true". */
+.h10-ar-note.refused { background: #eef2ff; border: 1px solid #d8dffb; color: #414a7a; }
+.h10-ar-note.refused svg, .h10-ar-note.refused b { color: #414a7a; }
+
+/* ── grid chrome ──────────────────────────────────────────────────────────────────────────────── */
+.h10-ar-tools { display: inline-flex; align-items: center; gap: 10px; }
+.h10-ar-tools .h10-svt-seg { margin: 0; padding: 2px; }
+.h10-ar-tools .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
+.h10-ar-search input { font: inherit; font-size: 11.5px; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 9px; width: 230px; }
+.h10-ar-search input:focus { outline: 2px solid #1f6fde; outline-offset: -1px; border-color: #1f6fde; }
+/* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.
+   🔴 It cannot appear today — `GET /advertising/apply-rules/cursor` does not exist and a failed
+   poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
+.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-ar-stale:hover { background: #fdeed5; }
+
+/* ── the sticky first column ──────────────────────────────────────────────────────────────────── */
+.h10-ar-first { display: flex; align-items: center; gap: 7px; min-width: 0; }
+/* Not `.t`. See note 2 at the top of this block. */
+.h10-ar-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1c2530; }
+.h10-ar-first.agg .h10-ar-nm { font-weight: 700; }
+/* The one real link in the cell, so the promise it makes is the only one made. */
+.h10-ar-open { flex: none; font-size: 10.5px; font-weight: 700; color: #1a61c6; text-decoration: none; opacity: 0; transition: opacity .12s; }
+tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration: underline; }
+/* Why this aggregate row cannot reach everything. Always rendered where there is one — a reach
+   note that is dropped is the double-counting the operator then does in their head. */
+.h10-ar-reach { flex: none; padding: 1px 6px; border-radius: 5px; background: #eef2ff; color: #414a7a; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; cursor: help; }
+
+/* ── row state ────────────────────────────────────────────────────────────────────────────────── */
+.h10-ar-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; }
+.h10-ar-pill.st-enabled, .h10-ar-pill.dl-on { background: #e7f5ed; color: #14663f; }
+.h10-ar-pill.st-paused, .h10-ar-pill.st-archived, .h10-ar-pill.dl-off { background: #eef1f5; color: #4d5763; }
+/* 🔴 Enabled + not delivering + gate shut. Resuming a paused campaign does NOT re-open the write
+   gate — the write is refused at `campaign_allowlist` and the gate's own comment calls that the
+   intended trade — so this row is one nothing may correct. Amber, and only on that intersection. */
+.h10-ar-flag { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 999px; background: #8a5316; color: #fff; font-style: normal; font-size: 9px; font-weight: 800; }
+/* Absence, said once and the same way everywhere: no portfolio, no product line, no reported
+   delivery. It is a measurement, not a placeholder, and never the same glyph as a zero. */
+.h10-ar-nd { font-size: 11px; font-style: italic; color: #667080; }
+.h10-ar-of { font-size: 10.5px; font-weight: 600; color: #667080; }
+
+/* ── the four empty states ────────────────────────────────────────────────────────────────────── */
+.h10-ar-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
+.h10-ar-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
+.h10-ar-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-ar-empty.bad b { color: #8a5316; }
+.h10-ar-empty.refused b { color: #414a7a; }
+
+@media (max-width: 1100px) {
+  .h10-ar-tools { flex-wrap: wrap; gap: 8px; }
+  .h10-ar-search input { width: 100%; }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    BSP.1 — the plan editor, the month stepper, the calendar and the enforcement preview.
    Appended at EOF under the same `h10-bsp-*` prefix. No existing selector is touched.
@@ -2739,103 +2858,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-note.warn b { color: #6b4310; }
 .h10-bsp-empty.refused .ico { color: #8a5316; }
 
-/* ══ AR.S0 — Apply Rules, its own page ═════════════════════════════════════════════════════════
-   Appended at EOF, `h10-ar-*` only, no `.dark` block (`.h10-shell` pins `color-scheme: light` with
-   hard-coded hex, so a dark block yields dark cards in a permanently light shell).
-
-   Two measured constraints this block exists to respect:
-
-   🔴 1. The page gutter inside `.h10-rules-page` is **0, not 24px**. At innerWidth 1728 `.h10-hdr`,
-         `.h10-rules-tabs` and `.h10-am-card` all sit at 96→1698; `h10-main`'s 30px padding IS the
-         gutter. `.h10-svt-seg` (:523) carries `margin: 10px 24px 0` and is where that 24px gets
-         copied from, so it is zeroed under `.h10-ar-tools` below. Nothing here sets a horizontal
-         margin.
-
-   🔴 2. `.h10-am-grid td.nm .t` (ads.css:695) paints the first column #1f6fde at (0,3,1) with a
-         pointer cursor and a hover underline, because every other consumer makes that column a
-         link. This page's name cell is NOT a link — S7 makes it open the row drawer — so it does
-         not use `.t` at all and carries `.h10-ar-nm` instead. No specificity fight, no
-         `!important`, and nothing for a later session to have to delete.
-
-   🔴 3. The ground behind every band is `.h10-shell`'s #f4f6f9, not white. #1f6fde is 4.79:1 on
-         white and only 4.42:1 there, so every on-ground link uses **#1a61c6** (5.33:1 on the
-         ground, 5.88:1 on white). `getComputedStyle` reports the declared colour and calls both a
-         pass; composite against the real ancestor background instead. */
-
-/* ── the resolution sentence, on the page ground ──────────────────────────────────────────────── */
-.h10-ar-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
-.h10-ar-said b { font-weight: 800; color: #1c2530; }
-/* The 300-second cache floor is furniture, not a warning — it is always true, so it never shouts. */
-.h10-ar-floor { color: #667080; text-decoration: underline dotted 1px; text-underline-offset: 3px; cursor: help; }
-
-/* One link treatment for every button-as-link on this page, on the ground and inside the card. */
-.h10-ar-lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #1a61c6; text-decoration: underline; cursor: pointer; }
-.h10-ar-lnk:hover { color: #16509f; }
-.h10-ar-lnk:focus-visible { outline: 2px solid #1a61c6; outline-offset: 2px; border-radius: 3px; }
-
-/* ── notes: a refusal is never the colour of a failure ────────────────────────────────────────── */
-.h10-ar-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
-.h10-ar-note svg { flex: none; margin-top: 3px; color: #667080; }
-.h10-ar-note b { font-weight: 800; color: #1c2530; }
-/* Broke — the read failed. Amber, and the only state on this page that is allowed to look wrong. */
-.h10-ar-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
-.h10-ar-note.bad svg, .h10-ar-note.bad b { color: #8a5316; }
-.h10-ar-note.bad .h10-ar-lnk { color: #7a4512; }
-/* Refused — the scope cannot resolve. A refusal is not a failure: it is the system working, and it
-   gets its own colour so an operator never reads "this is broken" where the answer is "this asks
-   for two things that cannot both be true". */
-.h10-ar-note.refused { background: #eef2ff; border: 1px solid #d8dffb; color: #414a7a; }
-.h10-ar-note.refused svg, .h10-ar-note.refused b { color: #414a7a; }
-
-/* ── grid chrome ──────────────────────────────────────────────────────────────────────────────── */
-.h10-ar-tools { display: inline-flex; align-items: center; gap: 10px; }
-.h10-ar-tools .h10-svt-seg { margin: 0; padding: 2px; }
-.h10-ar-tools .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
-.h10-ar-search input { font: inherit; font-size: 11.5px; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 9px; width: 230px; }
-.h10-ar-search input:focus { outline: 2px solid #1f6fde; outline-offset: -1px; border-color: #1f6fde; }
-/* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.
-   🔴 It cannot appear today — `GET /advertising/apply-rules/cursor` does not exist and a failed
-   poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
-.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
-.h10-ar-stale:hover { background: #fdeed5; }
-
-/* ── the sticky first column ──────────────────────────────────────────────────────────────────── */
-.h10-ar-first { display: flex; align-items: center; gap: 7px; min-width: 0; }
-/* Not `.t`. See note 2 at the top of this block. */
-.h10-ar-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1c2530; }
-.h10-ar-first.agg .h10-ar-nm { font-weight: 700; }
-/* The one real link in the cell, so the promise it makes is the only one made. */
-.h10-ar-open { flex: none; font-size: 10.5px; font-weight: 700; color: #1a61c6; text-decoration: none; opacity: 0; transition: opacity .12s; }
-tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration: underline; }
-/* Why this aggregate row cannot reach everything. Always rendered where there is one — a reach
-   note that is dropped is the double-counting the operator then does in their head. */
-.h10-ar-reach { flex: none; padding: 1px 6px; border-radius: 5px; background: #eef2ff; color: #414a7a; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; cursor: help; }
-
-/* ── row state ────────────────────────────────────────────────────────────────────────────────── */
-.h10-ar-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; }
-.h10-ar-pill.st-enabled, .h10-ar-pill.dl-on { background: #e7f5ed; color: #14663f; }
-.h10-ar-pill.st-paused, .h10-ar-pill.st-archived, .h10-ar-pill.dl-off { background: #eef1f5; color: #4d5763; }
-/* 🔴 Enabled + not delivering + gate shut. Resuming a paused campaign does NOT re-open the write
-   gate — the write is refused at `campaign_allowlist` and the gate's own comment calls that the
-   intended trade — so this row is one nothing may correct. Amber, and only on that intersection. */
-.h10-ar-flag { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 999px; background: #8a5316; color: #fff; font-style: normal; font-size: 9px; font-weight: 800; }
-/* Absence, said once and the same way everywhere: no portfolio, no product line, no reported
-   delivery. It is a measurement, not a placeholder, and never the same glyph as a zero. */
-.h10-ar-nd { font-size: 11px; font-style: italic; color: #667080; }
-.h10-ar-of { font-size: 10.5px; font-weight: 600; color: #667080; }
-
-/* ── the four empty states ────────────────────────────────────────────────────────────────────── */
-.h10-ar-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
-.h10-ar-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
-.h10-ar-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
-.h10-ar-empty.bad b { color: #8a5316; }
-.h10-ar-empty.refused b { color: #414a7a; }
-
-@media (max-width: 1100px) {
-  .h10-ar-tools { flex-wrap: wrap; gap: 8px; }
-  .h10-ar-search input { width: 100%; }
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════
    SOV.1 — the Δ, click share, and the colour scale.
 
@@ -2885,4 +2907,79 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 @media (max-width: 1200px) {
   .h10-sov-summary { gap: 6px; }
   .h10-sov-stat { padding: 6px 10px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   PLC.1 — the flags, the census strip and the lane split (/rules-automation/placement).
+
+   Appended at EOF, `h10-plc-*` only, no `.dark` block. Every colour is checked against the REAL
+   ground: `.h10-shell` is **#f4f6f9**, not white, which is why PLC.0's on-ground link is #1a61c6
+   (5.43:1) where the section's #1f6fde is 4.42:1 there. Chips inside the white grid card sit on
+   #fff and their own tint, so both grounds are checked.
+
+   Nothing here carries a horizontal margin: the page gutter inside `.h10-rules-page` is ZERO —
+   `h10-main`'s 30px padding IS the gutter, and PLC.0's six bands measure L=96 R=1350 ΔL=0 ΔR=0.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the census strip: every number is a filter, and every one states its denominator ────────── */
+.h10-plc-census { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 0; }
+.h10-plc-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 11px 13px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; text-align: left; cursor: pointer; font: inherit; }
+.h10-plc-cell:hover { border-color: #1a61c6; }
+.h10-plc-cell:focus-visible { outline: 2px solid #1a61c6; outline-offset: 1px; }
+/* The headline number and, beside it, the population it is a share of. The denominator is not
+   optional and not a tooltip: "6" alone and "6 of 23" are different claims. */
+.h10-plc-cellnum { display: flex; align-items: baseline; gap: 6px; }
+.h10-plc-cellnum b { font-size: 20px; font-weight: 800; line-height: 1.15; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-plc-cellnum i { font-style: normal; font-size: 12px; font-weight: 700; color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-plc-celllab { font-size: 11.5px; font-weight: 700; line-height: 1.35; color: #1c2530; }
+.h10-plc-cellsub { font-size: 10.5px; font-weight: 600; line-height: 1.4; color: #55606d; }
+.h10-plc-cell.on { border-color: #1a61c6; background: #e8f1fd; }
+.h10-plc-cell.on .h10-plc-cellnum b, .h10-plc-cell.on .h10-plc-celllab { color: #0e3f74; }
+.h10-plc-cell.on .h10-plc-cellnum i, .h10-plc-cell.on .h10-plc-cellsub { color: #10457f; }
+.h10-plc-cell.warn .h10-plc-cellnum b { color: #8a5316; }
+.h10-plc-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
+.h10-plc-cell.warn.on .h10-plc-cellnum b, .h10-plc-cell.warn.on .h10-plc-celllab { color: #6d3f10; }
+.h10-plc-cell.warn.on .h10-plc-cellnum i, .h10-plc-cell.warn.on .h10-plc-cellsub { color: #7a4812; }
+/* 🔴 The unmeasurable zero. `0 of 0` is not a finding — it is "we could not check" — so the cell
+   drops the big number entirely rather than printing a 0 that reads as an all-clear. */
+.h10-plc-cell.unknown { cursor: default; background: #f7f8fa; }
+.h10-plc-cell.unknown:hover { border-color: #e3e7ec; }
+.h10-plc-cell.unknown .h10-plc-cellnum b { font-size: 13px; color: #55606d; font-weight: 700; }
+
+/* ── the lane split ─────────────────────────────────────────────────────────────────────────── */
+.h10-plc-lanesplit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0 0; }
+.h10-plc-lanebox { display: flex; flex-direction: column; gap: 6px; padding: 10px 13px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-plc-lanehead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.h10-plc-lanehead b { font-size: 12px; font-weight: 800; color: #1c2530; }
+.h10-plc-lanehead i { font-style: normal; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.h10-plc-lanehead i.good { color: #14724d; }
+.h10-plc-lanehead i.bad { color: #9c2b2b; }
+.h10-plc-lanebar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: #eef1f5; }
+.h10-plc-lanebar span { display: block; height: 100%; }
+.h10-plc-lanebar span.impr { background: #a9bfe0; }
+.h10-plc-lanebar span.spend { background: #1a61c6; }
+.h10-plc-lanefoot { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; font-weight: 600; color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-plc-lanefoot b { font-weight: 800; color: #1c2530; }
+
+/* ── the row chips ──────────────────────────────────────────────────────────────────────────── */
+/* `.fl` already exists from PLC.0 (warn/bad). These add the two new tones and keep all four the
+   same shape, so a row with three chips reads as a list rather than as three unrelated badges. */
+.h10-plc-camp .fl.inv { background: #fdecec; color: #8f2828; }
+.h10-plc-camp .fl.dec { background: #f1f0fa; color: #443a83; }
+
+/* ── the engine sentence ────────────────────────────────────────────────────────────────────── */
+.h10-plc-hour { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 7px; margin: 10px 0 0; padding: 10px 13px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; font-size: 11.5px; line-height: 1.6; color: #55606d; }
+.h10-plc-hour b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-plc-hour .lnk { font: inherit; font-weight: 700; color: #1a61c6; text-decoration: underline; }
+.h10-plc-hour .clock { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* The refresh offer. It OFFERS; it never refetches under a reading operator. */
+.h10-plc-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #6d3f10; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-plc-stale:hover { background: #fdeed5; }
+
+@media (max-width: 1200px) {
+  .h10-plc-census { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .h10-plc-census { grid-template-columns: 1fr; }
+  .h10-plc-lanesplit { grid-template-columns: 1fr; }
 }
