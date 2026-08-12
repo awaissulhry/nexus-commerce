@@ -109,6 +109,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/web/next.config.js` | BID.S0 (one `?tab=bid` redirect, same shape as NEG.1's) | 2026-08-12 | **released** — landed `313828494`; verified on prod: `?tab=bid` → 308 → `/bid`, and `?tab=budget` still 200 |
 | `apps/web/src/app/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | BID.S0 (`onSortChange` + `onFilterChange` + seed re-sync, additive) | 2026-08-12 | **released** — landed `313828494`. Re-sync is GATED on the callbacks, so the ~20 existing grids are untouched. Back/forward verified on prod. See §4 |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `keyword-watchlist.service.ts` + `…/keyword-tracker/*` | KT.2 (per-market watchlists) | 2026-08-12 | **released** — `cae154aec` · `421b6d002` · `6d50a6783` · `b78ae2655` |
+| `…/rules-automation/rules-automation.css` | KT.5 (`h10-kt-*` at EOF, 22 lines) | 2026-08-12 | **released** — diffed before committing, every hunk mine |
+| `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.5 (coverage denominator, third blank state, share bound, ad coverage, feed health) | 2026-08-12 | **released** — KT-only files; no route change, `advertising-intel.routes.ts` untouched |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.0 (`GET /advertising/share-of-voice-page`, additive) | 2026-08-12 | **released** — landed `a07460f58`, staged as TWO HUNKS not the whole file; see §5 |
 | `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`, see §5 |
 | `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`. The `SovTrackerTab` IMPORT went with the branch (it was its last caller — an unused import fails the web build); the component FILE stays |
@@ -190,6 +192,29 @@ own one market state and pass it into the header, rather than rendering a second
 **`advertising-intel.routes.ts` belongs on the §3 list in practice.** It is not the 600 KB file, but
 it is now edited by more than one session and a duplicate route registration there is the same boot
 crash. Claim it before adding a route.
+
+### RA.SPINE — the shared layer, 2026-08-12
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `…/rules-automation/_shared/adsScope.ts` + `adsScope.vitest.test.ts` | RA.SPINE (S1 — the one URL/scope contract) | 2026-08-12 | **released** — NEW files, zero prior hits on the name |
+| `…/rules-automation/_shared/rulesTabRoutes.mjs` | RA.SPINE (S3 — the routed-key list `next.config.js` asked for by name) | 2026-08-12 | **released** — NEW file |
+| `…/rules-automation/_shared/useCursorPoll.ts` | RA.SPINE (S2 — header only, no signature change) | 2026-08-12 | **released** — comment-only; BUD.1 released it |
+| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | RA.SPINE (S5 — `showMarket?`, additive, defaulted `true`) | 2026-08-12 | **released** — file was clean; PLC.0 released it after `dateRange?` |
+| `apps/web/src/app/marketing/ads/_shell/MarketplaceContext.tsx` | RA.SPINE (S5 — additive `scopeMarket` / `setScopeMarket`; `market` UNTOUCHED) | 2026-08-12 | **released** — the five builder consumers read `market` and cannot see the new field |
+| `apps/web/next.config.js` | RA.SPINE (S3 — the five `?tab=` redirects the routed tabs still lack) | 2026-08-12 | **released** — file verified clean first; SOV.1's claim on it never landed (last toucher `c9d564cf9`, BUD.1) |
+| `…/rules-automation/budget-schedules/*` | RA.SPINE (S1's ONE conversion, as proof) | 2026-08-12 | **released** — page-own; BSP.1 released it at `2a53a125c` |
+| `…/rules-automation/tabs/NegativeTargetingTab.tsx` | RA.SPINE (deletion — **zero importers**, verified both ways) | 2026-08-12 | **released** |
+| `docs/2026-08-11-substrate-spec.md` | RA.SPINE (corrections, appended not silently edited) | 2026-08-12 | **released** |
+| `docs/2026-08-10-ra-session-locks.md` | RA.SPINE (§2 rows + §4 hand-offs) | 2026-08-12 | **released** — staged as its OWN HUNKS; KT.5's two rows at :112 were left uncommitted, see §5 |
+
+🔴 **RA.SPINE holds NEITHER `_shared/tabs.tsx` NOR `rules-automation.css`, deliberately.** Both were
+dirty with other sessions' uncommitted work when this session opened (`tabs.tsx`: AR.S0's `path?`
+field and the `rules` entry; the stylesheet: 119 lines, ≥2 sessions — `h10-ar-*` ×51 and
+`h10-kt-*` ×7). The substrate's S4 — the four clusters, the edge fade, keyboard scrolling and the
+counts provider — is the one unit that cannot be built without both, so it is **not built**, and it
+is handed off in §4 rather than edited around. §1.3 is the rule; this is the first time it has been
+followed rather than recorded after the fact.
 
 ---
 

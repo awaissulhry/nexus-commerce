@@ -52,7 +52,7 @@ const DEFAULT_MARKET = 'IT'
  * 1 aged out, ES 94 against 2, FR 94 against 3 — four markets printing one string for two problems
  * with two different fixes.
  */
-type RowState = 'measured' | 'no-row-this-period' | 'never-measured'
+type RowState = 'measured' | 'no-row-this-period' | 'never-measured' | 'not-measurable-here'
 
 interface Row {
   keyword: string
@@ -67,6 +67,11 @@ interface Row {
   state?: RowState
   lastSeen?: string | null
   lastSeenAgeDays?: number | null
+  /** KT.5 — the share is ONE ASIN's; this says which, and what the family bound is */
+  bestAsin?: string | null
+  shareBound?: number | null
+  /** KT.5 — do we advertise on this term, and is the attributed ASIN one of the ones that do? */
+  ad?: { bidOnTerm: boolean; adAsins: number; coveredAdAsins: number; bestAsinAdvertisesTerm: boolean } | null
   measured: boolean
   branded: boolean
 }
@@ -88,6 +93,9 @@ interface Payload {
     resolved: {
       campaigns: number; asins: number; keywordsWatched: number; keywordsMeasured: number
       keywordsNoRowThisPeriod?: number; keywordsNeverMeasured?: number
+      keywordsNotMeasurableHere?: number
+      /** KT.5 — of the ASINs in scope, how many the chosen week MEASURES */
+      asinsCovered?: number
     }
     unreachable: { campaignsWithoutPortfolio: number; campaignsInMarket: number } | null
   }
@@ -111,6 +119,18 @@ interface Payload {
     periodsUsed: Array<{ start: string; terms: number }>
     newestAsOf: string | null
     oldestAsOf: string | null
+  }
+  /** KT.5 — one health block behind the page's single new line */
+  feed?: {
+    nightsSilent: number
+    nightsClaimingZero: number
+    greenAndDead: number
+    lastRunAt: string | null
+    lastRunSummary: string | null
+    lastRunError: string | null
+    rowsWrittenPerNight: Array<{ day: string; rows: number }>
+    structuralFailures: string[]
+    cliff: { collapseOn: string | null; collapseToPeriod: string | null; collapseToRows: number; blankOn: string | null }
   }
   freshness: {
     sqp: { latestPeriodStart: string | null; ingestedAt: string | null; ageDays: number | null }
@@ -239,15 +259,44 @@ export function KeywordTrackerClient() {
       filterValue: (r) => r.marketRank ?? 0,
     },
     {
-      key: 'share', label: 'Our impression share',
-      tip: 'Brand Analytics impressionShare for our BEST ASIN on this query: our share of every impression the marketplace served for it. Not Share of Voice (our own ad-traffic mix) and not top-of-search impression share (Amazon\'s top-slot share, measured per campaign).',
+      key: 'share', label: 'Our best ASIN’s share',
+      tip: 'Brand Analytics impressionShare for the SINGLE best-performing of our ASINs on this query — not the family\'s total. Where more than one of our ASINs holds the query the row also shows a bound: the sum of their shares, which is an UPPER bound because two of our ASINs can appear in one search. Not Share of Voice (our own ad-traffic mix) and not top-of-search impression share (Amazon\'s top-slot share, per campaign).',
       render: (r) => {
         const st = rowState(r)
         if (st === 'measured') {
-          return <span className={`h10-kt-share${r.impressionShare === 0 ? ' zero' : ''}`}>{sharePct(r.impressionShare ?? 0)}</span>
+          // KT.5 — a term we bid on where the feed covers NONE of the advertising ASINs, or where the
+          // attributed ASIN is not one of them, is marked: the number is real but it is not evidence
+          // about the products we are actually running on this term.
+          const misattributed = !!r.ad?.bidOnTerm && r.ad.adAsins > 0 && !r.ad.bestAsinAdvertisesTerm
+          return (
+            <span className="h10-kt-sharecell">
+              <span
+                className={`h10-kt-share${r.impressionShare === 0 ? ' zero' : ''}${misattributed ? ' offterm' : ''}`}
+                title={misattributed
+                  ? `This share comes from ${r.bestAsin}, which is in none of the ${r.ad!.adAsins} ASINs advertising this term (the feed covers ${r.ad!.coveredAdAsins} of them). It measures the term, not our advertising on it.`
+                  : r.bestAsin ? `Our best ASIN on this query: ${r.bestAsin}` : undefined}
+              >
+                {sharePct(r.impressionShare ?? 0)}
+              </span>
+              {r.shareBound != null && (
+                <i title={`Our ${r.asinsCompeting} ASINs on this query sum to ${sharePct(r.shareBound)}. That is an UPPER BOUND, not a total — two of our ASINs can appear in one search, so the parts overlap.`}>
+                  ≤{sharePct(r.shareBound)}
+                </i>
+              )}
+            </span>
+          )
         }
         // Two different blanks. "no row this week" is a coverage gap you can chase; "never
         // measured" is a term Amazon has no data for at all. Same pill, different words.
+        // KT.5 — three blanks, not two. "not measurable here" is the one the scope filter used to
+        // hide: the feed DOES report this term this week, for an ASIN outside the current scope.
+        if (st === 'not-measurable-here') {
+          return (
+            <span className="h10-kt-nm here" title={`Brand Analytics reports this term in ${r.marketplace} for the week on screen, but for none of the ASINs in this scope. Widen the scope to see it.`}>
+              not measurable here
+            </span>
+          )
+        }
         return st === 'no-row-this-period'
           ? <span className="h10-kt-nm" title={`The feed has this term in ${r.marketplace}, but not in the week this grid renders${r.lastSeen ? ` — its newest row is the week of ${dayMonth(r.lastSeen)}` : ''}`}>no row this week</span>
           : <span className="h10-kt-nm" title={`Brand Analytics has never reported this term in ${r.marketplace}, at any period`}>never measured</span>
@@ -263,6 +312,7 @@ export function KeywordTrackerClient() {
         // A blank row still states an age when there is one to state: the last week the feed DID
         // report it. Deliberately not bounded by the lookback — a date is worth stating at any age.
         if (r.lastSeen) return <span className="h10-kt-age stale" title="The newest week this term has a row in, at any age">last seen {dayMonth(r.lastSeen)}<i>{r.lastSeenAgeDays}d</i></span>
+        if (rowState(r) === 'not-measurable-here') return <span className="h10-kt-nd" title="The week on screen does hold this term — for an ASIN this scope excludes">covered elsewhere</span>
         return <span className="h10-kt-nd">—</span>
       },
       sortValue: (r) => r.asOf ?? '',
@@ -272,6 +322,7 @@ export function KeywordTrackerClient() {
   const activeTab = rulesTabByKey('keyword-tracker')
   const s = data?.scope
   const f = data?.freshness
+  const f2 = data?.feed
 
   /** The one sentence stating what resolved — scope, then the age of what the grid is made of. */
   const resolution = (() => {
@@ -282,7 +333,14 @@ export function KeywordTrackerClient() {
     else if (s.boundBy === 'line' && s.line) bits.push(`${s.line.name.split(' — ')[0]} line`)
     else bits.push('all campaigns')
     bits.push(`${num(s.resolved.campaigns)} campaign${s.resolved.campaigns === 1 ? '' : 's'}`)
-    bits.push(`${num(s.resolved.asins)} ASIN${s.resolved.asins === 1 ? '' : 's'}`)
+    // 🔴 KT.5 — this printed "250 ASINs", which is ASINs in SCOPE. Every share on the grid is bounded
+    // by the ASINs Brand Analytics actually measures: 18 of 250 in IT, 4 of 91 in FR. Replaced, not
+    // appended — the line is already long and the old number was the misleading one.
+    bits.push(
+      s.resolved.asinsCovered != null
+        ? `share measured across ${num(s.resolved.asinsCovered)} of ${num(s.resolved.asins)} advertised ASINs`
+        : `${num(s.resolved.asins)} ASIN${s.resolved.asins === 1 ? '' : 's'}`,
+    )
     bits.push(`watching ${num(s.resolved.keywordsWatched)} term${s.resolved.keywordsWatched === 1 ? '' : 's'}`)
     bits.push(`${num(s.resolved.keywordsMeasured)} with share data`)
     // KT.1b — with one period per view this split is a real, actionable number rather than an
@@ -371,6 +429,50 @@ export function KeywordTrackerClient() {
               </span>
             </p>
           )}
+
+          {/* ── 🔴 KT.5 · THE ONE NEW LINE ────────────────────────────────────────────────────────
+              Quiet when the feed is behaving, loud when it is not, and never both. It exists to
+              change one decision: do I trust these numbers today, and when do I have to fix the
+              feed? Everything else KT.5 measured folded into lines that already existed.
+
+              Loud, measured 2026-08-12: the last two nights wrote nothing and BOTH reported
+              status=SUCCESS while carrying errorMessage="stale (auto-swept after 2.3h)". Which is
+              why this reads the DATA — rows written, and the run's own rows=N — and never
+              CronRun.status. */}
+          {f2 && (f2.nightsSilent >= 2 || f2.greenAndDead > 0 ? (
+            <p className="h10-kt-blind">
+              <AlertTriangle size={13} />
+              <span>
+                <b>
+                  The Brand Analytics feed has written nothing for {f2.nightsSilent}{' '}
+                  night{f2.nightsSilent === 1 ? '' : 's'}
+                  {f2.greenAndDead > 0 && <>, and {f2.greenAndDead === 1 ? 'the last run' : `${f2.greenAndDead} of the last 8 runs`} reported success while carrying an error</>}.
+                </b>{' '}
+                {f2.lastRunSummary && <>Its own summary says “{f2.lastRunSummary}”{f2.lastRunError ? ` alongside “${f2.lastRunError}”` : ''}. </>}
+                {f2.cliff.collapseOn && (
+                  <>
+                    This grid is built on the week of {period ? dayMonth(period) : '—'}; on{' '}
+                    <b>{dayMonth(f2.cliff.collapseOn)}</b> that week ages out of the {data?.window.lookbackDays ?? 42}-day
+                    window and it falls back to the week of {f2.cliff.collapseToPeriod ? dayMonth(f2.cliff.collapseToPeriod) : '—'},
+                    which holds {num(f2.cliff.collapseToRows)} rows against a normal{' '}
+                    {num(data?.window.baselineRows ?? 0)}.{' '}
+                  </>
+                )}
+                {f2.structuralFailures.length > 0 && (
+                  <>Five of the nine markets the nightly job iterates ({f2.structuralFailures.join(', ')}) have no
+                  listings at all, so its “failed=5” is a constant and a sixth failure would not show.</>
+                )}
+              </span>
+            </p>
+          ) : (
+            <p className="h10-kt-said quiet">
+              Brand Analytics feed:{' '}
+              {f2.rowsWrittenPerNight[0]
+                ? <>wrote {num(f2.rowsWrittenPerNight[0].rows)} rows on {dayMonth(f2.rowsWrittenPerNight[0].day)}</>
+                : <>no write in the last 14 days</>}
+              {f2.cliff.collapseOn && <> · this week holds until {dayMonth(f2.cliff.collapseOn)}</>}
+            </p>
+          ))}
 
           {/* 🔴 KT.1b — every share on the grid comes from one week. When the gate could not find a
               whole one, that is the first thing you need to know, in a full sentence, because it
@@ -489,6 +591,13 @@ export function KeywordTrackerClient() {
                 {r.asinsCompeting > 1 && (
                   <span className="ac" title={`${r.asinsCompeting} of our own ASINs hold a row on this query in the week this row reads — they are splitting its impressions`}>
                     {r.asinsCompeting} of ours
+                  </span>
+                )}
+                {/* KT.5 — the chip counted our ASINs ON the query; it now also says whether any of
+                    the ASINs we ADVERTISE on the term are measured. 24 rows are at zero. */}
+                {r.ad?.bidOnTerm && r.ad.adAsins > 0 && r.ad.coveredAdAsins === 0 && (
+                  <span className="nc" title={`We advertise this term across ${r.ad.adAsins} ASIN${r.ad.adAsins === 1 ? '' : 's'}, and Brand Analytics measures none of them. Any share here comes from a product we are not running on this term.`}>
+                    none advertised measured
                   </span>
                 )}
               </div>

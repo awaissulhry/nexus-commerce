@@ -1227,3 +1227,156 @@ lanes at 304/304/1568/1568, no horizontal scroll. Contrast composited against re
 - The ASIN-coverage denominator, the summed-share bound, per-term ad coverage, the staleness cliff
   and feed health → **KT.5**. Spend / clicks / top-of-search and the Δ column → **KT.3**. The
   per-keyword history drawer → **KT.4**. Any write to a bid, rule or campaign → **KT.6**.
+
+---
+
+## KT.5 — built
+
+**Shipped and verified on production 2026-08-12.** Session slug `kt5`.
+Re-measured with `_kt5-coverage.mts`, `_kt5-signals.mts`, `_kt5-verify.mts` — all read-only.
+**Nothing in this section is inherited from the study:** KT.2 replaced three of the four watchlists
+and KT.1b changed the lookback from 56 to 42 days, so every per-market number above is stale.
+
+### Stop conditions — all four hold
+
+| | |
+|---|---|
+| a new SQP period | no — newest is still **2026-07-26** in every market; most recent `ingestedAt` 2026-08-10 |
+| coverage engine armed | no — `NEXUS_COVERAGE_ENGINE_MODE` unset (→ observe), **0** enabled sets |
+| the 10-ASIN limit | unchanged — `sqp.service.ts:242` still `args.limit ?? 10`, and the nightly distinct-ASIN counts (IT 1–18/night) show no rotation |
+| a summed bound over 100 % | **none**, in any market — the bound holds everywhere |
+
+### 🔴 1 · The coverage denominator
+
+The reach line printed **`250 ASINs`**. That is ASINs in *scope*. Every share on the page is bounded
+by the ASINs Brand Analytics actually measures, in the week the grid reads:
+
+| market | advertised in scope | **measured in the chosen week** | covered ever |
+|---|---|---|---|
+| IT | 250 | **18** | 32 |
+| DE | 57 | **13** | 13 |
+| ES | 30 | **14** | 15 |
+| FR | 91 | **4** | 4 |
+
+Now reads *"share measured across 18 of 250 advertised ASINs"* — replacing the old token, not
+appended. The numerator is filtered to the scope's own ASINs even at market scope: the first version
+counted every covered ASIN in the market (19) against advertised ones (250), so **N was not a subset
+of M** — it read as a coverage ratio over a different population.
+
+Root cause is one constant: `ourAsinsForMarketplace(mkt, args.limit ?? 10)` requests the same 10
+ASINs per market every night and never rotates, while its own comment says the cron cycles coverage
+over days. Raising it is the single highest-value change behind this page, and the day it moves every
+number in this section is wrong — which is why the page computes the denominator rather than
+storing it.
+
+### 🔴 2 · The third blank state
+
+"This term has no row" and "the feed has a row, but for no ASIN you are scoped to" were one string,
+because the scope filter and the measurement were the same query.
+
+| scope | measured | no row this week | never measured | **not measurable here** |
+|---|---|---|---|---|
+| IT market | 97 | 0 | 0 | 0 |
+| DE market | 10 | 11 | 0 | 0 |
+| ES market | 6 | 1 | 0 | 0 |
+| FR market | 3 | 5 | 0 | 0 |
+| **IT campaign `Gale Jacket Yellow Only`** | 25 | 0 | 0 | **72** |
+
+At market scope the state has **zero instances** — which is exactly why it looked unrepresentable.
+Under one campaign it is the dominant blank: **72 of 97 rows**, every one of which the page was
+calling "no row this week" or "never measured". It costs one grouped read with the ASIN filter
+removed, asked only when the scope restricts ASINs.
+
+### 3 · The share is one ASIN's, and the bound is a bound
+
+Header is now **`Our best ASIN’s share`**; where more than one of our ASINs holds the query the row
+carries `≤ N%` beside it.
+
+| market | measured terms | with >1 of our ASINs | median understatement | largest ratio |
+|---|---|---|---|---|
+| IT | 97 | 47 | 0.25 pp | `giubbino moto` 1.57 % → **5.01 %** (3.19×, 6 ASINs) |
+| DE | 10 | 6 | 0.27 pp | `motorradjacke herren` 0.54 % → 1.62 % (3.00×) |
+| ES | 6 | 3 | 0.06 pp | `chaqueta moto hombre invierno` 0.37 % → **1.50 %** (4.05×) |
+| FR | 3 | 2 | 0.03 pp | `veste moto homme` 0.03 % → 0.06 % |
+
+Checked two ways — summing the share column, and summing `impressionsBrand` over the shared
+`impressionsTotal`. They agree everywhere, and **no row exceeds 100 %**. Labelled `≤` and described
+as an upper bound in every tooltip; the words "total share" appear nowhere.
+
+### 🔴 4 · The attribution hazard
+
+| market | watched terms we bid on | fully ad-covered | 0 % ad-covered | **share from a non-advertising ASIN** |
+|---|---|---|---|---|
+| IT | 33 | **0** | 4 | **4** |
+| DE | 21 | **0** | 12 | 1 |
+| ES | 7 | **0** | 3 | 2 |
+| FR | 8 | **0** | 5 | 0 |
+
+`giacca moto 4 stagioni` renders **1.67 % attributed to B0BMSJWW7L**, which is in none of the 12 ad
+groups bidding that term — those hold 30 ASINs and the feed covers **zero** of them. Folded into the
+existing `N OF OURS` chip (`none advertised measured`) plus a dotted-underline mark on the share
+itself, with the full sentence in the tooltip. **No new column.**
+
+### 5 · One health line, and the cliff as a date
+
+The page's single new permanent line: quiet when the feed is behaving, loud when it is not.
+
+Derived from data, never from `CronRun.status` — **the 2026-08-11 and 2026-08-12 runs both carry
+`status=SUCCESS` *and* `errorMessage="stale (auto-swept after 2.3h)"` *and* `rows=0`.** Across all
+72 runs, **14 carry a stale error while only 12 have a non-SUCCESS status.** An absent ingest day is
+a zero rather than a gap, so silent nights are counted by walking the calendar, not the `GROUP BY` —
+counting zeros in the grouped result would always return 0.
+
+🔴 **The cliff has TWO dates per market and the first is the one that matters.** The gate never
+empties the grid; it falls back to a thinner week first. My own first measurement found only the
+second date and reported 26 days when the answer was 19.
+
+| market | reading | **collapses on** | falls back to | measurable then | no week at all |
+|---|---|---|---|---|---|
+| IT | week of 19 Jul | **2026-08-31** | 26 Jul (8 rows vs a normal 655) | **2 of 97** | 2026-09-07 |
+| DE | 19 Jul | **2026-08-31** | 26 Jul (5 rows) | **0 of 21** | 2026-09-07 |
+| ES | 12 Jul | **2026-08-24** | 26 Jul (71 rows) | 3 of 7 | 2026-09-07 |
+| FR | 12 Jul | **2026-08-24** | 26 Jul (1 row) | **0 of 8** | 2026-09-07 |
+
+All dates assume no further complete week lands; `projectCliff` is pure and clock-injected, with 6
+tests (3 written against a deliberately-wrong version first).
+
+Also stated in the loud form: five of the nine markets the nightly job iterates (**IE, NL, PL, SE,
+UK**) have **zero** `ChannelListing` rows, so `ingestSqp` throws for them every night forever and
+`failed=5` is a constant that can never signal anything. And **FR has zero `listingStatus='ACTIVE'`
+listings** (of 133), so `ourAsinsForMarketplace`'s "ACTIVE first" comparator is inoperative there and
+its nightly 10 are effectively alphabetical — the cleanest available explanation for FR being
+measured on 4 ASINs of 91. ES is nearly as exposed: 19 ACTIVE of 141.
+
+### §4 label corrections, applied
+
+- **`topOfSearchIS` lags the placement report it rides on by ONE day** — report has 2026-08-11 rows,
+  the IS column stops at 2026-08-10. Recorded as a lag, because an age rots overnight and the
+  study's "2 days old" was true only on the day it was written.
+- **Its denominator is 65 of the 81 campaigns with any placement row**, not 65 of 220. 139 have none.
+
+### Published for KT.3 — Δ computability on the NEW watchlists
+
+| market | measured | Δ computable | 7 d | 14 d | 21 d | 28 d | 35 d+ | no earlier row |
+|---|---|---|---|---|---|---|---|---|
+| IT | 97 | **78** | 69 | 3 | 0 | 2 | 4 | **19** |
+| DE | 10 | 9 | 8 | 0 | 0 | 0 | 1 | 1 |
+| ES | 6 | 6 | 4 | 0 | 0 | 2 | 0 | 0 |
+| FR | 3 | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
+
+96 of 116 measured rows could carry a Δ; 20 could not. A blank Δ would be a **fourth** on-screen
+state beside `0.00 %`, the three blanks and the coverage mark — which is the question KT.3 has to
+answer before spending a column on it.
+
+### Perf
+
+The ad-coverage read and the SQP row read are the two ~500 ms queries and now run together; the two
+feed-health reads depend on nothing and moved into the first batch. Measured locally across the
+Atlantic to Neon (the API runs in-region, so these overstate): IT ~1.8 s warm, DE ~1.1 s, ES ~0.7 s,
+FR ~0.5 s.
+
+### Recorded, not fixed
+
+`sort`/`dir` still never written to the URL (needs an `AdsDataGrid` sort callback, nine pages);
+`sort=asins` accepted with no matching column; `reportPeriod` unguarded (all 15,075 rows are `WEEK`);
+`sqpImpressionShareForAsins` still has no recency guard — the RD study owns that one.
