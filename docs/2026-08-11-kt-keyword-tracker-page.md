@@ -1497,3 +1497,103 @@ sortable columns are the ones an operator would most want to share a view of. `s
 accepted with no matching column; `reportPeriod` unguarded; `sqpImpressionShareForAsins` has no
 recency guard (the RD study owns it). **Observed only, shared, not touched: the rule-type tab bar now
 overflows and clips `Apply Rules` at the left edge** after other sessions added routed tabs.
+
+---
+
+## KT.4 — built
+
+**Shipped and verified on production 2026-08-12.** Session slug `kt4`.
+Measured with `_kt4-drawer.mts` and `_kt4-verify.mts`, both read-only.
+
+A drawer at `?kw=<term>`: **header · chart · our ASINs · the campaigns bidding it.** Nothing was
+added to the page behind it — no column, no line, no filter.
+
+### Stop conditions — all four hold
+
+| | |
+|---|---|
+| a new SQP period | no — still 2026-07-26 |
+| any market truncated | no — IT/DE 19 Jul, ES/FR 12 Jul, all `complete` |
+| `AdTarget` carrying money | no — 2,129 positive keyword targets, spend/sales/impressions all 0. Only the **bid** is real, and only the bid is shown |
+| the 53-campaign case | still 53 — and **73 ad groups**, not the 46 the brief stated |
+
+### 🔴 The defect a measurement caught before it shipped
+
+ES's gate picks **2026-07-12** because 07-19 holds 193 rows against a 207-row threshold. But 07-19
+*has* rows for ES's terms, so the unbounded series ended there — the drawer would have drawn, as its
+newest point, **a week the page had already judged incomplete**, one line under a header reading "as
+of 12 Jul". That is KT.1b's defect reappearing inside a chart.
+
+`buildSeries` now takes the gate's period as a cap on the **share** series and reports how many weeks
+it dropped. Spend is deliberately **not** capped — a different feed on a different cadence, and its
+overhang is the thing worth seeing. ES went from 10 drawn share weeks to 9, and
+`shareTrailsSpendByDays` moved from 22 to 29, which is what KT.5 independently measured for ES.
+
+### The chart idiom, and why none of the three existing options was extended
+
+| candidate | why not |
+|---|---|
+| `bid/BidSpark.tsx` | **Step-interpolated** — correct for a bid, which holds its value until something writes a new one; wrong for a weekly share, which is a *sampled measurement* that does no holding. A step would claim the share was constant between readings. Also 88×22, no axis, no dates: a grid-cell sparkline |
+| `_schedule/DaypartingChart.tsx` | Right scale, wrong axis. `xAt(i, n)` spaces by **index**, because 24 hours and 7 weekdays are categorical and evenly spaced. Weeks are not — and **46 of IT's 97 measured terms have a span longer than 7 days** somewhere in their history (DE 7 of 21, ES 5 of 7, FR 3 of 8). Index spacing draws every one of those gaps as an ordinary step: the "a gap is not a zero" defect, moved to the time axis |
+| `recharts` | A real dependency used by four ads pages — but by **neither** chart in this section. Both charts in Rules & Automation are hand-rolled SVG, so reaching for it here adds a third idiom to one section instead of removing one |
+
+So: the section's own inline-SVG idiom, with the one thing neither neighbour has — a real time axis.
+**Offered for a reconciliation pass:** a shared time-series chart promoted out of these three, the
+same way `BidSpark`'s own header offers its promotion to `_shared/`.
+
+Three rules the chart keeps: the line **breaks** across any span over 7 days; **fewer than 3 readings
+is not a line** (dated points only — 19 IT terms and 4 DE terms); and the share series **ends where
+it ends**, with the stretch where spend continues shaded and named *"no Brand Analytics reading after
+19 Jul"*. Share trails spend by 22 days in IT/DE and 29 in ES/FR.
+
+### How many terms draw a series
+
+| market | terms | ≥2 weeks (a Δ) | **≥3 weeks (a line)** | exactly 1 week | with a gap |
+|---|---|---|---|---|---|
+| IT | 97 | 78 | **73** | 19 | **46** |
+| DE | 21 | 17 | 10 | 4 | 7 |
+| ES | 7 | 6 | 6 | 1 | 5 |
+| FR | 8 | 7 | 4 | 1 | 3 |
+
+IT weeks-per-term: `1→19 · 2→5 · 3→7 · 4→4 · 5→3 · 6→11 · 7→23 · 8→13 · 9→12` — the brief's version
+omitted the 4/5/6/7 buckets.
+
+### The two extremes, both first-class
+
+**`giacca moto` — 53 campaigns, 73 ad groups, all three match types.** The brief said 46 ad groups;
+measured **73**. A flat list would be unusable, so campaigns collapse with their ad-group count and
+match types in the header and expand on demand.
+
+**64 of IT's 97 watched terms have no campaign bidding them** (DE 0, ES 0, FR 0 — IT's list came from
+the coverage set, the others from bid keywords). Rendered as a finding with the market count beside
+it — *"No campaign bids this term … along with 63 other watched IT terms"* — never an empty table.
+
+`giacca moto estiva uomo`: 10 ASINs, best 0.700 %, worst 0.060 %, combined **≤1.890 %**, all ten
+resolved to PIM names, all ten advertised on the term. The bound is labelled `≤` and called an upper
+bound; the words "total share" appear nowhere.
+
+### The funnel — reported, not built
+
+| market | rows | impressionShare > 0 | clickShare > 0 | cartAddShare > 0 | purchaseShare > 0 |
+|---|---|---|---|---|---|
+| IT | 1,577 | 1,329 | 1,300 | 28 | **2** |
+| DE | 275 | 253 | 245 | 16 | **3** |
+| ES | 105 | 57 | 48 | 3 | 0 |
+| FR | 48 | 25 | 20 | 1 | 0 |
+
+**Five rows in the entire dataset carry a purchase.** Impression and click share are series;
+cart-adds and purchases are counts with their weeks, and the drawer says outright that no rate is
+derived from five rows. Same disqualification Orders earned in KT.3.
+
+### `?kw=` is a full round-trip
+
+It opens the drawer instead of filtering the grid to one row — KT.1's placeholder meaning, which
+would have made one param mean two things. The grid stays whole behind it, Escape and the backdrop
+close it, closing clears the param, and a term that no longer exists after a market change closes
+rather than lingering.
+
+### Recorded, not fixed
+
+`sort`/`dir` still not written to the URL; `sort=asins` accepted with no matching column;
+`reportPeriod` unguarded; the rule-type tab bar still clips `Apply Rules` (shared — observed by KT.3,
+KT.5 and now KT.4, touched by none of them).
