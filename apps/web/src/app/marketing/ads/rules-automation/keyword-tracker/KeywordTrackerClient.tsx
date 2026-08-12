@@ -32,12 +32,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Info } from 'lucide-react'
+import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from './KeywordScopeBar'
+import { WatchlistPanel } from './WatchlistPanel'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -80,7 +81,10 @@ interface Payload {
     line: { id: string; name: string } | null
     portfolio: { id: string; name: string } | null
     campaign: { id: string; name: string } | null
-    list: { id: string; name: string; marketplace: string; terms: number; enabled?: boolean } | null
+    /** KT.2 — a KeywordWatchlist. `enabled` is gone: it was the coverage engine's arming switch. */
+    list: { id: string; name: string; marketplace: string; terms: number; isDefault?: boolean; source?: string } | null
+    /** KT.2 — ?list= named a real list belonging to ANOTHER market, and was refused */
+    listRejected?: boolean
     resolved: {
       campaigns: number; asins: number; keywordsWatched: number; keywordsMeasured: number
       keywordsNoRowThisPeriod?: number; keywordsNeverMeasured?: number
@@ -115,7 +119,7 @@ interface Payload {
   }
   rows: Row[]
   total: number
-  lists: Array<{ id: string; name: string; marketplace: string; enabled: boolean }>
+  lists: Array<{ id: string; name: string; marketplace: string; isDefault: boolean; source: string; terms: number }>
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
@@ -125,6 +129,15 @@ const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
 }
+/** KT.2 — where a list's terms came from, in words, for the line under the scope bar. */
+const LIST_SOURCE: Record<string, string> = {
+  'coverage-set-import': 'copied from the curated coverage set',
+  'bid-keywords': 'the keywords we bid on that Brand Analytics can measure',
+  sqp: 'Brand Analytics queries',
+  manual: 'added by hand',
+  import: 'imported',
+}
+
 /** ≤7d fresh · ≤21d ageing · older is stale. Stale is a value, not an absence. */
 const ageClass = (d: number | null) => (d == null ? '' : d <= 7 ? 'fresh' : d <= 21 ? 'ageing' : 'stale')
 
@@ -154,6 +167,9 @@ export function KeywordTrackerClient() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
+  // KT.2 — the watchlist editor, and a nonce so any write to it re-reads the grid
+  const [editing, setEditing] = useState(false)
+  const [reload, setReload] = useState(0)
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -195,7 +211,7 @@ export function KeywordTrackerClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, measured, sort, dir])
+  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, measured, sort, dir, reload])
 
   const rows = useMemo(() => {
     const all = data?.rows ?? []
@@ -387,28 +403,46 @@ export function KeywordTrackerClient() {
             </p>
           )}
 
-          {/* 🔴 KT.1b — §3.1: the one coverage set on prod is `enabled: false`. KT.1 fetched that
-              field, returned it and never said it. Nothing filters on it and nothing should — the
-              page would go blank — but a page reading a disabled list has to admit it. */}
-          {s?.list && s.list.enabled === false && (
+          {/* KT.2 — the watchlist is this market's own object now. KT.1b's sentence said the list
+              was "disabled as a coverage set"; that flag was never a display flag — it arms the
+              coverage engine's nightly bid ladder — so the honest line is where the terms came
+              from and where arming actually happens. */}
+          {s?.list && (
             <p className="h10-kt-note">
               <Info size={13} />
               <span>
-                The watchlist is “{s.list.name}” ({num(s.list.terms)} terms), which is{' '}
-                <b>disabled as a coverage set</b> — no engine acts on it, and this page reads it purely
-                as a list of terms to watch. Editing and enabling it is KT.2.
+                Watching <b>“{s.list.name}”</b> — {num(s.list.terms)} term{s.list.terms === 1 ? '' : 's'}
+                {s.list.source ? <>, {LIST_SOURCE[s.list.source] ?? s.list.source}</> : null}. It belongs to
+                this page and to <b>{s.list.marketplace}</b> only; nothing automated reads it.
+                {' '}<button type="button" className="lnk" onClick={() => setEditing(true)}>Edit the list</button>
               </span>
             </p>
           )}
 
-          {/* The curated list is IT-only. Reading it against another market is legitimate — the
-              terms are the terms — but the page has to say that is what is happening. */}
-          {s?.list && s.list.marketplace !== market && (
-            <p className="h10-kt-note out">
-              <Info size={13} />
+          {/* 🔴 A market with no list borrows nobody's. This is the state KT.1's `?? sets[0]`
+              hid by serving 97 Italian terms to Germany, Spain and France. */}
+          {!s?.list && !loading && (
+            <p className="h10-kt-blind">
+              <AlertTriangle size={13} />
               <span>
-                “{s.list.name}” was curated for <b>{s.list.marketplace}</b>. You are reading its{' '}
-                {num(s.list.terms)} terms against <b>{market}</b>.
+                <b>{market} has no watchlist.</b> Earlier this page would have shown you another
+                market’s terms here — measured, only 8 of the 97 Italian terms have ever had a{' '}
+                {market === 'DE' ? 'German' : market === 'ES' ? 'Spanish' : market === 'FR' ? 'French' : 'local'} row,
+                so those grids were a wrong-list artefact rather than a data gap. Create a list for{' '}
+                {market} instead.{' '}
+                <button type="button" className="lnk" onClick={() => setEditing(true)}>Create one</button>
+              </span>
+            </p>
+          )}
+
+          {/* ?list= named a real list, but one belonging to another market. */}
+          {s?.listRejected && (
+            <p className="h10-kt-blind">
+              <AlertTriangle size={13} />
+              <span>
+                <b>That link points at another market’s watchlist.</b> A list belongs to one
+                marketplace, because volume, rank and share are per-marketplace numbers. Switch the
+                market in the header to open it, or pick a {market} list below.
               </span>
             </p>
           )}
@@ -420,6 +454,20 @@ export function KeywordTrackerClient() {
               <Info size={13} />
               <span>Showing one keyword: <b>{kw}</b>. <button type="button" className="lnk" onClick={() => push({ kw: '' })}>Show all {num(data?.total ?? 0)}</button></span>
             </p>
+          )}
+
+          {editing && (
+            <WatchlistPanel
+              market={market}
+              lists={data?.lists ?? []}
+              activeId={s?.list?.id ?? null}
+              onClose={() => setEditing(false)}
+              onChanged={(selectId) => {
+                // a write may have changed which list exists, which is default, or its terms
+                if (selectId !== undefined) push({ list: selectId ?? '' })
+                setReload((n) => n + 1)
+              }}
+            />
           )}
 
           <AdsDataGrid<Row>
@@ -471,6 +519,23 @@ export function KeywordTrackerClient() {
                 >
                   Brand terms: {branded ? 'included' : 'excluded'}
                 </button>
+                {/* KT.2 — a real picker, driving ?list=. Rendered as a select only when this market
+                    actually has a choice: a one-option dropdown is a control where nothing moves. */}
+                {(data?.lists.length ?? 0) > 1 && (
+                  <select
+                    className="h10-kt-listsel"
+                    aria-label="Watchlist"
+                    value={s?.list?.id ?? ''}
+                    onChange={(e) => push({ list: e.target.value })}
+                  >
+                    {data!.lists.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name} · {num(l.terms)} terms{l.isDefault ? ' · default' : ''}</option>
+                    ))}
+                  </select>
+                )}
+                <button type="button" className="h10-kt-toggle" onClick={() => setEditing(true)}>
+                  <ListPlus size={12} /> Watchlist
+                </button>
               </span>
             )}
             toolbarRight={data?.window ? (
@@ -497,10 +562,12 @@ export function KeywordTrackerClient() {
                   <b>Every watched term has share data in this scope. Nothing is unmeasured.</b>
                 ) : (data?.scope.resolved.keywordsWatched ?? 0) === 0 ? (
                   <>
-                    <b>No watchlist for this view.</b>
+                    <b>{data?.scope.list ? `“${data.scope.list.name}” has no terms to show.` : `${market} has no watchlist.`}</b>
                     <span>
-                      The tracker reads the curated coverage list plus the protected brand terms.
-                      Excluding brand terms left nothing — try including them.
+                      {data?.scope.list
+                        ? <>Every term on it is one of our own brand terms, which are excluded by default. Include brand terms, or add terms to the list.</>
+                        : <>A watchlist belongs to one marketplace. Create one for {market} — nothing on this page falls back to another market’s terms.</>}
+                      {' '}<button type="button" className="lnk" onClick={() => setEditing(true)}>{data?.scope.list ? 'Edit the list' : 'Create a list'}</button>
                     </span>
                   </>
                 ) : (

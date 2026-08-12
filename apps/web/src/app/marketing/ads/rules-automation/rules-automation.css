@@ -1589,3 +1589,52 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The view's single period, in the toolbar. Amber when the gate could not find a whole week —
    the same amber the truncated-week sentence above the grid uses, so the two read as one fact. */
 .h10-kt-win i.bad { background: #fff6e8; color: #8a5316; }
+
+/* ── KT.2 — the watchlist picker and editor ───────────────────────────────────────────────────
+   Appended at EOF, `h10-kt-*` only. The `.lnk`, `.h10-kt-note` and `.h10-kt-blind` families are
+   KT.1's and are reused, not restyled. */
+
+/* The picker only renders when a market has more than one list, so this is not a decorative select. */
+.h10-kt-listsel { font: inherit; font-size: 11.5px; font-weight: 600; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 5px 8px; max-width: 280px; }
+
+.h10-kt-wlpanel { margin: 12px 0 0; padding: 14px 16px; border: 1px solid #e3e7ec; border-radius: 12px; background: #fff; }
+.h10-kt-wlhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.h10-kt-wlhead h3 { margin: 0 0 4px; font-size: 14px; font-weight: 800; color: #1c2530; }
+.h10-kt-wlhead p { margin: 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-kt-wlhead p b { font-weight: 800; color: #1c2530; }
+.h10-kt-wlclose { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: #f1f4f8; color: #55606d; cursor: pointer; flex-shrink: 0; }
+.h10-kt-wlclose:hover { color: #1c2530; background: #e7ebf1; }
+
+/* Lanes, so a wide panel lays its four jobs side by side instead of in one long column. */
+.h10-kt-wlgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; margin-top: 13px; }
+.h10-kt-wlcard { border: 1px solid #e3e7ec; border-radius: 10px; padding: 12px 14px; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.h10-kt-wlcard.wide { grid-column: 1 / -1; }
+.h10-kt-wlcard h4 { margin: 0; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
+.h10-kt-wlcard .cap { margin: 0; font-size: 11px; line-height: 1.55; color: #667080; }
+.h10-kt-wlcard .cap b { font-weight: 800; color: #55606d; }
+.h10-kt-wlta { width: 100%; font: inherit; font-size: 12px; line-height: 1.5; color: #1c2530; border: 1px solid #e3e7ec; border-radius: 8px; padding: 8px 10px; resize: vertical; }
+
+.h10-kt-wlterms { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; max-height: 210px; overflow-y: auto; }
+.h10-kt-wlterm { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; color: #1c2530; cursor: pointer; background: #fff; }
+.h10-kt-wlterm.on { border-color: #1f6fde; background: #e8f1fd; }
+.h10-kt-wlterm .bd { padding: 1px 5px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+
+.h10-kt-wllists { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+.h10-kt-wlrow { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: #f8fafc; font-size: 11.5px; }
+.h10-kt-wlrow.on { background: #e8f1fd; }
+.h10-kt-wlrow .nm { font: inherit; font-size: inherit; font-weight: 700; color: #1c2530; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.h10-kt-wlrow .ct { color: #667080; font-variant-numeric: tabular-nums; }
+.h10-kt-wlrow .df { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: #14724d; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.h10-kt-wlnew { display: flex; gap: 7px; width: 100%; }
+.h10-kt-wlnew input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 12px; color: #1c2530; border: 1px solid #e3e7ec; border-radius: 8px; padding: 7px 10px; }
+
+/* D4 — a control that destroys says what it destroys, to how many things, and whether it can be
+   undone. Amber for "removes from a list", not red: nothing reaches Amazon and no bid moves. */
+.h10-kt-danger { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 0; padding: 10px 12px; border-radius: 9px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; width: 100%; }
+.h10-kt-danger b { font-weight: 800; color: #7a4512; }
+.h10-kt-danger .acts { display: flex; gap: 8px; }
+.h10-am-btn.danger { color: #a02c2c; }
+
+@media (max-width: 900px) {
+  .h10-kt-wlgrid { grid-template-columns: 1fr; }
+}
