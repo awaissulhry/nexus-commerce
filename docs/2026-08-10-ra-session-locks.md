@@ -131,6 +131,11 @@ there is no duplicate-registration risk), no `tabs.tsx`, no `rules-automation.cs
 every unit is a single Vercel deploy and the two-deploy ordering trap does not apply to this session
 at all.
 
+| `…/rules-automation/dayparting/*` + `…/tabs/RankGoalsList.tsx` | RD.P2 (the two-grain grid) | 2026-08-12 | **claimed** — page-own, re-claimed after RD.P0 released them |
+| `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files: `rank-runtime` has **zero** hits, so it collides with nothing, including PLC.1's `/advertising/placements/cursor` and the 20 `/advertising/rank-*` paths already in the 600 KB file |
+| `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **claimed** — the page must derive Mode from the engine's own spec mapping rather than a second copy that is free to drift; nothing else in the engine is touched |
+| `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **claimed** |
+
 **Two findings from KT.1 that bind every page in this section:**
 
 1. 🔴 **The page gutter is ZERO, not 24px.** Measured on prod at 1728px: `.h10-hdr`,
@@ -475,6 +480,33 @@ mid-edit on. `?tab=dayparting` and `?tab=keyword-tracker` remain broken and rema
 Measured on prod after the change: sections at x=96 w=1602 with no stagger, 16 rows, and all five
 builder entry points byte-identical. Nothing in P0 changed engine behaviour, edited a `RankTarget`,
 raised a ceiling or armed a schedule.
+
+**RD.P2 → whoever renders an engine-derived column, 2026-08-12 — `allOut` is not "chasing", and
+the obvious derivation prints a new lie.**
+
+`canChase = target.allOut || ceiling > floor` (`rank-controller.ts:186`) is **true** for an all-out
+target. But `computeStep`'s all-out branch reads **neither** `targetISPct` **nor** `acosCapPct` —
+`acosCap = target.allOut ? null : …`, and the branch simply climbs `+stepUpPct` toward `maxPct`. So
+a column that renders `canChase → "Chasing N% IS"` prints a goal that is **never read**, which on
+2026-08-12 at 12:00 Rome is **11 of 33 live campaigns** (`own-top-allout`, IS=90).
+
+Any surface deriving intent from a `RankTarget` needs `allOut` as its own state, above `chasing`:
+
+| state | test |
+|---|---|
+| capped | `cpcCapPct(...)` → `baseAlone`, or `capPct < floor` |
+| **all-out** | **`spec.allOut`** — climbing to the ceiling; the IS goal is inert |
+| chasing | `ceiling > floor` and NOT `allOut` — the only real closed loop |
+| holding | otherwise — `ceiling === floor`, snap-and-hold |
+
+Same rule for "goal vs actual": the goal is dead in **two** cases, `!canChase` **and** `allOut`.
+
+**Also latent, and it is not this page's to fix alone: two clocks.** `runRankDefendOnce` resolves
+every window on the **database** clock (`dbNow()`, added because Railway containers have run ~2h
+behind while Postgres stayed correct). `/advertising/rank-schedule-groups` resolves `activeTargetKey`
+on the **container** clock (`scheduleNowInTz`, `new Date()`). Measured skew right now is 0 minutes,
+so the list's `Now holding` column is correct **by luck**. Any endpoint answering "what is held right
+now" should take `SELECT now()` as its clock, as `GET /advertising/rank-runtime` does.
 
 ---
 
