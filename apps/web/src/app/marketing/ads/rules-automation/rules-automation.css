@@ -3836,7 +3836,11 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-ngw-list li { display: grid; grid-template-columns: minmax(0, 1.5fr) 84px 84px 108px 92px 108px;
   align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 11.5px; color: #35404f; }
 .h10-ngw-list li:nth-child(odd) { background: #fafbfc; }
-.h10-ngw-list li.blocked { opacity: 0.82; }
+/* 🔴 NO OPACITY HERE. `opacity: 0.82` on the row composited EVERY text colour inside it and
+   dragged 78 text nodes below 4.5:1 at once — the contrast×opacity trap, where getComputedStyle
+   still reports the declared colour and only compositing reveals it. "Blocked" is already carried
+   by the reason text, the caveat box and the absent button, none of which needs dimming. */
+.h10-ngw-list li.blocked { background: #fdfcfa; }
 .h10-ngw-list .g { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .h10-ngw-list .tw { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 0;
   border: 0; background: none; cursor: pointer; text-align: left; color: #10151c; }
@@ -3874,8 +3878,8 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-ngw-list .lnk:hover { text-decoration: underline; }
 
 .h10-ngw-list.win li { grid-template-columns: minmax(0, 1.6fr) 88px 84px 76px; }
-.h10-ngw-list.win .ro { color: #1f8a4c; text-align: right; }
-.h10-ngw-list.win .ro b { font-weight: 800; color: #1f8a4c; }
+.h10-ngw-list.win .ro { color: #177a41; text-align: right; } /* #1f8a4c measured 4.22 on the stripe */
+.h10-ngw-list.win .ro b { font-weight: 800; color: #177a41; }
 .h10-ngw-list.win .sa, .h10-ngw-list.win .or { color: #667080; text-align: right; }
 
 .h10-ngw-act { padding: 4px 10px; border: 1px solid #d5dae2; border-radius: 6px; background: #fff;

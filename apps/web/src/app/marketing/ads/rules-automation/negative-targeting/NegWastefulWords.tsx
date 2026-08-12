@@ -333,7 +333,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                           {w.collisions.length > 0 && <>Part of <b>{w.collisions.map((c) => `“${c.gram}” (ROAS ${c.roas.toFixed(1)})`).join(', ')}</b>. </>}
                           {w.convertingTerms.length > 0 && <>Would catch <b>{w.convertingTerms.length}</b> converting {w.convertingTerms.length === 1 ? 'term' : 'terms'} worth <b>{eur(w.convertingTerms.reduce((a, t) => a + t.salesCents, 0))}</b>. </>}
                           {w.protectedBy.length > 0 && <>Contains the protected term <b>{w.protectedBy[0].term}</b>, so the write gate would refuse it. </>}
-                          {w.blockedBy.includes('below-floor') && <>Below the floor: {(w.floorFailures ?? []).join(', ') || `under ${d.floor.minChars} characters or ${d.floor.minCatches} terms`}. </>}
+                          {w.blockedBy.includes('below-floor') && <>Below the floor: {(w.floorFailures ?? []).join(' · ') || `under ${d.floor.minChars} characters or ${d.floor.minCatches} terms`}. </>}
                           {w.blockedBy.includes('not-allowlisted') && <>No campaign running it is on the live-write allowlist. </>}
                         </span>
                       )}
