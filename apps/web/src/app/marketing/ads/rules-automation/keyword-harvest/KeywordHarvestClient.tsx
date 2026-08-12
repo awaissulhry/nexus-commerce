@@ -52,7 +52,7 @@ import {
 // The seven sections that follow. Each renders null until its session lands; each takes the same
 // typed props, so a later section is one file and one import line. Nobody restructures this client.
 import { HvThresholds } from './HvThresholds'
-import { HvDestination } from './HvDestination'
+import { HvDestination, DestName, DEST_STATUS_LABEL, DEST_STATUS_TIP } from './HvDestination'
 import { HvPromote } from './HvPromote'
 import { HvCohort } from './HvCohort'
 import { HvActors } from './HvActors'
@@ -137,6 +137,9 @@ export function KeywordHarvestClient() {
   const kind = (params.get('kind') ?? 'all') as 'keyword' | 'product' | 'all'
   const q = params.get('q') ?? ''
   const row = params.get('row')
+  // HV.3 — how the destination resolved, and the self-competition filter.
+  const dest = params.get('dest') ?? 'all'
+  const competing = params.get('competing') ?? ''
   // Read here so a link can carry them; the CONTROLS that move them are HV.2. `?minOrders=` is the
   // one that matters — the whole finding of the study is that the threshold decides whether this
   // tab has any content.
@@ -190,9 +193,10 @@ export function KeywordHarvestClient() {
     })) {
       if (v) p.set(k, v)
     }
-    for (const [k, v] of Object.entries({ status, kind })) {
+    for (const [k, v] of Object.entries({ status, kind, dest })) {
       if (v && v !== 'all') p.set(k, v)
     }
+    if (competing === '1') p.set('competing', '1')
     void fetch(`${getBackendUrl()}/api/advertising/keyword-harvest?${p.toString()}`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Could not load the harvest candidates (${r.status})`)
@@ -202,7 +206,7 @@ export function KeywordHarvestClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [canFetch, market, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, status, kind, minOrders, minClicks, maxAcos, matched, minSpend, windowParam, reloadTick])
+  }, [canFetch, market, scope.line, scope.portfolio, scope.campaign, scope.adGroup, q, status, kind, dest, competing, minOrders, minClicks, maxAcos, matched, minSpend, windowParam, reloadTick])
 
   const rows = data?.rows ?? []
   const census = data?.census ?? null
@@ -238,13 +242,15 @@ export function KeywordHarvestClient() {
       next.set('maxAcos', c.maxAcosPct == null ? 'none' : String(c.maxAcosPct))
       next.set('window', String(c.windowDays))
       next.set('matched', c.excludeExactMatched ? 'harvestable' : 'all')
+      if (dest !== 'all') next.set('dest', dest)
+      if (competing === '1') next.set('competing', '1')
     }
     const url = `${window.location.origin}${window.location.pathname}?${next.toString()}`
     void navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
     }).catch(() => { /* clipboard denied — the URL bar still carries every filter */ })
-  }, [params, market, data])
+  }, [params, market, data, dest, competing])
 
   const onExport = useCallback(() => {
     // The retiring console offers CSV on this exact data and this tab did not.
@@ -292,6 +298,45 @@ export function KeywordHarvestClient() {
         </span>
       ),
       sortValue: (r) => `${r.campaign.name} ${r.adGroup.name}`,
+    },
+    {
+      key: 'destination', label: 'Destination', metric: false,
+      tip: 'Where the keyword would be created, and how that was decided. 🔴 It also decides whether the source gets a negative: applyHarvest adds the isolation negative ONLY when the keyword lands in a different ad group. Click a row to choose.',
+      render: (r) => {
+        const d = r.destination
+        if (!d) return <span className="h10-hv-nd" title="this row has no local ad group">—</span>
+        if (d.chosen) {
+          return (
+            <button type="button" className="h10-hv-destbtn" onClick={() => push({ row: r.termKey })} title={`${d.source === 'stored' ? 'Stored for this scope' : 'The only ad group that matches'} · ${d.chosen.why}`}>
+              <DestName c={d.chosen} />
+              <i className={`src ${d.source}`}>{d.source === 'stored' ? 'chosen' : 'one match'}</i>
+            </button>
+          )
+        }
+        if (d.source === 'none') {
+          return <span className="h10-hv-destnone" title={DEST_STATUS_TIP['no-destination']}>nowhere to put it</span>
+        }
+        return (
+          <button type="button" className="h10-hv-destbtn amb" onClick={() => push({ row: r.termKey })} title={`${d.shortlist.length} ad groups could hold this keyword and none is obviously right. Click to choose one.`}>
+            <span className="pickme">{d.shortlist.length} possible — choose</span>
+          </button>
+        )
+      },
+      sortValue: (r) => `${r.destination?.source ?? 'zz'}|${r.destination?.chosen?.adGroupName ?? ''}`,
+    },
+    {
+      key: 'negateSrc', label: 'Negates source', metric: false,
+      tip: '🔴 The coupling that made this page necessary. applyHarvest fires the isolation negative only when the keyword lands elsewhere, so "promoted into the source" and "did not negate the source" are ONE defect. Hover for the sentence.',
+      render: (r) => {
+        const d = r.destination
+        if (!d) return <span className="h10-hv-nd">—</span>
+        return (
+          <span className={`h10-hv-neg2 ${d.wouldNegateAtSource ? 'yes' : 'no'}`} title={d.negateReason}>
+            {d.wouldNegateAtSource ? 'yes' : 'no'}
+          </span>
+        )
+      },
+      sortValue: (r) => (r.destination?.wouldNegateAtSource ? 1 : 0),
     },
     { key: 'impressions', label: 'Impressions', render: (r) => num(r.metrics.impressions), sortValue: (r) => r.metrics.impressions, filterValue: (r) => r.metrics.impressions },
     { key: 'clicks', label: 'Clicks', render: (r) => num(r.metrics.clicks), sortValue: (r) => r.metrics.clicks, filterValue: (r) => r.metrics.clicks },
@@ -346,6 +391,16 @@ export function KeywordHarvestClient() {
         </span>
       ),
       sortValue: (r) => r.status,
+    },
+    {
+      key: 'destStatus', label: 'At destination', metric: false,
+      tip: 'The same question asked of the DESTINATION rather than the source. HV.1\'s Status says whether the keyword exists where the traffic came from — a fact about the account. This says whether promoting would create anything — a fact about a decision, and undecidable until a destination is chosen.',
+      render: (r) => {
+        const d = r.destination
+        if (!d) return <span className="h10-hv-nd">—</span>
+        return <span className={`h10-hv-dst ${d.status}`} title={DEST_STATUS_TIP[d.status]}>{DEST_STATUS_LABEL[d.status]}</span>
+      },
+      sortValue: (r) => String(r.destination?.status ?? ''),
     },
     {
       key: 'negated', label: 'Blocked',
@@ -592,7 +647,9 @@ export function KeywordHarvestClient() {
            greyed Approve button here waiting for a session that has not happened. */
         selectable={false}
         selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
-        onRowClick={NO_WRITE_ACTIONS.onRowAction ?? undefined}
+        /* HV.3 — a row opens its destination picker. This is NOT a write action: it patches the
+           URL, so "look at this one" is a link. NO_WRITE_ACTIONS still supplies HV.4's row menu. */
+        onRowClick={(r: HarvestRow) => push({ row: r.termKey })}
         searchable
         searchPlaceholder="Search term, campaign or ad group…"
         searchValue={(r) => `${r.term} ${r.campaign.name} ${r.adGroup.name}`}

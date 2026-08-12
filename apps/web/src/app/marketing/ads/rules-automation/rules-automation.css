@@ -3322,3 +3322,107 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-kt-dr .h10-kt-note, .h10-kt-dr .h10-kt-blind { margin-left: 0; margin-right: 0; }
 
 @media (max-width: 900px) { .h10-kt-dr { width: 100vw; padding: 14px; } }
+
+/* ── HV.3 — the destination, the coupling, and the picker ─────────────────────────────────────
+   Appended at EOF under `h10-hv-*`, extending HV.1/HV.2's block. Same palette, no `.dark` block
+   (the shell pins `color-scheme: light`), every block `margin: Npx 0` because the page gutter
+   inside `.h10-rules-page` is ZERO. */
+
+/* campaign › ad group, always — ad group names REPEAT across campaigns in this account */
+.h10-hv-dest { display: flex; flex-direction: column; gap: 1px; min-width: 0; text-align: left; }
+.h10-hv-dest .ag { font-size: 11.5px; font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-hv-dest i { display: flex; align-items: center; gap: 5px; font-style: normal; font-size: 10.5px; color: #667080; min-width: 0; }
+.h10-hv-dest i > b.rl { flex: none; padding: 0 5px; border-radius: 4px; background: #f1f4f8; color: #667080; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.h10-hv-dest i > b.rl.exact { background: #e7f5ed; color: #14724d; }
+
+.h10-hv-destbtn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 2px 6px; background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer; min-width: 0; width: 100%; }
+.h10-hv-destbtn:hover { background: #e8f1fd; border-color: #1f6fde; }
+.h10-hv-destbtn i.src { font-style: normal; padding: 0 5px; border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; background: #e7f5ed; color: #14724d; }
+.h10-hv-destbtn i.src.resolved-unique { background: #f1f4f8; color: #55606d; }
+/* An unresolved destination is an ACTION, not a value — it reads as something to do. */
+.h10-hv-destbtn .pickme { padding: 3px 8px; border-radius: 6px; background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; font-size: 11px; font-weight: 800; }
+.h10-hv-destbtn.amb:hover .pickme { background: #ffeed3; }
+.h10-hv-destnone { font-size: 11.5px; font-weight: 700; color: #8a5316; }
+
+/* 🔴 the coupling, in one cell */
+.h10-hv-neg2 { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; }
+.h10-hv-neg2.yes { background: #e7f5ed; color: #14724d; }
+.h10-hv-neg2.no { background: #fff6e8; color: #8a5316; }
+
+/* destination-relative status — never replaces the source-relative one */
+.h10-hv-dst { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: #f1f4f8; color: #55606d; }
+.h10-hv-dst.will-create { background: #e7f5ed; color: #14724d; }
+.h10-hv-dst.undecided { background: #f1f4f8; color: #667080; }
+.h10-hv-dst.no-destination { background: #fff6e8; color: #8a5316; }
+.h10-hv-dst.destination-local-only { background: #fff6e8; color: #8a5316; }
+.h10-hv-dst.would-duplicate { background: #fdecec; color: #9a2c2c; }
+
+/* ── the section summary ─────────────────────────────────────────────────────────────────── */
+.h10-hv-destsum { margin: 14px 0 0; padding: 12px 14px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-hv-destsum .hd { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 12.5px; color: #55606d; }
+.h10-hv-destsum .hd svg { color: #667080; }
+.h10-hv-destsum .hd b { font-weight: 800; color: #1c2530; }
+.h10-hv-destsum .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.h10-hv-dcell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; text-align: left; cursor: pointer; }
+.h10-hv-dcell:hover { border-color: #1f6fde; }
+.h10-hv-dcell b { font-size: 18px; font-weight: 800; line-height: 1.15; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-hv-dcell span { font-size: 11.5px; font-weight: 600; color: #55606d; }
+.h10-hv-dcell.warn b { color: #8a5316; }
+.h10-hv-dcell.on { border-color: #1f6fde; background: #e8f1fd; }
+
+.h10-hv-destsum .couple { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-destsum .couple svg { flex: none; margin-top: 3px; }
+.h10-hv-destsum .couple b { font-weight: 800; color: #7a4812; }
+.h10-hv-destsum .couple.compete { background: #fdecec; border-color: #f0c9c9; color: #9a2c2c; }
+.h10-hv-destsum .couple.compete b { color: #7d1f1f; }
+.h10-hv-destsum .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* ── the picker ──────────────────────────────────────────────────────────────────────────── */
+.h10-hv-picker { margin: 12px 0 0; padding: 12px 14px; background: #fff; border: 1px solid #1f6fde; border-radius: 10px; }
+.h10-hv-picker .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 10px; }
+.h10-hv-picker .hd b { font-size: 13.5px; font-weight: 800; color: #1c2530; }
+.h10-hv-picker .hd i { display: block; margin-top: 2px; font-style: normal; font-size: 11.5px; color: #667080; }
+.h10-hv-picker .hd i b { font-size: 11.5px; color: #1c2530; }
+.h10-hv-picker .cls { padding: 4px 10px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-picker .cls:hover { background: #e8f1fd; color: #10457f; }
+
+.h10-hv-picker .negate { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 9px 11px; border-radius: 8px; font-size: 12px; line-height: 1.6; }
+.h10-hv-picker .negate .tag { flex: none; padding: 1px 7px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.h10-hv-picker .negate.yes { background: #e7f5ed; color: #0f5b3d; }
+.h10-hv-picker .negate.yes .tag { background: #14724d; color: #fff; }
+.h10-hv-picker .negate.no { background: #fff6e8; color: #7a4812; }
+.h10-hv-picker .negate.no .tag { background: #8a5316; color: #fff; }
+
+.h10-hv-picker .compete { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 10px; padding: 9px 11px; background: #fdecec; border: 1px solid #f0c9c9; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #9a2c2c; }
+.h10-hv-picker .compete svg { flex: none; margin-top: 3px; }
+.h10-hv-picker .compete b { font-weight: 800; color: #7d1f1f; }
+.h10-hv-picker .none { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-picker .none svg { flex: none; margin-top: 3px; }
+.h10-hv-picker .none b { font-weight: 800; color: #7a4812; }
+.h10-hv-picker .lnk { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #10457f; text-decoration: underline; background: none; border: 0; padding: 0; font-size: inherit; cursor: pointer; }
+.h10-hv-picker .lead { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-hv-picker .lead b { font-weight: 800; color: #1c2530; }
+.h10-hv-picker .lead code { padding: 0 4px; border-radius: 4px; background: #f1f4f8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+
+.h10-hv-picker .opts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.h10-hv-picker .opts .pick { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) auto auto; align-items: center; gap: 12px; width: 100%; padding: 8px 11px; background: #fff; border: 1px solid #e3e7ec; border-radius: 8px; cursor: pointer; text-align: left; }
+.h10-hv-picker .opts .pick:hover:not(:disabled) { border-color: #1f6fde; background: #f7fafd; }
+.h10-hv-picker .opts li.on .pick { border-color: #14724d; background: #e7f5ed; }
+.h10-hv-picker .opts .why { font-size: 11px; line-height: 1.45; color: #667080; }
+.h10-hv-picker .opts .clamp { font-size: 11px; font-weight: 700; color: #55606d; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-hv-picker .opts .on-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; color: #14724d; }
+.h10-hv-picker .opts .go { color: #a8b0ba; }
+
+.h10-hv-picker .neg { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; font-size: 12px; line-height: 1.55; color: #55606d; cursor: pointer; }
+.h10-hv-picker .neg input { margin-top: 2px; }
+.h10-hv-picker .neg b { font-weight: 800; color: #1c2530; }
+.h10-hv-picker .rm { display: inline-flex; align-items: center; gap: 5px; margin: 10px 0 0; padding: 6px 11px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-picker .rm:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: #8a5316; }
+.h10-hv-picker .ok { display: flex; align-items: center; gap: 5px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: #14724d; }
+.h10-hv-picker .bad { display: flex; align-items: center; gap: 5px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: #9a2c2c; }
+
+@media (max-width: 1200px) {
+  .h10-hv-destsum .cells { grid-template-columns: repeat(2, 1fr); }
+  .h10-hv-picker .opts .pick { grid-template-columns: minmax(0, 1fr) auto; }
+  .h10-hv-picker .opts .why { display: none; }
+}

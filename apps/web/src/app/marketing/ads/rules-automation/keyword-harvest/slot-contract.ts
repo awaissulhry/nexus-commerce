@@ -65,6 +65,55 @@ export interface HarvestRow {
   existing: { rows: number; atAmazon: number; bidCents: number | null; adGroups: string[] } | null
   /** D5 — read-only here. Refusing to propose a negated term is HV.4; the inventory is session 7's. */
   negatedIn: { rows: number; blocking: number; campaignLevel: number }
+  /** HV.3 — where this would go, and what that decides. `null` only when the row has no local ad group. */
+  destination: ResolvedDestination | null
+}
+
+/** HV.3 — how a destination came to be what it is. C9: show the evidence, or say there is none. */
+export type HvDestSource = 'stored' | 'resolved-unique' | 'resolved-ambiguous' | 'none'
+
+/**
+ * The candidate's status **relative to its destination** — a different question from HV.1's
+ * source-relative `status`, and it never replaces it on screen.
+ *
+ * HV.1 asked *"does this keyword exist where the traffic came from?"* — a fact about the account.
+ * This asks *"would promoting create anything?"* — a fact about a decision, and undecidable until
+ * a destination exists, which for 7 of today's 8 candidates it does not.
+ */
+export type HvDestStatus =
+  | 'undecided' | 'no-destination' | 'will-create'
+  | 'already-at-destination' | 'destination-local-only' | 'would-duplicate'
+
+export interface DestinationCandidate {
+  adGroupId: string
+  adGroupName: string
+  campaignId: string
+  /** 🔴 Always render campaign › ad group. Ad group names REPEAT across campaigns in this account. */
+  campaignName: string
+  campaignStatus: string | null
+  role: 'AUTO' | 'BROAD' | 'PHRASE' | 'EXACT' | null
+  /** why it is ranked here — composed server-side so the client never infers the evidence */
+  why: string
+  maxBidCents: number | null
+  minBidCents: number | null
+  holdsTerm: boolean
+  holdsTermAtAmazon: boolean
+}
+
+export interface ResolvedDestination {
+  createType: 'EXACT' | 'PHRASE' | 'BROAD' | 'PRODUCT'
+  source: HvDestSource
+  chosen: DestinationCandidate | null
+  shortlist: DestinationCandidate[]
+  status: HvDestStatus
+  /**
+   * 🔴 The §4.1 coupling. False whenever the keyword would land in the ad group that discovered it
+   * — which is what `applyHarvest` does with no destinations map, i.e. every harvest ever run here.
+   */
+  wouldNegateAtSource: boolean
+  /** the sentence the page prints, composed server-side so it cannot be phrased two ways */
+  negateReason: string
+  competingAdGroups: Array<{ id: string; name: string; campaignName: string }>
 }
 
 export interface HvCensus {
@@ -89,6 +138,16 @@ export interface HvCensus {
   }
   negativeCandidates: { count: number; spendCents: number }
   productCandidates: { graduations: number; negatives: number }
+  /** HV.3 — how destinations resolved across the whole candidate set, and the §4.1 coupling. */
+  destinations: {
+    stored: number
+    resolvedUnique: number
+    ambiguous: number
+    none: number
+    wouldNegate: number
+    wouldNotNegate: number
+    wouldDuplicate: number
+  }
 }
 
 export interface HvFreshness {
