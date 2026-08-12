@@ -21,7 +21,7 @@
  *       routing exists) and has no subject. It is not dead code; it is code with an empty domain.
  *   (c) LOCAL-ONLY — 42 rows with no `externalTargetId` (22 campaign-level + 20 ad-group). There
  *       is nothing at Amazon to archive. Removing one is a local delete plus an audit row, and the
- *       result says so: `reachedAmazon: false`. Conflating "retired at Amazon" with "deleted a row
+ *       result says so: `delivery: 'not_applicable'`. Conflating "retired at Amazon" with "deleted a row
  *       Amazon never had" is how a split-brain becomes invisible.
  *
  * 🔴 The 62 already-ARCHIVED rows are not ours to retire. They were archived ON AMAZON and
@@ -50,12 +50,34 @@ export type RetireOutcomeKind =
   /** something went wrong */
   | 'failed'
 
+/**
+ * 🔴 Delivery is a SEPARATE question from acceptance, and conflating them is the defect this whole
+ * page exists to stop.
+ *
+ * `updateAdTargetWithSync` returns `ok: true` when the write is ENQUEUED, not when it lands. The
+ * write gate runs later, in the worker. Measured on prod 2026-08-12 during stage 2: a pause on a
+ * negative in a paused campaign was accepted locally (`ok: true`, the local row moved to PAUSED),
+ * and the worker then SKIPPED it with
+ * `[ADS-WRITE-GATE-DENY] campaign_allowlist: … (Campaign.liveBidWritesEnabled=false)`. Amazon was
+ * never contacted, and the next v1 ingest quietly healed the local row back to ENABLED.
+ *
+ * So an outcome reports `delivery`, never a bare boolean:
+ *   'not_applicable' — path (c); there was nothing at Amazon to reach
+ *   'enqueued'       — accepted and queued; the gate has NOT run yet and may still refuse
+ *   'refused'        — the gate said no, before any HTTP call
+ *   'failed'         — attempted and rejected
+ */
+export type RetireDelivery = 'not_applicable' | 'enqueued' | 'refused' | 'failed'
+
 export interface RetireOutcome {
   adTargetId: string
   term: string
   kind: RetireOutcomeKind
-  /** 🔴 false for path (c) and for any refusal — never assume a retirement reached Amazon. */
-  reachedAmazon: boolean
+  /**
+   * 🔴 Never `true` at enqueue time. `enqueued` means the gate has not run yet — poll
+   * `outboundQueueId` for `syncStatus`/`errorMessage` to learn what actually happened.
+   */
+  delivery: RetireDelivery
   outboundQueueId: string | null
   actionLogId: string | null
   /** the gate's own words, verbatim, when it refused */
@@ -136,7 +158,7 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
   const found = new Set(rows.map((r) => r.id))
   for (const missing of req.adTargetIds.filter((id) => !found.has(id))) {
     outcomes.push({
-      adTargetId: missing, term: '—', kind: 'failed', reachedAmazon: false,
+      adTargetId: missing, term: '—', kind: 'failed', delivery: 'failed',
       outboundQueueId: null, actionLogId: null,
       reason: 'no negative with that id (it may have been removed already, or it is not a negative)',
       scope: null,
@@ -159,18 +181,18 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
 
     // Once the gate has refused in this batch, do not keep asking. Name the rest as untouched.
     if (gateRefused) {
-      outcomes.push({ ...base, kind: 'refused', reachedAmazon: false, reason: `not attempted — the write gate refused earlier in this batch: ${gateRefused}` })
+      outcomes.push({ ...base, kind: 'refused', delivery: 'refused', reason: `not attempted — the write gate refused earlier in this batch: ${gateRefused}` })
       continue
     }
 
     // 🔴 Already archived — on Amazon, by someone else, mirrored in. Not ours to retire, and a
     // no-op that logged as a retirement would be a false record.
     if (String(row.status) === 'ARCHIVED') {
-      outcomes.push({ ...base, kind: 'skipped', reachedAmazon: false, reason: 'already archived at Amazon — mirrored in by the sync, not retired through this product' })
+      outcomes.push({ ...base, kind: 'skipped', delivery: 'not_applicable', reason: 'already archived at Amazon — mirrored in by the sync, not retired through this product' })
       continue
     }
     if (row.retiredAt) {
-      outcomes.push({ ...base, kind: 'skipped', reachedAmazon: false, reason: `already retired here on ${row.retiredAt.toISOString().slice(0, 10)}` })
+      outcomes.push({ ...base, kind: 'skipped', delivery: 'not_applicable', reason: `already retired here on ${row.retiredAt.toISOString().slice(0, 10)}` })
       continue
     }
 
@@ -191,17 +213,17 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
           entityId: row.id,
           evidence,
           payloadBefore: { status: row.status, externalTargetId: null, negativeLevel: row.negativeLevel, expressionValue: term },
-          payloadAfter: { removed: 'local-only', reachedAmazon: false, retireReason: req.retireReason ?? null },
+          payloadAfter: { removed: 'local-only', delivery: 'not_applicable', reachedAmazon: false, retireReason: req.retireReason ?? null },
           outboundQueueId: null,
         })
         await prisma.adTarget.delete({ where: { id: row.id } })
         logger.info('[neg-retire] local-only negative removed — nothing was sent to Amazon', { adTargetId: row.id, term })
         outcomes.push({
-          ...base, kind: 'removed_local', reachedAmazon: false, actionLogId,
+          ...base, kind: 'removed_local', delivery: 'not_applicable', actionLogId,
           reason: 'Amazon never confirmed this negative, so there was nothing there to archive. Our record is gone; nothing changed at Amazon.',
         })
       } catch (e) {
-        outcomes.push({ ...base, kind: 'failed', reachedAmazon: false, reason: (e as Error).message })
+        outcomes.push({ ...base, kind: 'failed', delivery: 'failed', reason: (e as Error).message })
       }
       continue
     }
@@ -220,29 +242,28 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
       if (!res.ok) {
         // `no_changes` is a genuine skip, not a failure; everything else is refused or failed.
         if (res.error === 'no_changes') {
-          outcomes.push({ ...base, kind: 'skipped', reachedAmazon: false, reason: 'already in that state' })
+          outcomes.push({ ...base, kind: 'skipped', delivery: 'not_applicable', reason: 'already in that state' })
           continue
         }
         const refusedByGate = res.error === 'entity_orphaned' || String(res.error ?? '').startsWith('gate')
         if (refusedByGate) gateRefused = String(res.error)
-        outcomes.push({ ...base, kind: refusedByGate ? 'refused' : 'failed', reachedAmazon: false, reason: String(res.error ?? 'unknown') })
+        outcomes.push({ ...base, kind: refusedByGate ? 'refused' : 'failed', delivery: 'refused', reason: String(res.error ?? 'unknown') })
         continue
       }
-      // 🔴 `retiredAt` records that WE decided, and is written whether or not Amazon has confirmed
-      // yet — the outbound row carries the delivery question, and `lastSyncStatus` answers it. A
-      // retirement that has not reached Amazon must not be indistinguishable from one that has, so
-      // `reachedAmazon` here means "enqueued on the corrected route", nothing stronger.
+      // 🔴 `retiredAt` records that WE decided, not that Amazon agreed. The outbound row carries
+      // the delivery question and `syncStatus`/`errorMessage` answer it — the gate can still refuse
+      // this, in the worker, minutes from now.
       await prisma.adTarget.update({
         where: { id: row.id },
         data: { retiredAt: new Date(), retireReason: req.retireReason ?? null },
       })
       outcomes.push({
-        ...base, kind: 'retired', reachedAmazon: true,
+        ...base, kind: 'retired', delivery: 'enqueued',
         outboundQueueId: res.outboundQueueId, actionLogId: res.actionLogId,
-        reason: null,
+        reason: 'archived locally and queued for Amazon — the write gate has not run yet; poll the outbound row for the outcome',
       })
     } catch (e) {
-      outcomes.push({ ...base, kind: 'failed', reachedAmazon: false, reason: (e as Error).message })
+      outcomes.push({ ...base, kind: 'failed', delivery: 'failed', reason: (e as Error).message })
     }
   }
 
