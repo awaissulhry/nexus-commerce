@@ -935,6 +935,28 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  /**
+   * KT.4 — one watched term: its weekly series, our ASINs competing for it, the campaigns bidding it.
+   *
+   * A distinct path segment under the KT.1 route, so 401-vs-404 still proves deployment: no
+   * `:param` route can match `/advertising/keyword-tracker/term` (verified — it 404s before deploy).
+   */
+  fastify.get('/advertising/keyword-tracker/term', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const market = (q.market ?? '').toUpperCase()
+    if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
+      reply.status(400); return { error: `market must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+    }
+    if (!q.kw?.trim()) { reply.status(400); return { error: 'kw is required', code: 'kw_required' } }
+    const { getKeywordTerm } = await import('../services/advertising/keyword-term.service.js')
+    const out = await getKeywordTerm({
+      market, keyword: q.kw,
+      line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
   // ── KT.2 — the Keyword Tracker's watchlists, per market ─────────────
   //
   // 🔴 These endpoints never touch `KeywordCoverageSet`/`KeywordCoverageTerm` except to READ a set

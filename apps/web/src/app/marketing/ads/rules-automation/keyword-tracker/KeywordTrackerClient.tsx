@@ -39,6 +39,7 @@ import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from './KeywordScopeBar'
 import { WatchlistPanel } from './WatchlistPanel'
+import { TermDrawer } from './TermDrawer'
 import { buildCsv } from './csv'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
@@ -246,10 +247,16 @@ export function KeywordTrackerClient() {
     return () => { alive = false }
   }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, measured, sort, dir, reload])
 
-  const rows = useMemo(() => {
-    const all = data?.rows ?? []
-    return kw ? all.filter((r) => r.keyword === kw) : all
-  }, [data, kw])
+  /**
+   * 🔴 KT.4 — `?kw=` now OPENS THE DRAWER instead of filtering the grid to one row.
+   *
+   * KT.1 shipped it clearable-only: it filtered the list and offered "show all". That was the
+   * placeholder for this, and keeping both would mean two meanings for one param. The grid stays
+   * whole behind the drawer, so closing returns you where you were, not to a one-row list.
+   */
+  const rows = data?.rows ?? []
+  /** A term that survives a market or scope change stays open; one that no longer exists closes. */
+  const drawerTerm = kw && rows.some((r) => r.keyword === kw) ? kw : null
 
   const columns: GridColumn<Row>[] = useMemo(() => [
     {
@@ -639,12 +646,6 @@ export function KeywordTrackerClient() {
 
           {err && <p className="h10-kt-blind"><AlertTriangle size={13} /><span>{err}</span></p>}
 
-          {kw && (
-            <p className="h10-kt-note">
-              <Info size={13} />
-              <span>Showing one keyword: <b>{kw}</b>. <button type="button" className="lnk" onClick={() => push({ kw: '' })}>Show all {num(data?.total ?? 0)}</button></span>
-            </p>
-          )}
 
           {editing && (
             <WatchlistPanel
@@ -692,6 +693,9 @@ export function KeywordTrackerClient() {
             defaultSort={{ key: sort === 'keyword' ? '__first' : sort, dir }}
             selectable={false}
             customizable={false}
+            /* KT.4 — the whole row opens the drawer. AdsDataGrid ignores clicks landing on an
+               interactive child, so the chips and buttons keep their own behaviour. */
+            onRowClick={(r) => push({ kw: r.keyword })}
             searchable
             searchPlaceholder="Search keywords…"
             searchValue={(r) => r.keyword}
@@ -813,6 +817,15 @@ export function KeywordTrackerClient() {
              */
             reportLabel={period ? `Brand Analytics · week of ${dayMonth(period)}${periodAge != null ? ` · ${periodAge} days old` : ''}` : undefined}
           />
+          {drawerTerm && (
+            <TermDrawer
+              term={drawerTerm}
+              market={market}
+              scope={scope}
+              unbidInMarket={data ? data.rows.filter((r) => r.ad?.bidOnTerm !== true).length : null}
+              onClose={() => push({ kw: '' })}
+            />
+          )}
         </>
       )}
     </div>

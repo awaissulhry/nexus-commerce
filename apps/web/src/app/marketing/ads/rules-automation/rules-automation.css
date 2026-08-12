@@ -3247,3 +3247,78 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-ngr { width: 96vw; }
   .h10-ngr-sum .cell { flex: 1 1 40%; }
 }
+
+/* ── KT.4 — the term drawer and its chart ─────────────────────────────────────────────────────
+   Appended at EOF, `h10-kt-*` only.
+
+   🔴 The drawer PORTALS TO document.body, which in this repo has meant a panel escaping the light
+   pin and rendering dark on a light page. Every colour here is therefore declared, not inherited,
+   and the background is opaque so nothing shows through from whatever it lands on. */
+
+.h10-kt-dr-back { position: fixed; inset: 0; z-index: 1200; border: 0; padding: 0; background: rgba(20, 28, 38, .34); cursor: default; }
+.h10-kt-dr { position: fixed; top: 0; right: 0; bottom: 0; z-index: 1201; width: min(940px, 96vw); overflow-y: auto;
+  background: #fff; color: #1c2530; border-left: 1px solid #e3e7ec; box-shadow: -8px 0 28px rgba(20, 28, 38, .16); padding: 18px 22px 30px; }
+.h10-kt-drhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid #e3e7ec; }
+.h10-kt-drhead h2 { margin: 0 0 5px; font-size: 17px; font-weight: 800; color: #1c2530; }
+.h10-kt-drhead p { margin: 0; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-kt-drhead p b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-kt-drhead p i { font-style: normal; font-size: 10.5px; font-weight: 700; color: #55606d; background: #f1f4f8; padding: 1px 5px; border-radius: 5px; }
+.h10-kt-dr-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border: 0; border-radius: 8px; background: #f1f4f8; color: #55606d; cursor: pointer; }
+.h10-kt-dr-x:hover { color: #1c2530; background: #e7ebf1; }
+.h10-kt-dr-load { margin: 16px 0; font-size: 12px; color: #667080; }
+
+.h10-kt-drsec { margin-top: 18px; }
+.h10-kt-drsec h3 { margin: 0 0 9px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
+.h10-kt-drlead { margin: 0 0 9px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-kt-drlead b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-kt-drfoot { margin: 8px 0 0; font-size: 11.5px; line-height: 1.6; color: #667080; }
+.h10-kt-drfoot b { font-weight: 800; color: #55606d; }
+.h10-kt-drempty { margin: 0; font-size: 12px; color: #667080; }
+
+/* the ASIN table — dense and quiet, it is read-only */
+.h10-kt-drtable { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.h10-kt-drtable th { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e3e7ec; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: #667080; }
+.h10-kt-drtable th.n, .h10-kt-drtable td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.h10-kt-drtable td { padding: 6px 8px; border-bottom: 1px solid #f1f4f8; color: #1c2530; }
+.h10-kt-drtable td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #55606d; }
+.h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #14724d; background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
+.h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #8a5316; background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
+
+/* the campaign list — collapsed, because `giacca moto` has 53 campaigns and 73 ad groups */
+.h10-kt-drcamps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.h10-kt-drcamps > li { border: 1px solid #e3e7ec; border-radius: 8px; overflow: hidden; }
+.h10-kt-drcamps .row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border: 0; background: #fff; font: inherit; font-size: 11.5px; color: #1c2530; cursor: pointer; text-align: left; }
+.h10-kt-drcamps .row:hover { background: #f8fafc; }
+.h10-kt-drcamps .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.h10-kt-drcamps .st { flex-shrink: 0; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #55606d; background: #f1f4f8; padding: 1px 6px; border-radius: 5px; }
+.h10-kt-drcamps .st[data-s="ENABLED"] { color: #14724d; background: #e7f5ed; }
+.h10-kt-drcamps .ct, .h10-kt-drcamps .mt, .h10-kt-drcamps .bid { flex-shrink: 0; font-size: 10.5px; color: #667080; font-variant-numeric: tabular-nums; }
+.h10-kt-drcamps .bid { font-weight: 700; color: #1c2530; }
+.h10-kt-drcamps .groups { list-style: none; margin: 0; padding: 0 10px 7px 30px; display: flex; flex-direction: column; gap: 4px; background: #f8fafc; }
+.h10-kt-drcamps .groups li { display: flex; align-items: center; gap: 9px; font-size: 11px; color: #55606d; padding-top: 5px; }
+
+/* the chart. Share is a navy line, spend a blue bar — the two colours the section's other chart
+   uses for its two series, so a third palette is not introduced. */
+.h10-kt-tc { width: 100%; }
+.h10-kt-tc svg { width: 100%; height: auto; display: block; }
+.h10-kt-tc .axis line { stroke: #e3e7ec; stroke-width: 1; }
+.h10-kt-tc .axis text, .h10-kt-tc .ticks text { font-size: 9.5px; fill: #667080; }
+.h10-kt-tc .share-line { stroke: #0b2447; stroke-width: 1.75; }
+.h10-kt-tc .share-dot { fill: #0b2447; }
+.h10-kt-tc .spend-bar { fill: #1f6fde; opacity: .82; }
+/* the feed's silence: shaded, named, and behind everything else */
+.h10-kt-tc .silence rect { fill: #fff6e8; }
+.h10-kt-tc .silence text { font-size: 9.5px; fill: #8a5316; font-weight: 600; }
+.h10-kt-tc-none { margin: 0; font-size: 12px; color: #667080; }
+.h10-kt-tc-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 6px 0 0; font-size: 10.5px; color: #667080; }
+.h10-kt-tc-legend .k { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: #55606d; }
+.h10-kt-tc-legend .k::before { content: ''; width: 10px; height: 10px; border-radius: 2px; }
+.h10-kt-tc-legend .k.share::before { background: #0b2447; }
+.h10-kt-tc-legend .k.spend::before { background: #1f6fde; }
+.h10-kt-tc-legend .note { color: #8a5316; }
+
+/* the drawer's own copies of the page's shared note styles — it portals out, so it cannot rely on
+   anything scoped to .h10-rules-page above it */
+.h10-kt-dr .h10-kt-note, .h10-kt-dr .h10-kt-blind { margin-left: 0; margin-right: 0; }
+
+@media (max-width: 900px) { .h10-kt-dr { width: 100vw; padding: 14px; } }
