@@ -514,6 +514,83 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── NEG.5 — protected terms: the whitelist, and what already contradicts it ──
+  //
+  // The forward half (what can never be negated) has always been true. The backward half has
+  // never existed: `ads-write-gate.ts:300-337` is a going-forward gate installed 2026-08-04 over
+  // a base written 2026-05-20, so it can refuse the next write and can see nothing that is
+  // already there. 132 contradictions, all of them BLOCKING right now.
+  //
+  // 🔴 132 is a PAIR count (negation × protected term) and 128 is the distinct negation count —
+  // four `xavia gale` rows contradict two protections each. Both are in the payload because the
+  // groups sum to the first and a removal costs the second.
+  fastify.get('/advertising/negatives/protections', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const { getProtections } = await import('../services/advertising/negatives-protections.service.js')
+    const out = await getProtections({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      window: q.window ? Number(q.window) : null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── NEG.5 — the review decision ─────────────────────────────────────
+  //
+  // The ONLY write this section owns, and it touches `AdNegativeReview` alone: no Amazon call, no
+  // change to the whitelist, no change to the gate. Removal is NEG.3's path and stays there.
+  //
+  // Grain is (protected term × campaign) — deliberately NOT per negation row. See the model's own
+  // comment: per-row marking would need 132 decisions and would re-alarm on every new negation of
+  // the same term in the same campaign.
+  //
+  // RBAC: a POST/DELETE under /api/advertising requires `ads.campaigns.manage`, not `ads.view`.
+  // That is the right authority for a decision that suppresses an alarm, and it is not widened.
+  fastify.post('/advertising/negatives/review', async (request, reply) => {
+    const b = (request.body ?? {}) as { protectedTerm?: unknown; campaignId?: unknown; reason?: unknown }
+    const term = typeof b.protectedTerm === 'string' ? b.protectedTerm : ''
+    const campaignId = typeof b.campaignId === 'string' ? b.campaignId : ''
+    if (!term || !campaignId) {
+      reply.status(400)
+      return { error: 'protectedTerm and campaignId are both required', code: 'fields_required' }
+    }
+    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
+    const { markReview } = await import('../services/advertising/negatives-protections.service.js')
+    const out = await markReview({
+      protectedTerm: term,
+      campaignId,
+      reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim().slice(0, 500) : null,
+      reviewedBy: `user:${userId}`,
+    })
+    if (!out.ok) { reply.status(400); return out }
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
+  fastify.delete('/advertising/negatives/review', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const term = (q.protectedTerm ?? '').trim()
+    const campaignId = (q.campaignId ?? '').trim()
+    if (!term || !campaignId) {
+      reply.status(400)
+      return { error: 'protectedTerm and campaignId are both required', code: 'fields_required' }
+    }
+    const { unmarkReview } = await import('../services/advertising/negatives-protections.service.js')
+    const out = await unmarkReview(term, campaignId)
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
   // ── BID.S0 — the Bid page's one read ────────────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1 and NEG.1 are: a duplicate route

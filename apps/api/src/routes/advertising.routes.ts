@@ -9820,24 +9820,59 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { items }
   })
 
+  // NEG.5 — `matchType` is accepted here. It was not, and that was the panel's second defect:
+  // all ten live protections are CONTAINS, seeded by SQL, and this route could only ever produce
+  // EXACT or PREFIX. So every protection an operator added was strictly WEAKER than the ten that
+  // were already there — it would catch `xavia` but not `giacca moto xavia`, which is the exact
+  // case CONTAINS exists for (see the model comment, schema.prisma).
+  //
+  // Additive and backward-compatible: absent `matchType` falls through to the pre-existing
+  // `isPrefix` behaviour, so every caller that predates this — and every stored row — is
+  // unchanged. `isPrefix` is still written so the legacy column stays consistent with the new one.
   fastify.post('/advertising/keyword-protections', async (request, reply) => {
     const b = request.body as {
-      mode?: string; term?: string; isPrefix?: boolean
+      mode?: string; term?: string; isPrefix?: boolean; matchType?: string
       marketplace?: string | null; campaignId?: string | null; reason?: string | null
     }
     const mode = b.mode === 'BLACKLIST' ? 'BLACKLIST' : 'WHITELIST'
+    const MATCH_TYPES = ['EXACT', 'PREFIX', 'CONTAINS']
+    const rawMatch = typeof b.matchType === 'string' ? b.matchType.trim().toUpperCase() : ''
+    if (rawMatch && !MATCH_TYPES.includes(rawMatch)) {
+      reply.code(400)
+      return { ok: false, error: `matchType must be one of ${MATCH_TYPES.join('/')}`, code: 'match_type_invalid' }
+    }
+    // The gate reads `matchType ?? (isPrefix ? 'PREFIX' : 'EXACT')`, so writing null here keeps the
+    // old two-way behaviour exactly. Only an explicit choice stores a value.
+    const matchType = rawMatch || null
     const { normaliseTerm } = await import('../services/advertising/ads-write-gate.js')
     const term = normaliseTerm(String(b.term ?? ''))
     if (!term) { reply.code(400); return { ok: false, error: 'term required' } }
     // Same normalisation the gate matches on, so what an operator types is what binds.
     const existing = await prisma.adKeywordProtection.findFirst({
       where: { mode, term, marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null },
-      select: { id: true },
+      select: { id: true, matchType: true, isPrefix: true },
     })
-    if (existing) { reply.code(409); return { ok: false, error: 'already protected', id: existing.id } }
+    if (existing) {
+      // NEG.5 — say what is already there and how it differs. A protection cannot be edited in
+      // place (only deleted and re-added, which loses createdBy/createdAt), so a bare "already
+      // protected" left an operator trying to strengthen EXACT → CONTAINS with no way forward and
+      // no idea why.
+      const had = existing.matchType ?? (existing.isPrefix ? 'PREFIX' : 'EXACT')
+      const want = matchType ?? (b.isPrefix ? 'PREFIX' : 'EXACT')
+      reply.code(409)
+      return {
+        ok: false,
+        id: existing.id,
+        error: had === want
+          ? `“${term}” is already protected with ${had} matching`
+          : `“${term}” is already protected with ${had} matching. A protection cannot be changed in place — delete it and re-add it as ${want}.`,
+        code: 'already_protected',
+        existingMatchType: had,
+      }
+    }
     const row = await prisma.adKeywordProtection.create({
       data: {
-        mode, term, isPrefix: !!b.isPrefix,
+        mode, term, isPrefix: matchType ? matchType === 'PREFIX' : !!b.isPrefix, matchType,
         marketplace: b.marketplace ?? null, campaignId: b.campaignId ?? null,
         reason: b.reason ?? null, createdBy: actorFromHeaders(request.headers as Record<string, unknown>),
       },

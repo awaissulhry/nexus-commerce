@@ -14197,6 +14197,46 @@ model AdKeywordProtection {
   @@index([campaignId])
 }
 
+/// NEG.5 — the operator's "this contradiction is deliberate" mark.
+///
+/// 🔴 A SEPARATE TABLE ON PURPOSE. The obvious place for this is a campaign-scoped row on
+/// `AdKeywordProtection`, and that would be wrong in a way nothing would report. That table has
+/// seven production readers and two of them — `share-of-voice.service.ts:347` and
+/// `keyword-watchlist.service.ts:66` — treat a WHITELIST row as *the account's definition of a
+/// brand term*, selecting only `term/matchType/isPrefix/marketplace` and **never `campaignId`**.
+/// An exemption filed there would be silently read account-wide as "this is one of our brands".
+/// Worse, `ads-write-gate.ts:308-313` ANDs `campaignId IS NULL OR campaignId = ctx.campaignId`,
+/// which NARROWS a protection to one campaign rather than exempting that campaign from it — the
+/// exact inverse of the mark's meaning.
+///
+/// Grain: **(protected term × campaign)**, not one row per negation. The operator's decision is
+/// architectural — "brand traffic belongs out of the AIRMESH catch-all and in the house campaign"
+/// — not a judgement about one negation row. Per-row marking would need 132 decisions and would
+/// re-alarm every time a new negation of the same term landed in the same campaign.
+///
+/// The cost of that grain, which the UI must state rather than hide: one decision covers every
+/// current AND FUTURE negation of that term in that campaign. So the audit surfaces "N new since
+/// this decision" instead of silently absorbing them — a mark that quietly swallows new rows is
+/// how an audit stops being one.
+model AdNegativeReview {
+  id            String   @id @default(cuid())
+  /// The whitelisted term this decision concerns, normalised the way the gate normalises
+  /// (`ads-write-gate.ts:normaliseTerm`) so the audit and the enforcement cannot disagree.
+  protectedTerm String
+  /// Local `Campaign.id`. Not nullable: an account-wide "always fine" is not a decision an
+  /// operator can defend, and it would blank the audit in one click.
+  campaignId    String
+  /// INTENDED_FUNNEL is the only value today. A string rather than an enum because the second
+  /// value is not yet known and an enum migration is a schema change, not a data one.
+  decision      String
+  reason        String?
+  reviewedBy    String?
+  reviewedAt    DateTime @default(now())
+
+  @@unique([protectedTerm, campaignId])
+  @@index([campaignId])
+}
+
 model AdBlueprint {
   id                String   @id @default(cuid())
   name              String   @unique

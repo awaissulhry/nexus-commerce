@@ -110,6 +110,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/ads-create.service.ts` | HV.4 (optional `evidence` on `NewKeyword`, additive) | 2026-08-12 | **released** — landed `d8df06367` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.4 (`GET`/`POST /advertising/harvest-promote`, additive) | 2026-08-12 | **released** — landed `d8df06367` |
 | `…/rules-automation/rules-automation.css` | HV.4 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `6be25d22f`, EOF-append only, every hunk diffed and mine |
+| `apps/api/src/services/advertising/ads-create.service.ts` | HV.5 (`bidCents` in the `create_keyword` audit payload + `pushExistingKeyword`, both additive) | 2026-08-12 | **claimed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.5 (`GET /advertising/harvest-cohort` + `POST /advertising/harvest-push`, additive) | 2026-08-12 | **claimed** |
+| `…/rules-automation/rules-automation.css` | HV.5 (`h10-hv-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
 | `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
@@ -247,6 +250,12 @@ followed rather than recorded after the fact.
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.4 (`GET /advertising/negatives/attention`, additive) | 2026-08-12 | **released** |
 | `…/rules-automation/rules-automation.css` | NEG.4 (`h10-nga-*` at EOF) | 2026-08-12 | **released** |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.4 (import only) | 2026-08-12 | **released** |
+| `packages/database/prisma/schema.prisma` | NEG.5 (`AdNegativeReview`, additive — one new model, nothing altered) | 2026-08-12 | **released** — migration `20260812e_neg5_negative_review`, applied |
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.5 (`GET /advertising/negatives/protections` + `POST`/`DELETE /advertising/negatives/review`, additive) | 2026-08-12 | **released** — `grep -a`ed BOTH route files: `negatives/protections` and `negatives/review` have **zero** hits, so they collide with nothing, including PLC.1's `/advertising/placements/cursor` and RD.P2's `/advertising/rank-runtime` |
+| `apps/api/src/routes/advertising.routes.ts` | NEG.5 (`matchType` accepted on the EXISTING `POST /advertising/keyword-protections` — one field, defaulted to today's `isPrefix` behaviour; **no new route registered**) | 2026-08-12 | **released** — the existing handler gained one optional field; `grep -a` confirms still exactly one `fastify.post('/advertising/keyword-protections'` |
+| `…/rules-automation/rules-automation.css` | NEG.5 (`h10-ngp-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.5 (absorb `ProtectedTermsPanel` — delete its render + import, 2 lines) | 2026-08-12 | **claimed** |
+| `…/rules-automation/ProtectedTermsPanel.tsx` | NEG.5 — **NOT TOUCHED, claim withdrawn.** 🔴 The brief assumed the negative-targeting client was its only caller. It is not: `control-room/GuardrailsTab.tsx:197` mounts it too, deliberately (its own comment calls it "a second MOUNT and not a second copy"). Deleting the file is a build break on a page NEG.5 does not own, and editing it changes the Control Room's rendering without that programme's knowledge. NEG.5 removes only the render + import from ITS OWN client; the file and the ACR mount stay. See §4 | 2026-08-12 | **released** |
 
 ## 3 · Shared files — claim before editing
 
