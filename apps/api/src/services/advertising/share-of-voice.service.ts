@@ -87,7 +87,30 @@ export const SOV_DEFAULT_WEEKS = 8
 
 export type SovWeeks = (typeof SOV_WEEKS)[number]
 export type SovKind = 'keyword' | 'asin' | 'all'
-export type SovSortKey = 'query' | 'volume' | 'rank' | 'share' | 'asins'
+export type SovSortKey = 'query' | 'volume' | 'rank' | 'share' | 'clickShare' | 'delta' | 'asins'
+
+/**
+ * SOV.1 — why a row has no Δ. **The fifth state SOV.0's contract asks for, declared explicitly.**
+ *
+ * 🔴 It is a field of its OWN, not a fifth member of `SovRowState`, and that is a deliberate
+ * deviation from the brief's literal shape. A row is simultaneously `measured` for impression share
+ * and `delta-no-prior` for its Δ — those are two facts on two axes, and one enum cannot carry both
+ * without the Δ column silently overwriting the share column's state. The brief's own wording
+ * ("measured this period; the comparable prior week has no row for this query") describes exactly
+ * that pairing. The token it names is kept verbatim.
+ *
+ * Why this is not cosmetic: measured on prod 2026-08-12, a comparable prior week exists for only
+ * **18–28% of rows** (IT 136 of 482, DE 55 of 276, ES 57 of 316, FR 7 of 37) — and for **0%** at
+ * `?market=FR&weeks=4`. Four rows in five have no Δ, so the reason they have none is most of what
+ * this column communicates.
+ */
+export type SovDeltaState =
+  /** both this period and the comparable prior period hold a scoped row — `deltaPt` is real */
+  | 'delta-measured'
+  /** measured this period; the comparable prior week has no row for this query in this scope */
+  | 'delta-no-prior'
+  /** not measured this period at all, so there is nothing to compare — the row is already blank */
+  | 'delta-not-applicable'
 
 /**
  * Why a row is blank — four states, never rendered the same way.
@@ -127,6 +150,41 @@ export interface SovRow {
    * total), 0 means "a real market total and we hold none of it".
    */
   share: number | null
+  /** whole-market clicks for this query in the period */
+  marketClicks: number | null
+  /** OUR clicks, summed over the scope's ASINs. Same `null` ≠ `0` discipline as `share`. */
+  ourClicks: number | null
+  /**
+   * 0..1, or null. `clicksBrand / clicksTotal` — of everyone who clicked SOMETHING for this query,
+   * what fraction clicked us. Beside impression share it answers the one question impression share
+   * cannot: we are on the page, are we being chosen?
+   */
+  clickShare: number | null
+  /** our impression share in the comparable prior period, or null when there is no prior row */
+  priorShare: number | null
+  /**
+   * The week-over-week change in PERCENTAGE POINTS, never a percentage of a percentage:
+   * 1.71% → 1.83% is `+0.12`, not `+7`.
+   */
+  deltaPt: number | null
+  deltaState: SovDeltaState
+  /**
+   * True when this query's whole-market impressions sit below the period's median — the denominator
+   * is too small for its share to mean anything. `sappnetta knee spider nero` is "50.00%" of **4**
+   * market impressions. Not hidden, never hidden — ranked below confident rows when sorting by a
+   * share, and rendered muted.
+   */
+  lowConfidence: boolean
+  /**
+   * 🔴 The SAME test, on the click denominator, because it is a different and much smaller number.
+   *
+   * Found by measuring, not by reading: filtering the click column by `lowConfidence` (an
+   * impressions test) still surfaced `giacca moto 3xl` at "25.00% click share" — **1 of 4 market
+   * clicks** — on a row whose 5,364 market impressions clear the impression floor comfortably. A
+   * query can be well-measured for impressions and have four clicks in the whole market. One flag
+   * cannot police two denominators.
+   */
+  lowConfidenceClicks: boolean
   /** how many of OUR scoped ASINs hold a row on this query in the chosen period */
   asinsCompeting: number
   state: SovRowState
@@ -164,6 +222,93 @@ const ageDays = (d: Date | null | undefined) =>
 /** B + 9 alphanumerics. 643 of 5,383 AD-side queries are these; SQP has 0, all markets, all-time. */
 const ASIN_RE = /^b0[a-z0-9]{8}$/i
 
+const median = (xs: number[]): number => {
+  if (!xs.length) return 0
+  const s = [...xs].sort((a, b) => a - b)
+  const m = s.length >> 1
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+/** One SQP period, with the count that decides whether its values are usable at all. */
+export interface SovPeriodStat {
+  start: Date
+  rows: number
+  /** rows carrying `impressionsBrand > 0`. Zero across a whole period is the parser defect below. */
+  nonZeroRows: number
+}
+
+export interface SovPriorPeriod {
+  start: Date | null
+  rows: number
+  /** days between the prior period's start and the chosen one's. NOT always 7 — see below. */
+  gapDays: number | null
+  reason: 'comparable' | 'no-older-period' | 'all-older-excluded'
+  /** every older period this passed over, and why — so the page can name what it skipped */
+  excluded: Array<{ asOf: string; rows: number; reason: 'all-zero' | 'below-threshold' }>
+}
+
+/**
+ * 🔴 Pick the period a Δ compares against. Three rules, and the middle one is the whole point.
+ *
+ * **1. Strictly older than the chosen period.**
+ *
+ * **2. Not an all-zero week — COMPUTED, never a hard-coded date list.**
+ * Fourteen periods across the four markets carry `impressionsBrand = 0` on 100% of their rows:
+ * IT 2026-06-07 (462 rows) · 05-31 (158) · 05-24 (376) · 05-17 (1) · DE 06-07 (234) · 05-31 (84) ·
+ * ES 06-07 (290) · 05-31 (433) · 05-24 (569) · 05-17 (124) · FR 06-07 (61) · 05-31 (135) ·
+ * 05-24 (177) · 05-17 (183). That is the pre-`ACR.0.2` parser defect `sqp.service.ts`'s own header
+ * documents — *"the 'our side' counts were reading 0 on every one of 9,232 prod rows while the
+ * totals read 53.1M"* — in weeks that were never re-ingested. A Δ from 2026-07-19 back to
+ * 2026-06-07 would report a total collapse that never happened.
+ *
+ * A hard-coded list would rot the day a week is re-ingested, and a stale exclusion that silently
+ * stops matching is worse than none. So it is derived from the data every time. Independent
+ * corroboration that this is a defect and not a fact: `clicksBrand > 0` is **0 rows** in every one
+ * of those weeks and near-100% in every later one — two counts cannot both collapse and recover.
+ *
+ * **3. Clears the SAME completeness threshold as the chosen period.** A thin week is no more
+ * comparable as a baseline than it is as a view.
+ *
+ * 🔴 The gap is NOT always 7 days. At `?market=ES&weeks=4` the chosen period is 2026-07-26 and the
+ * nearest comparable prior is 2026-07-12 — **14 days**. Callers must render the date, never the
+ * words "vs last week", unless `gapDays === 7`.
+ */
+export function choosePriorPeriod(
+  periods: SovPeriodStat[],
+  chosen: Date | null,
+  threshold: number,
+): SovPriorPeriod {
+  const excluded: SovPriorPeriod['excluded'] = []
+  if (!chosen) return { start: null, rows: 0, gapDays: null, reason: 'no-older-period', excluded }
+
+  const older = periods
+    .filter((p) => +p.start < +chosen)
+    .sort((a, b) => +b.start - +a.start)
+  if (!older.length) return { start: null, rows: 0, gapDays: null, reason: 'no-older-period', excluded }
+
+  for (const p of older) {
+    // A period can be all-zero AND pass the completeness gate — IT 2026-06-07 holds 462 rows
+    // against a ~650 norm. The gate counts ROWS; this counts VALUES. Two independent tests, and
+    // this one is applied second.
+    if (p.rows > 0 && p.nonZeroRows === 0) {
+      excluded.push({ asOf: iso(p.start)!, rows: p.rows, reason: 'all-zero' })
+      continue
+    }
+    if (p.rows < threshold) {
+      excluded.push({ asOf: iso(p.start)!, rows: p.rows, reason: 'below-threshold' })
+      continue
+    }
+    return {
+      start: p.start,
+      rows: p.rows,
+      gapDays: Math.round((+chosen - +p.start) / 86_400_000),
+      reason: 'comparable',
+      excluded,
+    }
+  }
+  return { start: null, rows: 0, gapDays: null, reason: 'all-older-excluded', excluded }
+}
+
 export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   const market = q.market
   const limit = Math.min(2000, Math.max(1, q.limit ?? 1000))
@@ -178,7 +323,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // ── one round trip for everything that depends only on `market` ─────────────
   // KT.1b measured this ordering as most of a 6.6s first paint when it was serial. The period
   // groupBy and both freshness probes depend on nothing but the market, so they belong here.
-  const [campaigns, ads, watchlists, periodGroups, sqpLatest, adsLatest, protections] = await Promise.all([
+  const [campaigns, ads, watchlists, periodGroups, nonZeroGroups, sqpLatest, adsLatest, protections] = await Promise.all([
     prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true } }),
     prisma.adProductAd.findMany({
       where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
@@ -190,6 +335,12 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
     }),
     prisma.searchQueryPerformance.groupBy({ by: ['startDate'], where: { marketplace: market }, _count: { _all: true } }),
+    // SOV.1 — rows per period carrying a non-zero OUR-side impression count. A period where this is
+    // 0 while `rows` is not is the pre-ACR.0.2 parser defect, and it must never become a Δ baseline.
+    // `gt: 0` on a non-nullable Int with default 0 — no null branch to spell out.
+    prisma.searchQueryPerformance.groupBy({
+      by: ['startDate'], where: { marketplace: market, impressionsBrand: { gt: 0 } }, _count: { _all: true },
+    }),
     prisma.searchQueryPerformance.findFirst({ where: { marketplace: market }, orderBy: { startDate: 'desc' }, select: { startDate: true } }),
     prisma.amazonAdsSearchTerm.findFirst({ where: { marketplace: market }, orderBy: { date: 'desc' }, select: { date: true } }),
     // The same classifier KT.2 stores its per-term flag with. Never a second definition of "brand".
@@ -247,40 +398,91 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // Two reads rather than one, because they answer two different questions: the market read is the
   // POPULATION (which queries exist here at all) and the scoped read is the VALUE. Collapsing them
   // is what makes `not-covered` indistinguishable from `never-measured`.
-  const marketRows = chosen.start
-    ? await prisma.searchQueryPerformance.findMany({
-      where: { marketplace: market, startDate: chosen.start },
-      select: {
-        searchQuery: true, asin: true, impressionsTotal: true, impressionsBrand: true,
-        searchQueryVolume: true, searchQueryRank: true,
-      },
-    })
-    : []
+  // SOV.1 — the row shape both periods are read with. `clicksTotal/Brand` join the select for the
+  // click-share column; `cartAddsBrand`/`purchasesBrand` are read ONLY to count coverage, because
+  // they are far too sparse to be columns (§ funnelCoverage below).
+  const ROW_SELECT = {
+    searchQuery: true, asin: true,
+    impressionsTotal: true, impressionsBrand: true,
+    clicksTotal: true, clicksBrand: true,
+    cartAddsBrand: true, purchasesBrand: true,
+    searchQueryVolume: true, searchQueryRank: true,
+  } as const
+
+  const periodStats: SovPeriodStat[] = (() => {
+    const nz = new Map(nonZeroGroups.map((g) => [+g.startDate, g._count._all]))
+    return periodGroups.map((p) => ({
+      start: p.startDate, rows: p._count._all, nonZeroRows: nz.get(+p.startDate) ?? 0,
+    }))
+  })()
+  const prior = choosePriorPeriod(periodStats, chosen.start, chosen.threshold)
+
+  const [marketRows, priorRows] = await Promise.all([
+    chosen.start
+      ? prisma.searchQueryPerformance.findMany({ where: { marketplace: market, startDate: chosen.start }, select: ROW_SELECT })
+      : Promise.resolve([]),
+    // The prior period is read through the SAME scope filter. A Δ between "this scope now" and
+    // "the whole market last week" would be a different quantity wearing the same label.
+    prior.start
+      ? prisma.searchQueryPerformance.findMany({ where: { marketplace: market, startDate: prior.start }, select: ROW_SELECT })
+      : Promise.resolve([]),
+  ])
 
   const scopedAsins = new Set(scope.asins)
-  interface Agg { total: number; brand: number; vol: number; rank: number | null; asins: Set<string>; scopedRows: number }
-  const marketAgg = new Map<string, Agg>()
-  const scopedAgg = new Map<string, Agg>()
-  const asinsSeen = new Set<string>()
-  const add = (m: Map<string, Agg>, key: string, r: (typeof marketRows)[number]) => {
-    const a = m.get(key) ?? { total: 0, brand: 0, vol: 0, rank: null, asins: new Set<string>(), scopedRows: 0 }
-    // MAX, not sum: `impressionsTotal` is the whole market's count for the query, repeated on every
-    // ASIN row of it. Verified on prod: 0 of 482 IT queries disagree across their rows.
+  interface Agg {
+    total: number; brand: number; clicksTotal: number; clicksBrand: number
+    cartAdds: number; purchases: number
+    vol: number; rank: number | null; asins: Set<string>
+  }
+  const blank = (): Agg => ({
+    total: 0, brand: 0, clicksTotal: 0, clicksBrand: 0, cartAdds: 0, purchases: 0,
+    vol: 0, rank: null, asins: new Set<string>(),
+  })
+  type Row = { searchQuery: string; asin: string | null; impressionsTotal: number; impressionsBrand: number; clicksTotal: number; clicksBrand: number; cartAddsBrand: number; purchasesBrand: number; searchQueryVolume: number; searchQueryRank: number | null }
+  const add = (m: Map<string, Agg>, key: string, r: Row) => {
+    const a = m.get(key) ?? blank()
+    // MAX, not sum: a whole-market count is repeated on every ASIN row of the query, so summing it
+    // would multiply it. Verified on prod: 0 of 482 IT queries disagree across their rows.
+    // Σ for our own side. SOV.0 established this rule and every numerator added here keeps it.
     a.total = Math.max(a.total, r.impressionsTotal)
     a.brand += r.impressionsBrand
+    a.clicksTotal = Math.max(a.clicksTotal, r.clicksTotal)
+    a.clicksBrand += r.clicksBrand
+    a.cartAdds += r.cartAddsBrand
+    a.purchases += r.purchasesBrand
     a.vol = Math.max(a.vol, r.searchQueryVolume)
     if (r.searchQueryRank != null) a.rank = a.rank == null ? r.searchQueryRank : Math.min(a.rank, r.searchQueryRank)
     if (r.asin) a.asins.add(r.asin)
-    a.scopedRows++
     m.set(key, a)
   }
-  for (const r of marketRows) {
+  const inScope = (r: Row) => !scope.asinScoped || (!!r.asin && scopedAsins.has(r.asin))
+
+  const marketAgg = new Map<string, Agg>()
+  const scopedAgg = new Map<string, Agg>()
+  const priorAgg = new Map<string, Agg>()
+  const asinsSeen = new Set<string>()
+  for (const r of marketRows as Row[]) {
     add(marketAgg, r.searchQuery, r)
     if (r.asin) asinsSeen.add(r.asin)
     // `asinScoped` is false at market grain — KT's resolver says so, and it means "no ASIN
     // restriction on the share query at all", which is the market view by definition.
-    if (!scope.asinScoped || (r.asin && scopedAsins.has(r.asin))) add(scopedAgg, r.searchQuery, r)
+    if (inScope(r)) add(scopedAgg, r.searchQuery, r)
   }
+  for (const r of priorRows as Row[]) if (inScope(r)) add(priorAgg, r.searchQuery, r)
+
+  /** share of a stage, or null. 🔴 Never `0` for "no denominator" — that is the tie the page exists to break. */
+  const shareOf = (brand: number, total: number): number | null =>
+    (total > 0 ? Math.max(0, Math.min(1, brand / total)) : null)
+
+  /**
+   * The confidence floor: the MEDIAN whole-market impressions across the queries this period
+   * measured. Derived from the period's own distribution rather than a magic number, so it adapts
+   * per market and per week. Measured today — IT 371 · DE 290 · ES 176 · FR 313, against a median
+   * of just **85** among the top 20 by share. That gap is the entire argument of the sort rule.
+   */
+  const confidenceFloor = median([...scopedAgg.values()].filter((a) => a.total > 0).map((a) => a.total))
+  /** the same floor for the click denominator, which is two to three orders of magnitude smaller */
+  const confidenceFloorClicks = median([...scopedAgg.values()].filter((a) => a.clicksTotal > 0).map((a) => a.clicksTotal))
 
   // ── the population: the market's queries, plus the list's terms when one is chosen ──
   const population = new Set<string>(marketAgg.keys())
@@ -317,12 +519,26 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     if (mine) {
       // 🔴 The one line this whole page exists to get right. A zero market total yields `null`
       // (Amazon reported nothing to divide by), NOT `0` (we hold none of a real market).
-      const share = mine.total > 0 ? Math.max(0, Math.min(1, mine.brand / mine.total)) : null
+      const share = shareOf(mine.brand, mine.total)
+      const was = priorAgg.get(query)
+      const priorShare = was ? shareOf(was.brand, was.total) : null
+      // A prior ROW that carries no market total is not a prior VALUE — it cannot anchor a Δ, so it
+      // is `delta-no-prior` exactly like a missing row. Both are "nothing to compare against".
+      const comparable = share != null && priorShare != null
       return {
         query, marketplace: market,
         marketVolume: mine.vol, marketRank: mine.rank,
         marketImpressions: mine.total, ourImpressions: mine.brand,
-        share, asinsCompeting: mine.asins.size,
+        share,
+        marketClicks: mine.clicksTotal, ourClicks: mine.clicksBrand,
+        clickShare: shareOf(mine.clicksBrand, mine.clicksTotal),
+        priorShare,
+        // PERCENTAGE POINTS. 1.71% → 1.83% is +0.12, never "+7%".
+        deltaPt: comparable ? (share - priorShare) * 100 : null,
+        deltaState: comparable ? 'delta-measured' : 'delta-no-prior',
+        lowConfidence: mine.total > 0 && mine.total < confidenceFloor,
+        lowConfidenceClicks: mine.clicksTotal > 0 && mine.clicksTotal < confidenceFloorClicks,
+        asinsCompeting: mine.asins.size,
         state: 'measured', lastSeen: null, lastSeenAgeDays: null,
         branded, asinLike, onList,
       }
@@ -338,7 +554,13 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       marketVolume: mkt ? mkt.vol : null,
       marketRank: mkt ? mkt.rank : null,
       marketImpressions: mkt ? mkt.total : null,
-      ourImpressions: null, share: null, asinsCompeting: 0,
+      ourImpressions: null, share: null,
+      marketClicks: mkt ? mkt.clicksTotal : null, ourClicks: null, clickShare: null,
+      // Nothing measured this period ⇒ nothing to compare. Distinct from `delta-no-prior`, which
+      // means "we ARE measured now and there is no prior" — a fact about the baseline, not the row.
+      priorShare: null, deltaPt: null, deltaState: 'delta-not-applicable',
+      lowConfidence: false, lowConfidenceClicks: false,
+      asinsCompeting: 0,
       state, lastSeen: iso(seen), lastSeenAgeDays: ageDays(seen),
       branded, asinLike, onList,
     }
@@ -365,6 +587,94 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     realZeros: filtered.filter((r) => r.state === 'measured' && r.share === 0).length,
     /** measured, but Amazon reported no market total to divide by — the tie `share()` hides */
     noMarketTotal: filtered.filter((r) => r.state === 'measured' && r.share === null).length,
+    /** the Δ's own axis — see SovDeltaState. 18–28% of rows have a prior; one view has none. */
+    deltaMeasured: filtered.filter((r) => r.deltaState === 'delta-measured').length,
+    deltaNoPrior: filtered.filter((r) => r.deltaState === 'delta-no-prior').length,
+    /** rows whose market denominator is below the period's median — too small to rank */
+    lowConfidence: filtered.filter((r) => r.lowConfidence).length,
+    lowConfidenceClicks: filtered.filter((r) => r.lowConfidenceClicks).length,
+  }
+
+  const measured = filtered.filter((r) => r.state === 'measured' && r.share !== null)
+
+  /**
+   * 🔴 THE SCOPE-LEVEL Δ — computed over the INTERSECTION only, and it says so.
+   *
+   * An intersection is not a filter. Comparing "this week's total share" against "last week's total
+   * share" over two different query populations is the KT.1b population-mixing defect at aggregate
+   * level: it produces a headline number that moves when nothing changed. Only queries measured in
+   * BOTH periods, within THIS scope, enter either side of this ratio.
+   *
+   * Aggregated the way the whole page aggregates — `brand = Σ`, `total = max` per query — then both
+   * summed across the intersection and divided ONCE. Never an average of per-row percentages: that
+   * is the unweighted/weighted trap, and on this data the two answers differ by ~8×.
+   */
+  const scopeDelta = (() => {
+    const inBoth = measured.filter((r) => r.deltaState === 'delta-measured')
+    if (!prior.start || !inBoth.length) {
+      return {
+        queries: 0,
+        nowShare: null as number | null,
+        priorShare: null as number | null,
+        deltaPt: null as number | null,
+        withoutPrior: measured.length,
+      }
+    }
+    let nowBrand = 0, nowTotal = 0, wasBrand = 0, wasTotal = 0
+    for (const r of inBoth) {
+      const was = priorAgg.get(r.query)!
+      nowBrand += r.ourImpressions ?? 0
+      nowTotal += r.marketImpressions ?? 0
+      wasBrand += was.brand
+      wasTotal += was.total
+    }
+    const nowShare = shareOf(nowBrand, nowTotal)
+    const priorShare = shareOf(wasBrand, wasTotal)
+    return {
+      queries: inBoth.length,
+      nowShare,
+      priorShare,
+      deltaPt: nowShare != null && priorShare != null ? (nowShare - priorShare) * 100 : null,
+      withoutPrior: measured.length - inBoth.length,
+    }
+  })()
+
+  /**
+   * The one pair of numbers the band carries, and they must always appear together.
+   *
+   * `weighted` = Σ our impressions ÷ Σ market impressions across the view — our share of all the
+   * demand this view can see. `medianQuery` = the median of the per-row shares. Measured today the
+   * weighted figure is ~8× SMALLER, and the gap IS the finding: **we hold a few percent of hundreds
+   * of tiny queries and almost nothing of the big ones.** Showing only the median would flatter this
+   * account by an order of magnitude, which is why neither ships alone.
+   */
+  const shareSummary = (() => {
+    const totalMkt = measured.reduce((n, r) => n + (r.marketImpressions ?? 0), 0)
+    const totalOurs = measured.reduce((n, r) => n + (r.ourImpressions ?? 0), 0)
+    return {
+      queries: measured.length,
+      ourImpressions: totalOurs,
+      marketImpressions: totalMkt,
+      weighted: shareOf(totalOurs, totalMkt),
+      medianQuery: measured.length ? median(measured.map((r) => r.share!)) : null,
+    }
+  })()
+
+  /**
+   * Why cart-add share and purchase share are NOT columns.
+   *
+   * Measured in the default view: our-side cart-adds exist on **14 of 482** IT queries (2.9%) and
+   * purchases on **1** (0.2%); ES has 4 and **0**; FR has 0 and 0. Two columns that are `—` on 97%+
+   * of rows are two promises the data cannot keep — *an empty column is a promise, a missing column
+   * is a decision* (KT.1's law). This is NOT the parser defect: clicks parse fine in the same rows
+   * (475 of 482 in IT), so cart-adds and purchases are genuinely sparse at query × ASIN × week
+   * grain. They are stated as coverage and belong in the row drawer (SOV.5).
+   */
+  const funnelCoverage = {
+    queries: measured.length,
+    clicks: measured.filter((r) => (r.ourClicks ?? 0) > 0).length,
+    cartAdds: filtered.filter((r) => (scopedAgg.get(r.query)?.cartAdds ?? 0) > 0).length,
+    purchases: filtered.filter((r) => (scopedAgg.get(r.query)?.purchases ?? 0) > 0).length,
   }
 
   // Facets count over the population BEFORE their own dimension is applied, so a chip can state
@@ -385,6 +695,8 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       case 'query': return s * a.query.localeCompare(b.query)
       case 'rank': return s * ((a.marketRank ?? Number.MAX_SAFE_INTEGER) - (b.marketRank ?? Number.MAX_SAFE_INTEGER))
       case 'share': return s * ((a.share ?? -1) - (b.share ?? -1))
+      case 'clickShare': return s * ((a.clickShare ?? -1) - (b.clickShare ?? -1))
+      case 'delta': return s * ((a.deltaPt ?? Number.NEGATIVE_INFINITY) - (b.deltaPt ?? Number.NEGATIVE_INFINITY))
       case 'asins': return s * (a.asinsCompeting - b.asinsCompeting)
       case 'volume':
       default: return s * ((a.marketVolume ?? -1) - (b.marketVolume ?? -1))
@@ -395,9 +707,31 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // has but our ASINs are not covered on is a coverage gap you can chase; one the feed reported in
   // another week is a staleness fact; one it has never reported is neither.
   const stateRank = (r: SovRow) => (r.state === 'measured' ? 0 : r.state === 'not-covered' ? 1 : r.state === 'no-row-this-period' ? 2 : 3)
+  /**
+   * 🔴 THE SORT DISCIPLINE. Sorting by a share must not rank noise first.
+   *
+   * Measured on IT 2026-07-19, share-descending: the top of the page is
+   * `sappnetta knee spider nero` at **50.00% of 4 market impressions**, followed by five typos.
+   * Meanwhile the five queries above 10% share carry **221 of 1,671,561 market impressions —
+   * 0.01% of the demand** the page is about, while the 313 queries above 1% carry 29.18%.
+   *
+   * Nothing is hidden — hiding data is not the fix. Rows whose denominator is below the period's
+   * median sink BELOW confident rows within the same direction, and say why on hover. This applies
+   * to the share sorts only: sorting by market volume or rank is already denominator-aware, and
+   * demoting rows there would be inventing a second opinion about the operator's own request.
+   */
+  const confidenceSort = sortKey === 'share' || sortKey === 'clickShare' || sortKey === 'delta'
   const sorted = [...filtered].sort((a, b) => {
     const ra = stateRank(a), rb = stateRank(b)
-    return ra === rb ? cmp(a, b) : ra - rb
+    if (ra !== rb) return ra - rb
+    // Each share sorts by ITS OWN denominator's confidence — the click floor is two to three
+    // orders of magnitude below the impression floor, so one flag would police the wrong column.
+    if (confidenceSort) {
+      const la = sortKey === 'clickShare' ? a.lowConfidenceClicks : a.lowConfidence
+      const lb = sortKey === 'clickShare' ? b.lowConfidenceClicks : b.lowConfidence
+      if (la !== lb) return la ? 1 : -1
+    }
+    return cmp(a, b)
   })
   const page = sorted.slice(offset, offset + limit)
 
@@ -448,6 +782,20 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       truncated: chosen.truncated,
       /** newer periods the gate refused, newest first — so the page can name what it skipped */
       rejected: chosen.rejected,
+      /**
+       * SOV.1 — the week a Δ is measured against, and everything the page needs to name it.
+       * `gapDays` is NOT always 7: at `?market=ES&weeks=4` the chosen period is 2026-07-26 and the
+       * nearest comparable prior is 2026-07-12. The page must render the date, not "last week".
+       */
+      prior: {
+        asOf: iso(prior.start),
+        ageDays: ageDays(prior.start),
+        rows: prior.rows,
+        gapDays: prior.gapDays,
+        reason: prior.reason,
+      },
+      /** older periods skipped, and why — the all-zero ones are the parser defect, COMPUTED */
+      excludedPeriods: prior.excluded,
       weeks,
       lookbackDays: weeks * 7,
       /** what KT's shipped gate uses. Reported so a divergence between the pages is visible. */
@@ -470,6 +818,15 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       ads: { latest: iso(adsLatest?.date ?? null), ageDays: ageDays(adsLatest?.date ?? null) },
     },
     census,
+    /** the scope-level Δ, over the intersection only, always honest — see `scopeDelta` above */
+    scopeDelta,
+    /** the weighted / median pair. Neither ever ships alone; the gap between them is the finding. */
+    shareSummary,
+    /** why cart-add and purchase share are a stated line rather than two permanently empty columns */
+    funnelCoverage,
+    /** the median market impressions this period; rows below it cannot be ranked by share */
+    confidenceFloor,
+    confidenceFloorClicks,
     facets,
     rows: page,
     total: filtered.length,
