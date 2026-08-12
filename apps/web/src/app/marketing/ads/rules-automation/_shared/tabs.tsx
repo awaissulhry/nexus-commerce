@@ -231,21 +231,43 @@ export function RulesTabs({ active }: { active: string }) {
    */
   const barRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const bar = barRef.current
-    if (!bar) return
-    const el = bar.querySelector<HTMLElement>('[aria-selected="true"]')
-    if (!el || bar.scrollWidth <= bar.clientWidth) return
-    // 🔴 Rects, not `offsetLeft`. `.h10-rules-tabs` is not positioned, so the active tab's
-    // offsetParent is some ancestor further up and `offsetLeft` is measured from THAT — the first
-    // version of this scrolled 78px where 388 were needed and left the tab still clipped, which is
-    // how it was caught on prod. A rect delta is relative to nothing and cannot be wrong.
-    const barRect = bar.getBoundingClientRect()
-    const elRect = el.getBoundingClientRect()
-    const overRight = elRect.right - barRect.right
-    const overLeft = barRect.left - elRect.left
-    if (overRight > 0) bar.scrollLeft += overRight + 24
-    else if (overLeft > 0) bar.scrollLeft -= overLeft + 24
-  }, [active])
+    let cancelled = false
+    const bring = () => {
+      const bar = barRef.current
+      if (cancelled || !bar) return
+      const el = bar.querySelector<HTMLElement>('[aria-selected="true"]')
+      if (!el || bar.scrollWidth <= bar.clientWidth) return
+      // 🔴 Rects, not `offsetLeft`. `.h10-rules-tabs` is not positioned, so the active tab's
+      // offsetParent is an ancestor further up and `offsetLeft` is measured from THAT — the first
+      // version scrolled 78px where 388 were needed and left the tab clipped. A rect delta is
+      // relative to nothing and cannot be wrong.
+      const barRect = bar.getBoundingClientRect()
+      const elRect = el.getBoundingClientRect()
+      const overRight = elRect.right - barRect.right
+      const overLeft = barRect.left - elRect.left
+      if (overRight > 0) bar.scrollLeft += overRight + 24
+      else if (overLeft > 0) bar.scrollLeft -= overLeft + 24
+    }
+    bring()
+    /**
+     * 🔴 …and measuring ONCE on mount is not enough, which is the second thing prod taught this.
+     *
+     * The second version computed the right number and still left `scrollLeft` at 0. The bundle was
+     * current and the math checked out when run by hand — the effect was simply measuring a
+     * narrower bar than the one that ends up on screen. `counts` arrives from a fetch and adds five
+     * badges worth ~200px; at mount, without them, "Placement" ends at ~1257 inside a bar ending at
+     * 1350 and genuinely fits, so `bring()` correctly does nothing. The badges then land and push
+     * it to 1457.
+     *
+     * So it re-runs when the counts land (the dependency) and when the font swaps — the other thing
+     * that silently widens a row of text after it was measured. Deliberately not `requestAnimation-
+     * Frame`: rAF does not fire in a background tab, and a tab restored from the background is
+     * exactly when a bar has been laid out without ever being painted.
+     */
+    const fonts = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts
+    if (fonts?.ready) void fonts.ready.then(bring)
+    return () => { cancelled = true }
+  }, [active, counts])
 
   return (
     <div ref={barRef} className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types">
