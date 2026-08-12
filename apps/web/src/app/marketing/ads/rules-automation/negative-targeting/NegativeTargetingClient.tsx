@@ -263,8 +263,11 @@ export function NegativeTargetingClient() {
     {
       key: 'spread', label: 'Also negated in',
       tip: 'How far this same term reaches inside the current scope. Removing one row of a term negated in 49 ad groups changes almost nothing — this is the number that says so before you act.',
+      // NEG.2 — this used to push {view:'terms', q}, which answered "where else is this?" with a
+      // filtered grid. The drawer answers it properly: every negation with its own state, beside
+      // the traffic it may or may not be blocking.
       render: (r) => (
-        <button type="button" className="h10-ng-spread" onClick={() => push({ view: 'terms', q: r.term })} title={`${r.spread.rows} rows · ${r.spread.adGroups} ad groups · ${r.spread.campaigns} campaigns`}>
+        <button type="button" className="h10-ng-spread" onClick={() => push({ focus: r.termKey })} title={`${r.spread.rows} rows · ${r.spread.adGroups} ad groups · ${r.spread.campaigns} campaigns — open the term`}>
           {num(r.spread.rows)}<i>{r.spread.adGroups} ag · {r.spread.campaigns} camp</i>
         </button>
       ),
@@ -472,10 +475,10 @@ export function NegativeTargetingClient() {
           firstColLabel="Term"
           renderFirst={(r) => (
             <div className="h10-ng-term">
-              {/* The shared grid paints the first column blue at (0,3,1) because every other
-                  consumer makes it a link. This one is not a link yet — NEG.2 makes it open the
-                  term drawer — so the colour is overridden at matching specificity in the CSS. */}
-              <span className="t" title={r.term}>{r.term}</span>
+              {/* NEG.2 — now it IS interactive, so the CSS override that removed the shared grid's
+                  blue stays and a hover affordance is added instead: the colour said "not a link"
+                  when it was not one, and the underline says "opens something" now that it is. */}
+              <button type="button" className="t as-btn" title={`Everywhere “${r.term}” is blocked`} onClick={() => push({ focus: r.termKey })}>{r.term}</button>
               {!r.atAmazon && <span className="fl warn" title="Amazon has never confirmed this negative">not at Amazon</span>}
               {r.level === 'CAMPAIGN' && <span className="fl camp" title="Campaign-wide: blocks the term everywhere in this campaign">campaign</span>}
             </div>
@@ -507,7 +510,7 @@ export function NegativeTargetingClient() {
           firstColLabel="Term"
           renderFirst={(r) => (
             <div className="h10-ng-term">
-              <span className="t" title={r.term}>{r.term}</span>
+              <button type="button" className="t as-btn" title={`Everywhere “${r.term}” is blocked`} onClick={() => push({ focus: r.termKey })}>{r.term}</button>
               {r.campaignLevel > 0 && <span className="fl camp" title={`${r.campaignLevel} of these are campaign-wide`}>{r.campaignLevel} campaign-wide</span>}
             </div>
           )}

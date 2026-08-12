@@ -81,8 +81,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/rules-automation.css` | NEG.1 (`h10-ng-*` at EOF) | 2026-08-12 | **released** — appended at EOF only |
 | `…/rules-automation/rules-automation.css` | KT.1b (3 lines finishing the `h10-kt-*` keyword-cell override at EOF) | 2026-08-12 | **released** — see §5's new trap: these lines shipped inside NEG.1's `1df95d678`, not in a KT.1b commit |
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.2 (`GET /advertising/negatives/term-context`, additive) | 2026-08-12 | **released** |
-| `…/rules-automation/rules-automation.css` | NEG.2 (`h10-ngd-*` at EOF) | 2026-08-12 | **claimed** — appended at EOF only, disjoint prefix from NEG.1's `h10-ng-*` |
-| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **claimed** |
+| `…/rules-automation/rules-automation.css` | NEG.2 (`h10-ngd-*` at EOF) | 2026-08-12 | **released** — appended at EOF only; 🔴 the 130 lines landed inside PLC.0's `341d08e31`, not in a NEG.2 commit (see §5's `commit --only` trap, now observed in both directions) |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
@@ -103,10 +103,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's and BID.S0's |
 | `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **claimed** — the `keyword-tracker` branch is already gone; `SovTrackerTab`'s import goes with this branch since it was its last caller |
 | `…/rules-automation/rules-automation.css` | SOV.0 (`h10-sov-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
-| `…/rules-automation/_shared/tabs.tsx` | BSP.0 (`budget-schedules` → `routed: true` + label + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's, BID.S0's and SOV.0's |
-| `…/rules-automation/RulesAutomationClient.tsx` | BSP.0 (drop the `budget-schedules` branch only) | 2026-08-12 | **claimed** — `BudgetScheduleTab`'s import goes with it; verified it was its only caller. Disjoint from SOV.0's `share-of-voice` branch |
-| `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
-| `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | **claimed** — disjoint `has` value from HV.1's and BID.S0's |
+| `…/rules-automation/_shared/tabs.tsx` | BSP.0 (`budget-schedules` → `routed: true` + label + subtitle) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `…/rules-automation/RulesAutomationClient.tsx` | BSP.0 (drop the `budget-schedules` branch only) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
+| `apps/web/next.config.js` | BSP.0 (one `?tab=budget-schedules` redirect, same shape as NEG.1's) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
 
 | `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **claimed** — the page's own directory |
 | `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **claimed** — exactly ONE importer (this page's client), but it sits in the shared `tabs/` dir, so it is recorded rather than assumed |
@@ -224,6 +224,14 @@ session's push is held** — the same shape as the KT.1b note above, three files
 so the next session to see a red push knows it is not theirs. Not touched: it is HV.1's directory
 and it is obviously mid-flight. Retrying.
 
+**PLC.0 blocked on NEG.2, 2026-08-12 ~01:2x.** `negative-targeting/NegativeTargetingClient.tsx`
+has a syntax error mid-file (`TS1109: Expression expected` at :272-277, cascading to :570), so
+`tsc` and the pre-push web build fail and **every session's push is held**. Third instance of the
+same shape in this file's history (KT.1b → NEG.1, HV.1 → BID.S0). Recorded only so the next
+session to see a red push knows it is not theirs. Not touched: it is NEG.2's directory and it is
+obviously mid-flight. `tsc` with that one file excluded is clean, which is how PLC.0 confirmed its
+own files compile. Retrying.
+
 **PLC.0 → every session whose page keeps a date control, 2026-08-12.** `AdsPageHeader` declares
 `rangePreset` and `onRangePreset` in its props type and **never destructures either** (`:52-53`
 against `:60`), so those two props are dead: the only callback that fires is `onDateRange(start,
@@ -329,6 +337,24 @@ is a one-file job for whoever holds the config.
 **RD.P0 did not touch `next.config.js`.** HV.1 (**held**) and BID.S0 (**claimed**) both hold it in
 §2 and neither has released, so the rule above is a hand-off, not a change. `?tab=dayparting` stays
 broken until one of you takes it — it is one line inside the rule you are already writing.
+
+**🔴 BSP.0 — the `commit --only` trap fired again, and this time it shipped a broken tab to prod.**
+All four of BSP.0's shared-file edits — `_shared/tabs.tsx`, `RulesAutomationClient.tsx`,
+`rules-automation.css`, `next.config.js` — plus its own claim rows in §2 above, were swept into
+**PLC.0's `341d08e31`** while they sat uncommitted in the shared tree. Second instance in this
+file's history after NEG.1 → KT.1b (`1df95d678`), and materially worse than the first:
+
+> **`341d08e31` set `budget-schedules` to `routed: true` without the route.** Measured on prod at
+> 03:2x: `/marketing/ads/rules-automation/budget-schedules` returned **404** while the tab bar
+> rendered "Budget Pacing & Schedules" and linked to it. Every operator who clicked that tab got a
+> 404, and nothing in the tree said why — the page files were untracked in another session.
+
+Nothing was mis-authored and nothing was lost; the attribution is simply wrong in git and the
+window between the two commits was a live regression. The lesson is narrower than "diff before you
+commit", which both sessions did: **flipping `routed: true` and creating the route are ONE atomic
+change, and they live in two different sessions' files.** A session that finds a foreign
+`routed: true` hunk in `tabs.tsx` is looking at a tab that will 404 the moment it lands. Leave that
+hunk unstaged, or land it and say so loudly.
 
 **BSP.0 → the twelfth pass, 2026-08-12. The scope bar is now forked FIVE times.**
 `BudgetScopeBar` joins `KeywordScopeBar`, `NegativeScopeBar`, `HarvestScopeBar` and `BidScopeBar`.
