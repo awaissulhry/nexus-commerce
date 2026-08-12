@@ -449,6 +449,14 @@ export function KeywordHarvestClient() {
         onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign, adGroup: next.adGroup })}
       />
 
+      {/* 🔴 HV.2 sits HERE, not in the slot list below the grid where its stub lived.
+          Measured on prod: rendered in stub order it landed at y=1301 with the census it governs
+          at y=523 — the control that changes the count, 700px below the count. The seven-slot
+          ordering was written for sections that REPORT; this one is the only one that CONTROLS,
+          so it belongs above the thing it controls. Everything else about the seam is unchanged:
+          same typed props, same file, one import line. */}
+      <HvThresholds {...slotProps} />
+
       {resolution && <p className="h10-hv-said"><b>{resolution}</b></p>}
 
       {err && <p className="h10-hv-blind"><AlertTriangle size={13} /><span>{err}</span></p>}
@@ -602,8 +610,7 @@ export function KeywordHarvestClient() {
         reportLabel={data?.freshness.newestTermDate ? `search terms through ${dayMonth(data.freshness.newestTermDate)}` : undefined}
       />
 
-      {/* ── The seven sections that follow, in order. Every one renders null today. ─────────── */}
-      <HvThresholds {...slotProps} />
+      {/* ── The sections that follow the grid. Every one still renders null today. ──────────── */}
       <HvDestination {...slotProps} />
       <HvPromote {...slotProps} />
       <HvCohort {...slotProps} />
