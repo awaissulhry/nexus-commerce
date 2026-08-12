@@ -235,10 +235,16 @@ export function RulesTabs({ active }: { active: string }) {
     if (!bar) return
     const el = bar.querySelector<HTMLElement>('[aria-selected="true"]')
     if (!el || bar.scrollWidth <= bar.clientWidth) return
-    const left = el.offsetLeft
-    const right = left + el.offsetWidth
-    if (right > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = right - bar.clientWidth + 24
-    else if (left < bar.scrollLeft) bar.scrollLeft = Math.max(0, left - 24)
+    // 🔴 Rects, not `offsetLeft`. `.h10-rules-tabs` is not positioned, so the active tab's
+    // offsetParent is some ancestor further up and `offsetLeft` is measured from THAT — the first
+    // version of this scrolled 78px where 388 were needed and left the tab still clipped, which is
+    // how it was caught on prod. A rect delta is relative to nothing and cannot be wrong.
+    const barRect = bar.getBoundingClientRect()
+    const elRect = el.getBoundingClientRect()
+    const overRight = elRect.right - barRect.right
+    const overLeft = barRect.left - elRect.left
+    if (overRight > 0) bar.scrollLeft += overRight + 24
+    else if (overLeft > 0) bar.scrollLeft -= overLeft + 24
   }, [active])
 
   return (
