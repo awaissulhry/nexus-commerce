@@ -15,7 +15,7 @@
  * index. Nothing else in the bar changes.
  */
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RULE_TYPES } from './ruleTypes'
 
@@ -212,8 +212,37 @@ export function RulesTabs({ active }: { active: string }) {
     return () => { alive = false }
   }, [])
 
+  /**
+   * 🔴 PLC.0 — at eleven items the bar overflows and the ACTIVE tab can be off-screen.
+   *
+   * Measured on production 2026-08-12 at innerWidth 1380, standing on /placement:
+   * `scrollWidth 1642` against `clientWidth 1254` — **388px of overflow** — with the active
+   * "Placement" tab at L=1355 against a bar ending at 1350. So the page you are on is the one tab
+   * you cannot see, and `.h10-rules-tabs` hides its scrollbar (`ads.css:2063`), so there is no
+   * affordance saying more tabs exist. The last three routed pages are all in that dead zone.
+   *
+   * This scrolls the container, never `scrollIntoView`: the shell scrolls
+   * `main.flex-1.overflow-auto`, and an element-level scroll walks up to it and jumps the whole
+   * page on load. Setting `scrollLeft` on this div cannot move anything but this div.
+   *
+   * Deliberately the minimum. The edge fade, the four clusters and keyboard scrolling are the
+   * substrate's S6 and are a design change to a bar eleven pages share; making the active tab
+   * visible is a correctness fix, and it fixes it for all eleven at once.
+   */
+  const barRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const bar = barRef.current
+    if (!bar) return
+    const el = bar.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!el || bar.scrollWidth <= bar.clientWidth) return
+    const left = el.offsetLeft
+    const right = left + el.offsetWidth
+    if (right > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = right - bar.clientWidth + 24
+    else if (left < bar.scrollLeft) bar.scrollLeft = Math.max(0, left - 24)
+  }, [active])
+
   return (
-    <div className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types">
+    <div ref={barRef} className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types">
       {RULES_TABS.map((t) => {
         const n = counts?.[t.key]
         return (

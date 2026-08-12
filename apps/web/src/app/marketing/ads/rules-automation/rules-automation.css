@@ -1930,7 +1930,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The engine clause. Dotted underline because it carries a title that explains why the counts
    above are a reading of this hour — an affordance, not decoration. */
 .h10-plc-eng { border-bottom: 1px dotted #aab3bf; cursor: help; }
-.h10-plc-fresh .lnk { font: inherit; font-size: inherit; font-weight: 700; color: #1f6fde; text-decoration: underline; }
+/* 🔴 #1a61c6, not the section's #1f6fde, and only for links that sit on the PAGE ground.
+   Measured on prod with composite opacity: the ground behind these bands is `.h10-shell`'s
+   #f4f6f9, NOT white — `.h10-rules-page`, `.h10-main` and this <p> are all transparent. #1f6fde
+   is 4.79:1 on white and **4.42:1 on #f4f6f9**, so the section's link colour fails AA everywhere
+   it is used outside a white card. #1a61c6 is 5.33:1 there and 5.88:1 on white.
+   getComputedStyle reports the DECLARED colour and would have called this a pass. */
+.h10-plc-fresh .lnk { font: inherit; font-size: inherit; font-weight: 700; color: #1a61c6; text-decoration: underline; }
 
 .h10-plc-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
 .h10-plc-scope .h10-plc-note { margin: 0; }

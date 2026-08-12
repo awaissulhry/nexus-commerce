@@ -112,6 +112,7 @@ interface Payload {
   dataThrough: string | null
   counts: {
     campaigns: number
+    matchedCampaigns: number
     carrying: number
     governed: number
     unmanaged: number
@@ -437,6 +438,8 @@ export function PlacementClient() {
     bits.push(`${num(c.campaigns)} campaign${c.campaigns === 1 ? '' : 's'}`)
     bits.push(`${num(c.carrying)} carrying a multiplier`)
     bits.push(`${num(c.unmanaged)} of those governed by nothing`)
+    // The search is stated separately and never folded into the scope's numbers — see the service.
+    if (q) bits.push(`showing ${num(c.matchedCampaigns)} matching “${q}”`)
     return bits.join(' · ')
   })()
 
@@ -666,14 +669,21 @@ function EmptyState({
     )
   }
 
+  /**
+   * 🔴 The scope is not empty and the search is: two different sentences with two different fixes.
+   *
+   * Found by typing into the box on production. The counts used to be computed over the SEARCHED
+   * set, so this branch was unreachable — a no-match search collapsed `counts.campaigns` to 0 and
+   * the branch above fired, telling the operator to widen a scope that already held 220 campaigns.
+   */
   return (
     <span className="h10-plc-empty">
       <b>
-        {num(data.counts.campaigns)} campaign{data.counts.campaigns === 1 ? '' : 's'} resolved
-        {lane === 'all' ? '' : ` on the ${LANE_LABEL[lane]} lane`} — the search hides all of them.
+        {num(data.counts.campaigns)} campaign{data.counts.campaigns === 1 ? '' : 's'} in this scope
+        {lane === 'all' ? '' : ` on the ${LANE_LABEL[lane]} lane`} — {q ? 'the search hides' : 'the filters hide'} all of them.
       </b>
       <span>
-        {q ? <>Nothing matches “{q}”. </> : null}
+        {q ? <>No campaign name contains “{q}”. </> : null}
         <button type="button" className="lnk" onClick={() => push({ q: '', lane: 'all' })}>Clear the search and the lane filter</button>
       </span>
     </span>
