@@ -74,7 +74,13 @@ export function PacingBand({
     )
   }
 
-  const rows = data?.rows ?? []
+  // `analyzeBudgetManager()` returns markets in its own order, which comes out alphabetical —
+  // DE, ES, FR, IT — so IT lands last while carrying €2,220 of the €4,000 account cap. Ordered by
+  // the money instead: cap first, then spend, so a market with real spend and no cap set still
+  // sorts by what it is actually costing rather than falling to the end on a zero.
+  const rows = [...(data?.rows ?? [])].sort(
+    (a, b) => (b.monthlyBudgetCents - a.monthlyBudgetCents) || ((b.spendCents ?? 0) - (a.spendCents ?? 0)),
+  )
   if (!data || rows.length === 0) {
     return (
       <div className="h10-bsp-band">

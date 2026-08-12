@@ -2101,7 +2101,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-chip .hd b { font-size: 12px; font-weight: 800; color: #1c2530; letter-spacing: .02em; }
 .h10-bsp-chip .hd i { font-style: normal; font-size: 10.5px; font-weight: 700; }
 .h10-bsp-chip .amt { font-size: 11.5px; font-weight: 700; color: #1c2530; line-height: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.h10-bsp-chip .amt s { text-decoration: none; color: #98a2b3; }
+.h10-bsp-chip .amt s { text-decoration: none; color: #667080; }
 .h10-bsp-chip .amt em { font-style: normal; font-weight: 700; color: #667080; }
 .h10-bsp-bar { display: block; width: 100%; margin-top: 2px; }
 
@@ -2114,7 +2114,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-sum .l { display: inline-flex; align-items: baseline; gap: 5px; }
 .h10-bsp-sum b { font-weight: 800; color: #1c2530; }
 .h10-bsp-sum b.bad { color: #b3261e; }
-.h10-bsp-sum s { text-decoration: none; color: #c2c9d3; }
+.h10-bsp-sum s { text-decoration: none; color: #667080; }
 .h10-bsp-plan { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
 .h10-bsp-plan:hover { background: #e8f1fd; color: #10457f; border-color: #1f6fde; }
 

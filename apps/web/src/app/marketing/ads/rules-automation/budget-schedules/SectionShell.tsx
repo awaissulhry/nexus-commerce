@@ -111,9 +111,15 @@ export function SectionShell({
     if (!focused || !ref.current) return
     // The app shell scrolls `MAIN.h10-main`, not the window. `scrollIntoView` walks up to whatever
     // actually scrolls, which is why it is used here rather than a hand-computed offset — and
-    // `block: 'start'` lands under the sticky spine + band because the browser accounts for the
-    // sticky elements' own space, not their painted position. Verified by scrolling on prod.
-    ref.current.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    // `block: 'start'` honours this element's `scroll-margin-top: 120px`, which is what lands it
+    // under the pinned spine + band rather than behind them. Measured on prod: y = 120.2.
+    //
+    // 🔴 `behavior: 'auto'`, NOT 'smooth'. Smooth scrolling is driven by requestAnimationFrame, and
+    // measured on production `?section=hours` left `scrollTop` at 0 while the identical call with
+    // 'auto' moved it to 342. A deep link that silently does not scroll looks exactly like a deep
+    // link that was ignored. (`html { scroll-behavior: smooth }` is set globally and does not
+    // rescue it — the same rAF drives both.)
+    ref.current.scrollIntoView({ block: 'start', behavior: 'auto' })
   }, [focused])
 
   return (
