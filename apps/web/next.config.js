@@ -46,6 +46,15 @@ const nextConfig = {
         destination: '/marketing/ads/rules-automation/negative-targeting',
         permanent: true,
       },
+      // HV.1 — the same, for Keyword Harvest. One entry per routed tab; the block above explains
+      // why each is needed and why `check-link-targets.mjs` cannot catch a missing one (RulesTabs
+      // builds its href in a function call rather than a literal).
+      {
+        source: '/marketing/ads/rules-automation',
+        has: [{ type: 'query', key: 'tab', value: 'keyword-harvest' }],
+        destination: '/marketing/ads/rules-automation/keyword-harvest',
+        permanent: true,
+      },
       // BID.S0 — same mechanism, same shape. `?tab=bid` predates the route and is the URL every
       // existing link to the Bid tab uses; without this it silently renders Apply Rules.
       {

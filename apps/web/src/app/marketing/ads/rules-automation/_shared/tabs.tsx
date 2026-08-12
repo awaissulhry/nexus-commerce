@@ -17,6 +17,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { RULE_TYPES } from './ruleTypes'
 
 export interface RulesTab {
   key: string
@@ -51,7 +52,15 @@ export const RULES_TABS: RulesTab[] = [
     routed: true,
     subtitle: 'What each target bids, why it is that number, and who decided',
   },
-  { key: 'keyword-harvest', label: 'Keyword Harvest' },
+  // HV.1 — its own page. The tab used to render a rule list that filtered every rule out of
+  // itself (see RULE_TAB_ACTION_TYPES below) under a badge that said 5, and nothing else — while
+  // the harvest engine acted on 14 candidates nightly with no surface anywhere in the product.
+  {
+    key: 'keyword-harvest',
+    label: 'Keyword Harvest',
+    routed: true,
+    subtitle: 'Which search terms have earned their own keyword',
+  },
   // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
   // nothing else: 2,059 negatives existed and no screen anywhere in the product listed one.
   {
@@ -101,13 +110,40 @@ export const rulesTabByKey = (key: string): RulesTab | undefined => RULES_TABS.f
  * inventing a home would misfile them where nobody would think to look. They remain visible
  * on Apply Rules, which lists every rule regardless of type.
  */
-export const RULE_TAB_ACTION_TYPES: Record<string, string[]> = {
+const RULE_TAB_ACTION_TYPES_BASE: Record<string, string[]> = {
   bid: ['bid_to_target_acos', 'bid_up', 'bid_down', 'lower_bid_to_floor', 'raise_bids_for_rank_defense'],
   budget: ['adjust_ad_budget'],
   placement: ['set_placement_multiplier', 'defend_top_of_search'],
   'keyword-harvest': ['promote_to_exact', 'harvest_and_negate'],
   'negative-targeting': ['harvest_and_negate', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns'],
 }
+
+/**
+ * 🔴 HV.1 — a tab must also match its own BUILDER SLUG, and the map is derived rather than copied.
+ *
+ * `RuleBuilder.tsx:499` writes `actions: [{ type: slug }]` where `slug` is the builder's URL
+ * segment — `keyword-harvesting`, not the action type `promote_to_exact`. So a rule created in the
+ * builder carries an action type that the base map above has never contained, and **the first rule
+ * an operator creates is invisible on the tab it was created from.**
+ *
+ * Zero rules carry a builder slug today, so this is latent rather than a live defect — which is
+ * exactly why it would have survived: nothing on screen would have been wrong until the day
+ * someone used the builder.
+ *
+ * `ruleTypes.ts` already holds `{ slug, tab }` for all nine rule types and nothing read it. Merging
+ * from there rather than hand-adding a string keeps one source of truth: adding a rule type to the
+ * modal now wires its tab automatically.
+ *
+ * ⚠ Scoped to the tabs that already have an entry. `keyword-tracker`, `share-of-voice`,
+ * `dayparting` and `budget-schedules` have no entry in the base map at all — giving them one
+ * changes what those tabs count and belongs to the sessions that own them, not to this one.
+ */
+export const RULE_TAB_ACTION_TYPES: Record<string, string[]> = Object.fromEntries(
+  Object.entries(RULE_TAB_ACTION_TYPES_BASE).map(([tab, types]) => [
+    tab,
+    [...new Set([...types, ...RULE_TYPES.filter((rt) => rt.tab === tab).map((rt) => rt.slug)])],
+  ]),
+)
 
 /** True when any of the rule's actions belongs to `tabKey`. */
 export function ruleBelongsToTab(actions: unknown, tabKey: string): boolean {

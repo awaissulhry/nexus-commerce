@@ -1,0 +1,151 @@
+/**
+ * HV.1 — the seam.
+ *
+ * Seven sections follow this one. Each gets a slot in `KeywordHarvestClient`, in order, each
+ * importing from its own file and rendering null until its session lands. This file is the typed
+ * contract between them, and it exists so that **a later session adds one file and one import line
+ * and nobody restructures the client.**
+ *
+ * Three rules the sections inherit:
+ *
+ *   1. **Hidden, not disabled.** A section whose data does not exist yet renders nothing. A
+ *      disabled button that will never enable is the same defect class as the Delete button on
+ *      `RuleListTab.tsx:120`, which says "this cannot be undone" and mutates `useState`.
+ *   2. **A blank is not a zero.** `acosPct` and `cpcCents` are `number | null` in this contract
+ *      rather than `number`, deliberately: "not measured" and a real `0.00` must never render the
+ *      same, and a section that defaults the null to 0 has invented a measurement.
+ *   3. **Promote and negate-at-source are ONE decision, not two.** In `applyHarvest` the H.3
+ *      isolation negative fires only when a `destinations` map moved the keyword elsewhere — so
+ *      "promoted into the source" and "did not negate the source" are one defect. HV.3 and HV.4
+ *      must not be able to ship one without the other, which is why they share this contract.
+ */
+
+import type { ReactNode } from 'react'
+
+export type HvGrain = 'market' | 'line' | 'portfolio' | 'campaign' | 'adGroup'
+export type HvKind = 'keyword' | 'product'
+
+/**
+ * The four candidate states. There is no fifth and there is no blank.
+ *
+ * 🔴 `local-only` is a STATUS, not an absence. 210 of the account's 2,129 positive keywords carry
+ * no Amazon id, and **209 of those 210 were written by the harvest engine**, each one reporting
+ * success. A row that says "already exact" when the keyword never reached Amazon is the same lie
+ * as an empty grid under a badge of 5.
+ */
+export type HvStatus = 'new' | 'already-exact-here' | 'exact-elsewhere' | 'local-only'
+
+export interface HarvestRow {
+  id: string
+  term: string
+  termKey: string
+  market: string
+  kind: HvKind
+  campaign: { id: string | null; name: string; externalId: string; targetingType: string | null; status: string | null }
+  adGroup: { id: string | null; name: string; externalId: string }
+  metrics: {
+    impressions: number
+    clicks: number
+    spendCents: number
+    orders: number
+    salesCents: number
+    /** null = no sales to divide by. NOT zero. */
+    acosPct: number | null
+    /** the bid this term has EARNED: cost ÷ clicks. null = never clicked. NOT zero. */
+    cpcCents: number | null
+  }
+  /**
+   * Which match types actually produced this term's orders — the column that tells a tautology
+   * from a discovery. `previewHarvest` has no match-type filter, so a term that matched an EXACT
+   * keyword is offered as a candidate to create that same keyword.
+   */
+  matchedVia: Array<{ matchType: string; orders: number }>
+  exactMatchedOnly: boolean
+  status: HvStatus
+  existing: { rows: number; atAmazon: number; bidCents: number | null; adGroups: string[] } | null
+  /** D5 — read-only here. Refusing to propose a negated term is HV.4; the inventory is session 7's. */
+  negatedIn: { rows: number; blocking: number; campaignLevel: number }
+}
+
+export interface HvCensus {
+  candidates: number
+  byKind: { keyword: number; product: number }
+  newByKind: { keyword: number; product: number }
+  new: number
+  alreadyExactHere: number
+  exactElsewhere: number
+  localOnly: number
+  negatedAlready: number
+  exactMatchedOnly: number
+  atOneOrder: {
+    candidates: number
+    withoutKeywordInSource: number
+    noExactMatch: number
+    spendCents: number
+    salesCents: number
+    acosPct: number | null
+    singleOrder: number
+    repeatedValues: Array<{ salesCents: number; terms: number }>
+  }
+  negativeCandidates: { count: number; spendCents: number }
+  productCandidates: { graduations: number; negatives: number }
+}
+
+export interface HvFreshness {
+  newestTermDate: string | null
+  ageDays: number | null
+  newestRowWrittenAt: string | null
+  rows: number
+}
+
+export interface HvScopeState {
+  market: string
+  line: string
+  portfolio: string
+  campaign: string
+  adGroup: string
+  boundBy: HvGrain | null
+}
+
+/**
+ * What every slot receives. Identical for all seven, so a section cannot quietly widen what it
+ * takes and make the client its dependency.
+ */
+export interface HvSlotProps {
+  scope: HvScopeState
+  census: HvCensus | null
+  rows: HarvestRow[]
+  /**
+   * Read from the URL in HV.1 and displayed; the CONTROLS that move them are HV.2. They are in
+   * the contract from day one because the entire finding of the study is that the threshold
+   * decides whether this tab has any content — so every section reasons about the same numbers,
+   * and a link can carry them before anything can change them.
+   */
+  thresholds: { minOrders: number; minSpendEur: number; windowDays: number }
+  freshness: HvFreshness | null
+  loading: boolean
+  /** patch the URL — the single writer of page state, so every view stays linkable */
+  push: (patch: Record<string, string>) => void
+  /** the candidate the URL is focused on (`?row=<term>`), or null. HV.3 opens its panel from this. */
+  row: string | null
+  /** re-run the page's read after a write lands. HV.4 onward call it; HV.1 never does. */
+  reload: () => void
+}
+
+/**
+ * Write actions the candidate grid will accept, declared on day one and supplied by nobody yet.
+ *
+ * HV.4 (promote + negate-at-source as one transaction) and HV.7 (the queue) inject these; HV.1
+ * passes `null` for both and the grid renders no selection bar and no row menu. That is the seam
+ * that lets those sections ship without opening this client.
+ *
+ * 🔴 There is deliberately no "approve" that is separate from "promote". A promotion writes a
+ * keyword AND its isolation negative, and the two are one transaction in `applyHarvest` — a
+ * contract offering them separately would let a later section ship half of it.
+ */
+export interface HvWriteActions {
+  selectionActions: ((ids: string[], clear: () => void) => ReactNode) | null
+  onRowAction: ((row: HarvestRow) => void) | null
+}
+
+export const NO_WRITE_ACTIONS: HvWriteActions = { selectionActions: null, onRowAction: null }
