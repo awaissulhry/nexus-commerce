@@ -1469,7 +1469,9 @@ async function start() {
       const { startTosDefenseCron } = await import('./jobs/ads-tos-defense.job.js');
       // Apex B.1 — AMS SQS consumer (self-gated on NEXUS_AMS_SQS_QUEUE_URL + AWS creds).
       const { startAmsSqsPollCron } = await import('./jobs/ams-sqs-poll.job.js');
-      // Apex E.1 — SQP competitive-intel ingest (self-gated on NEXUS_ENABLE_SQP_INGEST_CRON).
+      // Apex E.1 — SQP competitive-intel ingest. Default ON; opt out with
+      // NEXUS_DISABLE_SQP_INGEST_CRON=1. (This comment used to name
+      // NEXUS_ENABLE_SQP_INGEST_CRON, which has no readers at all — see SQP.1.)
       const { startSqpIngestCron } = await import('./jobs/sqp-ingest.job.js');
       // AX-VT.5 — 6-hourly structural reconcile: compare the whole account against Amazon and
       // record where it disagrees. Reads + portfolio repair only; never touches bids.

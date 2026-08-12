@@ -530,7 +530,12 @@ export function KeywordTrackerClient() {
               Loud, measured 2026-08-12: the last two nights wrote nothing and BOTH reported
               status=SUCCESS while carrying errorMessage="stale (auto-swept after 2.3h)". Which is
               why this reads the DATA — rows written, and the run's own rows=N — and never
-              CronRun.status. */}
+              CronRun.status.
+
+              SQP.1 later made a zero-row run throw, so `greenAndDead` should now decay to 0 as
+              those two runs age out of the last 8. That is the fix landing, NOT the feed recovering:
+              `nightsSilent` is the one to watch, because it counts rows and cannot be talked out of
+              it by a status. Keep both — a future regression could reintroduce either half. */}
           {f2 && (f2.nightsSilent >= 2 || f2.greenAndDead > 0 ? (
             <p className="h10-kt-blind">
               <AlertTriangle size={13} />
@@ -551,8 +556,12 @@ export function KeywordTrackerClient() {
                   </>
                 )}
                 {f2.structuralFailures.length > 0 && (
-                  <>Five of the nine markets the nightly job iterates ({f2.structuralFailures.join(', ')}) have no
-                  listings at all, so its “failed=5” is a constant and a sixth failure would not show.</>
+                  // SQP.1, 2026-08-12: this used to read "so its failed=5 is a constant and a sixth
+                  // failure would not show". True until the job stopped iterating them; saying it
+                  // now would describe a defect that was fixed.
+                  <>Five of the nine markets its ads connections list ({f2.structuralFailures.join(', ')}) hold no
+                  listings at all; the nightly job skips and names them rather than failing on each, so
+                  a reported failure is now a real one.</>
                 )}
               </span>
             </p>

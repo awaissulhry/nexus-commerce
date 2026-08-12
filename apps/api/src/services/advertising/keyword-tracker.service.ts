@@ -874,8 +874,13 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     if ((wroteByDay.get(day) ?? 0) === 0) nightsSilent++
     else break
   }
+  // 🔴 SQP.1 — read the claim from EITHER field. `recordCronRun` persists `outputSummary` only on
+  // the success path, and since SQP.1 a run that writes nothing in every market throws on purpose
+  // so it can no longer leave a green row. Its summary therefore arrives inside `errorMessage`
+  // instead — and parsing only `outputSummary` would have made the very runs this signal exists to
+  // catch parse as "no claim", i.e. would have reported the fix as the absence of the defect.
   const claimedRows = recentRuns.map((r) => {
-    const m2 = /rows=(\d+)/.exec(r.outputSummary ?? '')
+    const m2 = /rows=(\d+)/.exec(r.outputSummary ?? '') ?? /rows=(\d+)/.exec(r.errorMessage ?? '')
     return m2 ? Number(m2[1]) : null
   })
   let nightsClaimingZero = 0
@@ -973,9 +978,13 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       lastRunError: recentRuns[0]?.errorMessage ?? null,
       rowsWrittenPerNight: ingestDays.slice(0, 7).map((r) => ({ day: r.day, rows: Number(r.rows) })),
       /**
-       * The five markets the cron iterates that can never succeed — 0 ChannelListing rows each, so
-       * `ok=4 failed=5` is a constant and a sixth failure would be invisible. Hard-coded because it
-       * is a property of which profiles are sandbox, not of today's data.
+       * The five markets whose ads connections are active but which hold no Amazon listing at all.
+       *
+       * 🔴 Their CONSEQUENCE changed on 2026-08-12 (SQP.1). They used to be iterated and throw every
+       * night, which is what made `ok=4 failed=5` a constant that a sixth, real failure could hide
+       * inside. The job now selects markets by whether we hold ASINs there and NAMES these as
+       * skipped, so `failed` finally means something. Kept on the payload because "five of nine ads
+       * markets are empty" is still worth saying — but it is no longer a description of a defect.
        */
       structuralFailures: ['IE', 'NL', 'PL', 'SE', 'UK'],
       /** the dates this view stops being current — see projectCliff */

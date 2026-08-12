@@ -227,7 +227,24 @@ export async function probeSqpAccess(marketplaceCode: string, period: SqpPeriod 
   }
 }
 
-export interface SqpIngestResult { marketplace: string; period: SqpPeriod; startDate: string; asinsRequested: number; rows: number; upserted: number; failedAsins: number }
+export interface SqpIngestResult {
+  marketplace: string
+  period: SqpPeriod
+  startDate: string
+  asinsRequested: number
+  rows: number
+  upserted: number
+  failedAsins: number
+  /**
+   * SQP.1 — of `failedAsins`, how many were ABANDONED at the client's 300s poll ceiling rather
+   * than rejected by Amazon. The distinction is the whole diagnosis: an abandoned report is not a
+   * failure at Amazon's end, it is one we stopped listening to. All 104 abandoned on record later
+   * reached DONE — see docs/2026-08-12-sqp-feed.md.
+   */
+  abandonedAsins: number
+}
+/** The client gives up after 30 polls × 10s; sp-api-reports.service phrases it exactly this way. */
+const ABANDONED_AT_CEILING = /did not reach DONE within/
 
 /**
  * SQP is per-ASIN, so we request one report per ASIN and store its query rows
@@ -249,6 +266,7 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
   let totalRows = 0
   let upserted = 0
   let failedAsins = 0
+  let abandonedAsins = 0
   let loggedSample = false
   for (const asin of asins) {
     let payload: object
@@ -257,8 +275,14 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
       const r = await fetchSpApiJsonReport<object>({ reportType: SQP_REPORT_TYPE, marketplaceId, dataStartTime: start, dataEndTime: end, reportOptions: { reportPeriod: period, asin } })
       payload = r.payload; reportId = r.reportId
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       failedAsins += 1
-      logger.warn('[sqp] asin report failed', { marketplace: args.marketplaceCode, asin, error: err instanceof Error ? err.message : String(err) })
+      const abandoned = ABANDONED_AT_CEILING.test(msg)
+      if (abandoned) abandonedAsins += 1
+      // SQP.1 — say WHICH kind of failure this is. "abandoned" means the report is still coming and
+      // we will not be here to collect it; that reads very differently from a rejection, and for two
+      // weeks both arrived as the same undifferentiated warning.
+      logger.warn('[sqp] asin report failed', { marketplace: args.marketplaceCode, asin, abandonedAtPollCeiling: abandoned, error: msg })
       continue
     }
     const rows = parseSqp(payload)
@@ -307,5 +331,5 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
       upserted += 1
     }
   }
-  return { marketplace: args.marketplaceCode, period, startDate: startDateOnly.toISOString().slice(0, 10), asinsRequested: asins.length, rows: totalRows, upserted, failedAsins }
+  return { marketplace: args.marketplaceCode, period, startDate: startDateOnly.toISOString().slice(0, 10), asinsRequested: asins.length, rows: totalRows, upserted, failedAsins, abandonedAsins }
 }

@@ -5,9 +5,32 @@
  * Amazon marketplace into SearchQueryPerformance, so the competitive-share view
  * stays current. Idempotent upsert (re-fetching the same week is safe).
  *
- * Default OFF (NEXUS_ENABLE_SQP_INGEST_CRON) until Brand Analytics access is
- * confirmed via probeSqpAccess — calling the report without the role just
- * errors. Registered in CRON_REGISTRY for manual triggering regardless.
+ * 🔴 **Default ON.** `NEXUS_ENABLE_SQP_INGEST_CRON` does NOT gate this and never did — it has
+ * zero readers anywhere in the repo, and this header used to claim it meant "default OFF". The
+ * real switch is the inverted `NEXUS_DISABLE_SQP_INGEST_CRON=1` opt-out, read once in
+ * `startSqpIngestCron` below. Registered in CRON_REGISTRY for manual triggering either way.
+ *
+ * ── What this job's summary is FOR (SQP.1, 2026-08-12) ────────────────────────────────────────
+ * It used to report `markets=9 ok=4 failed=5 rows=0` — and did so for two consecutive nights
+ * while writing nothing at all, on a row that read SUCCESS. Three separate things made a dead
+ * feed indistinguishable from a healthy one, and all three are fixed here:
+ *
+ *   1. **`failed=5` was a constant.** The loop iterated every active AmazonAdsConnection, five of
+ *      which (IE/NL/PL/SE/UK) have no Amazon listings at all, so `ingestSqp` threw instantly on
+ *      each, every run, forever. A real market failure had nowhere to show. Markets are now chosen
+ *      by whether we actually hold ASINs there, and the ones we skip are named as skipped.
+ *   2. **`rows` summed only `upserted`.** `asinsRequested`, rows parsed and `failedAsins` were
+ *      dropped, so "40 reports failed" and "40 reports came back empty" printed identically. The
+ *      summary now carries all of it, per market, including how many reports we ABANDONED at the
+ *      poll ceiling — which is the number that turned out to matter.
+ *   3. **Zero rows still returned SUCCESS.** A run that writes nothing in every market is not a
+ *      success, so it now throws, and the thrown message carries the whole per-market breakdown
+ *      (`recordCronRun` writes `outputSummary` only on the success path, so the detail has to
+ *      travel in the error or it is lost).
+ *
+ * See docs/2026-08-12-sqp-feed.md. Note what is NOT fixed here: the abandonment itself. Those
+ * reports do finish at Amazon — 104 of 104 on record reached DONE — and collecting them needs an
+ * asynchronous pass this job does not have. That is a design change awaiting a decision.
  */
 
 import cron from 'node-cron'
@@ -18,29 +41,122 @@ import { envEnabled } from '../utils/env-flag.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
+/** Per-ASIN reports are slow and serialised at Amazon, so the batch stays bounded. */
+const SQP_ASINS_PER_MARKET = 10
+
+/** One market's outcome, as `ingestSqp` reports it — plus the case where the market itself threw. */
+export interface SqpMarketOutcome {
+  marketplace: string
+  asinsRequested: number
+  /** rows PARSED out of the reports (not the same as written). */
+  rows: number
+  upserted: number
+  failedAsins: number
+  abandonedAsins: number
+  /** the whole market threw before any report — no ASINs, no marketplace id, auth */
+  errored?: boolean
+}
+
+/**
+ * SQP.1 — the summary and the verdict, as one pure function.
+ *
+ * Pure and exported because both halves are contracts rather than cosmetics, and neither could be
+ * tested through `runSqpIngestOnce` without mocking Amazon:
+ *
+ *   · the `rows=` token is READ by `keyword-tracker.service.ts` (`/rows=(\d+)/`) to drive the KT
+ *     page's feed-health line, so the token name is an interface;
+ *   · `fatal` decides whether the run leaves a green row, which is the single thing that let a dead
+ *     feed sit unnoticed for two weeks.
+ *
+ * Returns `fatal = null` when the run may report success.
+ */
+export function buildSqpSummary(args: {
+  candidates: string[]
+  skipped: string[]
+  outcomes: SqpMarketOutcome[]
+}): { summary: string; fatal: string | null } {
+  const { candidates, skipped, outcomes } = args
+  const sum = (f: (o: SqpMarketOutcome) => number) => outcomes.reduce((a, o) => a + f(o), 0)
+  const requested = sum((o) => o.asinsRequested)
+  const parsed = sum((o) => o.rows)
+  const upserted = sum((o) => o.upserted)
+  const failedReports = sum((o) => o.failedAsins)
+  const abandoned = sum((o) => o.abandonedAsins)
+  const marketErrors = outcomes.filter((o) => o.errored).length
+
+  const detail = outcomes.map((o) =>
+    o.errored
+      ? `${o.marketplace} ERROR`
+      : `${o.marketplace} ${o.asinsRequested - o.failedAsins}/${o.asinsRequested} done${o.abandonedAsins ? ` (${o.abandonedAsins} abandoned)` : ''} ${o.upserted} rows`,
+  )
+
+  // 🔴 `rows=` keeps its old name and its old meaning (rows WRITTEN), because
+  // keyword-tracker.service.ts parses `/rows=(\d+)/` out of this string. Renaming it to `upserted=`
+  // would have left that regex matching nothing and silently zeroed a defect signal — a summary is
+  // an interface the moment something reads it. `parsed=` is the new, separate number.
+  const summary =
+    `markets=${outcomes.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
+    ` · reports=${requested} failed=${failedReports}${abandoned ? ` abandoned=${abandoned}` : ''}` +
+    ` · parsed=${parsed} rows=${upserted}` +
+    (marketErrors ? ` · marketErrors=${marketErrors}` : '') +
+    (detail.length ? ` · ${detail.join(' · ')}` : '')
+
+  // A run that wrote nothing anywhere is a failure and must not leave a green row behind. The
+  // summary travels INSIDE the message because recordCronRun persists outputSummary only on success.
+  if (outcomes.length === 0) {
+    return { summary, fatal: `sqp-ingest: no eligible marketplace — none of ${candidates.length} active ads markets (${candidates.join(',')}) holds an Amazon ASIN. ${summary}` }
+  }
+  if (upserted === 0) {
+    const because = requested > 0 && abandoned === requested
+      ? `every one of the ${requested} reports was ABANDONED at the ~300s poll ceiling; they do finish at Amazon afterwards, so this is a collection failure and not an Amazon failure (docs/2026-08-12-sqp-feed.md)`
+      : `${failedReports} of ${requested} reports failed (${abandoned} abandoned at the poll ceiling), ${parsed} rows parsed`
+    return { summary, fatal: `sqp-ingest wrote 0 rows across all ${outcomes.length} markets: ${because}. ${summary}` }
+  }
+  return { summary, fatal: null }
+}
+
 /**
  * ACR.1.2d — the tick's work AND its summary, without the CronRun wrapper, so the
  * manual-trigger registry can call it and produce ONE honest row. See the same note on
  * ads-sync-drain.job.ts.
  */
 export async function runSqpIngestOnce(): Promise<string> {
-  const { ingestSqp } = await import('../services/advertising/sqp.service.js')
+  const { ingestSqp, ourAsinsForMarketplace } = await import('../services/advertising/sqp.service.js')
   const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
-  const markets = [...new Set(conns.map((c) => c.marketplace))]
-  let totalRows = 0
-  let ok = 0
-  let failed = 0
-  for (const mkt of markets) {
+  const candidates = [...new Set(conns.map((c) => c.marketplace))].sort()
+
+  // Choose markets by whether we hold ASINs there, not by whether an ads connection is active.
+  // Resolve once and pass the list through, so the market filter and the reports it requests can
+  // never disagree — and skipping is REPORTED, because a silently-dropped market is how the old
+  // constant `failed=5` hid everything behind it.
+  const eligible: Array<{ mkt: string; asins: string[] }> = []
+  const skipped: string[] = []
+  for (const mkt of candidates) {
+    const asins = await ourAsinsForMarketplace(mkt, SQP_ASINS_PER_MARKET)
+    if (asins.length === 0) skipped.push(mkt)
+    else eligible.push({ mkt, asins })
+  }
+  if (skipped.length) {
+    logger.info('[sqp-ingest] markets skipped — no Amazon ASINs held there', { skipped, candidates: candidates.length })
+  }
+
+  const outcomes: SqpMarketOutcome[] = []
+  for (const { mkt, asins } of eligible) {
     try {
-      const r = await ingestSqp({ marketplaceCode: mkt, period: 'WEEK' })
-      totalRows += r.upserted
-      ok += 1
+      const r = await ingestSqp({ marketplaceCode: mkt, period: 'WEEK', asins })
+      outcomes.push({
+        marketplace: mkt, asinsRequested: r.asinsRequested, rows: r.rows,
+        upserted: r.upserted, failedAsins: r.failedAsins, abandonedAsins: r.abandonedAsins,
+      })
     } catch (err) {
-      failed += 1
+      outcomes.push({ marketplace: mkt, asinsRequested: 0, rows: 0, upserted: 0, failedAsins: 0, abandonedAsins: 0, errored: true })
       logger.warn('[sqp-ingest] marketplace failed', { marketplace: mkt, error: err instanceof Error ? err.message : String(err) })
     }
   }
-  return `markets=${markets.length} ok=${ok} failed=${failed} rows=${totalRows}`
+
+  const { summary, fatal } = buildSqpSummary({ candidates, skipped, outcomes })
+  if (fatal) throw new Error(fatal)
+  return summary
 }
 
 export async function runSqpIngestCron(): Promise<void> {

@@ -146,6 +146,26 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * SQP.1 — an error that still knows which report it was about.
+ *
+ * Both failures below happen AFTER createReport succeeded, so Amazon is holding a real report we
+ * have simply stopped waiting for — and in the abandoned case it goes on to finish (104 of 104 on
+ * record did). The id was previously lost at the throw and survived only in the message text, which
+ * is no basis for collecting anything. See docs/2026-08-12-sqp-feed.md §6.3.
+ */
+export class SpApiReportError extends Error {
+  constructor(
+    message: string,
+    readonly reportId: string,
+    /** true = abandoned at OUR poll ceiling (still generating); false = Amazon ended it. */
+    readonly abandoned: boolean,
+  ) {
+    super(message)
+    this.name = 'SpApiReportError'
+  }
+}
+
+/**
  * Fetch an SP-API report end-to-end. Polls until DONE / CANCELLED / FATAL,
  * downloads the document, returns the parsed payload. Throws on auth
  * failure, polling timeout, or report fatal status — caller wraps in
@@ -182,6 +202,8 @@ export async function fetchSpApiReport<T = unknown>(
     if (runId)
       await failReportRun(runId, {
         errorMessage: err instanceof Error ? err.message : String(err),
+        // SQP.1 — keep the id when there is one, so an abandoned report stays addressable.
+        reportId: err instanceof SpApiReportError ? err.reportId : undefined,
       })
     throw err
   }
@@ -245,15 +267,19 @@ async function doFetchSpApiReport<T = unknown>(
           if (txt) detail = ` — ${String(txt).slice(0, 500)}`
         } catch { /* no error document available */ }
       }
-      throw new Error(
+      throw new SpApiReportError(
         `sp-api-reports: report ${reportId} ended with terminal status ${status}${detail}`,
+        reportId,
+        false,
       )
     }
     // IN_QUEUE / IN_PROGRESS → keep polling
   }
   if (!reportDocumentId) {
-    throw new Error(
+    throw new SpApiReportError(
       `sp-api-reports: report ${reportId} did not reach DONE within ${MAX_POLL_ATTEMPTS} polling attempts (~${(MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s)`,
+      reportId,
+      true,
     )
   }
 

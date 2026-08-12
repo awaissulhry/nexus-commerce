@@ -91,6 +91,13 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/ads-mutation.service.ts` | NEG.3b (optional `actionType` override on `updateAdTargetWithSync`, defaulted to current behaviour) | 2026-08-12 | **claimed** |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.2 (two entry points + the drawer mount; no restructuring) | 2026-08-12 | **released** |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.1b (one SQP period per view; the four unsaid things) | 2026-08-12 | **released** — landed `a3692fc80` (API) + the web commit that follows it |
+| `apps/api/src/jobs/sqp-ingest.job.ts` | SQP.1 (market selection by ASINs held; honest summary; zero-row run throws; `buildSqpSummary` extracted pure) | 2026-08-12 | **released** |
+| `apps/api/src/services/advertising/sqp.service.ts` | SQP.1 (`abandonedAsins` on `SqpIngestResult`; the per-ASIN warning says which kind of failure) | 2026-08-12 | **released** — additive |
+| `apps/api/src/services/sp-api-reports.service.ts` | SQP.1 (`SpApiReportError` carries the reportId out of the 2 throw sites that know it) | 2026-08-12 | **released** — additive; shared by every SP-API report puller, so the 2 throws changed class and nothing else |
+| `apps/api/src/services/amazon-report-registry.service.ts` | SQP.1 (`failReportRun` accepts + stores `reportId`) | 2026-08-12 | **released** — one optional field, one call site |
+| `apps/api/src/services/advertising/keyword-tracker.service.ts` | SQP.1 (the `rows=` reader now tries `errorMessage` too; `structuralFailures` comment) | 2026-08-12 | **released** — 🔴 see §5's new trap: a zero-row run's summary MOVED field |
+| `…/keyword-tracker/KeywordTrackerClient.tsx` | SQP.1 (the `failed=5` sentence, now that it is no longer true) | 2026-08-12 | **released** — copy only |
+| `apps/api/src/index.ts` | SQP.1 (one comment naming the decoy flag) | 2026-08-12 | **released** — comment only |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
@@ -356,6 +363,18 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**SQP.1 → every session, 2026-08-12 — making a job FAIL moves its summary to another column.**
+`recordCronRun` persists `outputSummary` only on the success path and `errorMessage` only on the
+failure path. So the moment you make a job throw on a condition it used to return normally — which is
+the right fix for anything that was reporting green while dead — **every reader of that job's summary
+starts reading `null`.** `keyword-tracker.service.ts` parses `/rows=(\d+)/` out of `outputSummary` to
+count nights that claimed zero rows; had SQP.1 not fixed the reader in the same commit, the runs that
+signal the defect would have scored as "no claim", and the health line would have gone quiet exactly
+when the feed died. The fix reports itself as the absence of the problem. Two rules fall out of it:
+**a cron summary is an interface the moment anything parses it** (SQP.1 kept the token name `rows=`
+for this reason and added `parsed=` alongside rather than renaming), and **grep for readers of
+`outputSummary` before you make a handler throw.**
 
 **HV.2 → every session, 2026-08-12 — a probe without `cache: 'no-store'` will lie to you.**
 The ads read routes set `Cache-Control: private, max-age=60`. A browser probe that omits

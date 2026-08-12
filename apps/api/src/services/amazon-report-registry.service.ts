@@ -68,9 +68,18 @@ export async function completeReportRun(
     })
 }
 
+/**
+ * SQP.1 — `reportId` is recorded on FAILURE too, and that is not bookkeeping.
+ *
+ * A report abandoned at the client's poll ceiling is still generating at Amazon and still finishes:
+ * all 104 abandoned Brand Analytics reports on record later reached DONE. Collecting one needs its
+ * id — and this function used to drop it, so the column was null on 104 of 104 and the id survived
+ * only inside the error message text. Nothing could resume a report whose id was never kept.
+ * See docs/2026-08-12-sqp-feed.md §6.3.
+ */
 export async function failReportRun(
   id: string,
-  opts: { errorMessage?: string; status?: string },
+  opts: { errorMessage?: string; status?: string; reportId?: string | null },
 ): Promise<void> {
   await prisma.amazonReportRun
     .update({
@@ -78,10 +87,13 @@ export async function failReportRun(
       data: {
         status: opts.status ?? 'FATAL',
         errorMessage: (opts.errorMessage ?? '').slice(0, 2000),
+        reportId: opts.reportId ?? undefined,
         completedAt: new Date(),
       },
     })
-    .catch(() => {})
+    .catch(() => {
+      // reportId is @unique — a collision must never break the pull, same as completeReportRun.
+    })
 }
 
 /**
