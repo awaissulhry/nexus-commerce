@@ -39,6 +39,7 @@ import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from './KeywordScopeBar'
 import { WatchlistPanel } from './WatchlistPanel'
+import { buildCsv } from './csv'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -72,6 +73,15 @@ interface Row {
   shareBound?: number | null
   /** KT.5 — do we advertise on this term, and is the attributed ASIN one of the ones that do? */
   ad?: { bidOnTerm: boolean; adAsins: number; coveredAdAsins: number; bestAsinAdvertisesTerm: boolean } | null
+  /** KT.3 — the change in percentage points, and how far apart the two periods really are */
+  deltaPP?: number | null
+  deltaGapDays?: number | null
+  priorShare?: number | null
+  priorPeriod?: string | null
+  /** KT.3 — spend on this exact query text in the SAME week the share is measured, in cents */
+  spendCents?: number | null
+  clicks?: number | null
+  orders?: number | null
   measured: boolean
   branded: boolean
 }
@@ -120,6 +130,8 @@ interface Payload {
     newestAsOf: string | null
     oldestAsOf: string | null
   }
+  /** KT.3 — a scope fact for the reach line. Campaign-grain, so never a column. */
+  topOfSearch?: { avgShare: number; campaignsWithReading: number; campaignsInScope: number; asOf: string | null } | null
   /** KT.5 — one health block behind the page's single new line */
   feed?: {
     nightsSilent: number
@@ -145,6 +157,7 @@ interface Payload {
 const num = (n: number) => n.toLocaleString('en-IE')
 /** A share is 0..1 from SQP. Two decimals of a percent, because 0.7% and 0.04% are both real here. */
 const sharePct = (v: number) => `${(v * 100).toFixed(2)}%`
+const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
@@ -304,6 +317,70 @@ export function KeywordTrackerClient() {
       sortValue: (r) => r.impressionShare ?? -1,
       filterValue: (r) => (r.impressionShare ?? 0) * 100,
     },
+    /**
+     * KT.3 — Δ in PERCENTAGE POINTS, carrying its gap.
+     *
+     * 🔴 The gap is not decoration. Of 96 computable Δs, 9 span 14–35 days: DE's
+     * `motorradjacke herren winter` fell 3.36% → 0.10%, and calling that "vs last week" would be a
+     * lie by 28 days. So the number and the span travel together, and the header names the unit.
+     */
+    {
+      key: 'delta', label: 'Δ share (pp)',
+      tip: 'The change in our best ASIN\'s share since the previous week that reported this term, in PERCENTAGE POINTS — 0.70% → 1.01% is +0.31pp, not +44%. Each row states how far apart the two weeks actually are, because 9 of the 96 comparable rows span 14 to 35 days rather than 7. Blank means the feed has no earlier week for that term (19 of 97 in IT); a row with no share has no Δ by construction.',
+      render: (r) => {
+        if (rowState(r) !== 'measured') return <span className="h10-kt-nd">—</span>
+        if (r.deltaPP == null) {
+          return <span className="h10-kt-nm" title="Brand Analytics has no earlier week for this term, so there is nothing to compare the current share against. This is a different absence from the share blanks — the share is present.">no earlier week</span>
+        }
+        const dir = r.deltaPP > 0.005 ? 'up' : r.deltaPP < -0.005 ? 'down' : 'flat'
+        const wide = (r.deltaGapDays ?? 7) > 7
+        return (
+          <span className="h10-kt-delta">
+            <span
+              className={dir}
+              title={`${((r.priorShare ?? 0) * 100).toFixed(2)}% in the week of ${r.priorPeriod ? dayMonth(r.priorPeriod) : '—'} → ${((r.impressionShare ?? 0) * 100).toFixed(2)}% now. For share, up is better.`}
+            >
+              {r.deltaPP > 0 ? '+' : ''}{r.deltaPP.toFixed(2)}
+            </span>
+            <i
+              className={wide ? 'wide' : undefined}
+              title={wide
+                ? `These two weeks are ${r.deltaGapDays} days apart, not 7 — the feed skipped the weeks between. Read it as a change over ${r.deltaGapDays} days.`
+                : 'The two weeks compared are 7 days apart'}
+            >
+              {r.deltaGapDays}d
+            </i>
+          </span>
+        )
+      },
+      sortValue: (r) => (r.deltaPP == null ? Number.NEGATIVE_INFINITY : r.deltaPP),
+    },
+    /**
+     * KT.3 — spend on the exact query text, in the SAME week the share is measured.
+     *
+     * The 30-day window would have been thicker (IT 65 terms / €444.69 against 46 / €135.59) and
+     * wrong: a 19 Jul share beside 30 days of spend invites "we spent €444 and got 0.7%", where the
+     * two numbers describe different periods. One coherent observation per row.
+     */
+    {
+      key: 'spend', label: 'Spend · that week',
+      tip: 'Ad spend on this exact query text during the SAME week the share is measured, so the row is one observation rather than two periods side by side. AmazonAdsSearchTerm has no ASIN column, so this is spend on the TERM while the share beside it is one ASIN\'s — they are not the same subject. Blank means we paid nothing on this term that week (32 of 97 in IT).',
+      render: (r) => {
+        if (r.spendCents == null || r.spendCents === 0) {
+          return <span className="h10-kt-nd" title="No ad spend on this exact query text in the week on screen">—</span>
+        }
+        return (
+          <span
+            className="h10-kt-spend"
+            title={`${eur(r.spendCents)} on this term in the week of ${r.asOf ? dayMonth(r.asOf) : '—'}${r.clicks ? ` · ${num(r.clicks)} click${r.clicks === 1 ? '' : 's'}` : ''}${r.orders ? ` · ${num(r.orders)} order${r.orders === 1 ? '' : 's'}` : ' · no orders'}. Spend is per TERM; the share beside it is one ASIN's.`}
+          >
+            {eur(r.spendCents)}
+          </span>
+        )
+      },
+      sortValue: (r) => (r.spendCents == null ? Number.NEGATIVE_INFINITY : r.spendCents),
+      filterValue: (r) => (r.spendCents ?? 0) / 100,
+    },
     {
       key: 'asOf', label: 'As of', metric: false,
       tip: 'The week this whole grid renders — one period for every row, so two rows can be compared with each other. A blank row shows the last week the feed DID report that term, if there is one.',
@@ -321,7 +398,6 @@ export function KeywordTrackerClient() {
 
   const activeTab = rulesTabByKey('keyword-tracker')
   const s = data?.scope
-  const f = data?.freshness
   const f2 = data?.feed
 
   /** The one sentence stating what resolved — scope, then the age of what the grid is made of. */
@@ -410,8 +486,15 @@ export function KeywordTrackerClient() {
             <p className="h10-kt-said">
               <b>{resolution}</b>
               {shareAge && <> · {shareAge}</>}
-              {f?.searchTerm.latestDate && (
-                <> · paid data current to {dayMonth(f.searchTerm.latestDate)} ({f.searchTerm.ageDays}d) — not on this grid until KT.3</>
+              {/* KT.3 — top-of-search IS lives HERE and not in a column: it is campaign-grain, so on a
+                  market grid every row would carry one average of many campaigns and under a campaign
+                  scope the identical number on every row. Its date is a LAG (the IS column stops one
+                  day behind the placement report it rides on), not an age. */}
+              {data?.topOfSearch && (
+                <> · top-of-search impression share <b>{(data.topOfSearch.avgShare * 100).toFixed(2)}%</b>{' '}
+                across the {num(data.topOfSearch.campaignsWithReading)} of{' '}
+                {num(data.topOfSearch.campaignsInScope)} campaigns with a reading
+                {data.topOfSearch.asOf ? ` (to ${dayMonth(data.topOfSearch.asOf)})` : ''}</>
               )}
             </p>
           )}
@@ -610,6 +693,19 @@ export function KeywordTrackerClient() {
             searchable
             searchPlaceholder="Search keywords…"
             searchValue={(r) => r.keyword}
+            /* KT.3 — the export goes in AdsDataGrid's existing slot. It writes the FULL filtered set
+               (`rows`), not the visible page: the grid pages at 100 and IT has 97, but a 30-row page
+               of a 200-term list would be a silent truncation. */
+            exportable
+            onExport={() => {
+              if (!data) return
+              const csv = buildCsv(rows, data)
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+              a.download = `keyword-tracker-${market}-${data.window.period ?? 'no-period'}.csv`
+              document.body.appendChild(a); a.click(); a.remove()
+              URL.revokeObjectURL(a.href)
+            }}
             pagerCentered
             storageKey="nexus.kt.cols"
             toolbarLeft={(

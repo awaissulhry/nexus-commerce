@@ -81,7 +81,7 @@ export const KT_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
 
 export type KtGrain = 'market' | 'line' | 'portfolio' | 'campaign'
 export type KtMeasuredFilter = 'all' | 'yes' | 'no'
-export type KtSortKey = 'keyword' | 'volume' | 'rank' | 'share' | 'asins' | 'asOf'
+export type KtSortKey = 'keyword' | 'volume' | 'rank' | 'share' | 'asins' | 'asOf' | 'delta' | 'spend'
 
 export interface KtScopeGraph {
   campaigns: Array<{ id: string; name: string; marketplace: string | null; portfolioId: string | null; status?: string }>
@@ -366,6 +366,29 @@ export interface KtRow {
    * four markets, and 24 rows where ad coverage is 0.
    */
   ad: { bidOnTerm: boolean; adAsins: number; coveredAdAsins: number; bestAsinAdvertisesTerm: boolean } | null
+  /**
+   * KT.3 — the change in our best ASIN's share since the previous period that holds this term, in
+   * PERCENTAGE POINTS (0.0031 = +0.31pp), plus how far apart the two periods actually are.
+   *
+   * 🔴 `deltaGapDays` is not decoration. Measured 2026-08-12: of 96 computable Δs, 9 span 14–35 days
+   * (IT 3×14d, 2×28d, 4×35d; DE 1×35d; ES 2×28d). Labelling those "vs last week" would be the exact
+   * defect class this page keeps removing, so the gap travels with the number and the UI prints it.
+   * Null when the term has no earlier period at all — 19 of 97 in IT.
+   */
+  deltaPP: number | null
+  deltaGapDays: number | null
+  priorShare: number | null
+  priorPeriod: string | null
+  /**
+   * KT.3 — ad spend on this exact query text, in the SAME week the share is measured, in cents.
+   * `AmazonAdsSearchTerm` has no ASIN column, so this is spend on the TERM while the share beside it
+   * is one ASIN's — the row must not imply they describe the same subject.
+   * `orders` rides along in the payload but is NOT a column: measured, the share week holds 2 orders
+   * in IT, 6 in DE, 1 in ES, 0 in FR — nine non-zero cells in the whole product.
+   */
+  spendCents: number | null
+  clicks: number | null
+  orders: number | null
   /** `state === 'measured'`. Kept so a client deployed before this field existed keeps working. */
   measured: boolean
   /** true when the term contains one of the AdKeywordProtection whitelist terms */
@@ -384,6 +407,17 @@ export interface KeywordTrackerQuery {
   dir?: 'asc' | 'desc'
   limit?: number
   offset?: number
+}
+
+/**
+ * KT.3 — order two possibly-null numbers so that NULLS COME LAST whichever way the column is sorted.
+ * `dir` is +1 for ascending, -1 for descending, and is applied only to the two present values.
+ */
+export function nullsLast(a: number | null, b: number | null, dir: number): number {
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+  return dir * (a - b)
 }
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
@@ -411,7 +445,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     // campaign count (1 of IT's 150 is archived). See `resolveScope`: it is excluded from the
     // market set but still resolvable by an explicit ?campaign= pick, because the campaign picker
     // is fed by /advertising/scope-options, which is another session's route and unfiltered.
-    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true } }),
+    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true, externalCampaignId: true } }),
     // Only this market's ads: `resolveScope` filters by market anyway, and fetching the account's
     // whole ad graph (4,211 rows) to answer one market cost ~2s of the page's first paint.
     prisma.adProductAd.findMany({
@@ -512,7 +546,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // ── the share rows AND the ad graph, in one round ──
   // KT.5 added the per-term ad-coverage read. Left serial it cost ~2s of a 4.5s first paint; neither
   // query depends on the other's result, so they go together.
-  const [sqpRows, adTargets] = await Promise.all([
+  const [sqpRows, adTargets, priorRows, spendRows] = await Promise.all([
     visibleTerms.length && chosen.start
       ? prisma.searchQueryPerformance.findMany({
         where: {
@@ -536,6 +570,32 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
           adGroup: { campaign: { marketplace: market, ...(scope.boundBy === 'market' ? {} : { id: { in: scope.campaignIds } }) } },
         },
         select: { expressionValue: true, adGroupId: true },
+      })
+      : Promise.resolve([]),
+    // KT.3 · Δ — every row for these terms in a period EARLIER than the chosen one. Reduced to
+    // newest-per-term in JS; per-term "newest before X" is not expressible as one Prisma query, and
+    // one read of ~1,500 rows beats 97 round trips.
+    visibleTerms.length && chosen.start
+      ? prisma.searchQueryPerformance.findMany({
+        where: {
+          marketplace: market,
+          startDate: { lt: chosen.start },
+          searchQuery: { in: visibleTerms },
+          ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
+        },
+        select: { searchQuery: true, startDate: true, impressionShare: true },
+      })
+      : Promise.resolve([]),
+    // KT.3 · spend on the exact query text, in the SAME week the share is measured
+    visibleTerms.length && chosen.start
+      ? prisma.amazonAdsSearchTerm.groupBy({
+        by: ['query'],
+        where: {
+          marketplace: market,
+          query: { in: visibleTerms },
+          date: { gte: chosen.start, lte: new Date(+chosen.start + 6 * 86_400_000) },
+        },
+        _sum: { costMicros: true, clicks: true, orders7d: true },
       })
       : Promise.resolve([]),
   ])
@@ -611,8 +671,24 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     }
   }
 
+  /** newest period before the chosen one that holds each term, with that period's best-ASIN share */
+  const prior = new Map<string, { period: Date; share: number }>()
+  for (const r of priorRows) {
+    const k = norm(r.searchQuery)
+    const share = Number(r.impressionShare)
+    const cur = prior.get(k)
+    if (!cur || +r.startDate > +cur.period) prior.set(k, { period: r.startDate, share })
+    else if (+r.startDate === +cur.period && share > cur.share) prior.set(k, { period: cur.period, share })
+  }
+  const spendByTerm = new Map(spendRows.map((r) => [norm(r.query), {
+    cents: Math.round(Number(r._sum.costMicros ?? 0n) / 10_000),
+    clicks: r._sum.clicks ?? 0,
+    orders: r._sum.orders7d ?? 0,
+  }]))
+
   const rows: KtRow[] = visibleTerms.map((term) => {
     const inPeriod = byTerm.get(term) ?? []
+    const spend = spendByTerm.get(term) ?? null
     const branded = isBranded(term)
     const groups = adGroupsByTerm.get(term)
     const adAsins = groups ? new Set([...groups].flatMap((g) => [...(asinsByAdGroup.get(g) ?? [])])) : new Set<string>()
@@ -630,11 +706,16 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         lastSeen: iso(seen), lastSeenAgeDays: ageDays(seen),
         bestAsin: null, shareBound: null,
         ad: groups ? { bidOnTerm: true, adAsins: adAsins.size, coveredAdAsins: 0, bestAsinAdvertisesTerm: false } : null,
+        // A row with no share has no Δ BY CONSTRUCTION — never render one as a separate absence.
+        deltaPP: null, deltaGapDays: null, priorShare: null, priorPeriod: null,
+        // Spend is not conditional on the share: we can pay for a term Brand Analytics never reports.
+        spendCents: spend?.cents ?? null, clicks: spend?.clicks ?? null, orders: spend?.orders ?? null,
         measured: false, branded,
       }
     }
     // our BEST ASIN on this query — the one whose share we would be defending
     const best = inPeriod.reduce((a, b) => (b.impressionShare > a.impressionShare ? b : a))
+    const p = prior.get(term) ?? null
     const covered = new Set(inPeriod.map((r) => r.asin).filter((x): x is string => !!x))
     // the SUM is an upper bound, not a total — two of our ASINs can share one impression
     const bound = inPeriod.reduce((acc, r) => acc + r.impressionShare, 0)
@@ -658,6 +739,11 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
           bestAsinAdvertisesTerm: !!best.asin && adAsins.has(best.asin),
         }
         : null,
+      deltaPP: p ? (best.impressionShare - p.share) * 100 : null,
+      deltaGapDays: p ? Math.round((+chosen.start! - +p.period) / 86_400_000) : null,
+      priorShare: p?.share ?? null,
+      priorPeriod: iso(p?.period ?? null),
+      spendCents: spend?.cents ?? null, clicks: spend?.clicks ?? null, orders: spend?.orders ?? null,
       measured: true, branded,
     }
   })
@@ -672,6 +758,11 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       case 'share': return s * ((a.impressionShare ?? -1) - (b.impressionShare ?? -1))
       case 'asins': return s * (a.asinsCompeting - b.asinsCompeting)
       case 'asOf': return s * ((a.asOf ? Date.parse(a.asOf) : 0) - (b.asOf ? Date.parse(b.asOf) : 0))
+      // 🔴 KT.3 — the two sparse columns sort BLANKS LAST IN BOTH DIRECTIONS. 32 IT terms have no
+      // spend and 19 no Δ; with a naive null-as-zero, "sort by spend ascending" would surface 32
+      // unmeasured rows instead of the cheapest measured one, which is the question being asked.
+      case 'delta': return nullsLast(a.deltaPP, b.deltaPP, s)
+      case 'spend': return nullsLast(a.spendCents, b.spendCents, s)
       case 'volume':
       default: return s * ((a.marketVolume ?? -1) - (b.marketVolume ?? -1))
     }
@@ -686,6 +777,43 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     return ra === rb ? cmp(a, b) : ra - rb
   })
   const page = sorted.slice(offset, offset + limit)
+
+  /**
+   * 🔴 KT.3 — `topOfSearchIS` is a SCOPE fact, not a column. It is campaign-grain: measured
+   * 2026-08-12, only 54 of IT's 149 campaigns carry a reading (DE 8 of 38, ES 1 of 10, FR 2 of 22),
+   * so on a market grid every row would show one average of many campaigns, and under a campaign
+   * scope the identical number on every row. A column whose value does not vary by row is not a
+   * column — the same test that keeps `Organic Rank` off this page, applied from the other side.
+   * So it goes where scope facts already live: the reach line.
+   *
+   * Its date is a LAG, not an age: the IS column stops exactly one day behind the placement report
+   * it rides on (report 2026-08-11, IS 2026-08-10).
+   */
+  const scopeExternalIds = campaigns
+    .filter((c) => c.marketplace === market && String(c.status) !== 'ARCHIVED'
+      && (scope.boundBy === 'market' || scope.campaignIds.includes(c.id)))
+    .map((c) => c.externalCampaignId)
+    .filter((x): x is string => !!x)
+  const tosRows = scopeExternalIds.length
+    ? await prisma.amazonAdsPlacementReport.findMany({
+      where: { campaignId: { in: scopeExternalIds }, topOfSearchIS: { not: null } },
+      select: { campaignId: true, date: true, topOfSearchIS: true },
+      orderBy: { date: 'desc' },
+    })
+    : []
+  const latestTos = new Map<string, { share: number; date: Date }>()
+  for (const r of tosRows) {
+    if (!latestTos.has(r.campaignId)) latestTos.set(r.campaignId, { share: Number(r.topOfSearchIS), date: r.date })
+  }
+  const tos = latestTos.size
+    ? {
+      /** impression-unweighted mean of each campaign's most recent reading */
+      avgShare: [...latestTos.values()].reduce((a, x) => a + x.share, 0) / latestTos.size,
+      campaignsWithReading: latestTos.size,
+      campaignsInScope: scopeExternalIds.length,
+      asOf: iso([...latestTos.values()].reduce((a, x) => (+x.date > +a.date ? x : a)).date),
+    }
+    : null
 
   // ── freshness, per source, for this market (probed in the batch above) ──
   const sqpIngested = sqpLatest
@@ -827,6 +955,8 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       newestAsOf: periodsUsed[0]?.start ?? null,
       oldestAsOf: periodsUsed[periodsUsed.length - 1]?.start ?? null,
     },
+    /** KT.3 — a scope fact for the reach line, never a column. See the block that builds it. */
+    topOfSearch: tos,
     /**
      * KT.5 — one health block, so the page can carry ONE line that is quiet when the feed is
      * behaving and loud when it is not. Derived from data; `CronRun.status` is never consulted.

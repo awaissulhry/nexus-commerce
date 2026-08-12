@@ -17,7 +17,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({ default: {} }))
 
-const { resolveScope, chooseViewPeriod, projectCliff, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO } = await import('./keyword-tracker.service.js')
+const { resolveScope, chooseViewPeriod, projectCliff, nullsLast, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO } = await import('./keyword-tracker.service.js')
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`)
 
@@ -264,5 +264,40 @@ describe('projectCliff', () => {
   it('the collapse date is derived from the LOOKBACK, not hard-coded', () => {
     // a 56-day lookback pushes IT's collapse out by exactly the 14-day difference
     expect(projectCliff(IT, { now: NOW, lookbackDays: 56 }).collapseOn).toBe('2026-09-14')
+  })
+})
+
+/**
+ * KT.3 — blank ordering on the two sparse columns.
+ *
+ * Measured 2026-08-12: 32 of IT's 97 rows have no spend and 19 have no Δ. With nulls treated as
+ * zero, "sort by spend ascending" answers a question nobody asked — it surfaces 32 terms we never
+ * paid for instead of the cheapest one we did. Nulls therefore sink in BOTH directions, which is the
+ * one ordering rule that cannot be got right by accident.
+ */
+describe('nullsLast', () => {
+  const sortBy = (xs: Array<number | null>, dir: number) => [...xs].sort((a, b) => nullsLast(a, b, dir))
+
+  it('sinks blanks when sorting ASCENDING — the cheapest MEASURED row comes first', () => {
+    expect(sortBy([null, 300, null, 100, 250], 1)).toEqual([100, 250, 300, null, null])
+  })
+
+  it('sinks blanks when sorting DESCENDING too — not merely reversed', () => {
+    expect(sortBy([null, 300, null, 100, 250], -1)).toEqual([300, 250, 100, null, null])
+  })
+
+  it('treats 0 as a value, not a blank — a term we paid €0.00 on is not a term we never paid for', () => {
+    expect(sortBy([null, 0, 5], 1)).toEqual([0, 5, null])
+    expect(sortBy([null, 0, 5], -1)).toEqual([5, 0, null])
+  })
+
+  it('handles a negative Δ, which is the common case', () => {
+    // measured: IT's biggest mover is -1.71pp
+    expect(sortBy([null, -1.71, 0.94, null, -0.12], 1)).toEqual([-1.71, -0.12, 0.94, null, null])
+  })
+
+  it('is stable when both sides are blank', () => {
+    expect(nullsLast(null, null, 1)).toBe(0)
+    expect(nullsLast(null, null, -1)).toBe(0)
   })
 })

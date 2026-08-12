@@ -3134,3 +3134,19 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 @media (max-width: 900px) {
   .h10-hv-critrow { gap: 10px; }
 }
+
+/* ── KT.3 — the Δ column, the spend column ────────────────────────────────────────────────────
+   Appended at EOF, `h10-kt-*` only. The up/down/flat vocabulary is the section's existing one
+   (`.h10-trk-delta`, `.h10-bud-delta` both use it) in this page's own palette — green #14724d and
+   amber #8a5316 are already the fresh/stale colours on the age chip, so a share that fell reads the
+   same way as a number that needs attention elsewhere on the page. */
+.h10-kt-delta { display: inline-flex; align-items: baseline; gap: 6px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.h10-kt-delta .up { font-weight: 700; color: #14724d; }
+.h10-kt-delta .down { font-weight: 700; color: #8a5316; }
+.h10-kt-delta .flat { font-weight: 700; color: #55606d; }
+/* The gap. Neutral at 7 days, amber past it — 9 of 96 rows span 14–35 days and calling those a
+   week-over-week change is the defect this page keeps removing. */
+.h10-kt-delta i { font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 5px; background: #f1f4f8; color: #55606d; }
+.h10-kt-delta i.wide { background: #fff6e8; color: #8a5316; }
+
+.h10-kt-spend { font-variant-numeric: tabular-nums; font-weight: 600; color: #1c2530; }
