@@ -1473,6 +1473,8 @@ async function start() {
       // NEXUS_DISABLE_SQP_INGEST_CRON=1. (This comment used to name
       // NEXUS_ENABLE_SQP_INGEST_CRON, which has no readers at all — see SQP.1.)
       const { startSqpIngestCron } = await import('./jobs/sqp-ingest.job.js');
+      // SQP.2 — the collect half of the async split. sqp-ingest now only REQUESTS.
+      const { startSqpCollectCron } = await import('./jobs/sqp-collect.job.js');
       // AX-VT.5 — 6-hourly structural reconcile: compare the whole account against Amazon and
       // record where it disagrees. Reads + portfolio repair only; never touches bids.
       const { startStructuralReconcileCron } = await import('./jobs/ads-structural-reconcile.job.js');
@@ -1495,6 +1497,7 @@ async function start() {
       startTosDefenseCron();
       startAmsSqsPollCron();
       startSqpIngestCron();
+      startSqpCollectCron();
       startStructuralReconcileCron();
       const { startTosIsIngestCron } = await import('./jobs/ads-tos-is-ingest.job.js');
       startTosIsIngestCron();

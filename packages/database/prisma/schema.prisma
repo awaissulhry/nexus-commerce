@@ -16181,3 +16181,58 @@ model AdsHarvestDestination {
   @@unique([scopeGrain, scopeId, matchType])
   @@index([adGroupId])
 }
+
+/// SQP.2 — one outstanding Brand Analytics report request, so collection can happen LATER.
+///
+/// Why this exists at all. Amazon generates this account's reports SERIALLY (measured: each
+/// report's processingStartTime equals the previous one's processingEndTime, to the second, across
+/// 104 samples). A synchronous per-ASIN loop therefore cannot work: on 2026-08-11 a 40-report batch
+/// took 14.6h to drain, our 300s poll ceiling abandoned all 40, and every one of them finished at
+/// Amazon afterwards with nobody listening. See docs/2026-08-12-sqp-feed.md §3.
+///
+/// So the request is split from the collection, and this table is the handoff. It is deliberately
+/// NOT `AmazonReportRun`: that registry records what a puller DID, in Amazon's own status
+/// vocabulary, and is read by the freshness surface. This records what we are still WAITING FOR,
+/// in ours — including `INGESTED`, which Amazon has no concept of, and `EXPIRED`, which is the
+/// difference between "we failed" and "we ran out of time" and must never be collapsed into it.
+model SqpReportRequest {
+  id String @id @default(cuid())
+
+  /// Amazon's report id — the thing that was lost before SQP.1, making finished reports unreachable.
+  reportId String @unique
+
+  /// Short market code (IT/DE/…), and the SP-API marketplace id actually sent.
+  marketplace   String
+  marketplaceId String
+  /// SQP is requested per ASIN; one row per (asin, window).
+  asin          String
+  reportPeriod  String   @default("WEEK")
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
+
+  /// PENDING (created, not terminal yet) | DONE (Amazon finished, not yet ingested)
+  /// | INGESTED (rows upserted — the only success) | FATAL | CANCELLED | EXPIRED (past retention)
+  /// | ERROR (our side failed). Five failure modes, never one.
+  status String @default("PENDING")
+
+  requestedAt  DateTime  @default(now())
+  /// How many times the collector has polled it, and when it last did — the pacing evidence.
+  pollAttempts Int       @default(0)
+  lastPolledAt DateTime?
+  /// When Amazon reported DONE, and when we actually ingested. The gap between them is the
+  /// collection latency this whole design exists to make visible.
+  doneAt       DateTime?
+  collectedAt  DateTime?
+
+  reportDocumentId String?
+  rowsParsed       Int?
+  rowsUpserted     Int?
+  errorMessage     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, requestedAt])
+  @@index([marketplace, startDate])
+  @@index([requestedAt])
+}

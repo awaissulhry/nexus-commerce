@@ -98,6 +98,7 @@ import { runAdsSyncDrainOnce } from './ads-sync-drain.job.js'
 import { runTosDefenseOnce } from './ads-tos-defense.job.js'
 import { runAmsSqsPoll } from './ams-sqs-poll.job.js'
 import { runSqpIngestOnce } from './sqp-ingest.job.js'
+import { runSqpCollectOnce } from './sqp-collect.job.js'
 import { runDaypartingOnce } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceOnce } from './budget-pool-rebalance.job.js'
@@ -253,6 +254,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'ams-sqs-poll': () => runAmsSqsPoll(),
   // Apex E.1 — ingest Brand Analytics Search Query Performance (competitive share).
   'sqp-ingest': () => runSqpIngestOnce(),
+  // SQP.2 — the collect half; manually triggerable so an operator can drain the queue on demand.
+  'sqp-collect': () => runSqpCollectOnce(),
   'ad-dayparting': async () => {
     const r = await runDaypartingOnce()
     return `evaluated=${r.evaluated} changed=${r.changed}`

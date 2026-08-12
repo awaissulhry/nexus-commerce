@@ -140,6 +140,43 @@ export async function runSqpIngestOnce(): Promise<string> {
     logger.info('[sqp-ingest] markets skipped — no Amazon ASINs held there', { skipped, candidates: candidates.length })
   }
 
+  // ── SQP.2 — ASYNCHRONOUS by default ──────────────────────────────────────────────────────────
+  // This tick REQUESTS and returns; `sqp-collect` picks the reports up on a later tick. The
+  // synchronous path is kept behind an opt-in because it is the only way to reproduce the old
+  // behaviour if the async path ever needs to be compared against it — but it is not the default,
+  // because it provably cannot work: Amazon generates this account's reports serially, so waiting
+  // 300s per report abandoned 40 of 40 on two consecutive nights.
+  if (!envEnabled('NEXUS_SQP_SYNCHRONOUS_INGEST')) {
+    const { requestSqpReports } = await import('../services/advertising/sqp-async.service.js')
+    const { periodWindow } = await import('../services/advertising/sqp.service.js')
+    const win = periodWindow('WEEK', new Date(), Math.max(1, Number(process.env.NEXUS_SQP_LOOKBACK) || 2))
+    const mkRows = await prisma.marketplace.findMany({ where: { channel: 'AMAZON' }, select: { code: true, marketplaceId: true } })
+    const idOf = new Map(mkRows.filter((m) => m.marketplaceId).map((m) => [m.code, m.marketplaceId!]))
+
+    const parts: string[] = []
+    let created = 0, failed = 0, outstanding = 0
+    for (const { mkt, asins } of eligible) {
+      const marketplaceId = idOf.get(mkt)
+      if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += asins.length; continue }
+      const r = await requestSqpReports({ marketplaceCode: mkt, marketplaceId, asins, period: 'WEEK', start: win.start, end: win.end })
+      created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding
+      parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.failed ? ` ${r.failed} failed` : ''}`)
+    }
+    const summary =
+      `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
+      ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}` +
+      ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
+      (parts.length ? ` · ${parts.join(' · ')}` : '')
+    // 🔴 `rows=0` here is CORRECT and must not be treated as the old zero-row failure: this pass
+    // writes no SearchQueryPerformance rows by design. So this branch does NOT throw on rows=0 —
+    // the honest failure for a request pass is "created nothing", which is what is checked.
+    if (created === 0 && outstanding === 0) {
+      throw new Error(`sqp-ingest (async): created 0 report requests across ${eligible.length} markets and nothing was already outstanding. ${summary}`)
+    }
+    logger.info('[sqp-ingest] request pass complete', { created, failed, outstanding })
+    return summary
+  }
+
   const outcomes: SqpMarketOutcome[] = []
   for (const { mkt, asins } of eligible) {
     try {

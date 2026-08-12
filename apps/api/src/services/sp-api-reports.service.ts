@@ -57,6 +57,20 @@ export interface FetchReportResult<T = unknown> {
 
 let cachedClient: SellingPartner | null = null
 
+/**
+ * SQP.2 — exported so a caller can drive the three report operations SEPARATELY.
+ *
+ * `fetchSpApiReport` is create→poll→download in one call, which is exactly the shape that cannot
+ * work when Amazon generates this account's reports serially (a 40-report batch drains in 14.6h
+ * against a 300s poll ceiling — see docs/2026-08-12-sqp-feed.md §3). An asynchronous collector needs
+ * `createReport` now and `getReport`/`getReportDocument` on a later tick, so it needs the client
+ * rather than the wrapper. Same cached, instrumented instance — every call still lands in
+ * OutboundApiCallLog.
+ */
+export function getSpApiClient(): SellingPartner {
+  return getClient()
+}
+
 function getClient(): SellingPartner {
   if (cachedClient) return cachedClient
 
