@@ -329,6 +329,24 @@ export function ShareOfVoiceClient() {
   const ss = data?.shareSummary
   const fc = data?.funnelCoverage
 
+  /**
+   * 🔴 The sort discipline has to be expressed in `sortValue`, not only server-side.
+   *
+   * Found by looking at the deployed page: the service ranks low-confidence rows last and
+   * `AdsDataGrid` then **re-sorts client-side from `sortValue`**, which threw that ordering away —
+   * `sappnetta knee spider nero` (50.00% of FOUR market impressions) was still the first row, muted
+   * but first. The server was right and the grid overruled it.
+   *
+   * A single scalar cannot say "last in whichever direction you are sorting", because the meaning of
+   * "last" flips. So the penalty reads the direction from the URL — the same `dir` the grid was
+   * seeded with — and pushes low-confidence rows to the far end of it. `1000` is beyond any share
+   * (0..1) or Δ (percentage points), so it dominates without distorting the order within each group.
+   */
+  const sink = useCallback(
+    (v: number, low: boolean | undefined) => (low ? v + (dir === 'desc' ? -1000 : 1000) : v),
+    [dir],
+  )
+
   const columns: GridColumn<Row>[] = useMemo(() => [
     {
       key: 'market', label: 'Market', metric: false,
@@ -377,7 +395,7 @@ export function ShareOfVoiceClient() {
             <span
               className={`h10-sov-share ${r.lowConfidence ? 'thin' : shareBand(r.share)}`}
               title={r.lowConfidence
-                ? `${num(r.ourImpressions ?? 0)} of only ${num(r.marketImpressions ?? 0)} market impressions — below this week's median of ${num(data?.confidenceFloor ?? 0)}, so this percentage is too small a sample to rank by.`
+                ? `${num(r.ourImpressions ?? 0)} of only ${num(r.marketImpressions ?? 0)} market impressions — below this week's median of ${num(Math.round(data?.confidenceFloor ?? 0))}, so this percentage is too small a sample to rank by.`
                 : `${num(r.ourImpressions ?? 0)} of ${num(r.marketImpressions ?? 0)} market impressions`}
             >
               {sharePct(r.share)}
@@ -396,7 +414,7 @@ export function ShareOfVoiceClient() {
           ? <span className="h10-sov-nm" title={`Brand Analytics has this query in ${r.marketplace}, but not in the week this grid renders${r.lastSeen ? ` — its newest row is the week of ${dayMonth(r.lastSeen)}` : ''}`}>no row this week</span>
           : <span className="h10-sov-nm muted" title={`Brand Analytics has never reported this query in ${r.marketplace}, at any period`}>never measured</span>
       },
-      sortValue: (r) => r.share ?? -1,
+      sortValue: (r) => sink(r.share ?? -1, r.lowConfidence),
       filterValue: (r) => (r.share ?? 0) * 100,
     },
     {
@@ -428,7 +446,7 @@ export function ShareOfVoiceClient() {
         }
         return <span className="h10-sov-nd">—</span>
       },
-      sortValue: (r) => r.deltaPt ?? Number.NEGATIVE_INFINITY,
+      sortValue: (r) => sink(r.deltaPt ?? Number.NEGATIVE_INFINITY, r.lowConfidence),
       filterValue: (r) => r.deltaPt ?? 0,
     },
     {
@@ -451,14 +469,14 @@ export function ShareOfVoiceClient() {
           <span
             className={`h10-sov-share ${r.lowConfidenceClicks ? 'thin' : shareBand(r.clickShare)}`}
             title={r.lowConfidenceClicks
-              ? `${num(r.ourClicks ?? 0)} of only ${num(r.marketClicks ?? 0)} market clicks — below this week's median of ${num(data?.confidenceFloorClicks ?? 0)}, so this percentage is too small a sample to rank by.`
+              ? `${num(r.ourClicks ?? 0)} of only ${num(r.marketClicks ?? 0)} market clicks — below this week's median of ${num(Math.round(data?.confidenceFloorClicks ?? 0))}, so this percentage is too small a sample to rank by.`
               : `${num(r.ourClicks ?? 0)} of ${num(r.marketClicks ?? 0)} market clicks`}
           >
             {r.clickShare === 0 ? '0.00%' : sharePct(r.clickShare)}
           </span>
         )
       },
-      sortValue: (r) => r.clickShare ?? -1,
+      sortValue: (r) => sink(r.clickShare ?? -1, r.lowConfidenceClicks),
       filterValue: (r) => (r.clickShare ?? 0) * 100,
     },
     {
@@ -486,7 +504,7 @@ export function ShareOfVoiceClient() {
       },
       sortValue: (r) => (r.state === 'measured' ? (p?.asOf ?? '') : (r.lastSeen ?? '')),
     },
-  ], [p?.asOf, p?.ageDays])
+  ], [p?.asOf, p?.ageDays, data?.confidenceFloor, data?.confidenceFloorClicks, sink])
 
   const activeTab = rulesTabByKey('share-of-voice')
 
@@ -878,12 +896,12 @@ export function ShareOfVoiceClient() {
                   <i
                     className="floor"
                     title={sort === 'clickShare'
-                      ? `Ranked below the rest: ${num(c.lowConfidenceClicks ?? 0)} queries with fewer than ${num(data?.confidenceFloorClicks ?? 0)} market clicks — the median for this week. A share of 1 click in 4 is not a share.`
-                      : `Ranked below the rest: ${num(c.lowConfidence ?? 0)} queries with fewer than ${num(data?.confidenceFloor ?? 0)} market impressions — the median for this week. Their percentages are real but the sample is too small to rank by.`}
+                      ? `Ranked below the rest: ${num(c.lowConfidenceClicks ?? 0)} queries with fewer than ${num(Math.round(data?.confidenceFloorClicks ?? 0))} market clicks — the median for this week. A share of 1 click in 4 is not a share.`
+                      : `Ranked below the rest: ${num(c.lowConfidence ?? 0)} queries with fewer than ${num(Math.round(data?.confidenceFloor ?? 0))} market impressions — the median for this week. Their percentages are real but the sample is too small to rank by.`}
                   >
                     {sort === 'clickShare'
-                      ? <>below {num(data?.confidenceFloorClicks ?? 0)} clicks: ranked last</>
-                      : <>below {num(data?.confidenceFloor ?? 0)} impressions: ranked last</>}
+                      ? <>below {num(Math.round(data?.confidenceFloorClicks ?? 0))} clicks: ranked last</>
+                      : <>below {num(Math.round(data?.confidenceFloor ?? 0))} impressions: ranked last</>}
                   </i>
                 )}
                 {p.asOf && (
