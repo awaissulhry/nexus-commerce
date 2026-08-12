@@ -778,6 +778,19 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // the full positive/negative target set, and it changes only when the five-minute export
     // ingest lands a new day.
     reply.header('Cache-Control', 'private, max-age=60')
+
+    /**
+     * HV.6 — the actors panel, computed ONLY when it is open.
+     *
+     * Additive on this route rather than a route of its own, deliberately. Registering a route is
+     * the one operation in this repo that can crash the API on boot (a duplicate registration in a
+     * 600 KB file the default grep cannot read), and this panel needs exactly one caller. Behind
+     * `?actors=1` the grid pays nothing for it: absent, not one extra query runs.
+     */
+    if (q.actors === '1') {
+      const { getHarvestActors } = await import('../services/advertising/harvest-actors.service.js')
+      return { ...out, actors: await getHarvestActors({ market }) }
+    }
     return out
   })
 

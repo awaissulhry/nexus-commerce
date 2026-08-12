@@ -74,8 +74,13 @@ import { envEnabled } from '../../utils/env-flag.js'
  * the line below — one reader, greppable. That matters: `NEXUS_ENABLE_SQP_INGEST_CRON` still sits
  * in Railway with NO code reading it, where it reads as proof that feed is deliberately on. A
  * flag nobody reads is worse than no flag.
+ *
+ * 🔴 HV.6 — exported, and it is the reason to export it. The Actors panel has to name the flag that
+ * holds this engine at Propose, and a second surface spelling the string itself would be two
+ * sources of truth for one flag: a rename would move the engine and leave the page naming a flag
+ * nobody reads, which is the exact defect the paragraph above describes. One literal, two readers.
  */
-const ARMED_FLAG = 'NEXUS_ADS_AUTO_HARVEST_ARMED'
+export const ARMED_FLAG = 'NEXUS_ADS_AUTO_HARVEST_ARMED'
 
 export interface AutoHarvestResult {
   skipped?: string

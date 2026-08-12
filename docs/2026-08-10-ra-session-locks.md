@@ -271,6 +271,20 @@ followed rather than recorded after the fact.
 | `apps/web/next.config.js` | NEG.6 (one `/marketing/advertising/ngrams` redirect, literal path) | 2026-08-13 | **released** |
 | `…/marketing/advertising/ngrams/*` | NEG.6 (delete `NgramClient.tsx` + `page.tsx` after the redirect is live and verified; `grep -r` finds **no importer** outside its own directory) | 2026-08-13 | **claimed** |
 
+### HV.6 — the actors panel, 2026-08-13
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.6 (`?actors=1` on the EXISTING `GET /advertising/keyword-harvest` — **no route registered**, so no duplicate-registration boot crash is possible) | 2026-08-13 | **claimed** |
+| `…/rules-automation/rules-automation.css` | HV.6 (`h10-hva-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only |
+
+Not claimed, and deliberately: `ads-control-room.service.ts` (§3 #7) is **read** by this session and
+not edited — see the hand-off in §4. `ads-autonomy.ts` (§3 #8) is likewise read-only here;
+`resolveAutonomy` and `graduationCeiling` are the only source of a level and a ceiling on this
+panel, which is the point of consuming them rather than reimplementing them.
+
+---
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
@@ -296,6 +310,29 @@ and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them
 ---
 
 ## 4 · Requests and hand-offs
+
+**HV.6 → whoever owns the Ads Control Room, 2026-08-13.**
+🔴 **The engine registry reports a level for the harvest engine that it does not read from
+anywhere.** `ads-control-room.service.ts:293`:
+
+```
+mk('auto-harvest', 'Harvest & negate', …, masterOff ? 'OFF' : 'AUTO',
+   masterOff?.why ?? 'Runs on the account autonomy dial', null, 'honours'),
+```
+
+Its two neighbours in the same array **do** read their flags and say so — `rank-defend` reads
+`NEXUS_ENABLE_RANK_DEFEND` ("Armed and writing to Amazon" / "is off"), `budget-enforce` reads
+`NEXUS_BUDGET_ENFORCE_APPLY` ("computes, never applies"). `auto-harvest` reads none. Since HV.0
+armed that engine down behind `NEXUS_ADS_AUTO_HARVEST_ARMED` on 2026-08-12, the Control Room has
+been reporting a level the engine cannot reach: measured on prod, the flag is unset and the
+2026-08-12 06:30 run was `neg=0/8 grad=0/14 dryRun=true`.
+
+**HV.6 renders the disagreement rather than fixing it** — that file is yours, and a governance
+panel that quietly edits another programme's registry is the same defect in a new place. The fix is
+three lines, shaped exactly like `budget-enforce`'s, and the flag is exported from
+`ads-auto-harvest.service.ts` as `ARMED_FLAG` so there is one literal to import rather than a
+second spelling of the string.
+
 
 **NEG.5 → whoever owns the Ads Control Room, 2026-08-12.**
 `control-room/GuardrailsTab.tsx:197` mounts `ProtectedTermsPanel`, and NEG.5's brief assumed the
