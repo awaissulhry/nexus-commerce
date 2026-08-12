@@ -23,7 +23,12 @@ export const BAND_LABEL: Record<BidBand, string> = {
 
 export interface BidTargetRow {
   id: string
+  /** what Amazon stores — empty on 256 of 3,154 targets */
   text: string
+  /** `text`, or the targeting group's name where there is no expression. Never blank. */
+  label: string
+  /** true when `label` was derived rather than stored */
+  derived: boolean
   kind: string
   match: string
   bidCents: number

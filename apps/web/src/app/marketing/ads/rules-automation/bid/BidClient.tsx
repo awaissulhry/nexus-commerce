@@ -452,19 +452,19 @@ export function BidClient() {
 
   const csv = () => {
     const head = view === 'targets'
-      ? ['Target', 'Match', 'Kind', 'Ad group', 'Campaign', 'Campaign status', 'Market', 'Bid EUR', 'Band', 'Measured', 'Impressions', 'Clicks', 'CPC EUR', 'Spend EUR', 'Sales EUR', 'ACoS %']
+      ? ['Target', 'Match', 'Kind', 'Ad group', 'Campaign', 'Campaign status', 'Market', 'Bid EUR', 'Band', 'Measured', 'Impressions', 'Clicks', 'CPC EUR', 'Spend EUR', 'Sales EUR', 'ACoS %', 'Target name derived']
       : ['Campaign', 'Market', 'Status', 'Targets', 'Measured', 'Bid min EUR', 'Bid max EUR', 'Impressions', 'Clicks', 'Spend EUR', 'Sales EUR', 'ACoS %']
     const cell = (v: unknown) => {
       const s = v == null ? '' : String(v)
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
     }
     const body = view === 'targets'
-      ? rows.map((r) => [r.text, r.match, r.kind, r.adGroupName, r.campaignName, r.campaignStatus, r.market,
+      ? rows.map((r) => [r.label, r.match, r.kind, r.adGroupName, r.campaignName, r.campaignStatus, r.market,
         (r.bidCents / 100).toFixed(2), r.band, r.measured ? 'yes' : 'no',
         r.measured ? r.impressions : '', r.measured ? r.clicks : '',
         r.cpcCents == null ? '' : (r.cpcCents / 100).toFixed(2),
         r.measured ? (r.spendCents / 100).toFixed(2) : '', r.measured ? (r.salesCents / 100).toFixed(2) : '',
-        r.acos == null ? '' : (r.acos * 100).toFixed(1)])
+        r.acos == null ? '' : (r.acos * 100).toFixed(1), r.derived ? 'yes' : 'no'])
       : campaigns.map((r) => [r.name, r.market, r.status, r.targets, r.measured,
         r.bidMinCents == null ? '' : (r.bidMinCents / 100).toFixed(2),
         r.bidMaxCents == null ? '' : (r.bidMaxCents / 100).toFixed(2),
@@ -634,11 +634,16 @@ export function BidClient() {
               {/* The shared grid paints the first column blue at (0,3,1) because every other
                   consumer makes it a link. This one is not a link yet — S3 makes it open the bid
                   curve — so the colour is overridden at matching specificity in the CSS. */}
-              <span className="t" title={r.text}>{r.text}</span>
+              <span
+                className={r.derived ? 't derived' : 't'}
+                title={r.derived
+                  ? `This target has no text expression — Amazon identifies it by its targeting group. Shown as "${r.label}", derived from ${r.match.replace(/_/g, ' ').toLowerCase()}.`
+                  : r.label}
+              >{r.label}</span>
               {!r.liveNow && <span className="fl off" title="This bid is not in any auction: the target or its campaign is not enabled">not bidding</span>}
             </div>
           )}
-          firstSortValue={(r) => r.text.toLowerCase()}
+          firstSortValue={(r) => r.label.toLowerCase()}
           columns={targetColumns}
           filters={filters}
           initialFilters={initialFilters}
