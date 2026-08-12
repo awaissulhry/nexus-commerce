@@ -353,7 +353,9 @@ export function KeywordTrackerClient() {
           </span>
         )
       },
-      sortValue: (r) => (r.deltaPP == null ? Number.NEGATIVE_INFINITY : r.deltaPP),
+      // null, not a sentinel: AdsDataGrid sinks a null in both directions (KT.3). A
+      // NEGATIVE_INFINITY here put the 19 blank rows FIRST when sorting ascending — found by clicking.
+      sortValue: (r) => r.deltaPP,
     },
     /**
      * KT.3 — spend on the exact query text, in the SAME week the share is measured.
@@ -378,7 +380,7 @@ export function KeywordTrackerClient() {
           </span>
         )
       },
-      sortValue: (r) => (r.spendCents == null ? Number.NEGATIVE_INFINITY : r.spendCents),
+      sortValue: (r) => r.spendCents,
       filterValue: (r) => (r.spendCents ?? 0) / 100,
     },
     {

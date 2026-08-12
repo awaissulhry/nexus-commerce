@@ -113,6 +113,7 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.5 (coverage denominator, third blank state, share bound, ad coverage, feed health) | 2026-08-12 | **released** — KT-only files; no route change, `advertising-intel.routes.ts` untouched |
 | `…/rules-automation/rules-automation.css` | KT.3 (`h10-kt-*` at EOF, 16 lines) | 2026-08-12 | **released** — diffed before committing, every hunk mine |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `…/keyword-tracker/*` | KT.3 (Δ column, spend column, CSV export, blank-last sort) | 2026-08-12 | **released** — KT-only files; no route change |
+| `…/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | KT.3 (a `sortValue` returning null sinks in BOTH directions — 3 lines, additive) | 2026-08-12 | **claimed** — see §3 row 12 |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.0 (`GET /advertising/share-of-voice-page`, additive) | 2026-08-12 | **released** — landed `a07460f58`, staged as TWO HUNKS not the whole file; see §5 |
 | `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`, see §5 |
 | `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`. The `SovTrackerTab` IMPORT went with the branch (it was its last caller — an unused import fails the web build); the component FILE stays |
@@ -237,6 +238,7 @@ followed rather than recorded after the fact.
 | 8 | `apps/api/src/services/advertising/ads-autonomy.ts` | `resolveAutonomy` — the mode contract |
 | 9 | `apps/web/src/app/marketing/ads/_shared/AutomationDock.tsx` | reads/writes the same rules as page 4 |
 | 10 | `packages/database/prisma/schema.prisma` | every migration |
+| 12 | `apps/web/src/app/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | **the ONE shared ads grid — 12+ consumers across the console.** Added to this list by KT.3: it was never listed and is more shared than several files that are. 321 `sortValue` definitions ride on it |
 | 11 | `apps/api/src/services/automation-rule-scope.ts` | `ruleMatchesScope` — the one answer to "does this rule apply here". Added to this list by RA.GRAIN: the generic name suggests app-wide, but `grep -a` finds exactly ONE importer (`advertising-rule-evaluator.job.ts`) plus its own test, so it is advertising-only in practice — and load-bearing for all four grains |
 
 **Also shared, and currently owned by another programme:** everything under `apps/web/src/app/fleet/*`

@@ -32,7 +32,12 @@ export interface GridColumn<T> {
   metric?: boolean
   sortable?: boolean
   render: (row: T) => ReactNode
-  sortValue?: (row: T) => number | string
+  /**
+   * KT.3 — may return `null` / `undefined` for "this row has no value". A blank then sinks in BOTH
+   * sort directions rather than being reversed with everything else, so ascending a sparse column
+   * surfaces the smallest MEASURED row. Prefer this over a sentinel like `NEGATIVE_INFINITY`.
+   */
+  sortValue?: (row: T) => number | string | null | undefined
   /** numeric accessor used by range filters keyed on this column */
   filterValue?: (row: T) => number
   /** Total-row cell. ER4 F2: pass a FUNCTION to compute it from the currently
@@ -316,7 +321,15 @@ export function AdsDataGrid<T>({
         if (ra !== rb) return ra - rb
       }
       if (!getVal || !sort) return 0
-      const va = getVal(a) as number | string, vb = getVal(b) as number | string
+      const va = getVal(a) as number | string | null | undefined
+      const vb = getVal(b) as number | string | null | undefined
+      // KT.3 — a column may return null/undefined for "this row has no value", and a blank must sink
+      // in BOTH directions. Returned BEFORE the direction flip, so it is not merely reversed:
+      // otherwise "sort by spend ascending" surfaces every row we never paid for instead of the
+      // cheapest one we did. Additive — of 321 sortValue definitions in the ads tree, none returns
+      // null today (28 substitute a sentinel like NEGATIVE_INFINITY, which is exactly the flaw this
+      // lets a column opt out of), so no existing consumer changes behaviour.
+      if (va == null || vb == null) return va == null ? (vb == null ? 0 : 1) : -1
       const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
       return sort.dir === 'asc' ? cmp : -cmp
     })
