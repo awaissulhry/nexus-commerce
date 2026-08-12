@@ -436,6 +436,55 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── HV.1 — the Keyword Harvest page's one read ──────────────────────
+  //
+  // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1 and BID.S0 are: that file
+  // is ~600 KB, the default `grep` in this repo (ugrep) returns NOTHING on it so a duplicate is
+  // easy to miss, and a duplicate route registration is a BOOT CRASH rather than a warning.
+  //
+  // One call carries the resolved scope, the census over the FULL candidate set, the facets and
+  // the rows — so the page can state what it is showing without a second fetch, and no number it
+  // renders is ever computed from a page of rows.
+  //
+  // Read-only, and it will stay read-only: HV.4 (promote) and HV.7 (queue) are POSTs of their own.
+  fastify.get('/advertising/keyword-harvest', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    // `all` is accepted, as on Negative Targeting: a candidate count and a spend total both sum
+    // honestly across markets, and every row carries its own market.
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : raw.toUpperCase()
+    if (market !== HV_MARKET_ALL && !HV_MARKETS.includes(market as (typeof HV_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${HV_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
+      (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
+
+    const out = await getKeywordHarvest({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      // Read in HV.1 so a link can carry them; the CONTROLS that move them are HV.2. The whole
+      // finding of the study is that the threshold decides whether this tab has any content, so a
+      // link has to be able to say which threshold it was looking at.
+      windowDays: q.window ? Number(q.window) : null,
+      minOrders: q.minOrders ? Number(q.minOrders) : null,
+      minSpendEur: q.minSpend ? Number(q.minSpend) : null,
+      status: oneOf(q.status, ['new', 'already-exact-here', 'exact-elsewhere', 'local-only', 'all'] as const) as HvStatus | 'all' | null,
+      kind: oneOf(q.kind, ['keyword', 'product', 'all'] as const) as HvKind | 'all' | null,
+      q: q.q ?? null,
+      sort: oneOf(q.sort, ['term', 'market', 'source', 'impressions', 'clicks', 'spend', 'orders', 'sales', 'acos', 'cpc', 'status', 'negated', 'kind'] as const) as HvSortKey | null,
+      dir: q.dir === 'asc' ? 'asc' : 'desc',
+    })
+    // Short private cache. The base is a 60-day grouped scan of 10,826 search-term rows joined to
+    // the full positive/negative target set, and it changes only when the five-minute export
+    // ingest lands a new day.
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
   // ── BID.S0 — the poll cursor ────────────────────────────────────────
   //
   // Three cheap aggregates, ~100 bytes, meant to be hit every 45 s by every open tab. The grid read
