@@ -1991,3 +1991,124 @@ The engine promoted it **into the ad group that discovered it** — so `promoted
 and no isolation negative was ever created (§4.1) — and it **never reached Amazon** (§4.1 ①). For six
 weeks it has looked like a successful graduation in every count this system produces. It is the
 control case for the write that has not yet run: the same term, the same source, done the old way.
+
+---
+
+# HV.5 — built
+
+**Landed 2026-08-12**: `b307d0258` (HV.5a doc) → `a046a097f` (API) → `5b856db0d` (web). Verified on
+production against a Ready deployment whose commit **contains `5b856db0d`** — checked by SHA.
+
+## Provenance — and nothing is unclassifiable
+
+`AdTarget` has no provenance column; the only record is `AdvertisingActionLog`. Over all 2,129
+positive keywords:
+
+| class | keywords | how it is proved |
+|---|---|---|
+| **mirrored from Amazon** | **1,363** | no `create_keyword` row, **and all 1,363** carry `lastSyncedAt` **and** an `externalTargetId` — this system never wrote them |
+| **bulk-created in-app** | **548** | `user:anonymous`, on **four days**: 2 · 135 · 137 · 274 keywords across 2 · 9 · 9 · 18 ad groups |
+| **harvested (engine)** | **218** | `automation:auto-harvest` |
+| **harvested (operator)** | **0** | HV.4's class — carries `evidence` and a real `userId` |
+| **unclassifiable** | **0** | |
+
+🔴 **`user:anonymous` is provably not harvested, and it is a proof rather than an inference: before
+HV.4 shipped there was no operator-initiated harvest path at all**, so the only harvest writer that
+has ever existed is the engine. The four-day burst shape corroborates a bulk operation; the argument
+does not rest on it.
+
+The brief anticipated *"if 546 of 774 keywords cannot be attributed, that is the most important
+sentence on the page"*. It resolved cleanly instead, so the page states the **1,911 excluded and
+why** rather than an unclassifiable count.
+
+## The four outcomes — four failures, four fixes
+
+| outcome | count | what it means |
+|---|---|---|
+| **never reached Amazon** | **209** | our record says we created a keyword; Amazon has no such keyword. Nothing will ever happen to it. **Plumbing, not performance** |
+| **not measured** | **2** | created before 2026-07-05, when performance data begins. We cannot *see* what it did |
+| **reached Amazon, never served** | **1** | it exists and is losing the auction, or its ad group is inert. **Bidding, not plumbing** |
+| **served** | **6** | €175.02 spend · €913.06 sales · 11 orders · **19% ACoS** |
+
+🔴 **The discriminator is not the creation date alone** — 239 pre-window keywords *do* have
+performance rows. It is: *has a performance row?* → served/never-served by impressions; *no row?* →
+created **before** the window ⇒ not measured, **after** ⇒ never served.
+
+Every performance cell renders **a dash with its reason**, never a zero, and which of the three
+non-served states a row is in decides what the blank means. The retraction that taught this page the
+lesson — *"688 harvested keywords, 0 impressions"* — came from exactly that confusion, and from
+reading `AdTarget`'s five metric columns, which are **still 0 on all 5,211 rows**.
+
+## The opening bid is 100% recoverable
+
+| | |
+|---|---|
+| never had a recorded bid change → today's `bidCents` **is** the opening bid | **99** |
+| had one → the earliest `AD_BID_UPDATE`'s `payloadBefore.bidCents` | **119** |
+| **unknown** | **0** |
+
+Rendered as **opening → current**, two numbers and never a chart (session 9 owns the curve), with a
+tilde marking a reconstructed value so *"we recorded it"* and *"we inferred it"* are not the same
+number on screen. Caveat carried: this is recoverable *as far as our record goes* — an unlogged
+Seller Central change before the first recorded one would be invisible, and BID.S2 already
+established `AdTarget.updatedAt` cannot detect a change.
+
+🔴 **A gap in my own HV.4 work, fixed here:** `create_keyword`'s audit payload carried **no bid**, so
+an opening bid survived only in `AdTarget.bidCents` and would have been lost the moment a bid rule
+moved it. One line, additive.
+
+## The comparison refuses to conclude
+
+| group | mkt | served | spend | sales | orders | ACoS | avg age |
+|---|---|---|---|---|---|---|---|
+| **Harvest engine** | DE | **3** | €149.77 | €831.91 | 10 | **18%** | 35d |
+| Mirrored from Amazon | DE | 18 | €989.64 | €3,937.34 | 46 | 25% | 74d |
+| **Harvest engine** | IT | **2** | €24.73 | €81.15 | 1 | 30% | 64d |
+| Mirrored from Amazon | IT | 105 | €523.06 | €1,490.17 | 19 | 35% | 73d |
+| Bulk-created in-app | IT | 301 | €735.88 | €1,153.32 | 13 | **64%** | 23d |
+
+**Six served harvested keywords. Eleven orders.** The view renders **"Not enough evidence yet"**,
+lists its confounds, and says what would change it — the 155 pushable keywords and promotions from
+the Candidates view — rather than printing "19% vs 25%" as a result.
+
+*"We cannot answer this yet, and here is exactly what would make it answerable"* is worth more than
+a confident wrong number, and it is the thing no competitor ships. The threshold for flipping to
+`indicative` is 30 served keywords **and** 30 orders, encoded rather than judged.
+
+## The backlog, with the 54 separated
+
+**155 pushable · 54 ASIN-shaped.** The ASINs are pre-H.5 legacy — an ASIN is a product target, so
+those are **deletions, not retries**, and `pushExistingKeyword` refuses them outright rather than
+letting Amazon reject them.
+
+🔴 **HV.4's write path genuinely does not fit, and would have silently no-opped.**
+`promoteCandidates` builds a *graduation* and calls `createKeywordLocal`, whose H.1 idempotence
+check finds the existing row and **returns it without pushing**. A local-only keyword needs a
+*push*, not a create. `pushExistingKeyword` is the smallest extension — same `resolveCtx`, same
+write gate, same `createKeyword` client, same audit path. **The action is wired; no batch was run.**
+
+## Verified on prod
+
+1,670 nodes checked with opacity composited, **0 contrast failures** · every block flush at
+`dLeft = dRight = 0` at **1728** and at a real **896** viewport · first column `rgb(28,37,48)` /
+`cursor: default` · no horizontal body scroll · the comparison table does not overflow at 896 · the
+grid scrolls inside its own container · the criteria bar correctly disappears in the Harvested view.
+
+**18 checks** in `_hv-5-endpoint.mts`, including an independent SQL recount of all four outcome
+states, that no non-served row carries a performance object, that no opening bid is unknown, and
+that each filter returns exactly its census count.
+
+## §1.2's finding, carried to HV.8 with evidence
+
+`applyHarvest`'s `negateCampaign` helper writes at CAMPAIGN scope, and **no campaign-scoped negative
+in this account has ever reached Amazon**: `AD_GROUP` 2,037 rows / **2,017 at Amazon (99%)** versus
+`CAMPAIGN` 20 rows / **0 (0%)**, newest 2026-06-24. HV.4 routed around it by passing `AD_GROUP`;
+**the helper itself is HV.8's**, and this is the evidence to fix it with.
+
+## What HV.6 / HV.7 / HV.8 inherit
+
+- **HV.6** (actors) gets the provenance classifier: four actors, zero unclassifiable, and the proof
+  that pre-HV.4 there was no operator harvest path.
+- **HV.7** (the queue) gets the 155-keyword backlog already separated from the 54 that must never be
+  pushed, and a wired action that runs nothing until someone chooses a batch.
+- **HV.8** gets `negateCampaign`'s 0-of-20 record, and the still-unrepaired rule path.

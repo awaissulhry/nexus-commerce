@@ -110,9 +110,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/services/advertising/ads-create.service.ts` | HV.4 (optional `evidence` on `NewKeyword`, additive) | 2026-08-12 | **released** — landed `d8df06367` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.4 (`GET`/`POST /advertising/harvest-promote`, additive) | 2026-08-12 | **released** — landed `d8df06367` |
 | `…/rules-automation/rules-automation.css` | HV.4 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `6be25d22f`, EOF-append only, every hunk diffed and mine |
-| `apps/api/src/services/advertising/ads-create.service.ts` | HV.5 (`bidCents` in the `create_keyword` audit payload + `pushExistingKeyword`, both additive) | 2026-08-12 | **claimed** |
-| `apps/api/src/routes/advertising-intel.routes.ts` | HV.5 (`GET /advertising/harvest-cohort` + `POST /advertising/harvest-push`, additive) | 2026-08-12 | **claimed** |
-| `…/rules-automation/rules-automation.css` | HV.5 (`h10-hv-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only |
+| `apps/api/src/services/advertising/ads-create.service.ts` | HV.5 (`bidCents` in the audit payload + `pushExistingKeyword`, both additive) | 2026-08-12 | **released** — landed `a046a097f` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | HV.5 (`GET /advertising/harvest-cohort` + `POST /advertising/harvest-push`, additive) | 2026-08-12 | **released** — landed `a046a097f` |
+| `…/rules-automation/rules-automation.css` | HV.5 (`h10-hv-*` at EOF) | 2026-08-12 | **released** — landed `5b856db0d`, EOF-append only |
 | `apps/api/src/services/advertising/ads-auto-harvest.service.ts` | HV.0 (propose-only by default behind `NEXUS_ADS_AUTO_HARVEST_ARMED`) | 2026-08-12 | **released** — landed `42af69317` |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.1 (`GET /advertising/keyword-harvest`, additive) | 2026-08-12 | **released** — landed `b32262393`; see §5's new trap, its import line shipped early inside `6d50a6783` |
 | `…/rules-automation/_shared/tabs.tsx` | HV.1 (`keyword-harvest` → `routed: true` + subtitle + the slug the builder writes) | 2026-08-12 | **released** — landed `46cba4968`; `RULE_TAB_ACTION_TYPES` is now DERIVED from `ruleTypes.ts`, scoped to tabs that already had an entry |
