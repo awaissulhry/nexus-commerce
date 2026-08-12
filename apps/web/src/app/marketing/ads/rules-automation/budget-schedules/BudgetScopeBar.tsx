@@ -161,7 +161,7 @@ export function BudgetScopeBar({
 
       <span className="h10-bsp-field">
         <span className="cap">Campaign</span>
-        <H10Select options={campOpts} value={scope.campaign} onChange={(v) => set({ campaign: v, portfolio: v ? '' : scope.portfolio })} ariaLabel="Campaign" width={200} searchable />
+        <H10Select options={campOpts} value={scope.campaign} onChange={(v) => set({ campaign: v, portfolio: v ? '' : scope.portfolio })} ariaLabel="Campaign" width={180} searchable />
       </span>
 
       <span className="h10-bsp-field">
@@ -172,8 +172,15 @@ export function BudgetScopeBar({
       <span className="h10-bsp-field">
         <span className="cap">Window</span>
         {/* Weeks, because `/advertising/dayparting/heatmap` counts whole weeks so every weekday
-            carries equal samples. A rolling day count would reintroduce the bias it avoids. */}
-        <H10Select options={WEEK_OPTIONS} value={String(weeks)} onChange={(v) => onWeeks(Number(v))} ariaLabel="Time window" width={96} />
+            carries equal samples. A rolling day count would reintroduce the bias it avoids.
+
+            ⚠ These four widths are measured, not chosen. The spine must stay ONE row: it has
+            1128px of inner width at 1280, and wrapping costs 33px of a 120px chrome budget.
+            A select needs its label + 46px of chrome (padding 22 · chevron 14 · gap 8 · border
+            2). '8 weeks' needs 97, so the 96 this started at truncated it to '8 wee…' by one
+            pixel. Campaign gives the 14px back — its placeholder needs 132 of the 180 it now
+            has, and a real campaign name truncates at any width. */}
+        <H10Select options={WEEK_OPTIONS} value={String(weeks)} onChange={(v) => onWeeks(Number(v))} ariaLabel="Time window" width={110} />
       </span>
 
       {narrowed && (
