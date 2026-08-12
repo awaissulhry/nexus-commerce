@@ -168,6 +168,25 @@ describe('blastRadiusSentence — D4: loud, exact, and five different zeros', ()
     expect(s).not.toContain('1 campaigns')
   })
 
+  it('does not offer the same fallback bid twice in one paragraph', () => {
+    // Seen on prod with both on screen: the nothing-to-do branch ended "€0.80 would be accepted."
+    // and the ceiling paragraph then repeated "€0.80 would be accepted everywhere."
+    const s = blastRadiusSentence(computeBlastRadius(giaccaMoto(), 95), ctx)
+    expect(s.match(/would be accepted/g) ?? []).toHaveLength(1)
+  })
+
+  it('names the week, so the drawer header\'s own age cannot read as a second fact', () => {
+    // The KT.4 header renders "week of 19 Jul (24d old)" — counted from the week's START. A bare
+    // "ended 18 days ago" two lines below it looked like a contradiction about the same data.
+    const s = blastRadiusSentence(computeBlastRadius(giaccaMoto(), 55), { ...ctx, shareAgeDays: 18, shareWeekLabel: '19 Jul' })
+    expect(s).toContain('the Brand Analytics week of 19 Jul, which ended 18 days ago')
+  })
+
+  it('still reads correctly with no week label available', () => {
+    const s = blastRadiusSentence(computeBlastRadius(giaccaMoto(), 55), { ...ctx, shareAgeDays: 18, shareWeekLabel: null })
+    expect(s).toContain('a Brand Analytics week that ended 18 days ago')
+  })
+
   it('says the share is too old to lean on when it is 24 days old', () => {
     const s = blastRadiusSentence(computeBlastRadius(giaccaMoto(), 55), ctx)
     expect(s).toContain('judge this on the bid and the spend, not on the share')

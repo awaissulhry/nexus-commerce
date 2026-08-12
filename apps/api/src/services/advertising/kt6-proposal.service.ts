@@ -95,6 +95,13 @@ export async function loadRow(term: string, marketplace: string): Promise<Kt6Row
  * page's own `chooseViewPeriod` picks the week, so this cannot disagree with what is on screen.
  * Measured 2026-08-13: 18 days for IT/DE, 25 for ES/FR.
  */
+export interface Kt6ShareAge { days: number | null; label: string | null }
+
+/** e.g. 19 Jul — the same spelling the KT.4 drawer header uses, so the two cannot disagree. */
+function weekLabel(d: Date): string {
+  return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
+}
+
 export async function shareAgeDays(marketplace: string): Promise<number | null> {
   const groups = await prisma.searchQueryPerformance.groupBy({
     by: ['startDate'], where: { marketplace }, _count: { _all: true },
@@ -104,6 +111,18 @@ export async function shareAgeDays(marketplace: string): Promise<number | null> 
   if (!chosen.start) return null
   const weekEnd = +chosen.start + 6 * 86_400_000
   return Math.floor((Date.now() - weekEnd) / 86_400_000)
+}
+
+/** The age AND the week's label, so the confirmation can name the week the header names. */
+export async function shareAge(marketplace: string): Promise<Kt6ShareAge> {
+  const groups = await prisma.searchQueryPerformance.groupBy({
+    by: ['startDate'], where: { marketplace }, _count: { _all: true },
+  })
+  if (!groups.length) return { days: null, label: null }
+  const chosen = chooseViewPeriod(groups.map((g) => ({ start: g.startDate, rows: g._count._all })))
+  if (!chosen.start) return { days: null, label: null }
+  const weekEnd = +chosen.start + 6 * 86_400_000
+  return { days: Math.floor((Date.now() - weekEnd) / 86_400_000), label: weekLabel(chosen.start) }
 }
 
 /** UTC day start — the ledger's bucket, matching the write gate's `utcDayKey`. */
@@ -239,9 +258,10 @@ export async function previewBidChange(args: {
     commitment,
   )
 
+  const age = await shareAge(args.marketplace)
   const confirmationText = blastRadiusSentence(radius, {
     term: args.term, marketplace: args.marketplace,
-    shareAgeDays: row.shareAgeDays, undoWindowHours: 24, proposeOnly: true,
+    shareAgeDays: age.days, shareWeekLabel: age.label, undoWindowHours: 24, proposeOnly: true,
   })
 
   const byCampaign = campaignIds.map((id) => {

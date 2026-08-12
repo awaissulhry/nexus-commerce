@@ -187,8 +187,17 @@ export function fmt(cents: number): string {
 export interface Kt6SentenceContext {
   term: string
   marketplace: string
-  /** how old the SQP week backing this decision is, in days. Measured 24 today. */
+  /**
+   * How old the SQP week backing this decision is, in days, measured from the week's END.
+   *
+   * 🔴 `shareWeekLabel` must be supplied alongside it. The KT.4 drawer header renders the same week as
+   * "week of 19 Jul (24d old)" — counting from the week's START — so a bare "18 days ago" two lines
+   * below it reads as a second, contradictory fact about the same data. Naming the week ties them
+   * together: "the week of 19 Jul, which ended 18 days ago". Seen on prod with both on screen at once.
+   */
   shareAgeDays: number | null
+  /** e.g. "19 Jul" — the same label the drawer header shows. */
+  shareWeekLabel?: string | null
   /** hours the undo window stays open. 24, from rollbackByExecutionId. */
   undoWindowHours: number
   /** true when the action is queued as a proposal rather than executed */
@@ -238,8 +247,14 @@ export function blastRadiusSentence(r: Kt6BlastRadius, ctx: Kt6SentenceContext):
   const oc = r.byReason.over_campaign_ceiling
   if (oc > 0) {
     const caps = [...new Set(r.excluded.filter((e) => e.why === 'over_campaign_ceiling').map((e) => e.target.maxBidCents!))].sort((a, b) => a - b)
+    // 🔴 The "X would be accepted" hint is added ONLY when the leading sentence did not already carry
+    // it. Seen on prod: the nothing-to-do branch ends "€0.80 would be accepted." and this paragraph
+    // then repeated "€0.80 would be accepted everywhere." in the same block. Repetition in a sentence
+    // about money reads as carelessness, and there is a clickable control offering the same value
+    // immediately below it.
+    const alreadySaid = r.actionable.length === 0 && r.highestUniformAllowed != null
     parts.push(
-      `${oc === 1 ? '1 target' : `${oc} targets`} sit${oc === 1 ? 's' : ''} in campaigns that cap bids at ${caps.map(fmt).join(' / ')}, so the write gate would refuse ${fmt(r.requestedBidCents)} there.${r.highestUniformAllowed != null ? ` ${fmt(r.highestUniformAllowed)} would be accepted everywhere.` : ''}`,
+      `${oc === 1 ? '1 target' : `${oc} targets`} sit${oc === 1 ? 's' : ''} in campaigns that cap bids at ${caps.map(fmt).join(' / ')}, so the write gate would refuse ${fmt(r.requestedBidCents)} there.${!alreadySaid && r.highestUniformAllowed != null ? ` ${fmt(r.highestUniformAllowed)} would be accepted everywhere.` : ''}`,
     )
   }
   const bf = r.byReason.below_floor
@@ -253,10 +268,11 @@ export function blastRadiusSentence(r: Kt6BlastRadius, ctx: Kt6SentenceContext):
 
   // Evidence age — §2.5. Any action justified by share must say how old that share is.
   if (ctx.shareAgeDays != null) {
+    const week = ctx.shareWeekLabel ? `the Brand Analytics week of ${ctx.shareWeekLabel}, which ended` : 'a Brand Analytics week that ended'
     parts.push(
       ctx.shareAgeDays >= 14
-        ? `The impression share on this row is from a Brand Analytics week that ended ${ctx.shareAgeDays} days ago, and the feed cannot currently produce a fresher one — judge this on the bid and the spend, not on the share.`
-        : `The impression share on this row is ${ctx.shareAgeDays} days old.`,
+        ? `The impression share on this row is from ${week} ${ctx.shareAgeDays} days ago, and the feed cannot currently produce a fresher one — judge this on the bid and the spend, not on the share.`
+        : `The impression share on this row is from ${week} ${ctx.shareAgeDays} days ago.`,
     )
   }
 
