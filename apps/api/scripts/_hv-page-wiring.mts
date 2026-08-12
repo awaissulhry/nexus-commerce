@@ -221,10 +221,20 @@ for (const c of [0.5, 0.6, 0.65, 0.75]) {
 console.log('\n\n═══ 8 · freshness and the engines ═══\n')
 const st = await prisma.amazonAdsSearchTerm.aggregate({ _max: { date: true }, _min: { date: true }, _count: true })
 console.log(`AmazonAdsSearchTerm: ${int(st._count)} rows · ${st._min.date?.toISOString().slice(0, 10)} → ${st._max.date?.toISOString().slice(0, 10)} (${st._max.date ? Math.floor((now - st._max.date.getTime()) / 86_400_000) : '?'} days old)`)
-for (const name of ['ads-auto-harvest', 'ads-coverage-engine', 'ads-v1-export-ingest']) {
-  const runs = await prisma.cronRun.findMany({ where: { name }, orderBy: { startedAt: 'desc' }, take: 6, select: { startedAt: true, status: true, result: true, durationMs: true } })
-  console.log(`\n${name}: ${runs.length ? '' : 'NO RUNS RECORDED'}`)
-  for (const r of runs) console.log(`  ${r.startedAt.toISOString().slice(0, 16)} ${pad(r.status, 8)} ${String(JSON.stringify(r.result ?? {})).slice(0, 150)}`)
+// HV.1c — this block used to crash the whole script at §8. `CronRun` has `jobName`, not `name`,
+// and carries `outputSummary` (a string) rather than `result`/`durationMs` — neither field exists
+// on the model. `_hv-page-forensics.mts` §4 always had it right, which is why the same data was
+// available there and this section had simply never run.
+//
+// 🔴 And the job list was wrong in a way that outlived the crash: `ads-v1-export-ingest` carries
+// the v1 unified export of STRUCTURE data (campaigns, ad groups, targets), NOT search terms. The
+// search-term chain is ads-report-create-st → ads-report-poll → ads-report-ingest. HV.1 read
+// `ingested=0 rows=0` off the export job and concluded the search-term feed had stalled. It had
+// not. See `_hv-2a-ingest.mts` and the doc's `## HV.2a` section.
+for (const jobName of ['ads-auto-harvest', 'ads-coverage-engine', 'ads-report-create-st', 'ads-report-poll', 'ads-report-ingest', 'ads-v1-export-ingest']) {
+  const runs = await prisma.cronRun.findMany({ where: { jobName }, orderBy: { startedAt: 'desc' }, take: 6, select: { startedAt: true, status: true, outputSummary: true, errorMessage: true } })
+  console.log(`\n${jobName}: ${runs.length ? '' : 'NO RUNS RECORDED'}`)
+  for (const r of runs) console.log(`  ${r.startedAt.toISOString().slice(0, 16)} ${pad(r.status, 8)} ${(r.outputSummary ?? '').slice(0, 120)}${r.errorMessage ? `  ERR: ${r.errorMessage.slice(0, 60)}` : ''}`)
 }
 
 await prisma.$disconnect()
