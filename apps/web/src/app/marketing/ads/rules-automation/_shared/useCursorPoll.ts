@@ -1,7 +1,19 @@
 'use client'
 
 /**
- * BID.S0 — cursor polling, shaped so the twelfth pass can lift it into the shared layer.
+ * Cursor polling for the Rules & Automation pages.
+ *
+ * Written by BID.S0 as `bid/useCursorPoll.ts`, shaped for this promotion and pre-blessed for it by
+ * its own closing section ("moving this file into `_shared/` is the whole of the shared-layer
+ * change"). BUD.1 moved it, unchanged apart from this header: the Budget page is the second caller,
+ * and a second caller is the moment a page-local file either becomes shared or becomes a fork.
+ *
+ * 🔴 **Nothing below knows what a bid, or a budget, is.** It takes a URL, a params object and a
+ * baseline cursor, and returns four fields. The page-specific parts are the endpoint and what the
+ * caller compares — which is why the two callers can disagree completely about what a cursor
+ * contains (Bid's is `{ targetsAt, loggedAt, n }`; Budget's is a *value* fingerprint, because
+ * `Campaign.updatedAt` fires ~7×/day against ~3 real budget changes and would light the banner
+ * more often wrongly than rightly) and still share every line of this file.
  *
  * The programme wants the eleven Rules & Automation pages to stay in sync with each other without a
  * reload: a rank schedule flipping to Min-bid at 00:00 changes twelve rows of the Bid grid, and an
@@ -35,12 +47,13 @@
  *   3. **A failed poll is silent.** The cursor going down must never put an error on a page whose
  *      data loaded fine.
  *
- * ── The lift ────────────────────────────────────────────────────────────────────────────────────
+ * ── The lift, done ──────────────────────────────────────────────────────────────────────────────
  *
- * Nothing below names a bid. It takes a URL and a params object and returns four fields; the only
- * page-specific things are the endpoint and what the caller compares against. Moving this file into
- * `_shared/` is the whole of the shared-layer change — no signature has to alter for Placement,
- * Budget or Rank to use it.
+ * BUD.1, 2026-08-12: moved here from `bid/`, no signature altered, Bid verified unchanged on prod
+ * afterwards. Placement and Rank can take it as-is. A page adopting it owes exactly one thing —
+ * a cursor whose fields actually move when ITS subject moves, measured rather than assumed. Bid's
+ * measurement rejected the audit log as load-bearing; Budget's rejected the row timestamp. Copying
+ * a sibling's cursor shape without re-measuring is the one way to misuse this hook.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'

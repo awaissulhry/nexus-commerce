@@ -44,7 +44,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { BidScopeBar, type BidScopeValue, type ScopeOptionsPayload } from './BidScopeBar'
-import { useCursorPoll } from './useCursorPoll'
+import { useCursorPoll } from '../_shared/useCursorPoll'
 import {
   BAND_LABEL, BID_BANDS,
   type BidCampaignRow, type BidGridPayload, type BidTargetRow, type BidView,
