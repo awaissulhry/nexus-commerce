@@ -2430,3 +2430,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   --color-primary: #1f6fde;
   --h10-wash-primary: #e8f1fd;
 }
+
+/* 🔴 SOV.0 — the query STOPS BEHAVING like a link. Measured on prod: the colour override above wins
+   (#1c2530, verified with getComputedStyle) but `ads.css:695`'s `cursor: pointer` and `:696`'s hover
+   underline both survive it, so the cell still promises a click that does nothing. Exactly the trap
+   KT.1b named as its §3.4 and fixed two lines below its own colour rule. Both lines are deleted
+   whole when SOV.5's drawer makes the query a real link. */
+.h10-am-grid td.nm .h10-sov-q .t { cursor: default; }
+.h10-am-grid td.nm .h10-sov-q .t:hover { text-decoration: none; }

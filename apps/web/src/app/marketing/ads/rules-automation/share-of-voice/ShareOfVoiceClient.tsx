@@ -116,8 +116,17 @@ interface Payload {
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
-/** A share is 0..1 from Brand Analytics. Two decimals of a percent — 0.07% and 2.19% are both real. */
-const sharePct = (v: number) => `${(v * 100).toFixed(2)}%`
+/**
+ * A share is 0..1 from Brand Analytics. Two decimals of a percent — 0.07% and 2.19% are both real.
+ *
+ * 🔴 `<0.01%` rather than `0.00%` for a small non-zero share. Found by looking at the deployed page,
+ * not by reading the code: `gilet refrigerante` holds **2 impressions of 93,869** (0.0000213) and
+ * `hugo boss uomo` **1 of 48,699**, and `toFixed(2)` rendered both as `0.00%` — the same string a
+ * genuine zero produces. That is the exact collapse this whole column exists to prevent, sneaking
+ * back in one layer above the API that so carefully refuses to make it: "we are barely present" and
+ * "we hold none of this market" are different findings and must never share a rendering.
+ */
+const sharePct = (v: number) => (v > 0 && v * 100 < 0.005 ? '<0.01%' : `${(v * 100).toFixed(2)}%`)
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
