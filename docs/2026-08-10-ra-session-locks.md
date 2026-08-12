@@ -99,10 +99,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/web/next.config.js` | BID.S0 (one `?tab=bid` redirect, same shape as NEG.1's) | 2026-08-12 | **released** — landed `313828494`; verified on prod: `?tab=bid` → 308 → `/bid`, and `?tab=budget` still 200 |
 | `apps/web/src/app/marketing/ads/campaigns/_grid/AdsDataGrid.tsx` | BID.S0 (`onSortChange` + `onFilterChange` + seed re-sync, additive) | 2026-08-12 | **released** — landed `313828494`. Re-sync is GATED on the callbacks, so the ~20 existing grids are untouched. Back/forward verified on prod. See §4 |
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` + `keyword-watchlist.service.ts` + `…/keyword-tracker/*` | KT.2 (per-market watchlists) | 2026-08-12 | **released** — `cae154aec` · `421b6d002` · `6d50a6783` · `b78ae2655` |
-| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.0 (`GET /advertising/share-of-voice-page`, additive) | 2026-08-12 | **claimed** — path disjoint from HV.1's `keyword-harvest`, KT.2's watchlist CRUD and BID.S0's `bid-grid`; and from the EXISTING `GET /advertising/share-of-voice` in `advertising.routes.ts:7284`, which stays serving its CSV |
-| `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **claimed** — one entry, disjoint from HV.1's and BID.S0's |
-| `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **claimed** — the `keyword-tracker` branch is already gone; `SovTrackerTab`'s import goes with this branch since it was its last caller |
-| `…/rules-automation/rules-automation.css` | SOV.0 (`h10-sov-*` at EOF) | 2026-08-12 | **claimed** — EOF-append only; will `git diff` every hunk before committing (§5) |
+| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.0 (`GET /advertising/share-of-voice-page`, additive) | 2026-08-12 | **released** — landed `a07460f58`, staged as TWO HUNKS not the whole file; see §5 |
+| `…/rules-automation/_shared/tabs.tsx` | SOV.0 (`share-of-voice` → `routed: true` + subtitle) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`, see §5 |
+| `…/rules-automation/RulesAutomationClient.tsx` | SOV.0 (drop the `share-of-voice` branch only) | 2026-08-12 | **released** — 🔴 swept into PLC.0's `341d08e31`. The `SovTrackerTab` IMPORT went with the branch (it was its last caller — an unused import fails the web build); the component FILE stays |
+| `…/rules-automation/rules-automation.css` | SOV.0 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — 🔴 the first block swept into PLC.0's `341d08e31`; the 2-line cursor override landed in my `32dc3e585` |
 | `…/rules-automation/_shared/tabs.tsx` | BSP.0 (`budget-schedules` → `routed: true` + label + subtitle) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
 | `…/rules-automation/RulesAutomationClient.tsx` | BSP.0 (drop the `budget-schedules` branch only) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
 | `…/rules-automation/rules-automation.css` | BSP.0 (`h10-bsp-*` at EOF) | 2026-08-12 | | **released** — 🔴 these lines shipped inside PLC.0's `341d08e31`, not in a BSP.0 commit; see §5 |
@@ -206,6 +206,34 @@ vs the watchlist CRUD (no duplicate path ⇒ no boot crash), and the CSS is EOF-
 two files while the other's hunks are uncommitted** — that is §5's trap, which already misattributed
 three lines inside `1df95d678`. I will `git diff` both before committing and, if KT.2's hunks are
 present, stage only my own rather than sweeping theirs under an HV message.
+
+🔴 **`git commit --only` swept an entire page's shared edits — the third occurrence, and the first
+load-bearing one. SOV.0, 2026-08-12.** PLC.0's `341d08e31` ran while SOV.0's three shared-file edits
+sat uncommitted in the tree, so that commit carries **`tabs.tsx`'s `share-of-voice` → `routed: true`,
+the `RulesAutomationClient` branch removal, and 69 lines of `h10-sov-*` CSS** under a Placement
+message. KT.1b's occurrence was three cosmetic CSS lines; this one **published a tab pointing at a
+route that did not exist in the same commit** — between `341d08e31` and SOV.0's `9811f5ec0`, the
+Share of Voice tab was a live 404 in any deploy built from the commits in between. The web build
+does not catch it: `rulesTabHref` builds the path in a function call, so nothing references the
+missing module.
+
+**Two things follow for every remaining session.** (1) `git diff <shared file>` before
+`commit --only`, as §5 already says — but also (2) **if your `--only` sweeps a `routed: true` you did
+not write, you have just shipped someone's 404; tell them rather than assuming their push is next.**
+
+🔴 **And the trap runs the other way in the same file on the same day.** SOV.0's own API commit
+(`a07460f58`) could NOT use `commit --only`: a NEG.2 session had uncommitted work in
+`advertising-intel.routes.ts` whose new route imports `getTermContext` from a `negatives.service.ts`
+that was not in HEAD. Committing the file whole would have been green in the shared tree and **red on
+its own**. The fix that worked, and is repeatable: `git diff` the file to a patch, drop the hunks
+that are not yours, `git apply --cached` the rest, then plain `git commit` on the index — and verify
+isolation with `git worktree add --detach <tmp> HEAD` plus `tsc` there.
+
+**Still open, and it needs one line from whoever owns it:** `?tab=share-of-voice` and
+`?tab=keyword-tracker` both resolve to **Apply Rules**, because `RulesAutomationClient` maps a routed
+`?tab=` to `'rules'`. NEG.1 established the fix (one `has: [{type:'query', key:'tab'}]` redirect in
+`next.config.js`). SOV.0 did not take it: `next.config.js` is claimed by HV.1 *and* BID.S0 with
+uncommitted hunks, and it is not among SOV.0's briefed files.
 
 **NEG.1 finding that binds every routed tab, `next.config.js`.** NEG.1 added a
 `has: [{ type: 'query', key: 'tab', … }]` redirect for `?tab=negative-targeting`, because
