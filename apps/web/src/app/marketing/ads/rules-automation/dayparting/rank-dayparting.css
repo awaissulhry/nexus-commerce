@@ -1,0 +1,40 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   RD — Rank & Dayparting, page-scoped styles.  Prefix: rd-*
+
+   Imported by DaypartingSchedulesClient only, so it reaches this route and nothing else.
+
+   WHY THIS FILE EXISTS (decision D1, operator-approved 2026-08-12). The obvious home for these
+   rules is `rules-automation.css`, and that file is named inside the builder boundary — so even an
+   append-at-EOF addition is a change to a protected file. It is also the file three other sessions
+   are queuing EOF-appends against, which is how three lines of one session's CSS ended up inside
+   another session's commit (locks §5). A page-scoped stylesheet touches nothing the builder
+   renders and nothing another session is holding.
+
+   The DS stylesheets are imported alongside this one and are entirely namespaced under
+   `.h10-ds-*` — verified, not assumed: zero top-level selectors outside that prefix in
+   primitives.css, components.css and patterns.css. So loading them cannot restyle the `h10-*`
+   chrome this page already wears. (`--h10-pill-*` in the DS are custom PROPERTY names, not
+   selectors; the DS's own pill is `.h10-ds-pill`.)
+
+   TWO TRAPS THIS PAGE HAS ALREADY PAID FOR ELSEWHERE — read before adding a rule here:
+
+   1. The page gutter is ZERO, not 24px. Measured on prod at innerWidth 1728: `.h10-hdr`,
+      `.h10-rules-tabs` and `.h10-am-card` all sit at 96→1698. `h10-main`'s 30px padding is the
+      gutter. Anything here with a horizontal margin is inset past everything else on the page.
+   2. `.h10-am-grid td.nm .t` sets #1f6fde at specificity (0,3,1), so a page-level `.rd-x .t
+      { color }` (0,2,0) loses and the first column renders BLUE. Every current consumer makes
+      that column a link so it reads correctly — a first column that is NOT a link must match the
+      specificity (`.h10-am-grid td.nm .rd-x .t`). `!important` is not needed and makes the
+      override harder to delete later.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── The section slot ─────────────────────────────────────────────────────────────────────────
+   Layout-neutral on purpose. It exists to (a) guarantee no section can acquire a horizontal inset
+   and (b) give every section an id to scroll to. The blocks inside keep their own vertical
+   margins, which collapse through this element exactly as they did before it wrapped them — so
+   adding the slot changed no measurement on the page. */
+.rd-sec {
+  display: block;
+  margin: 0;
+  padding: 0;
+}

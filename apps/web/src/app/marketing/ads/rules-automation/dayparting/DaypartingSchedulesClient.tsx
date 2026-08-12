@@ -24,6 +24,12 @@ import { HourlyPerformance, type ScopeOption } from './HourlyPerformance'
 import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
+import { RdSection } from './_rd/RdSection'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '@/design-system/styles/patterns.css'
+import './rank-dayparting.css'
 
 export function DaypartingSchedulesClient() {
   return (
@@ -80,14 +86,34 @@ function DaypartingSchedulesBody() {
         primaryAction={{ label: 'Rank Schedule', icon: <Plus size={15} />, href: '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
       />
       <RulesTabs active="dayparting" />
-      {/* Look first, author second — the grid sits above the list of schedules it justifies.
-          RDX/B1 — both now receive `market`. Until B1 the header's market switch was a dead
-          control: it held state, rendered, accepted clicks, and nothing consumed it. */}
-      {/* RDX/D2 — `allSchedules` (not `scopes`): hours can be added to a plan holding no campaigns. */}
-      <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} />
-      {/* RDX/C1 — the gap, stated between the evidence and the schedules that act on it. */}
-      <CoveragePanel market={market} schedules={allSchedules} onChanged={refresh} />
-      <RankGoalsList />
+
+      {/* ── The section map, structure doc §3, top to bottom ──────────────────────────────────
+          Unbuilt sections are NOT MOUNTED. An empty placeholder card is dead space, and the
+          standard for this foundation is that the page must look no worse than it did before. */}
+
+      {/* P1 · Fleet state band — fleet grain. Six tiles, each a filter onto the grid. */}
+
+      {/* P2 · The grid — group ⇄ campaign. The section that fixes the page's structural flaw:
+          the list is group-grained and every defect the study measured is campaign-grained.
+          (P3's row inspector and P4's signal columns land inside this section.) */}
+      <RdSection id="p2">
+        <RankGoalsList />
+      </RdSection>
+
+      {/* P5 · Guardrails & scope ceilings — spend ceilings per scope, refusals made visible. */}
+
+      {/* P6 · Evidence — the hourly grid and what no schedule covers.
+          It sits BELOW the grid now, which is the one visible change P0 makes: the page's own
+          subject used to start at y=739 on a 793px viewport, i.e. entirely below the fold, while
+          the evidence for it occupied the top 411px.
+          RDX/D2 — `allSchedules` (not `scopes`): hours can be added to a plan holding no campaigns.
+          RDX/C1 — the coverage gap, stated next to the evidence rather than above the schedules. */}
+      <RdSection id="p6">
+        <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} />
+        <CoveragePanel market={market} schedules={allSchedules} onChanged={refresh} />
+      </RdSection>
+
+      {/* P7 · Governance — events, versions, change log. */}
     </div>
   )
 }
