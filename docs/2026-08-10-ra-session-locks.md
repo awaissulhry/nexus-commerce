@@ -335,6 +335,33 @@ and `…/rules-automation/fleet/*` belongs to the NAF sessions. Do not edit them
 
 ## 4 · Requests and hand-offs
 
+**HV.8b → three owners, 2026-08-13.** Measured, not inferred; each is a one-line repair with a
+named victim, and none is HV's to make.
+
+1. 🔴 **`tabs/RuleListTab.tsx`'s four bulk controls write nothing** (→ RA / Automations).
+   `applyBulk` (`:120`) is a pure `setRows` mutation — Delete filters rows out of local state under
+   a modal that reads *"This cannot be undone."* The rows return on reload. **A real endpoint
+   already exists and is simply never called**: `DELETE /advertising/automation-rules/:id`
+   (`advertising.routes.ts:5907`, which does `prisma.automationRule.delete`). Four importers,
+   including Keyword Harvest — so this lie is on my page too, which is why it is filed rather than
+   ignored. Wire it or remove the toolbar.
+
+2. 🔴 **`ads-console/automation/HarvestTab.tsx`'s Apply button has always applied nothing**
+   (→ ads-console). It sends `{ windowDays }` to `POST /advertising/harvest/apply`, which calls
+   `applyHarvest((request.body ?? {}) as never)`; `negatives`/`graduations` are `undefined`, both
+   loops iterate `[]`, and the UI renders *"Applied · 0 promoted, 0 negated"* every time. **Do not
+   fix it with the obvious one line** — the tab already holds both arrays in React state, so
+   sending them turns an inert button into a live bulk structural write with no scope, no
+   per-row outcome and only a `window.confirm` in front of it. Delete the button, or route it
+   through HV.4's confirmed path.
+
+3. **`ads-rule-adapter.service.ts` drops 6 of 11 builder metrics for search-term rules**
+   (→ whichever session first saves a builder-shaped rule). `ACOS · ROAS · Impressions · CVR · CTR
+   · CPC` have no `SEARCHTERM_METRIC` entry, and **a dropped AND-condition makes a rule LOOSER**.
+   Zero victims today — 0 of 62 rules are builder-shaped, so `maybeTranslateAdsRule` returns null
+   on every call. It fires on the first rule anyone saves from the builder.
+
+
 **HV.6 → whoever owns the Ads Control Room, 2026-08-13.**
 🔴 **The engine registry reports a level for the harvest engine that it does not read from
 anywhere.** `ads-control-room.service.ts:293`:
@@ -981,6 +1008,24 @@ uncommitted — I will `git diff` it and stage only my own.
 ---
 
 ## 5 · Traps this repo has already paid for
+
+- 🔴 **`AdsDataGrid.selectable` defaults to TRUE.** A grid mounted without the prop renders a
+  checkbox on every row and a select-all in the header. On a read-only panel that is a control
+  leading nowhere — measured 2026-08-13 on HV.6, nine rows of them. Pass `selectable={false}`
+  unless the grid has a selection action. Nine pages mount this grid.
+- 🔴 **A `git push` can print `! [remote rejected] … cannot lock ref` and still have landed.**
+  Measured 2026-08-13 (HV.8a): the push reported a ref-lock failure against a SHA another session
+  had just moved, exit code 0, and `origin/main` afterwards equalled local HEAD with 0 ahead / 0
+  behind. **Do not re-push or repair on the strength of the message** — `git fetch` and compare
+  `git rev-parse origin/main` against HEAD first, exactly as the CLI-stderr trap below requires for
+  `vercel ls`. Re-pushing blind after a "rejection" that actually succeeded is how a session
+  duplicates or reverts another's work.
+- **`as never` is where these defects hide.** Two of this programme's silent write failures are a
+  cast standing where a type would have objected: `negateCampaign` omitted `marketplace` behind
+  `as never` for two months (0 of 20 negatives reached Amazon), and
+  `POST /advertising/harvest/apply` accepts a body it does not read via
+  `applyHarvest((request.body ?? {}) as never)` (the ads-console Apply button has always applied
+  nothing). Grep for `as never` before trusting a write path.
 
 - **`advertising.routes.ts` defeats grep.** The default `grep` here is `ugrep` and returns nothing on
   that file. Use `grep -a`. A duplicate route registration is a **boot crash**, not a warning —

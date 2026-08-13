@@ -2340,3 +2340,105 @@ graduate · 8 to negate)`, and its detail carries all three sentences the unit w
 `OFF` for an unrelated reason (`NEXUS_ENABLE_AMAZON_ADS_CRON` is unset in a dev `.env`), which is
 why the sentence is derived from the comparison at render time rather than written once — it says
 "ABOVE" only because production says `AUTO`.
+
+---
+
+# HV.8a — the negation write path
+
+## The diagnosis, and four causes ruled out
+
+| measured 2026-08-13 | |
+|---|---|
+| `AD_GROUP` negatives | **2,037 rows / 2,017 at Amazon (99%)** |
+| `CAMPAIGN` negatives | **20 rows / 0 at Amazon (0%)**, 2026-06-24 → 2026-08-10 |
+| all 20 | carry a `create_negative_keyword` audit row from `automation:auto-harvest` |
+| all 20 | `lastSyncStatus` **NULL**, `lastSyncError` **NULL** |
+| all 20 | their campaign **does** have a marketplace |
+
+**Cause #4: the write gate refused, and the local mirror was written anyway.** The others are out —
+`createNegative` has always handled CAMPAIGN (`SP_CAMPAIGN_NEGATIVE_KW_PATH`, `campaignNegativeKeywords`
+body key); Amazon was never asked, because the gate denies before the HTTP call; the id is passed
+straight into the mirror and a NULL `lastSyncStatus` proves no sync ran; and `profileId` is real on
+all three markets involved.
+
+🔴 **The cause was already fixed by another session, and the repaired path has never executed.**
+NEG.0(b) (`619c28468`, 2026-08-12) added the `marketplace` pass-through and made a denial throw.
+**All 20 rows predate it; zero exist since** — because HV.0 disarmed the engine the same day.
+
+🔴 **The discriminator in HV.6's own section was wrong.** A campaign negative is not
+`adGroupId IS NULL` — `AdTarget.adGroupId` is NOT NULL, and the row hangs off the campaign's first
+ad group with `negativeLevel = 'CAMPAIGN'`. Re-derived correctly the split is unchanged, so the
+numbers survived the wrong query. The query was still wrong, and it is corrected here.
+
+## What was actually broken
+
+1. **The default moved, CAMPAIGN → AD_GROUP**, changing both callers deliberately. The
+   compatibility being preserved was compatibility with a path that has never once worked.
+2. 🔴 **The counter lied.** `result.negativesAdded++` ran once per candidate the loop *reached*,
+   discarding the return value — `neg=8/8` across 72 nightly runs against zero rows that ever
+   reached Amazon. It now advances only for rows Amazon confirmed, with `negativeOutcomes[]`
+   carrying the rest and their reasons.
+3. `profileId ?? ''` refuses instead of calling Amazon with an argument that cannot identify a
+   connection.
+4. The CAMPAIGN isolation branch stopped hardcoding `reachedAmazon: false` — true of every row this
+   account has written, but an assumption rather than a reading.
+
+**6 tests, 3 seen to fail against the old behaviour first.**
+
+## Blast radius, with the engine's own parameters
+
+🔴 **The engine calls `previewHarvest({})`** (`ads-auto-harvest.service.ts:102`) — all defaults, so
+**€15**, not the €10 I first measured with. Measuring with parameters the engine never passes
+describes a run that never happens.
+
+Corrected: the first **armed** run would attempt **7 negative writes**, **€175.60** of spend behind
+them, **0 dedupe** — because the existing rows are CAMPAIGN-scope and `negativeExistsLocally`
+filters on `negativeLevel`. Six of the seven already carry a dead CAMPAIGN row. **Nothing fires
+today**; the engine stays disarmed and this work does not arm it.
+
+⚠ **The candidate list drifts with the window.** It read 19 negatives at one run and 14 minutes
+later — stable within a process, so it is the rolling 60-day window re-aggregating as data lands,
+not non-determinism. It matters because a confirm sentence must match what was on screen.
+
+## The 20 existing rows — proposed, not applied
+
+They are local-only records of a negation that never happened. `negatives-retire.service.ts` already
+has exactly the right path: `!externalTargetId` → write the audit row, delete the row, report
+*"Amazon never confirmed this negative, so there was nothing there to archive."* **Recommendation:
+retire all 20 through NEG's existing path**, with the reason recorded. Not done in this session.
+
+---
+
+# HV.8b — the subtraction decision
+
+The RA plan's doctrine is *"the work is SUBTRACTIVE."* HV.6 proved a large amount of harvest
+machinery is unreachable. **Measured per item, the subtraction is not available: nothing on the list
+is dead, and none of it is this session's to delete.** Each piece is unused *by harvest* while being
+live for someone else.
+
+| candidate | does anything reach it? | cost to repair | cost to delete | recommendation |
+|---|---|---|---|---|
+| **`ads-rule-adapter.service.ts`** (210 lines) | `automation-rule.service.ts:502`, on **every rule evaluation** — it just returns `null`, because 0 of 62 rules are builder-shaped. Serves **8 builder slugs** | ~15 lines for the harvest branch (6 metrics + the windows), meaningful only once a builder rule exists | 🔴 not available — breaks seven other pages' builders the moment anyone saves a rule | **KEEP.** Unexercised, not dead. Not mine |
+| **`HarvestRules.tsx`** | **2 live importers**, both in `campaign-builder/` — `GuidedBuilder.tsx:40` and `sp-super-wizard/LaunchStep.tsx:19` | — | 🔴 not available — a different programme, and live | **KEEP.** Not mine |
+| **the builder Preview** (`RuleBuilder.tsx:425`) | reads `j.candidates ?? j.terms ?? j.items` from a payload of `{negatives, graduations, …}` — **always `[]`. It has never shown a row** | **1 line** | — | **REPAIR** in HV.8c |
+| **the five bid constants** | `0.50`×2 handler defaults · `0.60`/`0.65` stored on rules · `0.75` the adapter's dead branch. Median observed CPC is **€0.39** | derive from observed CPC — HV.4 already does for the operator path | deleting `0.75` is a rename, not a subtraction | **LEAVE** |
+| **`ads-console/automation/HarvestTab.tsx`** | 1 importer (`InsightsTab.tsx:20`). 🔴 **Verified inert**: sends `{windowDays}` to `POST /advertising/harvest/apply`, which calls `applyHarvest((request.body ?? {}) as never)`. `negatives`/`graduations` are `undefined`, both loops iterate `[]`, and it renders *"Applied · 0 promoted, 0 negated"* — always | ~1 line: it already holds `negatives` and `graduations` in React state | off limits (§6.5) | 🔴 **DO NOT REPAIR.** One line turns an inert button into a live bulk write with no scope, no per-row outcome and only a `window.confirm`. Delete the button or route it through HV.4 |
+| **`tabs/RuleListTab.tsx`** write controls | **4 importers**, including this page. 🔴 **Verified**: `applyBulk` is a pure `setRows` mutation; Delete filters rows out of local state under a modal reading *"This cannot be undone."* | `DELETE /advertising/automation-rules/:id` **already exists** (`advertising.routes.ts:5907`) and really deletes — it is simply not called | small, but the toolbar is on 4 pages | 🔴 **WIRE IT OR REMOVE IT.** A live lie on four pages, one of them this one |
+
+**The `as never` cast is the common thread.** It is what let `harvest/apply` accept a body it does
+not read, and what let `negateCampaign` omit `marketplace` for two months. Both defects are a cast
+standing where a type would have objected.
+
+## Hand-offs filed in locks §4
+
+`RuleListTab`'s four fake bulk controls (RA/Automations) · the `ads-console` HarvestTab's inert
+Apply (ads-console) · `ads-rule-adapter`'s latent metric drop (whichever session first saves a
+builder-shaped rule).
+
+## The denominator, reconciled
+
+**62 = all rules, all domains** — advertising **51** + replenishment 8 + reviews 3. Of the 51
+advertising rules, **5** carry a harvest action and **7** can create a keyword *or a negative*; the
+extra two are `Account-wide negative sync` and `Wasted keyword instant negate`. Nothing is
+double-counted and no actor was counted as a rule. **HV.6's panel asked the 7 question; the brief
+asked the 5 question.** C5's one denominator for this page is **"7 of 51 advertising rules"**.
