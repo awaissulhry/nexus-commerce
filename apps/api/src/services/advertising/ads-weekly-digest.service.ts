@@ -31,6 +31,7 @@ import prisma from '../../db.js'
 import { pricePendingProposals } from './ads-proposal-pricing.service.js'
 import { getGraduationBoard } from './ads-graduation-readiness.service.js'
 import { getCoverageScoreboard } from './ads-coverage.service.js'
+import { buildNegDigestSection, type NegDigestSection } from './negatives-record.service.js'
 
 const DAY = 86_400_000
 
@@ -123,6 +124,15 @@ export interface WeeklyDigest {
     note: string
   } | null
   delivery: { failedWrites: number; deadLetters: number }
+  /**
+   * NEG.8 — the negatives section. Built by `negatives-record.service.ts` so the number in the
+   * Monday email and the number on the Negative Targeting page come from ONE builder; a second
+   * digest service is how two summaries start disagreeing about the same account.
+   *
+   * Null when the section could not be built — never a zeroed object, which would read as a quiet
+   * week rather than a failed read.
+   */
+  negatives: NegDigestSection | null
 }
 
 /** The operator's civil clock — same Intl approach the report schedules use, and for the same
@@ -412,10 +422,15 @@ export async function getWeeklyDigest(
         : `No hourly spend limit is set, so the guard enforces its ${(DEFAULT_MAX_HOURLY_SPEND_CENTS / 100).toFixed(0)} EUR/hour code default. The busiest of ${peakHoursSampled.toLocaleString('en-IE')} hours this week reached ${(peakHourSpendCents / 100).toFixed(2)} EUR — a limit that far above anything the account does cannot fire, so ad spend is effectively unguarded.`,
   }
 
+  // NEG.8 — one builder, two consumers. A failure here must not blank the digest, and must not
+  // fabricate a quiet week either: it degrades to null and the panel says the section is missing.
+  const negatives = await buildNegDigestSection(win.from.getTime(), win.to.getTime()).catch(() => null)
+
   return {
     generatedAt: now.toISOString(),
     window: { from: isoDate(win.from), to: isoDate(win.to), label: win.label, complete: win.complete },
     gates: gateState(),
+    negatives,
     breaker,
     totals,
     rules: ordered,

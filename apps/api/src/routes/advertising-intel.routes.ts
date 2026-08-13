@@ -694,6 +694,54 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── NEG.8 — the record: what changed, what was refused ──────────────
+  //
+  // 🔴 The most valuable content on this page is the REFUSALS, and they have never been on a
+  // screen: `protectConverting` refusals live inside `AutomationRuleExecution.actionResults` JSON
+  // and carry the term, the order count and the sales. Five terms, €1,045.40 earned between them,
+  // every one of which a rule tried to negate.
+  fastify.get('/advertising/negatives/record', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const { getNegRecord } = await import('../services/advertising/negatives-record.service.js')
+    const out = await getNegRecord({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+      window: q.window ? Number(q.window) : null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
+  // ── NEG.8 — the one write on this section, and it is a preference ───
+  //
+  // Writes to `NotificationPreference` and nothing else. No ads write, no Amazon call. The model
+  // already carries eventType / inApp / email / digestCadence, so this adds five event types to an
+  // existing store rather than a second notification system.
+  fastify.post('/advertising/negatives/alerts', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const eventType = typeof b.eventType === 'string' ? b.eventType : ''
+    if (!eventType) { reply.status(400); return { ok: false, error: 'eventType is required', code: 'event_required' } }
+    const { setNegAlert } = await import('../services/advertising/negatives-record.service.js')
+    const out = await setNegAlert({
+      eventType: eventType as never,
+      inApp: b.inApp !== false,
+      email: b.email === true,
+      cadence: typeof b.cadence === 'string' ? b.cadence : 'instant',
+    })
+    if (!out.ok) { reply.status(400); return { ...out, code: 'event_unknown' } }
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
   // ── BID.S0 — the Bid page's one read ────────────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1 and NEG.1 are: a duplicate route
