@@ -339,6 +339,14 @@ builder slugs and is not this session's to delete (see §4).
 
 ---
 
+### HV.9b-pre — the same null-id defect in the push path, 2026-08-13
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/api/src/services/advertising/ads-create.service.ts` | HV.9b (`pushExistingKeyword` reads back when Amazon returns no id — the 155-row backlog runs through it) | 2026-08-13 | **released** |
+
+---
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |

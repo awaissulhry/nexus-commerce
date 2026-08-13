@@ -19,6 +19,7 @@ import {
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
   listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
   createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
+  listKeywords, listSbKeywords,
   type AdsRegion,
 } from './ads-api-client.js'
 import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
@@ -303,10 +304,40 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
   try {
     const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: t.expressionValue, matchType: t.expressionType as 'EXACT' | 'PHRASE' | 'BROAD', bid: t.bidCents / 100, state: 'enabled' as const }
     const r = ag.campaign.adProduct === 'SPONSORED_BRANDS' ? await createSbKeyword(ctx, args) : await createKeyword(ctx, args)
-    if (!r.externalId) return { ok: false, externalTargetId: null, outcome: 'failed', error: 'Amazon accepted the call but returned no id' }
-    await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: r.externalId, lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })
-    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r.externalId, reachedAmazon: true, bidCents: t.bidCents }, input.userId, {}, 'SUCCESS', input.evidence ?? null)
-    return { ok: true, externalTargetId: r.externalId, outcome: 'acted' }
+    /**
+     * 🔴 HV.9a/HV.9b — AMAZON CAN CREATE THE KEYWORD AND RETURN NO ID.
+     *
+     * This used to return `failed` here and leave `externalTargetId` NULL. Measured on the
+     * 2026-08-13 proof write, on the negative half of the same service: `createNegative` logged
+     * `success … externalId: null` and the negative is ENABLED at Amazon as id 48498817150724.
+     * The same shape reaches this line.
+     *
+     * Reporting `failed` over a create that succeeded is worse than it sounds on a backlog: an
+     * operator retries the 155, and every retry of a silently-succeeded push is a DUPLICATE
+     * keyword at Amazon. So ask Amazon before concluding, and only report failure when the
+     * read-back agrees the keyword is not there.
+     */
+    let externalId = r.externalId
+    if (!externalId) {
+      try {
+        const live = ag.campaign.adProduct === 'SPONSORED_BRANDS'
+          ? await listSbKeywords(ctx, { externalCampaignIds: [ag.campaign.externalCampaignId] })
+          : await listKeywords(ctx, { campaignIds: [ag.campaign.externalCampaignId] })
+        const key = t.expressionValue.trim().toLowerCase()
+        const found = (live as Array<{ keywordId?: string; keywordText?: string; adGroupId?: string; matchType?: string }>)
+          .find((k) => String(k.keywordText ?? '').trim().toLowerCase() === key
+            && String(k.matchType ?? '').toUpperCase() === String(t.expressionType).toUpperCase()
+            && (!k.adGroupId || String(k.adGroupId) === ag.externalAdGroupId))
+        if (found?.keywordId) externalId = String(found.keywordId)
+      } catch { /* leave it null — the row then reports honestly as unproven rather than as created */ }
+      if (!externalId) {
+        return { ok: false, externalTargetId: null, outcome: 'failed', error: 'Amazon accepted the call but returned no id, and a read-back did not find the keyword. Nothing was created; retrying is safe.' }
+      }
+    }
+    const r2 = { externalId }
+    await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: r2.externalId, lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })
+    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r2.externalId, reachedAmazon: true, bidCents: t.bidCents, recoveredByReadBack: !r.externalId }, input.userId, {}, 'SUCCESS', input.evidence ?? null)
+    return { ok: true, externalTargetId: r2.externalId, outcome: 'acted' }
   } catch (e) {
     return { ok: false, externalTargetId: null, outcome: 'failed', error: (e as Error).message }
   }
