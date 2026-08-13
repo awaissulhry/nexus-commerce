@@ -665,6 +665,35 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // ── NEG.7 — the rules that can negate here, and whether AUTO is defensible ──
+  //
+  // 🔴 READ-ONLY, and deliberately so. No mode change, no enable/disable, no ceiling lift, no
+  // scope write. Automations owns the dial; this page owns the CONSEQUENCES of the rules — what
+  // one execution would create, where, and whether the preconditions for arming them hold.
+  //
+  // The blast radius is the number nobody has ever seen on a screen:
+  // `sync_negatives_across_campaigns` writes one campaign-level negative per ENABLED campaign in a
+  // marketplace, and its cap is 20/day.
+  fastify.get('/advertising/negatives/rules', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
+    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+    }
+    const { getNegRules } = await import('../services/advertising/negatives-rules.service.js')
+    const out = await getNegRules({
+      market,
+      line: q.line ?? null,
+      portfolio: q.portfolio ?? null,
+      campaign: q.campaign ?? null,
+      adGroup: q.adGroup ?? null,
+    })
+    reply.header('Cache-Control', 'private, max-age=60')
+    return out
+  })
+
   // ── BID.S0 — the Bid page's one read ────────────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1 and NEG.1 are: a duplicate route

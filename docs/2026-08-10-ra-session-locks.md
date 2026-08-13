@@ -323,6 +323,10 @@ builder slugs and is not this session's to delete (see §4).
 
 ---
 
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.7 (`GET /advertising/negatives/rules`, additive — READ-ONLY, arms nothing) | 2026-08-13 | **released** — `grep -a`ed BOTH route files: `negatives/rules` had **zero** hits |
+| `…/rules-automation/rules-automation.css` | NEG.7 (`h10-ngr7-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only; `h10-ngr-*` is NEG.3b's, hence the `7` |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.7 — **NOT TOUCHED.** The slot already mounts `NegRules`; the interim `RuleListTab` render is REPLACED by it, 2 lines | 2026-08-13 | **claimed** |
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
