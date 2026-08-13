@@ -72,6 +72,8 @@ export function TermDrawer({
   const [err, setErr] = useState<string | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [mounted, setMounted] = useState(false)
+  /** KT.7 — bumped when a write lands, so the change log refreshes without a page reload. */
+  const [changeSeq, setChangeSeq] = useState(0)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -133,11 +135,11 @@ export function TermDrawer({
         {/* KT.6 — the only control on this page that can spend. Placed FIRST because it is now the
             reason the drawer is opened; the read-only sections that follow are the evidence for it.
             `unbid` comes from the payload the drawer already has, so no extra fetch decides the shape. */}
-        {data && <BidAction term={term} market={market} unbid={data.bid.unbid} />}
+        {data && <BidAction term={term} market={market} unbid={data.bid.unbid} onWrite={() => setChangeSeq((n) => n + 1)} />}
 
         {/* KT.7 — what changed, scoped to this term's targets. Placed directly under the control that
             causes changes, so cause and effect are adjacent rather than in two different screens. */}
-        {data && <ChangeLog term={term} market={market} />}
+        {data && <ChangeLog term={term} market={market} refreshKey={changeSeq} />}
 
         {data && s && (
           <section className="h10-kt-drsec">

@@ -339,7 +339,9 @@ export function applySummary(a: {
     parts.push(`The share figure behind this decision came from ${week} ${a.shareAgeDays} days ago.`)
   }
   if (a.applied > 0) {
-    parts.push(`All ${a.applied} change${a.applied === 1 ? '' : 's'} can be undone together in one action for the next ${KT7_UNDO_WINDOW_HOURS} hours.`)
+    parts.push(a.applied === 1
+      ? `This change can be undone in one action for the next ${KT7_UNDO_WINDOW_HOURS} hours.`
+      : `All ${a.applied} changes can be undone together in one action for the next ${KT7_UNDO_WINDOW_HOURS} hours.`)
   }
   return parts.join(' ')
 }

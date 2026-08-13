@@ -33,7 +33,8 @@ describe('applySummary — past tense, and every number named', () => {
     const s = applySummary({ ...base, applied: 1, cappedTo: 1 })
     expect(s).toContain('on 1 target for')
     expect(s).not.toContain('1 targets')
-    expect(s).toContain('1 change can be undone')
+    expect(s).toContain('This change can be undone in one action')
+    expect(s).not.toContain('All 1 change')
   })
 
   it('names the §6 cap as deliberate rather than as a limitation', () => {

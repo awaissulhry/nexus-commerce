@@ -88,12 +88,14 @@ const REASON_LABEL: Record<string, string> = {
 }
 
 export function BidAction({
-  term, market, unbid,
+  term, market, unbid, onWrite,
 }: {
   term: string
   market: string
   /** true when no campaign bids this term at all — the control changes shape entirely */
   unbid: boolean
+  /** called when a write lands, so the change log beside this can show it without a reload */
+  onWrite?: () => void
 }) {
   const [bidEuros, setBidEuros] = useState('0.55')
   const [includeSuppressed, setIncludeSuppressed] = useState(false)
@@ -145,7 +147,9 @@ export function BidAction({
       })
       const body = await r.json().catch(() => ({}))
       if (r.status === 201) {
-        setResult({ ok: true, text: `Proposal raised for ${body.changing?.targets ?? '?'} targets. Nothing has changed on Amazon yet.` })
+        // "1 targets" shipped in the first build and was caught by reading the rendered string.
+        const n = Number(body.changing?.targets ?? 0)
+        setResult({ ok: true, text: `Proposal raised for ${n} target${n === 1 ? '' : 's'}. Nothing has changed on Amazon yet.` })
         setProposalId(String(body.id ?? '') || null)
         setApplied(null)
         setConfirming(false)
@@ -179,6 +183,7 @@ export function BidAction({
       if (r.ok) {
         setApplied({ ok: true, text: String(b.summary ?? 'Applied.'), rows: b.rows })
         setProposalId(null)
+        onWrite?.()
       } else {
         // 409 is a refusal, and its message already names what stopped it.
         setApplied({ ok: false, text: String(b.error ?? `The write was refused (${r.status})`), rows: b.rows })
@@ -186,7 +191,7 @@ export function BidAction({
       setApplyConfirm(false)
       void load()
     } catch (e) { setApplied({ ok: false, text: (e as Error).message }); setApplyConfirm(false) } finally { setLoading(false) }
-  }, [proposalId, includeSuppressed, load])
+  }, [proposalId, includeSuppressed, load, onWrite])
 
   // ── the unbid case: no bid to change, and no destination to invent ─────────────────────────────
   if (unbid) {
@@ -397,12 +402,20 @@ export function BidAction({
             </div>
           )}
 
+          {/* 🔴 The allowlist clause is CONDITIONAL. It read "the 0 targets in campaigns that are not
+              on the live-write allowlist could not be changed" on a row where every target is
+              writable — a true sentence about nothing, which is how a reader learns to skip the
+              whole paragraph. Found by clicking a one-target DE row. */}
           <p className="h10-kt6-foot">
-            Nothing on this page writes to Amazon. Every proposal is recorded and waits for approval;
-            applying one is a live bid write and goes through the account’s write gate, which is why
-            the {p.excludedByReason.not_write_enabled ?? 0} target
-            {(p.excludedByReason.not_write_enabled ?? 0) === 1 ? '' : 's'} in campaigns that are not on
-            the live-write allowlist could not be changed from here even after approval.
+            A proposal changes nothing by itself. Applying one is a live bid write and goes through the
+            account’s write gate, and it is undoable in one action for 24 hours.
+            {(p.excludedByReason.not_write_enabled ?? 0) > 0 && (
+              <>
+                {' '}That gate is also why the {p.excludedByReason.not_write_enabled} target
+                {p.excludedByReason.not_write_enabled === 1 ? '' : 's'} in campaigns that are not on the
+                live-write allowlist cannot be changed from here even after approval.
+              </>
+            )}
           </p>
         </>
       )}

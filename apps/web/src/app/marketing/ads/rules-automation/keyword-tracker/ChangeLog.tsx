@@ -78,7 +78,19 @@ function actorLabel(it: ChangeItem): { icon: 'user' | 'bot'; who: string; chip: 
   return { icon: 'user', who: raw || 'an operator', chip: 'operator' }
 }
 
-export function ChangeLog({ term, market }: { term: string; market: string }) {
+export function ChangeLog({
+  term, market, refreshKey = 0,
+}: {
+  term: string
+  market: string
+  /**
+   * 🔴 Bumped by the drawer when a write lands. This component is a SIBLING of the control that
+   * causes the changes, so it cannot observe an apply — found by clicking: the write succeeded, its
+   * confirmation appeared, and the log directly beneath it still showed the previous two rows. "Cause
+   * and effect are adjacent" is worth nothing if the effect needs a page reload.
+   */
+  refreshKey?: number
+}) {
   const [data, setData] = useState<ChangesResponse | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -94,7 +106,7 @@ export function ChangeLog({ term, market }: { term: string; market: string }) {
     } catch (e) { setErr((e as Error).message) }
   }, [term, market])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void load() }, [load, refreshKey])
 
   const undo = useCallback(async (it: ChangeItem) => {
     if (!it.undoActionLogId) return
