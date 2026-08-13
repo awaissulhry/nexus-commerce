@@ -16227,6 +16227,14 @@ model SqpReportRequest {
   reportDocumentId String?
   rowsParsed       Int?
   rowsUpserted     Int?
+  /// SQP.3 — of `rowsUpserted`, how many actually CHANGED a stored value.
+  ///
+  /// The distinction is the whole of SQP.3's §4.1: measured field by field, a settled week comes back
+  /// byte-identical, and `updatedAt` moved on 100 of 100 rows while 0 of 100 values did — because
+  /// Prisma's `@updatedAt` fires on the update path whether or not anything moved. So neither the row
+  /// count nor the timestamp can tell a useful re-fetch from a wasted one. This can, and it is what
+  /// lets the request pass stop asking for a week that has stopped moving.
+  rowsChanged      Int?
   errorMessage     String?
 
   createdAt DateTime @default(now())

@@ -148,32 +148,38 @@ export async function runSqpIngestOnce(): Promise<string> {
   // 300s per report abandoned 40 of 40 on two consecutive nights.
   if (!envEnabled('NEXUS_SQP_SYNCHRONOUS_INGEST')) {
     const { requestSqpReports } = await import('../services/advertising/sqp-async.service.js')
-    const { periodWindow } = await import('../services/advertising/sqp.service.js')
-    const win = periodWindow('WEEK', new Date(), Math.max(1, Number(process.env.NEXUS_SQP_LOOKBACK) || 2))
+    // 🔴 Imported, never re-derived. This line used to carry its OWN `|| 2`, so the lookback had two
+    // independent defaults and changing the one in sqp.service.ts would have had no effect on the
+    // job that actually requests the reports. Same constant, one definition.
+    const { periodWindow, SQP_LOOKBACK } = await import('../services/advertising/sqp.service.js')
+    const win = periodWindow('WEEK', new Date(), SQP_LOOKBACK)
     const mkRows = await prisma.marketplace.findMany({ where: { channel: 'AMAZON' }, select: { code: true, marketplaceId: true } })
     const idOf = new Map(mkRows.filter((m) => m.marketplaceId).map((m) => [m.code, m.marketplaceId!]))
 
     const parts: string[] = []
-    let created = 0, failed = 0, outstanding = 0
+    let created = 0, failed = 0, outstanding = 0, settled = 0
     for (const { mkt, asins } of eligible) {
       const marketplaceId = idOf.get(mkt)
       if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += asins.length; continue }
       const r = await requestSqpReports({ marketplaceCode: mkt, marketplaceId, asins, period: 'WEEK', start: win.start, end: win.end })
-      created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding
-      parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.failed ? ` ${r.failed} failed` : ''}`)
+      created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding; settled += r.alreadySettled
+      parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.alreadySettled ? ` (${r.alreadySettled} settled)` : ''}${r.failed ? ` ${r.failed} failed` : ''}`)
     }
     const summary =
       `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
-      ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}` +
+      ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
       ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
       (parts.length ? ` · ${parts.join(' · ')}` : '')
     // 🔴 `rows=0` here is CORRECT and must not be treated as the old zero-row failure: this pass
     // writes no SearchQueryPerformance rows by design. So this branch does NOT throw on rows=0 —
     // the honest failure for a request pass is "created nothing", which is what is checked.
-    if (created === 0 && outstanding === 0) {
-      throw new Error(`sqp-ingest (async): created 0 report requests across ${eligible.length} markets and nothing was already outstanding. ${summary}`)
+    // 🔴 `settled` belongs in this condition, not outside it. Once a week has been confirmed frozen
+    // for every ASIN, the correct behaviour is to request nothing — and without this term that
+    // success would throw every single night, exactly as if the feed had broken.
+    if (created === 0 && outstanding === 0 && settled === 0) {
+      throw new Error(`sqp-ingest (async): created 0 report requests across ${eligible.length} markets, nothing was already outstanding, and no week was settled. ${summary}`)
     }
-    logger.info('[sqp-ingest] request pass complete', { created, failed, outstanding })
+    logger.info('[sqp-ingest] request pass complete', { created, failed, outstanding, settled, week: win.start.toISOString().slice(0, 10) })
     return summary
   }
 

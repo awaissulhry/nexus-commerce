@@ -20,9 +20,20 @@ import { fetchSpApiJsonReport } from '../sp-api-reports.service.js'
 
 export const SQP_REPORT_TYPE = process.env.NEXUS_SQP_REPORT_TYPE || 'GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT'
 export type SqpPeriod = 'WEEK' | 'MONTH' | 'QUARTER'
-// How many completed periods back to request. SQP data for the just-finished
-// period isn't queryable for a few days, so default to 2 (env-overridable).
-const SQP_LOOKBACK = Math.max(1, Number(process.env.NEXUS_SQP_LOOKBACK) || 2)
+/**
+ * How many completed periods back to request.
+ *
+ * 🔴 Was 2, on the reasoning that *"SQP data for the just-finished period isn't queryable for a few
+ * days"*. Measured 2026-08-13 (SQP.3 §4.3): that is true of the CURRENT week and false of the one
+ * before it. A report for the week one back (2026-08-02, closed five days earlier) returned `DONE`
+ * with **49 rows, 80,946 bytes and 270,193 market impressions** for a single ASIN — while the
+ * lookback-2 target held **0** stored rows for that same ASIN.
+ *
+ * So lookback 2 was costing the page seven days of freshness on every row it shows, for nothing.
+ * Changed here rather than by setting the env var, so the value is versioned, reviewable, and
+ * carries the measurement that justifies it. `NEXUS_SQP_LOOKBACK` still overrides.
+ */
+export const SQP_LOOKBACK = Math.max(1, Number(process.env.NEXUS_SQP_LOOKBACK) || 1)
 
 export interface SqpRow {
   searchQuery: string

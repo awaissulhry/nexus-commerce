@@ -61,6 +61,34 @@ export interface SqpRequestResult {
   created: number
   failed: number
   alreadyOutstanding: number
+  /** skipped because a re-fetch already confirmed this (asin, week) has stopped moving. */
+  alreadySettled: number
+}
+
+/**
+ * Which ASINs this pass should actually ask Amazon for — pure, so the rule can be tested without
+ * touching Amazon or the database.
+ *
+ * Three outcomes, and they must not overlap or the summary double-counts: an ASIN is either already
+ * OUTSTANDING (a report is in flight; asking again would queue behind it and make the drain strictly
+ * worse), already SETTLED (a re-fetch confirmed the week has stopped moving — SQP.3 §4.1), or it is
+ * requested. Outstanding wins over settled, because an in-flight report is a fact about right now
+ * and settledness is a fact about the past.
+ */
+export function partitionRequestSet(args: {
+  asins: string[]
+  outstanding: string[]
+  settled: string[]
+}): { toRequest: string[]; alreadyOutstanding: string[]; alreadySettled: string[] } {
+  const out = new Set(args.outstanding)
+  const set = new Set(args.settled)
+  const toRequest: string[] = [], alreadyOutstanding: string[] = [], alreadySettled: string[] = []
+  for (const asin of args.asins) {
+    if (out.has(asin)) alreadyOutstanding.push(asin)
+    else if (set.has(asin)) alreadySettled.push(asin)
+    else toRequest.push(asin)
+  }
+  return { toRequest, alreadyOutstanding, alreadySettled }
 }
 
 /**
@@ -93,7 +121,29 @@ export async function requestSqpReports(args: {
     },
     select: { asin: true },
   })
-  const skip = new Set(outstanding.map((o) => o.asin))
+  // 🔴 And skip what has STOPPED MOVING. SQP.3 §4.1: a settled week comes back byte-identical —
+  // 0 of 100 fields differed at 25 days and again at 46 days. Yet this pass re-requested the same
+  // week every night for as long as the calendar pointed at it; 2026-07-26 was fetched five times.
+  // At ~65s per `createReport` that is the request pass's entire budget spent re-reading data we
+  // already hold, while the weeks we do NOT hold go unfetched.
+  //
+  // The rule is "fetch a week until it stops moving, then leave it": one ingest establishes the
+  // rows, a second confirms nothing moved (`rowsChanged = 0`), and from then on it is skipped. It
+  // takes TWO ingests, never one, because the first fetch of a week necessarily changes everything
+  // and so can never prove the week is settled.
+  const settledRows = await prisma.sqpReportRequest.findMany({
+    where: {
+      marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly,
+      asin: { in: args.asins }, status: 'INGESTED', rowsChanged: 0,
+    },
+    select: { asin: true },
+  })
+  const part = partitionRequestSet({
+    asins: args.asins,
+    outstanding: outstanding.map((o) => o.asin),
+    settled: settledRows.map((r) => r.asin),
+  })
+  const skip = new Set([...part.alreadyOutstanding, ...part.alreadySettled])
 
   let created = 0, failed = 0
   for (const asin of args.asins) {
@@ -130,7 +180,8 @@ export async function requestSqpReports(args: {
   }
   return {
     marketplace: args.marketplaceCode, period, startDate: startDateOnly.toISOString().slice(0, 10),
-    asinsRequested: args.asins.length, created, failed, alreadyOutstanding: skip.size,
+    asinsRequested: args.asins.length, created, failed,
+    alreadyOutstanding: part.alreadyOutstanding.length, alreadySettled: part.alreadySettled.length,
   }
 }
 
@@ -138,6 +189,8 @@ export interface SqpCollectResult {
   polled: number
   ingested: number
   rowsUpserted: number
+  /** of those, how many actually moved a stored value — see SqpReportRequest.rowsChanged */
+  rowsChanged: number
   rowsParsed: number
   stillPending: number
   expired: number
@@ -167,7 +220,7 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
   })
 
   const out: SqpCollectResult = {
-    polled: 0, ingested: 0, rowsUpserted: 0, rowsParsed: 0,
+    polled: 0, ingested: 0, rowsUpserted: 0, rowsChanged: 0, rowsParsed: 0,
     stillPending: 0, expired: 0, terminal: 0, errors: 0, pastRetentionStillTrying: 0,
     collectionLagMsP50: null,
   }
@@ -222,8 +275,41 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
       out.rowsParsed += rows.length
 
       let upserted = 0
+      let changed = 0
+
+      // 🔴 Read the existing rows FIRST, so a re-fetch can be told from a revision.
+      //
+      // SQP.3 §4.1 measured a settled week coming back byte-identical while `updatedAt` moved on every
+      // row — Prisma's `@updatedAt` fires on the update path whether or not a value changed, and this
+      // update branch writes every field every time. Neither the row count nor the timestamp can say
+      // whether a fetch was worth making. Comparing values can, and that is what lets the request pass
+      // stop asking for a week that has stopped moving.
+      const existing = await prisma.searchQueryPerformance.findMany({
+        where: {
+          marketplace: req.marketplace, reportPeriod: req.reportPeriod, startDate: req.startDate,
+          searchQuery: { in: rows.map((r) => r.searchQuery) },
+        },
+        select: {
+          searchQuery: true, asin: true, searchQueryVolume: true, searchQueryRank: true,
+          impressionsTotal: true, impressionsBrand: true, clicksTotal: true, clicksBrand: true,
+          cartAddsTotal: true, cartAddsBrand: true, purchasesTotal: true, purchasesBrand: true,
+        },
+      })
+      const priorByKey = new Map(existing.map((e) => [`${e.searchQuery}|${e.asin ?? ''}`, e]))
+
       for (const row of rows) {
         const a = row.asin || req.asin
+        const prior = priorByKey.get(`${row.searchQuery}|${a}`)
+        if (!prior) changed++
+        else if (
+          prior.searchQueryVolume !== row.searchQueryVolume ||
+          (prior.searchQueryRank ?? null) !== (row.searchQueryRank ?? null) ||
+          prior.impressionsTotal !== row.impressionsTotal || prior.impressionsBrand !== row.impressionsBrand ||
+          prior.clicksTotal !== row.clicksTotal || prior.clicksBrand !== row.clicksBrand ||
+          prior.cartAddsTotal !== row.cartAddsTotal || prior.cartAddsBrand !== row.cartAddsBrand ||
+          prior.purchasesTotal !== row.purchasesTotal || prior.purchasesBrand !== row.purchasesBrand
+        ) changed++
+
         await prisma.searchQueryPerformance.upsert({
           where: { marketplace_reportPeriod_startDate_searchQuery_asin: { marketplace: req.marketplace, reportPeriod: req.reportPeriod, startDate: req.startDate, searchQuery: row.searchQuery, asin: a } },
           create: {
@@ -252,9 +338,10 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
       // genuinely empty because the ASIN has no Brand Analytics data (feed doc §6.2). It is recorded
       // as ingested-with-zero, never as a failure — the previous design's conflation of the two is
       // what made a dead feed indistinguishable from a healthy one.
-      await mark(req.id, { status: 'INGESTED', rowsParsed: rows.length, rowsUpserted: upserted, collectedAt, doneAt: doneAt ?? undefined })
+      await mark(req.id, { status: 'INGESTED', rowsParsed: rows.length, rowsUpserted: upserted, rowsChanged: changed, collectedAt, doneAt: doneAt ?? undefined })
       out.ingested++
       out.rowsUpserted += upserted
+      out.rowsChanged += changed
       if (doneAt) lags.push(+collectedAt - +doneAt)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
