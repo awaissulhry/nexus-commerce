@@ -1900,3 +1900,104 @@ a term's ASINs · anything touching negations.
 
 **Recorded, not fixed:** `sort`/`dir` still absent from the URL · `sort=asins` with no matching column ·
 `reportPeriod` unguarded · the rule-type tab bug on Apply Rules · and K5.1's cap defect.
+
+---
+
+# KT.7 — 🔴 halted at a §7 stop condition, before any product code
+
+**2026-08-13. Nothing was built and nothing was written.** §7 lists "the 2¢/141 picture has changed
+materially" as a stop-and-report condition, and it has — in a way that also makes one of the two
+options §3.1 offered for the suppression decision **actively unsafe**. Probes only:
+`_kt7-stop.mts`, `_kt7-suppression-shift.mts`, `_kt7-collide.mts`.
+
+## L1 · The conditions that are clear
+
+| §7 condition | measured 2026-08-13 07:2x |
+|---|---|
+| `RankTarget.maxBiasPct` still NULL | ✓ 0 of 5 |
+| `NEXUS_COVERAGE_ENGINE_MODE` unset | ✓ unset |
+| `liveBidWritesEnabled` still 82 of 220 | ✓ 82 of 220 |
+| `minBidCents` set anywhere | ✓ 0 of 220 · `maxBidCents` on 82 · pins on 0 |
+| a write path bypassing the gate | ✓ none — the chokepoint is `ads-sync.worker.ts:366`; every write reaches it through `updateAd*WithSync` → `OutboundSyncQueue` |
+| `AdvertisingActionLog` is where the mutation path writes | ✓ 48,790 rows, newest 07:15:14, `AD_BID_UPDATE` 25,137 in 60d |
+| KT.6 close-out still holds | ✓ `KeywordBidProposal` 0 · `AdSpendCeiling` 0 |
+
+## L2 · 🔴 The condition that fired: 558 → 141, and the flag is gone everywhere
+
+| | brief §3.1 | measured now |
+|---|---|---|
+| bids at 2¢ | **558** | **141** |
+| bids at 5¢ | 50 | 57 |
+| `suppressedFromBidCents` set | 420 | **0 of 2,129** |
+| at 2¢ **and** flagged | 417 | **0** |
+| at 2¢ and **not** flagged | 141 | **141** |
+
+The "141" survives by coincidence, not by stability: it was *141 of 558 unflagged*, and it is now
+*all 141 that remain*. Counted by the database rather than in JS, `suppressedFromBidCents` is
+**NOT NULL on 0 rows and NULL on 2,129** — the two sum to the total, so this is a measurement, not a
+filter artefact. `baseBidFromCents` is also 0.
+
+**What happened: the no-pause suppress/restore cycle.** Measured over 7 days on
+`AD_BID_UPDATE` / `AD_TARGET`, 6,094 rows:
+
+| day | dropped **to** 2¢ | raised **from** 2¢ |
+|---|---|---|
+| 08-06 | 451 | 0 |
+| 08-09 | 900 | 318 |
+| 08-12 | 451 | 316 |
+| 08-13 | 0 | 317 |
+| **7d total** | **3,146** | **2,271** |
+
+All of it actored `automation:rank-defend-*`, with `payloadBefore {"bidCents":2}` →
+`payloadAfter {"bidCents":42}`. `restoreCampaignBids` clears `suppressedFromBidCents` the moment a
+push is accepted, which is why the column is empty: the 417 have been *restored*, not un-flagged.
+
+🔴 **So a target's 2¢ is a CLOCK READING, not a property** — the same class of finding as the BID
+page's chip counts. `ad-rank-defend` applied **508 changes in the 07:00 tick alone** (other ticks
+report `applied=0` or `2`), so any snapshot of the suppressed set is stale within the hour.
+
+## L3 · 🔴 §3.1's option B is unsafe, and the reason is in the code that owns the column
+
+§3.1 offered: *refuse a raise on an unflagged 2¢ target, **or** record the current bid into
+`suppressedFromBidCents` before raising.* The second cannot be done.
+
+`suppressedFromBidCents` is the **no-pause state machine's memory**, not a spare column:
+
+- `ads-bid-suppression.service.ts:195–201` — `restoreCampaignBids` selects
+  `where: { suppressedFromBidCents: { not: null } }` and calls
+  `updateAdTargetWithSync({ patch: { bidCents: t.suppressedFromBidCents } })`, then clears it.
+  **Any value in that column is a standing instruction to set the bid to it**, executed by an engine
+  that never suppressed the target.
+- `ad-rank-defend.job.ts:548–551` and `rank-runtime.service.ts:133–136` compute
+  `maxBaseBid = MAX(bidCents, suppressedFromBidCents)`. Writing it would also inflate the ceiling the
+  CPC cap is derived from.
+
+**There is a third option, and it needs no new storage at all.** Every bid write already records its
+own prior value: `payloadBefore {"status":"ENABLED","bidCents":2}` on all 6,094 rows in 7 days, and
+the existing per-change undo reads exactly that. The pre-bid is *already* durable, in the right place.
+
+**Proposed decision:** KT.7 **refuses** to raise any target at or below the 3¢ suppression convention
+by default — unchanged from KT.6, and now on firmer ground, because there is no flag left anywhere to
+distinguish "deliberately off-air" from "cheap". On an explicit operator opt-in the raise proceeds and
+is recoverable through the existing undo. **KT.7 never writes `suppressedFromBidCents`.**
+
+## L4 · A hazard §4.1 did not list: applying into a suppressed campaign
+
+If a target's campaign has `bidsSuppressedAt` set, the next resume overwrites whatever KT.7 wrote with
+the remembered bid — silently reverting it, with the engine's actor on the row. Right now
+`bidsSuppressedAt` is set on **0 of 220** campaigns and **0 of `giacca moto`'s 100 targets**, but at
+~450 suppressions a day that is another clock reading. **Apply must re-check
+`Campaign.bidsSuppressedAt` at apply time and refuse**, alongside the four re-checks §4.1 already
+requires.
+
+## L5 · What this changes about §4.1, and what it does not
+
+Nothing here weakens the plan; it sharpens three points and adds one:
+
+1. The suppression rule resolves to **refuse-by-default, never write the column** (L3).
+2. Apply-time re-checks gain a fifth: **campaign not currently suppressed** (L4).
+3. The change log's actor attribution matters more than the brief's 414/day estimate suggested —
+   measured, `AD_BID_UPDATE` alone is **925 in the last 24 h**, and a 7-day window shows the
+   suppress/restore cycle accounting for the majority of it. A KT.7 write will be one row among
+   hundreds of engine rows *on the same targets, on the same day*.
+4. Everything else in §4.1–§4.3 stands as written.
