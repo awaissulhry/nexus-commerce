@@ -243,6 +243,20 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
     },
   })
 
+  /**
+   * 🔴 A RESOLVED name, per §4's vocabulary — not a raw cuid. `userId` is stored as
+   * `user:<UserProfile.id>`, and rendering the id put `cmr44sxfw0001nj00whzur39t` in the actor
+   * column of the two most important rows in the ledger. Script actors (`neg3b-probe`) are not
+   * cuids and resolve to themselves.
+   */
+  const userIds = [...new Set(
+    logs.map((l) => l.userId).filter((u): u is string => !!u && u.startsWith('user:')).map((u) => u.slice(5)),
+  )]
+  const people = userIds.length
+    ? await prisma.userProfile.findMany({ where: { id: { in: userIds } }, select: { id: true, displayName: true, email: true } })
+    : []
+  const nameById = new Map(people.map((u) => [u.id, u.displayName?.trim() || u.email || u.id]))
+
   const targets = await prisma.adTarget.findMany({
     where: { id: { in: [...new Set(logs.map((l) => l.entityId))] } },
     select: {
@@ -265,7 +279,10 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
   /** NEG.1's four-value vocabulary, unchanged. "No record" and "a record with no actor" differ. */
   const actorOf = (l: { userId: string | null; executionId: string | null }): { kind: LedgerActor; label: string } => {
     if (l.userId?.startsWith('automation:')) return { kind: 'engine', label: l.userId }
-    if (l.userId) return { kind: 'user', label: l.userId.startsWith('user:') ? l.userId.slice(5) : l.userId }
+    if (l.userId) {
+      const raw = l.userId.startsWith('user:') ? l.userId.slice(5) : l.userId
+      return { kind: 'user', label: nameById.get(raw) ?? raw }
+    }
     if (l.executionId) return { kind: 'actor-not-recorded', label: 'actor not recorded' }
     return { kind: 'unattributed', label: 'unattributed' }
   }

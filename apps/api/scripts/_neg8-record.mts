@@ -63,6 +63,12 @@ const a = p.ledger.byActor
 console.log(`     user ${a.user} · engine ${a.engine} · unattributed ${a.unattributed} · actor-not-recorded ${a['actor-not-recorded']}`)
 assert('the four buckets account for every row', a.user + a.engine + a.unattributed + a['actor-not-recorded'], p.ledger.total)
 truthy('no row carries an empty actor label', p.ledger.rows.every((r) => r.actorLabel.trim().length > 0))
+// 🔴 §4 asks for a RESOLVED name. A raw cuid was rendering in the actor column of the two most
+// important rows in the ledger.
+const cuidish = /^c[a-z0-9]{24}$/
+truthy('🔴 no actor label is a raw cuid — the name is resolved',
+  !p.ledger.rows.some((r) => cuidish.test(r.actorLabel)),
+  p.ledger.rows.filter((r) => cuidish.test(r.actorLabel)).map((r) => r.actorLabel).join(', ') || 'none')
 truthy('🔴 unattributed negatives are stated as a FACT, not backfilled',
   p.ledger.unlogged.negativesWithNoLog > 0,
   `${int(p.ledger.unlogged.negativesWithNoLog)} of ${int(p.ledger.unlogged.negativesTotal)} negatives have no log and never will`)
