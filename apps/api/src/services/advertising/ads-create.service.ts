@@ -285,6 +285,30 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
   if (/^b0[a-z0-9]{8}$/i.test(t.expressionValue.trim())) {
     return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'asin_as_keyword', reason: 'This is an ASIN stored as keyword text (pre-H.5 legacy). It is a product target, not a keyword, and must be deleted rather than pushed.' } }
   }
+  /**
+   * 🔴 HV.9b — THE BACKLOG CONTAINS DUPLICATES, AND PUSHING THEM CORRUPTED OUR OWN RECORD.
+   *
+   * Measured 2026-08-13: 54 pushes produced 6 distinct Amazon keywords. One id ended up attributed
+   * to 26 local rows and another to 24, because the 209-row backlog holds the same
+   * (ad group, text, matchType) many times over — the very population HV.9c is scoped to clean up.
+   * The first push creates the keyword; Amazon refuses each later duplicate and returns NO ID; the
+   * read-back below then found the sibling's keyword and stamped it on.
+   *
+   * Amazon was never wrong — it refused every duplicate correctly. Only our record was. So a row
+   * whose keyword a sibling already holds is REFUSED here, before any call is made.
+   */
+  const twin = await prisma.adTarget.findFirst({
+    where: {
+      id: { not: t.id }, adGroupId: (await prisma.adTarget.findUnique({ where: { id: t.id }, select: { adGroupId: true } }))?.adGroupId,
+      isNegative: false, expressionValue: t.expressionValue, expressionType: t.expressionType,
+      externalTargetId: { not: null },
+    },
+    select: { id: true, externalTargetId: true },
+  })
+  if (twin) {
+    return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'duplicate_of_existing_row', reason: `Another row in this ad group already holds this keyword at Amazon (${twin.externalTargetId}). Pushing this one would create nothing and would attribute one Amazon keyword to two of our rows.` } }
+  }
+
   const ag = t.adGroup
   if (!ag?.externalAdGroupId || !ag.campaign?.externalCampaignId || !ag.campaign.marketplace) {
     return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'connection', reason: 'The ad group or campaign has no Amazon id, so there is nowhere to push it to.' } }
@@ -328,7 +352,16 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
           .find((k) => String(k.keywordText ?? '').trim().toLowerCase() === key
             && String(k.matchType ?? '').toUpperCase() === String(t.expressionType).toUpperCase()
             && (!k.adGroupId || String(k.adGroupId) === ag.externalAdGroupId))
-        if (found?.keywordId) externalId = String(found.keywordId)
+        if (found?.keywordId) {
+          // 🔴 Only claim a keyword no other row already claims. If a sibling holds this id, THIS
+          // push created nothing — Amazon refused it as a duplicate and the read-back found the
+          // sibling's keyword. Stamping it here is how 54 pushes came to share 6 ids.
+          const owner = await prisma.adTarget.findFirst({ where: { externalTargetId: String(found.keywordId), id: { not: t.id } }, select: { id: true } })
+          if (owner) {
+            return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'duplicate_of_existing_row', reason: `Amazon returned no id and the keyword found by read-back (${found.keywordId}) already belongs to another of our rows. Nothing was created.` } }
+          }
+          externalId = String(found.keywordId)
+        }
       } catch { /* leave it null — the row then reports honestly as unproven rather than as created */ }
       if (!externalId) {
         return { ok: false, externalTargetId: null, outcome: 'failed', error: 'Amazon accepted the call but returned no id, and a read-back did not find the keyword. Nothing was created; retrying is safe.' }

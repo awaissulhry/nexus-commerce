@@ -354,6 +354,14 @@ builder slugs and is not this session's to delete (see §4).
 | `…/rules-automation/rules-automation.css` | NEG.8 (`h10-ngrec-*` at EOF) | 2026-08-13 | **released** — one hunk at EOF, diffed before committing; 20 classes used and 20 defined, checked both ways |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.8 — **NOT TOUCHED**; the slot already mounts `NegRecord` | 2026-08-13 | **released** |
 
+### HV.9b-fix — the read-back claimed keywords it did not create, 2026-08-13
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/api/src/services/advertising/ads-create.service.ts` | HV.9b (`pushExistingKeyword` refuses a duplicate instead of stamping a sibling's Amazon id onto it) | 2026-08-13 | **released** |
+
+---
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
