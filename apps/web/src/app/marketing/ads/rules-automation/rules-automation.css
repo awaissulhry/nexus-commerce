@@ -4309,3 +4309,116 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-ngr7-rules .lv, .h10-ngr7-rules .pc { display: none; }
   .h10-ngr7-rules .rb { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── NEG.8 · the record: ledger, refusals, alerts (h10-ngrec-*) ────────────────────────────────
+   The last section. Appended at EOF per the protocol.
+   🔴 No `opacity` on any row container — NEG.6 put 78 text nodes below AA with one declaration. */
+.h10-ngrec { margin: 18px 0 0; padding: 16px 18px 18px; border: 1px solid #e3e7ee; border-radius: 10px; background: #fff; }
+.h10-ngrec-head h3 { margin: 0; font-size: 14px; font-weight: 800; color: #10151c; letter-spacing: -0.01em; }
+.h10-ngrec-head p { margin: 5px 0 0; font-size: 12px; line-height: 1.6; color: #4a5566; max-width: 82ch; }
+
+.h10-ngrec-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 12px; }
+.h10-ngrec-tab { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px;
+  border: 1px solid #d5dae2; border-radius: 7px; background: #fff; cursor: pointer;
+  font-size: 11.5px; color: #35404f; }
+.h10-ngrec-tab b { font-size: 13px; font-weight: 800; color: #10151c; }
+.h10-ngrec-tab:hover { border-color: #b9c1cd; background: #fafbfc; }
+.h10-ngrec-tab.on { border-color: #2f6feb; background: #eef3fd; color: #1d3f87; }
+.h10-ngrec-tab.on b { color: #1d3f87; }
+
+.h10-ngrec-hero { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 12px 14px;
+  border: 1px solid #cde8d6; border-radius: 8px; background: #f2faf5;
+  font-size: 12.5px; line-height: 1.65; color: #1c5334; }
+.h10-ngrec-hero svg { flex: none; margin-top: 2px; }
+.h10-ngrec-hero b { font-weight: 800; color: #123d25; }
+
+/* ── refusals ───────────────────────────────────────────────────────────────────────────────── */
+.h10-ngrec-ref { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.h10-ngrec-ref li { display: grid; grid-template-columns: minmax(0, 1.7fr) 84px 96px 48px 96px;
+  align-items: center; gap: 9px; padding: 7px 9px; border-radius: 6px; font-size: 11.5px; color: #35404f; }
+.h10-ngrec-ref li:nth-child(odd) { background: #fafbfc; }
+.h10-ngrec-ref .o { color: #4a5566; text-align: right; }
+.h10-ngrec-ref .s { font-weight: 800; color: #177a41; text-align: right; }
+.h10-ngrec-ref .m, .h10-ngrec-ref .t { font-size: 10.5px; color: #667080; text-align: right; }
+
+.h10-ngrec-other { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.h10-ngrec-other li { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 4px 10px;
+  padding: 10px 12px; border: 1px solid #e3e7ee; border-radius: 8px; background: #fafbfc; }
+.h10-ngrec-other b { font-size: 12px; font-weight: 700; color: #10151c; }
+.h10-ngrec-other .n { grid-row: 1; grid-column: 2; justify-self: end; font-size: 16px; font-weight: 800; color: #35404f; }
+.h10-ngrec-other em { grid-column: 1 / -1; font-style: normal; font-size: 11px; line-height: 1.6; color: #5a6474; }
+.h10-ngrec-other em.bad { color: #8c2a1a; }
+
+/* ── ledger ─────────────────────────────────────────────────────────────────────────────────── */
+.h10-ngrec-led { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.h10-ngrec-led li { display: grid; grid-template-columns: 62px 92px minmax(0, 1.4fr) minmax(0, 1.1fr) 128px 132px;
+  align-items: center; gap: 9px; padding: 6px 9px; border-radius: 6px; font-size: 11.5px; color: #35404f; }
+.h10-ngrec-led li:nth-child(odd) { background: #fafbfc; }
+.h10-ngrec-led .w { font-size: 10.5px; color: #667080; }
+.h10-ngrec-led .a { justify-self: start; padding: 2px 7px; border-radius: 4px; font-size: 10.5px; white-space: nowrap; }
+.h10-ngrec-led .a.created { background: #eef1f5; color: #4a5566; }
+.h10-ngrec-led .a.retired { background: #fdecea; color: #8c2a1a; }
+.h10-ngrec-led .a.state-changed { background: #fdf3e3; color: #7d5312; }
+.h10-ngrec-led .c { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4a5566; }
+.h10-ngrec-led .by { font-size: 10.5px; color: #4a5566; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngrec-led .by.unattributed, .h10-ngrec-led .by.actor-not-recorded { color: #7a8494; font-style: italic; }
+.h10-ngrec-led .d { font-size: 10.5px; color: #667080; text-align: right; }
+.h10-ngrec-led .ev { grid-column: 1 / -1; margin-top: 2px; padding: 6px 9px; border-radius: 5px;
+  background: #f2f4f7; font-size: 10.5px; line-height: 1.55; color: #4a5566; }
+
+/* ── alerts ─────────────────────────────────────────────────────────────────────────────────── */
+.h10-ngrec-alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.h10-ngrec-alerts li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center;
+  gap: 10px; padding: 10px 12px; border: 1px solid #e3e7ee; border-radius: 8px; background: #fafbfc; }
+.h10-ngrec-alerts li.on { border-color: #cde8d6; background: #f7fcf9; }
+.h10-ngrec-alerts .i { display: flex; justify-content: center; color: #667080; }
+.h10-ngrec-alerts li.on .i { color: #177a41; }
+.h10-ngrec-alerts .l { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.h10-ngrec-alerts .l b { font-size: 12.5px; font-weight: 700; color: #10151c; }
+.h10-ngrec-alerts .l em { font-style: normal; font-size: 11px; line-height: 1.6; color: #4a5566; }
+.h10-ngrec-alerts .a { display: flex; gap: 6px; }
+.h10-ngrec-tog { padding: 4px 10px; border: 1px solid #d5dae2; border-radius: 6px; background: #fff;
+  cursor: pointer; font-size: 11px; font-weight: 600; color: #4a5566; white-space: nowrap; }
+.h10-ngrec-tog:hover:not(:disabled) { border-color: #2f6feb; color: #1d3f87; }
+.h10-ngrec-tog.on { border-color: #177a41; background: #e7f4ec; color: #146034; }
+.h10-ngrec-tog:disabled { cursor: default; }
+
+/* ── known gaps ─────────────────────────────────────────────────────────────────────────────── */
+.h10-ngrec-sub { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #eef1f5; }
+.h10-ngrec-sub b { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #10151c; }
+.h10-ngrec-sub span { font-size: 11px; color: #667080; }
+.h10-ngrec-gaps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.h10-ngrec-gaps li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px;
+  padding: 9px 11px; border-radius: 6px; background: #fafbfc; }
+.h10-ngrec-gaps b { font-size: 12px; font-weight: 700; color: #10151c; }
+.h10-ngrec-gaps code { grid-column: 2; grid-row: 1; justify-self: end; padding: 1px 6px; border-radius: 4px;
+  background: #eef1f5; font-size: 10.5px; color: #4a5566; white-space: nowrap; }
+.h10-ngrec-gaps em { grid-column: 1 / -1; font-style: normal; font-size: 11px; line-height: 1.6; color: #5a6474; }
+
+/* ── states ─────────────────────────────────────────────────────────────────────────────────── */
+.h10-ngrec-msg { margin: 10px 0 0; padding: 12px 13px; border: 1px solid #e3e7ee; border-radius: 8px;
+  background: #fafbfc; font-size: 12px; line-height: 1.6; color: #4a5566; }
+.h10-ngrec-msg b { font-weight: 800; color: #10151c; }
+.h10-ngrec-msg i { font-style: italic; }
+.h10-ngrec-bad { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 11px 13px;
+  border: 1px solid #f0cfc9; border-radius: 8px; background: #fdf4f2; font-size: 12px; line-height: 1.6; color: #8c2a1a; }
+.h10-ngrec-bad svg { flex: none; margin-top: 2px; }
+.h10-ngrec-bad b { font-weight: 800; color: #6f1f13; }
+.h10-ngrec-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0;
+  font-size: 11px; line-height: 1.65; color: #5a6474; }
+.h10-ngrec-note svg { flex: none; margin-top: 2px; }
+.h10-ngrec-note b { font-weight: 800; color: #1c2530; }
+.h10-ngrec-note i { font-style: italic; }
+.h10-ngrec-note a { color: #1d4ed8; font-weight: 600; }
+.h10-ngrec .lnk { padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px; font-weight: 600; color: #1d4ed8; }
+.h10-ngrec .lnk:hover { text-decoration: underline; }
+
+@media (max-width: 1250px) {
+  .h10-ngrec-ref li { grid-template-columns: minmax(0, 1.6fr) 84px 96px; }
+  .h10-ngrec-ref .m, .h10-ngrec-ref .t { display: none; }
+  .h10-ngrec-led li { grid-template-columns: 62px 92px minmax(0, 1.4fr) 132px; }
+  .h10-ngrec-led .c, .h10-ngrec-led .by { display: none; }
+}

@@ -351,7 +351,7 @@ builder slugs and is not this session's to delete (see §4).
 
 | `apps/api/src/routes/advertising-intel.routes.ts` | NEG.8 (`GET /advertising/negatives/record` + `POST /advertising/negatives/alerts`, additive) | 2026-08-13 | **released** — `grep -a`ed BOTH route files: both paths had **zero** hits |
 | `apps/api/src/services/advertising/ads-weekly-digest.service.ts` | NEG.8 (**one optional field** — `negatives`, built by `negatives-record.service.ts` and `.catch(() => null)`, so a failure degrades to null rather than to a zeroed object that would read as a quiet week) | 2026-08-13 | **released** — the builder lives in NEG.8's own file; the digest only composes it |
-| `…/rules-automation/rules-automation.css` | NEG.8 (`h10-ngrec-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only |
+| `…/rules-automation/rules-automation.css` | NEG.8 (`h10-ngrec-*` at EOF) | 2026-08-13 | **released** — one hunk at EOF, diffed before committing; 20 classes used and 20 defined, checked both ways |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.8 — **NOT TOUCHED**; the slot already mounts `NegRecord` | 2026-08-13 | **released** |
 
 ## 3 · Shared files — claim before editing
