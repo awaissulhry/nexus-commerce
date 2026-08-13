@@ -186,6 +186,15 @@ export interface ListChangesOpts {
   originId?: string
   entityType?: string
   entityId?: string
+  /**
+   * KT.7 — a SET of entity ids, for a scope that is a list rather than a single row.
+   *
+   * One Keyword Tracker term resolves to up to 100 `AdTarget` ids, and its change log has to be
+   * "every change to any of them". `entityId` cannot express that and calling this once per target
+   * would be 100 queries. Purely additive: no existing caller passes it, and `entityId` still wins
+   * when both are supplied, so every current behaviour is byte-identical.
+   */
+  entityIds?: string[]
   campaignId?: string
   field?: string
   deliveryState?: string
@@ -304,7 +313,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       where: {
         changedAt: { gte: from, lte: to },
         ...(opts.entityType ? { entityType: opts.entityType } : {}),
-        ...(opts.entityId ? { entityId: opts.entityId } : {}),
+        ...(opts.entityId ? { entityId: opts.entityId } : opts.entityIds?.length ? { entityId: { in: opts.entityIds } } : {}),
         ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
         ...(opts.field ? { field: opts.field } : {}),
         ...(groupActors ? { changedBy: { in: groupActors } } : {}),
@@ -317,7 +326,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       where: {
         createdAt: { gte: from, lte: to },
         ...(opts.entityType ? { entityType: opts.entityType } : {}),
-        ...(opts.entityId ? { entityId: opts.entityId } : {}),
+        ...(opts.entityId ? { entityId: opts.entityId } : opts.entityIds?.length ? { entityId: { in: opts.entityIds } } : {}),
         ...(groupActors ? { userId: { in: groupActors } } : {}),
       },
       orderBy: { createdAt: 'desc' },

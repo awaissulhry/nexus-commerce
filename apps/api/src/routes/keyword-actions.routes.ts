@@ -1,5 +1,5 @@
 /**
- * KT.6 — the Keyword Tracker's action endpoints.
+ * KT.6 / KT.7 — the Keyword Tracker's action endpoints.
  *
  * 🔴 **A NEW FILE, and not `advertising-intel.routes.ts`, on purpose.** KT.1's own header explains why
  * that file rather than `advertising.routes.ts`: a duplicate route registration is a boot crash, not a
@@ -9,10 +9,15 @@
  * swept their work into this commit. That has happened four times in this programme. A new file has no
  * such hazard and no duplicate-route risk.
  *
- * Everything here is a READ except `POST /propose`, which records a `KeywordBidProposal` row. **No
- * endpoint writes to Amazon or queues a mutation.** Applying a proposal is not implemented: it is a
- * live bid write and must go through `checkAdsWriteGate`, and the operator's approval for this session
- * covers shipping the controls in PROPOSE.
+ * 🔴 **KT.7 changed what this file can do, and this header used to say the opposite.** `POST /apply`
+ * writes real bids to Amazon, through `updateAdTargetWithSync` → `OutboundSyncQueue` →
+ * `ads-sync.worker.ts:366` → `checkAdsWriteGate`. Nothing here bypasses that chokepoint and nothing
+ * here calls the Ads client directly.
+ *
+ * The rest are reads: `/preview` (what a change would do), `/proposals`, `/ceilings`, `/changes` (the
+ * scoped change log). `POST /propose` records a `KeywordBidProposal` and reaches no further.
+ * `POST /undo` is a pass-through to the existing `rollbackByActionLogId`, which reverses a whole
+ * change set — **KT.7 builds no rollback of its own.**
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -157,6 +162,131 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
       proposals: await proposalsFor(q.term!.trim(), market),
       committed: await committedToday(market),
     }
+  })
+
+  /**
+   * KT.7 — APPLY. 🔴 The one endpoint on this page that writes to Amazon.
+   *
+   * Every guard is re-evaluated from current state inside `applyProposal`; this handler only
+   * validates input and shapes the answer. `maxTargets` exists for §6's gate: the first real write is
+   * capped to one target, using the same code path as a full apply rather than a special case.
+   *
+   * A refusal is 409 — the request was well formed and was declined — and its message is already
+   * operator-ready, because refusals must never be silent.
+   */
+  fastify.post('/advertising/keyword-actions/apply', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const proposalId = String(b.proposalId ?? '')
+    if (!proposalId) { reply.status(400); return { error: 'proposalId is required', code: 'proposal_required' } }
+    const maxTargets = b.maxTargets == null ? undefined : Number(b.maxTargets)
+    if (maxTargets != null && (!Number.isInteger(maxTargets) || maxTargets < 1)) {
+      reply.status(400); return { error: 'maxTargets must be a whole number of at least 1', code: 'max_targets_invalid' }
+    }
+    const actor = (request as { user?: { id?: string; email?: string } }).user
+    const { applyProposal } = await import('../services/advertising/kt7-apply.service.js')
+    const r = await applyProposal({
+      proposalId,
+      actorEmail: actor?.email ?? actor?.id ?? null,
+      maxTargets,
+      includeSuppressed: b.includeSuppressed === true,
+    })
+    if (!r.ok) {
+      reply.status(409)
+      return { error: r.summary, code: r.refusalCode ?? 'refused', applied: r.applied, refused: r.refused, skipped: r.skipped, rows: r.rows }
+    }
+    return r
+  })
+
+  /**
+   * KT.7 — the scoped change log: every change to any keyword target behind THIS term, whoever made
+   * it. Not a live account feed — measured, `AD_BID_UPDATE` alone is 925 rows in 24h and the
+   * suppress/restore cycle accounts for most of it, so an unscoped log on this page would be noise.
+   *
+   * Reuses `listChanges`, which already resolves an actor string into a source and origin, so an
+   * engine row and an operator row are distinguishable without this endpoint re-deriving it.
+   */
+  fastify.get('/advertising/keyword-actions/changes', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const bad = badRequest(q)
+    if (bad) { reply.status(400); return bad }
+    const market = (q.market ?? '').toUpperCase()
+    const { loadRow } = await import('../services/advertising/kt6-proposal.service.js')
+    const { listChanges } = await import('../services/advertising/ads-changes.service.js')
+    const { previewRollbackOfAction } = await import('../services/advertising/rollback.service.js')
+
+    const row = await loadRow(q.term!.trim(), market)
+    const targetIds = row.targets.map((t) => t.id)
+    if (targetIds.length === 0) {
+      // 🔴 "no changes" and "nothing we could have recorded a change for" are different facts.
+      return {
+        items: [], count: 0, targetsInScope: 0,
+        emptyReason: 'no_targets',
+        emptyText: `No campaign bids “${q.term}” in ${market}, so there are no keyword targets whose changes could be recorded. This is not an empty log — there is nothing for a log to be about.`,
+      }
+    }
+    const days = Math.max(1, Math.min(90, Number(q.days) || 14))
+    const res = await listChanges({
+      entityIds: targetIds,
+      entityType: 'AD_TARGET',
+      from: new Date(Date.now() - days * 86_400_000),
+      limit: Math.max(1, Math.min(200, Number(q.limit) || 60)),
+    })
+
+    // The undo offer, per row, at the grain the existing rollback actually uses. A grouped row
+    // reverses with its whole set, so the count comes from the preview rather than being guessed.
+    const items = await Promise.all(res.items.map(async (it) => {
+      const undo = await previewRollbackOfAction(it.id).catch(() => null)
+      return {
+        id: it.id, at: it.at, actor: it.actor, source: it.source, origin: it.origin,
+        entity: it.entity, campaign: it.campaign, field: it.field,
+        oldValue: it.oldValue, newValue: it.newValue, reason: it.reason,
+        undo: undo
+          ? {
+              eligible: undo.eligible, reason: undo.reason ?? null,
+              groupedWith: undo.groupedWith ?? 1, changeSetId: undo.changeSetId ?? null,
+            }
+          : null,
+      }
+    }))
+    return {
+      items, count: res.count, targetsInScope: targetIds.length,
+      windowDays: days,
+      emptyReason: items.length === 0 ? 'no_changes_in_window' : null,
+      emptyText: items.length === 0
+        ? `No change to any of the ${targetIds.length} keyword target${targetIds.length === 1 ? '' : 's'} behind “${q.term}” in the last ${days} days. The targets exist and are being watched — nothing has moved them.`
+        : null,
+      /** the existing exporter, not a second one */
+      csvHref: `/api/advertising/changes.csv?entityType=AD_TARGET&limit=5000`,
+    }
+  })
+
+  /**
+   * KT.7 — undo. A thin pass-through to `rollbackByActionLogId`, which reverses the WHOLE change set
+   * when the row belongs to one. **No third rollback path is built here**; this endpoint exists only
+   * so the drawer does not have to reach into `advertising.routes.ts`.
+   */
+  fastify.post('/advertising/keyword-actions/undo', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>
+    const actionLogId = String(b.actionLogId ?? '')
+    if (!actionLogId) { reply.status(400); return { error: 'actionLogId is required', code: 'action_log_required' } }
+    const actor = (request as { user?: { id?: string; email?: string } }).user
+    const { rollbackByActionLogId } = await import('../services/advertising/rollback.service.js')
+    const r = await rollbackByActionLogId({
+      actionLogId,
+      actor: `user:${actor?.email ?? actor?.id ?? 'operator'}`,
+      reason: 'Keyword Tracker: undone by the operator',
+    })
+    if (!r.ok || r.reversed === 0) {
+      reply.status(409)
+      return {
+        error: r.reason ?? (r.expired
+          ? `The ${r.windowHours ?? 24}-hour undo window for this change has closed. It can no longer be reversed in one action; the values before the change are in the change log.`
+          : 'Nothing was reversed.'),
+        code: r.expired ? 'undo_window_closed' : 'undo_failed',
+        reversed: r.reversed, skipped: r.skipped, failed: r.failed,
+      }
+    }
+    return { reversed: r.reversed, skipped: r.skipped, failed: r.failed, details: r.details }
   })
 
   /**
