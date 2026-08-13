@@ -2001,3 +2001,114 @@ Nothing here weakens the plan; it sharpens three points and adds one:
    suppress/restore cycle accounting for the majority of it. A KT.7 write will be one row among
    hundreds of engine rows *on the same targets, on the same day*.
 4. Everything else in §4.1–§4.3 stands as written.
+
+## L6 · KT.7 — built, and the first real write is done and undone
+
+**Approval given on the L3 recommendation. The page now writes to Amazon.** What follows is what
+shipped, the §6 artefacts, and — plainly — the one part that did not get built.
+
+### L6.1 · Apply
+
+`POST /advertising/keyword-actions/apply` → `applyProposal` → `updateAdTargetWithSync` →
+`OutboundSyncQueue` → `ads-sync.worker.ts:366` → `checkAdsWriteGate`. Nothing bypasses that
+chokepoint; nothing calls the Ads client directly. The route file's header claimed "no endpoint
+writes to Amazon" and was corrected in the same commit rather than left as a stale comment.
+
+**Five re-checks, at apply time.** A proposal is a photograph: measured, 6,094 keyword bid writes in
+7 days, 3,146 dropping a bid to 2¢ and 2,271 raising one back. So the radius, the ceiling, the
+suppression exclusion and the target set are all re-decided from current state, and **a changed
+target set refuses the whole apply** rather than writing a subset nobody approved. The fifth is
+L4's: refuse any target whose campaign has `bidsSuppressedAt` set.
+
+**No `force`.** `force` bypasses the 5¢ floor and the change-clamp and exists for the suppression
+path's deliberate 2¢ writes. An operator bid change is an ordinary write and is bound by the same
+clamps every engine is.
+
+**No rollback path was built.** Every write in one apply carries the same `changeSetId`, which the
+mutation service stores as `AdvertisingActionLog.executionId`; `rollbackByActionLogId` sees it and
+delegates to `rollbackByChangeSetId`, reversing the whole set on a flat **24-hour** window. The
+synthetic `AutomationRuleExecution` that `rollbackByExecutionId` would have needed was not created.
+
+### L6.2 · 🔴 The first real write, and its undo
+
+`motorradjacke herren sommer` (DE) — the smallest row in the account, **one actionable target** —
+capped with `maxTargets: 1`, through the same code path a full apply uses.
+
+| | |
+|---|---|
+| **11:11:07** | `AD_BID_UPDATE` `before {"bidCents":50}` → `after {"bidCents":52}` · `amazon=SUCCESS` · change set `kt7-cmsrf3mvs…` · queue row SUCCESS, synced **11:12:03** |
+| **11:21:13** | the undo: a *new* log row `52 → 50` · `amazon=SUCCESS` · queue synced **11:22:03**; the original row now carries `rolledBackAt=11:21:15` |
+| **the target now** | `bidCents = €0.50`, `lastSyncStatus = SUCCESS` at **11:22:04** |
+| `suppressedFromBidCents` | **null** — never written, as approved |
+
+**Verified against Amazon, not against our row**: `lastSyncedAt`/`lastSyncStatus` moved to SUCCESS
+*after* the reversal, and the queue row synced a minute later. A two-cent move was chosen precisely
+so the whole exercise was trivially reversible.
+
+**The three refusals, exercised for real:**
+
+- **stale target set** — the proposal's stored `targetIds` were perturbed and apply refused the whole
+  set, writing nothing.
+- **ceiling at apply time, not just at preview** — a €0.01 DE ceiling was raised so the proposal could
+  pass, then lowered again, and *apply* is what refused.
+- **suppression** — on a real 2¢ target the radius yields 9 actionable without the opt-in and 12 with
+  it, so the opt-in is the only way in and it is off by default.
+
+### L6.3 · The scoped change log
+
+`GET /advertising/keyword-actions/changes` — every change to any keyword target behind one term,
+whoever made it, reusing `listChanges` (which already resolves an actor string into a source and
+origin) extended with an additive `entityIds` option. "No changes in the window" and "no targets a
+log could be about" render as different sentences.
+
+🔴 **Two defects the gate found here, both fixed:**
+
+1. **The undo offer said "That change no longer exists" for a change that existed.** `listChanges`
+   prefixes its display ids (`h:<CampaignBidHistory.id>`, `a:<AdvertisingActionLog.id>`) and for an
+   AD_TARGET **bid** row it deliberately leaves `undoActionLogId` null. Handles are now resolved from
+   the log and matched on `(entityId, second)`; a row with no handle says *"no undo is offered for
+   this row from this page"* rather than claiming the change is irreversible. After the fix the two
+   rows read **"yes (set of 1)"** and **"Already undone."** — both correct.
+2. **A commitment that had been undone was still counted as committed.** `committedToday` summed
+   `status='APPLIED'`, and `status` stays APPLIED after an undo (it *was* applied; that is history).
+   So the ceiling could have refused a later write on the strength of €0.52 that had been given back.
+   The reversal is now read from `rolledBackAt` on the action log, and the raw sum is carried
+   alongside as `committedBeforeReversalsCents` so a divergence is visible. Measured after the fix:
+   **DE committed €0.00 against a raw APPLIED sum of €0.52.**
+
+### L6.4 · "Anything big" — thresholds, and one axis refused
+
+| candidate | measured | proposed |
+|---|---|---|
+| targets touched | change sets in 30d: **only 4**; p50 6, p90 81 | **≥ 20** — 81 is a p90 of four samples and not an anchor; 20 is half of `giacca moto`'s current 39 |
+| euros committed | last published day, all markets **€115.76** | **≥ €11.58** (10% of a day) |
+| campaigns reached | `giacca moto` reaches 14 | **≥ 5** |
+| **percentage bid change** | p50 **95%**, p90 **1,650%**, p99 **5,900%** | 🔴 **refused as an axis** |
+
+The percentage axis is unusable on this account: the suppress/restore cycle turns 2¢ into 42¢
+(+2,000%) thousands of times a month, so a percentage threshold would fire on every restore and never
+on a real operator change. Only **100** of 18,202 bid writes in 30 days were operator-made. **Use the
+absolute change instead — p99 is €1.56.** Every number above ships as a default with its measurement
+printed beside it; a threshold nobody chose is a threshold nobody trusts.
+
+### L6.5 · What did NOT get built
+
+**The change log has no UI.** The endpoint is live, verified, and returns rows with actor, field,
+old/new and a correct undo offer — but nothing renders it in the drawer yet, so §6.3's *"see it in the
+page's change log"* was verified at the API and not by clicking. That is the honest state.
+
+**The digest and refusal notifications are not wired.** §3.4's transport (`ScheduledReport` + Resend,
+gated by `NEXUS_ENABLE_OUTBOUND_EMAILS` and `NEXUS_ENABLE_DASHBOARD_DIGEST_CRON`) is the right home and
+was not touched; the thresholds above are the input it needs. Refusals are returned on the API as 409
+with operator-ready messages, so they are not silent — but nothing emails them.
+
+### L6.6 · Close-out
+
+| | |
+|---|---|
+| `KeywordBidProposal` | **1 row** — the gate's own, `APPLIED` then reversed. Left in place deliberately: it is true history, and deleting it would make the change log describe a write with no proposal behind it |
+| `AdSpendCeiling` | **0 rows** — every gate ceiling removed |
+| the written target | back at **€0.50**, its original value, confirmed at Amazon |
+| `suppressedFromBidCents` | **0 of 2,129** — KT.7 never wrote it |
+| `maxBiasPct` | still NULL on 5 of 5 · `liveBidWritesEnabled` still 82 of 220 · `minBidCents` still 0 |
+| apply enablement | **not enabled broadly.** There is no UI button that calls `/apply`; it is reachable only by an authenticated API call |

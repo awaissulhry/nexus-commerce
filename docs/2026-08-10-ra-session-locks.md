@@ -111,6 +111,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/keyword-tracker/BidAction.tsx` | KT.6 (the bid control) | 2026-08-13 | **released** — NEW file |
 | `…/keyword-tracker/TermDrawer.tsx` | KT.6 (mount `BidAction` — 6 lines, no restructuring) | 2026-08-13 | **released** |
 | `…/rules-automation/rules-automation.css` | KT.6 (`h10-kt6-*` at EOF) | 2026-08-13 | **released** — EOF-append only; 27 classes used, 27 defined, none dead |
+| `apps/api/src/services/advertising/kt7-apply.service.ts` | KT.7 (apply: 5 re-checks, the suppression refusal, the change set) | 2026-08-13 | **released** — NEW file |
+| `apps/api/src/routes/keyword-actions.routes.ts` | KT.7 (`/apply`, `/changes`, `/undo`; header corrected — it said no endpoint writes to Amazon) | 2026-08-13 | **released** |
+| `apps/api/src/services/advertising/kt6-proposal.service.ts` | KT.7 (the ledger is reversal-aware: an undone commitment stops counting) | 2026-08-13 | **released** |
+| `apps/api/src/services/advertising/ads-changes.service.ts` | KT.7 (additive `entityIds` option — no existing caller passes it, `entityId` still wins, both filter sites) | 2026-08-13 | **released** |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
@@ -508,6 +512,27 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**KT.7 → every session, 2026-08-13 — `suppressedFromBidCents` is a STATE MACHINE, not a spare column.**
+`restoreCampaignBids` (`ads-bid-suppression.service.ts:195-201`) selects **every** `AdTarget` where
+that column is non-null and writes the value back as the bid, then clears it. So a value written there
+by anything else becomes a standing instruction executed later by the no-pause engine, on a target it
+never suppressed. Two more consumers compute `maxBaseBid = MAX(bidCents, suppressedFromBidCents)`
+(`ad-rank-defend.job.ts:548`, `rank-runtime.service.ts:133`), so writing it also inflates the ceiling
+the CPC cap derives from. **Never use it as a backup field** — `AdvertisingActionLog.payloadBefore`
+already records the prior bid on every write and the existing undo reads exactly that.
+
+And a corollary: **a bid of 2¢ is a CLOCK READING, not a property.** Measured over 7 days, 3,146 bids
+dropped to 2¢ and 2,271 were raised back off it, all by `automation:rank-defend-*`. Any snapshot of
+"the suppressed set" is stale within the hour, and `Campaign.bidsSuppressedAt` must be re-checked at
+write time — a write into a suppressed campaign is silently reverted on the next resume.
+
+**KT.7 → anyone rendering an undo affordance, 2026-08-13.** `listChanges` PREFIXES its display ids —
+`h:<CampaignBidHistory.id>` and `a:<AdvertisingActionLog.id>` — and for an `AD_TARGET` **bid** row it
+deliberately leaves `undoActionLogId` null. Passing the display id to `rollbackByActionLogId` returns
+*"That change no longer exists"* for a change that does exist. Resolve the handle from
+`AdvertisingActionLog` yourself, and when there is none say **"no undo is offered here"** rather than
+"this cannot be undone" — they are different claims.
 
 **KT.6 → every session, 2026-08-13 — `NOT: { field: 'x' }` in Prisma EXCLUDES rows where the field
 is NULL.** Measured on `AutomationRuleExecution` over 60 days:
