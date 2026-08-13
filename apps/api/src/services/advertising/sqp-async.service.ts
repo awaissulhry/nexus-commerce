@@ -66,6 +66,48 @@ export interface SqpRequestResult {
 }
 
 /**
+ * How far apart the two agreeing fetches must be before a week is called settled.
+ *
+ * 🔴 This constant is the difference between a measurement and an artefact. The rule is "fetched
+ * twice, nothing moved", and without a minimum span that is satisfiable in three minutes — which is
+ * exactly how the first prod cycle satisfied it, freezing a five-day-old week on evidence spanning
+ * one coffee. SQP.3 §4.1 measured weeks frozen at 25 and at 46 days; it did NOT measure whether a
+ * five-day-old week is still filling in on day ten, and that gap is real.
+ *
+ * 20 hours, so the confirmation has to span a day boundary. In production this costs nothing at all —
+ * the request pass runs nightly, so consecutive fetches are ~24h apart already — but it makes the
+ * rule mean "this week did not move overnight" rather than "we asked twice quickly".
+ */
+export const SQP_SETTLE_MIN_SPAN_HOURS = 20
+
+/**
+ * Which ASINs have stopped moving: fetched at least twice, the later fetch changed nothing, and the
+ * two are far enough apart to be evidence rather than an echo.
+ */
+export function settledAsins(
+  ingests: Array<{ asin: string; collectedAt: Date | null; rowsChanged: number | null }>,
+  minSpanHours = SQP_SETTLE_MIN_SPAN_HOURS,
+): Set<string> {
+  const byAsin = new Map<string, Array<{ at: number; changed: number | null }>>()
+  for (const i of ingests) {
+    if (!i.collectedAt) continue
+    const list = byAsin.get(i.asin) ?? []
+    list.push({ at: i.collectedAt.getTime(), changed: i.rowsChanged })
+    byAsin.set(i.asin, list)
+  }
+  const settled = new Set<string>()
+  for (const [asin, list] of byAsin) {
+    list.sort((a, b) => a.at - b.at)
+    const first = list[0]!.at
+    // A null rowsChanged is "we don't know" — it predates the measurement and must never be read as
+    // "nothing changed", or the 41 requests that existed before this column would settle everything.
+    const confirmed = list.find((l) => l.changed === 0 && (l.at - first) >= minSpanHours * 3600_000)
+    if (confirmed) settled.add(asin)
+  }
+  return settled
+}
+
+/**
  * Which ASINs this pass should actually ask Amazon for — pure, so the rule can be tested without
  * touching Amazon or the database.
  *
@@ -78,10 +120,12 @@ export interface SqpRequestResult {
 export function partitionRequestSet(args: {
   asins: string[]
   outstanding: string[]
-  settled: string[]
+  /** every INGESTED attempt at this (asin, week) — settledness is DERIVED, never passed in. */
+  ingests: Array<{ asin: string; collectedAt: Date | null; rowsChanged: number | null }>
+  nowMs?: number
 }): { toRequest: string[]; alreadyOutstanding: string[]; alreadySettled: string[] } {
   const out = new Set(args.outstanding)
-  const set = new Set(args.settled)
+  const set = settledAsins(args.ingests)
   const toRequest: string[] = [], alreadyOutstanding: string[] = [], alreadySettled: string[] = []
   for (const asin of args.asins) {
     if (out.has(asin)) alreadyOutstanding.push(asin)
@@ -131,17 +175,17 @@ export async function requestSqpReports(args: {
   // rows, a second confirms nothing moved (`rowsChanged = 0`), and from then on it is skipped. It
   // takes TWO ingests, never one, because the first fetch of a week necessarily changes everything
   // and so can never prove the week is settled.
-  const settledRows = await prisma.sqpReportRequest.findMany({
+  const ingests = await prisma.sqpReportRequest.findMany({
     where: {
       marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly,
-      asin: { in: args.asins }, status: 'INGESTED', rowsChanged: 0,
+      asin: { in: args.asins }, status: 'INGESTED',
     },
-    select: { asin: true },
+    select: { asin: true, collectedAt: true, rowsChanged: true },
   })
   const part = partitionRequestSet({
     asins: args.asins,
     outstanding: outstanding.map((o) => o.asin),
-    settled: settledRows.map((r) => r.asin),
+    ingests,
   })
   const skip = new Set([...part.alreadyOutstanding, ...part.alreadySettled])
 
