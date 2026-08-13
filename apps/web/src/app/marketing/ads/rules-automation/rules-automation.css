@@ -4135,3 +4135,61 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-kt6-cbtns .yes:disabled { opacity: .6; cursor: not-allowed; }
 .h10-kt6-cbtns .no { display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; font-size: 11.5px; font-weight: 700; color: #55606d; background: #fff; border: 1px solid #d8e2ef; border-radius: 5px; cursor: pointer; }
 .h10-kt6-foot { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: #55606d; }
+
+/* ── KT.7 · the apply step and the scoped change log ─────────────────────────────────────────────
+   Same discipline as KT.6: every colour DECLARED (the drawer portals to body and escapes the light
+   pin), the confirm sits in the drawer's own flow rather than fixed, no transitions on anything a
+   probe measures, and appended at EOF so source order carries the override. */
+.h10-kt7-go {
+  width: 100%; margin-top: 8px; padding: 9px 12px; font-size: 12px; font-weight: 800; cursor: pointer;
+  color: #fff; background: #b45309; border: 1px solid #b45309; border-radius: 6px;
+}
+.h10-kt7-go:disabled { color: #495260; background: #eef1f5; border-color: #dde4ec; cursor: not-allowed; }
+.h10-kt7-apply { margin-top: 8px; padding: 11px 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 6px; }
+.h10-kt7-apply p { margin: 0 0 9px; font-size: 11.5px; line-height: 1.65; color: #1c2530; }
+.h10-kt7-done {
+  display: flex; gap: 7px; align-items: flex-start; margin: 0 0 10px; padding: 9px 11px;
+  border-radius: 5px; font-size: 11.5px; line-height: 1.6; color: #14532d;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+}
+.h10-kt7-done svg { flex: 0 0 auto; margin-top: 2px; }
+.h10-kt7-done p { margin: 0; }
+.h10-kt7-rows { list-style: none; margin: 7px 0 0; padding: 0; }
+.h10-kt7-rows li { font-size: 10.5px; line-height: 1.55; color: #1c2530; }
+.h10-kt7-rows b { text-transform: uppercase; letter-spacing: .03em; color: #7f1d1d; }
+
+.h10-kt7-load { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 11.5px; color: #55606d; }
+.h10-kt7-none { display: flex; gap: 7px; align-items: flex-start; margin: 0; padding: 9px 11px; border-radius: 5px; font-size: 11.5px; line-height: 1.65; color: #1c2530; background: #f6f8fb; border: 1px solid #dde4ec; }
+.h10-kt7-none svg { flex: 0 0 auto; margin-top: 2px; color: #55606d; }
+.h10-kt7-lead { margin: 0 0 8px; font-size: 11.5px; line-height: 1.6; color: #1c2530; }
+
+.h10-kt7-list { list-style: none; margin: 0; padding: 0; }
+.h10-kt7-list li {
+  display: grid; grid-template-columns: 92px 168px 62px 108px 1fr 92px;
+  gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid #eef2f7; font-size: 10.5px;
+}
+.h10-kt7-list .w { color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-kt7-list .who { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.h10-kt7-list .who svg { flex: 0 0 auto; }
+.h10-kt7-list .who b { font-weight: 700; color: #1c2530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-kt7-list .who i { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 4px; border-radius: 3px; flex: 0 0 auto; }
+.h10-kt7-list .who.operator i { color: #14532d; background: #dcfce7; }
+.h10-kt7-list .who.automation i { color: #3b3163; background: #e6e3f5; }
+.h10-kt7-list .f { color: #55606d; }
+.h10-kt7-list .v { color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-kt7-list .v .ar { color: #55606d; }
+.h10-kt7-list .c { color: #55606d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-kt7-list .u {
+  display: inline-flex; align-items: center; gap: 4px; justify-self: end; padding: 3px 7px;
+  font-size: 10px; font-weight: 700; cursor: pointer; color: #1a5fbe; background: #fff;
+  border: 1px solid #c5dcfa; border-radius: 4px;
+}
+.h10-kt7-list .u:disabled { color: #55606d; border-color: #dde4ec; cursor: not-allowed; }
+.h10-kt7-list .ux { justify-self: end; font-size: 10px; color: #55606d; }
+.h10-kt7-foot { margin: 9px 0 0; font-size: 10.5px; line-height: 1.6; color: #55606d; }
+.h10-kt7-foot a { color: #1a5fbe; font-weight: 700; }
+
+@media (max-width: 900px) {
+  .h10-kt7-list li { grid-template-columns: 1fr 1fr; row-gap: 3px; }
+  .h10-kt7-list .c { display: none; }
+}

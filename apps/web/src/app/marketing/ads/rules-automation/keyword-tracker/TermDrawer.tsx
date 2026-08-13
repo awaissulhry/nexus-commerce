@@ -23,6 +23,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { TermChart, type TermPoint } from './TermChart'
 import { BidAction } from './BidAction'
+import { ChangeLog } from './ChangeLog'
 
 interface TermPayload {
   term: string
@@ -133,6 +134,10 @@ export function TermDrawer({
             reason the drawer is opened; the read-only sections that follow are the evidence for it.
             `unbid` comes from the payload the drawer already has, so no extra fetch decides the shape. */}
         {data && <BidAction term={term} market={market} unbid={data.bid.unbid} />}
+
+        {/* KT.7 — what changed, scoped to this term's targets. Placed directly under the control that
+            causes changes, so cause and effect are adjacent rather than in two different screens. */}
+        {data && <ChangeLog term={term} market={market} />}
 
         {data && s && (
           <section className="h10-kt-drsec">

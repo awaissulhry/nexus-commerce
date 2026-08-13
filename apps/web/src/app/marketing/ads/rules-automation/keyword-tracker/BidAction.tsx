@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * KT.6 — the one control on this page that can spend money.
+ * KT.6 / KT.7 — the one control on this page that spends money.
  *
  * It lives inside the KT.4 drawer, which already lists the campaigns bidding the term and the ASINs
  * holding it — exactly what a bid write touches — so the confirmation can name them without fetching
@@ -19,9 +19,11 @@
  *
  * ── What it will not do ────────────────────────────────────────────────────────────────────────
  *
- * · **It cannot apply.** Every proposal is PROPOSED and nothing reaches Amazon; there is no apply
- *   endpoint to call. `graduationCeiling` caps a keyword-creating action at PROPOSE anyway, and the
- *   operator's approval for this session covers shipping the controls in PROPOSE.
+ * · 🔴 **KT.7 gave it an apply, and this note used to say it had none.** `Apply this proposal` calls
+ *   `POST /apply`, which writes real bids through the account's write gate. It is offered ONLY after a
+ *   proposal exists, it sends nothing but the proposal id — every guard is re-decided server-side,
+ *   because the numbers in this component are already seconds old and bids here move thousands of
+ *   times a day — and it carries its own confirm naming what will be re-checked.
  * · **It does not offer to create a keyword** for an unbid term. Measured: 70 writable IT campaigns
  *   hold 70 MANUAL ad groups, so a new keyword could go in 70 places and none is derivable. It says
  *   so and points at Keyword Harvest, which already owns destination choice.
@@ -100,6 +102,10 @@ export function BidAction({
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  /** KT.7 — the proposal just raised, and whether the operator is confirming the APPLY of it. */
+  const [proposalId, setProposalId] = useState<string | null>(null)
+  const [applyConfirm, setApplyConfirm] = useState(false)
+  const [applied, setApplied] = useState<{ ok: boolean; text: string; rows?: Array<{ outcome: string; campaignName: string; fromCents: number | null; toCents: number; reason?: string }> } | null>(null)
 
   const bidCents = useMemo(() => {
     const n = Math.round(Number(bidEuros.replace(',', '.')) * 100)
@@ -139,7 +145,9 @@ export function BidAction({
       })
       const body = await r.json().catch(() => ({}))
       if (r.status === 201) {
-        setResult({ ok: true, text: `Proposal raised for ${body.changing?.targets ?? '?'} targets. Nothing has changed on Amazon — it is queued for approval.` })
+        setResult({ ok: true, text: `Proposal raised for ${body.changing?.targets ?? '?'} targets. Nothing has changed on Amazon yet.` })
+        setProposalId(String(body.id ?? '') || null)
+        setApplied(null)
         setConfirming(false)
         void load()
       } else {
@@ -149,6 +157,36 @@ export function BidAction({
       }
     } catch (e) { setResult({ ok: false, text: (e as Error).message }); setConfirming(false) } finally { setLoading(false) }
   }, [market, term, bidCents, includeSuppressed, load])
+
+  /**
+   * KT.7 — apply the proposal. 🔴 This is the call that writes to Amazon.
+   *
+   * It sends only the proposal id: every guard is re-decided server-side from current state, because
+   * the numbers in this component are already seconds to minutes old and bids on this account move
+   * thousands of times a day. A client that posted its own radius would be asking the server to
+   * write a set the server has not checked.
+   */
+  const apply = useCallback(async () => {
+    if (!proposalId) return
+    setLoading(true); setApplied(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/keyword-actions/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposalId, includeSuppressed }),
+      })
+      const b = await r.json().catch(() => ({}))
+      if (r.ok) {
+        setApplied({ ok: true, text: String(b.summary ?? 'Applied.'), rows: b.rows })
+        setProposalId(null)
+      } else {
+        // 409 is a refusal, and its message already names what stopped it.
+        setApplied({ ok: false, text: String(b.error ?? `The write was refused (${r.status})`), rows: b.rows })
+      }
+      setApplyConfirm(false)
+      void load()
+    } catch (e) { setApplied({ ok: false, text: (e as Error).message }); setApplyConfirm(false) } finally { setLoading(false) }
+  }, [proposalId, includeSuppressed, load])
 
   // ── the unbid case: no bid to change, and no destination to invent ─────────────────────────────
   if (unbid) {
@@ -284,6 +322,49 @@ export function BidAction({
             <p className={result.ok ? 'h10-kt6-ok' : 'h10-kt6-blind'}>
               {result.ok ? <Check size={13} /> : <AlertTriangle size={13} />}<span>{result.text}</span>
             </p>
+          )}
+
+          {/* ── KT.7 · the apply step, offered only once a proposal exists ──────────────────── */}
+          {applied && (
+            <div className={applied.ok ? 'h10-kt7-done' : 'h10-kt6-blind'}>
+              {applied.ok ? <Check size={13} /> : <AlertTriangle size={13} />}
+              <div>
+                <p>{applied.text}</p>
+                {applied.rows && applied.rows.some((x) => x.outcome !== 'APPLIED') && (
+                  <ul className="h10-kt7-rows">
+                    {applied.rows.filter((x) => x.outcome !== 'APPLIED').slice(0, 10).map((x, i) => (
+                      <li key={i}><b>{x.outcome.toLowerCase()}</b> · {x.campaignName} · {x.reason}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+
+          {proposalId && !applied?.ok && (
+            applyConfirm ? (
+              <div className="h10-kt7-apply">
+                <p>
+                  <b>Write this to Amazon?</b> Everything is re-checked against the account as it is
+                  right now — the targets, the allowlist, the ceiling, the suppressions, and whether any
+                  campaign is currently bid-suppressed. If any of it has moved since the proposal was
+                  raised, the write is refused rather than partly applied. It can be undone in one
+                  action for 24 hours afterwards.
+                </p>
+                <div className="h10-kt6-cbtns">
+                  <button type="button" className="yes" onClick={() => void apply()} disabled={loading}>
+                    {loading ? 'Writing…' : 'Yes, write it'}
+                  </button>
+                  <button type="button" className="no" onClick={() => setApplyConfirm(false)}>
+                    <X size={12} /> Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="h10-kt7-go" onClick={() => setApplyConfirm(true)} disabled={loading}>
+                Apply this proposal — writes to Amazon
+              </button>
+            )
           )}
 
           {!confirming ? (
