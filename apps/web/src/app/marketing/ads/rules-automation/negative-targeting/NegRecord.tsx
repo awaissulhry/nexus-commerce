@@ -43,7 +43,7 @@ interface LedgerRow {
   actor: LedgerActor; actorLabel: string; reason: string | null; evidence: string | null
   delivery: string
 }
-interface Refusal { term: string; orders: number; salesCents: number; market: string | null; times: number; lastAt: string }
+interface Refusal { term: string; orders: number; salesCents: number; markets?: string[]; windowDays?: number | null; times: number; lastAt: string }
 interface Payload {
   scope: { boundBy: string; market: string; campaignsInScope: number }
   window: { days: number; since: string }
@@ -202,7 +202,8 @@ export function NegRecord({ scope, push }: NegSlotProps) {
                     <span>
                       <b>{num(pr.refusals)} negations were refused</b> because the term was earning —
                       across <b>{pr.distinctTerms}</b> terms, in {num(pr.sampleExecutions)} executions
-                      read. Every one of these would have blocked a term that was making money.
+                      read. Every one of these would have blocked a term that was making money
+                      {pr.rows[0]?.windowDays ? <> in the {pr.rows[0].windowDays} days before each attempt</> : null}.
                     </span>
                   </p>
                   <ul className="h10-ngrec-ref">
@@ -211,7 +212,7 @@ export function NegRecord({ scope, push }: NegSlotProps) {
                         <button type="button" className="lnk" onClick={() => push({ focus: r.term })}>{r.term}</button>
                         <span className="o">{r.orders} {r.orders === 1 ? 'order' : 'orders'}</span>
                         <span className="s">{eur(r.salesCents)}</span>
-                        <span className="m">{r.market ?? '—'}</span>
+                        <span className="m">{(r.markets ?? []).join(', ') || '—'}</span>
                         <span className="t">refused {r.times}×</span>
                       </li>
                     ))}

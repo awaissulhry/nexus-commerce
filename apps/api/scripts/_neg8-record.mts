@@ -97,6 +97,12 @@ truthy('🔴 every refused term was EARNING', pr.rows.every((r) => r.orders > 0)
 truthy('🔴 ASIN targets are among them — nobody predicted that', pr.rows.some((r) => /^b0[a-z0-9]{8}$/i.test(r.term)),
   pr.rows.filter((r) => /^b0[a-z0-9]{8}$/i.test(r.term)).map((r) => r.term).join(', '))
 truthy('🔴 the note refuses to call the total "saved"', /not money saved|never|unknowable/i.test(pr.note))
+// 🔴 The evidence key is `markets` (an ARRAY), not `marketplace`. Reading the singular put an
+// em-dash on every row — a column that is always empty reads as missing DATA, not a missing reader.
+truthy('🔴 every refusal names its marketplace', pr.rows.every((r) => (r.markets ?? []).length > 0),
+  pr.rows.map((r) => `${r.term.slice(0, 14)}=${(r.markets ?? []).join('/') || 'EMPTY'}`).join(' · '))
+truthy('and its window, from the evidence rather than assumed', pr.rows.every((r) => r.windowDays != null),
+  String(pr.rows[0]?.windowDays))
 
 h('6 · 🔴 gate denials — not persisted, and not invented')
 assert('persisted', p.refusals.gate.persisted, false)

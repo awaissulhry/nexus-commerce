@@ -128,7 +128,14 @@ export interface ProtectionRefusal {
   term: string
   orders: number
   salesCents: number
-  market: string | null
+  /**
+   * 🔴 The evidence key is `markets` — an ARRAY — not `marketplace`. Reading the singular rendered
+   * an em-dash on every row: a column that is always empty, which is worse than no column because
+   * it looks like missing data rather than a missing reader.
+   */
+  markets: string[]
+  /** the window the orders were counted over, from the evidence rather than assumed */
+  windowDays: number | null
   times: number
   lastAt: string
 }
@@ -343,7 +350,8 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
           term,
           orders: Number(ev.orders ?? 0),
           salesCents: Number(ev.salesCents ?? 0),
-          market: ev.marketplace ? String(ev.marketplace) : null,
+          markets: Array.isArray(ev.markets) ? (ev.markets as unknown[]).map(String) : [],
+          windowDays: typeof ev.windowDays === 'number' ? ev.windowDays : null,
           times: 1,
           lastAt: e.startedAt.toISOString(),
         })
