@@ -291,6 +291,24 @@ panel, which is the point of consuming them rather than reimplementing them.
 
 ---
 
+### HV.8 — the negation write path, 2026-08-13
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/api/src/services/advertising/ads-harvest.service.ts` | HV.8a (`negateScope` extended to the WASTEFUL loop, default changed CAMPAIGN→AD_GROUP; `negateCampaign` returns rows; per-negative outcomes) | 2026-08-13 | **claimed** |
+
+🔴 **This claim changes behaviour for both existing callers** — `ads-auto-harvest.service.ts:48` and
+`ads-recommendations.service.ts:171/173`. That is the intent, not a side effect: today they negate
+at a scope that has landed **0 of 20** rows, against AD_GROUP's 2,017 of 2,037. The cron is
+dry-running behind HV.0, which makes this the safest moment it will ever be. Both callers compile
+unchanged — the argument is optional and only its default moved.
+
+Not claimed: `ads-negative-kw.service.ts` and `negatives-retire.service.ts` are **read** by this
+session, not edited. `ads-rule-adapter.service.ts` is measured and **left alone** — it serves eight
+builder slugs and is not this session's to delete (see §4).
+
+---
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
