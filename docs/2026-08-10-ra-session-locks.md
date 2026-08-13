@@ -362,6 +362,11 @@ builder slugs and is not this session's to delete (see §4).
 
 ---
 
+| `apps/api/src/services/advertising/negatives-attention.service.ts` | NEG.9 (a THIRD detector — `inbound`, additive; Detectors A and B untouched, and the suite asserts their counts are identical before and after) | 2026-08-13 | **released** |
+| `…/negative-targeting/NegAttention.tsx` | NEG.9 (a fourth count chip + its list; the existing three untouched) | 2026-08-13 | **claimed** |
+| `…/rules-automation/rules-automation.css` | NEG.9 (`h10-nga-in*` at EOF, extending NEG.4's block) | 2026-08-13 | **claimed** — EOF-append only |
+| `docs/2026-08-11-neg-negative-targeting-{page,study}.md` | NEG.9 (committing them UNTRACKED→tracked, body unedited, superseded-numbers header prepended) | 2026-08-13 | **claimed** |
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |

@@ -43,8 +43,56 @@ const WINDOWS = [30, 60, 120] as const
 const HISTORY_DAYS = 120
 /** Detector B's bar. One order is a signal worth surfacing, not a proven loss — the UI says so. */
 const MIN_HISTORY_ORDERS = 1
+/**
+ * NEG.9 — how recent a negation has to be to land in the review queue. 14 days: long enough that a
+ * sync landing overnight is caught, short enough that the queue does not become a second inventory.
+ */
+const INBOUND_LOOKBACK_DAYS = 14
 
-export type AttentionAlert = 'conflict' | 'suppressed' | 'splitbrain'
+export type AttentionAlert = 'conflict' | 'suppressed' | 'splitbrain' | 'inbound'
+
+/**
+ * 🔴 NEG.9's detector — the blind spot the other two cannot see.
+ *
+ * `protectConverting` and the write gate both bind OUR write path. A negation created at Amazon and
+ * mirrored in by the v1 sync passes NEITHER. Measured 2026-08-13: **1,227 of 2,059 negatives
+ * (59.6%) have no create log at all** — so this is the majority path, not an edge.
+ *
+ * Detector A cannot see it (it needs an ad-group overlap). Detector B cannot see it (it needs 30
+ * days of silence, and one of these was created today). This one asks a question neither does:
+ * *did a converting term get blocked by a negation that never passed the gate?*
+ *
+ * The fourth condition — no `create_negative_*` action log — is what makes it a blind-spot detector
+ * rather than a duplicate of the gate. A negation we created has already been checked.
+ *
+ * 🔴 IT IS A REVIEW QUEUE, NOT AN ALARM. Negating a converting term inside an AUTO campaign is
+ * standard funnel architecture — you push the term to its exact campaign so it stops competing with
+ * itself. The expected verdict for most rows is "deliberate". The copy says so.
+ */
+export interface InboundRow {
+  adTargetId: string
+  term: string
+  termKey: string
+  match: NegMatchType
+  campaignId: string
+  campaignName: string
+  /** 🔴 AUTO is where this is normally CORRECT; Brand/Exact is where it usually is not. */
+  campaignTargetingType: string | null
+  adGroupName: string
+  market: string
+  negatedAt: string
+  /** the term's own performance in the window — the reason it is worth a look */
+  orders: number
+  salesCents: number
+  spendCents: number
+  impressions: number
+  /** 🔴 where it STILL runs. `negated in 1, runs in 6` is the sentence that makes this benign. */
+  negatedIn: number
+  runsIn: number
+  /** whether NEG.5's review register already covers (term × campaign) */
+  reviewed: boolean
+  actionable: boolean
+}
 
 /**
  * 🔴 §5 — a negation BLOCKS only when all four hold. Deliberately stricter than
@@ -150,6 +198,25 @@ export interface AttentionPayload {
   }
   suppressed: { rows: SuppressedRow[]; total: number; totalUnscoped: number; explained: number }
   splitBrain: { rows: SplitBrainRow[]; total: number; totalUnscoped: number; byReason: Record<string, number> }
+  /**
+   * 🔴 NEG.9 — blocking negations that never passed our gate, on terms that converted.
+   *
+   * The zero here is window-dependent exactly as Detector A's is: measured 2026-08-13 it is **0 at
+   * 30 days and 1 at 60** (`motorradjacke 4xl`, 2 orders, €182.18 — 0 orders inside 30 days). So
+   * the window is load-bearing and on screen, and `candidates` states how many rows were eligible
+   * before the converting test, which is what makes a zero legible rather than suspicious.
+   */
+  inbound: {
+    rows: InboundRow[]
+    total: number
+    totalUnscoped: number
+    /** blocking negations created in the lookback that did NOT come through our write path */
+    candidates: number
+    /** of the whole base, how many have no create log — the denominator that makes this matter */
+    ungatedNegations: number
+    ungatedShare: number
+    lookbackDays: number
+  }
   /** 🔴 a real count of the traffic rows read. 0 here means a failed read, not a quiet account. */
   coverage: { searchTermRows: number; termsWithTraffic: number; termsTotal: number }
 }
@@ -390,6 +457,73 @@ export async function getAttention(req: AttentionRequest): Promise<AttentionPayl
 
   const blockingAll = negs.filter(blocks)
 
+  // ── NEG.9 — the third detector: what the gate never saw ─────────────────────────────────────
+  //
+  // 🔴 The fourth condition is the whole point. A negation carrying a `create_negative_*` action log
+  // came through our write path and `protectConverting` already judged it. One with no log arrived
+  // by the v1 sync from Amazon and passed nothing at all.
+  const createLogs = await prisma.advertisingActionLog.findMany({
+    where: { entityType: 'AD_TARGET', actionType: { in: ['create_negative_keyword', 'create_negative_product_target'] } },
+    select: { entityId: true },
+  })
+  const ourWrites = new Set(createLogs.map((l) => l.entityId))
+  const ungated = new Set(negs.filter((n) => !ourWrites.has(n.id)).map((n) => n.id))
+  const inboundCutoff = new Date(Date.now() - INBOUND_LOOKBACK_DAYS * 86400_000)
+
+  // Eligible BEFORE the converting test — this count is what makes a zero legible.
+  const inboundCandidates = negs.filter((n) => blocks(n) && n.createdAt >= inboundCutoff && !ourWrites.has(n.id))
+
+  // NEG.5's register, so a row an operator has already blessed leaves the queue.
+  const reviews = await prisma.adNegativeReview.findMany({ select: { protectedTerm: true, campaignId: true } })
+  const reviewed = new Set(reviews.map((r) => `${normaliseNegTerm(r.protectedTerm)}|${r.campaignId}`))
+
+  const campaignTargeting = new Map(
+    (await prisma.campaign.findMany({ select: { id: true, targetingType: true } })).map((c) => [c.id, c.targetingType]),
+  )
+
+  const inboundAll: InboundRow[] = []
+  for (const n of inboundCandidates) {
+    const key = normaliseNegTerm(n.expressionValue)
+    // 🔴 `trafficByTerm` is (term → EXTERNAL ad group → metrics), so the term's own totals are the
+    // sum over its ad groups. Reading it as a flat record silently yields undefined on every field.
+    const perAgForTerm = trafficByTerm.get(key)
+    if (!perAgForTerm) continue
+    const t = { orders: 0, salesCents: 0, spendCents: 0, impressions: 0, adGroups: perAgForTerm.size }
+    for (const v of perAgForTerm.values()) {
+      t.orders += v.orders; t.salesCents += v.salesCents; t.spendCents += v.spendCents; t.impressions += v.impressions
+    }
+    // ≥1 ORDER in the window. Impressions alone are not a reason to review a negation.
+    if (t.orders < 1) continue
+    const m = normaliseMatchType(n.expressionType, n.kind)
+    const campaignId = n.adGroup?.campaign?.id ?? ''
+    inboundAll.push({
+      adTargetId: n.id,
+      term: n.expressionValue,
+      termKey: key,
+      match: m.type,
+      campaignId,
+      campaignName: n.adGroup?.campaign?.name ?? '—',
+      campaignTargetingType: campaignTargeting.get(campaignId) ?? null,
+      adGroupName: n.adGroup?.name ?? '—',
+      market: n.adGroup?.campaign?.marketplace ?? '—',
+      negatedAt: n.createdAt.toISOString(),
+      orders: t.orders,
+      salesCents: t.salesCents,
+      spendCents: t.spendCents,
+      impressions: t.impressions,
+      // 🔴 "negated in 1, runs in 6" is the sentence that makes most of these benign.
+      negatedIn: (byTerm.get(key) ?? []).filter(blocks).length,
+      runsIn: t.adGroups,
+      reviewed: reviewed.has(`${key}|${campaignId}`),
+      actionable: actionable(n),
+    })
+  }
+  inboundAll.sort((a, b) => b.salesCents - a.salesCents)
+  const inboundScoped = inboundAll.filter((r) => {
+    const n = negs.find((x) => x.id === r.adTargetId)
+    return n ? inScope(n) : false
+  })
+
   return {
     scope: { market: req.market, boundBy: scope.boundBy, resolved: { campaigns: scope.campaignIds.length } },
     window: { days: windowDays, since: since.toISOString() },
@@ -421,6 +555,15 @@ export async function getAttention(req: AttentionRequest): Promise<AttentionPayl
       explained: suppressedScoped.filter((s) => s.explained).length,
     },
     splitBrain: { rows: splitScoped, total: splitScoped.length, totalUnscoped: splitAll.length, byReason },
+    inbound: {
+      rows: inboundScoped,
+      total: inboundScoped.length,
+      totalUnscoped: inboundAll.length,
+      candidates: inboundCandidates.length,
+      ungatedNegations: ungated.size,
+      ungatedShare: negs.length ? ungated.size / negs.length : 0,
+      lookbackDays: INBOUND_LOOKBACK_DAYS,
+    },
     // 🔴 A real count of what was read. 0 here means the read failed; it does NOT mean a quiet
     // account, and the UI refuses to report "nothing wrong" when this is 0.
     coverage: { searchTermRows: perAg.length, termsWithTraffic: trafficByTerm.size, termsTotal: byTerm.size },
