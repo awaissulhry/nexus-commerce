@@ -2126,12 +2126,38 @@ undone in one action for the next 24 hours"* → the log showed it at 12:16 as `
 `user:kt7-gate@nexus` correctly. The log distinguishes operator from automation, which is what D3
 needs, but it cannot yet tell one operator from another.
 
-### L6.6 · What still did NOT get built
+### L6.6 · The digest, and real actor attribution
 
-**The digest and refusal notifications are not wired.** §3.4's transport (`ScheduledReport` + Resend,
-gated by `NEXUS_ENABLE_OUTBOUND_EMAILS` and `NEXUS_ENABLE_DASHBOARD_DIGEST_CRON`) is the right home and
-was not touched; L6.4's thresholds are the input it needs. Refusals return as 409s with operator-ready
-messages and the change log shows every write, so nothing is silent — but nothing is pushed either.
+~~The digest and refusal notifications are not wired.~~ **Both built.**
+
+**Attribution.** These routes have no server session — `request.user` is undefined, which is why a UI
+apply first recorded the generic `user:operator`. The actor now travels in the request body, exactly
+as `/advertising/changes/:actionLogId/undo` has always taken it (`b.userId ? user:${b.userId} :
+'user:console'`), and the client sends it from `useAuth()`. It is client-supplied and therefore not
+proof of identity — `ads-write-gate.ts` says so plainly, *"the gate cannot reliably tell a person from
+an engine: `actor` is free text"* — but it is what makes one operator distinguishable from another.
+
+**The digest** (`kt-digest`, daily 07:30 UTC, opt-in via `NEXUS_ENABLE_KT_DIGEST_CRON`) reuses the
+shared Resend transport and adds none of its own. It separates **applied** from **reversed**, because
+a change that was applied and undone is not a change the account kept — the same defect the spend
+ledger had before the §6 gate caught it. It gives engine activity as context (**859** keyword bid
+writes in the same 24h) so the page is never read as the only thing moving bids. A quiet window and a
+digest that could not tell render as different sentences.
+
+🔴 **A correction to my own plan.** I intended to prove this with `NEXUS_ENABLE_OUTBOUND_EMAILS` off.
+**It is already ON in production**, with `RESEND_API_KEY` set — the transport is live. The only thing
+preventing a send is `NEXUS_KT_DIGEST_TO` being unset, and the job reports that in its own summary
+rather than claiming success: *"built, NOT SENT (NEXUS_KT_DIGEST_TO unset)"*. Setting a recipient
+sends real email, so it is left to the operator.
+
+Two more copy defects, from reading the rendered subject: it said *"0 changes applied"* on a window
+where two changes were applied and then undone — true, and misleading to anyone reading only the
+subject — and it labelled a rolling 24h window that straddles midnight with a single date. It now
+reads *"Keyword Tracker — 2 reversed, 2026-08-12 13:24–2026-08-13 13:24 UTC"*.
+
+**Refusals** are notable regardless of size — a refusal is the system declining to do what was asked,
+which is precisely the thing that must never be silent. A success is notable only when it crosses a
+threshold, and the digest names **which** threshold it crossed rather than calling it "big".
 
 ### L6.7 · Close-out
 

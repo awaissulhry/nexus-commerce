@@ -118,6 +118,8 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `…/keyword-tracker/ChangeLog.tsx` | KT.7 (the scoped change log + undo affordance) | 2026-08-13 | **released** — NEW file |
 | `…/keyword-tracker/BidAction.tsx` + `TermDrawer.tsx` | KT.7 (the apply button; the drawer's two-way refresh counter) | 2026-08-13 | **released** |
 | `…/rules-automation/rules-automation.css` | KT.7 (`h10-kt7-*` at EOF) | 2026-08-13 | **released** — EOF-append only; 9 used, 9 defined, none dead |
+| `apps/api/src/services/advertising/kt7-notify.service.ts` + `jobs/kt-digest.job.ts` | KT.7 (the digest; reuses the shared Resend transport, adds none) | 2026-08-13 | **released** — NEW files |
+| `apps/api/src/index.ts` + `jobs/cron-registry.ts` | KT.7 (register + manually trigger `kt-digest`) | 2026-08-13 | **released** — 3 lines each |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
@@ -347,6 +349,11 @@ builder slugs and is not this session's to delete (see §4).
 
 ---
 
+| `apps/api/src/routes/advertising-intel.routes.ts` | NEG.8 (`GET /advertising/negatives/record` + `POST /advertising/negatives/alerts`, additive) | 2026-08-13 | **released** — `grep -a`ed BOTH route files: both paths had **zero** hits |
+| `apps/api/src/services/advertising/ads-weekly-digest.service.ts` | NEG.8 (**one optional field** — `negatives`, built by `negatives-record.service.ts` and `.catch(() => null)`, so a failure degrades to null rather than to a zeroed object that would read as a quiet week) | 2026-08-13 | **released** — the builder lives in NEG.8's own file; the digest only composes it |
+| `…/rules-automation/rules-automation.css` | NEG.8 (`h10-ngrec-*` at EOF) | 2026-08-13 | **claimed** — EOF-append only |
+| `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.8 — **NOT TOUCHED**; the slot already mounts `NegRecord` | 2026-08-13 | **released** |
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
@@ -536,6 +543,12 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**KT.7 → every session, 2026-08-13 — `NEXUS_ENABLE_OUTBOUND_EMAILS` is already TRUE in production**,
+and `RESEND_API_KEY` is set. The transport is live: it is NOT a dry-run safety net you can lean on
+while testing. Anything that reaches `sendEmail` with a real recipient sends real mail. Gate a new
+notifier on its OWN recipient list or flag, and have it report which gate stopped it — "the digest
+works" is a very easy thing to say about an email nobody received.
 
 **KT.7 → anyone pairing two tables on a timestamp, 2026-08-13.** `CampaignBidHistory` and
 `AdvertisingActionLog` are written microseconds apart, so an exact-second join key MISSES across a
