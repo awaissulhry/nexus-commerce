@@ -422,8 +422,15 @@ export function RuleBuilder({ slug }: { slug: string }) {
         const minOrders = oc ? Math.max(1, Math.round(Number(oc.value) || 1)) : 1
         const qs = new URLSearchParams({ windowDays: String(windowDays), minOrders: String(minOrders), ...(sc ? { minSpendCents: String(Math.round((Number(sc.value) || 0) * 100)) } : {}) })
         const j = await fetch(`${getBackendUrl()}/api/advertising/harvest/preview?${qs}`).then((r) => r.json()).catch(() => ({}))
-        const raw = (j.candidates ?? j.terms ?? j.items ?? (Array.isArray(j) ? j : [])) as Array<Record<string, unknown>>
-        setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.searchTerm ?? t.term ?? t.query ?? ''), orders: Number(t.orders ?? t.ppcOrders ?? 0) || undefined, spend: t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined) })).filter((t) => t.term) })
+        // 🔴 HV.8c — this Preview has never shown a row. The endpoint returns
+        // `{ negatives, graduations, productNegatives, productGraduations, windowDays }` and the
+        // read asked for `candidates`/`terms`/`items`, so `raw` was ALWAYS `[]` and the panel
+        // rendered an empty list under a working button. A harvest rule's preview is what it would
+        // GRADUATE; the older keys stay as a fallback so nothing that did work stops.
+        const raw = (j.graduations ?? j.candidates ?? j.terms ?? j.items ?? (Array.isArray(j) ? j : [])) as Array<Record<string, unknown>>
+        // `costCents` is the field a harvest candidate actually carries — `spendCents` is the shape
+        // the other endpoint uses, and reading only that rendered every spend blank.
+        setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.searchTerm ?? t.term ?? t.query ?? ''), orders: Number(t.orders ?? t.ppcOrders ?? 0) || undefined, spend: t.costCents != null ? Number(t.costCents) / 100 : (t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined)) })).filter((t) => t.term) })
       } else {
         const minSpend = sc ? Math.max(0, Number(sc.value) || 0) : 0
         const qs = new URLSearchParams({ lookbackDays: String(windowDays), minSpend: String(minSpend), limit: '100' })

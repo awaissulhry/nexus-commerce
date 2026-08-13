@@ -2442,3 +2442,61 @@ advertising rules, **5** carry a harvest action and **7** can create a keyword *
 extra two are `Account-wide negative sync` and `Wasted keyword instant negate`. Nothing is
 double-counted and no actor was counted as a rule. **HV.6's panel asked the 7 question; the brief
 asked the 5 question.** C5's one denominator for this page is **"7 of 51 advertising rules"**.
+
+---
+
+# HV.8c — the small true fixes
+
+Three built, one documented. Each had a victim or a measured landmine; nothing else was touched.
+
+## 1 · The builder Preview has never shown a row — 1 expression
+
+`RuleBuilder.tsx:425` read `j.candidates ?? j.terms ?? j.items` from an endpoint returning
+`{ negatives, graduations, productNegatives, productGraduations, windowDays }`. **`raw` was always
+`[]`**: an empty list under a working button, for every harvest rule anyone ever previewed. A
+harvest rule's preview is what it would **graduate**, so `j.graduations` leads and the older keys
+stay as a fallback. A second defect rode with it — the mapper read `spendCents`, and a harvest
+candidate carries `costCents`, so every spend would have rendered blank even once rows appeared.
+
+## 2 · The evaluator's match-type filter — 1 array literal
+
+The `OR: [… , { matchType: null }]` branch was written for *"auto-targeting, no match type"*, and
+**no row in this account has ever been NULL** — 0 of 12,000+. Auto campaigns arrive as
+`TARGETING_EXPRESSION_PREDEFINED` and product expressions as `TARGETING_EXPRESSION`: **4,588 rows**
+of demand invisible to `promote_to_exact`. The comment described the intent; the filter implemented
+something else.
+
+Measured effect, 30 days at `orders ≥ 2`: **3 converting contexts → 5**. `EXACT` stays excluded
+deliberately — promoting an exact term to exact is the tautology HV.1 removed from the page's read.
+
+## 3 · A sweep is one proposal, not one per marketplace
+
+| before | cards | distinct payloads |
+|---|---|---|
+| `harvest_and_negate` | **18** | **2** — one per rule, replicated across 9 marketplaces |
+| `bid_down` | 60 | **60** — sixty genuine per-keyword proposals |
+
+The dedupe key `(ruleId, entityId, proposedKey)` is exactly right for an action that acts **on** its
+context and exactly wrong for one that sweeps regardless of it.
+
+🔴 **Worse than noise.** The payload says `scoped: false` and `wouldNegate: 14` — account-wide —
+while the cards were filed under `MARKETPLACE:NL/IE/PL/UK/SE`, five markets whose connection has
+`writesEnabledAt: NULL` and cannot be written to at all. **An operator approving the NL card would
+have been approving an account-wide negation.** Sweeps now file against one `ACCOUNT` entity, which
+is also the truthful one: the proposal is not about NL. Everything else keeps its real entity, so
+`bid_down`'s sixty distinct proposals stay sixty.
+
+**4 tests, 3 seen to fail against the old behaviour first.**
+
+## 4 · `CONVERTING_MIN_ORDERS` — documented, not changed
+
+It is a `having` clause, so it is a **floor a rule author cannot see and cannot lower**: the context
+is built first, and only terms already at `>= 2` orders ever reach the rule's conditions. A rule
+asking for "orders ≥ 1" can never match a 1-order term. A rule condition can tighten it, never
+loosen it. Recorded at the query; the default is untouched.
+
+## What was deliberately NOT fixed
+
+The `ads-console` Apply button and `RuleListTab`'s four fake bulk controls — both **verified broken**
+in HV.8b, both belonging to other programmes, both handed off in locks §4. Repairing the first with
+its obvious one line would turn an inert button into a live bulk structural write.

@@ -682,9 +682,22 @@ async function buildSearchTermConvertingContexts() {
     // the whole evaluator (surfaced by the RRL.7 overdueCrons alert).
     where: {
       date: { gte: since, lte: until },
-      OR: [{ matchType: { in: ['BROAD', 'PHRASE'] } }, { matchType: null }],
+      // 🔴 HV.8c — the null branch was written for "auto-targeting, no match type", and NO ROW IN
+      // THIS ACCOUNT HAS EVER BEEN NULL. Auto campaigns arrive as TARGETING_EXPRESSION_PREDEFINED
+      // and product expressions as TARGETING_EXPRESSION, so 4,514 rows of auto-targeting demand
+      // were invisible to `promote_to_exact` — the comment described the intent and the filter
+      // implemented something else. HV.1 repaired the page's own read; this is the rule path's copy.
+      // EXACT stays out deliberately: promoting an exact term to exact is the tautology HV.1 removed.
+      OR: [
+        { matchType: { in: ['BROAD', 'PHRASE', 'TARGETING_EXPRESSION', 'TARGETING_EXPRESSION_PREDEFINED'] } },
+        { matchType: null },
+      ],
     },
     _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true },
+    // 🔴 HV.8c — this is a HAVING clause, so it is a FLOOR the rule author cannot see and cannot
+    // lower. A rule asking for "orders >= 1" can never match a 1-order term: the context is built
+    // first and only terms already at >= CONVERTING_MIN_ORDERS reach the conditions at all. A rule
+    // condition can tighten this, never loosen it. Default is 2 (NEXUS_CONVERTING_MIN_ORDERS).
     having: { orders7d: { _sum: { gte: CONVERTING_MIN_ORDERS } } },
   })
   return terms.slice(0, 300).map((t) => ({

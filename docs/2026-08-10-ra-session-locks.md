@@ -309,6 +309,16 @@ builder slugs and is not this session's to delete (see §4).
 
 ---
 
+### HV.8c — the small true fixes, 2026-08-13
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/api/src/services/advertising/ads-suggestions.service.ts` | HV.8c (sweep actions collapse to ONE card instead of one per marketplace) | 2026-08-13 | **released** |
+| `apps/api/src/jobs/advertising-rule-evaluator.job.ts` | HV.8c (one array literal — the converting context's match-type filter + the `having`-clause note) | 2026-08-13 | **released** |
+| `…/rules-automation/_shared/RuleBuilder.tsx` | HV.8c (the harvest Preview reads the key the endpoint actually returns) | 2026-08-13 | **released** — one expression, harvest branch only |
+
+---
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |

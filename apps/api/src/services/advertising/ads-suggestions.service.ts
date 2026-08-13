@@ -26,6 +26,30 @@ function extractEntity(context: unknown): Entity | null {
  */
 const NON_PROPOSAL_ACTIONS = new Set(['notify', 'alert_operator', 'log_only'])
 
+/**
+ * 🔴 HV.8c — actions that sweep the account from a single firing, and therefore have no entity.
+ *
+ * The dedupe key is `(ruleId, entityId, proposedKey)`, which works perfectly for an action that
+ * acts ON its context: `bid_down` produced **60 cards carrying 60 distinct payloads** — sixty real
+ * proposals about sixty keywords. A SWEEP does the same thing regardless of which context happened
+ * to trigger it, so the entity is noise, and the key multiplies one proposal by however many
+ * contexts matched.
+ *
+ * Measured on prod 2026-08-13: `harvest_and_negate` holds **18 cards carrying 2 distinct payloads**
+ * — one proposal per rule, replicated across all nine marketplaces
+ * (`MARKETPLACE:NL/IE/IT/DE/PL/UK/FR/ES/SE`). Worse than merely noisy: the payload itself says
+ * `scoped: false` and `wouldNegate: 14` — an ACCOUNT-WIDE sweep — while five of the nine cards are
+ * filed against markets whose connection has `writesEnabledAt: NULL` and cannot be written to at
+ * all. An operator approving the NL card would be approving an account-wide negation.
+ *
+ * So these collapse to one card against a stable account-level entity, which is also the truthful
+ * one: the proposal is not about NL.
+ */
+const SWEEP_ACTIONS = new Set(['harvest_and_negate', 'sync_negatives_across_campaigns'])
+
+/** The one entity an account-wide sweep is actually about. */
+const ACCOUNT_ENTITY = { type: 'ACCOUNT', id: 'account', name: 'the whole account' } as const
+
 // stable change-kind key (intent, not current value) so the same proposed change dedupes.
 function proposedKey(action: Record<string, unknown>): string {
   const parts = [String(action.type ?? '')]
@@ -68,14 +92,18 @@ export async function generateSuggestionsFromExecution(args: {
       if (NON_PROPOSAL_ACTIONS.has(String(action.type ?? ''))) continue
       if (out.wouldChange === 0 || out.wouldChange === '0') continue
       const key = proposedKey(action)
+      // HV.8c — a sweep is filed against the account, not against whichever context tripped it.
+      // Everything else keeps its real entity, so `bid_down`'s sixty distinct proposals stay sixty.
+      const sweep = SWEEP_ACTIONS.has(String(action.type ?? ''))
+      const ent = sweep ? ACCOUNT_ENTITY : entity
       // upsert on the dedupe key — keep one row per rule×entity×change; don't resurrect a
       // dismissed/applied row (the operator already decided).
       const proposal = { ...action, ...(res.output as object) } as object
       await prisma.adsRuleSuggestion.upsert({
-        where: { ruleId_entityId_proposedKey: { ruleId: args.ruleId, entityId: entity.id, proposedKey: key } },
+        where: { ruleId_entityId_proposedKey: { ruleId: args.ruleId, entityId: ent.id, proposedKey: key } },
         create: {
           ruleId: args.ruleId, ruleName: args.ruleName, executionId: args.executionId, trigger: args.trigger, marketplace,
-          entityType: entity.type, entityId: entity.id, entityName: entity.name,
+          entityType: ent.type, entityId: ent.id, entityName: ent.name,
           proposedAction: proposal, proposedKey: key, status: 'pending',
         },
         update: {
@@ -173,6 +201,11 @@ export function resolveSourceLink(row: SourceRow, lk: SourceLookups): Suggestion
     case 'MARKETPLACE':
       // Marketplace-scope rules (e.g. budget caps) → the Ad Manager grid (market lives in a shared store, not the URL).
       return { href: `${ADS_BASE}/campaigns`, label: row.entityId, marketplace: row.entityId }
+    case 'ACCOUNT':
+      // HV.8c — an account-wide sweep. It has no single entity to link to, and inventing one is how
+      // this proposal came to be filed against nine marketplaces including five that cannot be
+      // written to. The rules board is the honest destination.
+      return { href: `${ADS_BASE}/rules-automation`, label: 'the whole account', marketplace: row.marketplace }
     default:
       return { href: null, label: fallback, marketplace: row.marketplace }
   }
