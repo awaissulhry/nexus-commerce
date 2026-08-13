@@ -1478,6 +1478,8 @@ async function start() {
       const { startSqpIngestCron } = await import('./jobs/sqp-ingest.job.js');
       // SQP.2 — the collect half of the async split. sqp-ingest now only REQUESTS.
       const { startSqpCollectCron } = await import('./jobs/sqp-collect.job.js');
+      // KT.7 — the Keyword Tracker's daily digest. Opt-in: NEXUS_ENABLE_KT_DIGEST_CRON=1.
+      const { startKtDigestCron } = await import('./jobs/kt-digest.job.js');
       // AX-VT.5 — 6-hourly structural reconcile: compare the whole account against Amazon and
       // record where it disagrees. Reads + portfolio repair only; never touches bids.
       const { startStructuralReconcileCron } = await import('./jobs/ads-structural-reconcile.job.js');
@@ -1501,6 +1503,7 @@ async function start() {
       startAmsSqsPollCron();
       startSqpIngestCron();
       startSqpCollectCron();
+      startKtDigestCron();
       startStructuralReconcileCron();
       const { startTosIsIngestCron } = await import('./jobs/ads-tos-is-ingest.job.js');
       startTosIsIngestCron();

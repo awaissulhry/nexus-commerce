@@ -121,13 +121,12 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
     const bid = parseBid(String(b.bidCents ?? ''))
     if ('error' in bid) { reply.status(400); return bid }
 
-    const actor = (request as { user?: { id?: string; email?: string } }).user
     const result = await proposeBidChange({
       term: q.term.trim(),
       marketplace: q.market.toUpperCase(),
       requestedBidCents: bid.cents,
       includeSuppressed: b.includeSuppressed === true,
-      proposedBy: actor?.email ?? actor?.id ?? null,
+      proposedBy: typeof b.userId === 'string' && b.userId.trim() ? b.userId.trim() : null,
     })
 
     if (!result.ok) {
@@ -182,11 +181,16 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
     if (maxTargets != null && (!Number.isInteger(maxTargets) || maxTargets < 1)) {
       reply.status(400); return { error: 'maxTargets must be a whole number of at least 1', code: 'max_targets_invalid' }
     }
-    const actor = (request as { user?: { id?: string; email?: string } }).user
+    // 🔴 The actor comes from the BODY, following `/advertising/changes/:actionLogId/undo`'s own
+    // convention (`b.userId ? \`user:${b.userId}\` : 'user:console'`). These routes have no server-side
+    // session: `request.user` is undefined here, which is why a UI apply first recorded the generic
+    // `user:operator`. It is client-supplied and therefore not proof of identity — `ads-write-gate.ts`
+    // says so plainly, "the gate cannot reliably tell a person from an engine: actor is free text" —
+    // but it is what makes an operator row distinguishable from an engine row, which is what D3 needs.
     const { applyProposal } = await import('../services/advertising/kt7-apply.service.js')
     const r = await applyProposal({
       proposalId,
-      actorEmail: actor?.email ?? actor?.id ?? null,
+      actorEmail: typeof b.userId === 'string' && b.userId.trim() ? b.userId.trim() : null,
       maxTargets,
       includeSuppressed: b.includeSuppressed === true,
     })
@@ -315,11 +319,12 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
     const b = (request.body ?? {}) as Record<string, unknown>
     const actionLogId = String(b.actionLogId ?? '')
     if (!actionLogId) { reply.status(400); return { error: 'actionLogId is required', code: 'action_log_required' } }
-    const actor = (request as { user?: { id?: string; email?: string } }).user
+    // Same convention as the apply route above, and as the existing undo route.
+    const who = typeof b.userId === 'string' && b.userId.trim() ? b.userId.trim() : 'operator'
     const { rollbackByActionLogId } = await import('../services/advertising/rollback.service.js')
     const r = await rollbackByActionLogId({
       actionLogId,
-      actor: `user:${actor?.email ?? actor?.id ?? 'operator'}`,
+      actor: `user:${who}`,
       reason: 'Keyword Tracker: undone by the operator',
     })
     if (!r.ok || r.reversed === 0) {

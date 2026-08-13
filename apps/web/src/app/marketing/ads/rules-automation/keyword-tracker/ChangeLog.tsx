@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Bot, Check, Info, Loader2, RotateCcw, User } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useAuth } from '@/lib/auth/AuthProvider'
 
 interface ChangeItem {
   id: string
@@ -97,6 +98,12 @@ export function ChangeLog({
    */
   refreshKey?: number
 }) {
+  // Who is acting. These routes have no server session — the actor travels in the body, the same way
+  // /advertising/changes/:actionLogId/undo has always taken it. Without this a UI write recorded the
+  // generic `user:operator` and one operator could not be told from another in the change log.
+  const { user } = useAuth()
+  const userId = user?.email ?? user?.id ?? undefined
+
   const [data, setData] = useState<ChangesResponse | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -121,7 +128,7 @@ export function ChangeLog({
       const r = await fetch(`${getBackendUrl()}/api/advertising/keyword-actions/undo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actionLogId: it.undoActionLogId }),
+        body: JSON.stringify({ actionLogId: it.undoActionLogId, userId }),
       })
       const b = await r.json().catch(() => ({}))
       if (r.ok) {

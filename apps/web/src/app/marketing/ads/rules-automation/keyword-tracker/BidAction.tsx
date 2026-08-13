@@ -40,6 +40,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useAuth } from '@/lib/auth/AuthProvider'
 
 interface PreviewResponse {
   term: string
@@ -99,6 +100,12 @@ export function BidAction({
   /** bumped when the change log undoes something, so this preview stops claiming the old bid */
   refreshKey?: number
 }) {
+  // Who is acting. These routes have no server session — the actor travels in the body, the same way
+  // /advertising/changes/:actionLogId/undo has always taken it. Without this a UI write recorded the
+  // generic `user:operator` and one operator could not be told from another in the change log.
+  const { user } = useAuth()
+  const userId = user?.email ?? user?.id ?? undefined
+
   const [bidEuros, setBidEuros] = useState('0.55')
   const [includeSuppressed, setIncludeSuppressed] = useState(false)
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
@@ -145,7 +152,7 @@ export function BidAction({
       const r = await fetch(`${getBackendUrl()}/api/advertising/keyword-actions/propose`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ market, term, bidCents, includeSuppressed }),
+        body: JSON.stringify({ market, term, bidCents, includeSuppressed, userId }),
       })
       const body = await r.json().catch(() => ({}))
       if (r.status === 201) {
@@ -179,7 +186,7 @@ export function BidAction({
       const r = await fetch(`${getBackendUrl()}/api/advertising/keyword-actions/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposalId, includeSuppressed }),
+        body: JSON.stringify({ proposalId, includeSuppressed, userId }),
       })
       const b = await r.json().catch(() => ({}))
       if (r.ok) {
