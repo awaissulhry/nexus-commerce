@@ -252,14 +252,32 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
       },
       select: { id: true, entityId: true, createdAt: true, executionId: true, rolledBackAt: true },
     })
-    const handleFor = new Map<string, { id: string; changeSetId: string | null; rolledBack: boolean }>()
+    // 🔴 NOT an exact-second key. The two tables are written microseconds apart, so a change at
+    // 12:16:59.8 lands in one at :59 and the other at :60 — and a missed handle makes the row claim no
+    // undo is offered for a change that is perfectly reversible. Observed on production. Matched to the
+    // nearest log row for the same entity within a few seconds instead.
+    const MATCH_WINDOW_MS = 4000
+    const byEntity = new Map<string, typeof logRows>()
     for (const l of logRows) {
-      handleFor.set(`${l.entityId}|${Math.floor(l.createdAt.getTime() / 1000)}`, { id: l.id, changeSetId: l.executionId, rolledBack: l.rolledBackAt != null })
+      const arr = byEntity.get(l.entityId) ?? []
+      arr.push(l); byEntity.set(l.entityId, arr)
+    }
+    const findHandle = (entityId: string, at: number) => {
+      const arr = byEntity.get(entityId)
+      if (!arr?.length) return null
+      let best: (typeof logRows)[number] | null = null
+      let bestGap = Infinity
+      for (const l of arr) {
+        const gap = Math.abs(l.createdAt.getTime() - at)
+        if (gap < bestGap) { bestGap = gap; best = l }
+      }
+      if (!best || bestGap > MATCH_WINDOW_MS) return null
+      return { id: best.id, changeSetId: best.executionId, rolledBack: best.rolledBackAt != null }
     }
 
     const items = await Promise.all(res.items.map(async (it) => {
-      const key = `${it.entity.id}|${Math.floor(new Date(it.at).getTime() / 1000)}`
-      const handle = handleFor.get(key) ?? (it.undoActionLogId ? { id: it.undoActionLogId, changeSetId: null, rolledBack: false } : null)
+      const handle = findHandle(it.entity.id, new Date(it.at).getTime())
+        ?? (it.undoActionLogId ? { id: it.undoActionLogId, changeSetId: null, rolledBack: false } : null)
       const undo = handle ? await previewRollbackOfAction(handle.id).catch(() => null) : null
       return {
         undoActionLogId: handle?.id ?? null,

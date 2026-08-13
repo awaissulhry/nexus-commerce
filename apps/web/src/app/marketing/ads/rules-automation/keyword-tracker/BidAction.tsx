@@ -88,7 +88,7 @@ const REASON_LABEL: Record<string, string> = {
 }
 
 export function BidAction({
-  term, market, unbid, onWrite,
+  term, market, unbid, onWrite, refreshKey = 0,
 }: {
   term: string
   market: string
@@ -96,6 +96,8 @@ export function BidAction({
   unbid: boolean
   /** called when a write lands, so the change log beside this can show it without a reload */
   onWrite?: () => void
+  /** bumped when the change log undoes something, so this preview stops claiming the old bid */
+  refreshKey?: number
 }) {
   const [bidEuros, setBidEuros] = useState('0.55')
   const [includeSuppressed, setIncludeSuppressed] = useState(false)
@@ -135,7 +137,7 @@ export function BidAction({
     if (unbid) return
     const t = setTimeout(() => { void load() }, 350)
     return () => clearTimeout(t)
-  }, [load, unbid])
+  }, [load, unbid, refreshKey])
 
   const propose = useCallback(async () => {
     setLoading(true); setErr(null)

@@ -79,10 +79,16 @@ function actorLabel(it: ChangeItem): { icon: 'user' | 'bot'; who: string; chip: 
 }
 
 export function ChangeLog({
-  term, market, refreshKey = 0,
+  term, market, refreshKey = 0, onUndo,
 }: {
   term: string
   market: string
+  /**
+   * 🔴 The refresh has to run BOTH ways. The undo button lives here and the blast-radius preview lives
+   * in the sibling control, so after a successful undo that preview still said "1 target already bids
+   * €0.55" while the bid was back at €0.50. Observed on production immediately after the first UI undo.
+   */
+  onUndo?: () => void
   /**
    * 🔴 Bumped by the drawer when a write lands. This component is a SIBLING of the control that
    * causes the changes, so it cannot observe an apply — found by clicking: the write succeeded, its
@@ -120,12 +126,13 @@ export function ChangeLog({
       const b = await r.json().catch(() => ({}))
       if (r.ok) {
         setNote({ ok: true, text: `Reversed ${b.reversed} change${b.reversed === 1 ? '' : 's'}. The previous bid${b.reversed === 1 ? '' : 's'} ${b.reversed === 1 ? 'has' : 'have'} been pushed back to Amazon.` })
+        onUndo?.()
       } else {
         setNote({ ok: false, text: String(b.error ?? `Could not undo (${r.status})`) })
       }
       void load()
     } catch (e) { setNote({ ok: false, text: (e as Error).message }) } finally { setBusy(null) }
-  }, [load])
+  }, [load, onUndo])
 
   if (err) {
     return (
