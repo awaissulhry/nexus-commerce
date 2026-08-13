@@ -27,7 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Info, Plus } from 'lucide-react'
+import { AlertTriangle, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -45,10 +45,8 @@ import { NegProtectedTerms } from './NegProtectedTerms'
 import { NegWastefulWords } from './NegWastefulWords'
 import { NegRules } from './NegRules'
 import { NegRecord } from './NegRecord'
-// Interim, until NEG.5 and NEG.7 replace them: rendered exactly as the tab rendered them, so
-// nothing is lost in the move off `?tab=negative-targeting`.
-import { RuleListTab } from '../tabs/RuleListTab'
-import { NoDataIllus } from '../_shared/NoDataIllus'
+// NEG.5 and NEG.7 have both landed, so the two interim renders — `ProtectedTermsPanel` and
+// `RuleListTab` — are gone from this client. Both FILES stay: each has other importers.
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -545,22 +543,11 @@ export function NegativeTargetingClient() {
 
       <NegWastefulWords {...slotProps} />
 
+      {/* NEG.7 absorbed the interim `<RuleListTab liveType="negative-targeting" />` that stood here.
+          🔴 Its FILE stays: `RulesAutomationClient` and `SovTrackerTab` both import it, so deleting
+          it is a build break on pages this session does not own — the same trap NEG.5 hit with
+          `ProtectedTermsPanel`. Only this render and its import are gone. */}
       <NegRules {...slotProps} />
-      {/* Interim until NEG.7, same deal. */}
-      <RuleListTab
-        noun="Negative Targeting Rule"
-        seed={[]}
-        liveType="negative-targeting"
-        editHref={(id) => `/marketing/ads/rules-automation/builder/negative-targeting?ruleId=${id}`}
-        onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/negative-targeting' }}
-        emptyNode={(
-          <span className="h10-rr-empty">
-            <NoDataIllus size={104} />
-            <b>Create a Negative Targeting Rule to block wasted spend!</b>
-            <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/negative-targeting"><Plus size={13} /> Create Rule</a>
-          </span>
-        )}
-      />
 
       <NegRecord {...slotProps} />
     </div>

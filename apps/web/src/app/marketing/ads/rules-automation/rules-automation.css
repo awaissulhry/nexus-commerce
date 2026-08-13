@@ -4193,3 +4193,119 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-kt7-list li { grid-template-columns: 1fr 1fr; row-gap: 3px; }
   .h10-kt7-list .c { display: none; }
 }
+
+/* ── NEG.7 · the rules, their radius, and the readiness checklist (h10-ngr7-*) ─────────────────
+   `h10-ngr-*` is NEG.3b's removal dialog, hence the 7. Appended at EOF per the protocol.
+   🔴 No `opacity` on any row container: NEG.6 put 78 text nodes below AA with one such
+   declaration, every colour individually fine. "off" is carried by a background and a word. */
+.h10-ngr7 { margin: 18px 0 0; padding: 16px 18px 18px; border: 1px solid #e3e7ee; border-radius: 10px; background: #fff; }
+.h10-ngr7-head h3 { margin: 0; font-size: 14px; font-weight: 800; color: #10151c; letter-spacing: -0.01em; }
+.h10-ngr7-head p { margin: 5px 0 0; font-size: 12px; line-height: 1.6; color: #4a5566; max-width: 84ch; }
+.h10-ngr7-head a, .h10-ngr7-note a { color: #1d4ed8; font-weight: 600; }
+
+.h10-ngr7-scope { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 11px 13px;
+  border: 1px solid #e3e7ee; border-radius: 8px; background: #fafbfc;
+  font-size: 12px; line-height: 1.65; color: #35404f; }
+.h10-ngr7-scope.wide { border-color: #f0d9c9; background: #fdf7f2; color: #6b4a12; }
+.h10-ngr7-scope svg { flex: none; margin-top: 3px; }
+.h10-ngr7-scope b { font-weight: 800; color: #1c2530; }
+
+.h10-ngr7-sub { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #eef1f5; }
+.h10-ngr7-sub b { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #10151c; }
+.h10-ngr7-sub span { font-size: 11px; color: #667080; }
+
+/* ── the six conditions ─────────────────────────────────────────────────────────────────────── */
+.h10-ngr7-cond { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.h10-ngr7-cond li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start;
+  gap: 9px; padding: 8px 10px; border-radius: 6px; }
+.h10-ngr7-cond li.closed { background: #f4faf6; }
+.h10-ngr7-cond li.open { background: #fdf7f2; }
+.h10-ngr7-cond .i { display: flex; justify-content: center; padding-top: 2px; }
+.h10-ngr7-cond li.closed .i { color: #177a41; }
+.h10-ngr7-cond li.open .i { color: #a8321f; }
+.h10-ngr7-cond .l { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.h10-ngr7-cond .l b { font-size: 12.5px; font-weight: 700; color: #10151c; }
+.h10-ngr7-cond .l em { font-style: normal; font-size: 11.5px; line-height: 1.6; color: #4a5566; }
+.h10-ngr7-cond .a { align-self: center; }
+.h10-ngr7-cond .done { font-style: normal; font-size: 11px; color: #177a41; }
+
+.h10-ngr7-act { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+  border: 1px solid #d5dae2; border-radius: 6px; background: #fff; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; color: #35404f; white-space: nowrap; text-decoration: none; }
+.h10-ngr7-act:hover { border-color: #2f6feb; color: #1d3f87; background: #f4f7fc; }
+
+/* ── the rules ──────────────────────────────────────────────────────────────────────────────── */
+.h10-ngr7-rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.h10-ngr7-rules > li { border: 1px solid #e3e7ee; border-radius: 8px; overflow: hidden; background: #fff; }
+.h10-ngr7-rules > li.off { background: #fafbfc; }
+.h10-ngr7-rules .rh { display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 74px 128px 190px 150px 92px;
+  align-items: center; gap: 9px; padding: 9px 11px; font-size: 11.5px; color: #35404f; }
+.h10-ngr7-rules .tw { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 0;
+  border: 0; background: none; cursor: pointer; text-align: left; color: #10151c; }
+.h10-ngr7-rules .tw b { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ngr7-rules .tw svg { flex: none; color: #667080; transition: transform 0.12s ease; }
+.h10-ngr7-rules .tw svg.rot { transform: rotate(90deg); }
+.h10-ngr7-rules .tw:hover b { text-decoration: underline; }
+.h10-ngr7-rules .st { justify-self: start; padding: 2px 7px; border-radius: 4px; font-size: 10.5px;
+  background: #eef1f5; color: #4a5566; }
+.h10-ngr7-rules .st.on { background: #e7f4ec; color: #1c5334; font-weight: 700; }
+.h10-ngr7-rules .lv { font-size: 11px; color: #4a5566; }
+.h10-ngr7-rules .lv em { font-style: normal; color: #7d5312; }
+.h10-ngr7-rules .pc { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: #1c5334; }
+.h10-ngr7-rules .pc svg { flex: none; }
+.h10-ngr7-rules .rd { font-size: 11px; color: #35404f; }
+.h10-ngr7-rules .rd b { font-weight: 800; color: #a8321f; }
+.h10-ngr7-rules .rd em { font-style: normal; color: #667080; }
+.h10-ngr7-rules .cp { font-size: 11px; color: #667080; text-align: right; }
+
+.h10-ngr7-rules .never { margin: 0; padding: 7px 11px 9px; background: #fdf7f2;
+  font-size: 11.5px; line-height: 1.6; color: #6b4a12; border-top: 1px solid #f3e7db; }
+.h10-ngr7-rules .never b { font-weight: 800; color: #4d340a; }
+.h10-ngr7-rules .never i { font-style: italic; }
+
+.h10-ngr7-rules .rb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+  padding: 12px 11px 13px; border-top: 1px solid #eef1f5; background: #fafbfc; }
+.h10-ngr7-rules .blk { min-width: 0; }
+.h10-ngr7-rules .blk > em { display: block; margin-bottom: 5px; font-style: normal;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #5a6474; }
+.h10-ngr7-rules .blk p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.6; color: #35404f; }
+.h10-ngr7-rules .blk p b { font-weight: 800; color: #10151c; }
+.h10-ngr7-rules .mk { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.h10-ngr7-rules .mk span { padding: 1px 6px; border-radius: 4px; background: #eef1f5; font-size: 10.5px; color: #4a5566; }
+.h10-ngr7-rules .mk i { flex: 1 1 100%; font-style: normal; font-size: 10.5px; color: #667080; }
+.h10-ngr7-rules .cap { padding: 6px 8px; border-radius: 5px; background: #fdf4f2; color: #8c2a1a; }
+.h10-ngr7-rules .cap b { color: #6f1f13; }
+.h10-ngr7-rules .facts { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.h10-ngr7-rules .facts li { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; padding: 4px 7px; border-radius: 4px; font-size: 11.5px; color: #4a5566; }
+.h10-ngr7-rules .facts li:nth-child(odd) { background: #f2f4f7; }
+.h10-ngr7-rules .facts li b { flex: none; font-weight: 800; color: #10151c; }
+.h10-ngr7-rules .facts li.bad b { color: #a8321f; }
+.h10-ngr7-rules .hint { font-size: 11px; line-height: 1.6; color: #5a6474; }
+.h10-ngr7-rules .hint.bad { color: #8c2a1a; }
+.h10-ngr7-rules .lnks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* ── states ─────────────────────────────────────────────────────────────────────────────────── */
+.h10-ngr7-msg { margin: 10px 0 0; padding: 12px 13px; border: 1px solid #e3e7ee; border-radius: 8px;
+  background: #fafbfc; font-size: 12px; line-height: 1.6; color: #4a5566; }
+.h10-ngr7-msg b { font-weight: 800; color: #10151c; }
+.h10-ngr7-good { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 11px 13px;
+  border: 1px solid #cde8d6; border-radius: 8px; background: #f2faf5; font-size: 12px; line-height: 1.6; color: #1c5334; }
+.h10-ngr7-good svg { flex: none; margin-top: 2px; }
+.h10-ngr7-good b { font-weight: 800; color: #123d25; }
+.h10-ngr7-bad { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 11px 13px;
+  border: 1px solid #f0cfc9; border-radius: 8px; background: #fdf4f2; font-size: 12px; line-height: 1.6; color: #8c2a1a; }
+.h10-ngr7-bad svg { flex: none; margin-top: 2px; }
+.h10-ngr7-bad b { font-weight: 800; color: #6f1f13; }
+.h10-ngr7-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0;
+  font-size: 11px; line-height: 1.65; color: #5a6474; }
+.h10-ngr7-note svg { flex: none; margin-top: 2px; }
+.h10-ngr7-note b { font-weight: 800; color: #1c2530; }
+
+@media (max-width: 1250px) {
+  .h10-ngr7-rules .rh { grid-template-columns: minmax(0, 1.4fr) 74px 150px 92px; }
+  .h10-ngr7-rules .lv, .h10-ngr7-rules .pc { display: none; }
+  .h10-ngr7-rules .rb { grid-template-columns: minmax(0, 1fr); }
+}
