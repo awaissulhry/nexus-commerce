@@ -232,11 +232,37 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
       limit: Math.max(1, Math.min(200, Number(q.limit) || 60)),
     })
 
-    // The undo offer, per row, at the grain the existing rollback actually uses. A grouped row
-    // reverses with its whole set, so the count comes from the preview rather than being guessed.
+    // ── the undo offer, and 🔴 why `it.id` is NOT the handle ──────────────────────────────────
+    //
+    // `listChanges` merges two tables and prefixes its display ids: `h:<CampaignBidHistory.id>` and
+    // `a:<AdvertisingActionLog.id>`. It also computes `undoable` + `undoActionLogId` using the same
+    // rule object the rollback service uses — but for an AD_TARGET **bid** row it deliberately leaves
+    // the handle null, because that undo historically ran through the per-campaign history path.
+    //
+    // KT.7's writes DO have an action-log row (with a change set, proven by the §6 gate), so the
+    // handle exists; it just is not on the display row. Passing `it.id` to the rollback service asked
+    // it to look up "h:cmsr…" in AdvertisingActionLog and got "That change no longer exists" for a
+    // change that very much existed — which is what this looked like on the first run.
+    //
+    // So the handles are resolved from the log itself and matched on (entityId, second).
+    const logRows = await prisma.advertisingActionLog.findMany({
+      where: {
+        entityType: 'AD_TARGET', entityId: { in: targetIds },
+        createdAt: { gte: new Date(Date.now() - days * 86_400_000) },
+      },
+      select: { id: true, entityId: true, createdAt: true, executionId: true, rolledBackAt: true },
+    })
+    const handleFor = new Map<string, { id: string; changeSetId: string | null; rolledBack: boolean }>()
+    for (const l of logRows) {
+      handleFor.set(`${l.entityId}|${Math.floor(l.createdAt.getTime() / 1000)}`, { id: l.id, changeSetId: l.executionId, rolledBack: l.rolledBackAt != null })
+    }
+
     const items = await Promise.all(res.items.map(async (it) => {
-      const undo = await previewRollbackOfAction(it.id).catch(() => null)
+      const key = `${it.entity.id}|${Math.floor(new Date(it.at).getTime() / 1000)}`
+      const handle = handleFor.get(key) ?? (it.undoActionLogId ? { id: it.undoActionLogId, changeSetId: null, rolledBack: false } : null)
+      const undo = handle ? await previewRollbackOfAction(handle.id).catch(() => null) : null
       return {
+        undoActionLogId: handle?.id ?? null,
         id: it.id, at: it.at, actor: it.actor, source: it.source, origin: it.origin,
         entity: it.entity, campaign: it.campaign, field: it.field,
         oldValue: it.oldValue, newValue: it.newValue, reason: it.reason,
@@ -245,7 +271,9 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
               eligible: undo.eligible, reason: undo.reason ?? null,
               groupedWith: undo.groupedWith ?? 1, changeSetId: undo.changeSetId ?? null,
             }
-          : null,
+          // 🔴 no handle is NOT "not undoable" — it is "this row's undo is not offered here".
+          // Saying the wrong one would tell an operator a reversible change cannot be reversed.
+          : { eligible: false, reason: 'No undo is offered for this row from this page.', groupedWith: 1, changeSetId: null },
       }
     }))
     return {

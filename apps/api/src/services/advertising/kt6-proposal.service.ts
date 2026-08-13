@@ -131,8 +131,10 @@ function todayStart(): Date {
 }
 
 export interface Kt6Committed {
-  /** applied today, in cents — the number the ceiling compares against */
+  /** applied today AND NOT SINCE UNDONE, in cents — the number the ceiling compares against */
   committedCents: number
+  /** the raw APPLIED sum, ignoring reversals. Carried so the two can be shown to differ. */
+  committedBeforeReversalsCents: number
   /** raised but not yet decided, shown separately so a queue of proposals cannot hide */
   pendingCents: number
   pendingCount: number
@@ -149,6 +151,32 @@ export interface Kt6Committed {
  */
 export async function committedToday(marketplace: string): Promise<Kt6Committed> {
   const since = todayStart()
+
+  // 🔴 A commitment that has been UNDONE is not committed.
+  //
+  // Found by KT.7's §6 gate: the one-target write was applied and then reversed, and this figure
+  // still counted its €0.52 — so the ceiling would have refused a later write on the strength of
+  // money that had been given back. `status` stays APPLIED after an undo (the proposal WAS applied;
+  // that is history), so the reversal has to be read from the action log, which is where
+  // `rolledBackAt` lives. A change set whose rows are all rolled back contributes nothing.
+  const appliedRows = await prisma.keywordBidProposal.findMany({
+    where: { marketplace, status: 'APPLIED', decidedAt: { gte: since }, executionId: { not: null } },
+    select: { id: true, executionId: true, commitmentCents: true },
+  })
+  let committedCents = 0
+  for (const r of appliedRows) {
+    const live = await prisma.advertisingActionLog.count({
+      where: { executionId: r.executionId as string, rolledBackAt: null },
+    })
+    if (live > 0) committedCents += r.commitmentCents
+  }
+  // Proposals applied before executionId was stamped, or with no change set, still count in full.
+  const untagged = await prisma.keywordBidProposal.aggregate({
+    where: { marketplace, status: 'APPLIED', decidedAt: { gte: since }, executionId: null },
+    _sum: { commitmentCents: true },
+  })
+  committedCents += untagged._sum.commitmentCents ?? 0
+
   const [applied, pending] = await Promise.all([
     prisma.keywordBidProposal.aggregate({
       where: { marketplace, status: 'APPLIED', decidedAt: { gte: since } },
@@ -178,7 +206,10 @@ export async function committedToday(marketplace: string): Promise<Kt6Committed>
   }
 
   return {
-    committedCents: applied._sum.commitmentCents ?? 0,
+    // the reversal-aware figure, not the raw sum
+    committedCents,
+    /** what the raw sum would have said, so a discrepancy is visible rather than silent */
+    committedBeforeReversalsCents: applied._sum.commitmentCents ?? 0,
     pendingCents: pending._sum.commitmentCents ?? 0,
     pendingCount: pending._count._all,
     amazonSpendCents, amazonSpendDate,
