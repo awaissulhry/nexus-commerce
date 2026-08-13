@@ -2091,24 +2091,56 @@ on a real operator change. Only **100** of 18,202 bid writes in 30 days were ope
 absolute change instead — p99 is €1.56.** Every number above ships as a default with its measurement
 printed beside it; a threshold nobody chose is a threshold nobody trusts.
 
-### L6.5 · What did NOT get built
+### L6.5 · The UI, and the six defects only clicking found
 
-**The change log has no UI.** The endpoint is live, verified, and returns rows with actor, field,
-old/new and a correct undo offer — but nothing renders it in the drawer yet, so §6.3's *"see it in the
-page's change log"* was verified at the API and not by clicking. That is the honest state.
+~~The change log has no UI.~~ **Built after the gate report, on approval: the apply button and the
+scoped change log both ship in the drawer, and the whole loop was driven through the browser** —
+propose → apply → the write lands → the log shows it attributed → undo → the bid returns.
+
+Six defects, none visible in the code, all found by clicking on production:
+
+1. 🔴 **The change log did not show the change just made.** It is a SIBLING of the control that causes
+   changes, so it cannot observe an apply: the write succeeded, its confirmation appeared directly
+   above, and the log beneath still showed the previous rows until a reload. *Cause and effect are
+   adjacent* is worth nothing if the effect needs a refresh.
+2. 🔴 **…and the refresh only ran one way.** The undo button lives in the log and the blast-radius
+   preview lives in the control, so after the first UI undo the preview still said *"1 target already
+   bids €0.55"* while the bid was back at €0.50. The drawer's counter is now bumped from both sides.
+3. 🔴 **The undo handle was matched on an exact second**, and the two tables are written microseconds
+   apart — a change at 12:16:59.8 lands in `CampaignBidHistory` at `:59` and in `AdvertisingActionLog`
+   at `:60`. The row I had just undone read **"not here"** while an older one correctly read
+   **"undone"**. Now matched to the nearest log row within 4 seconds.
+4. *"Proposal raised for 1 targets"* — plurality, caught by reading the rendered string.
+5. *"the **0** targets in campaigns that are not on the live-write allowlist could not be changed"* —
+   a true sentence about nothing, on a row where every target is writable. The clause is now
+   conditional.
+6. *"All 1 change can be undone together"* → *"This change can be undone in one action"*.
+
+**The full loop, clicked:** propose (`1 of 1 targets · commits up to €0.55`) → the pending-proposal
+notice fired → **Apply — writes to Amazon** → *"Set the bid to €0.55 on 1 target… This change can be
+undone in one action for the next 24 hours"* → the log showed it at 12:16 as `operator` → **Undo** →
+*"Reversed 1 change. The previous bid has been pushed back to Amazon."*
+
+🔴 One honest gap in attribution: a UI-driven apply records the actor as `user:operator`, because
+`request.user` is not populated on this route. The API-driven gate write recorded
+`user:kt7-gate@nexus` correctly. The log distinguishes operator from automation, which is what D3
+needs, but it cannot yet tell one operator from another.
+
+### L6.6 · What still did NOT get built
 
 **The digest and refusal notifications are not wired.** §3.4's transport (`ScheduledReport` + Resend,
 gated by `NEXUS_ENABLE_OUTBOUND_EMAILS` and `NEXUS_ENABLE_DASHBOARD_DIGEST_CRON`) is the right home and
-was not touched; the thresholds above are the input it needs. Refusals are returned on the API as 409
-with operator-ready messages, so they are not silent — but nothing emails them.
+was not touched; L6.4's thresholds are the input it needs. Refusals return as 409s with operator-ready
+messages and the change log shows every write, so nothing is silent — but nothing is pushed either.
 
-### L6.6 · Close-out
+### L6.7 · Close-out
 
 | | |
 |---|---|
-| `KeywordBidProposal` | **1 row** — the gate's own, `APPLIED` then reversed. Left in place deliberately: it is true history, and deleting it would make the change log describe a write with no proposal behind it |
+| `KeywordBidProposal` | **2 rows** — the gate's and the UI's, both `APPLIED` then reversed. Left deliberately: they are true history, and deleting them would make the change log describe writes with no proposal behind them |
 | `AdSpendCeiling` | **0 rows** — every gate ceiling removed |
-| the written target | back at **€0.50**, its original value, confirmed at Amazon |
+| the written target | back at **€0.50**, its original value · `lastSyncStatus=SUCCESS` at 12:29:49 · all four `OutboundSyncQueue` rows SUCCESS |
+| net effect on the account | **nil.** Four writes, four confirmed at Amazon, two of them reversals; the bid ends where it started |
 | `suppressedFromBidCents` | **0 of 2,129** — KT.7 never wrote it |
 | `maxBiasPct` | still NULL on 5 of 5 · `liveBidWritesEnabled` still 82 of 220 · `minBidCents` still 0 |
 | apply enablement | **not enabled broadly.** There is no UI button that calls `/apply`; it is reachable only by an authenticated API call |

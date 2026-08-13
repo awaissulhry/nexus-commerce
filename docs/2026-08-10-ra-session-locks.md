@@ -115,6 +115,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/api/src/routes/keyword-actions.routes.ts` | KT.7 (`/apply`, `/changes`, `/undo`; header corrected — it said no endpoint writes to Amazon) | 2026-08-13 | **released** |
 | `apps/api/src/services/advertising/kt6-proposal.service.ts` | KT.7 (the ledger is reversal-aware: an undone commitment stops counting) | 2026-08-13 | **released** |
 | `apps/api/src/services/advertising/ads-changes.service.ts` | KT.7 (additive `entityIds` option — no existing caller passes it, `entityId` still wins, both filter sites) | 2026-08-13 | **released** |
+| `…/keyword-tracker/ChangeLog.tsx` | KT.7 (the scoped change log + undo affordance) | 2026-08-13 | **released** — NEW file |
+| `…/keyword-tracker/BidAction.tsx` + `TermDrawer.tsx` | KT.7 (the apply button; the drawer's two-way refresh counter) | 2026-08-13 | **released** |
+| `…/rules-automation/rules-automation.css` | KT.7 (`h10-kt7-*` at EOF) | 2026-08-13 | **released** — EOF-append only; 9 used, 9 defined, none dead |
 | `packages/database/prisma/schema.prisma` | HV.2 (`AdsHarvestPolicy`, additive — one new model, nothing altered) | 2026-08-12 | **released** — landed `0534af3db`; also carries two whitespace-only hunks in `AmazonAdsProfile` / `KeywordWatchlistTerm` that `prisma format` realigned, semantically identical |
 | `apps/api/src/routes/advertising-intel.routes.ts` | HV.2 (`GET`/`PUT`/`DELETE /advertising/harvest-policy`, additive) | 2026-08-12 | **released** — landed `f2c0620de` + `63d97ad2c` |
 | `…/rules-automation/rules-automation.css` | HV.2 (`h10-hv-*` at EOF, extending HV.1's block) | 2026-08-12 | **released** — landed `db7374d4b`, EOF-append only, every hunk diffed and mine; the merge conflict with PLC.1 was resolved keeping both blocks |
@@ -516,6 +519,18 @@ in-progress file holds everyone's push. (Two `keyword-tracker.service.ts` errors
   engine's precondition for acting on a term. One sentence on that control would close this. KT.2 did
   not touch the page (locks §0) and built its own entity instead, which is why the Keyword Tracker
   can no longer be the thing that arms it.
+
+**KT.7 → anyone pairing two tables on a timestamp, 2026-08-13.** `CampaignBidHistory` and
+`AdvertisingActionLog` are written microseconds apart, so an exact-second join key MISSES across a
+second boundary: a change at `12:16:59.8` lands in one at `:59` and the other at `:60`. The visible
+symptom was a change log row saying **"no undo is offered"** for a change that had just been made and
+was perfectly reversible, sitting directly above an older row that correctly said "undone". Match to
+the nearest row within a few seconds, never on a truncated timestamp.
+
+**KT.7 → anyone putting a log next to the control that writes to it.** They are SIBLINGS, so the log
+cannot see the write. Both directions need a signal: the write must refresh the log, **and** an undo in
+the log must refresh the control's preview — otherwise the preview goes on describing a bid that was
+just put back. Both halves were found by clicking, one after the other.
 
 **KT.7 → every session, 2026-08-13 — `suppressedFromBidCents` is a STATE MACHINE, not a spare column.**
 `restoreCampaignBids` (`ads-bid-suppression.service.ts:195-201`) selects **every** `AdTarget` where
