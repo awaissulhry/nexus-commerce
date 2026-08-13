@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { createNegative, type NegativeMatchType } from './ads-negative-kw.service.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
-import { createKeywordLocal, createNegativeKeywordCampaignLocal, createTargetLocal, createNegativeProductTargetLocal } from './ads-create.service.js'
+import { createKeywordLocal, createNegativeKeywordCampaignLocal, createTargetLocal, createNegativeProductTargetLocal, mirrorNegativeKeywordLocal } from './ads-create.service.js'
 // NEG.0(a) — enforced HERE rather than at applyHarvest's five callers, for the reason the write
 // gate gives about itself: a protection only some callers honour is not a protection. The five are
 // the rule engine, the POST route, ads-auto-harvest (which wrote the 22 engine-attributed rows),
@@ -291,6 +291,9 @@ export async function applyHarvest(args: {
     const camp = await prisma.campaign.findFirst({ where: { externalCampaignId }, select: { marketplace: true } })
     if (!camp?.marketplace) throw new Error(`no local campaign (or no marketplace) for externalCampaignId=${externalCampaignId} — cannot resolve a connection for the write gate`)
     const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace, isActive: true }, select: { profileId: true } })
+    // The local ad group the mirror row hangs off. Resolved once, outside the match-type loop.
+    const localAg = await prisma.adGroup.findFirst({ where: { externalAdGroupId }, select: { id: true } })
+    const localAdGroupId = localAg?.id ?? null
     const out: NegRow[] = []
     for (const nm of negMatches) {
       if (nm !== 'EXACT' && nm !== 'PHRASE') throw new Error(`unsupported negative match type "${nm}" — Amazon SP accepts EXACT and PHRASE only`)
@@ -300,7 +303,49 @@ export async function applyHarvest(args: {
       // 🔴 A refusal is not a failure (C7). It is returned, with the gate's own words, rather than
       // thrown — the promotion half may well have succeeded and the operator has to see both.
       if (r.denied) { out.push({ matchType: nm, externalTargetId: null, denied: { deniedAt: String(r.denied.deniedAt), reason: String(r.denied.reason) } }); continue }
-      out.push({ matchType: nm, externalTargetId: r.externalNegativeKeywordId ?? null })
+
+      /**
+       * 🔴 HV.9a — A NULL ID DOES NOT MEAN AMAZON DIDN'T CREATE IT.
+       *
+       * HV.4's doctrine — "reachedAmazon is the external id, never the fact we called create" — is
+       * still right as a default, and this is its converse, which is NOT safe. Measured on the
+       * 2026-08-13 proof write: `createNegative` logged `success … externalId: null` for
+       * "veste moto homme homologué", we reported `outcome: failed / reachedAmazon: false`, and the
+       * negative is ENABLED at Amazon as id 48498817150724. Amazon accepted the create, returned no
+       * error, and returned no keywordId.
+       *
+       * A false failure is not the safe direction: an operator who believes it failed retries, and
+       * the retry is a duplicate. So when the id is missing, ask Amazon rather than assume.
+       */
+      let externalTargetId = r.externalNegativeKeywordId ?? null
+      if (!externalTargetId && !r.alreadyExisted) {
+        try {
+          const { listNegativeKeywords } = await import('./ads-api-client.js')
+          const live = await listNegativeKeywords({ profileId: conn.profileId, region: 'EU' }, { campaignIds: [externalCampaignId] })
+          const key = query.trim().toLowerCase()
+          const found = (live as Array<{ keywordId?: string; keywordText?: string; adGroupId?: string; matchType?: string }>)
+            .find((k) => String(k.keywordText ?? '').trim().toLowerCase() === key
+              && String(k.adGroupId ?? '') === externalAdGroupId
+              && String(k.matchType ?? '').toUpperCase().includes(nm))
+          if (found?.keywordId) {
+            externalTargetId = String(found.keywordId)
+            logger.warn('[applyHarvest] Amazon created the negative but returned no id — recovered by read-back', { query, externalAdGroupId, externalTargetId })
+          }
+        } catch (e) {
+          // A failed read-back leaves the id null and the row reports honestly as unproven. It must
+          // never throw: the negative may well exist, and losing the whole outcome would be worse.
+          logger.warn('[applyHarvest] read-back after a null negative id failed', { query, error: (e as Error).message })
+        }
+      }
+
+      // HV.9a — mirror it locally. `negateCampaign` always did; this path never did, so every
+      // ad-group negative it created was invisible here.
+      try {
+        if (localAdGroupId) await mirrorNegativeKeywordLocal({ adGroupId: localAdGroupId, keywordText: query, matchType, externalTargetId, userId: args.userId })
+      } catch (e) {
+        logger.warn('[applyHarvest] could not mirror the ad-group negative locally', { query, error: (e as Error).message })
+      }
+      out.push({ matchType: nm, externalTargetId })
     }
     return out
   }
@@ -333,7 +378,7 @@ export async function applyHarvest(args: {
           ? `Negated at ${negScope === 'AD_GROUP' ? 'ad-group' : 'campaign'} scope; Amazon confirmed it.`
           : denied?.denied
             ? `Refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
-            : `Written locally, but Amazon returned no id — this term is NOT negated at Amazon.`,
+            : `Amazon returned no id and a read-back did not find it, so this term is NOT negated at Amazon. Nothing was created; retrying is safe.`,
       })
     } catch (e) {
       result.errors.push(`neg "${n.query}": ${(e as Error).message}`)

@@ -1102,6 +1102,53 @@ export async function createNegativeProductTargetLocal(input: NewNegativeProduct
 
 // NT.4 — ad-group-level negative keyword (the funnel + Auto-isolation writes), match-typed.
 export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string }
+/**
+ * 🔴 HV.9a — mirror an AD_GROUP negative that has ALREADY been created at Amazon.
+ *
+ * Distinct from `createNegativeKeywordLocal` above, which calls Amazon itself. `applyHarvest`'s
+ * `negateAdGroup` has already made that call, so re-using the other function would create the
+ * negative twice. It had no mirror at all before this — `negateCampaign` wrote one and the
+ * ad-group path did not — so a negative that landed at Amazon left no row here.
+ *
+ * Measured 2026-08-13, both proof writes: `motorradjacke 4xl` (id 53955160123085) and
+ * `veste moto homme homologué` (id 48498817150724) are ENABLED at Amazon and had no local row.
+ * That is the 209-row defect pointing the other way — our record and Amazon's disagreeing, with
+ * neither side visible from the other.
+ */
+export async function mirrorNegativeKeywordLocal(input: {
+  adGroupId: string; keywordText: string; matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
+  externalTargetId: string | null; userId?: string
+}): Promise<{ id: string; created: boolean }> {
+  const existing = await prisma.adTarget.findFirst({
+    where: {
+      adGroupId: input.adGroupId, isNegative: true, negativeLevel: 'AD_GROUP',
+      expressionValue: input.keywordText,
+      // Both spellings: the sync stores plain EXACT/PHRASE with isNegative, mirrors store NEGATIVE_*.
+      expressionType: { in: [input.matchType, input.matchType.replace('NEGATIVE_', '')] },
+    },
+    select: { id: true, externalTargetId: true },
+  })
+  if (existing) {
+    // Heal a row the sync mirrored without an id, rather than creating a second one.
+    if (!existing.externalTargetId && input.externalTargetId) {
+      await prisma.adTarget.update({ where: { id: existing.id }, data: { externalTargetId: input.externalTargetId } })
+    }
+    return { id: existing.id, created: false }
+  }
+  const t = await prisma.adTarget.create({
+    data: {
+      adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType,
+      expressionValue: input.keywordText, bidCents: 0, status: 'ENABLED',
+      isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: input.externalTargetId,
+    },
+  })
+  await audit('create_negative_keyword', 'AD_TARGET', t.id, {
+    keywordText: input.keywordText, matchType: input.matchType, scope: 'AD_GROUP',
+    externalTargetId: input.externalTargetId, reachedAmazon: input.externalTargetId != null,
+  }, input.userId)
+  return { id: t.id, created: true }
+}
+
 export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<{ id: string; externalTargetId: string | null; mode: string }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true } } } })
   if (!ag) throw new Error('ad group not found')

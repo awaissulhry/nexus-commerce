@@ -20,6 +20,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const createNegative = vi.fn()
 const createNegativeKeywordCampaignLocal = vi.fn(async () => ({ id: 'local-1', created: true }))
 const createNegativeKeywordLocal = vi.fn(async () => ({ id: 'local-2', created: true }))
+const mirrorNegativeKeywordLocal = vi.fn(async () => ({ id: 'mirror-1', created: true }))
+const listNegativeKeywords = vi.fn(async () => [] as unknown[])
 
 vi.mock('./ads-negative-kw.service.js', () => ({ createNegative: (...a: unknown[]) => createNegative(...a) }))
 vi.mock('./ads-create.service.js', () => ({
@@ -27,7 +29,9 @@ vi.mock('./ads-create.service.js', () => ({
   createNegativeKeywordLocal: (...a: unknown[]) => createNegativeKeywordLocal(...a),
   createKeywordLocal: vi.fn(),
   createProductTargetLocal: vi.fn(),
+  mirrorNegativeKeywordLocal: (...a: unknown[]) => mirrorNegativeKeywordLocal(...a),
 }))
+vi.mock('./ads-api-client.js', () => ({ listNegativeKeywords: (...a: unknown[]) => listNegativeKeywords(...a) }))
 vi.mock('./ads-protect-converting.js', () => ({
   checkProtectConverting: vi.fn(async () => new Map()),
   protectConvertingConfig: vi.fn(() => ({})),
@@ -56,6 +60,8 @@ const candidate = {
 } as never
 
 beforeEach(() => {
+  mirrorNegativeKeywordLocal.mockClear()
+  listNegativeKeywords.mockReset(); listNegativeKeywords.mockResolvedValue([])
   createNegative.mockReset()
   createNegativeKeywordCampaignLocal.mockClear()
   createNegativeKeywordLocal.mockClear()
@@ -110,5 +116,62 @@ describe('HV.8a — the default scope moved to AD_GROUP', () => {
     expect(r.negativesAdded).toBe(0)
     expect(r.negativeOutcomes[0].outcome).toBe('failed')
     expect(r.errors[0]).toMatch(/empty profileId/)
+  })
+})
+
+/**
+ * 🔴 HV.9a — found by the proof writes, not by any test.
+ *
+ * Amazon can CREATE the negative and return no keywordId. Measured 2026-08-13: createNegative
+ * logged `success … externalId: null` for "veste moto homme homologué", we reported
+ * `outcome: failed / reachedAmazon: false`, and the negative is ENABLED at Amazon as
+ * id 48498817150724. A false failure is not the safe direction — an operator who believes it
+ * failed retries, and the retry is a duplicate.
+ */
+describe('HV.9a — a null id does not mean Amazon did not create it', () => {
+  it('🔴 recovers the id by reading back, and reports acted', async () => {
+    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
+    listNegativeKeywords.mockResolvedValue([
+      { keywordId: '48498817150724', keywordText: 'giacca moto', adGroupId: 'EAG1', matchType: 'NEGATIVE_EXACT' },
+    ])
+    const r = await applyHarvest({ negatives: [candidate] })
+    expect(r.negativeOutcomes[0]).toMatchObject({ reachedAmazon: true, outcome: 'acted', externalTargetId: '48498817150724' })
+    expect(r.negativesAdded).toBe(1)
+  })
+
+  it('still reports failed when the read-back genuinely does not find it', async () => {
+    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
+    listNegativeKeywords.mockResolvedValue([])
+    const r = await applyHarvest({ negatives: [candidate] })
+    expect(r.negativeOutcomes[0]).toMatchObject({ reachedAmazon: false, outcome: 'failed' })
+    expect(r.negativeOutcomes[0].reason).toMatch(/read-back did not find it/)
+    expect(r.negativeOutcomes[0].reason).not.toMatch(/Written locally/)
+  })
+
+  it('does not throw when the read-back itself fails', async () => {
+    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: null, denied: null, alreadyExisted: false })
+    listNegativeKeywords.mockRejectedValue(new Error('429 from Amazon'))
+    const r = await applyHarvest({ negatives: [candidate] })
+    expect(r.negativeOutcomes[0].outcome).toBe('failed')
+  })
+})
+
+/**
+ * 🔴 HV.9a — `negateCampaign` always mirrored locally; `negateAdGroup` never did. Both proof
+ * writes landed at Amazon and left no row here, which is the 209-row defect pointing the other way.
+ */
+describe('HV.9a — an ad-group negative is mirrored locally', () => {
+  it('writes a local mirror carrying the Amazon id', async () => {
+    createNegative.mockResolvedValue({ ok: true, externalNegativeKeywordId: 'AMZ-7', denied: null, alreadyExisted: false })
+    await applyHarvest({ negatives: [candidate] })
+    expect(mirrorNegativeKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({
+      keywordText: 'giacca moto', matchType: 'NEGATIVE_EXACT', externalTargetId: 'AMZ-7',
+    }))
+  })
+
+  it('does not mirror when the gate refused — nothing was created', async () => {
+    createNegative.mockResolvedValue({ ok: false, externalNegativeKeywordId: null, denied: { deniedAt: 'keyword_protected', reason: 'whitelisted' }, alreadyExisted: false })
+    await applyHarvest({ negatives: [candidate] })
+    expect(mirrorNegativeKeywordLocal).not.toHaveBeenCalled()
   })
 })

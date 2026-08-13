@@ -330,6 +330,15 @@ builder slugs and is not this session's to delete (see §4).
 | `…/rules-automation/rules-automation.css` | NEG.7 (`h10-ngr7-*` at EOF) | 2026-08-13 | **released** — one hunk at EOF, diffed before committing; 24 classes used and 24 defined, checked both ways |
 | `…/negative-targeting/NegativeTargetingClient.tsx` | NEG.7 (drop the interim `RuleListTab` render + 3 now-unused imports; the slot already mounted `NegRules`) | 2026-08-13 | **released** — 🔴 `RuleListTab.tsx` itself is NOT deleted: `RulesAutomationClient` and `SovTrackerTab` both import it, the same trap NEG.5 hit with `ProtectedTermsPanel` |
 
+### HV.9a — the proof writes found three defects in HV.8a, 2026-08-13
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/api/src/services/advertising/ads-harvest.service.ts` | HV.9a (`negateAdGroup` mirrors locally + reads back when Amazon returns no id) | 2026-08-13 | **released** |
+| `apps/api/src/services/advertising/ads-create.service.ts` | HV.9a (`mirrorNegativeKeywordLocal` — NEW export, writes the row + audit and calls Amazon NOT AT ALL) | 2026-08-13 | **released** |
+
+---
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
