@@ -320,9 +320,16 @@ export function NegRules({ scope, push }: NegSlotProps) {
                             </li>
                           )}
                         </ul>
+                        {/* 🔴 The sentence has to match THIS rule's numbers. A generic "the cap is
+                            doing most of the work" sat directly under a rule whose cap refused 0. */}
                         <p className="hint">
-                          🔴 A refusal is not a failure and an execution is not a write. These are
-                          four different counts and the cap is doing most of the work.
+                          🔴 A refusal is not a failure and an execution is not a write — these are
+                          four different counts.{' '}
+                          {r.activity.refusedByCap > r.activity.dryRuns
+                            ? <>Here the daily cap is doing most of the work.</>
+                            : r.activity.dryRuns > 0
+                              ? <>Here every row is a dry run: on {r.autonomyLevel} it proposes and stops, so nothing was written whatever the total says.</>
+                              : <>Here it has neither been capped nor run.</>}
                         </p>
                       </div>
 

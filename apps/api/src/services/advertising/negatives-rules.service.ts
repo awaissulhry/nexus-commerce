@@ -252,7 +252,7 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
       const n = scopedMarket
         ? (marketList.find((m) => m.market === scopedMarket)?.count ?? 0)
         : scope.boundBy !== 'market' ? inScopeEnabled.length : worst.count
-      const where = scopedMarket ?? (scope.boundBy !== 'market' ? 'this scope' : `${worst.market}, its largest marketplace`)
+      const where = scopedMarket ?? (scope.boundBy !== 'market' ? 'this scope' : `${worst.market}, its largest marketplace,`)
       return {
         kind: 'per-marketplace-campaigns',
         perExecution: n,
