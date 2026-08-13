@@ -295,7 +295,7 @@ panel, which is the point of consuming them rather than reimplementing them.
 
 | file / area | session | since | state |
 |---|---|---|---|
-| `apps/api/src/services/advertising/ads-harvest.service.ts` | HV.8a (`negateScope` extended to the WASTEFUL loop, default changed CAMPAIGN→AD_GROUP; `negateCampaign` returns rows; per-negative outcomes) | 2026-08-13 | **claimed** |
+| `apps/api/src/services/advertising/ads-harvest.service.ts` | HV.8a (`negateScope` extended to the WASTEFUL loop, default changed CAMPAIGN→AD_GROUP; `negateCampaign` returns rows; per-negative outcomes) | 2026-08-13 | **released** — landed `31d5d496a` |
 
 🔴 **This claim changes behaviour for both existing callers** — `ads-auto-harvest.service.ts:48` and
 `ads-recommendations.service.ts:171/173`. That is the intent, not a side effect: today they negate
