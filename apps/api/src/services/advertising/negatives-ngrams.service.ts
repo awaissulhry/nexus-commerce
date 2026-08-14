@@ -442,9 +442,37 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
   }
 
   const since = new Date(Date.now() - page.window.days * 86400_000)
+  // 🔴 THE SCOPE MUST BIND THE WRITE, NOT ONLY THE PREVIEW.
+  //
+  // This query decides which ad groups get written to, and it used to carry NO scope filter at all
+  // while `getWastefulWords` above — the preview — carried a full one. So a caller passing
+  // `campaign: <id>` saw a preview of ONE ad group and the write went to all 26. Caught on the
+  // first real gram negation: three campaigns were approved and twenty-six were targeted.
+  //
+  // The filter below is the same one the preview uses, resolved from the same request.
+  const scopeCampaignsForWrite = await prisma.campaign.findMany({
+    select: { id: true, name: true, marketplace: true, portfolioId: true, externalCampaignId: true },
+  })
+  const writeScope = resolveNegScope(
+    {
+      campaigns: scopeCampaignsForWrite,
+      adGroups: await prisma.adGroup.findMany({ select: { id: true, name: true, campaignId: true } }),
+      products: [], ads: [],
+    },
+    req,
+  )
+  const writeExternalIds = writeScope.boundBy === 'market'
+    ? null
+    : scopeCampaignsForWrite.filter((c) => writeScope.campaignIds.includes(c.id)).map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+  const writeMarket = req.market && req.market !== NEG_MARKET_ALL ? req.market : null
+
   const st = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query', 'adGroupId', 'campaignId'],
-    where: { date: { gte: since } },
+    where: {
+      date: { gte: since },
+      ...(writeMarket ? { marketplace: writeMarket } : {}),
+      ...(writeExternalIds ? { campaignId: { in: writeExternalIds } } : {}),
+    },
     _sum: { clicks: true },
   })
   const targets = new Map<string, string>()
@@ -489,6 +517,13 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
       })
       if (res.denied) outcomes.push({ ...base, outcome: 'refused', reason: res.denied.reason, externalNegativeKeywordId: null })
       else if (res.alreadyExisted) outcomes.push({ ...base, outcome: 'already_existed', reason: null, externalNegativeKeywordId: null })
+      else if (res.mode === 'sandbox') {
+        // 🔴 A SANDBOX RESPONSE IS NOT A CREATE. `createNegative` logs `[ADS-SANDBOX]`, returns
+        // `mode: 'sandbox'` with a NULL keyword id, and calls Amazon not at all. Mirroring that as
+        // a real row manufactures exactly the split-brain state NEG.4 exists to count — a local
+        // negative that no auction honours. The `mode` field was always there to be read.
+        outcomes.push({ ...base, outcome: 'refused', reason: 'the ads client is in SANDBOX mode — nothing was sent to Amazon, and no local row was written', externalNegativeKeywordId: null })
+      }
       else {
         // 🔴 MIRROR THE LOCAL ROW AND AUDIT IT. `createNegative` only pushes to Amazon — it reads
         // from the database and never writes to it (see its four `findFirst` calls, all the
