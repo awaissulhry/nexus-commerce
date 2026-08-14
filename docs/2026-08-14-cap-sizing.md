@@ -493,15 +493,78 @@ Not touched: §9 of the brief says report, don't patch, and §7 forbids touching
 
 ---
 
+## 10b · ✅ EXECUTED 2026-08-14 — the data changes, and two the pre-flight stopped
+
+Operator decision, given after §1–§10 were written: **"data changes only, counter stays off"** and
+**"Retail guard exempt from the row cap, bounded at 20 writes/day"**. Applied by
+`_cap-apply.mts --apply`; every row snapshotted in full first, every change read back.
+
+**13 rows changed. `automation-rule.service.ts` untouched — the counter is still unarmed, so none of
+this binds anything yet.** That is the point of doing it in this order.
+
+| rule | cap before (ROWS) | cap after | |
+|---|---|---|---|
+| Daily automation digest | 1 | **9** | one context per marketplace, once — what *daily* costs here |
+| Target ACOS setter (from profit) | 1 | **36** | 4 sweeps × 9 markets |
+| Weekend budget boost | 1 | **36** | |
+| Profit-native bid optimisation | 2 | **36** | |
+| Auto harvest & negate | 3 | **36** | was 3 against a 9-market fan-out — it would have run in 3 markets and never reached the rest |
+| AIREON — Target ACoS bidding | 4 | **36** | |
+| ACoS convergence | 4 | **10** | 1 entity, ~hourly |
+| Campaign ACOS rebalance | 5 | **10** | |
+| Alert: ACOS spike | 50 | **24** | hourly |
+| Reduce bids on ACOS spike | 30 | **10** | |
+| Low CTR bid reduction | 100 | **200** | 🔴 was **below** its own 85-entity count |
+| **Retail guard** | 96 | **null — EXEMPT** | safety rule; bounded at **20 writes/day** in step 6 |
+| **New-to-brand optimizer** | *(cap unchanged)* | — | 🔴 **`enabled: false`** |
+
+`New-to-brand optimizer` was **disabled, not deleted** — it carries **167,851** execution rows and
+`AutomationRuleExecution.rule` is `onDelete: Cascade`. Full row snapshotted; one click to reverse.
+
+### 🔴 Two approved config fixes were NOT made, and both were stopped by re-reading before writing
+
+**`AIREON — Target ACoS bidding` — my §7.3 recommendation was wrong.** `ads-bid-optimizer.service.ts:253-274`
+records a **deliberate** decision by RA.AUTO not to coerce `30 → 0.3`: *"Coercing 30 → 0.3 would be a
+guess about intent dressed as a fix, and a wrong guess here moves real money."* I had proposed
+exactly the thing that comment exists to prevent. And it would not have worked anyway: the rule also
+stores **`campaignIds` (an array of 11)** where the handler reads `campaignId`, so a **second** guard
+refuses it regardless. The rule is PROPOSE and has applied 0 bids, so nothing is lost by leaving it.
+**What it needs is a decision about what it was meant to do, not a coercion.**
+
+**`Reduce bids on ACOS spike` — held until the write cap exists.** It is **AUTO, `dryRun: false`**, with
+`bid_down −20%` on ad groups. Clearing `maxValueCentsEur: 0` un-blocks it — and with the counter
+still broken and `maxWritesPerDay` not yet built, that creates a **new uncapped AUTO writer**. That is
+materially more than "a data change", so it waits for step 6. Its row cap was still lowered to 10.
+
+### Verification after the write
+
+| | expected | measured |
+|---|---|---|
+| all 13 rows read back as intended | 13 | **13 ✓** |
+| old counter clause still matches | **0** | **0** — nothing binds yet |
+| `_cap-sizing.mts` | green | ✓ all assertions passed (now 20 enabled rules) |
+| NEG census / orphaned / split-brain | 2,062 / 0 / 40 | **2,062 / 0 / 40** |
+| Detector A / B / C | 0 / 3 / 0 | **0 / 3 / 0** |
+| `_neg9-inbound.mts` · `_neg7-rules.mts` | green | ✓ · ✓ |
+
+**Still open, in order:** step 4 (arm the counter) · step 5 (watch 24h) · step 6 (`maxWritesPerDay`,
+including Retail guard's 20 and `Reduce bids on ACOS spike`'s config) · step 7 (notification dedupe).
+
+---
+
 ## 11 · What was deliberately not done
 
-No cap changed · no counter armed · no rule disabled or deleted · no notification path touched · no
-bid write path touched · `ad-rank-defend` untouched · no engine change · no new page or surface ·
-no shared file edited, so **no lock claimed in §2 of the session-locks file**.
+**No counter armed** (`automation-rule.service.ts` is untouched) · no notification path touched · no
+bid write path touched · no rule deleted · `ad-rank-defend` untouched · no engine change · no
+handler change · no schema change · no new page or surface · the Negative Targeting page unchanged.
 
-The six scripts are committed rather than left untracked: two of them
-(`_cap-damage.mts`, `_cap-budgetpath.mts`) are the argument *for* a change, and that argument only
-holds while it can be re-run.
+**No source file was edited at all** — the only writes were to `AutomationRule` rows — so **no lock
+was claimed in §2 of the session-locks file**.
+
+The eight scripts are committed rather than left untracked: two of them
+(`_cap-damage.mts`, `_cap-budgetpath.mts`) are the argument *for* a change, `_cap-preflight.mts` is
+what stopped two changes that were already approved, and `_cap-apply.mts` carries the snapshot that
+reverses the ones that were made. None of that holds if it cannot be re-run.
 
 ---
 
