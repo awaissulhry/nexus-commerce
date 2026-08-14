@@ -1,12 +1,17 @@
 # CAP — what a "run" is, what each rule's limit should be, and only then the counter
 
-*2026-08-14. A recommendation, not a change. Nothing shipped: no cap altered, no counter armed, no
-rule disabled, no notification path touched. Every number below is labelled with its unit, because
-the whole defect is that a limit and its counter are in different ones.*
+*2026-08-14. §1–§9 were written as a recommendation with nothing shipped. The operator then approved
+it in two steps, and §10b/§10c are the execution record: **13 caps re-sized, one rule disabled, and
+the counter armed** — in that order, which is the entire point. Every number is labelled with its
+unit, because the whole defect is that a limit and its counter were in different ones.*
+
+**Status: the brake is on.** First tick under the armed counter, 18:45 UTC — one rule wrote, the one
+deliberately exempted, and it wrote exactly **9 rows: one per active marketplace**. §10c.
 
 Companion: [WH's writeback §2](2026-08-14-wh-writeback.md) — why the counter fix was withheld.
 Scripts: `_cap-sizing.mts` · `_cap-anchor.mts` · `_cap-damage.mts` · `_cap-budgetpath.mts` ·
-`_cap-probe.mts` · `_cap-actions.mts` — all read-only.
+`_cap-probe.mts` · `_cap-actions.mts` · `_cap-preflight.mts` · `_cap-watch.mts` · `_cap-tick.mts` —
+all read-only. `_cap-apply.mts` is the only one that writes, and only with `--apply`.
 
 ---
 
@@ -440,7 +445,7 @@ visible evidence that the caps are wrong — and it is the evidence that made th
 | 2 | **Disable `New-to-brand optimizer`** (§7.2) — `enabled: false`, never delete | data | one click |
 | 3 | **Fix the two configs** (§7.3) | data | yes |
 | 4 | **Arm the counter** — `OR: [{ errorMessage: null }, { errorMessage: { not: 'DAILY_CAP_EXCEEDED' } }]` at `automation-rule.service.ts:573` | code · 1 deploy | revert |
-| 5 | **Watch 24 hours.** Expect: rows ≈ 1,987/day, notifications ≈ 3,062/day, `DAILY_CAP_EXCEEDED` rows appearing for the first time, suggestions unchanged at ~260 | — | — |
+| 5 | **Watch 24 hours.** Expect: rows ≈ 1,987/day, notifications ≈ 3,062/day, suggestions unchanged at ~260 | — | — |
 | 6 | **Then** add `maxWritesPerDay` (§3) and set the write caps (§6.1) | schema + code | additive |
 | 7 | **Then** the notification dedupe (§8) | code | — |
 
@@ -448,11 +453,19 @@ visible evidence that the caps are wrong — and it is the evidence that made th
 cap binds nothing until it is armed. The risky step is second, isolated, and one revert away — which
 is the opposite of how this would have gone if the counter had been fixed first.
 
-**A note on step 5.** The first day with real caps is the first day this account has ever had a
-brake. `DAILY_CAP_EXCEEDED` rows will appear and the execution table will start showing refusals
-again — but as **refusals**, not failures. The digest already distinguishes `denied` (operator) from
-`declined` (engine); a cap refusal is `declined`. The 693,704 rows already in the table are that
-same class, from the pre-ADX.1 self-ratchet, and they are not breakage.
+**🔴 A correction to step 5, found while writing the watch script.** I wrote above that
+`DAILY_CAP_EXCEEDED` rows would start appearing. **They will not, and that is by design.** ADX.1
+made a cap refusal write **no execution row** — that was the fix for the self-ratchet, where each
+refusal raised the count that caused it. A refusal now emits only an ephemeral `publishAdsExecution`
+event into a 50-entry, 5-minute in-process ring buffer.
+
+**So the cap is observable only as an absence: rows-per-rule-per-day stopping at the cap.** Not as
+refusals, not as failures, not as anything in the execution table. `_cap-watch.mts` measures it that
+way. Anyone verifying this by looking for refusal rows will conclude the fix did not work.
+
+That also means the 693,704 `DAILY_CAP_EXCEEDED` rows on prod are **historical residue** from before
+2026-08-04, not a live condition — which is why the null branch matters so much: they are the only
+thing the old clause could see, and they stopped arriving ten days ago.
 
 ---
 
@@ -547,8 +560,55 @@ materially more than "a data change", so it waits for step 6. Its row cap was st
 | Detector A / B / C | 0 / 3 / 0 | **0 / 3 / 0** |
 | `_neg9-inbound.mts` · `_neg7-rules.mts` | green | ✓ · ✓ |
 
-**Still open, in order:** step 4 (arm the counter) · step 5 (watch 24h) · step 6 (`maxWritesPerDay`,
-including Retail guard's 20 and `Reduce bids on ACOS spike`'s config) · step 7 (notification dedupe).
+---
+
+## 10c · ✅ THE COUNTER IS ARMED — 2026-08-14 18:35 UTC
+
+Step 4, approved after §10b. `automation-rule.service.ts:590` now carries the null branch. Shipped
+in `6ce492420`; live on prod as build `94de80aa` (another session's commit on top of mine — verified
+with `git merge-base --is-ancestor` and the `/api/health` build sha, not by assuming).
+
+**The first tick with a working brake fired at 18:45 UTC. Measured with `_cap-tick.mts`:**
+
+```
+rows written since 18:44 UTC — the first tick with the counter armed:
+  Retail guard                                 cap= null  rows=   9  last 18:47:11
+
+  enabled advertising rules: 20 · rules that wrote in this window: 1
+  ✓ wrote and is EXEMPT: Retail guard
+  ✓ no capped rule wrote a single row — the counter is holding
+```
+
+**One rule wrote. It is the one deliberately exempted, and it wrote exactly 9 rows — one per active
+marketplace.** The other 19 were already past their caps on pre-arming rows and went silent, as they
+must until 00:00 UTC.
+
+That single line is three verifications at once:
+
+1. **The counter binds.** 19 of 20 rules stopped mid-day, the first time any cap has held since
+   2026-08-04. Before the deploy the same rules were writing ~430 rows per tick.
+2. **The exemption works, and it was necessary.** `Retail guard` — the rule that pauses campaigns on
+   stock-out — is the *only* thing still running. Under a cap of 96 it would have stopped at tick 11
+   of 96 and stayed off for the rest of the day.
+3. 🔴 **9 rows is the unit thesis, measured directly.** One logical run of one SCHEDULE rule costs
+   exactly 9 execution rows on a 9-marketplace account. That is the whole argument of this document,
+   printed by the engine itself on the first tick after the fix.
+
+| observable | expected | measured at 18:47 |
+|---|---|---|
+| capped rules writing rows | 0 | **0** |
+| exempt rule writing rows | 9 (one per marketplace) | **9** |
+| `DAILY_CAP_EXCEEDED` rows written today | **0** — a refusal writes no row | **0** |
+| notifications/hour | falling from ~1,730 | **1,378** and dropping |
+| account rows, 18:35 → 18:47 | +9 | **20,994 → 21,002 (+8, +1 landing mid-read)** |
+
+**Still open, in order:** step 5 (watch through 00:00 UTC — the first clean day) · step 6
+(`maxWritesPerDay`, including Retail guard's 20 and `Reduce bids on ACOS spike`'s config) · step 7
+(notification dedupe).
+
+**What to check tomorrow:** every capped rule should sit at *exactly* its cap, not below it. A rule
+resting below its cap means its trigger stopped producing contexts, which is a different condition
+and must not be read as the cap working. `_cap-watch.mts` distinguishes them (`AT CAP` vs `quiet`).
 
 ---
 
@@ -561,10 +621,11 @@ handler change · no schema change · no new page or surface · the Negative Tar
 **No source file was edited at all** — the only writes were to `AutomationRule` rows — so **no lock
 was claimed in §2 of the session-locks file**.
 
-The eight scripts are committed rather than left untracked: two of them
-(`_cap-damage.mts`, `_cap-budgetpath.mts`) are the argument *for* a change, `_cap-preflight.mts` is
-what stopped two changes that were already approved, and `_cap-apply.mts` carries the snapshot that
-reverses the ones that were made. None of that holds if it cannot be re-run.
+The ten scripts are committed rather than left untracked: two of them (`_cap-damage.mts`,
+`_cap-budgetpath.mts`) are the argument *for* a change, `_cap-preflight.mts` is what stopped two
+changes that were already approved, `_cap-apply.mts` carries the snapshot that reverses the ones that
+were made, and `_cap-watch.mts` / `_cap-tick.mts` are how anyone checks tomorrow whether the brake is
+still holding. None of that holds if it cannot be re-run.
 
 ---
 
