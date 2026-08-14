@@ -97,4 +97,19 @@ function tabRedirects() {
     }))
 }
 
-module.exports = { RULES_BASE, ROUTED, PENDING, tabRedirects }
+/**
+ * The landing redirect — the bare index 308s to Apply Rules (operator decision 2026-08-15,
+ * superseding substrate spec §10 Q5's earlier "Automations" answer).
+ *
+ * 🔴 Must be spread AFTER `tabRedirects()`: it carries no `has`, so placed ahead of them it would
+ * match every `?tab=` URL first and swallow all eleven. After them, it catches the bare path and
+ * any unknown `?tab=` value — Next preserves query params, so `?tab=typo` lands on Apply Rules
+ * carrying its junk param, which is the page the old client fallback rendered, now with an honest
+ * URL instead of a silent wrong-page render.
+ */
+const LANDING = 'apply-rules'
+function bareIndexRedirect() {
+  return [{ source: RULES_BASE, destination: `${RULES_BASE}/${LANDING}`, permanent: true }]
+}
+
+module.exports = { RULES_BASE, ROUTED, PENDING, tabRedirects, bareIndexRedirect, LANDING }

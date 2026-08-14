@@ -356,13 +356,17 @@ dismantled by this work anyway.
 
 ### 2.2 🔴 The landing question
 
-> ⏳ **DECIDED, NOT YET BUILT (2026-08-12).** The decision below stands. RA.SPINE shipped the
-> `?tab=` half — all eleven, derived from one list — and deliberately held the bare-index redirect
-> and the index client's deletion. See `2026-08-10-ra-session-locks.md` §4.
+> ✅ **BUILT 2026-08-15 — with a different destination.** The operator, asked directly on
+> 2026-08-15, chose **Apply Rules**, superseding this section's Automations answer. The bare index
+> 308s to `/apply-rules` (derived in `rulesTabRoutes.cjs`, AFTER the `?tab=` rules so it cannot
+> swallow them), the five legacy `/marketing/advertising/automation*` paths point at
+> `/automations` / `/builder` directly (no two-hop chains), and the index client + placeholder
+> seeds + `SovTrackerTab`/`TrackerTab` are deleted. The redirect lives in `next.config.js` only —
+> no one-line `redirect()` page, per the ACR Stage 6 precedent quoted below.
 
-**`/marketing/ads/rules-automation` becomes a redirect, not a page.** It 307s to
-`/rules-automation/automations`, preserving query params, and maps every legacy `?tab=<key>` to its
-new route.
+**`/marketing/ads/rules-automation` becomes a redirect, not a page.** ~~It 307s to
+`/rules-automation/automations`~~ — superseded above: it 308s to `/rules-automation/apply-rules` —
+preserving query params, and maps every legacy `?tab=<key>` to its new route.
 
 Why not an overview page: it would be a **twelfth page nobody studied**, and its content is either
 Automations' census or a second copy of it — which fails Part 5 law 1 (one subject, one page) and

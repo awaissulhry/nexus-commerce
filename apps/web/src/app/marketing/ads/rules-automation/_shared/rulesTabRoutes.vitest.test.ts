@@ -163,12 +163,23 @@ describe('array order in next.config.js is load-bearing', () => {
     if (firstParam >= 0) expect(lastTab).toBeLessThan(firstParam)
   })
 
-  it('the bare index still renders — the landing redirect is deliberately NOT here yet', () => {
-    // Held with `?tab=rules`: `/rules-automation` → `/automations` would send `?tab=rules` and the
-    // three `/marketing/advertising/automation/*` legacy paths to Automations, which is the wrong
-    // page, until `/apply-rules` is committed. Both land in the same follow-up.
-    return loadRedirects().then((all) => {
-      expect(all.filter((r) => r.source === RULES_BASE && !r.has)).toEqual([])
-    })
+  it('🔴 the bare index lands on Apply Rules, and only AFTER every ?tab= rule', async () => {
+    // Operator decision 2026-08-15 (supersedes substrate spec §10 Q5's "Automations"). The bare
+    // rule carries no `has`, so if it ever moves AHEAD of the `?tab=` rules it matches every
+    // query first and swallows all eleven — order in the array is the whole safety property.
+    const all = await loadRedirects()
+    const bare = all.map((r, i) => ({ r, i })).filter((x) => x.r.source === RULES_BASE && !x.r.has)
+    expect(bare).toHaveLength(1)
+    expect(bare[0]!.r.destination).toBe(`${RULES_BASE}/apply-rules`)
+    const lastTab = all.map((r, i) => ({ r, i })).filter((x) => x.r.has && x.r.source === RULES_BASE).map((x) => x.i).pop() ?? -1
+    expect(bare[0]!.i, 'the bare redirect must sit after the last ?tab= rule').toBeGreaterThan(lastTab)
+  })
+
+  it('no legacy path targets the bare index any more — that would 308 twice', async () => {
+    // The five `/marketing/advertising/automation*` entries used to point here; with the landing
+    // redirect live, each would become a two-hop chain. They now name their real page directly.
+    const all = await loadRedirects()
+    const intoBare = all.filter((r) => r.destination === RULES_BASE)
+    expect(intoBare.map((r) => r.source)).toEqual([])
   })
 })

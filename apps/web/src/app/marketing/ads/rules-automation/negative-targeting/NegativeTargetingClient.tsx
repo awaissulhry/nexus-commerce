@@ -544,9 +544,11 @@ export function NegativeTargetingClient() {
       <NegWastefulWords {...slotProps} />
 
       {/* NEG.7 absorbed the interim `<RuleListTab liveType="negative-targeting" />` that stood here.
-          🔴 Its FILE stays: `RulesAutomationClient` and `SovTrackerTab` both import it, so deleting
-          it is a build break on pages this session does not own — the same trap NEG.5 hit with
-          `ProtectedTermsPanel`. Only this render and its import are gone. */}
+          🔴 Its FILE stays: Bid, Budget and Keyword Harvest still mount it as their interim rules
+          section, and Automations imports its `HistoryDrawer` — deleting it is a build break on
+          pages this session does not own, the same trap NEG.5 hit with `ProtectedTermsPanel`.
+          (The index client and `SovTrackerTab`, its other two importers when this note was first
+          written, were deleted with the legacy index on 2026-08-15.) */}
       <NegRules {...slotProps} />
 
       <NegRecord {...slotProps} />

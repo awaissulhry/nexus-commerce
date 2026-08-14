@@ -1461,7 +1461,7 @@ export function CampaignsGrid() {
         onDataSync={() => void load({ sync: true, range: dateRange })} syncing={syncing}
         actions={[
           { label: 'Create Campaign', href: '/marketing/ads/campaign-builder' },
-          { label: 'Create Rule', href: '/marketing/ads/rules-automation' },
+          { label: 'Create Rule', href: '/marketing/ads/rules-automation/builder' },
           { label: showGraph ? 'Hide Graph' : 'Show Graph', onClick: () => setShowGraph((v) => !v) },
         ]}
       />

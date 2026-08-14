@@ -1,7 +1,7 @@
 // RA.SPINE S3 — the routed Rules & Automation tabs, in the one format this CommonJS config can
 // read. See that file's header for why it exists and why it is a `.cjs` and not the `.mjs` the
 // hand-off note below guessed.
-const { tabRedirects } = require('./src/app/marketing/ads/rules-automation/_shared/rulesTabRoutes.cjs');
+const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rules-automation/_shared/rulesTabRoutes.cjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -55,13 +55,13 @@ const nextConfig = {
       // that the ELEVENTH cannot be forgotten: the guard fails when a tab is routed in `tabs.tsx`
       // with no entry here, and when an entry points at a directory with no `page.tsx`.
       //
-      // ⚠ `?tab=rules` is deliberately still absent — `/apply-rules` is uncommitted in another
-      // session, and a 308 to a route that is not in the bundle is a hard 404. See `PENDING`.
-      //
       // ⚠ Order is load-bearing: these are literal-path rules and must stay ahead of anything
       // parameterised. They match on `has` rather than on the path, so their order among themselves
       // does not matter and nothing later can swallow them.
       ...tabRedirects(),
+      // …and the bare index lands on Apply Rules (operator decision 2026-08-15). AFTER the `?tab=`
+      // rules on purpose — no `has`, so ahead of them it would swallow all eleven.
+      ...bareIndexRedirect(),
 
       // Phase 4 (2026-05-06): /pim/review → /catalog/organize.
       // Page does catalog organization, not a review queue; renamed
@@ -115,14 +115,17 @@ const nextConfig = {
       { source: '/marketing/advertising/goals', destination: '/marketing/ads/ai-advertising/new-goal', permanent: true },
 
       // Automation. Literals first — see the ordering note above.
-      { source: '/marketing/advertising/automation/new', destination: '/marketing/ads/rules-automation', permanent: true },
-      { source: '/marketing/advertising/automation/library', destination: '/marketing/ads/rules-automation', permanent: true },
-      { source: '/marketing/advertising/automation/analytics', destination: '/marketing/ads/rules-automation', permanent: true },
+      // The five that pointed at the bare index now name the Automations page directly — the bare
+      // index 308s to /apply-rules (landing decision 2026-08-15), and these URLs were automation
+      // pages, so riding the landing redirect would be both a two-hop chain and the wrong page.
+      { source: '/marketing/advertising/automation/new', destination: '/marketing/ads/rules-automation/builder', permanent: true },
+      { source: '/marketing/advertising/automation/library', destination: '/marketing/ads/rules-automation/automations', permanent: true },
+      { source: '/marketing/advertising/automation/analytics', destination: '/marketing/ads/rules-automation/automations', permanent: true },
       { source: '/marketing/advertising/automation/health', destination: '/marketing/ads/health', permanent: true },
       { source: '/marketing/advertising/automation/executions/:id', destination: '/marketing/ads/rules-automation/control-room?tab=activity', permanent: true },
       { source: '/marketing/advertising/automation/executions', destination: '/marketing/ads/rules-automation/control-room?tab=activity', permanent: true },
-      { source: '/marketing/advertising/automation/:id', destination: '/marketing/ads/rules-automation', permanent: true },
-      { source: '/marketing/advertising/automation', destination: '/marketing/ads/rules-automation', permanent: true },
+      { source: '/marketing/advertising/automation/:id', destination: '/marketing/ads/rules-automation/automations', permanent: true },
+      { source: '/marketing/advertising/automation', destination: '/marketing/ads/rules-automation/automations', permanent: true },
       { source: '/marketing/advertising/dayparting', destination: '/marketing/ads/rules-automation/dayparting', permanent: true },
       // SOV.1 — pointed at the route rather than at `?tab=share-of-voice`. It still worked via the
       // entry added above, but as a two-hop chain through a query param that only exists to be
