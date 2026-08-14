@@ -38,6 +38,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { envEnabled } from '../utils/env-flag.js'
+import type { AsinYieldEvidence } from '../services/advertising/sqp-yield.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -163,46 +164,71 @@ export async function runSqpIngestOnce(): Promise<string> {
     const mkRows = await prisma.marketplace.findMany({ where: { channel: 'AMAZON' }, select: { code: true, marketplaceId: true } })
     const idOf = new Map(mkRows.filter((m) => m.marketplaceId).map((m) => [m.code, m.marketplaceId!]))
 
-    // ── SQP.3 Phase C — rotation, OFF by default ────────────────────────────────────────────────
-    // Measured 2026-08-13: the pool is 694 distinct ASINs across the four live markets and this pass
-    // asks for the same 40 every night — 5.8% coverage, with ~654 ASINs never sampled once. Phase B's
-    // settle rule frees slots, and rotation spends them on ASINs that have never been asked for, at
-    // the SAME nightly budget.
+    // ── SQP.4 — aim the SAME budget at ASINs that actually return rows ──────────────────────────
     //
-    // 🔴 Default OFF because it changes which ASINs the account samples, and the brief gates widening
-    // on approval. Turning it on is one env var; nothing else has to change.
-    const rotationOn = envEnabled('NEXUS_SQP_ROTATION')
-    const { selectNightlyAsins, selectionSummary } = await import('../services/advertising/sqp-selection.js')
+    // 🔴 Measured 2026-08-14, IT, same week and same night: 2 hand-picked ASINs known to return rows
+    // gave 66 rows (33.0/report), while the 10 this pass selected gave 6 (0.6/report) — a 55×
+    // difference at identical cost, with 8 of the 10 returning literally nothing. Only 2/10 (IT),
+    // 3/10 (DE), 7/10 (ES) and 2/10 (FR) of the selected ASINs had ever produced a row, because
+    // `ourAsinsForMarketplace` orders by `listingStatus` and carries no yield signal at all.
+    //
+    // So the feed's problem was never budget — it was aim. This spends the same 40 reports a night.
+    //
+    // The explore quota replaces SQP.3's separate rotation flag and does the same job better: it
+    // reserves slots for never-asked ASINs, which is both the coverage sweep and the escape from
+    // `_acr2-sqp-backfill.mts`'s trap of only ever re-selecting known winners.
+    const yieldOrder = !envEnabled('NEXUS_SQP_YIELD_ORDER_OFF')
+    const { planRequestSet } = await import('../services/advertising/sqp-yield.js')
     const { settledAsins } = await import('../services/advertising/sqp-async.service.js')
 
     const parts: string[] = []
-    let created = 0, failed = 0, outstanding = 0, settled = 0, rotated = 0
+    let created = 0, failed = 0, outstanding = 0, settled = 0, explored = 0
     for (const { mkt, asins: coreAsins } of eligible) {
       const marketplaceId = idOf.get(mkt)
       if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += coreAsins.length; continue }
 
       let asins = coreAsins
-      if (rotationOn) {
+      if (yieldOrder) {
         const pool = await ourAsinsForMarketplace(mkt, SQP_ROTATION_POOL)
-        const hist = await prisma.sqpReportRequest.groupBy({
-          by: ['asin'], where: { marketplace: mkt, reportPeriod: 'WEEK', asin: { in: pool } },
-          _max: { requestedAt: true },
+
+        // Successes. SearchQueryPerformance records only these — an ASIN that returned nothing leaves
+        // no row here and is indistinguishable from one never asked.
+        const wins = await prisma.searchQueryPerformance.groupBy({
+          by: ['asin'], where: { reportPeriod: 'WEEK', marketplace: mkt, asin: { in: pool } }, _count: { _all: true },
         })
-        const lastAsked = new Map(hist.map((h) => [h.asin, h._max.requestedAt ?? null]))
+        const weeks = await prisma.searchQueryPerformance.findMany({
+          where: { reportPeriod: 'WEEK', marketplace: mkt, asin: { in: pool } },
+          select: { asin: true, startDate: true }, distinct: ['asin', 'startDate'],
+        })
+        const weekCount = new Map<string, number>()
+        for (const w of weeks) if (w.asin) weekCount.set(w.asin, (weekCount.get(w.asin) ?? 0) + 1)
+
+        // 🔴 And the zeros, which live ONLY in the ledger. Without this an ASIN measured five times
+        // and empty five times is treated as unexplored and gets asked again forever.
+        const asked = await prisma.sqpReportRequest.groupBy({
+          by: ['asin'], where: { marketplace: mkt, reportPeriod: 'WEEK', asin: { in: pool } }, _count: { _all: true },
+        })
+        const askedCount = new Map(asked.map((a) => [a.asin, a._count._all]))
+
+        const evidence = new Map<string, AsinYieldEvidence>()
+        for (const a of pool) {
+          const rows = wins.find((w) => w.asin === a)?._count._all ?? 0
+          evidence.set(a, { rows, weeksMeasured: weekCount.get(a) ?? 0, reportsRequested: askedCount.get(a) ?? 0 })
+        }
+
         const forWeek = await prisma.sqpReportRequest.findMany({
           where: { marketplace: mkt, reportPeriod: 'WEEK', startDate: win.start, asin: { in: pool } },
           select: { asin: true, status: true, collectedAt: true, rowsChanged: true },
         })
-        const sel = selectNightlyAsins({
-          candidates: pool.map((asin, rank) => ({ asin, rank, lastRequestedAt: lastAsked.get(asin) ?? null })),
-          budget: coreAsins.length,
-          coreCount: coreAsins.length,
-          settled: settledAsins(forWeek.filter((r) => r.status === 'INGESTED')),
-          outstanding: new Set(forWeek.filter((r) => r.status === 'PENDING' || r.status === 'DONE').map((r) => r.asin)),
-        })
-        asins = sel.chosen
-        rotated += sel.slotsFreedToRotation
-        parts.push(selectionSummary(mkt, sel, pool.length))
+        const exclude = new Set<string>([
+          ...settledAsins(forWeek.filter((r) => r.status === 'INGESTED')),
+          ...forWeek.filter((r) => r.status === 'PENDING' || r.status === 'DONE').map((r) => r.asin),
+        ])
+
+        const plan = planRequestSet({ pool, evidence, budget: coreAsins.length, exclude })
+        asins = plan.chosen
+        explored += plan.explore.length
+        parts.push(`${mkt} ${plan.chosen.length}/${pool.length} (${plan.exploit.length} proven + ${plan.explore.length} new${plan.barrenSkipped ? `, ${plan.barrenSkipped} barren skipped` : ''})`)
       }
 
       const r = await requestSqpReports({ marketplaceCode: mkt, marketplaceId, asins, period: 'WEEK', start: win.start, end: win.end })
@@ -212,7 +238,7 @@ export async function runSqpIngestOnce(): Promise<string> {
     const summary =
       `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
       ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
-      ` · rotation=${rotationOn ? `on(${rotated} freed slots reused)` : 'off'}` +
+      ` · aim=${yieldOrder ? `yield-ordered(${explored} exploring)` : 'off'}` +
       ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
       (parts.length ? ` · ${parts.join(' · ')}` : '')
     // 🔴 `rows=0` here is CORRECT and must not be treated as the old zero-row failure: this pass
@@ -224,7 +250,7 @@ export async function runSqpIngestOnce(): Promise<string> {
     if (created === 0 && outstanding === 0 && settled === 0) {
       throw new Error(`sqp-ingest (async): created 0 report requests across ${eligible.length} markets, nothing was already outstanding, and no week was settled. ${summary}`)
     }
-    logger.info('[sqp-ingest] request pass complete', { created, failed, outstanding, settled, week: win.start.toISOString().slice(0, 10) })
+    logger.info('[sqp-ingest] request pass complete', { created, failed, outstanding, settled, explored, yieldOrder, week: win.start.toISOString().slice(0, 10) })
     return summary
   }
 
