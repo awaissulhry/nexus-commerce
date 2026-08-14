@@ -2651,3 +2651,54 @@ refusing a duplicate, and the read-back stamping the pre-existing id onto a surp
 Each of the 9 groups has exactly **one** legitimate owner (`rows=1` for all nine after the
 `b0fc316ab` repair), and **all nine owners sit outside the archive set**. So the archive is 204
 surplus rows, none of which holds an Amazon id, and there is no reconciler binding to do.
+
+---
+
+# HV.9c.6 — the archive, applied
+
+**206 rows archived. 9 batches of 25. acted 206 · refused 0 · failed 0.** Nothing deleted, nothing
+sent to Amazon. `apps/api/scripts/_hv9c6-archive.mts` (dry-run by default), `_hv9c6-verify.mts`.
+
+```
+THE COHORT NOW:  218 = 12 at Amazon + 0 live local-only + 206 archived
+```
+
+🔴 **The 209-row backlog that opened HV.5 is closed at zero** — not by pushing it, but by
+establishing that it was never a backlog. Every keyword in it already exists at Amazon.
+
+## The reader proof, and why it is only valid once
+
+Before archiving: **90 ARCHIVED targets, 0 bid writes against them, ever**, against 18,755 for
+non-ARCHIVED in 30 days. That was the control, and it is what justified archiving as the way to stop
+D-B's 22 writes/day for this cohort.
+
+⚠ **That measurement is now unrepeatable.** Post-archive the same query returns 1,458 writes across
+113 ARCHIVED targets — the newly-archived rows carrying their own history. It is retrospective, not
+a contradiction, and the honest test of the fix is whether the rank-defend cron writes to them again
+after tomorrow's 06:00 run. **Recorded so nobody reads the post-archive number as a failure.**
+
+I could not find a `status` filter in either `adTarget.findMany` in `ad-rank-defend.job.ts`, so this
+was settled by measuring behaviour rather than by reading the query. The exclusion happens somewhere
+in the path; the outcome is what matters.
+
+## What was written, per row
+
+`status: ARCHIVED` · `retiredAt` · `retireReason` naming the census — **206 of 206 carry all three**.
+`retiredAt`/`retireReason` are NEG.3's columns, nullable and unused for positives, so **no migration
+was needed**.
+
+**206 `archive_surplus_keyword` audit rows, 206 carrying evidence (C9)**, actor
+`user:operator-hv9c`. The entire case for archiving over deleting was that the trail survives — so
+the archiving is in the trail.
+
+## What archiving did NOT fix
+
+**D-B remains open.** 480 bid writes across 7 id-less targets **outside** this cohort continue, which
+is precisely why it is a handoff to Bid rather than something archiving resolves.
+
+## The census reads 206 local-only until it learns about ARCHIVED
+
+`_hv9c1-census.mts` counts `externalTargetId IS NULL` regardless of status, so it still prints 206.
+That is correct and it is why `_hv9c6-verify.mts` restates the cohort with the status split. **A
+future reader of the census must apply the same split** — the number that matters is
+*live* local-only, and it is **0**.
