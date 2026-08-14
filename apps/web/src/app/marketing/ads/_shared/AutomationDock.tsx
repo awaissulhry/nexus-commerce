@@ -199,7 +199,7 @@ export function AutomationDock({ title = 'Automations', onChanged, surface = 'co
               <div className="adock-name-row">
                 <span className="adock-swatch" title={r.categoryLabel} />
                 <span className="adock-name" title={r.name}>{r.name}</span>
-                <Link href="/marketing/ads/rules-automation" className="adock-edit" title="Edit this rule"><Pencil size={11} /></Link>
+                <Link href="/marketing/ads/rules-automation/automations" className="adock-edit" title="Edit this rule"><Pencil size={11} /></Link>
               </div>
               <div className="adock-sub">
                 {r.week.acted} acted · {r.week.proposed} proposed this week
