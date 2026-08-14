@@ -553,11 +553,23 @@ export function KeywordTrackerClient() {
                 {f2.lastRunSummary && <>Its own summary says “{f2.lastRunSummary}”{f2.lastRunError ? ` alongside “${f2.lastRunError}”` : ''}. </>}
                 {f2.cliff.collapseOn && (
                   <>
+                    {/* 🔴 KT.8, found by clicking: this read "on 14 Sept that week ages out and it
+                        falls back to the week of 2 Aug" — naming the SAME week the grid is already on,
+                        because when nothing newer qualifies `projectCliff` falls back to the newest
+                        stored period, which is the current one. It also described the fallback in ROWS
+                        against a "normal" median, which is the rule the gate no longer uses. */}
                     This grid is built on the week of {period ? dayMonth(period) : '—'}; on{' '}
                     <b>{dayMonth(f2.cliff.collapseOn)}</b> that week ages out of the {data?.window.lookbackDays ?? 42}-day
-                    window and it falls back to the week of {f2.cliff.collapseToPeriod ? dayMonth(f2.cliff.collapseToPeriod) : '—'},
-                    which holds {num(f2.cliff.collapseToRows)} rows against a normal{' '}
-                    {num(data?.window.baselineRows ?? 0)}.{' '}
+                    window
+                    {f2.cliff.collapseToPeriod && period && f2.cliff.collapseToPeriod.slice(0, 10) !== period.slice(0, 10) ? (
+                      <> and it falls back to the week of {dayMonth(f2.cliff.collapseToPeriod)}.{' '}</>
+                    ) : (
+                      <>
+                        {' '}and there is nothing newer to fall back to — the grid keeps showing it,
+                        labelled as outside the window, until the feed writes a week measuring at least{' '}
+                        {num(data?.window.floorAsins ?? 5)} of our {market} ASINs.{' '}
+                      </>
+                    )}
                   </>
                 )}
                 {f2.structuralFailures.length > 0 && (
