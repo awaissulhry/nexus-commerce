@@ -238,9 +238,11 @@ export function NegRecord({ scope, push }: NegSlotProps) {
                     Of {num(d.refusals.cap.executionsInWindow)} executions. A rule refused by its own
                     cap is not a failure and not your decision.
                   </em>
-                  {d.refusals.cap.counterBroken && (
-                    <em className="bad">🔴 {d.refusals.cap.note}</em>
-                  )}
+                  {/* CAP 2026-08-14 — the healthy branch used to render nothing, so the repair was
+                      invisible here. Plain `em`, not `em.bad`: a working brake is not an alarm. */}
+                  {d.refusals.cap.counterBroken
+                    ? <em className="bad">🔴 {d.refusals.cap.note}</em>
+                    : <em>{d.refusals.cap.note}</em>}
                 </li>
                 <li>
                   <b>Refused by the write gate</b>

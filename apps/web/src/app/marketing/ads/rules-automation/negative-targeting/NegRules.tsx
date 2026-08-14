@@ -381,7 +381,16 @@ export function NegRules({ scope, push }: NegSlotProps) {
           )}
 
           {/* ── the two things that are true but easy to miss ───────────────────────────────── */}
-          {!d.capCounter.trustworthy && (
+          {/* CAP 2026-08-14 — this used to render nothing when healthy, so the day the counter was
+              repaired the page simply went quiet about it. A brake that started working is worth a
+              line; and `trustworthy` now measures the predicate the engine actually runs, not a
+              copy of it kept on this side. */}
+          {d.capCounter.trustworthy ? (
+            <p className="h10-ngr7-good">
+              <Check size={13} />
+              <span><b>The daily-cap counter is working.</b> {d.capCounter.note}</span>
+            </p>
+          ) : (
             <p className="h10-ngr7-note">
               <AlertTriangle size={13} />
               <span>🔴 <b>The daily-cap counter is broken.</b> {d.capCounter.note}</span>
