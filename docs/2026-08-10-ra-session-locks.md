@@ -375,6 +375,8 @@ builder slugs and is not this session's to delete (see §4).
 | `apps/api/src/services/advertising/kt6-proposal.service.ts` | KT.8 (same, 2 call sites — its own comment requires it to agree with the page) | 2026-08-14 | **released** |
 | `…/keyword-tracker/KeywordTrackerClient.tsx` | KT.8 (the health line, the truncated banner and the tooltip all describe the gate in ROWS; under a coverage floor that copy is false) | 2026-08-14 | **released** |
 | 🔴 `apps/api/src/services/advertising/share-of-voice.service.ts` | KT.8 — **NOT claimed, deliberately.** It calls the same `chooseViewPeriod`, so the floor is opt-in per caller: SOV passes no coverage and keeps the ratio unchanged. A different page owns it. | 2026-08-14 | **not touched** |
+| 🔴 `apps/api/src/services/automation-rule.service.ts` | CAP — **the daily-cap counter is ARMED.** WH proved this clause and reverted it because the caps were sized in the wrong unit; the caps were re-sized first (`c573f3ac1`, 13 rows) and the operator approved arming on 2026-08-14. One block, `:562-600`, no other line touched | 2026-08-14 | **released** |
+| `apps/api/src/services/automation-rule-cap.vitest.test.ts` | CAP — the test at `:101` asserted the OLD clause's SHAPE and passed for ten days while the cap counted zero on prod. Replaced with a three-valued-logic behaviour check, **seen to fail against the old clause first** | 2026-08-14 | **released** |
 
 ## 3 · Shared files — claim before editing
 

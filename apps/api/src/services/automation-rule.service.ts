@@ -562,6 +562,27 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // both live actions and dry-run churn; SPEND is bounded separately by maxValueCentsEur
   // and maxDailyAdSpendCentsEur. The right fix for "the cap is too tight" is a correctly
   // sized cap, not an exempt category.
+  //
+  // CAP (2026-08-14) — and then the exclusion above silently disabled the whole cap.
+  //
+  // `NOT: { errorMessage: 'X' }` compiles to `NOT (errorMessage = 'X')`, which in SQL's
+  // three-valued logic is **NULL — not TRUE** — for the null `errorMessage` that every
+  // SUCCESS and DRY_RUN row carries. So the clause meant to exclude ~693k refusals
+  // excluded every real execution as well. Measured on prod: the old form matched **0**
+  // of 956,629 rows in 60 days; the null-safe form matches **262,925**, still excluding
+  // all 693,704 refusals. No cap had bound anything since 2026-08-04.
+  //
+  // 🔴 This was armed SECOND, on purpose. Turning it on against the caps as they stood
+  // would have capped 18 of 21 enabled rules immediately, 8 of them on AUTO — because
+  // the caps were sized in a different unit from what this counts. One evaluator tick
+  // emits one context PER ACTIVE MARKETPLACE (9 here), so a SCHEDULE rule doing one
+  // logical run per tick writes 9 rows, and 864 in a day; `Daily automation digest`
+  // carried a cap of 1 against 811 rows. The 21 caps were re-sized in the ROWS unit
+  // first (2026-08-14, `docs/2026-08-14-cap-sizing.md` §6, `scripts/_cap-apply.mts`),
+  // and only then was this clause fixed. Reversing that order caps a safety rule.
+  //
+  // When excluding a value from a NULLABLE column anywhere, always spell out the null
+  // branch. This is the fourth place in this codebase the bare `NOT` has cost us.
   if (rule.maxExecutionsPerDay != null) {
     const dayStart = new Date()
     dayStart.setUTCHours(0, 0, 0, 0)
@@ -569,8 +590,12 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       where: {
         ruleId: rule.id,
         startedAt: { gte: dayStart },
-        // Never count refusals — including the pre-ADX.1 rows still on prod.
-        NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' },
+        // Never count refusals — including the pre-ADX.1 rows still on prod. The null
+        // branch is not optional: without it this counts nothing at all.
+        OR: [
+          { errorMessage: null },
+          { errorMessage: { not: 'DAILY_CAP_EXCEEDED' } },
+        ],
       },
     })
     if (todayCount >= rule.maxExecutionsPerDay) {

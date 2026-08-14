@@ -87,7 +87,22 @@ describe('daily cap — the ADX.1 ratchet', () => {
     expect(r.executionId).toBeUndefined()
   })
 
-  it('the cap count excludes prior DAILY_CAP_EXCEEDED rows', async () => {
+  /**
+   * CAP (2026-08-14) — this test used to assert `where.NOT` equalled
+   * `{ errorMessage: 'DAILY_CAP_EXCEEDED' }`, and it PASSED for ten days while the cap it
+   * describes counted literally zero rows on production.
+   *
+   * 🔴 A shape assertion can never catch this defect. `NOT (f = v)` is a perfectly
+   * well-formed predicate; what is wrong with it is its SQL semantics on a nullable column —
+   * three-valued logic makes it NULL, not TRUE, when `f IS NULL`, so those rows are dropped.
+   * The object looked exactly as intended and the query returned nothing.
+   *
+   * So the predicate is now evaluated against representative rows under SQL's own truth
+   * table. The old form fails these; the new one passes. `prisma.count` is mocked, so this is
+   * the closest a unit test can get to running the query — and it is close enough to have
+   * caught the original bug, which the shape check was not.
+   */
+  it('the cap count excludes refusals but COUNTS successes — under SQL three-valued logic', async () => {
     execCount.mockResolvedValueOnce(0)
 
     await evaluateRule({
@@ -96,10 +111,47 @@ describe('daily cap — the ADX.1 ratchet', () => {
     })
 
     expect(execCount).toHaveBeenCalledTimes(1)
-    const where = execCount.mock.calls[0]?.[0]?.where
-    // Without this the ~693k historical rejection rows keep the cap tripped forever.
-    expect(where?.NOT).toEqual({ errorMessage: 'DAILY_CAP_EXCEEDED' })
+    const where = execCount.mock.calls[0]?.[0]?.where as Record<string, unknown> | undefined
     expect(where?.ruleId).toBe('rule-1')
+
+    /** SQL semantics: a row is counted only when the predicate is TRUE. NULL is not TRUE. */
+    const matches = (w: Record<string, unknown> | undefined, errorMessage: string | null): boolean => {
+      const leaf = (clause: unknown): boolean | null => {
+        const c = clause as Record<string, unknown>
+        if ('errorMessage' in c) {
+          const v = c.errorMessage
+          // `{ f: null }` is Prisma's `f IS NULL`, and IS NULL is two-valued: it is the one
+          // form that returns TRUE for a null column. That is why the OR needs it.
+          if (v === null) return errorMessage === null
+          if (typeof v === 'object' && v !== null && 'not' in (v as Record<string, unknown>)) {
+            // `f <> 'x'` is NULL when f IS NULL — the entire bug, in one line.
+            if (errorMessage === null) return null
+            return errorMessage !== (v as { not: string }).not
+          }
+          // `f = 'x'` is likewise NULL, not FALSE, when f IS NULL.
+          if (errorMessage === null) return null
+          return errorMessage === v
+        }
+        return null
+      }
+      if (w && Array.isArray(w.OR)) return w.OR.some((c) => leaf(c) === true)
+      if (w && w.NOT) {
+        const inner = leaf(w.NOT)
+        return inner === null ? false : !inner // NOT NULL is NULL, which is not TRUE
+      }
+      return false
+    }
+
+    // A successful or dry-run execution carries a NULL errorMessage. It MUST be counted —
+    // this is the assertion the old clause failed on 956,629 production rows.
+    expect(matches(where, null)).toBe(true)
+    // A refusal must NOT be counted, or the ~693k historical rows keep every cap tripped.
+    expect(matches(where, 'DAILY_CAP_EXCEEDED')).toBe(false)
+    // Any other failure is real work and still counts.
+    expect(matches(where, 'VALUE_CAP_EXCEEDED')).toBe(true)
+
+    // And the bare form this replaced is provably wrong under the same evaluator.
+    expect(matches({ NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' } }, null)).toBe(false)
   })
 
   it('under cap: the rule executes and records exactly one row', async () => {
