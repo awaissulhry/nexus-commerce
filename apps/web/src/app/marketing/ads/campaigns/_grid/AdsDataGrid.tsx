@@ -176,6 +176,23 @@ export interface AdsDataGridProps<T> {
    */
   onSortChange?: (sort: { key: string; dir: 'asc' | 'desc' } | null) => void
   onFilterChange?: (filters: Record<string, unknown>) => void
+  /**
+   * S4.1 (additive; default off) — the other half of the URL bridge: page and search.
+   *
+   * AR.S0 §7 measured why these two could not be bridged from outside: `page` and `search` live in
+   * private state with no seed and no callback, so `?page=` could not round-trip on any page in
+   * the section. Same contract as the sort/filter pair above — passing a callback turns on
+   * re-sync from the seed prop, and consumers that pass neither are provably untouched.
+   *
+   * The grid's own page resets (a filter click, a search keystroke, a rows-per-page change all
+   * `setPage(1)`) EMIT, so the URL follows the grid rather than disagreeing with it. The emitted
+   * page is the RAW state, never the render-time clamp: while rows load, `pageCount` is 1 and
+   * emitting the clamp would wipe a pasted `?page=5` before the data it names has arrived.
+   */
+  initialPage?: number
+  onPageChange?: (page: number) => void
+  initialSearch?: string
+  onSearchChange?: (q: string) => void
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -201,10 +218,11 @@ export function AdsDataGrid<T>({
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
   onSortChange, onFilterChange,
+  initialPage, onPageChange, initialSearch, onSearchChange,
 }: AdsDataGridProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(() => !!initialSearch)
+  const [search, setSearch] = useState(initialSearch ?? '')
   const [fstate, setFstate] = useState<FilterState>(initialFilters ?? {})
   // ── ER3.1 Filter Library (only when filterPresetsKey is set) ──
   const [presets, setPresets] = useState<Array<{ name: string; values: FilterState }>>([])
@@ -227,7 +245,8 @@ export function AdsDataGrid<T>({
   const [applying, setApplying] = useState(false)
   const editByKey = useMemo(() => new Map((editMode?.fields ?? []).map((f) => [f.key, f])), [editMode])
   const setDraft = (id: string, key: string, v: string) => setDrafts((d) => ({ ...d, [id]: { ...d[id], [key]: v } }))
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(() =>
+    initialPage != null && Number.isFinite(initialPage) && initialPage >= 1 ? Math.floor(initialPage) : 1)
   const [rowsPerPage, setRowsPerPage] = useState(100)
   const [showCustomize, setShowCustomize] = useState(false)
 
@@ -418,6 +437,51 @@ export function AdsDataGrid<T>({
     if (suppressEmit.current) { suppressEmit.current = false; return }
     onFilterChange(fstate)
   }, [fstate, onFilterChange])
+
+  // ── S4.1 — URL-linkable page + search (additive; the same shape as the BID.S0 block above) ─────
+  //
+  // Inward seeds land through the useState INITIALIZERS on mount; these effects exist only for
+  // LATER seed changes (the back button, a pasted link). `bridgeMounted` — declared LAST so the
+  // mount pass sees it false — keeps the mount run from arming `suppress*`, which would otherwise
+  // swallow the first real user action instead of an echo.
+  const bridgeMounted = useRef(false)
+  const seedPage = initialPage != null && Number.isFinite(initialPage) && initialPage >= 1 ? Math.floor(initialPage) : null
+  const suppressPageEmit = useRef(false)
+  useEffect(() => {
+    if (!onPageChange || seedPage == null || !bridgeMounted.current) return
+    suppressPageEmit.current = true
+    setPage(seedPage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedPage])
+  const lastPageEmitted = useRef<number | null>(null)
+  useEffect(() => {
+    if (!onPageChange) return
+    if (lastPageEmitted.current === null) { lastPageEmitted.current = page; return }
+    if (lastPageEmitted.current === page) return
+    lastPageEmitted.current = page
+    if (suppressPageEmit.current) { suppressPageEmit.current = false; return }
+    onPageChange(page)
+  }, [page, onPageChange])
+
+  const seedSearch = initialSearch ?? ''
+  const suppressSearchEmit = useRef(false)
+  useEffect(() => {
+    if (!onSearchChange || !bridgeMounted.current) return
+    suppressSearchEmit.current = true
+    setSearch(seedSearch)
+    if (seedSearch) setSearchOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedSearch])
+  const lastSearchEmitted = useRef<string | null>(null)
+  useEffect(() => {
+    if (!onSearchChange) return
+    if (lastSearchEmitted.current === null) { lastSearchEmitted.current = search; return }
+    if (lastSearchEmitted.current === search) return
+    lastSearchEmitted.current = search
+    if (suppressSearchEmit.current) { suppressSearchEmit.current = false; return }
+    onSearchChange(search)
+  }, [search, onSearchChange])
+  useEffect(() => { bridgeMounted.current = true }, [])
 
   // SF.1 — `userSorted` distinguishes "the grid's default order" from "the operator asked for this
   // order". Third click clears the sort, which also drops back to the default (enabled-first) view.
