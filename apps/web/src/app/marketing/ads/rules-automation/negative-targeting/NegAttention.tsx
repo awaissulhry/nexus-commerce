@@ -303,7 +303,7 @@ export function NegAttention({ scope, push }: NegSlotProps) {
                 <Info size={12} />
                 <span>
                   🔴 <b>The converting-term protection only binds writes we make.</b>{' '}
-                  <b>{num(data.inbound.ungatedNegations)}</b> of this account&apos;s negatives
+                  <b>{num(data.inbound.ungatedNegations)}</b>{' '}of this account&apos;s negatives
                   ({(data.inbound.ungatedShare * 100).toFixed(0)}%) arrived from Amazon by sync and
                   passed no gate at all. This lists the ones created in the last{' '}
                   {data.inbound.lookbackDays} days that block a term with an order behind it.
@@ -317,12 +317,12 @@ export function NegAttention({ scope, push }: NegSlotProps) {
                   <span>
                     <b>Nothing to review in the last {data.inbound.lookbackDays} days.</b>{' '}
                     {data.inbound.candidates > 0
-                      ? <><b>{num(data.inbound.candidates)}</b> negation{data.inbound.candidates === 1 ? '' : 's'} arrived
+                      ? <><b>{num(data.inbound.candidates)}</b>{' '}negation{data.inbound.candidates === 1 ? '' : 's'} arrived
                         from Amazon in that time and none of their terms took an order in the last{' '}
                         {data.window.days} days — so this is a checked result, not an unread one.
                         This count moves with the window.</>
                       : <>No negation arrived from Amazon in that time at all.</>}
-                    {data.inbound.totalUnscoped > 0 && <> <b>{num(data.inbound.totalUnscoped)}</b> elsewhere outside this scope.</>}
+                    {data.inbound.totalUnscoped > 0 && <> <b>{num(data.inbound.totalUnscoped)}</b>{' '}elsewhere outside this scope.</>}
                   </span>
                 </p>
               ) : (
