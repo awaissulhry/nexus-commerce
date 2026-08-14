@@ -114,6 +114,18 @@ export const SQP_COMPLETENESS_RATIO = 0.5
  */
 export const KT_COVERAGE_FLOOR = 5
 
+/**
+ * KT.10 — Amazon's hard ceiling on how many search queries one report returns for one ASIN in one week.
+ *
+ * Measured 2026-08-15 across **395** distinct (market, week, ASIN) cells: **none above 100, 70 at
+ * exactly 100.** That is what bounds terms covered — not the number of ASINs, which is why SQP.5
+ * measured ten ASINs buying all 97 IT watchlist terms while ASINs 11–15 bought zero.
+ *
+ * It belongs on the page because the reach line's denominator ("12 of 250 advertised ASINs") implies
+ * the fix is more ASINs. Ten measured ASINs is already 1,000 query slots against a 97-term watchlist.
+ */
+export const SQP_QUERIES_PER_ASIN_CAP = 100
+
 /** How many recent periods define "a normal week here". A quarter of weekly history. */
 export const SQP_BASELINE_PERIODS = 12
 
@@ -458,6 +470,15 @@ export interface KtRow {
    * Null when the term has no earlier period at all — 19 of 97 in IT.
    */
   deltaPP: number | null
+  /**
+   * KT.10 — how the MARKET moved over the same two periods, in percent.
+   *
+   * 🔴 A share Δ without this is ambiguous in the way that matters: **+0.19 pp reads as "we improved"
+   * when it can equally mean "the market shrank underneath us"** — and right now it is mostly the
+   * second. Measured 2026-08-15, IT like-for-like 07-12 → 08-02: market volume **−46 %** while our
+   * impressions fell only 10 %, so our share rose 0.296 % → 0.490 %. Good news, different fact.
+   */
+  marketDeltaPct: number | null
   deltaGapDays: number | null
   priorShare: number | null
   priorPeriod: string | null
@@ -678,7 +699,10 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
           searchQuery: { in: visibleTerms },
           ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
         },
-        select: { searchQuery: true, startDate: true, impressionShare: true },
+        // KT.10 — `searchQueryVolume` joins the select so the share Δ can carry its DENOMINATOR.
+        // It is per (query, week) and independent of ASIN, so comparing it for the same term across
+        // the same two periods the Δ already uses is like-for-like by construction.
+        select: { searchQuery: true, startDate: true, impressionShare: true, searchQueryVolume: true },
       })
       : Promise.resolve([]),
     // KT.3 · spend on the exact query text, in the SAME week the share is measured
@@ -767,14 +791,68 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   }
 
   /** newest period before the chosen one that holds each term, with that period's best-ASIN share */
-  const prior = new Map<string, { period: Date; share: number }>()
+  const prior = new Map<string, { period: Date; share: number; volume: number }>()
   for (const r of priorRows) {
     const k = norm(r.searchQuery)
     const share = Number(r.impressionShare)
+    const volume = r.searchQueryVolume ?? 0
     const cur = prior.get(k)
-    if (!cur || +r.startDate > +cur.period) prior.set(k, { period: r.startDate, share })
-    else if (+r.startDate === +cur.period && share > cur.share) prior.set(k, { period: cur.period, share })
+    if (!cur || +r.startDate > +cur.period) prior.set(k, { period: r.startDate, share, volume })
+    else if (+r.startDate === +cur.period && share > cur.share) prior.set(k, { period: cur.period, share, volume })
   }
+  // ── KT.10 — what the MARKET did, like-for-like ────────────────────────────────────────────────
+  //
+  // 🔴 The health line described thinness as feed silence. Measured 2026-08-15, the dominant cause is
+  // not silence: IT's search volume fell 46 % between 07-12 and 08-02 while our impressions fell only
+  // 10 %, so our share ROSE 0.296 % → 0.490 %. An operator reading "the feed is thin" concludes the
+  // opposite of what happened.
+  //
+  // 🔴 It compares against the period the Δ COLUMN predominantly uses — the modal `priorPeriod` across
+  // measured terms — not the immediately preceding stored week. A first cut used the latter and
+  // returned null in IT and DE, because the week before 08-02 is 07-26, which holds 8 IT rows: the
+  // overlap fell below the five-pair floor. Worse than null, it would have made the line and the
+  // column describe different comparisons on the same screen, which is the defect KT.7 paid for.
+  //
+  // LIKE-FOR-LIKE, and it has to be: this sums only (searchQuery, asin) pairs present in BOTH periods.
+  // An aggregate over all rows folds coverage change into market change.
+  const marketMovement = await (async () => {
+    if (!chosen.start) return null
+    const tally = new Map<number, number>()
+    for (const p of prior.values()) tally.set(+p.period, (tally.get(+p.period) ?? 0) + 1)
+    const modal = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (!modal) return null
+    const prevStart = new Date(modal[0])
+    const rows = await prisma.searchQueryPerformance.findMany({
+      where: { marketplace: market, reportPeriod: 'WEEK', startDate: { in: [chosen.start, prevStart] } },
+      select: { startDate: true, searchQuery: true, asin: true, searchQueryVolume: true, impressionsTotal: true, impressionsBrand: true },
+    })
+    const k = (r: (typeof rows)[number]) => `${r.searchQuery}|${r.asin ?? ''}`
+    const now = new Map(rows.filter((r) => +r.startDate === +chosen.start!).map((r) => [k(r), r]))
+    const was = new Map(rows.filter((r) => +r.startDate === +prevStart).map((r) => [k(r), r]))
+    const both = [...was.keys()].filter((x) => now.has(x))
+    if (both.length < 5) return null   // fewer than five pairs is an anecdote, not a movement
+    const sum = (m: typeof now, f: (r: (typeof rows)[number]) => number) =>
+      both.reduce((t, x) => t + (f(m.get(x)!) || 0), 0)
+    const volWas = sum(was, (r) => r.searchQueryVolume ?? 0), volNow = sum(now, (r) => r.searchQueryVolume ?? 0)
+    const impWas = sum(was, (r) => r.impressionsTotal ?? 0), impNow = sum(now, (r) => r.impressionsTotal ?? 0)
+    const ourWas = sum(was, (r) => r.impressionsBrand ?? 0), ourNow = sum(now, (r) => r.impressionsBrand ?? 0)
+    return {
+      priorPeriod: iso(prevStart), pairs: both.length,
+      volumeDeltaPct: volWas > 0 ? ((volNow - volWas) / volWas) * 100 : null,
+      ourImpressionsDeltaPct: ourWas > 0 ? ((ourNow - ourWas) / ourWas) * 100 : null,
+      sharePriorPct: impWas > 0 ? (100 * ourWas) / impWas : null,
+      shareNowPct: impNow > 0 ? (100 * ourNow) / impNow : null,
+      /**
+       * 🔴 Whether the newest period is SETTLED, because that decides how much weight this carries.
+       * SQP.3 measured weeks frozen by ~25 days. Split by window: IT's 07-12 → 07-19 comparison (both
+       * settled) shows volume −10 %, while 07-19 → 08-02 shows −40 % — so the headline decline sits
+       * mostly in the newer, possibly-still-filling week. The page says that rather than asserting a
+       * halved market as fact.
+       */
+      newestIsSettled: (Date.now() - +chosen.start) / 86_400_000 >= 25,
+    }
+  })()
+
   const spendByTerm = new Map(spendRows.map((r) => [norm(r.query), {
     cents: Math.round(Number(r._sum.costMicros ?? 0n) / 10_000),
     clicks: r._sum.clicks ?? 0,
@@ -802,7 +880,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         bestAsin: null, shareBound: null,
         ad: groups ? { bidOnTerm: true, adAsins: adAsins.size, coveredAdAsins: 0, bestAsinAdvertisesTerm: false } : null,
         // A row with no share has no Δ BY CONSTRUCTION — never render one as a separate absence.
-        deltaPP: null, deltaGapDays: null, priorShare: null, priorPeriod: null,
+        deltaPP: null, marketDeltaPct: null, deltaGapDays: null, priorShare: null, priorPeriod: null,
         // Spend is not conditional on the share: we can pay for a term Brand Analytics never reports.
         spendCents: spend?.cents ?? null, clicks: spend?.clicks ?? null, orders: spend?.orders ?? null,
         measured: false, branded,
@@ -835,6 +913,11 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         }
         : null,
       deltaPP: p ? (best.impressionShare - p.share) * 100 : null,
+      // Same term, same two periods as the Δ above. Null when the prior period recorded no volume,
+      // rather than a fabricated 0 % or an Infinity from dividing by nothing.
+      marketDeltaPct: p && p.volume > 0 && best.searchQueryVolume != null
+        ? ((best.searchQueryVolume - p.volume) / p.volume) * 100
+        : null,
       deltaGapDays: p ? Math.round((+chosen.start! - +p.period) / 86_400_000) : null,
       priorShare: p?.share ?? null,
       priorPeriod: iso(p?.period ?? null),
@@ -1054,6 +1137,13 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
        *  health line still explains the feed's state in rows. */
       asins: chosen.asins,
       floorAsins: chosen.floorAsins,
+      /** KT.10 — like-for-like market movement against the previous stored period; null when fewer
+       *  than five (query, ASIN) pairs overlap, because that is an anecdote rather than a movement. */
+      market: marketMovement,
+      /** KT.10 — Amazon returns at most 100 queries per ASIN per week. Measured across 395 cells:
+       *  none above 100, 70 at exactly 100. This is the real ceiling on terms covered, not the ASIN
+       *  count — so a reach line that reads "12 of 250" invites exactly the wrong fix. */
+      queriesPerAsinCap: SQP_QUERIES_PER_ASIN_CAP,
       /** KT.8 — the best coverage any period inside the lookback reached, so a refusal can say whether
        *  this week is thin or whether the market has never been measured well enough. */
       bestAsinsInWindow,

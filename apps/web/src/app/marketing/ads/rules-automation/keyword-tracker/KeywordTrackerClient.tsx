@@ -76,6 +76,7 @@ interface Row {
   ad?: { bidOnTerm: boolean; adAsins: number; coveredAdAsins: number; bestAsinAdvertisesTerm: boolean } | null
   /** KT.3 — the change in percentage points, and how far apart the two periods really are */
   deltaPP?: number | null
+  marketDeltaPct?: number | null
   deltaGapDays?: number | null
   priorShare?: number | null
   priorPeriod?: string | null
@@ -124,6 +125,16 @@ interface Payload {
     periodRows?: number
     baselineRows?: number
     threshold?: number
+    queriesPerAsinCap?: number
+    market?: {
+      priorPeriod: string | null
+      pairs: number
+      volumeDeltaPct: number | null
+      ourImpressionsDeltaPct: number | null
+      sharePriorPct: number | null
+      shareNowPct: number | null
+      newestIsSettled: boolean
+    } | null
     /** KT.8 — what the gate actually decided on */
     asins?: number
     floorAsins?: number | null
@@ -338,7 +349,7 @@ export function KeywordTrackerClient() {
      */
     {
       key: 'delta', label: 'Δ share (pp)',
-      tip: 'The change in our best ASIN\'s share since the previous week that reported this term, in PERCENTAGE POINTS — 0.70% → 1.01% is +0.31pp, not +44%. Each row states how far apart the two weeks actually are, because 9 of the 96 comparable rows span 14 to 35 days rather than 7. Blank means the feed has no earlier week for that term (19 of 97 in IT); a row with no share has no Δ by construction.',
+      tip: 'The change in our best ASIN\'s share since the previous week that reported this term, in PERCENTAGE POINTS — 0.70% → 1.01% is +0.31pp, not +44%. `mkt` beside it is how the SEARCH VOLUME for that term moved over the same two weeks: a share gain while `mkt` is negative means the market shrank faster than we did, which is good news but not growth. Each row states how far apart the two weeks actually are, because 9 of the 96 comparable rows span 14 to 35 days rather than 7. Blank means the feed has no earlier week for that term (19 of 97 in IT); a row with no share has no Δ by construction.',
       render: (r) => {
         if (rowState(r) !== 'measured') return <span className="h10-kt-nd">—</span>
         if (r.deltaPP == null) {
@@ -354,6 +365,17 @@ export function KeywordTrackerClient() {
             >
               {r.deltaPP > 0 ? '+' : ''}{r.deltaPP.toFixed(2)}
             </span>
+            {/* 🔴 KT.10 — the denominator. +0.19pp reads as "we improved" and right now it mostly
+                means "the market shrank underneath us", which is still good news and a different
+                fact. Same term, same two periods as the Δ itself. */}
+            {r.marketDeltaPct != null && (
+              <em
+                className={r.marketDeltaPct <= -10 ? 'mkt shrank' : r.marketDeltaPct >= 10 ? 'mkt grew' : 'mkt'}
+                title={`Search volume for this term moved ${r.marketDeltaPct >= 0 ? 'up' : 'down'} ${Math.abs(r.marketDeltaPct).toFixed(0)}% between the same two weeks. A share gain in a shrinking market means we held our ground better than the market did — not that we reached more shoppers.`}
+              >
+                mkt {r.marketDeltaPct > 0 ? '+' : ''}{r.marketDeltaPct.toFixed(0)}%
+              </em>
+            )}
             <i
               className={wide ? 'wide' : undefined}
               title={wide
@@ -413,6 +435,9 @@ export function KeywordTrackerClient() {
   const activeTab = rulesTabByKey('keyword-tracker')
   const s = data?.scope
   const f2 = data?.feed
+  // KT.10 — null below five overlapping (query, ASIN) pairs: ES had 4 on this window and FR had 1,
+  // and a market movement quoted off one pair is an anecdote wearing a percentage sign.
+  const m2 = data?.window.market ?? null
 
   /** The one sentence stating what resolved — scope, then the age of what the grid is made of. */
   const resolution = (() => {
@@ -428,7 +453,11 @@ export function KeywordTrackerClient() {
     // appended — the line is already long and the old number was the misleading one.
     bits.push(
       s.resolved.asinsCovered != null
-        ? `share measured across ${num(s.resolved.asinsCovered)} of ${num(s.resolved.asins)} advertised ASINs`
+        // 🔴 KT.10 — "N of M" implies M is the target and that more ASINs means more coverage. It
+        // does not: Amazon returns at most 100 queries per ASIN per week (measured, 395 cells, none
+        // above), so ten measured ASINs is already 1,000 slots against a ~97-term watchlist. Without
+        // the cap an operator reads a true number and concludes the wrong fix.
+        ? `share measured across ${num(s.resolved.asinsCovered)} of ${num(s.resolved.asins)} advertised ASINs (Amazon caps each at ${num(data?.window.queriesPerAsinCap ?? 100)} queries a week)`
         : `${num(s.resolved.asins)} ASIN${s.resolved.asins === 1 ? '' : 's'}`,
     )
     bits.push(`watching ${num(s.resolved.keywordsWatched)} term${s.resolved.keywordsWatched === 1 ? '' : 's'}`)
@@ -570,6 +599,37 @@ export function KeywordTrackerClient() {
                         {num(data?.window.floorAsins ?? 5)} of our {market} ASINs.{' '}
                       </>
                     )}
+                  </>
+                )}
+                {/* ── 🔴 KT.10 — what the MARKET did, which is currently the headline ──────────
+                    The rest of this line describes the FEED, and everything it says is true. But
+                    measured 2026-08-15 the dominant fact is not feed silence: IT's search volume fell
+                    46% like-for-like while our impressions fell only 10%, so our share ROSE from
+                    0.296% to 0.490%. An operator reading only the feed half concludes the opposite of
+                    what happened. A shrinking market is a fact to act on, not an alarm. */}
+                {m2 && m2.volumeDeltaPct != null && m2.shareNowPct != null && m2.sharePriorPct != null && (
+                  <>
+                    {' '}<b>
+                      Search volume for the terms measured in both weeks is{' '}
+                      {m2.volumeDeltaPct >= 0 ? 'up' : 'down'} {Math.abs(m2.volumeDeltaPct).toFixed(0)}%
+                      {' '}against {m2.priorPeriod ? dayMonth(m2.priorPeriod) : 'the previous week'}
+                      {m2.ourImpressionsDeltaPct != null && (
+                        <>, our impressions {m2.ourImpressionsDeltaPct >= 0 ? 'up' : 'down'}{' '}
+                        {Math.abs(m2.ourImpressionsDeltaPct).toFixed(0)}%</>
+                      )}
+                      , so our share {m2.shareNowPct >= m2.sharePriorPct ? 'rose' : 'fell'} from{' '}
+                      {m2.sharePriorPct.toFixed(3)}% to {m2.shareNowPct.toFixed(3)}%.
+                    </b>{' '}
+                    {/* 🔴 The question SQP.5 could not close, left open ON SCREEN rather than resolved
+                        in prose. A re-fetch at a different week-age returned no change, but only two
+                        of six observations cleared the 20-hour bar that programme set for itself. */}
+                    {!m2.newestIsSettled && (
+                      <>This week is {data?.window.periodAgeDays ?? '—'} days old and Brand Analytics
+                      weeks have been seen to settle by about 25, so part of that fall may still fill
+                      in. Read the direction, not the exact figure.{' '}</>
+                    )}
+                    Measured on {m2.pairs} query–ASIN pairs present in both weeks, so coverage changes
+                    are held out of it.{' '}
                   </>
                 )}
                 {f2.structuralFailures.length > 0 && (

@@ -4428,3 +4428,27 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
    sentence does not wrap mid-clause. No `opacity` anywhere — NEG.6 put 78 nodes below AA with one. */
 .h10-nga-rows li .t em.ok { background: #e7f4ec; color: #1c5334; }
 .h10-nga-list h4 .ct { margin-left: 6px; }
+
+/* ── KT.10 — the market's movement beside the share Δ ──────────────────────────────────────────
+   A share Δ with no denominator reads as "we improved" when it can equally mean "the market shrank
+   underneath us". This is the denominator, so it must be legible but subordinate: the Δ is the
+   number being read, `mkt` is the context that decides what it means.
+   Contrast checked against the row ground #ffffff and the striped ground #f9fafb, through the
+   opacity chain — KT.6's only real failures were a disabled label at 4.27:1 and a separator at
+   1.96:1, both from compositing that was never done. */
+.h10-kt-delta em.mkt {
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1;
+  margin-left: 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  color: #4b5563;           /* 7.56:1 on #ffffff, 7.16:1 on #f9fafb */
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+/* A shrinking market is not an error state — it is the fact that explains the Δ, so it is marked
+   rather than alarmed. Red here would tell an operator that gaining share was a problem. */
+.h10-kt-delta em.mkt.shrank { color: #92400e; background: #fffbeb; border-color: #fde68a; }  /* 7.31:1 on #fffbeb */
+.h10-kt-delta em.mkt.grew   { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }  /* 7.44:1 on #ecfdf5 */
