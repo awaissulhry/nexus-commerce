@@ -166,10 +166,26 @@ export function KeywordHarvestClient() {
   const [reloadTick, setReloadTick] = useState(0)
   const [copied, setCopied] = useState(false)
 
+  /**
+   * 🔴 HV.10 — `market` is the one key where `'all'` is a VALUE, not an absence.
+   *
+   * Every other filter here means "no filter" when it reads `all` — `status`, `kind`, `dest`,
+   * `matched` — so dropping the param is right for them and keeps the URL short. `market` is not
+   * one of those: this page's read accepts `market=all` as a real scope (`HV_MARKET_ALL`) covering
+   * every marketplace, and an absent `?market=` means something *different* — fall back to the
+   * console's persisted choice, per the note on `ctxMarket` above.
+   *
+   * Deleting it on `'all'` therefore made "All markets" unselectable. Measured on prod 2026-08-14:
+   * choosing it wrote no param, the resolver fell through to the context market, and the header
+   * snapped back to 🇫🇷 France — which has **0 candidates**, while `all` has 6. The operator landed
+   * on an empty page and the one control that would have shown them data silently refused. The
+   * picker was not broken; it was being overruled one line later.
+   */
+  const ALL_IS_A_VALUE = new Set(['market'])
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries(patch)) {
-      if (!v || v === 'all') next.delete(k)
+      if (!v || (v === 'all' && !ALL_IS_A_VALUE.has(k))) next.delete(k)
       else next.set(k, v)
     }
     const qs = next.toString()
