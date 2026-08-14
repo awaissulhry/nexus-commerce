@@ -489,7 +489,57 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
       })
       if (res.denied) outcomes.push({ ...base, outcome: 'refused', reason: res.denied.reason, externalNegativeKeywordId: null })
       else if (res.alreadyExisted) outcomes.push({ ...base, outcome: 'already_existed', reason: null, externalNegativeKeywordId: null })
-      else outcomes.push({ ...base, outcome: 'created', reason: null, externalNegativeKeywordId: res.externalNegativeKeywordId })
+      else {
+        // 🔴 MIRROR THE LOCAL ROW AND AUDIT IT. `createNegative` only pushes to Amazon — it reads
+        // from the database and never writes to it (see its four `findFirst` calls, all the
+        // idempotency probe). Without this block the negation would exist at Amazon, arrive back
+        // days later by the v1 sync, and land with NO create log — which means:
+        //
+        //   · NEG.8's ledger would not show it, so "who negated this and why" is unanswerable;
+        //   · NEG.9's third detector, whose fourth condition is "no create log", would classify
+        //     OUR OWN write as "negated outside Nexus" and put it in the review queue.
+        //
+        // `applyHarvest` has always done this ("push to Amazon (gated, via createNegative) THEN
+        // mirror a local row", ads-harvest.service.ts:249). This path did not, and it was found
+        // pre-flighting the first real gram negation rather than after it.
+        let mirroredId: string | null = null
+        try {
+          const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: extAdGroupId }, select: { id: true } })
+          if (ag) {
+            const t = await prisma.adTarget.create({
+              data: {
+                adGroupId: ag.id, kind: 'KEYWORD', expressionType: 'NEGATIVE_PHRASE',
+                expressionValue: gram, bidCents: 0, status: 'ENABLED',
+                externalTargetId: res.externalNegativeKeywordId, isNegative: true, negativeLevel: 'AD_GROUP',
+              },
+            })
+            mirroredId = t.id
+            await prisma.advertisingActionLog.create({
+              data: {
+                userId: req.actor, actionType: 'create_negative_keyword', entityType: 'AD_TARGET',
+                entityId: t.id, payloadBefore: {},
+                payloadAfter: { keywordText: gram, matchType: 'NEGATIVE_PHRASE', scope: 'AD_GROUP', externalTargetId: res.externalNegativeKeywordId, campaign: c.name },
+                amazonResponseStatus: 'SUCCESS',
+                // Evidence: WHY this gram, in the operator's own units.
+                evidence: {
+                  note: `gram negation: "${gram}" cost ${(row.costCents / 100).toFixed(2)} EUR over ${row.clicks} clicks with 0 orders in ${page.window.days}d; blocks ${row.catches} search terms (contiguous token match); chosen scope ${c.name}`,
+                  metric: 'gramSpendNoOrders',
+                  observed: row.costCents, windowDays: page.window.days, termsBlocked: row.catches,
+                } as never,
+              },
+            })
+          }
+        } catch (e) {
+          // A failed mirror must not be reported as a clean create — the negation IS at Amazon.
+          outcomes.push({ ...base, outcome: 'failed', reason: `created at Amazon but the local mirror failed: ${(e as Error).message}`, externalNegativeKeywordId: res.externalNegativeKeywordId })
+          continue
+        }
+        if (!mirroredId) {
+          outcomes.push({ ...base, outcome: 'failed', reason: 'created at Amazon but no local ad group matched, so no record was written', externalNegativeKeywordId: res.externalNegativeKeywordId })
+          continue
+        }
+        outcomes.push({ ...base, outcome: 'created', reason: null, externalNegativeKeywordId: res.externalNegativeKeywordId })
+      }
     } catch (e) {
       outcomes.push({ ...base, outcome: 'failed', reason: (e as Error).message, externalNegativeKeywordId: null })
     }
