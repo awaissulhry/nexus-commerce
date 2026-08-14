@@ -139,10 +139,32 @@ export async function runSqpIngestOnce(): Promise<string> {
   // constant `failed=5` hid everything behind it.
   const eligible: Array<{ mkt: string; asins: string[] }> = []
   const skipped: string[] = []
+  const dormant: string[] = []
   for (const mkt of candidates) {
+    // ── SQP.5 — a market with ZERO ACTIVE listings cannot be measured ──────────────────────────
+    //
+    // 🔴 Measured 2026-08-15: FR holds 0 ACTIVE of 133 listings and its ten nightly reports bought
+    // 3 producing ASINs and 11 rows — 2 of 8 watchlist terms. KT.8's floor refuses FR's page anyway,
+    // and its banner already names listing sync as the cause. Amazon cannot report Brand Analytics
+    // for ASINs that are not listed active, so those ten reports are spent to re-learn that.
+    //
+    // FR was NOT always like this: 106 rows on 06-14, 42 on 07-12, then 4 on 07-19. The break dates
+    // to between 2026-07-12 and 2026-07-19 and belongs to whoever owns listing sync.
+    //
+    // 🔴 SELF-RESTORING, deliberately. The cost of stopping is that FR accumulates no history until
+    // the sync is fixed, and a diary note is how that becomes permanent. This is a live query: the
+    // night FR's ACTIVE count goes above zero, it is requested again with no one having to remember.
+    const activeListings = await prisma.channelListing.count({
+      where: { channel: 'AMAZON', listingStatus: 'ACTIVE', OR: [{ marketplace: mkt }, { region: mkt }] },
+    })
+    if (activeListings === 0) { dormant.push(mkt); continue }
+
     const asins = await ourAsinsForMarketplace(mkt, SQP_ASINS_PER_MARKET)
     if (asins.length === 0) skipped.push(mkt)
     else eligible.push({ mkt, asins })
+  }
+  if (dormant.length) {
+    logger.info('[sqp-ingest] markets DORMANT — zero ACTIVE listings, nothing to measure', { dormant })
   }
   if (skipped.length) {
     logger.info('[sqp-ingest] markets skipped — no Amazon ASINs held there', { skipped, candidates: candidates.length })
@@ -237,6 +259,7 @@ export async function runSqpIngestOnce(): Promise<string> {
     }
     const summary =
       `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
+      `${dormant.length ? ` dormant=${dormant.length}[${dormant.join(',')}] (0 ACTIVE listings — self-restoring)` : ''}` +
       ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
       ` · aim=${yieldOrder ? `yield-ordered(${explored} exploring)` : 'off'}` +
       ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
