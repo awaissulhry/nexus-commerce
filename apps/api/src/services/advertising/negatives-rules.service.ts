@@ -378,20 +378,29 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
 
   // ── §6 — is the cap counter trustworthy? Measured, not assumed. ─────────────────────────────
   //
-  // `automation-rule.service.ts:573` counts with `NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' }`.
-  // In SQL that is `NOT (errorMessage = 'X')`, which is NULL — and therefore false — for every row
-  // where errorMessage IS NULL. A SUCCESS row carries a null errorMessage, so successes are
-  // excluded from the count that is supposed to stop them.
+  // 🔴 CAP (2026-08-14) — this block used to hard-code its OWN copy of the engine's clause and
+  // measure that. `NOT (errorMessage = 'X')` is NULL — never TRUE — for a null column, which is a
+  // property of SQL, not of our engine. So the panel could never report anything but "broken", and
+  // when the engine WAS repaired on 2026-08-14 this page went on telling operators the counter was
+  // broken while it was holding on production. A surface that reports on a code path must read the
+  // code path, not a copy of it.
+  //
+  // Both now import `notCapRefusal()` from `automation-cap-predicate.ts`, so this measures the
+  // predicate the engine actually runs. The bare form is still measured — to show the blind spot it
+  // closed — but it comes from the same module, named so it cannot be reached for by accident.
+  const { notCapRefusal, bareNotFormDoNotUse } = await import('../automation-cap-predicate.js')
   const succeededRows = await prisma.automationRuleExecution.count({ where: { errorMessage: null, startedAt: { gte: since } } })
-  const nonCapRows = await prisma.automationRuleExecution.count({
-    where: { startedAt: { gte: since }, NOT: { errorMessage: 'DAILY_CAP_EXCEEDED' } },
-  })
-  const counterDropsNulls = succeededRows > 0 && nonCapRows < succeededRows
+  const [engineClauseRows, bareFormRows] = await Promise.all([
+    prisma.automationRuleExecution.count({ where: { startedAt: { gte: since }, ...notCapRefusal() } }),
+    prisma.automationRuleExecution.count({ where: { startedAt: { gte: since }, ...bareNotFormDoNotUse() } }),
+  ])
+  const counterDropsNulls = succeededRows > 0 && engineClauseRows < succeededRows
+  const blindSpotClosed = engineClauseRows - bareFormRows
   const capCounter = {
     trustworthy: !counterDropsNulls,
     note: counterDropsNulls
-      ? `Still broken. ${succeededRows.toLocaleString('en-IE')} executions in ${ACTIVITY_WINDOW_DAYS} days carry no errorMessage, but the cap counter's \`NOT errorMessage = 'DAILY_CAP_EXCEEDED'\` matches only ${nonCapRows.toLocaleString('en-IE')} of them — SQL three-valued logic drops every NULL. The counts on this page come from AutomationRuleExecution directly and do not use it.`
-      : `The cap counter's NOT-clause matched ${nonCapRows.toLocaleString('en-IE')} rows against ${succeededRows.toLocaleString('en-IE')} null-error rows, so it is not dropping NULLs on this data.`,
+      ? `🔴 Still broken. ${succeededRows.toLocaleString('en-IE')} executions in ${ACTIVITY_WINDOW_DAYS} days carry no errorMessage, but the predicate the engine runs matches only ${engineClauseRows.toLocaleString('en-IE')} of them. The counts on this page come from AutomationRuleExecution directly and do not use it.`
+      : `Fixed 2026-08-14, and this line measures the engine's own predicate rather than a copy of it. It matches ${engineClauseRows.toLocaleString('en-IE')} of the ${succeededRows.toLocaleString('en-IE')} null-error executions in ${ACTIVITY_WINDOW_DAYS} days, while still excluding every cap refusal. The bare \`NOT errorMessage = 'DAILY_CAP_EXCEEDED'\` it replaced matches ${bareFormRows.toLocaleString('en-IE')} — a blind spot of ${blindSpotClosed.toLocaleString('en-IE')} rows, which is why no cap bound anything between 2026-08-04 and 2026-08-14.`,
   }
 
   // ── §5 — the six conditions, each COMPUTED ─────────────────────────────────────────────────

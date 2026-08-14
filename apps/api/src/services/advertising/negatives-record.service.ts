@@ -438,10 +438,16 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
         nullErrorRows,
         brokenClauseMatches,
         blindSpot,
-        counterBroken: blindSpot > 0,
-        note: blindSpot > 0
-          ? `The engine's own cap counter (\`automation-rule.service.ts:573\`) uses \`NOT errorMessage = 'DAILY_CAP_EXCEEDED'\`, which in SQL is NULL — not true — for the ${nullErrorRows.toLocaleString('en-IE')} rows where errorMessage IS NULL. It matches ${brokenClauseMatches.toLocaleString('en-IE')} rows and cannot see ${blindSpot.toLocaleString('en-IE')}. The counts here use the null-safe form.`
-          : 'The cap counter is not dropping NULLs on this data.',
+        // 🔴 CAP (2026-08-14) — `counterBroken` used to be `blindSpot > 0`, and blindSpot is the gap
+        // between the null-safe form and the bare `NOT`. That gap is a property of SQL and never
+        // closes, so this flag was permanently true and went on naming a line of the engine that no
+        // longer says what it quoted. The engine's predicate is now imported (see
+        // `automation-cap-predicate.ts`), so "broken" means what it says: the predicate the engine
+        // runs cannot see the account's real work.
+        counterBroken: nullErrorRows > 0 && nullSafeMatches < nullErrorRows,
+        note: nullErrorRows > 0 && nullSafeMatches < nullErrorRows
+          ? `The engine's cap counter cannot see ${(nullErrorRows - nullSafeMatches).toLocaleString('en-IE')} of the ${nullErrorRows.toLocaleString('en-IE')} rows where errorMessage IS NULL. The counts here use the null-safe form.`
+          : `The cap counter was repaired on 2026-08-14 and is enforcing again. It matches ${nullSafeMatches.toLocaleString('en-IE')} rows while excluding all ${capRefusals.toLocaleString('en-IE')} cap refusals; the bare \`NOT errorMessage = 'DAILY_CAP_EXCEEDED'\` it replaced matches ${brokenClauseMatches.toLocaleString('en-IE')}, a blind spot of ${blindSpot.toLocaleString('en-IE')} rows that left every cap unenforced between 2026-08-04 and 2026-08-14.`,
       },
     },
     alerts: NEG_ALERT_EVENTS.map((e) => {

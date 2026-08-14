@@ -41,6 +41,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { notCapRefusal } from './automation-cap-predicate.js'
 
 // ─── Conditions DSL ───────────────────────────────────────────────
 
@@ -592,10 +593,12 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
         startedAt: { gte: dayStart },
         // Never count refusals — including the pre-ADX.1 rows still on prod. The null
         // branch is not optional: without it this counts nothing at all.
-        OR: [
-          { errorMessage: null },
-          { errorMessage: { not: 'DAILY_CAP_EXCEEDED' } },
-        ],
+        //
+        // Imported, not spelled out here, because the Negative Targeting page reports on
+        // THIS predicate. It used to keep its own copy of the clause, which meant it was
+        // measuring SQL rather than the engine and went on calling the counter broken for
+        // hours after it was fixed. One implementation, both readers.
+        ...notCapRefusal(),
       },
     })
     if (todayCount >= rule.maxExecutionsPerDay) {
