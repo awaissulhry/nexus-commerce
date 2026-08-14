@@ -44,6 +44,13 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 /** Per-ASIN reports are slow and serialised at Amazon, so the batch stays bounded. */
 const SQP_ASINS_PER_MARKET = 10
 
+/**
+ * How deep into the pool rotation may look. NOT a widening — the nightly budget stays
+ * `SQP_ASINS_PER_MARKET`; this only bounds the set rotation chooses from. Measured pool sizes are
+ * DE 208 / ES 121 / FR 113 / IT 252, so 250 reaches all of them.
+ */
+const SQP_ROTATION_POOL = Math.max(SQP_ASINS_PER_MARKET, Number(process.env.NEXUS_SQP_ROTATION_POOL) || 250)
+
 /** One market's outcome, as `ingestSqp` reports it — plus the case where the market itself threw. */
 export interface SqpMarketOutcome {
   marketplace: string
@@ -156,11 +163,48 @@ export async function runSqpIngestOnce(): Promise<string> {
     const mkRows = await prisma.marketplace.findMany({ where: { channel: 'AMAZON' }, select: { code: true, marketplaceId: true } })
     const idOf = new Map(mkRows.filter((m) => m.marketplaceId).map((m) => [m.code, m.marketplaceId!]))
 
+    // ── SQP.3 Phase C — rotation, OFF by default ────────────────────────────────────────────────
+    // Measured 2026-08-13: the pool is 694 distinct ASINs across the four live markets and this pass
+    // asks for the same 40 every night — 5.8% coverage, with ~654 ASINs never sampled once. Phase B's
+    // settle rule frees slots, and rotation spends them on ASINs that have never been asked for, at
+    // the SAME nightly budget.
+    //
+    // 🔴 Default OFF because it changes which ASINs the account samples, and the brief gates widening
+    // on approval. Turning it on is one env var; nothing else has to change.
+    const rotationOn = envEnabled('NEXUS_SQP_ROTATION')
+    const { selectNightlyAsins, selectionSummary } = await import('../services/advertising/sqp-selection.js')
+    const { settledAsins } = await import('../services/advertising/sqp-async.service.js')
+
     const parts: string[] = []
-    let created = 0, failed = 0, outstanding = 0, settled = 0
-    for (const { mkt, asins } of eligible) {
+    let created = 0, failed = 0, outstanding = 0, settled = 0, rotated = 0
+    for (const { mkt, asins: coreAsins } of eligible) {
       const marketplaceId = idOf.get(mkt)
-      if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += asins.length; continue }
+      if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += coreAsins.length; continue }
+
+      let asins = coreAsins
+      if (rotationOn) {
+        const pool = await ourAsinsForMarketplace(mkt, SQP_ROTATION_POOL)
+        const hist = await prisma.sqpReportRequest.groupBy({
+          by: ['asin'], where: { marketplace: mkt, reportPeriod: 'WEEK', asin: { in: pool } },
+          _max: { requestedAt: true },
+        })
+        const lastAsked = new Map(hist.map((h) => [h.asin, h._max.requestedAt ?? null]))
+        const forWeek = await prisma.sqpReportRequest.findMany({
+          where: { marketplace: mkt, reportPeriod: 'WEEK', startDate: win.start, asin: { in: pool } },
+          select: { asin: true, status: true, collectedAt: true, rowsChanged: true },
+        })
+        const sel = selectNightlyAsins({
+          candidates: pool.map((asin, rank) => ({ asin, rank, lastRequestedAt: lastAsked.get(asin) ?? null })),
+          budget: coreAsins.length,
+          coreCount: coreAsins.length,
+          settled: settledAsins(forWeek.filter((r) => r.status === 'INGESTED')),
+          outstanding: new Set(forWeek.filter((r) => r.status === 'PENDING' || r.status === 'DONE').map((r) => r.asin)),
+        })
+        asins = sel.chosen
+        rotated += sel.slotsFreedToRotation
+        parts.push(selectionSummary(mkt, sel, pool.length))
+      }
+
       const r = await requestSqpReports({ marketplaceCode: mkt, marketplaceId, asins, period: 'WEEK', start: win.start, end: win.end })
       created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding; settled += r.alreadySettled
       parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.alreadySettled ? ` (${r.alreadySettled} settled)` : ''}${r.failed ? ` ${r.failed} failed` : ''}`)
@@ -168,6 +212,7 @@ export async function runSqpIngestOnce(): Promise<string> {
     const summary =
       `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
       ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
+      ` · rotation=${rotationOn ? `on(${rotated} freed slots reused)` : 'off'}` +
       ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
       (parts.length ? ` · ${parts.join(' · ')}` : '')
     // 🔴 `rows=0` here is CORRECT and must not be treated as the old zero-row failure: this pass
