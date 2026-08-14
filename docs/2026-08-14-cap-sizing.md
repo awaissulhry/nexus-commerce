@@ -669,6 +669,44 @@ their own.
 
 ---
 
+## 10e · ✅ STEP 7 — the notification path
+
+§8 said this belonged *after* the caps, because silencing it first would remove the evidence that
+the caps were wrong. The caps are now armed and holding, so it is safe to close.
+
+**Dedupe inside `notifyAutomation`**, not at the call sites — same argument as `logGateDeny`: a
+caller can forget. Suppressed when an **identical unread** notice exists within
+`NEXUS_ADS_NOTIFY_DEDUPE_MINUTES` (default **360**). *Unread* is the point: once an operator has
+actually seen it, a recurrence is new information. The key includes **`body`**, not just `title` —
+the `notify` handler puts campaign, target and market there, so a title-only key would collapse 85
+distinct keywords into one line.
+
+🔴 **`severity: 'danger'` is never deduped, and never even checked.** This service also carries the
+circuit-breaker, the halt event and `ad-rank-defend`'s blast-radius guard. Collapsing a second
+incident into the first would be a far worse defect than the volume it fixes. There is a test for
+exactly this, and it fails when the guard is removed.
+
+🔴 **A suppressed notice is not a failed one.** `created: 0, deduped: true` and
+`created: 0, deduped: false` are the same number and opposite facts — precisely the conflation that
+hid `alert_operator` for months. `notifyAutomationDetailed` returns
+`{ created, deduped, wouldHaveReached }`, and both rule handlers now put `deduped` and `reachable`
+on their output. The legacy `notifyAutomation(): Promise<number>` is unchanged, so the **eleven call
+sites across six files** owned by other sessions (rank-defend, eBay ads, auto-harvest, auto-bid,
+halt) were not touched.
+
+**`Retail guard`'s false message — fixed.** It announced *"Retail guard paused campaign(s)"* ~809
+times a day while its own output read `{ paused: 0 }`. The `notify` handler cannot see the preceding
+action's result (`meta` is `{ dryRun, ruleId }`), so making it *conditional* is an engine change
+with its own blast radius, and threading prior results through every handler to fix one message is
+not worth it. What was fixed is the claim: it now says it *ran*, and points at the log for any
+pauses. **Reported, not built: `notify` has no access to prior action results.** That is the real
+defect underneath, and it is a decision for whoever owns the engine.
+
+Eight new tests on the notify service. The danger-exclusion one was **seen to fail** with the guard
+removed.
+
+---
+
 ## 11 · What was deliberately not done
 
 **No counter armed** (`automation-rule.service.ts` is untouched) · no notification path touched · no

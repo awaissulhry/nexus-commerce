@@ -366,9 +366,16 @@ ACTION_HANDLERS.notify = async (action, context, meta): Promise<ActionResult> =>
   const mkt = getFieldPath(context, 'marketplace'); if (mkt) bits.push(`Market: ${String(mkt)}`)
   const body = [action.body as string | undefined, bits.join(' · ') || undefined].filter(Boolean).join(' — ') || undefined
   try {
-    const { notifyAutomation } = await import('./ads-automation-notify.service.js')
-    const notified = await notifyAutomation({ type: 'ads-automation-rule', severity, title, body, meta: { ruleId: meta.ruleId, dryRun: meta.dryRun } })
-    return { type: action.type, ok: true, output: { notified, title, dryRun: meta.dryRun } }
+    // CAP — the detailed variant, so a SUPPRESSED notice does not read as a failed one.
+    // `notified: 0` from a dedupe and `notified: 0` from a broken notifier are the same number and
+    // very different facts; that conflation is what hid `alert_operator` for months.
+    const { notifyAutomationDetailed } = await import('./ads-automation-notify.service.js')
+    const r = await notifyAutomationDetailed({ type: 'ads-automation-rule', severity, title, body, meta: { ruleId: meta.ruleId, dryRun: meta.dryRun } })
+    return {
+      type: action.type,
+      ok: true,
+      output: { notified: r.created, deduped: r.deduped, reachable: r.wouldHaveReached, title, dryRun: meta.dryRun },
+    }
   } catch (e) {
     return { type: action.type, ok: false, error: (e as Error).message }
   }
@@ -1231,24 +1238,33 @@ ACTION_HANDLERS.alert_operator = async (action, context, meta): Promise<ActionRe
   // simply never did.
   //
   // `notified` is on the output so a run that reaches nobody is visible as 0 rather than as silence.
+  //
+  // CAP — and `deduped` is on it too, because after dedupe `notified: 0` has two meanings:
+  // "an identical unread alert is already in the bell" and "the notifier is broken". Those are the
+  // same number and opposite facts, and collapsing them is how this handler stayed invisible.
   let notified = 0
+  let deduped = false
+  let reachable = 0
   try {
-    const { notifyAutomation } = await import('./ads-automation-notify.service.js')
+    const { notifyAutomationDetailed } = await import('./ads-automation-notify.service.js')
     const sev = (['info', 'success', 'warn', 'danger'] as const).includes(severity as never)
       ? (severity as 'info' | 'success' | 'warn' | 'danger')
       : 'info'
-    notified = await notifyAutomation({
+    const r = await notifyAutomationDetailed({
       type: 'ads-automation-rule',
       severity: sev,
       title: message,
       body: `Rule ${meta.ruleId}${meta.dryRun ? ' (dry run)' : ''}`,
       meta: { ruleId: meta.ruleId, dryRun: meta.dryRun, alert: true },
     })
+    notified = r.created
+    deduped = r.deduped
+    reachable = r.wouldHaveReached
   } catch (e) {
     // A failed notification must not fail the rule — but it must not read as a delivered one either.
     logger.warn('[automation:alert] notifyAutomation failed', { ruleId: meta.ruleId, error: String(e).slice(0, 140) })
   }
-  return { type: action.type, ok: true, output: { severity, message, ruleId: meta.ruleId, notified, timestamp: new Date().toISOString() } }
+  return { type: action.type, ok: true, output: { severity, message, ruleId: meta.ruleId, notified, deduped, reachable, timestamp: new Date().toISOString() } }
 }
 
 // ── EA1: builder-rule apply handlers ──────────────────────────────────
