@@ -244,7 +244,7 @@ export async function createNegative(
   })
 
   const block = (response as Record<string, unknown>)[bodyKey] as
-    | { success?: Array<{ keywordId: string }>; error?: Array<{ errors: unknown }> }
+    | { success?: Array<{ keywordId?: string; negativeKeywordId?: string }>; error?: Array<{ errors: unknown }> }
     | undefined
   const successList = block?.success ?? []
   const errorList = block?.error ?? []
@@ -264,7 +264,15 @@ export async function createNegative(
     }
   }
 
-  const externalId = successList[0]?.keywordId ?? null
+  // 🔴 BOTH SPELLINGS. Amazon's create response can name the id `negativeKeywordId` where the list
+  // response names it `keywordId` — `NegKwDTO` (ads-api-client.ts:614) already declares both, and
+  // reading only `keywordId` returned NULL for a create that had genuinely succeeded.
+  //
+  // Measured 2026-08-14: three `protezioni` negatives were created at Amazon (read back live as
+  // ENABLED NEGATIVE_PHRASE with real ids) while this line returned null for all three, so the
+  // local rows were written with no external id — the split-brain state NEG.4 exists to count,
+  // manufactured by a parser rather than by a failed write.
+  const externalId = successList[0]?.keywordId ?? successList[0]?.negativeKeywordId ?? null
   logger.info('[ADS-LIVE] createNegative success', {
     profileId: args.profileId,
     scope: args.scope,

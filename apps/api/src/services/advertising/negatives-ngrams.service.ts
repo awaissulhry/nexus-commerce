@@ -573,6 +573,13 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
           outcomes.push({ ...base, outcome: 'failed', reason: 'created at Amazon but no local ad group matched, so no record was written', externalNegativeKeywordId: res.externalNegativeKeywordId })
           continue
         }
+        // 🔴 A create with no Amazon id is not a confirmed create. Defence in depth: even with the
+        // parser fixed, a null id here means we cannot prove the negation exists, and NEG.4 would
+        // count the row as never-confirmed. Say so rather than reporting a clean success.
+        if (!res.externalNegativeKeywordId) {
+          outcomes.push({ ...base, outcome: 'failed', reason: 'Amazon accepted the call but returned no keyword id, so the write cannot be confirmed — read back before trusting it', externalNegativeKeywordId: null })
+          continue
+        }
         outcomes.push({ ...base, outcome: 'created', reason: null, externalNegativeKeywordId: res.externalNegativeKeywordId })
       }
     } catch (e) {
