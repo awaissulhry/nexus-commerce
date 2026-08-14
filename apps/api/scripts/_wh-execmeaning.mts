@@ -1,0 +1,11 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const dayStart = new Date(); dayStart.setUTCHours(0,0,0,0)
+const r = await prisma.automationRule.findFirst({ where: { name: 'Target ACOS setter (from profit)' }, select: { id:true, name:true, maxExecutionsPerDay:true, evaluationCount:true, matchCount:true, executionCount:true } })
+console.log(`${r?.name}: cap ${r?.maxExecutionsPerDay}/day · lifetime evaluations ${r?.evaluationCount?.toLocaleString('en-IE')} · matches ${r?.matchCount?.toLocaleString('en-IE')} · executions ${r?.executionCount?.toLocaleString('en-IE')}`)
+const today = await prisma.automationRuleExecution.findMany({ where: { ruleId: r!.id, startedAt: { gte: dayStart } }, select: { status:true, dryRun:true, triggerData:true }, take: 5 })
+console.log(`\nsample of today's execution rows (${today.length} shown):`)
+for (const t of today) console.log(`  status=${t.status} dryRun=${t.dryRun} trigger=${JSON.stringify(t.triggerData).slice(0,110)}`)
+const distinctEntities = new Set((await prisma.automationRuleExecution.findMany({ where: { ruleId: r!.id, startedAt: { gte: dayStart } }, select: { triggerData:true } })).map(x => JSON.stringify((x.triggerData as any)?.campaign?.id ?? (x.triggerData as any)?.adTarget?.id ?? '')))
+console.log(`\ndistinct entities behind today's rows: ${distinctEntities.size}`)
+await prisma.$disconnect()
