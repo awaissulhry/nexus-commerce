@@ -50,6 +50,7 @@ interface Observed {
   refused: number
   topRefusal: string | null
   neverReaches: boolean
+  noAttempts?: boolean
 }
 interface RuleRow {
   id: string; name: string; enabled: boolean; autonomyLevel: string; trigger: string
@@ -276,6 +277,14 @@ export function NegRules({ scope, push }: NegSlotProps) {
                     <span className="cp">cap {r.maxExecutionsPerDay ?? '—'}/day</span>
                   </div>
 
+                  {r.observed.noAttempts && r.enabled && (
+                    <p className="never">
+                      <b>No attempt in the last {r.activity.windowDays} days.</b> This rule is
+                      enabled but has not tried to negate anything in the window — which is a
+                      different fact from reaching its write, and the row below describes what it{' '}
+                      <i>could</i> do rather than what it has done.
+                    </p>
+                  )}
                   {r.observed.neverReaches && (
                     <p className="never">
                       🔴 <b>Never reaches its write.</b> {num(r.observed.attempts)} attempts in the

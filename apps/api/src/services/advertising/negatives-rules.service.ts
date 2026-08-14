@@ -118,6 +118,9 @@ export interface NegRuleRow {
     topRefusal: string | null
     /** 🔴 true when EVERY sampled attempt failed before the write — a radius that is theoretical */
     neverReaches: boolean
+    /** 🔴 true when the rule made NO attempt in the window. Distinct from `neverReaches: false`,
+     *  which means it DID reach its write — going quiet and starting to work are different facts. */
+    noAttempts: boolean
   }
   /** refusals are not failures, and neither is a success — three separate counts */
   activity: {
@@ -287,12 +290,24 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
   // and for three of the five enabled rules the observed one is ZERO — they fail a precondition
   // before ever reaching the write. A panel showing only the capability would overstate the risk;
   // one showing only the observation would understate it. Both go on the row.
-  const recent = await prisma.automationRuleExecution.findMany({
-    where: { ruleId: { in: rulesOnTab.map((rr) => rr.id) }, startedAt: { gte: since } },
-    orderBy: { startedAt: 'desc' },
-    select: { ruleId: true, actionResults: true },
-    take: 1400,
-  })
+  // 🔴 PER RULE, not one shared page. A single `take` across all seven, ordered newest-first, is
+  // dominated by whichever rules are busiest — so a rule that goes QUIET drops out of the sample
+  // entirely, `attempts` becomes 0, and `neverReaches` flips from true to false. A rule that has
+  // never once reached its write then reads as one that does.
+  //
+  // Observed 2026-08-14, one hour after `Account-wide negative sync` was disabled: it vanished from
+  // the shared 1,400-row page and its "Never reaches its write" banner disappeared with it. Going
+  // quiet is not the same as starting to work, and the two must never render the same.
+  const recent = (await Promise.all(
+    rulesOnTab.map((rr) =>
+      prisma.automationRuleExecution.findMany({
+        where: { ruleId: rr.id, startedAt: { gte: since } },
+        orderBy: { startedAt: 'desc' },
+        select: { ruleId: true, actionResults: true },
+        take: 200,
+      }),
+    ),
+  )).flat()
   const observedOf = (ruleId: string) => {
     let attempts = 0, reached = 0, refused = 0, wouldNegate: number | null = null
     const errs = new Map<string, number>()
@@ -315,7 +330,7 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
       }
     }
     const topRefusal = [...errs].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
-    return { wouldNegate, attempts, reached, refused, topRefusal, neverReaches: attempts > 0 && reached === 0 }
+    return { wouldNegate, attempts, reached, refused, topRefusal, neverReaches: attempts > 0 && reached === 0, noAttempts: attempts === 0 }
   }
 
   const rules: NegRuleRow[] = rulesOnTab.map((r) => {
