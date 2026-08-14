@@ -154,14 +154,20 @@ export async function runSqpIngestOnce(): Promise<string> {
     // 🔴 SELF-RESTORING, deliberately. The cost of stopping is that FR accumulates no history until
     // the sync is fixed, and a diary note is how that becomes permanent. This is a live query: the
     // night FR's ACTIVE count goes above zero, it is requested again with no one having to remember.
+    // 🔴 ORDER MATTERS, and getting it wrong mislabelled five markets. SKIPPED is checked first:
+    // IE/NL/PL/SE/UK are sandbox connections holding no listings at all, and calling them "dormant,
+    // self-restoring" invites someone to wait for a sync that was never running. DORMANT is the
+    // narrower and more actionable state — listings EXIST here and none of them are active, which is
+    // FR and only FR. Found by exercising the deployed decision rather than trusting the predicate.
+    const asins = await ourAsinsForMarketplace(mkt, SQP_ASINS_PER_MARKET)
+    if (asins.length === 0) { skipped.push(mkt); continue }
+
     const activeListings = await prisma.channelListing.count({
       where: { channel: 'AMAZON', listingStatus: 'ACTIVE', OR: [{ marketplace: mkt }, { region: mkt }] },
     })
     if (activeListings === 0) { dormant.push(mkt); continue }
 
-    const asins = await ourAsinsForMarketplace(mkt, SQP_ASINS_PER_MARKET)
-    if (asins.length === 0) skipped.push(mkt)
-    else eligible.push({ mkt, asins })
+    eligible.push({ mkt, asins })
   }
   if (dormant.length) {
     logger.info('[sqp-ingest] markets DORMANT — zero ACTIVE listings, nothing to measure', { dormant })

@@ -10,8 +10,11 @@ import { describe, it, expect } from 'vitest'
 /** The decision the job makes per market, extracted so it can be asserted without a database. */
 export function marketState(args: { activeListings: number; asinsHeld: number }):
   'dormant' | 'skipped' | 'eligible' {
-  if (args.activeListings === 0) return 'dormant'
+  // 🔴 SKIPPED first. A market holding no ASINs at all (IE/NL/PL/SE/UK — sandbox connections) is
+  // structurally absent, not awaiting a listing-sync fix, and labelling it "dormant, self-restoring"
+  // invites someone to wait for something that was never running.
   if (args.asinsHeld === 0) return 'skipped'
+  if (args.activeListings === 0) return 'dormant'
   return 'eligible'
 }
 
@@ -38,7 +41,13 @@ describe('marketState', () => {
     expect(marketState({ activeListings: 5, asinsHeld: 0 })).toBe('skipped')
   })
 
-  it('prefers dormant when both are true, because ACTIVE=0 is the actionable one', () => {
-    expect(marketState({ activeListings: 0, asinsHeld: 0 })).toBe('dormant')
+  it('🔴 calls a market with NO ASINs skipped, not dormant, even though ACTIVE is also 0', () => {
+    // Exercising the deployed decision showed this mislabelling 5 sandbox markets as "dormant,
+    // self-restoring". They hold no listings at all; there is no sync to wait for.
+    expect(marketState({ activeListings: 0, asinsHeld: 0 })).toBe('skipped')
+  })
+
+  it('reserves dormant for the FR shape: listings exist, none of them active', () => {
+    expect(marketState({ activeListings: 0, asinsHeld: 113 })).toBe('dormant')
   })
 })
