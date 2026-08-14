@@ -2500,3 +2500,104 @@ loosen it. Recorded at the query; the default is untouched.
 The `ads-console` Apply button and `RuleListTab`'s four fake bulk controls — both **verified broken**
 in HV.8b, both belonging to other programmes, both handed off in locks §4. Repairing the first with
 its obvious one line would turn an inert button into a live bulk structural write.
+
+---
+
+# HV.9c.1 — the de-dup census (authoritative)
+
+Read-only. Every number downstream cites this section. Reproduced by
+`apps/api/scripts/_hv9c1-census.mts`, `_hv9c1-reconcile.mts`, `_hv9c1-6v3.mts`.
+
+## 🔴 The headline: the backlog is nine keywords, not 150 rows
+
+| | |
+|---|---|
+| engine-harvested cohort | **218** |
+| at Amazon | **12** |
+| local-only | **206** |
+| distinct `(ad group, match type, text)` among them | **14** |
+| **distinct AND pushable** | **9** |
+| of those 9, already held at Amazon by a sibling row | **7** |
+| 🔴 **keywords that still genuinely need pushing** | **2** |
+
+**204 of the 206 local-only rows sit inside 12 duplicate groups.** Every duplicate was created
+**2026-05-30 → 2026-06-23** and **none since** — H.1's idempotence guard shipped 2026-06-23 and has
+held ever since. The two rows outside a group are both under AUTO campaigns.
+
+| × | market | campaign › ad group | text | sibling at Amazon |
+|---|---|---|---|---|
+| 25 | IT | IT_Exact_Gale_SV=2k+ › Exact_Gale… | `giacca moto` | — |
+| 25 | IT | IT_DEF_Gale_"Targets=All-A… | `b0bmswm15b` | — (ASIN) |
+| 24 | IT | Exact_Gale_SV_LessThan_1k… | `giubbotto moto uomo` | `16026030732543` |
+| 24 | DE | DE_Exact_3_Keywords | `motorrad jacke herren` | `252943870004724` |
+| 22 | DE | DE_Exact_3_Keywords | `motorradjacke herren` | `169513143345169` |
+| 18 | IT | IT_Exact_Gale_SV=6k+ › Exact_Gale… | `giacca moto uomo` | — |
+| 17 | IT | IT_DEF_Gale_"Targets=All-A… | `b0bms6zz4h` | — (ASIN) |
+| 17 | DE | DE_Phrase_3_Keywords | `motorradjacke herren mit p…` | `126731108917969` |
+| 12 | DE | DE_Auto_Substitute | `b0dvzs4t8g` | — (ASIN **and** AUTO) |
+| 9 | DE | DE_Phrase_3_Keywords | `dünne motorradjacke mit pr…` | `204988683848148` |
+| 6 | DE | GALE EXACT DE › EXACT ONLY | `motorrad jacke herren` | `156132292838069` |
+| 5 | IT | GALE BROAD IT › BROAD ONLY | `giacche estive da moto` | `45785702917260` |
+
+**The two that still need pushing: `giacca moto` and `giacca moto uomo`.** Everything else is either
+already at Amazon through a sibling, an ASIN, or under an AUTO campaign.
+
+## The keep rule, argued
+
+**Keep the row that holds the Amazon id where one exists; otherwise keep the OLDEST row.**
+
+The alternative — keep the newest — is what a push would have touched, and that is exactly the
+reasoning that produced the incident below. The oldest row is the one the engine actually created
+and the one every `create_keyword` audit row points at, so keeping it preserves the audit chain.
+Where a sibling already carries the id, that row is the truth and the others never existed at Amazon.
+
+## 🔴 §3.7 — the 6-vs-3 reconciliation, and my repair got 3 of them wrong
+
+**54 pushes produced 6 stamped ids. Only 3 were keywords Amazon actually created.**
+
+| id | keyword | verdict |
+|---|---|---|
+| `252943870004724` | motorrad jacke herren (DE_Exact_3) | **created today** |
+| `169513143345169` | motorradjacke herren | **created today** |
+| `156132292838069` | motorrad jacke herren (GALE EXACT DE) | **created today** |
+| `16026030732543` | giubbotto moto uomo | 🔴 **already at Amazon on 2026-08-12** |
+| `126731108917969` | motorradjacke herren mit protektor | 🔴 **already at Amazon on 2026-08-12** |
+| `204988683848148` | dünne motorradjacke mit protektore | 🔴 **already at Amazon on 2026-08-12** |
+
+The proof is this document: HV.6 pinned *"all 9 harvested keywords that reached Amazon"* and named
+them. Six of that nine are still marked pre-existing today. **The other three are exactly the three
+above** — so their ids did not appear today, they moved.
+
+**What my repair did wrong.** Its keep-rule was *"the row whose `push_keyword` audit came first"*.
+For those three groups the original owner had no push audit at all, so the rule kept the **pushed**
+row — which created nothing — and nulled the **original**, which recorded the engine's creation.
+No data was lost and Amazon is untouched, but for three keywords the local row that owns the id is
+now the wrong one, and the `create_keyword` audit row points at a sibling that reads as local-only.
+
+**Nothing else was disturbed:** 6 of 6 ids are attributed to exactly one row; 48 duplicate rows were
+cleared; 158 never-pushed rows are untouched; 48 + 158 = 206. ✅
+
+**A performance row cannot settle this** — four of the six carry a `2026-08-13` performance row,
+which is the sync's timing and not evidence of age. The documented list settled it.
+
+## The three populations that must never be pushed
+
+- **54 ASIN-as-keyword rows** — 3 ASINs (`b0bmswm15b` ×25 · `b0bms6zz4h` ×17 · `b0dvzs4t8g` ×12),
+  **2 ad groups**, **0 with an Amazon id**, all written by `automation:auto-harvest` before H.5.
+- **14 rows under AUTO campaigns** — 12 of them are the `b0dvzs4t8g` ASIN rows in
+  `DE_Auto_Substitute`, plus `motorradjacke 4xl` and `motorrad jacke herren` in `DE_Auto_Close`.
+  🔴 A keyword cannot exist in auto-targeted inventory; Amazon accepts the call and creates nothing.
+  The ad group reads `targetingType: MANUAL` while its **campaign** is `AUTO`, so an ad-group-level
+  check misses it entirely.
+
+## The four denominators, pinned
+
+| fact | pinned value | definition |
+|---|---|---|
+| keywords the 54 pushes created | **3** | new at Amazon; 3 more were reattributions |
+| pushable local-only rows | **150** rows → **9** distinct → **2** still needed | 206 − 54 ASIN − 2 non-ASIN AUTO |
+| rules | **62** all domains · **51** advertising · **7** can create a keyword or negative · **5** harvest | `domain='advertising'` for the 51 |
+| auto-targeting search-term rows | **4,588** all time · 2,866 (60d) · 1,239 (30d) | `TARGETING_EXPRESSION` + `_PREDEFINED`, all time, at 2026-08-13 |
+
+🔴 The HV.8c code comment says **4,514** and is wrong; the all-time figure is **4,588** and grows
+daily, which is why the window must be stated wherever it is quoted.
