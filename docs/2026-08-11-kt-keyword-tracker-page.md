@@ -2304,3 +2304,103 @@ system: SQP.4 measured FR returning **0 rows from an ASIN holding 247 historical
 🔴 **Not paired with a denominator on purpose.** The reach line's *"N of M advertised"* is **scope**-level
 (`scope.resolved.asinsCovered` / `.asins`); this gate is **market**-level. Printing one against the other
 would compare two populations in one sentence — the defect class this page keeps finding.
+
+## KT.10 — built
+
+**The market halved and our share rose; the page said neither.** Three changes, no new lines.
+Probes `_kt10-*`. Live and click-verified on all four markets 2026-08-15.
+
+### 10.1 · §2 re-measured — every figure reproduces
+
+Like-for-like on (searchQuery, ASIN) pairs present in **both** 12 Jul and 2 Aug:
+
+| market | pairs | market volume | our impressions | **our share** |
+|---|---|---|---|---|
+| IT | 63 | 74,761 → 40,643 (**−46 %**) | −10 % | **0.296 % → 0.490 %** |
+| DE | 28 | 81,808 → 48,104 (−41 %) | −15 % | 0.185 % → 0.264 % |
+| ES | 4 | 5,478 → 2,557 (−53 %) | +74 % | 0.101 % → 0.375 % |
+| FR | 1 | 1,669 → 1,094 (−34 %) | −7 % | 0.363 % → 0.493 % |
+
+🔴 **ES rests on 4 pairs and FR on 1.** Those two rows are anecdotes wearing percentage signs, and the
+implementation refuses to render a market movement below **five** overlapping pairs for exactly that
+reason.
+
+**§2.2's cap holds:** across **395** distinct (market, week, ASIN) cells, **none above 100**, 70 at
+exactly 100.
+
+### 10.2 · §2.3 — split, not settled, and left open on screen
+
+SQP.5's re-fetch verdict exists: six ASINs re-fetched against 08-02 at week-age 12.8 d all returned
+`rowsChanged = 0`. 🔴 **But only two clear SQP.3's own 20-hour admissibility bar** (first fetches at
+11.9 d → 21.6 h span; the other four at 12.6 d → 4.8 h). So it is **n=2**, not a curve.
+
+A stronger test splits the window, using a week too old to be young:
+
+| window | IT volume | DE volume | at-cap cells |
+|---|---|---|---|
+| 07-12 → 07-19 (**both settled**) | −10 % | **+7 %** | 12 → **2** |
+| 07-19 → 08-02 (settled → 12 d) | **−40 %** | **−46 %** | 2 → 0 |
+
+**Two distinct declines.** Coverage per ASIN collapsed at **07-19 — a settled week**, so that part is
+real. The **volume** collapse sits in 07-19 → 08-02, the week whose age is in question.
+
+**⇒ The page does not assert a halved market as fact.** Whenever the chosen period is under 25 days
+old it adds: *"This week is 12 days old and Brand Analytics weeks have been seen to settle by about 25,
+so part of that fall may still fill in. Read the direction, not the exact figure."*
+
+### 10.3 · The three changes, as they read on prod
+
+**The Δ carries its denominator** — `+0.07  mkt −40%  14d`. Computed on the same term over the same two
+periods the Δ uses; `searchQueryVolume` is per query-week and ASIN-independent, so it is like-for-like
+by construction. Null, never 0 %, when the prior week recorded no volume. The chip is amber below
+−10 %, green above +10 %, grey between — FR shows `mkt −34%` amber beside `mkt −9%` grey.
+
+**The reach line states the cap** — *"share measured across 12 of 250 advertised ASINs **(Amazon caps
+each at 100 queries a week)**"*. "12 of 250" is true and invites the wrong fix: ten measured ASINs is
+already 1,000 query slots against a 97-term watchlist.
+
+**The health line separates feed from market**, verbatim on IT:
+
+> *"…Search volume for the terms measured in both weeks is down 40 % against 19 Jul, our impressions
+> down 20 %, so our share rose from 0.370 % to 0.494 %. This week is 12 days old… Measured on 51
+> query–ASIN pairs present in both weeks, so coverage changes are held out of it."*
+
+### 10.4 · 🔴 The defect verification caught: the line and the column disagreed
+
+The first cut compared against the **immediately preceding stored period**. For IT that is 07-26 — an
+**8-row** week — so the overlap fell below the five-pair floor and the health line returned `null` in
+IT *and* DE.
+
+Worse than null: had a market with a fuller 07-26 existed, **the line would have quoted a different
+comparison from the Δ column on the same screen.** That is the sibling-disagreement defect KT.7 paid
+for. It now uses the **modal `priorPeriod` across measured terms** — what the Δ column actually
+compares to.
+
+| market | compares against | pairs | volume | our impr | share |
+|---|---|---|---|---|---|
+| IT | 2026-07-19 | 51 | −40 % | −20 % | 0.370 % → 0.494 % |
+| DE | 2026-07-19 | 28 | −46 % | −45 % | 0.272 % → 0.277 % |
+| ES | 2026-07-26 | 5 | −43 % | −41 % | 0.278 % → 0.296 % |
+| FR | — | — | **null** — 1 pair, below the floor | | |
+
+**DE is not a "we gained" story** and the copy does not make it one: share moved 0.272 % → 0.277 %
+while our impressions fell 45 % with the market. The numbers are stated; the operator judges.
+
+### 10.5 · §4's invariants, re-run
+
+**KT.1b — 0 inversions**, one distinct period per grid, in all three of its scopes:
+
+```
+IT default                   period 2026-08-02 · 40 measured · periods [2026-08-02] · INVERSIONS 0
+portfolio IT_Gale            period 2026-08-02 · 40 measured · periods [2026-08-02] · INVERSIONS 0
+campaign Gale Jacket Yellow  period 2026-08-02 ·  7 measured · periods [2026-08-02] · INVERSIONS 0
+```
+
+**KT.8's floor** unchanged — IT 12 · DE 10 · ES 12 measured ASINs against 5; FR refused at 3.
+**KT.5's blank states** and **KT.6/KT.7's write path** untouched.
+
+### 10.6 · The bar, met
+
+§8 asked that the IT page make this readable without a script: *the market halved, we held share, our
+share nearly doubled.* From prod: **"Search volume … is down 40 % against 19 Jul, our impressions down
+20 %, so our share rose from 0.370 % to 0.494 %."**
