@@ -18,7 +18,20 @@ Companion documents: [the close-out](2026-08-13-neg-page-closing-note.md) ·
 These are §4.4's two remaining preconditions. Conditions 1–4 are closed by this page's work. Until
 both close, the graduation ceiling stays shut and every rule stays on PROPOSE — correctly.
 
-## 3 · 🔴 `Account-wide negative sync` — **delete it; do not repair it**
+## 3 · ✅ `Account-wide negative sync` — **DISABLED 2026-08-14**, not deleted
+
+**Closed.** The operator chose disable over delete on 2026-08-14, on the evidence below plus one
+fact discovered while preparing it: **`AutomationRuleExecution.rule` is declared `onDelete: Cascade`**,
+so deleting the rule would have destroyed the **16,399 execution rows** that are the evidence it
+never worked — rows NEG.8's ledger and the weekly digest both read.
+
+`enabled` is now `false`. The full row was snapshotted first. `KEYWORD_WASTED_SPEND` still routes to
+`Wasted keyword instant negate` (enabled, PROPOSE), and the execution history is intact. Reversible
+in one click if it is ever wanted back.
+
+The original case, kept because it is the argument for never re-enabling it:
+
+### ~~The case for deletion~~ — the case for keeping it off
 
 **The measurement that decides it.** The rule has failed **600 of 600** recent executions with
 `keyword + marketplace required`, and has never once reached its own selection query.
@@ -95,7 +108,7 @@ out, but cause 1 fully explains the observation and is free.
 | 8 | **Gate refusals are not persisted** | `ads-write-gate.ts:358` (`logGateDeny`) | Writes to the application log and nowhere else. No table exists, so no surface can count refusals by the write gate — this page renders an em-dash and says so rather than inventing a number | Build it as **substrate**, not a negatives feature. Several pages need the same thing (bids, budgets, placements). One table, one writer, many readers |
 | 9 | **`pause` semantics for a negative are undefined** | Amazon's docs | Amazon **accepts** `PAUSED` on a negative keyword — NEG.3b proved it with a reversible probe. No documentation anywhere states whether a paused negative still excludes the term. `campaigns/[id]/tabs/NegativeTargetsTab.tsx:90` already ships a Pause button that may therefore be a lie | Ask Amazon support. If pause **does** stop the exclusion, retirement becomes reversible — which is exactly what the graduation ceiling cares about, and would materially change §4.4 |
 | 10 | **Daily vs weekly digest** | `ads-weekly-digest.service.ts` | The operator asked for a daily digest; the existing one is weekly. It is a **cadence change on one builder**, not a second service | Change the cadence on that builder if wanted. Do not build a second digest — that is how two summaries start disagreeing about the same account |
-| 11 | **`protezioni` and the 42 other actionable grams** | this page → Wasteful words | 43 grams are safe to negate; `protezioni` alone is €134.32 across 195 terms and 27 ad groups. The action is live and has **never been run** | Operator's call. The first execution writes 26 irreversible negatives at Amazon, so it wants a named decision rather than a click in passing |
+| 11 | 🔴 **`protezioni` — approved, ATTEMPTED, and not yet done** | this page → Wasteful words | 43 grams are safe to negate; `protezioni` alone is €134.32 across 195 terms and 27 ad groups. The action is live and has **never been run** | **Approved for the top 3 campaigns on 2026-08-14 and attempted the same day. Nothing reached Amazon** — this machine's ads client is in sandbox (`NEXUS_AMAZON_ADS_MODE` unset). The attempt exposed two real defects in NEG.6's write path, now fixed (`512e6d711`): the scope bound the preview but **not** the write, so 3 approved campaigns targeted 26; and a sandbox stub was mirrored as a real create. 26 local rows were written and deleted; the database is at its exact baseline. **Re-run needs a live path** — `railway run` or the deployed `POST /advertising/negatives/negate-gram` — and a fresh go-ahead |
 
 ## What changed in NEG.9
 
