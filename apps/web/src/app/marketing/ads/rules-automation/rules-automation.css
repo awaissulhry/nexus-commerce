@@ -4452,3 +4452,30 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
    rather than alarmed. Red here would tell an operator that gaining share was a problem. */
 .h10-kt-delta em.mkt.shrank { color: #92400e; background: #fffbeb; border-color: #fde68a; }  /* 7.31:1 on #fffbeb */
 .h10-kt-delta em.mkt.grew   { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }  /* 7.44:1 on #ecfdf5 */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   S4 — the tab bar at eleven items (substrate spec §3, changes 2+3).
+   `h10-rt-*`, appended at EOF: the bar's base classes live in ads.css
+   (.h10-cd-tabs / .h10-rules-tabs) and are NOT restyled — the wrapper, the
+   cluster hairlines and the edge fades are additions around them.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* The wrapper takes over the bar's 16px rhythm so the fades can sit flush on the
+   bar itself (an absolutely-positioned fade cannot cover a child's margin). */
+.h10-rt-wrap { position: relative; margin-bottom: 16px; }
+.h10-rt-wrap > .h10-rules-tabs { margin-bottom: 0; }
+
+/* Cluster hairline — Act ┊ Bid & Place ┊ Spend ┊ Terms. Sized and margined so its
+   vertical centre matches the label text (tabs carry 11px underline padding). */
+.h10-rt-sep { flex: 0 0 1px; width: 1px; height: 15px; background: #d9dee6; align-self: center; margin-bottom: 11px; }
+
+/* Edge fade: the scrollbar is hidden (ads.css:2063), so this is the only sign that
+   tabs continue off-screen. `.on` is set from scrollLeft; the 1px bottom inset
+   keeps the bar's underline visible through the fade. Page ground is #f4f6f9. */
+.h10-rt-fade { position: absolute; top: 0; bottom: 1px; width: 34px; pointer-events: none; opacity: 0; transition: opacity 120ms ease; }
+.h10-rt-fade.l { left: 0; background: linear-gradient(90deg, #f4f6f9 18%, rgba(244, 246, 249, 0)); }
+.h10-rt-fade.r { right: 0; background: linear-gradient(270deg, #f4f6f9 18%, rgba(244, 246, 249, 0)); }
+.h10-rt-fade.on { opacity: 1; }
+
+/* The bar is keyboard-scrollable (tabIndex=0); show where focus is when it is. */
+.h10-rules-tabs:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; border-radius: 4px; }

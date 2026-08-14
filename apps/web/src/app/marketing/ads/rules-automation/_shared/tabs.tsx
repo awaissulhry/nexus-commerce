@@ -15,9 +15,9 @@
  * index. Nothing else in the bar changes.
  */
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
-import { getBackendUrl } from '@/lib/backend-url'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { RULE_TYPES } from './ruleTypes'
+import { useRulesTabCounts } from './tabCountsContext'
 
 export interface RulesTab {
   key: string
@@ -39,13 +39,21 @@ export interface RulesTab {
   path?: string
   /** shown under the page title when this tab is active */
   subtitle?: string
+  /**
+   * S4 — which of the four clusters the tab sits in (substrate spec §3 change 3). Rendered as a
+   * hairline separator wherever the group changes; no control, no state. Grouping implies the
+   * array is ORDERED BY GROUP — an entry filed under the wrong neighbour renders a stray divider.
+   */
+  group: 'act' | 'bid-place' | 'spend' | 'terms'
 }
 
 export const RULES_BASE = '/marketing/ads/rules-automation'
 
-// Order matches Helium 10 Ads. "Dayparting Schedules" is renamed because 100% of the live rows are
-// rank-goal schedules (hold an impression share), not classic bid/pause dayparting — the old label
-// described the mode nobody uses.
+// S4 — ordered by CLUSTER, not by the old Helium 10 order: Act ┊ Bid & Place ┊ Spend ┊ Terms
+// (substrate spec §3 change 3). A hairline renders wherever `group` changes, so the array order IS
+// the grouping. "Dayparting Schedules" is renamed because 100% of the live rows are rank-goal
+// schedules (hold an impression share), not classic bid/pause dayparting — the old label described
+// the mode nobody uses.
 export const RULES_TABS: RulesTab[] = [
   // AR.S0 — its own page, at /apply-rules. The tab used to render five columns copied from
   // Helium 10, three of which are fiction: `Bid Rule` reads a field no API returns, `Budget Rule`
@@ -57,11 +65,13 @@ export const RULES_TABS: RulesTab[] = [
   // ⚠ `key` and `label` are deliberately unchanged. The route is `path`, not the key (see the
   // `path` field above), and the bare `/rules-automation` still renders the index's own grid —
   // whether it eventually redirects here is an open operator decision.
+  // ── Act ──────────────────────────────────────────────────────────────────────────────────────
   {
     key: 'rules',
     label: 'Apply Rules',
     routed: true,
     path: 'apply-rules',
+    group: 'act',
     subtitle: 'Which campaigns automation may write to, and what it is allowed to change',
   },
   // RA.AUTO — one page for all 51 automations, with the type filter that replaces the five
@@ -71,33 +81,31 @@ export const RULES_TABS: RulesTab[] = [
     key: 'automations',
     label: 'Automations',
     routed: true,
+    group: 'act',
     subtitle: 'Every automation you have, what it can change, and the one control that decides',
   },
+  // ── Bid & Place ──────────────────────────────────────────────────────────────────────────────
   // BID.S0 — its own page. The tab used to render a bid RULE list and not one bid: 2,944 enabled
   // targets carry a bid and no screen in the product listed them outside a single campaign.
   {
     key: 'bid',
     label: 'Bid',
     routed: true,
+    group: 'bid-place',
     subtitle: 'What each target bids, why it is that number, and who decided',
   },
-  // HV.1 — its own page. The tab used to render a rule list that filtered every rule out of
-  // itself (see RULE_TAB_ACTION_TYPES below) under a badge that said 5, and nothing else — while
-  // the harvest engine acted on 14 candidates nightly with no surface anywhere in the product.
+  // PLC.0 — its own page. The tab used to render a placement RULE list: 8 rules, all disabled,
+  // 0 successes ever, last activity 2026-08-03 — while the lever they describe moved 15,366 times
+  // in 60 days and no screen listed one campaign's three lanes side by side.
   {
-    key: 'keyword-harvest',
-    label: 'Keyword Harvest',
+    key: 'placement',
+    label: 'Placement',
     routed: true,
-    subtitle: 'Which search terms have earned their own keyword',
+    group: 'bid-place',
+    subtitle: 'Which lane your ads show in, what each one is worth, and who put the multiplier there',
   },
-  // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
-  // nothing else: 2,059 negatives existed and no screen anywhere in the product listed one.
-  {
-    key: 'negative-targeting',
-    label: 'Negative Targeting',
-    routed: true,
-    subtitle: 'What you are blocking, where, and who decided',
-  },
+  { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, group: 'bid-place', subtitle: 'Hold a rank, on a schedule, across many campaigns' },
+  // ── Spend ────────────────────────────────────────────────────────────────────────────────────
   // BUD.1 — its own page, and relabelled. The tab used to render a rule list whose column edits
   // changed React state only and whose Delete removed a row while the rule survived — showing
   // neither the 2,386 budget changes in 60 days nor the two AUTO rules cutting −15%/−20% of the
@@ -108,9 +116,9 @@ export const RULES_TABS: RulesTab[] = [
     key: 'budget',
     label: 'Budget Rules',
     routed: true,
+    group: 'spend',
     subtitle: 'What may change a budget, by how much, and what it actually did',
   },
-  { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, subtitle: 'Hold a rank, on a schedule, across many campaigns' },
   // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
   // `BudgetSchedule` table has never held a row and its executor has ticked 4,909 times over
   // nothing — but budget still binds on 32.7% of campaign-days, so the subject is pacing and level,
@@ -119,16 +127,28 @@ export const RULES_TABS: RulesTab[] = [
     key: 'budget-schedules',
     label: 'Budget Pacing & Schedules',
     routed: true,
+    group: 'spend',
     subtitle: 'Where the money goes, how fast, and whether it lasts the month',
   },
-  // PLC.0 — its own page. The tab used to render a placement RULE list: 8 rules, all disabled,
-  // 0 successes ever, last activity 2026-08-03 — while the lever they describe moved 15,366 times
-  // in 60 days and no screen listed one campaign's three lanes side by side.
+  // ── Terms ────────────────────────────────────────────────────────────────────────────────────
+  // HV.1 — its own page. The tab used to render a rule list that filtered every rule out of
+  // itself (see RULE_TAB_ACTION_TYPES below) under a badge that said 5, and nothing else — while
+  // the harvest engine acted on 14 candidates nightly with no surface anywhere in the product.
   {
-    key: 'placement',
-    label: 'Placement',
+    key: 'keyword-harvest',
+    label: 'Keyword Harvest',
     routed: true,
-    subtitle: 'Which lane your ads show in, what each one is worth, and who put the multiplier there',
+    group: 'terms',
+    subtitle: 'Which search terms have earned their own keyword',
+  },
+  // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
+  // nothing else: 2,059 negatives existed and no screen anywhere in the product listed one.
+  {
+    key: 'negative-targeting',
+    label: 'Negative Targeting',
+    routed: true,
+    group: 'terms',
+    subtitle: 'What you are blocking, where, and who decided',
   },
   // SOV.0 — its own page. The tab used to render SovTrackerTab kind="sov": a [ Rules | Report ]
   // segment whose Rules half is the DEFAULT view and can never render a row, over a column that
@@ -137,6 +157,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'share-of-voice',
     label: 'Share of Voice',
     routed: true,
+    group: 'terms',
     subtitle: 'On the queries that matter, how much of each market do we hold?',
   },
   // KT.1 — its own page. The tab used to render SovTrackerTab kind="tracker": a [ Rules | Report ]
@@ -145,6 +166,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'keyword-tracker',
     label: 'Keyword Tracker',
     routed: true,
+    group: 'terms',
     subtitle: 'On the keywords you chose — are we on the page, and is it moving?',
   },
 ]
@@ -236,22 +258,10 @@ export function RulesTabs({ active }: { active: string }) {
   //
   // Only the five mapped tabs get a count. The rest genuinely have no number to state here, and
   // a blank is honest where a 0 would read as "nothing to do".
-  const [counts, setCounts] = useState<Record<string, number> | null>(null)
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const j = await fetch(`${getBackendUrl()}/api/advertising/automation-rules`, { cache: 'no-store' }).then((r) => r.json())
-        const all = (Array.isArray(j?.rules) ? j.rules : Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : []) as Array<Record<string, unknown>>
-        const next: Record<string, number> = {}
-        for (const key of Object.keys(RULE_TAB_ACTION_TYPES)) {
-          next[key] = all.filter((r) => ruleBelongsToTab(r.actions, key)).length
-        }
-        if (alive) setCounts(next)
-      } catch { /* a failed count must never blank the navigation */ }
-    })()
-    return () => { alive = false }
-  }, [])
+  //
+  // S4 — read from the layout's provider (one fetch per session) instead of fetching here on
+  // every page mount. Null when the provider's fetch failed or has not landed: badge-less labels.
+  const counts = useRulesTabCounts()
 
   /**
    * 🔴 PLC.0 — at eleven items the bar overflows and the ACTIVE tab can be off-screen.
@@ -310,24 +320,58 @@ export function RulesTabs({ active }: { active: string }) {
     return () => { cancelled = true }
   }, [active, counts])
 
+  /**
+   * S4 — the edge fade (substrate spec §3 change 2). The bar hides its scrollbar, so at eleven
+   * items the only sign that more tabs exist off-screen is this: a fade on the edge that has
+   * hidden content, gone when that side is fully scrolled. State, not CSS-only, because the fade
+   * must react to scrollLeft; recomputed on scroll, on resize, and when the count badges land
+   * (they widen the row ~200px after mount — the same late-width trap `bring()` documents above).
+   */
+  const [fade, setFade] = useState<{ l: boolean; r: boolean }>({ l: false, r: false })
+  useEffect(() => {
+    const bar = barRef.current
+    if (!bar) return
+    const update = () => {
+      const l = bar.scrollLeft > 2
+      const r = bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2
+      setFade((p) => (p.l === l && p.r === r ? p : { l, r }))
+    }
+    update()
+    bar.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      bar.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [counts])
+
   return (
-    <div ref={barRef} className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types">
-      {RULES_TABS.map((t) => {
-        const n = counts?.[t.key]
-        return (
-          <Link
-            key={t.key}
-            href={rulesTabHref(t)}
-            role="tab"
-            aria-selected={t.key === active}
-            className={`h10-cd-tab ${t.key === active ? 'on' : ''}`}
-            scroll={false}
-          >
-            {t.label}
-            {n != null && <span className="h10-cd-tabn">{n}</span>}
-          </Link>
-        )
-      })}
+    <div className="h10-rt-wrap">
+      {/* tabIndex: the scrollbar is hidden, so the keyboard's only way to reach the overflow is
+          focusing the bar and using the arrow keys — native scroll on a focusable container. */}
+      <div ref={barRef} className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types" tabIndex={0}>
+        {RULES_TABS.map((t, i) => {
+          const n = counts?.[t.key]
+          const prev = i > 0 ? RULES_TABS[i - 1] : undefined
+          return (
+            <Fragment key={t.key}>
+              {prev && prev.group !== t.group && <span className="h10-rt-sep" aria-hidden="true" />}
+              <Link
+                href={rulesTabHref(t)}
+                role="tab"
+                aria-selected={t.key === active}
+                className={`h10-cd-tab ${t.key === active ? 'on' : ''}`}
+                scroll={false}
+              >
+                {t.label}
+                {n != null && <span className="h10-cd-tabn">{n}</span>}
+              </Link>
+            </Fragment>
+          )
+        })}
+      </div>
+      <span className={`h10-rt-fade l${fade.l ? ' on' : ''}`} aria-hidden="true" />
+      <span className={`h10-rt-fade r${fade.r ? ' on' : ''}`} aria-hidden="true" />
     </div>
   )
 }
