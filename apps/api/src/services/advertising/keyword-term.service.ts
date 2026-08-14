@@ -27,7 +27,7 @@
  *     `isNegative` and is filtered explicitly.
  */
 import prisma from '../../db.js'
-import { chooseViewPeriod, resolveScope, type KtScopeGraph } from './keyword-tracker.service.js'
+import { chooseViewPeriod, periodCoverageByMarket, resolveScope, KT_COVERAGE_FLOOR, type KtScopeGraph } from './keyword-tracker.service.js'
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
@@ -172,7 +172,13 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
     products: products.map((p) => ({ id: p.id, parentId: p.parentId })),
   }
   const scope = resolveScope(graph, { market, line: q.line, portfolio: q.portfolio, campaign: q.campaign })
-  const chosen = chooseViewPeriod(periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all })))
+  // KT.8 — the drawer gates on the same floor as the grid it opens from. A drawer that resolved a
+  // different week would show a term's share for a period the row behind it is not on.
+  const coverage = await periodCoverageByMarket(market)
+  const chosen = chooseViewPeriod(
+    periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all, asins: coverage.get(+p.startDate) ?? 0 })),
+    { floorAsins: KT_COVERAGE_FLOOR },
+  )
 
   // ── the series: every week this term has, in scope ──
   const [shareHistory, spendHistory] = await Promise.all([

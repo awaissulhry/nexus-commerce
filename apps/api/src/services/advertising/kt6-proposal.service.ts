@@ -20,7 +20,7 @@ import {
   resolveCeiling, checkCeiling, commitmentCents,
   type Kt6Ceiling, type Kt6CeilingCheck, type Kt6CeilingGrain,
 } from './kt6-spend-ceiling.js'
-import { chooseViewPeriod } from './keyword-tracker.service.js'
+import { chooseViewPeriod, periodCoverageByMarket, KT_COVERAGE_FLOOR } from './keyword-tracker.service.js'
 
 /** normalise a term the same way the write gate and the watchlist do */
 export function normTerm(s: string): string {
@@ -107,7 +107,11 @@ export async function shareAgeDays(marketplace: string): Promise<number | null> 
     by: ['startDate'], where: { marketplace }, _count: { _all: true },
   })
   if (!groups.length) return null
-  const chosen = chooseViewPeriod(groups.map((g) => ({ start: g.startDate, rows: g._count._all })))
+  const coverage = await periodCoverageByMarket(marketplace)
+  const chosen = chooseViewPeriod(
+    groups.map((g) => ({ start: g.startDate, rows: g._count._all, asins: coverage.get(+g.startDate) ?? 0 })),
+    { floorAsins: KT_COVERAGE_FLOOR },
+  )
   if (!chosen.start) return null
   const weekEnd = +chosen.start + 6 * 86_400_000
   return Math.floor((Date.now() - weekEnd) / 86_400_000)
@@ -119,7 +123,11 @@ export async function shareAge(marketplace: string): Promise<Kt6ShareAge> {
     by: ['startDate'], where: { marketplace }, _count: { _all: true },
   })
   if (!groups.length) return { days: null, label: null }
-  const chosen = chooseViewPeriod(groups.map((g) => ({ start: g.startDate, rows: g._count._all })))
+  const coverage = await periodCoverageByMarket(marketplace)
+  const chosen = chooseViewPeriod(
+    groups.map((g) => ({ start: g.startDate, rows: g._count._all, asins: coverage.get(+g.startDate) ?? 0 })),
+    { floorAsins: KT_COVERAGE_FLOOR },
+  )
   if (!chosen.start) return { days: null, label: null }
   const weekEnd = +chosen.start + 6 * 86_400_000
   return { days: Math.floor((Date.now() - weekEnd) / 86_400_000), label: weekLabel(chosen.start) }

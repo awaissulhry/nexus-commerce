@@ -73,6 +73,47 @@ export const KT_LOOKBACK_DAYS = 42
  */
 export const SQP_COMPLETENESS_RATIO = 0.5
 
+/**
+ * KT.8 — how many of OUR ASINs a period must have measured to qualify. **This replaces the ratio for
+ * every caller that supplies coverage; it is not OR'd with it and not AND'd with it.**
+ *
+ * ── Why the ratio had to go ───────────────────────────────────────────────────────────────────
+ *
+ * `SQP_COMPLETENESS_RATIO` compares a week's row count against the median of the weeks around it. That
+ * was right when every stored week came from the same backfill. It is wrong now, in both directions:
+ *
+ *   • **Too strict today.** The baseline still holds backfill weeks (07-12 = 1,066 IT rows) while a
+ *     cron-fed week produces 135–258, so IT needed 279.25 and had 258 — short by **21 rows, 7.6%** —
+ *     and the page read a **27-day-old** week while the feed underneath it got better.
+ *   • **🔴 Too loose tomorrow.** Once the backfill weeks age out, the baseline is a median of cron
+ *     weeks and the threshold is set by the very thinness it exists to catch. Measured on a cron-only
+ *     baseline: IT 4.0 · DE 2.5 · ES 35.5 · **FR 0.5, against a week holding one row.** Every week
+ *     passes by construction. **A threshold defined as a fraction of a statistic over the same
+ *     population it judges will eventually pass everything.**
+ *
+ * A fixed floor cannot go vacuous, because it is not computed from our own output. SQP.4 checked the
+ * obvious alternative and it fails the same way: ASIN coverage compared against its OWN median
+ * collapses identically, since coverage is bounded by how many ASINs we request. The fix is the fixed
+ * reference, not the change of quantity.
+ *
+ * ── Why 5 ─────────────────────────────────────────────────────────────────────────────────────
+ *
+ * `SQP_ASINS_PER_MARKET` is 10: the nightly pass asks about ten ASINs per market. **A week that
+ * measured fewer than half the ASINs we asked about is a sample, not a week.** That ties the constant
+ * to a real one rather than to the outcome it produces.
+ *
+ * Measured 2026-08-14 — 3, 5 and 8 all put IT, DE and ES on 2026-08-02, so the choice only decides how
+ * fast a degrading market is refused. 8 leaves DE (10 covered) two of headroom and is brittle to normal
+ * variation; 3 would keep FR on a three-ASIN week, which renders a share that looks real and is not.
+ *
+ * ── Why coverage and not rows ─────────────────────────────────────────────────────────────────
+ *
+ * Rows scale with how many search queries each ASIN happens to match, so they are not comparable across
+ * weeks or markets. **ASINs measured is what the page's own reach line already prints**, so the gate
+ * and the caption finally describe the same quantity.
+ */
+export const KT_COVERAGE_FLOOR = 5
+
 /** How many recent periods define "a normal week here". A quarter of weekly history. */
 export const SQP_BASELINE_PERIODS = 12
 
@@ -182,12 +223,22 @@ export interface KtSqpRow {
 }
 
 /** Row counts per SQP period for one market, in any order. */
-export interface KtPeriodCandidate { start: Date; rows: number }
+export interface KtPeriodCandidate {
+  start: Date
+  rows: number
+  /** distinct ASINs of ours measured in this period, for this market. Absent for callers still on the
+   *  row ratio — Share of Voice is one, deliberately. */
+  asins?: number
+}
 
 export type KtPeriodReason = 'complete' | 'incomplete-week' | 'outside-lookback' | 'no-data'
 
 export interface KtChosenPeriod {
   start: Date | null
+  /** distinct ASINs measured in the chosen period — the number the reach line prints */
+  asins: number
+  /** the floor that was applied, or null when this caller is still on the row ratio */
+  floorAsins: number | null
   /** rows the chosen period holds for this market (all queries, not just the watchlist) */
   rows: number
   /** the median row count of the last SQP_BASELINE_PERIODS periods — "a normal week here" */
@@ -228,28 +279,57 @@ const median = (xs: number[]): number => {
  * 28-day lookback, the local median accepts ES 2026-07-26 (71 rows, 17% of a normal week) while the
  * wider baseline rejects it. Same constants, opposite answer.
  */
+/**
+ * KT.8 — distinct ASINs of ours measured per period, for one market.
+ *
+ * `groupBy` cannot express `count(DISTINCT asin)`, so this is raw. **Exported and shared on purpose:**
+ * the grid, the cliff projection, the term drawer and KT.6's proposals all gate on the same week, and
+ * KT.7 already paid for two surfaces computing the same thing separately. The `where` here mirrors the
+ * period groupBy exactly (`marketplace` only, no `reportPeriod` filter) — if those two ever disagree,
+ * the gate is judging a different population from the one it is counting.
+ */
+export async function periodCoverageByMarket(market: string): Promise<Map<number, number>> {
+  const rows = await prisma.$queryRaw<Array<{ startDate: Date; n: number }>>`
+    SELECT "startDate", count(DISTINCT "asin")::int AS n
+    FROM "SearchQueryPerformance"
+    WHERE "marketplace" = ${market} AND "asin" IS NOT NULL
+    GROUP BY 1`
+  return new Map(rows.map((r) => [+r.startDate, Number(r.n)]))
+}
+
 export function chooseViewPeriod(
   periods: KtPeriodCandidate[],
-  opts: { lookbackDays?: number; ratio?: number; baselinePeriods?: number; now?: number } = {},
+  opts: { lookbackDays?: number; ratio?: number; baselinePeriods?: number; now?: number; floorAsins?: number } = {},
 ): KtChosenPeriod {
   const lookbackDays = opts.lookbackDays ?? KT_LOOKBACK_DAYS
   const ratio = opts.ratio ?? SQP_COMPLETENESS_RATIO
   const baselinePeriods = opts.baselinePeriods ?? SQP_BASELINE_PERIODS
   const now = opts.now ?? Date.now()
+  // 🔴 Opt-in PER CALLER, and that is the whole boundary. A caller that supplies `floorAsins` gets the
+  // floor INSTEAD of the ratio; one that does not keeps the ratio untouched. Share of Voice calls this
+  // same function from another page, so a global switch would have moved a surface this session does
+  // not own. Absence is not a fallback for the KT path — every KT call site passes it explicitly.
+  const floorAsins = opts.floorAsins ?? null
 
   const sorted = [...periods].sort((a, b) => +b.start - +a.start)
   if (!sorted.length) {
-    return { start: null, rows: 0, baselineRows: 0, threshold: 0, reason: 'no-data', truncated: true, rejected: [] }
+    return { start: null, asins: 0, floorAsins, rows: 0, baselineRows: 0, threshold: 0, reason: 'no-data', truncated: true, rejected: [] }
   }
 
   const baselineRows = median(sorted.slice(0, baselinePeriods).map((p) => p.rows))
+  // Kept and still reported even under the floor: the health line explains WHY a week was refused, and
+  // "258 rows where a normal week holds 558" is the sentence that makes the feed's state legible.
   const threshold = ratio * baselineRows
   const inLookback = sorted.filter((p) => (now - +p.start) / 86_400_000 <= lookbackDays)
 
+  // A missing `asins` scores 0 rather than passing — no evidence is not the same as enough evidence.
+  const qualifies = (p: KtPeriodCandidate) =>
+    floorAsins === null ? p.rows >= threshold : (p.asins ?? 0) >= floorAsins
+
   const rejected: Array<{ start: string; rows: number }> = []
   for (const p of inLookback) {
-    if (p.rows >= threshold) {
-      return { start: p.start, rows: p.rows, baselineRows, threshold, reason: 'complete', truncated: false, rejected }
+    if (qualifies(p)) {
+      return { start: p.start, asins: p.asins ?? 0, floorAsins, rows: p.rows, baselineRows, threshold, reason: 'complete', truncated: false, rejected }
     }
     rejected.push({ start: iso(p.start)!, rows: p.rows })
   }
@@ -260,6 +340,8 @@ export function chooseViewPeriod(
   const fallback = inLookback[0] ?? sorted[0]
   return {
     start: fallback.start,
+    asins: fallback.asins ?? 0,
+    floorAsins,
     rows: fallback.rows,
     baselineRows,
     threshold,
@@ -294,7 +376,7 @@ export function chooseViewPeriod(
  */
 export function projectCliff(
   periods: KtPeriodCandidate[],
-  opts: { lookbackDays?: number; ratio?: number; baselinePeriods?: number; now?: number; horizonDays?: number } = {},
+  opts: { lookbackDays?: number; ratio?: number; baselinePeriods?: number; now?: number; horizonDays?: number; floorAsins?: number } = {},
 ): { collapseOn: string | null; collapseToPeriod: string | null; collapseToRows: number; blankOn: string | null } {
   const now = opts.now ?? Date.now()
   const horizon = opts.horizonDays ?? 200
@@ -440,7 +522,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // KT.1b — the period groupBy and the three freshness probes depend on nothing but `market`, so
   // they belong in this batch rather than in two more serial round trips. Measured: that ordering
   // alone was most of a 6.6s first paint.
-  const [campaigns, ads, watchlists, periodGroups, sqpLatest, stLatest, plLatest, ingestDays, recentRuns] = await Promise.all([
+  const [campaigns, ads, watchlists, periodGroups, activeListingCount, sqpLatest, stLatest, plLatest, ingestDays, recentRuns] = await Promise.all([
     // KT.1b — `status` joins the select so an ARCHIVED campaign stops inflating the market's
     // campaign count (1 of IT's 150 is archived). See `resolveScope`: it is excluded from the
     // market set but still resolvable by an explicit ?campaign= pick, because the campaign picker
@@ -460,6 +542,10 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       orderBy: [{ marketplace: 'asc' }, { isDefault: 'desc' }, { name: 'asc' }],
     }),
     prisma.searchQueryPerformance.groupBy({ by: ['startDate'], where: { marketplace: market }, _count: { _all: true } }),
+    // KT.8 — how many listings this market has ACTIVE. FR has zero, which is the root of its
+    // coverage never reaching the floor; the refusal banner names it so the operator is sent to
+    // listing sync rather than to the Brand Analytics feed.
+    prisma.channelListing.count({ where: { channel: 'AMAZON', listingStatus: 'ACTIVE', OR: [{ marketplace: market }, { region: market }] } }),
     prisma.searchQueryPerformance.findFirst({
       where: { marketplace: market }, orderBy: { startDate: 'desc' }, select: { startDate: true },
     }),
@@ -541,7 +627,16 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // Jacket Yellow Only" holds 25 of 97 there against 47 in an older week — those 72 terms become
   // `no-row-this-period` rows carrying their own last-seen date, rather than a fresher number
   // pulled from a week the rest of the grid is not on.
-  const chosen = chooseViewPeriod(periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all })))
+  // KT.8 — the candidates now carry coverage, and the gate is the FLOOR rather than the row ratio.
+  // Built once and reused by `projectCliff` below: two lists would be two answers to "which week".
+  const coverage = await periodCoverageByMarket(market)
+  const periodCandidates: KtPeriodCandidate[] = periodGroups.map((p) => ({
+    start: p.startDate, rows: p._count._all, asins: coverage.get(+p.startDate) ?? 0,
+  }))
+  const chosen = chooseViewPeriod(periodCandidates, { floorAsins: KT_COVERAGE_FLOOR })
+  const bestAsinsInWindow = Math.max(0, ...periodCandidates
+    .filter((p) => (Date.now() - +p.start) / 86_400_000 <= KT_LOOKBACK_DAYS)
+    .map((p) => p.asins ?? 0))
 
   // ── the share rows AND the ad graph, in one round ──
   // KT.5 added the per-term ad-coverage read. Left serial it cost ~2s of a 4.5s first paint; neither
@@ -886,7 +981,10 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   let nightsClaimingZero = 0
   for (const n of claimedRows) { if (n === 0) nightsClaimingZero++; else break }
   const greenAndDead = recentRuns.filter((r) => String(r.status) === 'SUCCESS' && !!r.errorMessage).length
-  const cliff = projectCliff(periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all })))
+  // 🔴 The same candidate list and the same floor. KT.5's cliff dates answer "when does this view stop
+  // being current"; computing them on the ratio while the grid runs on the floor would print a date
+  // for a rule the page no longer uses.
+  const cliff = projectCliff(periodCandidates, { floorAsins: KT_COVERAGE_FLOOR })
 
   return {
     scope: {
@@ -951,6 +1049,21 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       periodRows: chosen.rows,
       baselineRows: chosen.baselineRows,
       threshold: Math.round(chosen.threshold),
+      /** KT.8 — distinct ASINs of ours measured in the chosen period, and the floor it had to meet.
+       *  These are what the gate actually decided on; `baselineRows`/`threshold` stay because the
+       *  health line still explains the feed's state in rows. */
+      asins: chosen.asins,
+      floorAsins: chosen.floorAsins,
+      /** KT.8 — the best coverage any period inside the lookback reached, so a refusal can say whether
+       *  this week is thin or whether the market has never been measured well enough. */
+      bestAsinsInWindow,
+      /** KT.8 — 🔴 FR holds ZERO of these, which is why its coverage never reaches the floor. A
+       *  refusal that says "incomplete data" sends an operator to the feed; this sends them to
+       *  listing sync, which is where SQP.4 located the cause. */
+      activeListings: activeListingCount,
+      /** 🔴 deliberately NOT paired with a denominator here. The reach line's "N of M advertised" is
+       *  SCOPE-level (`scope.resolved.asinsCovered` / `.asins`); this gate is MARKET-level. Printing
+       *  one against the other would compare two different populations in a single sentence. */
       /** why this period: complete · incomplete-week · outside-lookback · no-data */
       reason: chosen.reason,
       truncated: chosen.truncated,

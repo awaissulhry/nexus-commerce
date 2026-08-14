@@ -124,6 +124,11 @@ interface Payload {
     periodRows?: number
     baselineRows?: number
     threshold?: number
+    /** KT.8 — what the gate actually decided on */
+    asins?: number
+    floorAsins?: number | null
+    bestAsinsInWindow?: number
+    activeListings?: number
     reason?: 'complete' | 'incomplete-week' | 'outside-lookback' | 'no-data'
     truncated?: boolean
     rejected?: Array<{ start: string; rows: number }>
@@ -592,14 +597,32 @@ export function KeywordTrackerClient() {
                   </>
                 ) : (
                   <>
+                    {/* 🔴 KT.8 — the gate now decides on ASIN COVERAGE, so the refusal must be stated in
+                        ASINs. Saying "N rows against a normal week" would describe a rule the page no
+                        longer uses, and would send an operator to look at row counts that are not what
+                        refused this week. */}
                     <b>
-                      The week of {dayMonth(period)} is incomplete: {num(data.window.periodRows ?? 0)}{' '}
-                      rows where a normal {market} week holds about {num(data.window.baselineRows ?? 0)}.
+                      The week of {dayMonth(period)} measured {num(data.window.asins ?? 0)} of our{' '}
+                      {market} ASINs; a view needs at least {num(data.window.floorAsins ?? 5)}.
                     </b>{' '}
-                    No week inside the last {data.window.lookbackDays} days carried at least{' '}
-                    {Math.round((data.window.completenessRatio ?? 0.5) * 100)}% of that, so this is the
-                    best there is. Every share below is measured against however many of our ASINs the
-                    feed happened to cover, so a low number here may be a coverage gap and not a loss.
+                    No week inside the last {data.window.lookbackDays} days reached that
+                    {(data.window.bestAsinsInWindow ?? 0) > 0
+                      ? <> — the best was {num(data.window.bestAsinsInWindow ?? 0)}</>
+                      : null}, so this is the newest there is rather than a complete one.{' '}
+                    {data.window.activeListings === 0 ? (
+                      // FR: 0 ACTIVE listings, and an ASIN holding 247 historical FR rows returned
+                      // nothing. SQP.4 located the cause in listing sync, not in the feed — so the
+                      // banner has to send the operator there, not to the Brand Analytics job.
+                      <>
+                        <b>{market} has no ACTIVE listings at all</b>, so Amazon reports almost nothing
+                        for it. This is a listing-sync problem, not a Brand Analytics one — the feed
+                        cannot measure ASINs that are not listed as active. Every share below rests on
+                        a handful of ASINs; treat them as indicative, not as a ranking.
+                      </>
+                    ) : (
+                      <>Every share below is measured against however many of our ASINs the feed
+                      happened to cover, so a low number here may be a coverage gap and not a loss.</>
+                    )}
                   </>
                 )}
               </span>
@@ -769,8 +792,8 @@ export function KeywordTrackerClient() {
                     className={data.window.truncated ? 'bad' : undefined}
                     title={
                       data.window.truncated
-                        ? `This week is incomplete: ${num(data.window.periodRows ?? 0)} rows against a ${num(data.window.baselineRows ?? 0)}-row normal week`
-                        : `${num(data.window.periodRows ?? 0)} rows in ${market} that week, against a ${num(data.window.baselineRows ?? 0)}-row normal week`
+                        ? `This week measured ${num(data.window.asins ?? 0)} of our ${market} ASINs, below the floor of ${num(data.window.floorAsins ?? 5)}`
+                        : `${num(data.window.asins ?? 0)} of our ${market} ASINs measured that week (floor ${num(data.window.floorAsins ?? 5)}) · ${num(data.window.periodRows ?? 0)} rows`
                         + ((data.window.rejected?.length ?? 0) ? `. Skipped ${data.window.rejected!.length} newer week(s) that were too thin: ${data.window.rejected!.map((r) => `${r.start} (${r.rows} rows)`).join(', ')}` : '')
                     }
                   >
