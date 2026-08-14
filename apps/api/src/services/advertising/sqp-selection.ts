@@ -1,4 +1,18 @@
 /**
+ * 🔴 SUPERSEDED 2026-08-14 by `sqp-yield.ts`. Nothing in production imports this any more.
+ *
+ * SQP.3 built this to spend settle-freed slots on never-asked ASINs, ranked by how long since we last
+ * asked. SQP.4 measured why that was solving the wrong problem: the ASINs it rotated *from* were
+ * themselves near-worthless (0.6 rows/report against 33.0 for ASINs known to return rows), so spreading
+ * coverage over more of them spread the wrong thing. `planRequestSet` keeps the idea — an explore quota
+ * reserved for never-asked ASINs — but ranks the rest by MEASURED YIELD instead of by recency.
+ *
+ * Kept, not deleted, because `docs/2026-08-12-sqp-feed.md` §C3 cites it and `_sqp3-rotation-preview.mts`
+ * still runs against it. **Do not wire it back into the request pass** — two selectors deciding the same
+ * nightly set is exactly the shape SQP.4's brief warned about.
+ *
+ * ── original header ───────────────────────────────────────────────────────────────────────────
+ *
  * SQP.3 Phase C — which ASINs tonight's request pass should ask for.
  *
  * ── What was wrong with "the top ten" ─────────────────────────────────────────────────────────
