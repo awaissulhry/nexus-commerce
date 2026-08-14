@@ -18,6 +18,8 @@ const execCreate = vi.fn(async () => ({ id: 'exec-new' }))
 const execCount = vi.fn(async () => 0)
 const ruleUpdate = vi.fn(async () => ({}))
 const ruleFindUnique = vi.fn(async () => RULE)
+/** CAP — the write cap counts AdvertisingActionLog by ACTOR. */
+const actionLogCount = vi.fn(async () => 0)
 
 vi.mock('../db.js', () => ({
   default: {
@@ -28,6 +30,9 @@ vi.mock('../db.js', () => ({
     automationRule: {
       get update() { return ruleUpdate },
       get findUnique() { return ruleFindUnique },
+    },
+    advertisingActionLog: {
+      get count() { return actionLogCount },
     },
   },
 }))
@@ -68,6 +73,96 @@ beforeEach(() => {
   ruleUpdate.mockClear()
   ruleFindUnique.mockClear()
   genSuggestions.mockClear()
+  actionLogCount.mockClear()
+  actionLogCount.mockResolvedValue(0)
+})
+
+/**
+ * CAP — the write cap. It exists because the row cap is in the wrong unit for harm:
+ * `Trim budget on weak ACOS` walked a campaign €100.00 → €1.00 in 39 Amazon writes in one day
+ * while carrying a row cap of 10.
+ *
+ * The property that matters most is NOT that it stops writes — it is that it stops writes
+ * WITHOUT going silent. `Reduce bids on ACOS spike` carries `maxValueCentsEur = 0`, which refuses
+ * every action including its own `notify`, and it has been 100% inert in complete silence for
+ * weeks. A cap that suppresses the report of itself is how that happens.
+ */
+describe('CAP — the write cap demotes, it does not silence', () => {
+  const AUTO_RULE = { ...RULE, dryRun: false, autonomyLevel: 'AUTO', maxWritesPerDay: 5, maxExecutionsPerDay: null }
+
+  it('under the write cap: an AUTO rule still acts', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO_RULE)
+    actionLogCount.mockResolvedValueOnce(4) // cap is 5
+
+    const r = await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'SCHEDULE', marketplace: 'IT' } })
+
+    expect(r.status).not.toBe('DRY_RUN')
+    expect(execCreate).toHaveBeenCalledTimes(1)
+    expect(execCreate.mock.calls[0]?.[0]?.data?.dryRun).toBe(false)
+  })
+
+  it('at the write cap: demoted to dry-run, and it STILL RUNS and still records', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO_RULE)
+    actionLogCount.mockResolvedValueOnce(5) // at cap
+
+    const r = await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'SCHEDULE', marketplace: 'IT' } })
+
+    // Demoted, NOT refused: the execution happened, so the rule can still report.
+    expect(r.status).toBe('DRY_RUN')
+    expect(execCreate).toHaveBeenCalledTimes(1)
+    const data = execCreate.mock.calls[0]?.[0]?.data
+    expect(data?.dryRun).toBe(true)
+    // 🔴 Durable: unlike a row-cap refusal, which writes no row at all and survives only as a
+    // 5-minute ring-buffer event, this leaves a record of WHY the write did not happen.
+    expect(data?.errorMessage).toBe('WRITE_CAP_REACHED')
+    // …and not as a cap refusal, or the row-cap counter would stop counting it as work.
+    expect(data?.errorMessage).not.toBe('DAILY_CAP_EXCEEDED')
+  })
+
+  it('🔴 a write-capped AUTO rule still PROPOSES — being stopped is not a reason to go quiet', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO_RULE)
+    actionLogCount.mockResolvedValueOnce(99)
+
+    await evaluateRule({
+      ruleId: 'rule-1',
+      context: { trigger: 'SCHEDULE', marketplace: 'IT', campaign: { id: 'camp-1', name: 'GALE|IT' } },
+    })
+
+    await flush()
+    // levelProposes() is PROPOSE-only, so without the writeCapReached term this is 0 and the
+    // operator gets a DRY_RUN row and nothing to approve.
+    expect(genSuggestions).toHaveBeenCalledTimes(1)
+  })
+
+  it('the write cap counts by ACTOR, never by executionId', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO_RULE)
+    actionLogCount.mockResolvedValueOnce(0)
+
+    await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'SCHEDULE', marketplace: 'IT' } })
+
+    expect(actionLogCount).toHaveBeenCalledTimes(1)
+    const where = actionLogCount.mock.calls[0]?.[0]?.where
+    // executionId is null on every rule write (97 rows in 60d vs 36,219 by actor), so an
+    // executionId-keyed cap reads zero for every rule and never binds.
+    expect(where?.userId).toBe('automation:rule-1')
+    expect(where).not.toHaveProperty('executionId')
+  })
+
+  it('no write cap set: the action log is never queried', async () => {
+    ruleFindUnique.mockResolvedValueOnce({ ...AUTO_RULE, maxWritesPerDay: null })
+
+    await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'SCHEDULE', marketplace: 'IT' } })
+
+    expect(actionLogCount).not.toHaveBeenCalled()
+  })
+
+  it('a PROPOSE rule never consults the write cap — it cannot write in the first place', async () => {
+    ruleFindUnique.mockResolvedValueOnce({ ...RULE, maxWritesPerDay: 1, maxExecutionsPerDay: null })
+
+    await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'SCHEDULE', marketplace: 'IT' } })
+
+    expect(actionLogCount).not.toHaveBeenCalled()
+  })
 })
 
 describe('daily cap — the ADX.1 ratchet', () => {

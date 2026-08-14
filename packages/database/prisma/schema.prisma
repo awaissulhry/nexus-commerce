@@ -3829,6 +3829,11 @@ model AdvertisingActionLog {
   @@index([executionId, createdAt(sort: Desc)])
   @@index([entityType, entityId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+  /// CAP (2026-08-14) — `maxWritesPerDay` counts this table by ACTOR, once per rule evaluation,
+  /// because `executionId` is null on every rule write and cannot attribute one. Without this index
+  /// that count is a scan; the actor prefix is also how the per-rule write columns in
+  /// `docs/2026-08-14-cap-sizing.md` §4 were measured.
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 // AD.5 — Cross-marketplace budget pool. Operator groups campaigns
@@ -12850,6 +12855,31 @@ model AutomationRule {
   autonomyLevel String @default("PROPOSE")
 
   maxExecutionsPerDay     Int?    @default(100)
+  /// CAP (2026-08-14) — the SECOND cap, in the unit damage is actually measured in.
+  ///
+  /// `maxExecutionsPerDay` counts EXECUTION ROWS, and a row is one (rule × context) match. One
+  /// evaluator tick emits one context per active marketplace — 9 on this account — so a SCHEDULE
+  /// rule doing one logical run per tick writes 9 rows and 864 in a day. That makes the row cap a
+  /// churn bound: it governs engine load, notifications and proposal volume. It is a poor bound on
+  /// harm, because rows and writes are not the same quantity and never were.
+  ///
+  /// Measured 2026-08-14: `Trim budget on weak ACOS` walked one campaign from €100.00 to €1.00 in
+  /// 39 Amazon writes in a single day while carrying a row cap of 10, because its trigger produced
+  /// roughly one matching context per tick — so its row count and its write count were different
+  /// numbers the whole time.
+  ///
+  /// This counts rows in `AdvertisingActionLog` written by this rule's actor today
+  /// (`userId = 'automation:<ruleId>'`). 🔴 NOT by `executionId`: `automation-action-handlers.ts`
+  /// passes `executionId: null` on every rule write, so an executionId-keyed cap reads zero for
+  /// every rule and never binds — the same shape of silent failure as the bare `NOT` clause.
+  ///
+  /// Reaching it DEMOTES the execution to dry-run rather than refusing it. A cap that also blocks
+  /// the rule's `notify` hides itself: `Reduce bids on ACOS spike` carried `maxValueCentsEur = 0`
+  /// and refused every action including the notification that would have said so, silently, for
+  /// weeks. A demoted rule still evaluates, still proposes and still tells you.
+  ///
+  /// null = no write cap (today's behaviour for every rule that has one unset).
+  maxWritesPerDay         Int?
   maxValueCentsEur        Int?
   // AD.3 — per-rule daily SUM cap across executions, complementary to
   // maxValueCentsEur (which is per-execution). Defense-in-depth for

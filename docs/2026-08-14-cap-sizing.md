@@ -602,13 +602,70 @@ That single line is three verifications at once:
 | notifications/hour | falling from ~1,730 | **1,378** and dropping |
 | account rows, 18:35 → 18:47 | +9 | **20,994 → 21,002 (+8, +1 landing mid-read)** |
 
-**Still open, in order:** step 5 (watch through 00:00 UTC — the first clean day) · step 6
-(`maxWritesPerDay`, including Retail guard's 20 and `Reduce bids on ACOS spike`'s config) · step 7
-(notification dedupe).
+**Still open:** step 5 (watch through 00:00 UTC — the first clean day) · step 7 (notification dedupe).
 
 **What to check tomorrow:** every capped rule should sit at *exactly* its cap, not below it. A rule
 resting below its cap means its trigger stopped producing contexts, which is a different condition
 and must not be read as the cap working. `_cap-watch.mts` distinguishes them (`AT CAP` vs `quiet`).
+
+---
+
+## 10d · ✅ STEP 6 — `maxWritesPerDay`, the cap in the unit damage is measured in
+
+Migration `20260814a_cap_max_writes_per_day`, applied to prod on the direct (non-pooler) host:
+one nullable column on `AutomationRule` and one index `AdvertisingActionLog(userId, createdAt DESC)`.
+Purely additive; NULL means no write cap, so every rule kept today's behaviour until it was set.
+
+**The design decision that matters is not the cap — it is that reaching it DEMOTES rather than
+refuses.**
+
+```ts
+const dryRun = !levelActs(level) || !!args.forceDryRun || adsManualSuggest || writeCapReached
+```
+
+Refusing the whole execution would also refuse the rule's `notify`. That is precisely how
+`Reduce bids on ACOS spike` vanished: `maxValueCentsEur = 0`, `0 >= 0` is true on the *first*
+action, and it has been 100% inert **in complete silence** for weeks — the notification that would
+have reported it was refused by the same cap. **A cap that suppresses the report of itself is how a
+rule disappears.** A demoted rule still evaluates, still records, still proposes, still tells you.
+
+Three consequences, each deliberate:
+
+| | |
+|---|---|
+| **counted by ACTOR** | `userId = 'automation:<ruleId>'`. 🔴 **Never `executionId`** — it is null on every rule write (**97** rows in 60d vs **36,219** by actor), so an executionId-keyed cap reads zero for every rule and never binds. The same silent zero as the bare `NOT`. |
+| **a durable record** | The execution row carries `errorMessage: 'WRITE_CAP_REACHED'` with `status: 'DRY_RUN'` — accurate, it *was* a dry run. Deliberately **not** `DAILY_CAP_EXCEEDED`, so the row counter still counts it as work. Unlike a row-cap refusal, which writes no row at all and survives only as a 5-minute ring-buffer event. |
+| **it still proposes** | `levelProposes()` is PROPOSE-only, so without `\|\| writeCapReached` a capped AUTO rule would leave a DRY_RUN row and **nothing reviewable**. A rule that wanted to act and was stopped should hand over what it would have done. Bounded by the existing suggestion upsert. |
+
+### The caps set
+
+| rule | ROW cap | **WRITE cap** | why |
+|---|---|---|---|
+| Campaign ACOS rebalance | 10 | **6** | 3 campaigns ever touched, 2 moves/day each |
+| Trim budget on weak ACOS | 10 | **8** | `GALE EXACT DE` would have ended 2026-08-06 at ≈€39, not €1 |
+| Retail guard | **null (exempt)** | **20** | protective: free to evaluate every tick, bounded in what it can pause |
+| Reduce bids on ACOS spike | 10 | **30** | bounded — but see below, it is still inert |
+| Target ACOS setter · Profit-native · Weekend boost · ACoS convergence | 36 / 36 / 36 / 10 | **50** each | `applied: 0` for 60 days; binds nothing today, bounds them the day they start working |
+
+All eight read back by **id**, not by name — see §7.4. My first read-back keyed on name, matched the
+disabled `Trim budget on weak ACOS` twin, and reported a failure that had not happened. Fixed; a
+probe that invents failures is worse than none.
+
+### 🔴 What step 6 deliberately did NOT do
+
+**`Reduce bids on ACOS spike` still carries `maxValueCentsEur = 0` and remains 100% inert.** §7.3
+recommended clearing it, and the precondition I set for that — a write bound — now exists. But
+clearing it converts a dormant AUTO rule into a **live writer** on a real ad account, which is a
+different act from bounding one. It is now a clean, well-bounded decision (30 writes/day, `bid_down`
+−20% on ad groups at ACOS ≥ 100%) and it is the operator's to make, not a side effect of setting
+caps.
+
+### Tests, seen to fail first
+
+Six new cases. **Three fail with the feature disabled** — demotion, still-proposes, counts-by-actor.
+The other three (under-cap acts, no-cap-never-queries, PROPOSE-never-queries) are over-trigger
+guards that correctly pass either way, and are worth having for that reason but prove nothing on
+their own.
 
 ---
 

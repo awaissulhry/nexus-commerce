@@ -637,9 +637,42 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // that is already quieter than it.
   const level = args.forceDryRun && declared === 'AUTO' ? 'PROPOSE' : declared
 
+  // CAP (2026-08-14) — the write cap, in the unit damage is measured in.
+  //
+  // `maxExecutionsPerDay` above bounds CHURN: it counts execution rows, and a row is one
+  // (rule × context) match, so on a 9-marketplace account one logical run costs 9 of them. It is
+  // a poor bound on harm. `Trim budget on weak ACOS` walked a campaign €100.00 → €1.00 in 39
+  // Amazon writes in one day under a row cap of 10, because its trigger matched about once per
+  // tick and its two numbers were never the same quantity.
+  //
+  // 🔴 Counted by ACTOR, never by `executionId`. `automation-action-handlers.ts:748` passes
+  // `executionId: null` on every rule write — 97 rows in 60 days carry one, against 36,219 by
+  // actor — so an executionId-keyed cap would read zero for every rule and never bind. That is
+  // the same silent-zero this session already fixed once.
+  //
+  // 🔴 And reaching it DEMOTES rather than refuses. Refusing the whole execution would also refuse
+  // the rule's `notify`, which is exactly how `Reduce bids on ACOS spike` disappeared: it carries
+  // `maxValueCentsEur = 0`, `0 >= 0` is true on the FIRST action, and it has been failing 100% of
+  // its actions — including the notification that would have reported it — in silence. A demoted
+  // rule keeps evaluating, keeps proposing and keeps telling you; it just stops writing.
+  let writeCapReached = false
+  if (rule.maxWritesPerDay != null && levelActs(level) && !args.forceDryRun) {
+    const dayStart = new Date()
+    dayStart.setUTCHours(0, 0, 0, 0)
+    const writesToday = await prisma.advertisingActionLog.count({
+      where: { userId: `automation:${rule.id}`, createdAt: { gte: dayStart } },
+    })
+    if (writesToday >= rule.maxWritesPerDay) {
+      writeCapReached = true
+      logger.warn('[automation-rule] write cap reached — execution demoted to dry-run', {
+        ruleId: rule.id, ruleName: rule.name, writesToday, cap: rule.maxWritesPerDay,
+      })
+    }
+  }
+
   // EA3 — Manual-control ads rules are propose-only: force dry-run so they generate suggestions
   // (audit "would do X" rows) but never auto-apply. Automate rules respect the dial + autonomy.
-  const dryRun = !levelActs(level) || !!args.forceDryRun || adsManualSuggest
+  const dryRun = !levelActs(level) || !!args.forceDryRun || adsManualSuggest || writeCapReached
   const actions = (rule.actions ?? []) as unknown as Action[]
   const actionResults: ActionResult[] = []
   let valueSpentCentsEur = 0
@@ -707,6 +740,12 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       actionResults: actionResults as object,
       dryRun,
       status,
+      // CAP — a write-capped execution leaves a DURABLE record, unlike a row-cap refusal, which
+      // writes no row at all (ADX.1, deliberately) and survives only as a 5-minute ring-buffer
+      // event. `status` stays DRY_RUN because that is what it was; this says WHY it was one.
+      // Deliberately not 'DAILY_CAP_EXCEEDED', so the row-cap counter still counts it — being
+      // demoted is work, and it consumed a context.
+      ...(writeCapReached ? { errorMessage: 'WRITE_CAP_REACHED' } : {}),
       finishedAt: new Date(),
       durationMs: Date.now() - startedAt,
     },
@@ -749,7 +788,12 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // quieten a noisy rule is to switch it off, which also stops the evidence you need to
   // decide whether to trust it. adsManualSuggest still forces the propose path for
   // builder rules explicitly marked control='manual'.
-  if (rule.domain === 'advertising' && dryRun && !args.isTestRun && (levelProposes(level) || adsManualSuggest)) {
+  // CAP — `|| writeCapReached`. `levelProposes` is PROPOSE-only, so without this an AUTO rule that
+  // hit its write cap would leave a DRY_RUN row and nothing reviewable: it wanted to act, was
+  // stopped, and the operator would have no artifact to approve. A capped rule handing over what it
+  // would have done is the most useful thing it can do with the rest of its day. Volume is bounded
+  // by the existing upsert on (ruleId, entityId, proposedKey), so a 15-min tick refreshes one row.
+  if (rule.domain === 'advertising' && dryRun && !args.isTestRun && (levelProposes(level) || adsManualSuggest || writeCapReached)) {
     void import('./advertising/ads-suggestions.service.js').then((m) =>
       m.generateSuggestionsFromExecution({
         ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, executionId: exec.id,
