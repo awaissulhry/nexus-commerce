@@ -2601,3 +2601,53 @@ which is the sync's timing and not evidence of age. The documented list settled 
 
 🔴 The HV.8c code comment says **4,514** and is wrong; the all-time figure is **4,588** and grows
 daily, which is why the window must be stated wherever it is quoted.
+
+---
+
+# HV.9c.5 — the census, settled against Amazon
+
+Two `listKeywords` calls (one per profile, `campaignIdFilter` batches the 7 campaigns), 15 IT + 14 DE
+keywords read, **zero writes**. `apps/api/scripts/_hv9c5-amazon.mts`, `_hv9c5-owners.mts`.
+
+## 🔴 All nine groups exist at Amazon. The residual push is ZERO.
+
+| × | keyword | Amazon id | state | bid |
+|---|---|---|---|---|
+| 24 | giubbotto moto uomo | `16026030732543` | ENABLED | €0.05 |
+| 25 | giacca moto | `128430480348864` | ENABLED | €0.05 |
+| 24 | motorrad jacke herren *(DE_Exact_3)* | `252943870004724` | ENABLED | €0.45 |
+| 22 | motorradjacke herren | `169513143345169` | ENABLED | €0.50 |
+| 18 | giacca moto uomo | `216419338483049` | ENABLED | €0.05 |
+| 17 | motorradjacke herren mit protektoren | `126731108917969` | ENABLED | €0.50 |
+| 9 | dünne motorradjacke … jungen xs | `204988683848148` | ENABLED | €0.44 |
+| 6 | motorrad jacke herren *(GALE EXACT DE)* | `156132292838069` | ENABLED | €0.49 |
+| 5 | giacche estive da moto | `45785702917260` | ENABLED | €0.54 |
+
+**exists & bound 9 · unbound 0 · residual push candidates 0.** **HV.9b′ is cancelled** — not
+skipped. There is nothing to push, and that is the finding.
+
+## Two corrections to HV.9c.1's own census
+
+1. 🔴 **The two "only push candidates" were never candidates.** `giacca moto` and `giacca moto uomo`
+   exist under `128430480348864` and `216419338483049` — ids that appear nowhere else in this
+   engagement. The census called them sibling-less because it searched for siblings **only inside
+   the harvest cohort**. Their owners were created **2026-05-30** and are `NOT harvest` — bulk
+   import rows. The sibling test was scoped too narrowly.
+2. **`204988683848148` is resolved: it existed.** ENABLED at €0.44. Zero performance means *never
+   served*, not *newly created*.
+
+## 🔴 The answer that moved four times, settled
+
+**The 54 pushes created ZERO keywords at Amazon.** 6 → 3 → "at most 1" → **0**.
+
+Every one of the six ids belonged to a keyword that already existed. Every push was Amazon correctly
+refusing a duplicate, and the read-back stamping the pre-existing id onto a surplus row.
+
+> **Every figure derived from our own database was wrong. Every figure derived from Amazon has
+> held.** That is the whole lesson of this page in one sentence.
+
+## What it makes the archive
+
+Each of the 9 groups has exactly **one** legitimate owner (`rows=1` for all nine after the
+`b0fc316ab` repair), and **all nine owners sit outside the archive set**. So the archive is 204
+surplus rows, none of which holds an Amazon id, and there is no reconciler binding to do.
