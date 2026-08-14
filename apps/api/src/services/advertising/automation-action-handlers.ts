@@ -1225,7 +1225,30 @@ ACTION_HANDLERS.alert_operator = async (action, context, meta): Promise<ActionRe
   const severity = (action.severity as string | undefined) ?? 'info'
   const message = (action.message as string | undefined) ?? `Automation alert: ${action.type}`
   logger.warn(`[automation:alert] ${severity.toUpperCase()}: ${message}`, { ruleId: meta.ruleId, context: JSON.stringify(context)?.slice(0, 500) })
-  return { type: action.type, ok: true, output: { severity, message, ruleId: meta.ruleId, timestamp: new Date().toISOString() } }
+  // 🔴 It used to stop at that logger.warn. The action named "alert operator" reached neither the
+  // bell, the feed nor the inbox — five advertising rules use it and none of their alerts has ever
+  // been seen. `notify` (the sibling handler, ~line 369) has always fanned out correctly; this one
+  // simply never did.
+  //
+  // `notified` is on the output so a run that reaches nobody is visible as 0 rather than as silence.
+  let notified = 0
+  try {
+    const { notifyAutomation } = await import('./ads-automation-notify.service.js')
+    const sev = (['info', 'success', 'warn', 'danger'] as const).includes(severity as never)
+      ? (severity as 'info' | 'success' | 'warn' | 'danger')
+      : 'info'
+    notified = await notifyAutomation({
+      type: 'ads-automation-rule',
+      severity: sev,
+      title: message,
+      body: `Rule ${meta.ruleId}${meta.dryRun ? ' (dry run)' : ''}`,
+      meta: { ruleId: meta.ruleId, dryRun: meta.dryRun, alert: true },
+    })
+  } catch (e) {
+    // A failed notification must not fail the rule — but it must not read as a delivered one either.
+    logger.warn('[automation:alert] notifyAutomation failed', { ruleId: meta.ruleId, error: String(e).slice(0, 140) })
+  }
+  return { type: action.type, ok: true, output: { severity, message, ruleId: meta.ruleId, notified, timestamp: new Date().toISOString() } }
 }
 
 // ── EA1: builder-rule apply handlers ──────────────────────────────────

@@ -367,6 +367,10 @@ builder slugs and is not this session's to delete (see §4).
 | `…/rules-automation/rules-automation.css` | NEG.9 (2 lines at EOF extending NEG.4's `h10-nga-*` block) | 2026-08-13 | **released** — one hunk at EOF, diffed before committing |
 | `docs/2026-08-11-neg-negative-targeting-{page,study}.md` | NEG.9 (UNTRACKED→tracked, bodies unedited, superseded-numbers header prepended) | 2026-08-13 | **released** — landed `f75071365` |
 
+| `apps/api/src/services/automation-rule.service.ts` | WH — **claim WITHDRAWN, nothing committed.** The NULL-safe fix was written and proven (old clause matches **0** rows; null-safe matches **261,295**) then REVERTED on the operator's decision: enabling it would cap **18 of 21** enabled rules today, **8 on AUTO**. 🔴 The caps are sized in a different unit from what the counter counts — `Target ACOS setter` is cap **1/day** against **533** execution rows, one per marketplace per tick. Sizing the caps is a prior decision. See `docs/2026-08-14-wh-writeback.md` | 2026-08-14 | **released** |
+| `apps/api/src/services/advertising/automation-action-handlers.ts` | WH (`alert_operator` calls `notifyAutomation` — one handler, no others touched) | 2026-08-14 | **released** — operator-approved 2026-08-14 knowing the volume: ~1,254 alert executions/day × 2 users ≈ **2,508 notifications/day** |
+| `…/rules-automation/_shared/tabs.tsx` · `rule-category.ts` · `ads-graduation.ts` | WH — **claim WITHDRAWN, nothing edited.** `add_negative_phrase` is NOT removable-cheaply: it is referenced in FIVE maps, not three (add `harvest-actors.service.ts:71`, HV.6's, and `negatives-rules.service.ts:42`), and **no UI can create a rule using it** — `RuleBuilder` emits rule-type SLUGS, not action types. The maps are not wrong; the handler is missing. Removing touches two other sessions' files to close a theoretical hole. Reported instead, see §4 | 2026-08-14 | **released** |
+
 ## 3 · Shared files — claim before editing
 
 | # | file | why it is shared |
