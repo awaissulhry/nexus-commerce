@@ -54,6 +54,16 @@ interface Payload {
   conflicts: { rows: ConflictRow[]; total: number; totalUnscoped: number; overlapsRelaxed: number; overlapsRelaxedUnscoped: number; relaxedExplained: Array<{ termKey: string; externalAdGroupId: string; rows: number; reason: string }> }
   suppressed: { rows: SuppressedRow[]; total: number; totalUnscoped: number; explained: number }
   splitBrain: { rows: SplitRow[]; total: number; totalUnscoped: number; byReason: Record<string, number> }
+  /** NEG.9 — optional, because web and API deploy separately and this field is newer than the panel. */
+  inbound?: {
+    rows: InboundRow[]
+    total: number
+    totalUnscoped: number
+    candidates: number
+    ungatedNegations: number
+    ungatedShare: number
+    lookbackDays: number
+  }
   coverage: { searchTermRows: number; termsWithTraffic: number; termsTotal: number }
 }
 
@@ -63,7 +73,14 @@ const dayMonth = (iso: string) => {
   const d = new Date(iso)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })} ${d.getUTCFullYear()}`
 }
-type Alert = 'conflict' | 'suppressed' | 'splitbrain'
+interface InboundRow {
+  adTargetId: string; term: string; termKey: string; match: string
+  campaignId: string; campaignName: string; campaignTargetingType: string | null
+  adGroupName: string; market: string; negatedAt: string
+  orders: number; salesCents: number; spendCents: number; impressions: number
+  negatedIn: number; runsIn: number; reviewed: boolean; actionable: boolean
+}
+type Alert = 'conflict' | 'suppressed' | 'splitbrain' | 'inbound'
 
 export function NegAttention({ scope, push }: NegSlotProps) {
   // 🔴 `useSearchParams`, never `window.location.search`. The latter is not reactive under soft
@@ -112,6 +129,15 @@ export function NegAttention({ scope, push }: NegSlotProps) {
     { key: 'suppressed', n: data.suppressed.total, label: data.suppressed.total === 1 ? 'suppressed earner' : 'suppressed earners', tone: data.suppressed.total > 0 ? 'warn' : 'ok' },
     { key: 'splitbrain', n: data.splitBrain.total, label: 'never confirmed at Amazon', tone: data.splitBrain.total > 0 ? 'warn' : 'ok' },
   ]
+  // NEG.9's detector is newer than this panel; an older API build simply has no chip.
+  if (data.inbound) {
+    tabs.push({
+      key: 'inbound',
+      n: data.inbound.total,
+      label: data.inbound.total === 1 ? 'to review — negated outside Nexus' : 'to review — negated outside Nexus',
+      tone: data.inbound.total > 0 ? 'warn' : 'ok',
+    })
+  }
 
   return (
     <section className="h10-nga">
@@ -270,6 +296,75 @@ export function NegAttention({ scope, push }: NegSlotProps) {
           )}
 
           {/* ── split-brain ─────────────────────────────────────────────────────────────────── */}
+          {show('inbound') && data.inbound && (
+            <div className="h10-nga-list">
+              <h4>Negated outside Nexus, on a term that converted <span className="ct">{num(data.inbound.total)}</span></h4>
+              <p className="h10-nga-note">
+                <Info size={12} />
+                <span>
+                  🔴 <b>The converting-term protection only binds writes we make.</b>{' '}
+                  <b>{num(data.inbound.ungatedNegations)}</b> of this account&apos;s negatives
+                  ({(data.inbound.ungatedShare * 100).toFixed(0)}%) arrived from Amazon by sync and
+                  passed no gate at all. This lists the ones created in the last{' '}
+                  {data.inbound.lookbackDays} days that block a term with an order behind it.
+                </span>
+              </p>
+              {data.inbound.total === 0 ? (
+                /* 🔴 The zero states its own denominator AND its window, because it is
+                   window-dependent: 0 at 30 days and 1 at 60 on this data. */
+                <p className="h10-nga-zero">
+                  <Check size={13} />
+                  <span>
+                    <b>Nothing to review in the last {data.inbound.lookbackDays} days.</b>{' '}
+                    {data.inbound.candidates > 0
+                      ? <><b>{num(data.inbound.candidates)}</b> negation{data.inbound.candidates === 1 ? '' : 's'} arrived
+                        from Amazon in that time and none of their terms took an order in the last{' '}
+                        {data.window.days} days — so this is a checked result, not an unread one.
+                        This count moves with the window.</>
+                      : <>No negation arrived from Amazon in that time at all.</>}
+                    {data.inbound.totalUnscoped > 0 && <> <b>{num(data.inbound.totalUnscoped)}</b> elsewhere outside this scope.</>}
+                  </span>
+                </p>
+              ) : (
+                <>
+                  <p className="h10-nga-note">
+                    <ShieldAlert size={12} />
+                    <span>
+                      🔴 <b>This is a review queue, not a list of errors.</b> Negating a converting
+                      term inside an <b>AUTO</b> campaign is standard funnel routing — you push it to
+                      its exact campaign so it stops competing with itself. The honest question is
+                      only whether each one was intended.
+                    </span>
+                  </p>
+                  <ul className="h10-nga-rows">
+                    {data.inbound.rows.slice(0, 50).map((r) => (
+                      <li key={r.adTargetId}>
+                        <span className="t">
+                          <button type="button" className="lnk" onClick={() => push({ focus: r.termKey })}>{r.term}</button>
+                          <em className="mk">{r.market}</em>
+                          {r.campaignTargetingType && <em className={r.campaignTargetingType === 'AUTO' ? 'ok' : ''}>{r.campaignTargetingType}</em>}
+                          {r.reviewed && <em className="ok">reviewed</em>}
+                        </span>
+                        <span className="sc">
+                          {r.campaignName} › {r.adGroupName} · negated {dayMonth(r.negatedAt)} ·{' '}
+                          <b>negated in {num(r.negatedIn)}</b>, runs in {num(r.runsIn)}
+                        </span>
+                        <span className="m">
+                          {r.orders} {r.orders === 1 ? 'order' : 'orders'} · {eur(r.salesCents)} ·{' '}
+                          {num(r.impressions)} impr · {eur(r.spendCents)} in {data.window.days}d —
+                          created outside Nexus, so the converting-term protection did not apply;
+                          check it was intended.
+                        </span>
+                        <button type="button" className="h10-nga-act" onClick={() => push({ focus: r.termKey })}>Open the term…</button>
+                      </li>
+                    ))}
+                  </ul>
+                  {data.inbound.rows.length > 50 && <p className="h10-nga-note"><Info size={12} /><span>Showing 50 of {num(data.inbound.rows.length)}.</span></p>}
+                </>
+              )}
+            </div>
+          )}
+
           {show('splitbrain') && (
             <div className="h10-nga-list">
               <h4>Never confirmed at Amazon <span className="ct">{num(data.splitBrain.total)}</span></h4>

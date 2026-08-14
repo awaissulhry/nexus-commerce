@@ -4422,3 +4422,9 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
   .h10-ngrec-led li { grid-template-columns: 62px 92px minmax(0, 1.4fr) 132px; }
   .h10-ngrec-led .c, .h10-ngrec-led .by { display: none; }
 }
+
+/* ── NEG.9 · the third detector, extending NEG.4's h10-nga-* block at EOF ──────────────────────
+   Only two additions: the AUTO/reviewed chip tone, and a wider row so the "negated in N, runs in M"
+   sentence does not wrap mid-clause. No `opacity` anywhere — NEG.6 put 78 nodes below AA with one. */
+.h10-nga-rows li .t em.ok { background: #e7f4ec; color: #1c5334; }
+.h10-nga-list h4 .ct { margin-left: 6px; }
