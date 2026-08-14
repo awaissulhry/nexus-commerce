@@ -2170,3 +2170,137 @@ threshold, and the digest names **which** threshold it crossed rather than calli
 | `suppressedFromBidCents` | **0 of 2,129** — KT.7 never wrote it |
 | `maxBiasPct` | still NULL on 5 of 5 · `liveBidWritesEnabled` still 82 of 220 · `minBidCents` still 0 |
 | apply enablement | **not enabled broadly.** There is no UI button that calls `/apply`; it is reachable only by an authenticated API call |
+
+## KT.8 — built
+
+**The completeness gate stopped being a row ratio and became an absolute ASIN-coverage floor.**
+`KT_COVERAGE_FLOOR = 5`, replacing `SQP_COMPLETENESS_RATIO` for every caller that supplies coverage.
+Probes `_kt8-*`. SQP.4's handed-over specification, implemented.
+
+### 8.1 · §3.2 answered — the baseline is ALL-STORED, not in-window
+
+```ts
+const sorted = [...periods].sort((a, b) => +b.start - +a.start)
+const baselineRows = median(sorted.slice(0, baselinePeriods).map((p) => p.rows))   // ← no lookback
+const threshold = ratio * baselineRows
+const inLookback = sorted.filter(...)                                              // ← applied AFTER
+```
+
+The baseline is computed **before** `inLookback` exists and never consults it. Proven by injection
+rather than by reading: driving `chooseViewPeriod` over the real IT series at `lookbackDays` of **7, 42
+and 400** returns `baselineRows = 558.5` every time.
+
+**⇒ A backfill week keeps inflating the threshold long after it has aged out of the 42-day window and
+can no longer be selected.** That is the mechanism behind "too strict today".
+
+And it is `SQP_BASELINE_PERIODS = **12**`, not the trailing-four that three separate documents have now
+described. Both prompts, and one probe, carried the same wrong number.
+
+### 8.2 · §8's arithmetic discrepancy — resolved, and neither figure was the shipped one
+
+| baseline used | median | threshold | IT (258 rows) |
+|---|---|---|---|
+| **12 periods — what the code does** | **558.5** | **279.25** | **short by 21.25** ✓ |
+| trailing 4, including the newest | 456.5 | 228.25 | **passes by 29.75** |
+| trailing 4, excluding the newest (`8/655/1066/989`) | 822 | 411 | short by 153 |
+
+**SQP.4's "short by 21" matches the shipped arithmetic.** The "153" assumed a trailing-four baseline
+*and* dropped the newest week from its own baseline — two deviations, compounding. Worth recording that
+the honest-looking middle option (a true trailing four) reverses the verdict entirely: IT would have
+passed, and nobody would have looked for the defect.
+
+### 8.3 · The floor, chosen from measurement
+
+| | IT | DE | ES | FR |
+|---|---|---|---|---|
+| coverage in the newest week | 12 | 10 | 12 | **1** |
+| best coverage inside the 42-day window | 19 | 14 | 15 | **4** |
+| floor ≥3 | 08-02 | 08-02 | 08-02 | 07-19 (3 ASINs) |
+| **floor ≥5** | **08-02** | **08-02** | **08-02** | **refused** |
+| floor ≥8 | 08-02 | 08-02 | 08-02 | refused |
+
+**3, 5 and 8 all put IT, DE and ES on 2026-08-02**, so the floor only decides how fast a degrading
+market is refused. **5**, because `SQP_ASINS_PER_MARKET` is 10 — *a week that measured fewer than half
+the ASINs we asked about is a sample, not a week.* The constant is tied to another constant rather than
+to the outcome it produces. 8 leaves DE (10 covered) two of headroom and is brittle to ordinary
+variation; 3 keeps FR on a three-ASIN week, which renders a share that looks real and is not.
+
+### 8.4 · 🔴 Replacement, not `OR`, not `AND` — and the tests say why
+
+| shape | IT (258 rows, 12 ASINs) | FR (42 rows, 4 ASINs) |
+|---|---|---|
+| ratio only | rejects → 27-day-old week | accepts 07-12 |
+| `ratio OR floor` | accepts | 🔴 **accepts via the ratio — FR is never refused** |
+| `ratio AND floor` | 🔴 **rejects — 258 misses the ratio** | rejects |
+| **floor, replacing** | **accepts** | **refused** ✓ |
+
+Only replacement both moves three markets and refuses the fourth. An earlier model used `OR` and
+reported FR as fixed when it was not.
+
+### 8.5 · 🔴 The boundary the brief did not anticipate: Share of Voice calls this function
+
+`share-of-voice.service.ts` calls the same `chooseViewPeriod` from **a different page**, which the locks
+doc forbids this session from changing. So the floor is **opt-in per caller**: supply `floorAsins` and
+you get the floor *instead of* the ratio; omit it and the ratio is untouched. SOV passes no coverage and
+is byte-identical.
+
+All **four** KT call sites pass it together — the grid, `projectCliff`, the term drawer, and KT.6's two
+proposal sites — because KT.7 already paid for two surfaces computing the same week separately. A
+shared `periodCoverageByMarket` is exported so none of them can count coverage differently, and its
+`where` mirrors the period groupBy exactly.
+
+### 8.6 · Verified against the real service
+
+`getKeywordTracker` called exactly as the route calls it:
+
+| market | before | after | ASINs | rows | verdict |
+|---|---|---|---|---|---|
+| IT | 07-19 · 27 d | **08-02 · 12 d** | 12 | 258 | complete |
+| DE | 07-19 · 27 d | **08-02 · 12 d** | 10 | 135 | complete |
+| ES | 07-19 · 27 d | **08-02 · 12 d** | 12 | 46 | complete |
+| FR | 07-12 · 34 d | 08-02 · 12 d | **1** | 1 | **truncated** |
+
+**KT.1b's invariant re-run in its three scopes — 0 inversions, one distinct period per grid:**
+
+```
+IT default                    period 2026-08-02 · 40 measured rows · periods [2026-08-02] · INVERSIONS 0
+portfolio IT_Gale             period 2026-08-02 · 40 measured rows · periods [2026-08-02] · INVERSIONS 0
+campaign Gale Jacket Yellow   period 2026-08-02 ·  7 measured rows · periods [2026-08-02] · INVERSIONS 0
+```
+
+🔴 A first run of that probe reported `INVERSIONS 0` while reading `r.share` and `w.asOf`, **neither of
+which exists** — 0 of 0 rows. The field names are `impressionShare` and `window.period`. It also matched
+portfolio `DE_Gale` against market IT and scored 0 inversions over an empty grid. Both were fixed before
+any number here was believed.
+
+### 8.7 · KT.3's Δ, re-measured — the trade this makes
+
+**Δ share is computable on 40 of 40 measured IT rows** (DE 7 of 7, ES 4 of 4), against **96 of 116** on
+the old period. The ratio is better and the population is smaller: the grid moves from **116 measured
+rows on a 27-day-old week to 40 on a 12-day-old one.**
+
+**That is a real trade and it should be stated as one: fresher, and narrower.** It follows from the feed,
+not from the gate — the 08-02 week covers 12 ASINs where 07-19 covered 19 — and it is the honest
+consequence of reading the newest week the feed actually wrote.
+
+### 8.8 · FR's banner — the one that had never rendered
+
+KT.1b recorded the truncated banner as *"test-verified and not verified by eye"*; at the old constants no
+market ever hit it. FR hits it now, and its copy described a rule the page no longer uses (*"N rows where
+a normal week holds about M"*).
+
+Rewritten to name the quantity the gate decides on, and — when `activeListings === 0` — to say where the
+cause actually is:
+
+> **The week of 2 Aug measured 1 of our FR ASINs; a view needs at least 5.** No week inside the last 42
+> days reached that — the best was 4 — so this is the newest there is rather than a complete one.
+> **FR has no ACTIVE listings at all**, so Amazon reports almost nothing for it. This is a listing-sync
+> problem, not a Brand Analytics one — the feed cannot measure ASINs that are not listed as active.
+
+`activeListings` is a new market-level count added for exactly this sentence. **FR holds 0**; IT 137,
+DE 99, ES 19. Sending an operator to the Brand Analytics feed would have been sending them to the wrong
+system: SQP.4 measured FR returning **0 rows from an ASIN holding 247 historical FR rows**.
+
+🔴 **Not paired with a denominator on purpose.** The reach line's *"N of M advertised"* is **scope**-level
+(`scope.resolved.asinsCovered` / `.asins`); this gate is **market**-level. Printing one against the other
+would compare two populations in one sentence — the defect class this page keeps finding.
