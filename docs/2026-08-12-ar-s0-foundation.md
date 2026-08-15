@@ -177,10 +177,12 @@ default, never a stored preference — with the one deliberate exception the sub
 (`market`, which falls back to `AdsMarketplaceProvider`, because a market is a *place you are
 working in*).
 
-**`?page=` is deliberately NOT emitted.** `AdsDataGrid` holds `page`, `rowsPerPage` and `search` in
-private `useState` with no seed and no callback, so a `?page=` this page wrote could not restore the
-view it names. PLC.0 reached the same conclusion; emitting a param that does not round-trip is worse
-than not having one. See §7.
+**`?page=` was deliberately NOT emitted — ✅ closed 2026-08-16.** `AdsDataGrid` held `page`,
+`rowsPerPage` and `search` in private `useState` with no seed and no callback, so a `?page=` this
+page wrote could not restore the view it names, and emitting a param that does not round-trip is
+worse than not having one. **S4.1 (`74fdd8090`) added `initialPage`/`onPageChange` +
+`initialSearch`/`onSearchChange`, citing this section by name**, and this page is the first adopter.
+`?page=` now round-trips; `?q=` deliberately stays page-owned. See §7.
 
 ---
 
@@ -347,6 +349,59 @@ void`, and `initialSearch?: string` + `onSearchChange?: (q: string) => void`, bo
 callback's presence exactly as BID.S0 gated sort and filters — so the ~20 existing grids stay
 byte-identical. That is the whole ask. **AR.S0 did not make it**: `AdsDataGrid` is a §3 shared file
 and a fifth session editing it this week is how a shared file breaks every session's push.
+
+---
+
+### 7.1 ✅ Closed, 2026-08-16 — and what the first adoption found
+
+**S4.1 (`74fdd8090`) shipped the ask verbatim**, gated exactly as specified and citing this section
+in its own header. **FB.1 (`5d014f324`)** added a third pair, `filterState` / `onFilterStateChange`
+(+ `hideFilterPanel`), and **FB.2 (`7f39868e5`)** turned that into the section's one merged bar —
+`_shared/useMergedFilters` + `AdsFilterBar` — adopted by Bid, Budget and Automations. This page is
+the **first consumer of the page/search pair** and the **fourth of the bar**. What changed here:
+
+| | before | now |
+|---|---|---|
+| `?page=` | not emitted | **round-trips**, seeded and emitted, page 1 absent from the URL |
+| filters | BID.S0's seed/emit bridge — a merging seed and a one-tick emit suppression | **`useMergedFilters`**, one state object, one writer on the URL |
+| the filter panel | the grid's own, collapsed, inside the card it filters | **one bar at the top of the page** (`hideFilterPanel`) |
+| `?q=` | page-owned, with a note calling it a workaround | page-owned, **and now a decision** — see below |
+
+**`useMergedFilters` rather than the hand-rolled equivalent I wrote first.** The hand-rolled version
+worked and was four lines shorter; it was also a fourth way of resolving the same thing in a section
+that has already paid for five scope bars. The shared hook additionally handles the two cases a
+hand-rolled one gets wrong — a **page-local range filter**, which S4's metric columns will bring,
+and **not rewriting an identical address bar on every keystroke** in a range input.
+
+⚠ **One consequence to carry forward:** with `hideFilterPanel`, `AdsDataGrid` no longer resets its
+own page when a filter moves — that reset lived in the panel's `onAfterChange`. `status` and
+`delivery` therefore joined `ROW_SET_KEYS`, so the page owes the reset. Narrowing to three rows
+while standing on page 2 would otherwise show an empty grid and no reason why.
+
+**`?q=` stays page-owned, and that is no longer a workaround.** The grid searches the rows it
+renders, and this page renders four different kinds of row. Searching *gale* here filters
+**campaigns** and re-aggregates, so at market grain you get four rows counting only the gale
+campaigns. Handed to the grid, the same word would filter the four **market rows** by their labels
+and return nothing. A page number means the same thing whatever a row is; a search term does not.
+
+**`?page=` resets on anything that changes which rows exist** — market, grain, portfolio, line,
+campaign, `q` — and that rule lives inside `push()` so no call site can forget it. Page 3 of 220
+campaigns is not page 3 of 4 market rows. Status and delivery are deliberately *not* in that list:
+the grid already resets its own page when one of its filters moves, and a second copy of that rule
+is a second thing to keep in agreement.
+
+🔴 **One defect found by being first, and it is in the shared bridge, not here.**
+`AdsDataGrid`'s inward page effect arms `suppressPageEmit` **unconditionally** before calling
+`setPage(seedPage)`. When the seed is an echo of the grid's own emit, that `setPage` is a no-op,
+the outward effect never runs to consume the flag, and the suppression is still armed when the
+operator clicks the **next** page — so that click is swallowed. The symptom is a pager that updates
+the URL on every *other* click: grid on page 3, address bar still saying 2.
+
+This page guards it on the consumer side (withhold the seed while the URL merely mirrors what we
+emitted; a genuine inbound change — the back button, a pasted link — never matches). **The proper
+fix is one line in the grid** — skip the effect when `seedPage` already equals `page` — and it is
+handed to the shared owner in the locks doc §4 rather than made here, in a file three sessions hold.
+The same trap applies to `initialSearch`/`onSearchChange`, which has the identical shape.
 
 ---
 

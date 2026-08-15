@@ -1205,6 +1205,41 @@ against the column's own content-driven width — use px); and a label that is a
 Labels are labels; the sentence goes in `title`. Beyond about ten columns nothing fits 1602px
 regardless, and the honest answer is `defaultHidden` on the ones addressable another way.
 
+🔴 **AR.S0b → whoever owns `AdsDataGrid`, 2026-08-16 — S4.1's page bridge swallows every other page
+click, and the fix is one line.** Apply Rules is the **first consumer** of `initialPage` /
+`onPageChange` (and of FB.1's `filterState`), so this had not been exercised before.
+
+`AdsDataGrid.tsx:494-499` arms `suppressPageEmit.current = true` **unconditionally**, then calls
+`setPage(seedPage)`. When the page hands back the value the grid just emitted — which is what a
+URL-backed consumer does by construction — that `setPage` is a **no-op**: `page` does not change,
+so the outward effect at `:501` never runs, and nothing consumes the flag. It is still armed on the
+operator's next pager click, and that click updates the grid but **not the URL**. Symptom: the grid
+is on page 3 and the address bar still says 2, on every other click.
+
+```js
+// AdsDataGrid.tsx, the inward page effect — one added line
+if (!onPageChange || seedPage == null || !bridgeMounted.current) return
+if (seedPage === pageRef.current) return          // ← nothing to suppress; do not arm the flag
+suppressPageEmit.current = true
+setPage(seedPage)
+```
+
+**`initialSearch` / `onSearchChange` at `:512` has the identical shape** and will do the identical
+thing to the first page that adopts it — this page deliberately did not (its `?q=` filters campaigns
+*before* aggregation, so the grid's row-level search would mean something different at three of its
+four grains).
+
+AR.S0b guarded it **consumer-side** instead — withhold the seed while the URL merely mirrors what we
+emitted — because `AdsDataGrid` is a §3 file that three sessions hold and that has already held
+everyone's push once this week (BID.S3's note above). The guard is correct but it is a workaround in
+one consumer; the line above fixes it for all eleven. Not claimed, not touched.
+
+Two things that did NOT need a workaround, recorded so the next adopter trusts them: `filterState` /
+`onFilterStateChange` is clean — it correctly disables the BID.S0 seed/emit bridge, and a page whose
+filters already live in the URL should prefer it (it deletes the merging seed and the one-tick emit
+suppression outright). And the `__` prefix on a filter key is now **load-bearing**, not decoration:
+`isServerKey` treats it as page-owned, so a saved preset preserves it instead of clobbering it.
+
 ## 5 · Traps this repo has already paid for
 
 - 🔴 **`AdsDataGrid.selectable` defaults to TRUE.** A grid mounted without the prop renders a

@@ -63,12 +63,14 @@
  * the page says so rather than implying otherwise with a spinner.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { useMergedFilters } from '../_shared/useMergedFilters'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -88,6 +90,16 @@ import { useAdsSync } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
 const DEFAULT_GRAIN: ApplyRulesGrain = 'campaign'
+
+/**
+ * The params that change which rows exist. A change to any of them invalidates `?page=`.
+ *
+ * 🔴 `status` and `delivery` are in this list BECAUSE the filter panel moved out of the grid.
+ * `AdsDataGrid` reset its own page from the panel's `onAfterChange`; under FB.2 the page renders
+ * the bar and passes `hideFilterPanel`, so that reset no longer fires and the page owes it. Left
+ * out, narrowing to 3 rows while standing on page 2 shows an empty grid and no reason why.
+ */
+const ROW_SET_KEYS = ['market', 'grain', 'portfolio', 'line', 'campaign', 'q', 'status', 'delivery'] as const
 
 /** Campaigns that advertise no product line at all. A real row, not a bucket for missing data. */
 const NO_LINE_KEY = '__no_line__'
@@ -134,6 +146,9 @@ export function ApplyRulesClient() {
   const dirParam = params.get('dir') === 'asc' ? 'asc' : 'desc'
   const statusFilter = (params.get('status') ?? '').split(',').filter(Boolean)
   const deliveryFilter = (params.get('delivery') ?? '').split(',').filter(Boolean)
+  // S4.1 closed the half of the URL contract AR.S0 §7 had to leave open. A junk or out-of-range
+  // value falls back to page 1 rather than to an empty grid.
+  const pageParam = Math.max(1, Math.floor(Number(params.get('page')) || 1))
 
   // 🔴 Reserved for S7. Parsed into the slot contract from day one and read by NOBODY in S0, so a
   // link someone shares today survives the section that gives it meaning.
@@ -161,9 +176,16 @@ export function ApplyRulesClient() {
         || (k === 'market' && v === DEFAULT_MARKET)
         || (k === 'grain' && v === DEFAULT_GRAIN)
         || (k === 'dir' && v === 'desc')
+        || (k === 'page' && v === '1')
       if (isDefault) next.delete(k)
       else next.set(k, v)
     }
+    // 🔴 Anything that changes WHICH ROWS EXIST sends you back to page 1, and the rule lives here so
+    // that no call site can forget it. Page 3 of 220 campaigns is not page 3 of 4 market rows, and a
+    // pager that survives a grain switch strands the operator on an empty page with no clue why.
+    // The grid resets itself on a filter or search change it owns, but market/grain/scope and this
+    // page's own `?q=` box are pushed from here, where the grid cannot see them.
+    if (ROW_SET_KEYS.some((k) => k in patch) && !('page' in patch)) next.delete('page')
     const qs = next.toString()
     // `push`, not `replace`: back and forward have to walk the filter history. A grid whose filters
     // cannot be undone with the browser's own back button is a grid people stop filtering.
@@ -643,23 +665,73 @@ export function ApplyRulesClient() {
     },
   ] : []), [grain])
 
-  const initialFilters = useMemo(
+  /**
+   * FB.1 / FB.2 — the page OWNS the filter state; the grid reads it and stores nothing.
+   *
+   * This replaces BID.S0's `initialFilters` + `onFilterChange` seed/emit bridge, which existed only
+   * because the grid kept its own copy: the seed had to MERGE rather than replace, and the outward
+   * emit had to be suppressed for one tick or URL → seed → emit → URL looped forever. Neither
+   * mechanism is needed once there is one writer, and both of this page's filters are already
+   * fully described by the URL — so there was never a second copy worth keeping, only one worth
+   * deleting.
+   *
+   * `useMergedFilters` rather than a hand-rolled version of it: FB.2 gave Bid, Budget and
+   * Automations one bar over one state object, and a fourth page resolving the same thing its own
+   * way is how this section ended up with five scope bars. It also already handles the two things
+   * a hand-rolled one gets wrong — a page-local range filter (which S4's metric columns will bring)
+   * and not rewriting an identical address bar on every keystroke.
+   *
+   * ⚠ The `__` prefix is load-bearing, not decoration: `isServerKey` treats a `__` key as owned by
+   * the page, so applying a saved filter preset (S8) preserves these two rather than clobbering the
+   * scope an operator arrived on.
+   */
+  const urlValues = useMemo(
     () => ({ __status: statusFilter, __delivery: deliveryFilter }),
     [statusFilter.join(','), deliveryFilter.join(',')],
   )
 
-  const onFilterChange = useCallback((next: Record<string, unknown>) => {
-    const list = (k: string) => (Array.isArray(next[k]) ? (next[k] as string[]).join(',') : '')
-    push({ status: list('__status'), delivery: list('__delivery') })
+  const onUrlChange = useCallback((next: Record<string, string>) => {
+    push({ status: next.__status ?? '', delivery: next.__delivery ?? '' })
   }, [push])
+
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange })
+
+  /**
+   * S4.1 — page 1 is the default and is absent from the URL; `push` deletes it.
+   *
+   * 🔴 The seed must NOT be handed back the value the grid just emitted, and this is the first
+   * adoption of that bridge so it is worth saying why. `AdsDataGrid`'s inward effect arms
+   * `suppressPageEmit` **unconditionally** before calling `setPage(seedPage)`. When the seed is an
+   * echo of the grid's own emit, that `setPage` is a no-op, nothing changes, and the outward effect
+   * never runs to consume the flag — so the suppression is still armed when the operator clicks the
+   * NEXT page, and that click is swallowed. The symptom is a pager that updates the URL on every
+   * other click: grid on page 3, address bar still saying 2.
+   *
+   * So the seed is withheld while the URL merely mirrors what we emitted. A genuine inbound change —
+   * the back button, a pasted link — never matches `lastEmittedPage` and seeds normally.
+   * Handed to the shared owner in the locks doc §4; the grid-side fix is one line (skip the effect
+   * when `seedPage` already equals `page`), and it is not mine to make in a file three sessions hold.
+   */
+  const lastEmittedPage = useRef<number | null>(null)
+  const onPageChange = useCallback((n: number) => {
+    lastEmittedPage.current = n
+    push({ page: String(n) })
+  }, [push])
+  const seedPage = pageParam === lastEmittedPage.current ? undefined : pageParam
 
   // ── the toolbar ───────────────────────────────────────────────────────────────────────────────
   //
-  // 🔴 `?q=` is owned here rather than handed to the grid. `AdsDataGrid` keeps `search`, `page` and
-  // `rowsPerPage` in private state with no seed and no callback, so a search typed into the grid
-  // cannot reach the URL and a `?q=` in the URL cannot reach the grid. One search box, and it is
-  // linkable. (`?page=` is deliberately not emitted for the same reason — a param that cannot
-  // restore the view it names is worse than no param.)
+  // 🔴 `?q=` stays owned HERE, and that is now a choice rather than a workaround.
+  //
+  // S4.1 added `initialSearch`/`onSearchChange`, so this box could be handed to the grid — and it
+  // must not be, because the grid searches the rows it renders and this page renders four different
+  // kinds of row. Searching "gale" here filters CAMPAIGNS and then re-aggregates, so at market grain
+  // you get four rows counting only the gale campaigns. Handed to the grid, the same word would
+  // filter the four market rows by their own labels and return nothing. One box that means one
+  // thing at all four grains beats one box that quietly changes subject when the grain does.
+  //
+  // (`?page=` had the same shape of hole and does NOT have this problem — a page number means the
+  // same thing whatever a row is — so it is bridged below.)
   const searchBox = (
     <span className="h10-ar-search">
       <input
@@ -737,6 +809,14 @@ export function ApplyRulesClient() {
 
       <RulesTabs active="rules" />
 
+      {/* FB.2 — one bar, at the top of the page, above the numbers it produces. It replaces the
+          grid's own collapsed "Show Filters" panel (`hideFilterPanel` below), which put this page's
+          only two filters inside the card they filter and two scroll-lengths from the sentence
+          stating what they resolved to. Collapsed by default here, unlike Bid's: these are two
+          optional narrowings of a complete population, not the page's primary control — the grain
+          switch is, and it lives in the toolbar beside the rows it reshapes. */}
+      <AdsFilterBar filters={filters} value={filterState} onChange={setFilterState} />
+
       {resolution && (
         <p className="h10-ar-said">
           <b>{resolution}</b>
@@ -792,9 +872,11 @@ export function ApplyRulesClient() {
           firstSortValue={(r) => r.name.toLowerCase()}
           columns={campaignColumns}
           filters={filters}
-          initialFilters={initialFilters}
-          onFilterChange={onFilterChange}
-          filtersDefaultOpen={false}
+          filterState={filterState}
+          onFilterStateChange={setFilterState}
+          hideFilterPanel
+          initialPage={seedPage}
+          onPageChange={onPageChange}
           defaultSort={sortKey ? { key: sortKey, dir: dirParam } : undefined}
           onSortChange={onSortChange}
           enabledFirst={(r) => r.status}
@@ -826,6 +908,8 @@ export function ApplyRulesClient() {
           )}
           firstSortValue={(r) => r.label.toLowerCase()}
           columns={aggregateColumns}
+          initialPage={seedPage}
+          onPageChange={onPageChange}
           defaultSort={sortKey ? { key: sortKey, dir: dirParam } : { key: 'n', dir: 'desc' }}
           onSortChange={onSortChange}
           showTotal
