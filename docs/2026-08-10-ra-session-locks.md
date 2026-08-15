@@ -1432,6 +1432,32 @@ carrying it in the working tree — the same rule this section already gives for
 
 ---
 
+### 🔴 LIVE ON PROD, 2026-08-16 ~01:40 — the Bid page freezes the renderer at `?status=all`
+
+Not diagnosed to a commit, and **not this session's** — recording it so it is not lost.
+
+**Symptom.** `/marketing/ads/rules-automation/bid?status=all` loads, then the renderer stops
+responding: CDP `Runtime.evaluate` times out at 45 s, screenshots fail with "page is busy".
+`?status=all&target=…` does the same. The page WITHOUT `status=all` (2,739 targets) is fine, and
+`/negative-targeting` is fine, so it is this page and this param.
+
+**What it is not.** The server is not the cause — measured directly:
+`status=enabled` 2,739 rows / 2.47 MB / 6.1 s versus `status=all` 3,155 rows / 2.80 MB / 6.7 s.
+A 13% difference, no cliff. And it is not BID.S3's diff: this session's only web change is inside
+`BidTargetDrawer.tsx`, which is mounted at `BidClient.tsx:961` behind `{reserved.target && …}` and
+therefore does not render in the failing case at all.
+
+**What changed in the window.** The same URL was used four times ~40 minutes earlier for BID.S3's
+fixture verification and was responsive every time. Since then five commits landed on
+`apps/web/src/app/marketing/ads/`: `2341b1562` (BSP.2), `b0172818c` (PLC.3), **`52a91421e` (FB.3 —
+"the four pages that had a scope bar and no filters panel")**, `0d6e37689` (SOV.6), `29e57197d`
+(BUD.8). FB.3 touches the filters panel, which this page has. A deploy in the same window also
+FAILED type-check on `AdsFilterBar`'s `notesSlot` prop, so the live bundle may not be a clean one.
+
+**For whoever owns FB.3 / `AdsFilterBar`:** start there. A 6-second read that re-renders a
+2.8 MB payload on every cursor tick would also do it, so the `adsBus` / cursor work (`aa3f99cd7`,
+`7e6935135`) is the other place to look.
+
 ## 5 · Traps this repo has already paid for
 
 ### 🔴 The `commit --only` trap has a SECOND form, and it shipped a red tip to prod (RA.SPINE S4b, 2026-08-16)
