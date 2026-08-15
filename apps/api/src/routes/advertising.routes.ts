@@ -8116,12 +8116,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/budget-schedules', async (_request, reply) => {
     reply.header('Cache-Control', 'private, max-age=15')
     const items = await prisma.budgetSchedule.findMany({ where: { kind: 'BUDGET' }, orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }] })
-    const shaped = items.map((s) => ({
-      id: s.id, name: s.name, type: s.type, enabled: s.enabled, autoRefill: s.autoRefill,
-      days: bsScheduleDays(s.windows),
-      startDate: bsFmtDate(s.startDate), endDate: s.neverExpire ? null : bsFmtDate(s.endDate),
-      excludeStart: null as string | null, excludeEnd: null as string | null,
-    }))
+    const shaped = items.map((s) => {
+      // BSP.2 (§2.2) — the columns stop being hard-coded nulls: the FIRST stored blackout range
+      // renders (the grid has two columns, not a list); pre-fix rows that stored the builder's
+      // boolean `false` fall through Array.isArray to none, exactly as the executor reads them.
+      const ex = Array.isArray(s.excludeDates) ? (s.excludeDates as Array<{ start?: string; end?: string }>) : []
+      const first = ex.find((r) => r?.start && r?.end) ?? null
+      return {
+        id: s.id, name: s.name, type: s.type, enabled: s.enabled, autoRefill: s.autoRefill,
+        days: bsScheduleDays(s.windows),
+        startDate: bsFmtDate(s.startDate), endDate: s.neverExpire ? null : bsFmtDate(s.endDate),
+        excludeStart: first?.start ?? null, excludeEnd: first?.end ?? null,
+        excludeRanges: ex.length,
+      }
+    })
     return { items: shaped, count: shaped.length }
   })
 
@@ -8141,9 +8149,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       timezone: (b.timezone as string) ?? 'Europe/Rome', chartPrefs: (b.chartPrefs as object) ?? {},
       startDate: b.startDate ? new Date(String(b.startDate)) : null,
       endDate: b.endDate ? new Date(String(b.endDate)) : null,
-      neverExpire: b.neverExpire !== false, excludeDates: (b.excludeDates as object) ?? [],
+      // BSP.2 (§2.2) — only an ARRAY of ranges is a blackout list. The old `?? []` let the
+      // builder's boolean `false` through into a Json column documented as `[{start,end}]`.
+      neverExpire: b.neverExpire !== false, excludeDates: Array.isArray(b.excludeDates) ? b.excludeDates : [],
       autoRefill: b.autoRefill === true,
     } })
+    // BSP.2 (§2.6) — the schedule's own edit history was unrecorded (unlike the rank side's
+    // RankScheduleVersion). One audit row per CRUD; best-effort, never fails the write.
+    await prisma.advertisingActionLog.create({
+      data: {
+        userId: actorFromHeaders(request.headers as Record<string, unknown>),
+        actionType: 'budget_schedule_create', entityType: 'BUDGET_SCHEDULE', entityId: schedule.id,
+        payloadBefore: {}, payloadAfter: { name: schedule.name, type: schedule.type, enabled: schedule.enabled },
+        amazonResponseStatus: 'SUCCESS',
+      },
+    }).catch(() => { /* audit must never fail the write it describes */ })
     return { schedule }
   })
 
@@ -8152,14 +8172,38 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = (request.body ?? {}) as Record<string, unknown>
     const data: Record<string, unknown> = {}
     for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'autoRefill', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    // BSP.2 (§2.2) — same sanitisation as create: an array or nothing.
+    if (data.excludeDates !== undefined && !Array.isArray(data.excludeDates)) data.excludeDates = []
     if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null
     if (b.endDate !== undefined) data.endDate = b.endDate ? new Date(String(b.endDate)) : null
-    try { const schedule = await prisma.budgetSchedule.update({ where: { id }, data }); return { schedule } } catch { reply.status(404); return { error: 'not found' } }
+    try {
+      const schedule = await prisma.budgetSchedule.update({ where: { id }, data })
+      await prisma.advertisingActionLog.create({
+        data: {
+          userId: actorFromHeaders(request.headers as Record<string, unknown>),
+          actionType: 'budget_schedule_update', entityType: 'BUDGET_SCHEDULE', entityId: id,
+          payloadBefore: {}, payloadAfter: { fields: Object.keys(data), enabled: schedule.enabled },
+          amazonResponseStatus: 'SUCCESS',
+        },
+      }).catch(() => { /* best-effort */ })
+      return { schedule }
+    } catch { reply.status(404); return { error: 'not found' } }
   })
 
   fastify.delete('/advertising/budget-schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try { await prisma.budgetSchedule.delete({ where: { id } }); return { ok: true } } catch { reply.status(404); return { error: 'not found' } }
+    try {
+      const gone = await prisma.budgetSchedule.delete({ where: { id } })
+      await prisma.advertisingActionLog.create({
+        data: {
+          userId: actorFromHeaders(request.headers as Record<string, unknown>),
+          actionType: 'budget_schedule_delete', entityType: 'BUDGET_SCHEDULE', entityId: id,
+          payloadBefore: { name: gone.name, type: gone.type, enabled: gone.enabled }, payloadAfter: {},
+          amazonResponseStatus: 'SUCCESS',
+        },
+      }).catch(() => { /* best-effort */ })
+      return { ok: true }
+    } catch { reply.status(404); return { error: 'not found' } }
   })
 
   // BS chart — "Hourly Campaign Performance" aggregated by hour-of-day (Rome), from the AMS

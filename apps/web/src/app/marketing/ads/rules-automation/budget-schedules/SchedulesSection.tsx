@@ -83,9 +83,13 @@ export function SchedulesSection() {
   const columns: GridColumn<ScheduleRow>[] = useMemo(() => [
     { key: 'type', label: 'Type', metric: false, sortable: true, render: (r) => r.type },
     { key: 'days', label: 'Days', metric: false, sortable: false, render: (r) => r.days },
-    { key: 'autoRefill', label: 'Auto Refill', metric: false, sortable: false, render: (r) => (r.autoRefill ? 'On' : 'Off') },
+    // BSP.2 (§2.3) — the Auto Refill column is GONE, not relabelled: `autoRefill` has zero
+    // readers anywhere in api or web, the builder never sends it, and a column that is
+    // permanently "Off" and would mean nothing "On" is a promise the object cannot keep.
     { key: 'startDate', label: 'Start Date', metric: false, sortable: true, render: (r) => r.startDate },
     { key: 'endDate', label: 'End Date', metric: false, sortable: true, render: (r) => r.endDate },
+    // §2.2 — these two now render REAL values: the route stopped hard-coding nulls and returns
+    // the first stored blackout range (rows that stored the old boolean fall through to none).
     { key: 'excludeStart', label: 'Exclude Start Date', metric: false, sortable: false, render: (r) => r.excludeStart },
     { key: 'excludeEnd', label: 'Exclude End Date', metric: false, sortable: false, render: (r) => r.excludeEnd },
   ], [])

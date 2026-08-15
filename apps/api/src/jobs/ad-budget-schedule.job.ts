@@ -32,9 +32,24 @@ function activeWindow(windows: BSWindow[], tz: string): BSWindow | null {
   if (!Array.isArray(windows) || windows.length === 0) return null
   const { day, minutes } = nowInTz(tz)
   return windows.find((w) => {
-    if (Number(w.day) !== day) return false
-    if (!w.start || !w.end) return true // daily (multiplier) windows span the whole day
-    return minutes >= parseHHMM(w.start) && minutes < parseHHMM(w.end)
+    const wDay = Number(w.day)
+    if (!w.start || !w.end) return wDay === day // daily (multiplier) windows span the whole day
+    const a = parseHHMM(w.start)
+    const b = parseHHMM(w.end)
+    /**
+     * BSP.2 (§2.1) — a window whose end is at or before its start WRAPS past midnight.
+     * `22:00 → 02:00` used to evaluate `minutes >= 1320 && minutes < 120` and was never active,
+     * and hour 23 was unreachable by any window (TIME_OPTIONS ends at 23:00 and the match is
+     * `< end`) — €97.73 = 5.7% of hourly-tracked spend, the account's fourth-largest hour.
+     * With the wrap, `23:00 → 00:00` covers it. Two care points:
+     *   · the post-midnight half runs under the FOLLOWING weekday, so it matches `(day+1) % 7`
+     *     — the picker names the day the window STARTS;
+     *   · `start === end` stays "never", the prior behaviour for a degenerate window, not
+     *     silently repurposed as all-day.
+     */
+    if (a === b) return false
+    if (a < b) return wDay === day && minutes >= a && minutes < b
+    return (wDay === day && minutes >= a) || ((wDay + 1) % 7 === day && minutes < b)
   }) ?? null
 }
 
@@ -71,19 +86,48 @@ export async function runBudgetScheduleOnce(): Promise<{ evaluated: number; chan
     const nextLast: Record<string, { budget: number; at: string }> = {}
 
     for (const c of camps) {
-      const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true } })
+      const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true, budgetBaselineCents: true } })
       if (!campaign || campaign.status === 'ARCHIVED') continue
-      const base = c.dailyBudget != null ? Number(c.dailyBudget) : Number(campaign.dailyBudget ?? 0)
+      /**
+       * BSP.2 (§2.5) — the base, in precedence order:
+       *   1. the operator's CAPTURED BASELINE (BUD.2's anchor — the one number every relative
+       *      budget mechanism now agrees to return to);
+       *   2. the creation-time snapshot (the old behaviour, for campaigns with no baseline);
+       *   3. the live value, when the snapshot never carried one.
+       * A schedule created before the August ratchet used to keep restoring pre-ratchet budgets
+       * forever — undoing both the rules and the pacer — because the snapshot was frozen at
+       * creation and nothing could refresh it.
+       */
+      const base = campaign.budgetBaselineCents != null
+        ? campaign.budgetBaselineCents / 100
+        : c.dailyBudget != null ? Number(c.dailyBudget) : Number(campaign.dailyBudget ?? 0)
       // In a window → the window's budget; otherwise restore base.
       const target = win ? computeBudget(base, s.type, win.adj, win.value) : Math.max(1, Math.round(base * 100) / 100)
-      nextLast[c.id] = { budget: target, at: new Date().toISOString() }
-      if (last[c.id]?.budget === target) continue // churn guard
-      if (Number(campaign.dailyBudget ?? 0) === target) continue
+      const live = Number(campaign.dailyBudget ?? 0)
+      /**
+       * BSP.2 (§2.4) — the guard order, rebuilt:
+       *   · REALITY first: if the live budget already equals the target there is nothing to do,
+       *     and that fact (not our intent) is what gets memoised.
+       *   · The memo second: the one-shot stays a one-shot, in AND out of windows — two other
+       *     engines write this same field (§3's measured oscillation), and whether this schedule
+       *     should re-fight them is the §3 precedence decision, which is the operator's. This fix
+       *     changes what the memo RECORDS, never who wins.
+       *   · A FAILED write is no longer memoised as applied — the old code stamped `nextLast`
+       *     before the attempt, so one failure silently skipped the window until the target
+       *     changed. Now the previous memo carries forward and the next tick retries.
+       */
+      if (live === target) { nextLast[c.id] = { budget: target, at: new Date().toISOString() }; continue }
+      if (last[c.id]?.budget === target) { nextLast[c.id] = { budget: target, at: new Date().toISOString() }; continue }
       try {
         await updateCampaignWithSync({ campaignId: c.id, patch: { dailyBudget: target }, actor: `automation:budget-schedule-${s.id}` as never, reason: win ? `budget schedule: window → €${target}` : 'budget schedule: outside window → base', applyImmediately: true } as never)
         changed++
+        nextLast[c.id] = { budget: target, at: new Date().toISOString() }
         logger.info('[budget-schedule] applied', { scheduleId: s.id, campaignId: c.id, budget: target, inWindow: !!win })
-      } catch (e) { logger.warn('[budget-schedule] apply failed', { scheduleId: s.id, campaignId: c.id, error: (e as Error).message }) }
+      } catch (e) {
+        // Carry the previous memo (if any) so the failure is retried, not laundered into success.
+        if (last[c.id]?.budget != null) nextLast[c.id] = { budget: last[c.id].budget!, at: new Date().toISOString() }
+        logger.warn('[budget-schedule] apply failed — will retry next tick', { scheduleId: s.id, campaignId: c.id, error: (e as Error).message })
+      }
     }
     await prisma.budgetSchedule.update({ where: { id: s.id }, data: { lastApplied: nextLast, lastEvaluatedAt: new Date() } })
   }
