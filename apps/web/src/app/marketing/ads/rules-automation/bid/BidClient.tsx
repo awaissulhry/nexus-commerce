@@ -611,7 +611,9 @@ export function BidClient() {
     },
     {
       key: 'campaigns', n: num(census.campaigns), label: census.campaigns === 1 ? 'campaign' : 'campaigns',
-      tip: `Campaigns holding one of these targets. ${num(census.liveCampaigns)} of them are ENABLED.`,
+      // S6 made the campaign grain filter by CAMPAIGN status, so the click is a view switch that
+      // lands on the ENABLED ones — the tip says so rather than letting 217 → 86 read as a bug.
+      tip: `Campaigns holding one of these targets. ${num(census.liveCampaigns)} of them are ENABLED — the campaign grain's default filter shows those; set Status to “Any” for all of them.`,
       on: view === 'campaigns', apply: () => push({ view: 'campaigns' }),
     },
     {

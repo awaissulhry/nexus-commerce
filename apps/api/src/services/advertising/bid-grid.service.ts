@@ -804,7 +804,17 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
 
   let rows: BidTargetRow[] | BidCampaignRow[]
   if (req.view === 'campaigns') {
-    const cr = rollUp()
+    /**
+     * BID.S6 — at CAMPAIGN grain, the status filter means CAMPAIGN status. It always filtered
+     * TARGET status (S0 built one query for both views), which put rows wearing "paused" badges
+     * under a filter reading "Enabled", and made the S1 band's "40 no bidder" land on a grid
+     * showing 173 — the band counts ENABLED campaigns, the roll-up counted campaigns holding
+     * enabled targets, and a chip that cannot reproduce its own number is the NEG.1 defect.
+     * `all` keeps the full roll-up, exactly as before.
+     */
+    const cr = req.status === 'all'
+      ? rollUp()
+      : rollUp().filter((c) => c.status === STATUS_ENUM[req.status])
     const f = req.sort ? campaignSort[req.sort] : null
     rows = f ? [...cr].sort((a, b) => cmp(f(a), f(b), sign)) : cr.sort((a, b) => b.spendCents - a.spendCents || a.name.localeCompare(b.name))
   } else {
