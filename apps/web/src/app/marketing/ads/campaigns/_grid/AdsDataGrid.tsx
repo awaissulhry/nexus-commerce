@@ -205,7 +205,8 @@ function useClickAway<T extends HTMLElement>(onAway: () => void) {
   return ref
 }
 
-const pluralize = (noun: string, n: number) => (n === 1 ? noun : `${noun}s`)
+// Consonant-y takes -ies ("8 Queries", not "8 Querys" — shipped, seen, fixed).
+const pluralize = (noun: string, n: number) => (n === 1 ? noun : /[^aeiou]y$/i.test(noun) ? `${noun.slice(0, -1)}ies` : `${noun}s`)
 
 export function AdsDataGrid<T>({
   rows, loading, rowId, noun,
