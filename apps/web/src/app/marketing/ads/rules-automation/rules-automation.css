@@ -4518,3 +4518,10 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-au-runsum { font-style: normal; color: #6b7585; }
 .h10-au-enginenote { margin: 14px 0 0; font-size: 12.5px; color: #4b5563; }
 .h10-au-enginenote a { color: #1f6fde; display: inline-flex; align-items: center; gap: 3px; }
+
+/* AUTO.A1 — band tiles that filter. A button-tile keeps the stat card's look; the pressed state
+   is a visible ring, not colour alone. */
+.h10-au-stat.tilebtn { appearance: none; font: inherit; text-align: left; cursor: pointer; }
+.h10-au-stat.tilebtn:hover { border-color: #c7cdd6; }
+.h10-au-stat.tilebtn.on { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
+.h10-au-stat.exposure .v { color: #b42318; }  /* 5.9:1 on the card ground */

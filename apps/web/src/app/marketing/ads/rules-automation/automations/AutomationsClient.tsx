@@ -84,6 +84,20 @@ export function AutomationsClient() {
   const [actors, setActors] = useState<{ engines: EngineActor[]; observed: ObservedActor[] } | null>(null)
   const [actorsErr, setActorsErr] = useState<string | null>(null)
   const [engineKey, setEngineKey] = useState<string | null>(null)
+  const [pendingCount, setPendingCount] = useState<number | null>(null)
+  // AUTO.A1 — the band tile acting as a filter (?tile=). Clicking the active tile clears it.
+  const [tile, setTile] = useState<'writing' | 'unscoped' | 'off' | null>(() => {
+    if (typeof window === 'undefined') return null
+    const v = new URLSearchParams(window.location.search).get('tile')
+    return v === 'writing' || v === 'unscoped' || v === 'off' ? v : null
+  })
+  const setTileAndUrl = (t: 'writing' | 'unscoped' | 'off' | null) => {
+    const next = t === tile ? null : t
+    setTile(next)
+    const u = new URL(window.location.href)
+    if (next) u.searchParams.set('tile', next); else u.searchParams.delete('tile')
+    window.history.replaceState(null, '', u)
+  }
   const [kind, setKind] = useState<ActorKind>(() => {
     if (typeof window === 'undefined') return 'all'
     const v = new URLSearchParams(window.location.search).get('kind')
@@ -123,6 +137,13 @@ export function AutomationsClient() {
       setActors({ engines: Array.isArray(aj?.engines) ? aj.engines : [], observed: Array.isArray(aj?.observed) ? aj.observed : [] })
       setActorsErr(null)
     } catch (e) { setActorsErr((e as Error).message); setActors({ engines: [], observed: [] }) }
+    // AUTO.A1 — the queue, in one number. null (not 0) on failure: "no queue" and "could not
+    // count the queue" must never render the same.
+    try {
+      const q = await fetch(`${getBackendUrl()}/api/advertising/suggestions/count`, { cache: 'no-store' })
+      const qj = await q.json()
+      setPendingCount(q.ok && typeof qj?.pending === 'number' ? qj.pending : null)
+    } catch { setPendingCount(null) }
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -207,14 +228,32 @@ export function AutomationsClient() {
    * keep it. `observed` rows ride with the engines segment — they are the log's answer to
    * "who else", and hiding them under Rules would bury the one list nothing else shows.
    */
+  /** A rule with no grain bound at all — the account's actual exposure when it also writes. */
+  const isUnscoped = (r: Rule) => r.scope.kind === 'account' && !r.marketplace && !r.scope.product
+
   const gridRows = useMemo<ActorRow[]>(() => {
-    const ruleRows: ActorRow[] = rows.map((r) => ({ k: 'rule', r }))
-    const engineRows: ActorRow[] = (actors?.engines ?? []).map((e) => ({ k: 'engine', e }))
-    const obsRows: ActorRow[] = (actors?.observed ?? []).map((o) => ({ k: 'obs', o }))
+    let ruleRows: ActorRow[] = rows.map((r) => ({ k: 'rule', r }))
+    let engineRows: ActorRow[] = (actors?.engines ?? []).map((e) => ({ k: 'engine', e }))
+    let obsRows: ActorRow[] = (actors?.observed ?? []).map((o) => ({ k: 'obs', o }))
+    // A1 — the active tile narrows every kind it can describe. Engines are unscoped by
+    // construction, so 'unscoped' keeps the AUTO ones; 'off' keeps OFF engines.
+    if (tile === 'writing') {
+      ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'AUTO' && a.r.writes)
+      engineRows = engineRows.filter((a) => a.k === 'engine' && a.e.posture === 'AUTO')
+      obsRows = []
+    } else if (tile === 'unscoped') {
+      ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'AUTO' && a.r.writes && isUnscoped(a.r))
+      engineRows = engineRows.filter((a) => a.k === 'engine' && a.e.posture === 'AUTO')
+      obsRows = []
+    } else if (tile === 'off') {
+      ruleRows = ruleRows.filter((a) => a.k === 'rule' && a.r.level === 'OFF')
+      engineRows = engineRows.filter((a) => a.k === 'engine' && a.e.posture === 'OFF')
+      obsRows = []
+    }
     if (kind === 'rules') return ruleRows
     if (kind === 'engines') return [...engineRows, ...obsRows]
     return [...ruleRows, ...engineRows, ...obsRows]
-  }, [rows, actors, kind])
+  }, [rows, actors, kind, tile])
 
   const conflicts = useMemo(() => detectConflicts(all), [all])
 
@@ -227,12 +266,17 @@ export function AutomationsClient() {
     // The number that matters: on AUTO *and* able to reach Amazon.
     writing: all.filter((r) => r.level === 'AUTO' && r.writes).length,
     autoNotifyOnly: all.filter((r) => r.level === 'AUTO' && !r.writes).length,
+    // A1 — the account's actual exposure: writes, on AUTO, and bound to NOTHING.
+    unscopedWriting: all.filter((r) => r.level === 'AUTO' && r.writes && isUnscoped(r)).length,
+    engineAuto: (actors?.engines ?? []).filter((e) => e.posture === 'AUTO').length,
+    engineOff: (actors?.engines ?? []).filter((e) => e.posture === 'OFF').length,
     ready: [...grad.values()].filter((g) => g.canGraduate).length,
     // A rule can report completed executions while every action inside them failed, so the run
     // count alone reads as health. This is the state that has no surface anywhere today.
     allFailing: all.filter((r) => r.week.failed > 0 && r.week.acted === 0),
     neverRan: all.filter((r) => r.lifetime.evaluations === 0).length,
-  }), [all, grad])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [all, grad, actors])
 
   const categoryOpts = useMemo(() => {
     const seen = new Map<string, { label: string; n: number }>()
@@ -505,7 +549,8 @@ export function AutomationsClient() {
       />
       <RulesTabs active="automations" />
 
-      {/* ── Census ─────────────────────────────────────────────────────────────────────── */}
+      {/* ── A1 — the exposure band. Every tile that can filter the grid IS a filter (aria-pressed,
+             click again to clear); the two that cannot say why in their footline. ───────────── */}
       <div className="h10-au-census">
         <div className="h10-au-stat">
           <div className="k">Automations</div>
@@ -514,11 +559,11 @@ export function AutomationsClient() {
             {counts.neverRan > 0 ? `${counts.neverRan} have never evaluated once` : 'all have evaluated at least once'}
           </div>
         </div>
-        <div className="h10-au-stat">
+        <button type="button" className={`h10-au-stat tilebtn${tile === 'off' ? ' on' : ''}`} aria-pressed={tile === 'off'} onClick={() => setTileAndUrl('off')}>
           <div className="k">Off</div>
           <div className="v muted">{num(counts.off)}</div>
-          <div className="s">do not evaluate at all</div>
-        </div>
+          <div className="s">rules that do not evaluate{counts.engineOff > 0 ? ` · ${counts.engineOff} engines off` : ''}</div>
+        </button>
         <div className="h10-au-stat">
           <div className="k">Proposing</div>
           <div className="v">{num(counts.propose)}</div>
@@ -527,13 +572,23 @@ export function AutomationsClient() {
           </div>
         </div>
         {/* The emphasis, and it counts what can WRITE rather than what is on Auto. */}
-        <div className="h10-au-stat writing">
+        <button type="button" className={`h10-au-stat writing tilebtn${tile === 'writing' ? ' on' : ''}`} aria-pressed={tile === 'writing'} onClick={() => setTileAndUrl('writing')}>
           <div className="k">Writing to Amazon</div>
-          <div className="v">{num(counts.writing)}</div>
+          <div className="v">{rules === null || actors === null ? '…' : num(counts.writing + counts.engineAuto)}</div>
           <div className="s">
-            on Auto and able to change the account
+            {num(counts.writing)} rules + {actors === null ? '…' : num(counts.engineAuto)} engines on Auto
             {counts.autoNotifyOnly > 0 && <> · {counts.autoNotifyOnly} more on Auto that only notifies</>}
           </div>
+        </button>
+        <button type="button" className={`h10-au-stat exposure tilebtn${tile === 'unscoped' ? ' on' : ''}`} aria-pressed={tile === 'unscoped'} onClick={() => setTileAndUrl('unscoped')}>
+          <div className="k">Unscoped and writing</div>
+          <div className="v">{rules === null || actors === null ? '…' : num(counts.unscopedWriting + counts.engineAuto)}</div>
+          <div className="s">bound to no market, portfolio, campaign or product — the account&rsquo;s actual exposure</div>
+        </button>
+        <div className="h10-au-stat">
+          <div className="k">Awaiting you</div>
+          <div className="v">{pendingCount === null ? '—' : num(pendingCount)}</div>
+          <div className="s">{pendingCount === null ? 'the queue could not be counted' : 'pending proposals — the inbox is A6’s build'}</div>
         </div>
         {counts.ready > 0 && (
           <div className="h10-au-stat ready">
