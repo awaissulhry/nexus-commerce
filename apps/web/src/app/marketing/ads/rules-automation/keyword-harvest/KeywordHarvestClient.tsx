@@ -63,6 +63,8 @@ import { HvRepairs } from './HvRepairs'
 // nothing is lost in the move off `?tab=keyword-harvest`.
 import { TabRules } from '../_shared/TabRules'
 import { useAdsSync } from '../_shared/adsBus'
+import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
+import { StaleBanner } from '../_shared/StaleBanner'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -185,6 +187,18 @@ export function KeywordHarvestClient() {
   // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
   // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
   useAdsSync(['ads.keyword.changed', 'ads.negative.changed', 'ads.suggestion.changed', 'ads.rule.changed'], () => setReloadTick((n) => n + 1))
+
+  // RT.2 — the cursor. Harvest's subject is EXISTENCE (does this term have a keyword yet), so the
+  // cursor counts rather than reading `AdTarget.updatedAt` — measured, that column moved on 2,937
+  // of 3,155 rows in three hours because `ads-v1-sync` re-stamps every matched row.
+  const hvCursorParams = useMemo(() => {
+    const p: Record<string, string> = { market }
+    if (scope.campaign) p.campaign = scope.campaign
+    return p
+  }, [market, scope.campaign])
+  const hvCursorUrl = `${getBackendUrl()}/api/advertising/keyword-harvest/cursor`
+  const hvBaseline = useCursorBaseline<Record<string, unknown>>(hvCursorUrl, hvCursorParams, reloadTick)
+  const hvRefresh = useCursorPoll<Record<string, unknown>>({ url: hvCursorUrl, params: hvCursorParams, baseline: hvBaseline })
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -710,9 +724,12 @@ export function KeywordHarvestClient() {
         exportable
         onExport={onExport}
         toolbarLeft={(
-          <button type="button" className="h10-hv-copy" onClick={copyLink} title="Copy a link to exactly this view, with the market written in explicitly">
-            {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy link</>}
-          </button>
+          <>
+            <StaleBanner stale={hvRefresh.stale} subject="The search-term feed or a harvested keyword" onRefresh={() => setReloadTick((n) => n + 1)} />
+            <button type="button" className="h10-hv-copy" onClick={copyLink} title="Copy a link to exactly this view, with the market written in explicitly">
+              {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy link</>}
+            </button>
+          </>
         )}
         toolbarRight={data ? <span className="h10-hv-win">{num(data.total)} of {num(data.census.candidates)} in scope</span> : undefined}
         emptyNode={<EmptyState loading={loading} data={data} err={err} q={q} status={status} kind={kind} push={push} />}

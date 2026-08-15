@@ -39,20 +39,21 @@
  * ── 🔴 The liveness claim this page does NOT make ───────────────────────────────────────────────
  *
  * The ads SSE bus carries 0.21% of writes and the engines publish nothing to it, so this page polls
- * a cursor — `_shared/useCursorPoll`, reused unchanged. **But Apply Rules has no cursor endpoint
- * yet.** The hook is wired at `GET /advertising/apply-rules/cursor`, which does not exist; by the
- * hook's own rule 3 a failed poll is silent, so today no banner can appear, no error reaches the
- * page, and `lastCheckedAt` stays `null`. That null is the armed signal, and it is in the slot
- * contract so that no later section renders an "as of" while the poll has never succeeded.
+ * a cursor — `_shared/useCursorPoll`, reused unchanged.
  *
- * TODO(AR.S5) — the route this is waiting for. Three fields and only three:
- *     { campaignsAt: max(Campaign.updatedAt) in scope,
- *       loggedAt:    max(AdvertisingActionLog.loggedAt) where entityType='CAMPAIGN',
- *       n:           row count }
- * `n` is there because neither timestamp moves on a create or a delete. Do not copy Bid's cursor
- * (it rejected the audit log as load-bearing) or Budget's (it rejected the row timestamp) without
- * re-measuring: this page's subject is the write gate, the bounds and the pins, which move on a
- * third path again.
+ * ✅ RT.2 (2026-08-15) — the endpoint exists and the baseline is wired. For a fortnight before that
+ * this page polled `GET /advertising/apply-rules/cursor`, which **did not exist**, with
+ * `baseline: null`: rule 3 swallowed the 404 and the `stale` definition made a banner unreachable.
+ * A live-looking poll wired to nothing, and nothing on screen said so.
+ *
+ * 🔴 The TODO that stood here proposed `{ campaignsAt: max(Campaign.updatedAt), loggedAt, n }`.
+ * **Both halves were wrong, and it was superseded rather than implemented.** Measured on prod:
+ * `Campaign.updatedAt` moved on **200 of 220 rows in 25 minutes** — `ads-campaign-settings-sync`
+ * re-stamps every campaign every 20 minutes, so that cursor would have cried wolf about 72 times a
+ * day. And the audit log cannot see this page's headline column at all: `PATCH /live-writes` flips
+ * the write gate and logs only to `logger.warn`, writing no `AdvertisingActionLog` row.
+ * The shipped cursor is a value fingerprint — `{ n, managed, bounded, pinned, suppressed,
+ * liveBudgetCents, loggedAt }` — where the counts ARE the witness. See `ads-cursors.service.ts`.
  *
  * ── One staleness floor nothing on the client can fix ───────────────────────────────────────────
  *
@@ -69,7 +70,7 @@ import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
-import { useCursorPoll } from '../_shared/useCursorPoll'
+import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { getBackendUrl } from '@/lib/backend-url'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import {
@@ -400,8 +401,10 @@ export function ApplyRulesClient() {
   }, [guardrails, campaigns, allRows])
 
   // ── the refresh cursor ────────────────────────────────────────────────────────────────────────
-  // See the file header: the endpoint does not exist yet, the poll fails silently by design, and
-  // `lastCheckedAt === null` is what a later section must check before claiming anything is live.
+  // RT.2 — the endpoint exists now, and the baseline is read alongside the data. Before this the
+  // hook polled `/apply-rules/cursor` (a 404) with `baseline: null`, so by rule 3 the failure was
+  // silent and by the `stale` definition no banner could ever have fired: the page had a live-
+  // looking poll wired to nothing, for a fortnight, and nothing on screen said so.
   const cursorParams = useMemo(() => {
     const p: Record<string, string> = { market, grain }
     for (const [k, v] of Object.entries({ line: scope.line, portfolio: scope.portfolio, campaign: scope.campaign })) {
@@ -410,10 +413,15 @@ export function ApplyRulesClient() {
     return p
   }, [market, grain, scope.line, scope.portfolio, scope.campaign])
 
+  const cursorUrl = `${getBackendUrl()}/api/advertising/apply-rules/cursor`
+  const cursorBaseline = useCursorBaseline<Record<string, unknown>>(cursorUrl, cursorParams, reloadTick)
   const refresh = useCursorPoll<Record<string, unknown>>({
-    url: `${getBackendUrl()}/api/advertising/apply-rules/cursor`,
+    url: cursorUrl,
     params: cursorParams,
-    baseline: null,
+    baseline: cursorBaseline,
+    // A dialog open on one campaign is a conversation about that campaign; a banner about other
+    // rows can wait for it to close.
+    enabled: boundsFor == null,
   })
 
   const slotProps: ApplyRulesSlotProps = {

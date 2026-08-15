@@ -46,6 +46,8 @@ import { NegWastefulWords } from './NegWastefulWords'
 import { NegRules } from './NegRules'
 import { NegRecord } from './NegRecord'
 import { useAdsSync } from '../_shared/adsBus'
+import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
+import { StaleBanner } from '../_shared/StaleBanner'
 // NEG.5 and NEG.7 have both landed, so the two interim renders — `ProtectedTermsPanel` and
 // `RuleListTab` — are gone from this client. Both FILES stay: each has other importers.
 
@@ -124,6 +126,18 @@ export function NegativeTargetingClient() {
   // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
   // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
   useAdsSync(['ads.negative.changed', 'ads.keyword.changed', 'ads.rule.changed'], () => setReloadTick((n) => n + 1))
+
+  // RT.2 — the cursor. `n` is FIRST here, not a third guard as it is on Bid: creates and deletes
+  // are this page's main event, and `AdTarget.updatedAt` is disqualified by the schema's own
+  // comment (it is the last INGEST tick — all 62 archived negatives share one).
+  const negCursorParams = useMemo(() => {
+    const p: Record<string, string> = { market }
+    if (scope.campaign) p.campaign = scope.campaign
+    return p
+  }, [market, scope.campaign])
+  const negCursorUrl = `${getBackendUrl()}/api/advertising/negatives/cursor`
+  const negBaseline = useCursorBaseline<Record<string, unknown>>(negCursorUrl, negCursorParams, reloadTick)
+  const negRefresh = useCursorPoll<Record<string, unknown>>({ url: negCursorUrl, params: negCursorParams, baseline: negBaseline })
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -500,7 +514,7 @@ export function NegativeTargetingClient() {
           searchValue={(r) => `${r.term} ${r.campaignName} ${r.adGroupName}`}
           pagerCentered
           storageKey="nexus.neg.cols"
-          toolbarLeft={<ViewToggle view={view} push={push} />}
+          toolbarLeft={<><StaleBanner stale={negRefresh.stale} subject="A negation or a protected term" onRefresh={() => setReloadTick((n) => n + 1)} /><ViewToggle view={view} push={push} /></>}
           toolbarRight={data ? <span className="h10-ng-win">{num(data.total)} of {num(data.census.negations)} in scope</span> : undefined}
           emptyNode={<EmptyState loading={loading} data={data} q={q} push={push} />}
           reportLabel={data?.freshness.newestSyncedAt ? `last synced from Amazon ${dayMonth(data.freshness.newestSyncedAt)}` : undefined}
@@ -530,7 +544,7 @@ export function NegativeTargetingClient() {
           searchValue={(r) => r.term}
           pagerCentered
           storageKey="nexus.neg.termcols"
-          toolbarLeft={<ViewToggle view={view} push={push} />}
+          toolbarLeft={<><StaleBanner stale={negRefresh.stale} subject="A negation or a protected term" onRefresh={() => setReloadTick((n) => n + 1)} /><ViewToggle view={view} push={push} /></>}
           toolbarRight={data ? <span className="h10-ng-win">{num(data.total)} of {num(data.census.terms)} in scope</span> : undefined}
           emptyNode={<EmptyState loading={loading} data={data} q={q} push={push} />}
         />

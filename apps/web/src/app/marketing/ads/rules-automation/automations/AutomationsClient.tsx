@@ -41,6 +41,8 @@ import { QueueView } from './QueueView'
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { triggerText } from './ruleText'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
+import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
+import { StaleBanner } from '../_shared/StaleBanner'
 
 interface Rule extends DetailRule {
   category: string
@@ -187,6 +189,20 @@ export function AutomationsClient() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // RT.2 — the cursor. Account-wide on purpose: all four of this page's reads are account-wide, so
+  // a scoped cursor would describe a different row set from the grid. `cfg` folds every rule's
+  // CONFIG while excluding evaluationCount / lastEvaluatedAt / updatedAt — measured, those moved on
+  // 19 of 51 rules in 20 minutes because the evaluator touches every rule every tick. `actedAt`
+  // rides only on the ledger view, where those writes ARE the subject.
+  const autoCursorParams = useMemo(() => ({ view }), [view])
+  const autoCursorUrl = `${getBackendUrl()}/api/advertising/automations/cursor`
+  const autoBaseline = useCursorBaseline<Record<string, unknown>>(autoCursorUrl, autoCursorParams, rules?.length ?? 0)
+  const autoRefresh = useCursorPoll<Record<string, unknown>>({
+    url: autoCursorUrl, params: autoCursorParams, baseline: autoBaseline,
+    // A rule drawer open is a conversation about one rule; a banner about the other fifty waits.
+    enabled: detailId == null && engineKey == null && bulk == null,
+  })
 
   // RT.1 — your own writes, from any tab, applied silently. This page is the control plane, so it
   // hears the three subjects it owns: rule edits (from the builder or any page's rule section),
@@ -610,6 +626,7 @@ export function AutomationsClient() {
         primaryAction={{ label: 'Rule', icon: <Zap size={15} />, href: '/marketing/ads/rules-automation/builder' }}
       />
       <RulesTabs active="automations" />
+      <StaleBanner stale={autoRefresh.stale} subject="A rule, a cap, a scope or the queue" onRefresh={() => { void load() }} />
 
       {/* ── A1 — the exposure band. Every tile that can filter the grid IS a filter (aria-pressed,
              click again to clear); the two that cannot say why in their footline. ───────────── */}

@@ -134,6 +134,44 @@ function sameCursor<C extends Record<string, unknown>>(a: C | null, b: C | null)
   return true
 }
 
+/**
+ * RT.2 — read the cursor ONCE per data load, to serve as `baseline`.
+ *
+ * Bid, Budget and Placement get their baseline free: their one read returns `cursor` on the
+ * payload, so the poll compares against the exact cursor the rendered rows were read with. The five
+ * pages wired in RT.2 have no such field — several make three or four reads with no single payload
+ * to hang it on — and `baseline: null` makes `stale` unreachable, which is how Apply Rules came to
+ * poll a 404 in silence for a fortnight without anyone noticing.
+ *
+ * So: read the cursor alongside the data, key it to the same reload signal, and hand it back.
+ *
+ * 🔴 There is a real gap between the data landing and this resolving — a change inside that window
+ * is baked into the baseline and never announced. That is the honest trade for not restructuring
+ * five payloads, and it is bounded: the reads are milliseconds apart, and the NEXT change still
+ * fires. A payload-carried cursor is strictly better; a page adding one should stop calling this.
+ */
+export function useCursorBaseline<C extends Record<string, unknown>>(
+  url: string,
+  params: Record<string, string>,
+  reloadKey: unknown,
+): C | null {
+  const [baseline, setBaseline] = useState<C | null>(null)
+  const key = JSON.stringify(params)
+  useEffect(() => {
+    let alive = true
+    // Null it first: a stale baseline from the previous scope would compare against the new
+    // scope's cursor and announce "changed" when all that changed is what you asked for.
+    setBaseline(null)
+    const qs = new URLSearchParams(JSON.parse(key) as Record<string, string>).toString()
+    void fetch(`${url}${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && j) setBaseline(j as C) })
+      .catch(() => { /* same rule 3: a failed cursor read is silent */ })
+    return () => { alive = false }
+  }, [url, key, reloadKey])
+  return baseline
+}
+
 export function useCursorPoll<C extends Record<string, unknown>>({
   url, params, baseline, intervalMs = 45_000, enabled = true,
 }: CursorPollOptions<C>): CursorPollResult<C> {

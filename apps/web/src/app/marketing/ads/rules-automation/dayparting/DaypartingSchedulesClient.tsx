@@ -33,6 +33,9 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '@/design-system/styles/patterns.css'
 import './rank-dayparting.css'
+import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
+import { StaleBanner } from '../_shared/StaleBanner'
+import { getBackendUrl } from '@/lib/backend-url'
 
 export function DaypartingSchedulesClient() {
   return (
@@ -72,6 +75,20 @@ function DaypartingSchedulesBody() {
     [groups],
   )
 
+  // RT.2 — the cursor. It carries the resolved PLAN and what the engine has APPLIED, never the
+  // clock: the page's mode/capped values are hour-derived, so a cursor over the hour would fire
+  // 24x a day. `applied` fires instead when the engine acts on the new hour — the moment the
+  // stored data actually changes.
+  const dpCursorParams = useMemo(() => {
+    const p: Record<string, string> = { market: url.market }
+    if (url.portfolio) p.portfolio = url.portfolio
+    if (url.campaign) p.campaign = url.campaign
+    return p
+  }, [url.market, url.portfolio, url.campaign])
+  const dpCursorUrl = `${getBackendUrl()}/api/advertising/dayparting/cursor`
+  const dpBaseline = useCursorBaseline<Record<string, unknown>>(dpCursorUrl, dpCursorParams, groups.length)
+  const dpRefresh = useCursorPoll<Record<string, unknown>>({ url: dpCursorUrl, params: dpCursorParams, baseline: dpBaseline })
+
   const subtitle = useMemo(() => rulesTabByKey('dayparting')?.subtitle ?? '', [])
 
   return (
@@ -94,6 +111,7 @@ function DaypartingSchedulesBody() {
         primaryAction={{ label: 'Rank Schedule', icon: <Plus size={15} />, href: '/marketing/ads/rules-automation/builder/dayparting-schedule' }}
       />
       <RulesTabs active="dayparting" />
+      <StaleBanner stale={dpRefresh.stale} subject="A schedule, a rank target or the engine's applied state" onRefresh={refresh} />
 
       {/* ── The section map, structure doc §3, top to bottom ──────────────────────────────────
           Unbuilt sections are NOT MOUNTED. An empty placeholder card is dead space, and the
