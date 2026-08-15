@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AlertTriangle, Info, Pencil, Plus, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -61,8 +61,7 @@ import { BidTargetDrawer } from './BidTargetDrawer'
 import { BidBidderBand } from './BidBidderBand'
 // Interim, until S7 replaces it: rendered exactly as the tab rendered it, so nothing is lost in the
 // move off `?tab=bid`.
-import { RuleListTab } from '../tabs/RuleListTab'
-import { NoDataIllus } from '../_shared/NoDataIllus'
+import { BidRules } from './BidRules'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -934,29 +933,9 @@ export function BidClient() {
         />
       )}
 
-      {/* Interim until S7: the rule list exactly as `?tab=bid` rendered it, so routing the tab
-          takes nothing out of the product. S7 deletes this block and its two imports. */}
-      <div className="h10-bd-prov">
-        <h2>
-          Bid rules
-          <i>Provisional — this is the old tab, moved unchanged. S7 replaces it with rules as
-          declared exceptions to a campaign&rsquo;s bidder.</i>
-        </h2>
-      </div>
-      <RuleListTab
-        noun="Bid Rule"
-        seed={[]}
-        liveType="bid"
-        editHref={(id) => `/marketing/ads/rules-automation/builder/bid?ruleId=${id}`}
-        onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/bid' }}
-        emptyNode={(
-          <span className="h10-rr-empty">
-            <NoDataIllus size={104} />
-            <b>Create a Bid Rule to optimize keyword bids based on performance!</b>
-            <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/bid"><Plus size={13} /> Create Rule</a>
-          </span>
-        )}
-      />
+      {/* S7 — rules as declared exceptions to a campaign's bidder. Replaced the provisional
+          RuleListTab (the old tab, moved unchanged); rule records live on Automations. */}
+      <BidRules />
     </div>
   )
 }
