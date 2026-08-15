@@ -51,6 +51,9 @@
 import prisma from '../../db.js'
 import { resolveScopeReach } from './ads-scope-reach.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
+// The ONE actor classifier. `AdvertisingActionLog.userId` holds an actor STRING, not an operator
+// id — see `bidderByCampaign` for the defect that cost.
+import { parseActor } from './ads-changes.service.js'
 
 /** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
 export const BID_MARKETS = ['IT', 'DE', 'FR', 'ES'] as const
@@ -358,13 +361,33 @@ async function resolveScope(req: BidGridRequest) {
  * name, which is indistinguishable from a measurement of zero.
  *
  * Returns null when nothing lifts the bid, so the column renders "—" rather than repeating Bid on
- * the 18 ENABLED campaigns that carry no multiplier. A column that restates another column on most
+ * the ENABLED campaigns that carry no multiplier. A column that restates another column on most
  * rows is the Apply Rules defect, and it is the reason Suggested Bid was cut.
+ *
+ * ── 🔴 BID.S3: this is a SAMPLE, not a ceiling ─────────────────────────────────────────────────
+ *
+ * The placement multiplier is not a setting an operator left somewhere. The rank engine's all-out
+ * mode steps it **+25% every 15 minutes** and snaps it to 0 when the lane goes above plan.
+ * Measured on one campaign on 2026-08-13: `350 → 375 → 400 → 425 → 450 → 475` between 11:45 and
+ * 12:45, then `475 → 0` at 13:01. Account-wide, **1,050 placement writes in 24 hours, values
+ * 0–475.**
+ *
+ * So there is no such thing as "the largest multiplier" without a timestamp — BID.S2's doc quoted
+ * +400% and the operator measured +300% seven hours later, and both readings were correct. Every
+ * number this function returns expires at the next 15-minute tick, and any bound S5 derives from it
+ * must carry the same caveat.
+ *
+ * The CONVENTION is verified and is not the defect: `+300%` means the bid is multiplied by
+ * **×4.00**, i.e. `bid × (1 + pct/100)`.
  */
 const LANE_UPLIFT: Record<string, number> = {
   PLACEMENT_TOP: 1.0,
   PLACEMENT_REST_OF_SEARCH: 0.5,
   PLACEMENT_PRODUCT_PAGE: 0.5,
+  // BID.S3 — the fourth lane, named rather than left to the `?? 0.5` fallback below. 7 campaigns
+  // carry it, max +10%. Its uplift IS 0.5 (Amazon's non-top figure), so the behaviour is unchanged
+  // — but a lane arriving at its value through a fallback is a lane nobody has checked.
+  SITE_AMAZON_BUSINESS: 0.5,
 }
 export function effectiveMaxCpc(bidCents: number, dynamicBidding: unknown): { cents: number | null; placementPct: number; strategy: string | null } {
   const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement?: string; percentage?: number }>; strategy?: string }
@@ -434,30 +457,42 @@ const cmp = (a: number | string | null, b: number | string | null, sign: number)
 /**
  * BID.S2 — who owns each campaign's bids. Four values, read-only here; S6 makes it assignable.
  *
- * Measured 2026-08-12 over the 86 ENABLED campaigns: **schedule 33 · goal 0 · manual 12 · none 41**.
- * The brief's "none: 53" is manual+none combined; the split matters, because a campaign a human
- * touched last month and a campaign nobody has ever bid on are different problems.
+ * Measured 2026-08-16 over the 86 ENABLED campaigns: **schedule 33 · goal 0 · manual 6 · none 47**.
  *
- * 🔴 `none` is the page's most important finding, not a tidy default: 41 ENABLED campaigns have no
- * bidder, 26 of them spent €709.93 in 30 days, and their write gates are OPEN. Nothing is stopping
- * a bidder from reaching them. Nothing is trying.
+ * 🔴 **BID.S3 corrected `manual` here, and the original was wrong in the worst direction.**
+ * S2 selected operator writes with `userId: { not: null }`, on the belief that
+ * `AdvertisingActionLog.userId` holds an operator id and is null for automation. It does not:
+ * `ads-mutation.service.ts:106` writes `userId: args.actor`, so the column holds the ACTOR STRING
+ * — `user:<id>` for a human and `automation:<ruleId>` for an engine — and
+ * `ads-changes.service.ts:70` says so in as many words: *"the mutation path stores automation
+ * actors in userId"*.
  *
- * The schedule's NAME resolves through to its group — `group?.name ?? name` — which is the rule
- * `resolveOrigins` (`ads-changes.service.ts:111`) applies, and it applies it because *the operator
- * thinks in named groups*. That function is not exported and takes `ChangeRow[]`, so it cannot be
- * imported here; what is reused is its rule, not a second parser. No actor string is parsed on this
- * path at all — `AdSchedule` and `AdvertisingActionLog.userId` are read directly.
+ * Measured over 60 days: **25,139 `AD_BID_UPDATE` rows · 25,039 automation · 100 operator · 0
+ * null.** So `not: null` matched essentially every automated write and promoted 6 campaigns from
+ * `none` to `manual` — under-reporting the page's loudest and most consequential chip. `manual`
+ * went 12 → 6 and `none` 41 → 47.
+ *
+ * The classifier is `parseActor`, which is exported, pure and unit-tested precisely so that every
+ * surface classifies an actor the same way. Reading the raw column was the second resolver this
+ * page promised not to write; it just did not look like one.
+ *
+ * The schedule's NAME still resolves through to its group — `group?.name ?? name` — the rule
+ * `resolveOrigins` applies because *the operator thinks in named groups*. That function is not
+ * exported and takes `ChangeRow[]`, so its rule is reused, not the function.
  */
 async function bidderByCampaign(): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
   const since60 = new Date(Date.now() - 60 * 86400_000)
-  const [schedules, campaigns, manualLogs] = await Promise.all([
+  const [schedules, campaigns, bidLogs] = await Promise.all([
     prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true, name: true, group: { select: { name: true } } } }),
     prisma.campaign.findMany({ select: { id: true, dynamicBidding: true } }),
     prisma.advertisingActionLog.findMany({
-      where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 }, userId: { not: null } },
-      select: { entityId: true },
+      // No `userId` predicate in the query: the column cannot express "a human did this", so the
+      // filtering happens in `parseActor` below where the vocabulary is actually understood.
+      where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 } },
+      select: { entityId: true, userId: true },
     }),
   ])
+  const manualLogs = bidLogs.filter((l) => parseActor(l.userId).source === 'operator')
   // An operator's bid write names a TARGET; the bidder is a property of the CAMPAIGN, so resolve up.
   const manualTargetIds = [...new Set(manualLogs.map((l) => l.entityId))]
   const manualCampaigns = new Set(
