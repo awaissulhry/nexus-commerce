@@ -502,6 +502,23 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     adsManualSuggest = a0?.control === 'manual'
     const { maybeTranslateAdsRule } = await import('./advertising/ads-rule-adapter.service.js')
     const translated = maybeTranslateAdsRule(rule as { id: string; actions?: unknown; conditions?: unknown })
+    // P2.1 — a builder rule with an untranslatable condition FAILS CLOSED. The adapter used to
+    // drop the condition, and a dropped AND-condition makes a rule looser — "negate at ACOS > 80%"
+    // would have negated at any ACOS. The save routes refuse these with a 400 now, so this branch
+    // only fires for rules written around the API; it evaluates as no-match, never as loosened.
+    if (translated?.untranslatable?.length) {
+      await prisma.automationRule.update({
+        where: { id: rule.id },
+        data: { evaluationCount: { increment: 1 }, lastEvaluatedAt: new Date() },
+      })
+      return {
+        ruleId: rule.id,
+        matched: false,
+        status: 'NO_MATCH',
+        actionResults: [],
+        durationMs: Date.now() - startedAt,
+      }
+    }
     if (translated) {
       rule.conditions = translated.conditions as never
       rule.actions = translated.actions as never

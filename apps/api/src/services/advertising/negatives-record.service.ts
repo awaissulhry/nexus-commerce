@@ -468,17 +468,12 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
       consumers: ['the Activity tab\'s "This week" rollup', 'the Monday email'],
       note: 'One builder, two consumers — a number on screen and a number in the inbox cannot disagree. The negatives section is added to that builder rather than to a second service. You asked for a DAILY digest; that is a cadence change on this builder, not a new system, and it has not been made.',
     },
+    // P2.7 — two entries REMOVED because they were fixed and this list went on asserting them:
+    // `alert_operator` calls `notifyAutomation` since 2026-08-14 (9b7c3be0c), and the daily-cap
+    // counter was made null-safe and armed the same day (6ce492420) — the caps.counterBroken
+    // block above already reports that repair with its measured numbers. A truth panel that
+    // outlives its truth is the exact defect this page exists to prevent.
     knownGaps: [
-      {
-        what: '`alert_operator` does not alert anyone',
-        where: 'automation-action-handlers.ts:1224',
-        consequence: 'The handler calls `logger.warn` and never `notifyAutomation`, so the action named "alert operator" reaches neither the bell, the feed nor the inbox. Five advertising rules use it.',
-      },
-      {
-        what: 'The daily-cap counter cannot see a success',
-        where: 'automation-rule.service.ts:573',
-        consequence: `A NULL-unsafe NOT clause with a ${blindSpot.toLocaleString('en-IE')}-row blind spot in ${windowDays} days.`,
-      },
       {
         what: 'Gate denials are not persisted',
         where: 'ads-write-gate.ts:358 (`logGateDeny`)',

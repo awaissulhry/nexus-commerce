@@ -91,3 +91,26 @@ describe('isLevelAllowed', () => {
     expect(isLevelAllowed('OFF', 'OFF')).toBe(true)
   })
 })
+
+// P2.4 — builder slugs are judged by what they translate INTO, not left in default-deny.
+describe('builder-slug expansion', () => {
+  const g = (types: string[], prot = true) => graduationCeiling({ actionTypes: types, hasKeywordProtections: prot })
+
+  it('a bid/budget/placement/sov/keyword-tracker slug reaches AUTO like its *_apply action', () => {
+    for (const slug of ['bid', 'budget', 'placement', 'sov', 'keyword-tracker']) {
+      expect(g([slug]).maxLevel, slug).toBe('AUTO')
+    }
+  })
+
+  it('a negation slug is recognised as the negation family, whitelist gate and all', () => {
+    const withProtections = g(['negative-targeting'], true)
+    expect(withProtections.maxLevel).toBe('PROPOSE')
+    expect(withProtections.reason).toMatch(/retirement path/i)
+    const without = g(['negative-targeting'], false)
+    expect(without.reason).toMatch(/protected terms/i)
+  })
+
+  it('a harvest slug is structural — it creates keywords and negatives', () => {
+    expect(g(['keyword-harvesting']).maxLevel).toBe('PROPOSE')
+  })
+})

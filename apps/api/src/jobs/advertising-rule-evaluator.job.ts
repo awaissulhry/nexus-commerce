@@ -530,6 +530,8 @@ interface CampaignBudgetContext {
     id: string; externalCampaignId: string | null; name: string
     dailyBudgetCents: number; spendCents: number; salesCents: number
     acos: number | null; roas: number | null
+    impressions: number; clicks: number; orders: number
+    ctr: number | null; cvr: number | null; cpcCents: number | null
     avgDailySpendCents: number; budgetUtilization: number | null
   }
 }
@@ -544,7 +546,9 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId'],
     where: { entityType: 'CAMPAIGN', localEntityId: { in: campaigns.map((c) => c.id) }, date: { gte: since, lte: until } },
-    _sum: { costMicros: true, sales7dCents: true, sales14dCents: true },
+    // P2.1 — impressions/clicks/orders ride the same groupBy so the builder's full metric list
+    // (CTR, CVR, CPC, Impressions, Clicks, Orders) translates instead of being refused.
+    _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
   })
   const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
   const out: CampaignBudgetContext[] = []
@@ -553,6 +557,9 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
     const spendCents = microsToCents(p?._sum.costMicros)
     if (spendCents === 0) continue
     const salesCents = (p?._sum.sales7dCents ?? 0) + (p?._sum.sales14dCents ?? 0)
+    const impressions = p?._sum.impressions ?? 0
+    const clicks = p?._sum.clicks ?? 0
+    const orders = p?._sum.orders7d ?? 0
     const dailyBudgetCents = Math.round(Number(c.dailyBudget) * 100)
     const avgDailySpendCents = Math.round(spendCents / BUDGET_RULE_WINDOW_DAYS)
     out.push({
@@ -563,6 +570,12 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
         dailyBudgetCents, spendCents, salesCents,
         acos: salesCents > 0 ? spendCents / salesCents : null,
         roas: spendCents > 0 ? salesCents / spendCents : null,
+        // Ratios are null (never 0) when the denominator is 0 — a null fails a condition, which
+        // is the honest reading for "not measurable"; a fabricated 0 would MATCH every `lt`.
+        impressions, clicks, orders,
+        ctr: impressions > 0 ? clicks / impressions : null,
+        cvr: clicks > 0 ? orders / clicks : null,
+        cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
         avgDailySpendCents,
         budgetUtilization: dailyBudgetCents > 0 ? avgDailySpendCents / dailyBudgetCents : null,
       },
@@ -693,26 +706,40 @@ async function buildSearchTermConvertingContexts() {
         { matchType: null },
       ],
     },
-    _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true },
+    _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true, impressions: true },
     // 🔴 HV.8c — this is a HAVING clause, so it is a FLOOR the rule author cannot see and cannot
     // lower. A rule asking for "orders >= 1" can never match a 1-order term: the context is built
     // first and only terms already at >= CONVERTING_MIN_ORDERS reach the conditions at all. A rule
     // condition can tighten this, never loosen it. Default is 2 (NEXUS_CONVERTING_MIN_ORDERS).
     having: { orders7d: { _sum: { gte: CONVERTING_MIN_ORDERS } } },
   })
-  return terms.slice(0, 300).map((t) => ({
-    trigger: 'SEARCH_TERM_CONVERTING' as const,
-    marketplace: t.marketplace,
-    searchTerm: {
-      query: t.query,
-      externalCampaignId: t.campaignId,
-      externalAdGroupId: t.adGroupId,
-      orders: t._sum.orders7d ?? 0,
-      clicks: t._sum.clicks ?? 0,
-      spendCents: microsToCents(t._sum.costMicros),
-      salesCents: t._sum.sales7dCents ?? 0,
-    },
+  return terms.slice(0, 300).map((t) => searchTermContext('SEARCH_TERM_CONVERTING', t.marketplace, {
+    query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId,
+    orders: t._sum.orders7d ?? 0, clicks: t._sum.clicks ?? 0, impressions: t._sum.impressions ?? 0,
+    spendCents: microsToCents(t._sum.costMicros), salesCents: t._sum.sales7dCents ?? 0,
   }))
+}
+
+// P2.1 — one shape for both search-term triggers, with the derived ratios the builder's metric
+// list offers (ACOS/ROAS/CTR/CVR/CPC). Ratios are null (never 0) when their denominator is 0 —
+// a null fails a condition, the honest reading for "not measurable".
+function searchTermContext(
+  trigger: 'SEARCH_TERM_CONVERTING' | 'SEARCH_TERM_WASTING',
+  marketplace: string | null,
+  base: { query: string; externalCampaignId: string | null; externalAdGroupId: string | null; orders: number; clicks: number; impressions: number; spendCents: number; salesCents: number },
+) {
+  return {
+    trigger,
+    marketplace,
+    searchTerm: {
+      ...base,
+      acos: base.salesCents > 0 ? base.spendCents / base.salesCents : null,
+      roas: base.spendCents > 0 ? base.salesCents / base.spendCents : null,
+      ctr: base.impressions > 0 ? base.clicks / base.impressions : null,
+      cvr: base.clicks > 0 ? base.orders / base.clicks : null,
+      cpcCents: base.clicks > 0 ? Math.round(base.spendCents / base.clicks) : null,
+    },
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -733,18 +760,31 @@ async function buildHighAcosKeywordContexts() {
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
       where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
-      _sum: { costMicros: true, sales7dCents: true, orders7d: true },
+      _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true, impressions: true },
     })
     return perf
       .map((p) => ({ p, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0, orders: p._sum.orders7d ?? 0 }))
       .filter((x) => x.orders > 0 && x.sales > 0 && x.spend >= 200 && x.spend / x.sales >= 0.2)
       .sort((a, b) => (b.spend / b.sales) - (a.spend / a.sales))
       .slice(0, 500)
-      .map(({ p, spend, sales, orders }) => ({
-        trigger: 'KEYWORD_HIGH_ACOS' as const,
-        marketplace: p.marketplace,
-        adTarget: { id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: spend / sales },
-      }))
+      .map(({ p, spend, sales, orders }) => {
+        const clicks = p._sum.clicks ?? 0
+        const impressions = p._sum.impressions ?? 0
+        return {
+          trigger: 'KEYWORD_HIGH_ACOS' as const,
+          marketplace: p.marketplace,
+          adTarget: {
+            id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: spend / sales,
+            // P2.1 — the builder's full metric list (ROAS/CTR/CVR/CPC/Clicks/Impressions)
+            // translates now; ratios are null when the denominator is 0, never a fabricated 0.
+            roas: spend > 0 ? sales / spend : null,
+            clicks, impressions,
+            ctr: impressions > 0 ? clicks / impressions : null,
+            cvr: clicks > 0 ? orders / clicks : null,
+            cpcCents: clicks > 0 ? Math.round(spend / clicks) : null,
+          },
+        }
+      })
   } catch (e) { logger.warn('[ads-rule-evaluator] buildHighAcosKeywordContexts failed', { error: (e as Error).message }); return [] }
 }
 
@@ -859,7 +899,7 @@ async function buildSearchTermWastingContexts() {
     const terms = await prisma.amazonAdsSearchTerm.groupBy({
       by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
       where: { date: { gte: since, lte: until } },
-      _sum: { orders7d: true, clicks: true, costMicros: true },
+      _sum: { orders7d: true, clicks: true, costMicros: true, sales7dCents: true, impressions: true },
       having: { orders7d: { _sum: { equals: 0 } } },
     })
     return terms
@@ -867,10 +907,11 @@ async function buildSearchTermWastingContexts() {
       .filter((x) => x.spend >= 300 && x.clicks >= 5)
       .sort((a, b) => b.spend - a.spend)
       .slice(0, 300)
-      .map(({ t, spend, clicks }) => ({
-        trigger: 'SEARCH_TERM_WASTING' as const,
-        marketplace: t.marketplace,
-        searchTerm: { query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId, spendCents: spend, clicks, orders: 0, salesCents: 0 },
+      .map(({ t, spend, clicks }) => searchTermContext('SEARCH_TERM_WASTING', t.marketplace, {
+        query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId,
+        spendCents: spend, clicks, orders: 0, impressions: t._sum.impressions ?? 0,
+        // orders7d = 0 by the HAVING; sales can still be non-zero on longer attribution — report it.
+        salesCents: t._sum.sales7dCents ?? 0,
       }))
   } catch (e) { logger.warn('[ads-rule-evaluator] buildSearchTermWastingContexts failed', { error: (e as Error).message }); return [] }
 }
@@ -941,9 +982,16 @@ async function buildSovBidContexts() {
     const sovByQuery = new Map(sov.rows.map((r) => [r.query.trim().toLowerCase(), r]))
     const targets = await prisma.adTarget.findMany({
       where: { kind: 'KEYWORD', isNegative: false },
-      select: { id: true, expressionValue: true, spendCents: true, salesCents: true, ordersCount: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
+      // P2.3 — carry the ad-group and campaign IDS. Without them contextIdentity() resolved
+      // campaign/portfolio/product empty, so a SOV rule scoped to any grain but market silently
+      // matched zero contexts forever — the rule looked armed and never fired.
+      select: { id: true, expressionValue: true, adGroup: { select: { id: true, campaign: { select: { id: true, marketplace: true } } } } },
       take: 3000,
     })
+    // P2.3 — perf comes from the daily table, never AdTarget's metric columns: those are
+    // unpopulated account-wide (0 on all 2,129 keyword targets), so Spend/ACOS conditions could
+    // never distinguish anything. 30-day window to match the SOV signal's own.
+    const perfByTarget = await targetPerfMap(targets.map((t) => t.id), 30)
     return targets
       .map((t) => {
         const key = (t.expressionValue ?? '').trim().toLowerCase()
@@ -952,18 +1000,49 @@ async function buildSovBidContexts() {
         return {
           trigger: 'SOV_BID' as const,
           marketplace: t.adGroup?.campaign?.marketplace ?? null,
+          campaign: t.adGroup?.campaign?.id ? { id: t.adGroup.campaign.id } : undefined,
+          adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
             // sovPct / topSharePct are fractions (0..1); our within-account SOV IS impression share.
             sovPct: s.sovPct, topSharePct: s.topCampaignSharePct, impressionSharePct: s.sovPct,
-            spendCents: t.spendCents, salesCents: t.salesCents, orders: t.ordersCount,
-            acos: t.salesCents > 0 ? t.spendCents / t.salesCents : 0,
+            ...(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .slice(0, 1000)
   } catch (e) { logger.warn('[ads-rule-evaluator] buildSovBidContexts failed', { error: (e as Error).message }); return [] }
+}
+
+// P2.3 — shared 30d perf aggregate for the SOV/RANK context builders. Same fields and null
+// semantics as the KEYWORD_HIGH_ACOS context, so one metric map serves all three.
+const EMPTY_TARGET_PERF = { spendCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0, acos: null as number | null, roas: null as number | null, ctr: null as number | null, cvr: null as number | null, cpcCents: null as number | null }
+async function targetPerfMap(targetIds: string[], windowDays: number) {
+  const map = new Map<string, typeof EMPTY_TARGET_PERF>()
+  if (!targetIds.length) return map
+  const { since, until } = ruleWindowBounds(windowDays)
+  const perf = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['localEntityId'],
+    where: { entityType: 'AD_TARGET', localEntityId: { in: targetIds }, date: { gte: since, lte: until } },
+    _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true, impressions: true },
+  })
+  for (const p of perf) {
+    const spendCents = microsToCents(p._sum.costMicros)
+    const salesCents = p._sum.sales7dCents ?? 0
+    const orders = p._sum.orders7d ?? 0
+    const clicks = p._sum.clicks ?? 0
+    const impressions = p._sum.impressions ?? 0
+    map.set(p.localEntityId!, {
+      spendCents, salesCents, orders, clicks, impressions,
+      acos: salesCents > 0 ? spendCents / salesCents : null,
+      roas: spendCents > 0 ? salesCents / spendCents : null,
+      ctr: impressions > 0 ? clicks / impressions : null,
+      cvr: clicks > 0 ? orders / clicks : null,
+      cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
+    })
+  }
+  return map
 }
 
 // ── KEYWORD_RANK_BID (SK4) — keyword bid adjustment driven by organic/paid rank. For each positive
@@ -982,9 +1061,12 @@ async function buildKeywordRankBidContexts() {
     }
     const targets = await prisma.adTarget.findMany({
       where: { kind: 'KEYWORD', isNegative: false },
-      select: { id: true, expressionValue: true, spendCents: true, salesCents: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
+      // P2.3 — ids for contextIdentity (see buildSovBidContexts) + perf from the daily table,
+      // never AdTarget's unpopulated metric columns.
+      select: { id: true, expressionValue: true, adGroup: { select: { id: true, campaign: { select: { id: true, marketplace: true } } } } },
       take: 3000,
     })
+    const perfByTarget = await targetPerfMap(targets.map((t) => t.id), 30)
     return targets
       .map((t) => {
         const kw = (t.expressionValue ?? '').trim().toLowerCase()
@@ -995,12 +1077,14 @@ async function buildKeywordRankBidContexts() {
         return {
           trigger: 'KEYWORD_RANK_BID' as const,
           marketplace: mkt || null,
+          campaign: t.adGroup?.campaign?.id ? { id: t.adGroup.campaign.id } : undefined,
+          adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
             organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume,
             // +ve delta = rank improved (number went down)
             rankDelta: prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : 0,
-            spendCents: t.spendCents, acos: t.salesCents > 0 ? t.spendCents / t.salesCents : 0,
+            ...(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }
       })

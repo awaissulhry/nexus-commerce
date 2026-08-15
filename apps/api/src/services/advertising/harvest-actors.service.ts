@@ -32,9 +32,10 @@
  *
  *  1. **Never render `dryRun` or `enabled` as a mode.** `dryRun` is a dead field; the level is
  *     `resolveAutonomy()` and is one of exactly four words (C1).
- *  2. **Never render a level without its ceiling** (C2), and never a cap as a live brake:
- *     `maxExecutionsPerDay` is not enforced, and the 693,704 `DAILY_CAP_EXCEEDED` rows are
- *     historical residue — newest 2026-08-03.
+ *  2. **Never render a level without its ceiling** (C2). (The old second half of this rule —
+ *     "never a cap as a live brake" — expired on 2026-08-14: the null-safe counter is armed and
+ *     `maxWritesPerDay` demotes past its bound. The 693,704 `DAILY_CAP_EXCEEDED` rows remain
+ *     historical residue from the pre-2026-08-04 self-ratchet, newest 2026-08-03.)
  *  3. **Never merge the four words** (C7). `acted · proposed · refused · failed`, and a refusal is
  *     not a failure.
  *  4. **Never read a success counter as a write count.** `neg=8/8 grad=14/14` counts candidates
@@ -536,32 +537,16 @@ export async function getHarvestActors(opts: { market: string }): Promise<HvActo
       available: false,
       why: 'Nothing is shown here because nothing can answer it. GET /advertising/autonomy/conflicts does not exist; the only conflicts route is campaign-grained and answers a different question — which of your products should own a contested keyword. The rule-vs-rule detector on the Automations page matches on trigger and marketplace, and cannot see the engine or you. A second detector built here would be worse than none.',
     },
-    latent: [
-      {
-        id: 'adapter-metric-drop',
-        title: '6 of 11 builder metrics are unmapped for search-term rules',
-        detail: 'ACOS, ROAS, Impressions, CVR, CTR and CPC have no search-term equivalent in the adapter, and a dropped AND-condition makes a rule LOOSER, not tighter: "orders ≥ 2 AND ACoS ≤ 25%" would execute as "orders ≥ 2". No rule in this account is affected, because none is builder-shaped — every one stores engine-native conditions and the adapter never runs. It fires on the first harvest rule saved from the builder.',
-        affected: 0,
-        affectedLabel: 'rules affected today',
-        defersTo: 'HV.8',
-      },
-      {
-        id: 'adapter-windows-dropped',
-        title: 'The builder’s lookback and exclude windows are never read',
-        detail: 'translateConditions reads only a group’s conditions array, so the window control on the builder changes nothing about what is evaluated. Latent for the same reason as above.',
-        affected: 0,
-        affectedLabel: 'rules affected today',
-        defersTo: 'HV.8',
-      },
-      {
-        id: 'daily-cap-not-enforced',
-        title: 'A daily cap is not a brake',
-        detail: 'maxExecutionsPerDay is checked with a filter whose null branch is unspelled, so it excludes every row and the counter never bites. The 693,704 DAILY_CAP_EXCEEDED rows in this account are residue from the self-ratcheting cap bug fixed on 2026-08-04 — nothing newer than 2026-08-03. Every cap on this panel is rendered as a number that has not stopped anything.',
-        affected: 693_704,
-        affectedLabel: 'historical rows, none recent',
-        defersTo: 'HV.8',
-      },
-    ],
+    // P2.7 — all three latent entries this list used to carry are CLOSED, and a truth panel that
+    // outlives its truth is the defect it exists to prevent:
+    //   · adapter-metric-drop — the maps cover every offered metric and an unmapped one now
+    //     REFUSES the rule at save and at evaluation instead of loosening it (P2.1);
+    //   · adapter-windows-dropped — the Lookback/Exclude selects are gone; the builder states the
+    //     trigger's fixed window and stores that truth (P2.1);
+    //   · daily-cap-not-enforced — the null-safe counter was armed 2026-08-14 (6ce492420), caps
+    //     re-sized in the counted unit first (c573f3ac1), and `maxWritesPerDay` demotes past its
+    //     bound (5cda0d120). The 693,704 rows stay in history; nothing newer than 2026-08-03.
+    latent: [],
     window: {
       since: oldest?.startedAt.toISOString() ?? null,
       note: 'Counted over every execution on record. The Automations board counts the last 7 days, so its numbers are smaller by design.',

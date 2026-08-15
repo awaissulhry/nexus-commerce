@@ -1021,48 +1021,57 @@ ACTION_HANDLERS.pause_all_campaigns = async (action, _context, meta): Promise<Ac
   return { type: action.type, ok: errors.length < campaigns.length, output: { paused, errors: errors.slice(0, 5) } }
 }
 
-// ── add_negative_exact ────────────────────────────────────────────────
-// Add a specific query as negative exact to a campaign. Designed for use with
+// ── add_negative_exact · add_negative_phrase ──────────────────────────
+// Add a specific query as a negative to a campaign. Designed for use with
 // KEYWORD_WASTED_SPEND and SEARCH_TERM triggers where we know the exact term.
-ACTION_HANDLERS.add_negative_exact = async (action, context, meta): Promise<ActionResult> => {
-  const keyword = (action.keyword as string | undefined) ?? (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
-  const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
-  if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
-  if (!externalCampaignId) return { type: action.type, ok: false, error: 'No externalCampaignId in context' }
-  // EA2 — honor the builder's Negation Level: AD_GROUP scopes to the source ad group; CAMPAIGN (default) is broader.
-  const scope = (action.scope as string | undefined) === 'AD_GROUP' ? 'AD_GROUP' : 'CAMPAIGN'
-  const externalAdGroupId = scope === 'AD_GROUP'
-    ? ((action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId)
-    : undefined
+//
+// P2.6 — one body, two match types. `add_negative_phrase` was offered on the Negative Targeting
+// tab, categorised in rule-category.ts and ceilinged in ads-graduation.ts — and absent from this
+// map, so a rule using it failed every execution with "Unknown action type". NEG.X proved phrase
+// negation through the same `createNegative` path (three NEGATIVE_PHRASE rows live at Amazon), so
+// the handler is the exact handler with the match type as a parameter.
+const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE') =>
+  async (action: Record<string, unknown> & { type: string }, context: unknown, meta: { ruleId: string; dryRun: boolean }): Promise<ActionResult> => {
+    const keyword = (action.keyword as string | undefined) ?? (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
+    const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
+    if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
+    if (!externalCampaignId) return { type: action.type, ok: false, error: 'No externalCampaignId in context' }
+    // EA2 — honor the builder's Negation Level: AD_GROUP scopes to the source ad group; CAMPAIGN (default) is broader.
+    const scope = (action.scope as string | undefined) === 'AD_GROUP' ? 'AD_GROUP' : 'CAMPAIGN'
+    const externalAdGroupId = scope === 'AD_GROUP'
+      ? ((action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId)
+      : undefined
 
-  // NEG.0(b) — the gate's FIRST substantive check is `if (!ctx.marketplace) → deniedAt:'connection'`
-  // (ads-write-gate.ts:165-171), BEFORE the whitelist at :304. This handler used to hide the missing
-  // field behind `as never`, so every negation it attempted was refused at the connection check and
-  // the whitelist never ran. Refuse here instead: a write that cannot be gated is not a write.
-  const marketplace = (context as any)?.marketplace as string | undefined
-  if (!marketplace) return { type: action.type, ok: false, error: 'No marketplace in context — the write gate cannot resolve a connection, so this negation cannot be checked against the protected terms' }
+    // NEG.0(b) — the gate's FIRST substantive check is `if (!ctx.marketplace) → deniedAt:'connection'`
+    // (ads-write-gate.ts:165-171), BEFORE the whitelist at :304. This handler used to hide the missing
+    // field behind `as never`, so every negation it attempted was refused at the connection check and
+    // the whitelist never ran. Refuse here instead: a write that cannot be gated is not a write.
+    const marketplace = (context as any)?.marketplace as string | undefined
+    if (!marketplace) return { type: action.type, ok: false, error: 'No marketplace in context — the write gate cannot resolve a connection, so this negation cannot be checked against the protected terms' }
 
-  // NEG.0(a) — "Never create a negative for a term that converted (≥1 order) in the last 30 days in
-  // any campaign". Checked BEFORE the dry-run return: every rule in this account is on PROPOSE, so
-  // the dry run is the only path any of them takes, and a preview promising a negation the armed
-  // rule would refuse is the same defect one step earlier.
-  const guard = await checkProtectConverting({ terms: [keyword], config: protectConvertingConfig(action) })
-  const decision = guard.get(normaliseNegTerm(keyword))
-  if (decision && !decision.allowed) {
-    logger.warn('[add_negative_exact] refused by protectConverting', { ruleId: meta.ruleId, keyword, evidence: decision.evidence })
-    return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword, externalCampaignId, scope } }
+    // NEG.0(a) — "Never create a negative for a term that converted (≥1 order) in the last 30 days in
+    // any campaign". Checked BEFORE the dry-run return: every rule in this account is on PROPOSE, so
+    // the dry run is the only path any of them takes, and a preview promising a negation the armed
+    // rule would refuse is the same defect one step earlier.
+    const guard = await checkProtectConverting({ terms: [keyword], config: protectConvertingConfig(action) })
+    const decision = guard.get(normaliseNegTerm(keyword))
+    if (decision && !decision.allowed) {
+      logger.warn(`[${action.type}] refused by protectConverting`, { ruleId: meta.ruleId, keyword, evidence: decision.evidence })
+      return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword, externalCampaignId, scope } }
+    }
+
+    if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType, scope } }
+    const { createNegative } = await import('./ads-negative-kw.service.js')
+    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+    const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType, scope, marketplace })
+    // A denied write used to be reported as `ok: true`. With the gate now reachable (above), a
+    // refusal by the protected-terms whitelist is the expected outcome for a brand term — and it has
+    // to land in the execution row as a failure, or the whitelist is invisible to whoever reads it.
+    if (res.denied) return { type: action.type, ok: false, error: `Write gate denied at ${res.denied.deniedAt}: ${res.denied.reason}`, output: { keyword, externalCampaignId, scope, denied: res.denied } }
+    return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType, scope, alreadyExisted: res.alreadyExisted, externalTargetId: res.externalNegativeKeywordId } }
   }
-
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, scope } }
-  const { createNegative } = await import('./ads-negative-kw.service.js')
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
-  const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope, marketplace })
-  // A denied write used to be reported as `ok: true`. With the gate now reachable (above), a
-  // refusal by the protected-terms whitelist is the expected outcome for a brand term — and it has
-  // to land in the execution row as a failure, or the whitelist is invisible to whoever reads it.
-  if (res.denied) return { type: action.type, ok: false, error: `Write gate denied at ${res.denied.deniedAt}: ${res.denied.reason}`, output: { keyword, externalCampaignId, scope, denied: res.denied } }
-  return { type: action.type, ok: true, output: { keyword, externalCampaignId, matchType: 'NEGATIVE_EXACT', scope, alreadyExisted: res.alreadyExisted, externalTargetId: res.externalNegativeKeywordId } }
-}
+ACTION_HANDLERS.add_negative_exact = makeAddNegativeHandler('NEGATIVE_EXACT')
+ACTION_HANDLERS.add_negative_phrase = makeAddNegativeHandler('NEGATIVE_PHRASE')
 
 // ── promote_to_exact ──────────────────────────────────────────────────
 // Take a converting search term and create an EXACT match keyword in the

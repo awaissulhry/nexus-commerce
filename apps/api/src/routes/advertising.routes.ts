@@ -5812,11 +5812,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       maxExecutionsPerDay?: number
       maxValueCentsEur?: number
       maxDailyAdSpendCentsEur?: number
+      maxWritesPerDay?: number
       scopeMarketplace?: string
     }
     if (!body?.name || !body.trigger) {
       reply.code(400)
       return { error: 'name + trigger required' }
+    }
+    // P2.1 — refuse an untranslatable builder rule AT SAVE. The adapter used to drop unmapped
+    // AND-conditions at evaluation, which made the rule LOOSER than the author wrote; now the
+    // adapter fails such a rule closed and this refuses to store one at all, naming the metrics.
+    {
+      const { listUntranslatableMetrics } = await import('../services/advertising/ads-rule-adapter.service.js')
+      const bad = listUntranslatableMetrics({ actions: body.actions, conditions: body.conditions })
+      if (bad.length) {
+        reply.code(400)
+        return { error: 'untranslatable_conditions', metrics: bad, message: `No engine signal exists for: ${bad.join(', ')}. Remove those conditions — a rule saved with them could never evaluate as written.` }
+      }
     }
     const ALLOWED_TRIGGERS = new Set([
       'FBA_AGE_THRESHOLD_REACHED',
@@ -5863,6 +5875,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         maxExecutionsPerDay: body.maxExecutionsPerDay ?? 10,
         maxValueCentsEur: body.maxValueCentsEur ?? null,
         maxDailyAdSpendCentsEur: body.maxDailyAdSpendCentsEur ?? 10000,
+        // P2.2 — the demote-to-dry-run write cap (CAP step 6). Builder rules could not set it at
+        // all before, so every one arrived with the second brake unset.
+        maxWritesPerDay: body.maxWritesPerDay ?? null,
         scopeMarketplace: body.scopeMarketplace ?? null,
         createdBy: 'user',
       },
@@ -5887,7 +5902,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       maxExecutionsPerDay?: number | null
       maxValueCentsEur?: number | null
       maxDailyAdSpendCentsEur?: number | null
+      maxWritesPerDay?: number | null
       scopeMarketplace?: string | null
+    }
+    // P2.1 — same save-time refusal as the create route. Validate the MERGED rule: a PATCH that
+    // touches neither actions nor conditions cannot introduce an untranslatable metric, but one
+    // that changes either half must be checked against the pair it will actually store.
+    if (body.actions !== undefined || body.conditions !== undefined) {
+      const { listUntranslatableMetrics } = await import('../services/advertising/ads-rule-adapter.service.js')
+      const bad = listUntranslatableMetrics({
+        actions: body.actions ?? (existing.actions as object[]),
+        conditions: body.conditions ?? (existing.conditions as object[]),
+      })
+      if (bad.length) {
+        reply.code(400)
+        return { error: 'untranslatable_conditions', metrics: bad, message: `No engine signal exists for: ${bad.join(', ')}. Remove those conditions — a rule saved with them could never evaluate as written.` }
+      }
     }
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
@@ -5899,6 +5929,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.maxExecutionsPerDay !== undefined) data.maxExecutionsPerDay = body.maxExecutionsPerDay
     if (body.maxValueCentsEur !== undefined) data.maxValueCentsEur = body.maxValueCentsEur
     if (body.maxDailyAdSpendCentsEur !== undefined) data.maxDailyAdSpendCentsEur = body.maxDailyAdSpendCentsEur
+    if (body.maxWritesPerDay !== undefined) data.maxWritesPerDay = body.maxWritesPerDay
     if (body.scopeMarketplace !== undefined) data.scopeMarketplace = body.scopeMarketplace
     const rule = await prisma.automationRule.update({ where: { id }, data })
     return { rule }

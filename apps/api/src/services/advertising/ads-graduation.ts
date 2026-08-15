@@ -24,10 +24,15 @@
  */
 
 import type { AutonomyLevel } from './ads-autonomy.js'
+import { BUILDER_SLUG_ACTIONS } from './ads-rule-adapter.service.js'
 
 /**
  * Actions that move a number the engine can move back. Reversible, bounded by the write
  * gate, and the ones the market agrees should run unattended.
+ *
+ * P2.4 — the `*_apply` family is the builder-rule execution vocabulary (what the adapter
+ * translates a slug into): value moves with `payloadBefore` recorded, same reversibility class
+ * as their engine-native cousins above.
  */
 const REVERSIBLE_ACTIONS = new Set([
   'bid_to_target_acos',
@@ -41,6 +46,10 @@ const REVERSIBLE_ACTIONS = new Set([
   'refresh_dayparting',
   'retail_guard',
   'archive_keyword_restore',
+  'budget_apply',
+  'bid_apply',
+  'placement_apply',
+  'dayparting_apply',
 ])
 
 /**
@@ -94,7 +103,14 @@ export interface GraduationVerdict {
  * by moving a number back.
  */
 export function graduationCeiling(input: GraduationInput): GraduationVerdict {
-  const acts = input.actionTypes.filter((t) => !NOTIFY_ACTIONS.has(t))
+  // P2.4 — a stored builder rule carries its SLUG as the action type; the engine translates it
+  // at evaluation. Judge the rule by what it will actually DO: expand each slug into its
+  // translated action types (BUILDER_SLUG_ACTIONS lives beside the translation, so the two
+  // cannot drift). Before this, every builder slug fell into the unclassified default-deny —
+  // safe, but the reason said "classify me" instead of naming the real ceiling, and a
+  // negation-slug rule was not recognised as the negation family the whitelist gate exists for.
+  const expanded = input.actionTypes.flatMap((t) => BUILDER_SLUG_ACTIONS[t] ?? [t])
+  const acts = expanded.filter((t) => !NOTIFY_ACTIONS.has(t))
 
   if (acts.length === 0) {
     return { maxLevel: 'AUTO', reason: 'Only notifies — nothing to gate.', blockedBy: [] }
