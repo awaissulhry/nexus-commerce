@@ -80,7 +80,12 @@ export function AutomationsClient() {
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [detailId, setDetailId] = useState<string | null>(null)
+  // BUD.3 / A3 — `?rule=<id>` deep-links a rule's drawer, so every other page's rule row can
+  // point HERE instead of forking a second record (one owner: this page owns the actor).
+  const [detailId, setDetailId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return new URLSearchParams(window.location.search).get('rule')
+  })
   const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
   const [bulk, setBulk] = useState<{ kind: 'mode'; level: Level } | { kind: 'delete' } | null>(null)
   // AUTO.A2 — the non-rule actors, and the All ⇄ Rules ⇄ Engines segment (?kind= in the URL).

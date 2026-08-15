@@ -914,6 +914,94 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, captured, skipped, notFound: ids.length - rows.length }
   })
 
+  /**
+   * BUD.3 — restore budgets TO their baseline: the recovery act the ratchet never had. Explicit
+   * ids from the page; per campaign it is a REAL gated write (allowlist, pins, bounds, spend
+   * ceilings all bind — a denial reports per row, never silently). Skips: no baseline captured
+   * (nothing to restore TO), already at baseline. This is deliberately the only bulk budget
+   * RAISE in the product, and it can only raise to a number an operator anchored.
+   */
+  fastify.post('/advertising/budget-baselines/restore', async (request, reply) => {
+    const b = request.body as { campaignIds?: string[] }
+    const ids = Array.isArray(b?.campaignIds) ? b.campaignIds.slice(0, 200) : []
+    if (ids.length === 0) { reply.code(400); return { error: 'campaignIds required' } }
+    const rows = await prisma.campaign.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, dailyBudget: true, budgetBaselineCents: true },
+    })
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    const results: Array<{ id: string; name: string; outcome: 'restored' | 'skipped' | 'failed'; why?: string; fromCents?: number; toCents?: number }> = []
+    for (const c of rows) {
+      const currentCents = Math.round(Number(c.dailyBudget) * 100)
+      if (c.budgetBaselineCents == null) { results.push({ id: c.id, name: c.name, outcome: 'skipped', why: 'no baseline captured' }); continue }
+      if (c.budgetBaselineCents === currentCents) { results.push({ id: c.id, name: c.name, outcome: 'skipped', why: 'already at baseline' }); continue }
+      try {
+        const res = await updateCampaignWithSync({
+          campaignId: c.id,
+          patch: { dailyBudget: c.budgetBaselineCents / 100 },
+          actor,
+          reason: `restore to baseline €${(c.budgetBaselineCents / 100).toFixed(2)} (was €${(currentCents / 100).toFixed(2)})`,
+        } as never)
+        const ok = (res as { ok?: boolean }).ok !== false
+        results.push({ id: c.id, name: c.name, outcome: ok ? 'restored' : 'failed', why: (res as { error?: string }).error, fromCents: currentCents, toCents: c.budgetBaselineCents })
+      } catch (e) {
+        results.push({ id: c.id, name: c.name, outcome: 'failed', why: (e as Error).message, fromCents: currentCents, toCents: c.budgetBaselineCents })
+      }
+    }
+    const restored = results.filter((r) => r.outcome === 'restored').length
+    return { ok: true, restored, skipped: results.filter((r) => r.outcome === 'skipped').length, failed: results.filter((r) => r.outcome === 'failed').length, results, note: 'Each write passes the gate; acceptance here means ENQUEUED, and the worker may still refuse it — the change log is the delivery record.' }
+  })
+
+  /**
+   * BUD.6 — reallocation: move €X/day of budget from one campaign to another. The missing ACTION
+   * TYPE the study named — both AUTO budget rules only cut; nothing could move money sideways.
+   * Two gated writes, CUT FIRST: if the raise is then refused, the compensation restores the
+   * source and the response says exactly what state the pair is in — never a silent half.
+   */
+  fastify.post('/advertising/budget-transfer', async (request, reply) => {
+    const b = request.body as { fromId?: string; toId?: string; cents?: number }
+    const cents = Math.round(Number(b?.cents))
+    if (!b?.fromId || !b?.toId || b.fromId === b.toId || !Number.isFinite(cents) || cents <= 0) {
+      reply.code(400); return { error: 'fromId + toId (distinct) + cents > 0 required' }
+    }
+    const [from, to] = await Promise.all([
+      prisma.campaign.findUnique({ where: { id: b.fromId }, select: { id: true, name: true, dailyBudget: true } }),
+      prisma.campaign.findUnique({ where: { id: b.toId }, select: { id: true, name: true, dailyBudget: true } }),
+    ])
+    if (!from || !to) { reply.code(404); return { error: 'campaign not found' } }
+    const fromCents = Math.round(Number(from.dailyBudget) * 100)
+    const toCents = Math.round(Number(to.dailyBudget) * 100)
+    if (fromCents - cents < 100) {
+      reply.code(400)
+      return { error: `moving €${(cents / 100).toFixed(2)} would take “${from.name}” below Amazon's €1 floor (it holds €${(fromCents / 100).toFixed(2)})` }
+    }
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    const reason = (leg: string) => `budget transfer €${(cents / 100).toFixed(2)}/day: “${from.name}” → “${to.name}” (${leg})`
+    const cut = await updateCampaignWithSync({ campaignId: from.id, patch: { dailyBudget: (fromCents - cents) / 100 }, actor, reason: reason('source cut') } as never)
+    if ((cut as { ok?: boolean }).ok === false) {
+      reply.code(422)
+      return { ok: false, stage: 'cut', error: (cut as { error?: string }).error ?? 'the source cut was refused; nothing moved' }
+    }
+    const raise = await updateCampaignWithSync({ campaignId: to.id, patch: { dailyBudget: (toCents + cents) / 100 }, actor, reason: reason('destination raise') } as never)
+    if ((raise as { ok?: boolean }).ok === false) {
+      // Compensate: put the source back. If even that fails, say so loudly — a half-transfer the
+      // response hides is worse than one it names.
+      const undo = await updateCampaignWithSync({ campaignId: from.id, patch: { dailyBudget: fromCents / 100 }, actor, reason: reason('compensation — destination refused') } as never)
+      reply.code(422)
+      return {
+        ok: false, stage: 'raise',
+        error: (raise as { error?: string }).error ?? 'the destination raise was refused',
+        compensated: (undo as { ok?: boolean }).ok !== false,
+        note: (undo as { ok?: boolean }).ok !== false
+          ? 'The source was restored; nothing moved.'
+          : '🔴 The source cut landed and the compensation ALSO failed — the pair is half-transferred. Restore the source by hand.',
+      }
+    }
+    return { ok: true, moved: cents, from: { id: from.id, name: from.name, nowCents: fromCents - cents }, to: { id: to.id, name: to.name, nowCents: toCents + cents }, note: 'Both writes are enqueued through the gate; the change log is the delivery record.' }
+  })
+
   // ── CBN.2h.6: Bid Automation + Target ACoS (Ad Manager Bulk Actions) ────
   // Local automation settings stored in dynamicBidding (NOT pushed to Amazon —
   // these drive our own bid-optimizer, which reads dynamicBidding.targetAcos).

@@ -541,6 +541,21 @@ export function logGateDeny(
         error: (err as Error).message,
       })
     })
+  // BUD.7 / A7 — "at the cap: refuse further writes AND TELL ME." A ceiling or budget-bound
+  // refusal reaches the operator through notifyAutomation; the 6h body-keyed dedupe means one
+  // notice per distinct refusal, not one per queued write, and a failed notification never
+  // breaks the deny path.
+  if (deniedAt === 'spend_ceiling' || (deniedAt === 'entity_bounds' && reason.startsWith('budget'))) {
+    void import('./ads-automation-notify.service.js')
+      .then(({ notifyAutomation }) => notifyAutomation({
+        type: 'ads_write_refusal',
+        severity: 'warn',
+        title: deniedAt === 'spend_ceiling' ? 'A spend ceiling refused a budget raise' : 'A budget bound refused a write',
+        body: reason,
+        href: '/marketing/ads/rules-automation/automations?view=limits',
+      }))
+      .catch((err) => logger.warn('[ADS-WRITE-GATE-DENY] notify failed', { error: (err as Error).message }))
+  }
 }
 
 /**

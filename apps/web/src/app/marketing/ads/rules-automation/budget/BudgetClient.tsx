@@ -9,17 +9,13 @@
  * baseline, the rule record, proposals, reallocation and notifications are BUD.2–BUD.7 and every
  * one of them is a slot at the bottom of this file.
  *
- * 🔴 **Read-only, and stated rather than implied.** No budget and no rule moves from this page. The
- * grid's write-capable props are passed as explicit nulls via `NO_WRITE_ACTIONS`. The two AUTO
- * rules are still armed and the operator has not authorised the intervention: BUD.1 SHOWS the
- * ratchet, BUD.2 stops it.
- *
- * What replaced the tab: `?tab=budget` rendered `<RuleListTab liveType="budget" />` — three columns
- * of rules whose edits changed React state and nothing else, over a Delete that said "cannot be
- * undone" and removed a row while the rule survived. It showed neither the 2,386 budget changes nor
- * the two rules making them. The rule list is still here, at the bottom, lifted verbatim and
- * labelled provisional, because routing a tab must not take anything out of the product. BUD.4
- * replaces it.
+ * 🔴 The read-only era ended with BUD.2 (2026-08-15), and its end is stated where its start was:
+ * `WRITE_ACTIONS` replaced `NO_WRITE_ACTIONS`. The page now carries exactly the writes it owns —
+ * BUD.2's guardrails & baseline (the panel below the grid), BUD.3's restore-to-baseline and
+ * BUD.6's transfer (selection actions), every one a GATED write whose denial reports its reason.
+ * Rule records live on Automations (`?rule=` deep-links its drawer) — one owner; this page
+ * renders outcomes and links. The interim `RuleListTab` block is gone (BUD.4): the Rules view IS
+ * the honest list, and pending budget proposals queue in Automations' one inbox.
  *
  * ── Four things this page refuses to blur, each one measured on prod 2026-08-12 ─────────────────
  *
@@ -42,7 +38,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AlertTriangle, Plus, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -57,8 +53,7 @@ import { WRITE_ACTIONS, type BudSlotProps } from './slot-contract'
 import { BudgetSections } from './BudgetSections'
 // Interim, until BUD.4 replaces it: rendered exactly as the tab rendered it, so nothing is lost in
 // the move off `?tab=budget`.
-import { RuleListTab } from '../tabs/RuleListTab'
-import { NoDataIllus } from '../_shared/NoDataIllus'
+import { H10Select } from '../../campaigns/FilterDropdown'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -128,6 +123,14 @@ export function BudgetClient() {
   const [err, setErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // BUD.3/BUD.6 — selection + the two write acts. `writeNote` is the outcome sentence, always
+  // rendered with the server's own words (a denial names its gate).
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [writeBusy, setWriteBusy] = useState(false)
+  const [writeNote, setWriteNote] = useState<string | null>(null)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferEur, setTransferEur] = useState('')
+  const [transferFrom, setTransferFrom] = useState<string>('')
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -576,6 +579,57 @@ export function BudgetClient() {
     },
   ] : []
 
+  /**
+   * BUD.3 — restore the selected campaigns to their captured baselines. The server skips
+   * no-baseline and already-there rows and reports each; the sentence here repeats its words
+   * and never rounds a partial success up to a clean one.
+   */
+  const restoreSelected = async (ids: string[]) => {
+    setWriteBusy(true); setWriteNote(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/budget-baselines/restore`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignIds: ids }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j?.error ?? `Restore failed (${r.status})`)
+      const failed = (j.results as Array<{ name: string; outcome: string; why?: string }> | undefined)?.filter((x) => x.outcome === 'failed') ?? []
+      setWriteNote([
+        `${j.restored} restored to baseline`,
+        j.skipped ? `${j.skipped} skipped (no baseline, or already there)` : null,
+        failed.length ? `${failed.length} refused — ${failed.slice(0, 2).map((f) => `“${f.name}”: ${f.why ?? 'refused'}`).join(' · ')}` : null,
+        'Each write passed the gate as ENQUEUED; the change log is the delivery record.',
+      ].filter(Boolean).join(' · '))
+      setSel(new Set())
+      setReloadTick((n) => n + 1)
+    } catch (e) { setWriteNote(`Restore failed: ${(e as Error).message}`) } finally { setWriteBusy(false) }
+  }
+
+  /** BUD.6 — the transfer, source-first with compensation; the server's note is the verdict. */
+  const doTransfer = async () => {
+    const ids = [...sel]
+    const fromId = transferFrom || ids[0]
+    const toId = ids.find((x) => x !== fromId)
+    const cents = Math.round(Number(transferEur) * 100)
+    if (!fromId || !toId || !Number.isFinite(cents) || cents <= 0) return
+    setWriteBusy(true); setWriteNote(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/budget-transfer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromId, toId, cents }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) {
+        setWriteNote(`Transfer refused at the ${j?.stage ?? 'gate'}: ${j?.error ?? `(${r.status})`}${j?.note ? ` — ${j.note}` : ''}`)
+      } else {
+        setWriteNote(`Moved €${(cents / 100).toFixed(2)}/day: “${j.from?.name}” → “${j.to?.name}”. ${j.note ?? ''}`)
+        setSel(new Set())
+        setReloadTick((n) => n + 1)
+      }
+      setTransferOpen(false); setTransferEur(''); setTransferFrom('')
+    } catch (e) { setWriteNote(`Transfer failed: ${(e as Error).message}`) } finally { setWriteBusy(false) }
+  }
+
   const csv = () => {
     const head = view === 'campaigns'
       ? ['Campaign', 'Market', 'Status', 'Daily budget EUR', 'At floor', 'Gate open', `Spend ${days}d EUR`, 'Utilisation 7d avg %', 'Last moved', 'Last moved from EUR', 'Last moved to EUR', 'Last moved by', 'Delivered', `Delta ${days}d EUR`, 'Writes 24h', `Writes ${days}d`, 'Rules reaching']
@@ -723,13 +777,14 @@ export function BudgetClient() {
             <b>{num(census.atFloor)} of {num(census.campaigns)} campaigns sit at Amazon&rsquo;s €1 minimum</b>
             {census.rulesCutOnly > 0 && <>, and {census.rulesCutOnly === 1 ? 'a rule that only cuts is' : `${census.rulesCutOnly} rules that only cut are`} still running on their own</>}.
             Each applies its percentage to the <b>current</b> budget rather than to a baseline, every
-            15 minutes, with no cooldown — ten applications of −20% leave a budget at 11% of where it
-            started. The {num(census.cuttable)} campaigns still above €1 are the entire reachable
-            surface. <b>The daily execution cap is not stopping this</b>: the query counting
-            today&rsquo;s executions tests <code>NOT (errorMessage = &lsquo;DAILY_CAP_EXCEEDED&rsquo;)</code>,
-            which is NULL rather than true for the null a success carries, so it returns 0 where the
-            correct predicate returns the rule&rsquo;s full count — and nothing has been refused since
-            2026-08-03. That is what a &ldquo;Refused&rdquo; column of zeroes below means.
+            15 minutes — ten applications of −20% of the CURRENT value leave a budget at 11% of
+            where it started. The {num(census.cuttable)} campaigns still above €1 are the entire
+            reachable surface. <b>The caps now bound how OFTEN, not how far</b>: the daily-cap
+            counter was repaired and armed on 2026-08-14 (its first tick held 19 of 20 rules) and
+            the write cap demotes past its bound — but a bounded rule still compounds. What stops
+            the compounding itself is a <b>baseline</b>: capture one in{' '}
+            <a href="#bud-guardrails">Guardrails &amp; the baseline</a> below and every relative
+            rule anchors to it instead of walking.
           </span>
         </p>
       )}
@@ -738,6 +793,13 @@ export function BudgetClient() {
         <p className="h10-bud-note bad">
           <AlertTriangle size={12} />
           <span>This scope holds more than 5,000 campaigns and the grid is showing the first 5,000 by budget. Narrow the scope — the export would be truncated too.</span>
+        </p>
+      )}
+
+      {writeNote && (
+        <p className="h10-bud-note" role="status">
+          <Info size={12} />
+          <span>{writeNote}</span>
         </p>
       )}
 
@@ -763,9 +825,38 @@ export function BudgetClient() {
           onSortChange={onSortChange}
           showTotal
           totalFirst={`${num(campaigns.length)} shown`}
-          /* 🔴 BUD.1 is read-only. Passed as explicit absence rather than omitted. */
-          selectable={false}
-          selectionActions={WRITE_ACTIONS.selectionActions ?? undefined}
+          /* BUD.3/BUD.6 — the page writes now (BUD.2 ended the read-only era): selection carries
+             the two acts this page owns — restore to a captured baseline, and the sideways move
+             neither AUTO rule can make. Both are gated per write; a denial reports, never hides. */
+          selectable
+          selected={sel}
+          onSelectedChange={setSel}
+          selectionActions={(ids) => {
+            const chosen = campaigns.filter((c) => ids.includes(c.id))
+            const restorable = chosen.filter((c) => c.budgetBaselineCents != null && c.budgetBaselineCents !== c.dailyBudgetCents)
+            return (
+              <span className="h10-bud-selrow">
+                <button
+                  type="button"
+                  className="h10-am-btn bulk"
+                  disabled={writeBusy || restorable.length === 0}
+                  title={restorable.length === 0 ? 'None of the selected campaigns has a baseline it is away from — capture baselines below first.' : `Write each campaign's budget back to its captured baseline. ${chosen.length - restorable.length > 0 ? `${chosen.length - restorable.length} of the selection will be skipped (no baseline, or already there).` : ''}`}
+                  onClick={() => void restoreSelected(ids)}
+                >
+                  Restore {restorable.length > 0 ? `${restorable.length} ` : ''}to baseline
+                </button>
+                <button
+                  type="button"
+                  className="h10-am-btn bulk"
+                  disabled={writeBusy || ids.length !== 2}
+                  title={ids.length === 2 ? 'Move €/day from one of the two selected campaigns to the other.' : 'Select exactly two campaigns to transfer budget between them.'}
+                  onClick={() => setTransferOpen(true)}
+                >
+                  Transfer…
+                </button>
+              </span>
+            )
+          }}
           onRowClick={WRITE_ACTIONS.onRowAction ?? undefined}
           exportable
           onExport={csv}
@@ -784,11 +875,11 @@ export function BudgetClient() {
           noun="Rule"
           firstColLabel="Rule"
           renderFirst={(r) => (
-            /* 🔴 NOT a link — BUD.3 makes this open the rule record. The shared grid paints the
-               first column #1f6fde at (0,3,1) because every other consumer makes it one, so the
-               colour is overridden at matching specificity in rules-automation.css. */
+            /* BUD.3 — the name opens the rule's RECORD, which lives on Automations (one owner:
+               that page owns the actor; this one renders outcomes and links). ?rule= deep-links
+               its drawer. */
             <div className="h10-bud-rule">
-              <span className="t" title={r.name}>{r.name}</span>
+              <Link className="t" href={`/marketing/ads/rules-automation/automations?rule=${r.id}`} title={`${r.name} — open its record on Automations (mode, ceiling, scope, history, simulate)`}>{r.name}</Link>
               {!r.enabled && <span className="fl off" title="Switched off — it does not evaluate">off</span>}
               {r.acts && r.percent != null && r.percent < 0 && (
                 <span className="fl cut" title="This rule changes budgets on its own, and the only budget change it makes is a cut">cuts, on its own</span>
@@ -817,30 +908,61 @@ export function BudgetClient() {
              today; nobody restructures this client to add one. ──────────────────────────────────── */}
       <BudgetSections {...slotProps} />
 
-      {/* Interim until BUD.4: the rule list exactly as `?tab=budget` rendered it, so routing the tab
-          takes nothing out of the product. BUD.4 deletes this block and its two imports. */}
-      <div className="h10-bud-prov">
-        <h2>
-          Budget rules
-          <i>Provisional — this is the old tab, moved unchanged. Its columns edit local state only
-          and its Delete removes a row without deleting the rule. BUD.4 replaces it with the Rules
-          view above, made editable.</i>
-        </h2>
-      </div>
-      <RuleListTab
-        noun="Budget Rule"
-        seed={[]}
-        liveType="budget"
-        editHref={(id) => `/marketing/ads/rules-automation/builder/budget?ruleId=${id}`}
-        onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/budget' }}
-        emptyNode={(
-          <span className="h10-rr-empty">
-            <NoDataIllus size={104} />
-            <b>Create a Budget Rule to generate suggestions for a campaign!</b>
-            <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> Create Rule</a>
-          </span>
-        )}
-      />
+      {/* BUD.4 — the interim RuleListTab is GONE: the Rules view above is the honest list
+          (resolveAutonomy levels, refusals in their own column), each name opens its record on
+          Automations, and the builder entry lives below. Pending budget proposals queue in ONE
+          inbox — Automations' Queue — per the section's one-owner rule. */}
+      <p className="h10-bud-foot">
+        <a className="h10-am-btn" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> New budget rule</a>
+        <a className="h10-am-link" href="/marketing/ads/rules-automation/automations?view=queue">Pending budget proposals live in the Queue →</a>
+      </p>
+
+      {transferOpen && (() => {
+        const ids = [...sel]
+        const a = campaigns.find((c) => c.id === ids[0])
+        const b = campaigns.find((c) => c.id === ids[1])
+        if (!a || !b) return null
+        const from = transferFrom === b.id ? b : a
+        const to = from.id === a.id ? b : a
+        return (
+          <div className="h10-ntm-back" onClick={() => setTransferOpen(false)}>
+            <div className="h10-ntm" role="dialog" aria-modal="true" aria-label="Transfer budget" onClick={(e) => e.stopPropagation()}>
+              <div className="h10-ntm-h"><b>Transfer daily budget</b></div>
+              <div className="h10-ntm-sub">
+                Moves €/day sideways — the action neither AUTO rule can make. Two gated writes, source first;
+                if the destination raise is refused, the source is put back and the outcome says so.
+              </div>
+              <div className="h10-ntm-b">
+                <label className="h10-bud-xferrow">
+                  <span>From</span>
+                  <H10Select
+                    width={280}
+                    options={[a, b].map((c) => ({ value: c.id, label: `${c.name} (€${(c.dailyBudgetCents / 100).toFixed(2)}/day)` }))}
+                    value={from.id}
+                    onChange={setTransferFrom}
+                    ariaLabel="Source campaign"
+                  />
+                </label>
+                <p className="h10-bud-xferto">→ “{to.name}” (€{(to.dailyBudgetCents / 100).toFixed(2)}/day)</p>
+                <label className="h10-bud-xferrow">
+                  <span>Amount</span>
+                  <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="0.00" value={transferEur} onChange={(e) => setTransferEur(e.target.value)} aria-label="Amount in euros per day" autoFocus /><span className="sf">/day</span></span>
+                </label>
+                {Number(transferEur) > 0 && (from.dailyBudgetCents - Math.round(Number(transferEur) * 100)) < 100 && (
+                  <p className="h10-au-limiterr"><AlertTriangle size={13} aria-hidden /> That would take “{from.name}” below Amazon&rsquo;s €1 floor — the server will refuse it.</p>
+                )}
+              </div>
+              <div className="h10-ntm-f">
+                <button type="button" className="cancel" onClick={() => setTransferOpen(false)}>Cancel</button>
+                <span className="grow" />
+                <button type="button" className="apply" disabled={writeBusy || !(Number(transferEur) > 0)} onClick={() => void doTransfer()}>
+                  {writeBusy ? 'Working…' : `Move €${(Number(transferEur) || 0).toFixed(2)}/day`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
