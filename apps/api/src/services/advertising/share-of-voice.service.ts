@@ -943,10 +943,20 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       baselinePeriods: SQP_BASELINE_PERIODS,
     },
     /**
-     * 🔴 Two feeds, two ages, never one number. The market side is ~17 days behind by
-     * configuration (`NEXUS_SQP_LOOKBACK` defaults to 2, so the newest week the cron can write is
-     * always ~2 weeks old) and the ad side is 2 days behind. A single "last synced" chip would be
-     * wrong whichever feed it named.
+     * 🔴 Two feeds, two ages, never one number. A single "last synced" chip would be wrong
+     * whichever feed it named.
+     *
+     * The ad side is ~2 days behind (D-1 reports, ingested overnight). The market side is far
+     * worse, and FOUR lags stack: the grain is a completed WEEK; `NEXUS_SQP_LOOKBACK` (default
+     * **1** since 2026-08-13 — this comment said 2 until RT.3 corrected it) bounds the newest week
+     * the cron may even request; Amazon generates these reports SERIALLY, so one 40-report batch
+     * took 14.6 hours to drain; and `chooseViewPeriod` then rejects any period thinner than half a
+     * normal week. Measured net effect: the grid renders a week that is typically **24–31 days
+     * old**, not ~17.
+     *
+     * That is also why this page polls no cursor (RT.2): a 45-second poll against a feed that
+     * moves weekly can only ever report "nothing changed", while implying a liveness the data
+     * does not have. The two ages below are the honest control, and they are already computed.
      *
      * Rendered inline by the page in a shape `<FreshnessChip>` can replace: freshness is
      * substrate-owned (spec §4 and §6.3) and Phase S has not happened. This is NOT a rival
