@@ -43,7 +43,10 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
-import { BidScopeBar, type BidScopeValue, type ScopeOptionsPayload } from './BidScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { ScopeNotes } from '../_shared/ScopeNotes'
+import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
 import { useCursorPoll } from '../_shared/useCursorPoll'
 import {
   BAND_LABEL, BID_BANDS, BIDDER_LABEL,
@@ -91,7 +94,7 @@ export function BidClient() {
   // Every view is linkable and an absent param means the default, never a stored preference, so a
   // link renders the same view for whoever opens it.
   const market = params.get('market') ?? DEFAULT_MARKET
-  const scope: BidScopeValue = {
+  const scope: ScopeValue = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
     campaign: params.get('campaign') ?? '',
@@ -166,9 +169,12 @@ export function BidClient() {
       else next.set(k, v)
     }
     const qs = next.toString()
-    // `push`, not `replace`: back and forward have to walk the filter history. A grid whose
-    // filters cannot be un-done with the browser's own back button is a grid people stop filtering.
-    router.push(qs ? `?${qs}` : '?', { scroll: false })
+    // FB.2 — `replace`, not `push`. Five of the seven scope bars already replaced, and the two that
+    // pushed (this page and Budget) made the merged bar unusable: with scope and the chips now in
+    // ONE panel, setting three controls stacked three history entries, and leaving the page took
+    // six clicks of Back. The grid's own state is still linkable — a copied URL reproduces the view
+    // exactly as before — it just no longer owns the back button.
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [params, router])
 
   useEffect(() => {
@@ -501,7 +507,11 @@ export function BidClient() {
   // with their counts, so a value the data holds can never be missing from the control.
   const filters: GridFilter[] = useMemo(() => {
     const f = data?.facets
+    // FB.2 — the scope grains lead the bar, in the order they narrow. They carry no `value`
+    // accessor on purpose: the server already resolved them and the rows reflect it, so a client
+    // accessor would filter a second time and drop every row the two disagreed about.
     const common: GridFilter[] = [
+      ...buildScopeFilters({ options, market, value: scope }),
       {
         key: '__status', label: 'Status', kind: 'select', placeholder: 'Enabled',
         options: [
@@ -572,19 +582,27 @@ export function BidClient() {
       { key: 'acos', label: 'ACoS', kind: 'range', unit: '%' },
       { key: 'clicks', label: 'Clicks', kind: 'range' },
     ]
-  }, [data, view, bidderCounts, stateCounts])
+  }, [data, view, bidderCounts, stateCounts, options, market, scope.line, scope.portfolio, scope.campaign])
 
   // The four server-side chips ride the URL, so the grid's own filter state is only used for the
   // numeric ranges. Bridging them here rather than inside AdsDataGrid keeps that component
   // untouched apart from the additive sort callback.
-  const initialFilters = useMemo(() => ({
+  // FB.2 — every URL-backed control in one map. The panel's numeric ranges stay page-local; the
+  // hook merges the two into the single FilterState the bar and both grids read.
+  const urlValues = useMemo(() => ({
+    ...scopeToFilterState(scope),
     __status: status, __kind: kind, __match: match, __band: band, __measured: measured, __state: stateParam, __bidder: bidderParam,
-  }), [status, kind, match, band, measured, stateParam, bidderParam])
+  }), [scope.line, scope.portfolio, scope.campaign, status, kind, match, band, measured, stateParam, bidderParam])
 
-  const onFilterChange = useCallback((next: Record<string, unknown>) => {
-    const s = (k: string) => (typeof next[k] === 'string' ? (next[k] as string) : '')
-    push({ status: s('__status'), kind: s('__kind'), match: s('__match'), band: s('__band'), measured: s('__measured'), state: s('__state'), bidder: s('__bidder') })
+  const onUrlChange = useCallback((next: Record<string, string>) => {
+    push({
+      line: next.__line ?? '', portfolio: next.__portfolio ?? '', campaign: next.__campaign ?? '',
+      status: next.__status ?? '', kind: next.__kind ?? '', match: next.__match ?? '',
+      band: next.__band ?? '', measured: next.__measured ?? '', state: next.__state ?? '', bidder: next.__bidder ?? '',
+    })
   }, [push])
+
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange })
 
   const activeTab = rulesTabByKey('bid')
   const sc = data?.scope
@@ -748,14 +766,25 @@ export function BidClient() {
 
       <RulesTabs active="bid" />
 
-      <BidScopeBar
-        options={options}
-        market={market}
-        scope={scope}
-        applied={sc?.applied ?? []}
-        notes={sc?.notes ?? []}
-        contradiction={sc?.contradiction ?? null}
-        onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign })}
+      {/* FB.2 — ONE bar. Scope used to sit here and the grid's Filters panel sat below the census,
+          two strips for one job at opposite ends of the page's numbers. Now: controls, then the
+          numbers they produce, then the rows. */}
+      <AdsFilterBar
+        filters={filters}
+        value={filterState}
+        onChange={setFilterState}
+        /* Open. The scope bar this replaces was three always-visible selects, and collapsing them
+           behind a "Show Filters" toggle would make the page's primary control the one thing you
+           cannot see. The collapsed state stays honest (the head names what is set) for whoever
+           closes it. */
+        defaultOpen
+        notesSlot={(
+          <ScopeNotes
+            applied={sc?.applied ?? []}
+            notes={sc?.notes ?? []}
+            contradiction={sc?.contradiction ?? null}
+          />
+        )}
       />
 
       {/* S1 — the bidder band, above the grid where the seam comment placed it. */}
@@ -867,8 +896,9 @@ export function BidClient() {
           firstSortValue={(r) => r.label.toLowerCase()}
           columns={targetColumns}
           filters={filters}
-          initialFilters={initialFilters}
-          onFilterChange={onFilterChange}
+          filterState={filterState}
+          onFilterStateChange={setFilterState}
+          hideFilterPanel
           defaultSort={sortKey ? { key: sortKey, dir: sortDir } : { key: 'spend', dir: 'desc' }}
           onSortChange={onSortChange}
           showTotal
@@ -904,8 +934,9 @@ export function BidClient() {
           firstSortValue={(r) => r.name.toLowerCase()}
           columns={campaignColumns}
           filters={filters}
-          initialFilters={initialFilters}
-          onFilterChange={onFilterChange}
+          filterState={filterState}
+          onFilterStateChange={setFilterState}
+          hideFilterPanel
           defaultSort={sortKey ? { key: sortKey, dir: sortDir } : { key: 'spend', dir: 'desc' }}
           onSortChange={onSortChange}
           showTotal

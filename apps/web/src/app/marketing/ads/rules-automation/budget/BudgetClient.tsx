@@ -44,7 +44,10 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { useCursorPoll } from '../_shared/useCursorPoll'
 import { getBackendUrl } from '@/lib/backend-url'
-import { BudgetScopeBar, type BudScopeValue, type ScopeOptionsPayload } from './BudgetScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { ScopeNotes } from '../_shared/ScopeNotes'
+import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
 import {
   BUD_STATES, LEVEL_LABEL, STATE_LABEL,
   type BudCampaignRow, type BudGridPayload, type BudRuleRow, type BudState, type BudView,
@@ -95,8 +98,12 @@ export function BudgetClient() {
   // URL should say, and what the scope actually resolves to.
   const campaignParam = params.get('campaign') ?? ''
   const portfolioParam = params.get('portfolio') ?? ''
-  const scope: BudScopeValue = {
-    product: params.get('product') ?? '',
+  // FB.2 — the line grain is `?line=` here as on the other ten pages. This page called it
+  // `?product=` alone, which made one grain two names across the section and meant a link could not
+  // be carried from Bid to Budget. The old spelling is still READ, so links already out there keep
+  // working; `push` rewrites the address bar to the new one the first time anything moves.
+  const scope: ScopeValue = {
+    line: params.get('line') ?? params.get('product') ?? '',
     portfolio: campaignParam ? '' : portfolioParam,
     campaign: campaignParam,
   }
@@ -153,10 +160,13 @@ export function BudgetClient() {
     // The exclusivity rule, applied to the URL itself so the address bar never shows a state the
     // server did not resolve.
     if (next.get('campaign')) next.delete('portfolio')
+    // The old spelling never survives a write: one grain, one param.
+    next.delete('product')
     const qs = next.toString()
-    // `push`, not `replace`: back and forward have to walk the filter history. A grid whose filters
-    // cannot be undone with the browser's own back button is a grid people stop filtering.
-    router.push(qs ? `?${qs}` : '?', { scroll: false })
+    // FB.2 — `replace`, not `push`. With scope and the chips in ONE panel, three clicks used to
+    // stack three history entries and leaving the page took six presses of Back. The view is still
+    // fully linkable; it just no longer owns the back button. Five of the seven bars already did this.
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [params, router])
 
   // A link that arrives carrying both grains is rewritten once, quietly, so the URL matches what is
@@ -181,13 +191,14 @@ export function BudgetClient() {
 
   const gridParams = useMemo(() => {
     const p: Record<string, string> = { market, view, status, window: windowParam.replace('d', '') }
-    for (const [k, v] of Object.entries({ product: scope.product, portfolio: scope.portfolio, campaign: scope.campaign, q })) {
+    // `product` is the SERVER's field name (`BudGridRequest.product`); only the URL param moved.
+    for (const [k, v] of Object.entries({ product: scope.line, portfolio: scope.portfolio, campaign: scope.campaign, q })) {
       if (v) p[k] = v
     }
     if (state) p.state = state
     if (sortParam) { p.sort = sortParam; p.dir = dirParam }
     return p
-  }, [market, view, status, windowParam, scope.product, scope.portfolio, scope.campaign, q, state, sortParam, dirParam])
+  }, [market, view, status, windowParam, scope.line, scope.portfolio, scope.campaign, q, state, sortParam, dirParam])
 
   const gridKey = JSON.stringify(gridParams)
 
@@ -215,7 +226,7 @@ export function BudgetClient() {
     const p: Record<string, string> = { market, view, status }
     for (const [k, v] of Object.entries(scope)) if (v) p[k] = v
     return p
-  }, [market, view, status, scope.product, scope.portfolio, scope.campaign])
+  }, [market, view, status, scope.line, scope.portfolio, scope.campaign])
 
   const refresh = useCursorPoll({
     url: `${getBackendUrl()}/api/advertising/budget-grid/cursor`,
@@ -487,6 +498,10 @@ export function BudgetClient() {
   // 🔴 Market is NOT a filter here: the header owns it.
   const filters: GridFilter[] = useMemo(() => {
     const stateFacet = (s: BudState) => data?.facets.state.find((f) => f.value === s)?.count ?? 0
+    // FB.2 — the scope grains lead the bar in BOTH views. They narrow the rules view too (a rule is
+    // shown with what it reaches), so leaving them out of that branch would make the same three
+    // controls appear and vanish as you switch view.
+    const scopeFilters = buildScopeFilters({ options, market, value: scope })
     const common: GridFilter[] = [
       {
         key: '__status', label: 'Status', kind: 'select', placeholder: 'Enabled',
@@ -498,12 +513,14 @@ export function BudgetClient() {
     ]
     if (view === 'rules') {
       return [
+        ...scopeFilters,
         { key: 'executions7d', label: `Ran (${days}d)`, kind: 'range' },
         { key: 'wrote7d', label: 'Changed a budget', kind: 'range' },
         { key: 'canStillMove', label: 'Can still move', kind: 'range' },
       ]
     }
     return [
+      ...scopeFilters,
       ...common,
       {
         key: '__state', label: 'State', kind: 'select', placeholder: 'Any state', wide: true,
@@ -517,16 +534,22 @@ export function BudgetClient() {
       { key: 'utilization', label: 'Utilisation', kind: 'range', unit: '%' },
       { key: 'writes7d', label: 'Writes', kind: 'range' },
     ]
-  }, [data, view, days])
+  }, [data, view, days, options, market, scope.line, scope.portfolio, scope.campaign])
 
   // The server-side chips ride the URL, so the grid's own filter state is only used for the numeric
   // ranges. Bridged here rather than inside AdsDataGrid, which stays untouched.
-  const initialFilters = useMemo(() => ({ __status: status, __state: state ?? '' }), [status, state])
+  const urlValues = useMemo(() => ({
+    ...scopeToFilterState(scope), __status: status, __state: state ?? '',
+  }), [scope.line, scope.portfolio, scope.campaign, status, state])
 
-  const onFilterChange = useCallback((next: Record<string, unknown>) => {
-    const s = (k: string) => (typeof next[k] === 'string' ? (next[k] as string) : '')
-    push({ status: s('__status'), state: s('__state') })
+  const onUrlChange = useCallback((next: Record<string, string>) => {
+    push({
+      line: next.__line ?? '', portfolio: next.__portfolio ?? '', campaign: next.__campaign ?? '',
+      status: next.__status ?? '', state: next.__state ?? '',
+    })
   }, [push])
+
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange })
 
   const activeTab = rulesTabByKey('budget')
   const sc = data?.scope
@@ -733,14 +756,19 @@ export function BudgetClient() {
 
       <RulesTabs active="budget" />
 
-      <BudgetScopeBar
-        options={options}
-        market={market}
-        scope={scope}
-        applied={sc?.applied ?? []}
-        notes={sc?.notes ?? []}
-        contradiction={sc?.contradiction ?? null}
-        onChange={(next) => push({ product: next.product, portfolio: next.portfolio, campaign: next.campaign })}
+      {/* FB.2 — ONE bar: controls, then the numbers they produce, then the rows. */}
+      <AdsFilterBar
+        filters={filters}
+        value={filterState}
+        onChange={setFilterState}
+        defaultOpen
+        notesSlot={(
+          <ScopeNotes
+            applied={sc?.applied ?? []}
+            notes={sc?.notes ?? []}
+            contradiction={sc?.contradiction ?? null}
+          />
+        )}
       />
 
       {resolution && (
@@ -824,8 +852,9 @@ export function BudgetClient() {
           firstSortValue={(r) => r.name.toLowerCase()}
           columns={campaignColumns}
           filters={filters}
-          initialFilters={initialFilters}
-          onFilterChange={onFilterChange}
+          filterState={filterState}
+          onFilterStateChange={setFilterState}
+          hideFilterPanel
           defaultSort={sortParam ? { key: sortParam, dir: dirParam } : { key: 'budget', dir: 'desc' }}
           onSortChange={onSortChange}
           showTotal
@@ -894,6 +923,9 @@ export function BudgetClient() {
           firstSortValue={(r) => r.name.toLowerCase()}
           columns={ruleColumns}
           filters={filters}
+          filterState={filterState}
+          onFilterStateChange={setFilterState}
+          hideFilterPanel
           defaultSort={sortParam ? { key: sortParam, dir: dirParam } : { key: 'level', dir: 'desc' }}
           onSortChange={onSortChange}
           showTotal

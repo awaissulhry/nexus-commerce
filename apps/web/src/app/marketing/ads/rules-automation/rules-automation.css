@@ -4890,3 +4890,15 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
    a non-text indicator needing 3:1 (WCAG 1.4.11) and clears it at 4.42:1. Moved anyway so the bar
    speaks one blue. */
 .h10-rules-tabs:focus-visible { outline-color: #1a61c6; }
+
+/* ── FB.2 — the one scope note, replacing h10-bd-note / h10-plc-note / *-blind ────────────────────
+   Lives INSIDE the merged filter bar, under the controls (see `_shared/ScopeNotes.tsx`). The
+   neutral form is the intersection and the blind-spot facts; `.bad` is the server's refusal. */
+.h10-am-fpanel .h10-ra-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-am-fpanel .h10-ra-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-am-fpanel .h10-ra-note b { font-weight: 800; color: #1c2530; }
+.h10-am-fpanel .h10-ra-note .lnk { font: inherit; font-weight: 700; color: #1f6fde; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.h10-am-fpanel .h10-ra-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-am-fpanel .h10-ra-note.bad svg { color: #8a5316; }
+.h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
+.h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }

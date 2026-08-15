@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { HistoryDrawer } from '../tabs/RuleListTab'
@@ -43,6 +43,8 @@ import { triggerText } from './ruleText'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { StaleBanner } from '../_shared/StaleBanner'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { useMergedFilters } from '../_shared/useMergedFilters'
 
 interface Rule extends DetailRule {
   category: string
@@ -71,6 +73,11 @@ const ago = (iso: string | null) => {
   return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
 }
 const LEVEL_WORD: Record<Level, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
+
+/** The three band tiles that narrow the grid. `null` is "not narrowed". */
+type TileKey = 'writing' | 'unscoped' | 'off'
+const asTile = (v: string | null | undefined): TileKey | null =>
+  (v === 'writing' || v === 'unscoped' || v === 'off' ? v : null)
 
 export function AutomationsClient() {
   const [rules, setRules] = useState<Rule[] | null>(null)
@@ -108,18 +115,25 @@ export function AutomationsClient() {
     duplicates: { bodies: string[][]; names: string[][] }
   } | null>(null)
   // AUTO.A1 — the band tile acting as a filter (?tile=). Clicking the active tile clears it.
-  const [tile, setTile] = useState<'writing' | 'unscoped' | 'off' | null>(() => {
+  //
+  // 🔴 FB.2 — this used to be a SECOND STORE. The tile lived here in `?tile=` while Mode lived in
+  // the grid's own filter state, with nothing reconciling them: setting Mode=Propose while
+  // `?tile=writing` was on left an empty grid under two controls that both looked live, and the
+  // panel's Clear could not clear the tile. The tile is now a filter like any other — it appears in
+  // the merged bar as "Exposure", it clears with everything else, and the band buttons are a second
+  // affordance on the same store rather than a store of their own.
+  const [tile, setTile] = useState<TileKey | null>(() => {
     if (typeof window === 'undefined') return null
-    const v = new URLSearchParams(window.location.search).get('tile')
-    return v === 'writing' || v === 'unscoped' || v === 'off' ? v : null
+    return asTile(new URLSearchParams(window.location.search).get('tile'))
   })
-  const setTileAndUrl = (t: 'writing' | 'unscoped' | 'off' | null) => {
-    const next = t === tile ? null : t
+  const applyTile = useCallback((next: TileKey | null) => {
     setTile(next)
     const u = new URL(window.location.href)
     if (next) u.searchParams.set('tile', next); else u.searchParams.delete('tile')
     window.history.replaceState(null, '', u)
-  }
+  }, [])
+  /** The band's affordance: clicking the active tile clears it. The select does not toggle. */
+  const setTileAndUrl = (t: TileKey | null) => applyTile(t === tile ? null : t)
   const [kind, setKind] = useState<ActorKind>(() => {
     if (typeof window === 'undefined') return 'all'
     const v = new URLSearchParams(window.location.search).get('kind')
@@ -611,6 +625,51 @@ export function AutomationsClient() {
   const detail = detailId && !bulk ? all.find((r) => r.id === detailId) ?? null : null
   const subtitle = rulesTabByKey('automations')?.subtitle ?? ''
 
+  // ── FB.2 — one bar. Exposure leads it, because it is the coarsest thing on the page and the
+  //    band tiles above write it.
+  //
+  //    🔴 `__tile` carries no `value` accessor. The tile predicate is not a row property — 'writing'
+  //    is `level==='AUTO' && writes` across three row KINDS, and 'unscoped' adds "bound to no
+  //    market, portfolio, campaign or product". It is applied in `visible` before the grid sees a
+  //    row, so an accessor here would be a second, weaker copy of that predicate.
+  const filters: GridFilter[] = useMemo(() => [
+    {
+      key: '__tile', label: 'Exposure', kind: 'select', placeholder: 'Everything', wide: true,
+      options: [
+        { value: 'writing', label: `Writing to Amazon (${num(counts.writing + counts.engineAuto)})` },
+        { value: 'unscoped', label: `Unscoped and writing (${num(counts.unscopedWriting + counts.engineAuto)})` },
+        { value: 'off', label: `Off (${num(counts.off)})` },
+      ],
+    },
+    // Rule-property filters. An ACTIVE selection names rule facts, so engine/observed rows
+    // (whose accessor returns nothing) drop out while it is set — a filtered view never
+    // silently carries rows the filter cannot describe.
+    { key: 'category', label: 'Type', kind: 'multiselect', options: categoryOpts, placeholder: 'All types', wide: true, value: (a: unknown) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.category : '') },
+    {
+      key: 'mode', label: 'Mode', kind: 'multiselect', placeholder: 'All modes', wide: true,
+      options: [
+        { value: 'AUTO', label: `Auto (${counts.auto})` },
+        { value: 'PROPOSE', label: `Propose (${counts.propose})` },
+        { value: 'OBSERVE', label: `Observe (${counts.observe})` },
+        { value: 'OFF', label: `Off (${counts.off})` },
+      ],
+      value: (a: unknown) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.level : ''),
+    },
+    {
+      key: 'scopeKind', label: 'Rule scope', kind: 'select', placeholder: 'Any scope', wide: true,
+      options: [
+        { value: 'account', label: 'Whole account' },
+        { value: 'portfolio', label: 'One portfolio' },
+        { value: 'campaign', label: 'One campaign' },
+      ],
+      value: (a: unknown) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.scope.kind : ''),
+    },
+  ], [categoryOpts, counts])
+
+  const urlValues = useMemo(() => ({ __tile: tile ?? '' }), [tile])
+  const onUrlChange = useCallback((next: Record<string, string>) => { applyTile(asTile(next.__tile)) }, [applyTile])
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange })
+
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
@@ -627,6 +686,13 @@ export function AutomationsClient() {
       />
       <RulesTabs active="automations" />
       <StaleBanner stale={autoRefresh.stale} subject="A rule, a cap, a scope or the queue" onRefresh={() => { void load() }} />
+
+      {/* FB.2 — ONE bar, at the top: controls, then the numbers they produce, then the rows. Only on
+          the Actors view; Ledger, Queue and Limits mount different components with different rows,
+          and a bar that filtered none of them would be a control that does nothing. */}
+      {view === 'actors' && (
+        <AdsFilterBar filters={filters} value={filterState} onChange={setFilterState} defaultOpen />
+      )}
 
       {/* ── A1 — the exposure band. Every tile that can filter the grid IS a filter (aria-pressed,
              click again to clear); the two that cannot say why in their footline. ───────────── */}
@@ -809,31 +875,10 @@ export function AutomationsClient() {
         pagerCentered
         rowClassName={(a) => (a.k === 'rule' && conflicts.has(a.r.id) ? 'h10-au-rowconf' : a.k !== 'rule' ? 'h10-au-rowactor' : undefined)}
         emptyLabel="No actors match this filter."
-        filters={[
-          // Rule-property filters. An ACTIVE selection names rule facts, so engine/observed rows
-          // (whose accessor returns nothing) drop out while it is set — a filtered view never
-          // silently carries rows the filter cannot describe.
-          { key: 'category', label: 'Type', kind: 'multiselect', options: categoryOpts, placeholder: 'All types', wide: true, value: (a) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.category : '') },
-          {
-            key: 'mode', label: 'Mode', kind: 'multiselect', placeholder: 'All modes',
-            options: [
-              { value: 'AUTO', label: `Auto (${counts.auto})` },
-              { value: 'PROPOSE', label: `Propose (${counts.propose})` },
-              { value: 'OBSERVE', label: `Observe (${counts.observe})` },
-              { value: 'OFF', label: `Off (${counts.off})` },
-            ],
-            value: (a) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.level : ''),
-          },
-          {
-            key: 'scopeKind', label: 'Scope', kind: 'select', placeholder: 'Any scope',
-            options: [
-              { value: 'account', label: 'Whole account' },
-              { value: 'portfolio', label: 'One portfolio' },
-              { value: 'campaign', label: 'One campaign' },
-            ],
-            value: (a) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.scope.kind : ''),
-          },
-        ]}
+        filters={filters}
+        filterState={filterState}
+        onFilterStateChange={setFilterState}
+        hideFilterPanel
         selectionActions={(ids, clear) => (
           <span className="h10-au-bulkrow">
             <span className="lbl">Set mode</span>

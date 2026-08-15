@@ -45,9 +45,12 @@ export type { BudCampaignRow, BudCursor, BudGridPayload, BudRuleRow, BudState, B
 /** The four grains the page binds. Market is here as a value but `AdsPageHeader` owns its control. */
 export interface BudScope {
   market: string
-  product: string
+  /** FB.2 — `line`, the name the other ten pages use. Was `product`, and the SERVER field still is. */
+  line: string
   portfolio: string
   campaign: string
+  /** present on the shared `ScopeValue`; this page has no ad-group grain */
+  adGroup?: string
 }
 
 /**
