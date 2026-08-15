@@ -192,6 +192,11 @@ export function BidActivity({ scope, campaigns, loading }: BidSlotProps) {
           <Link href="/marketing/ads/rules-automation/automations?view=limits">Automations → Limits <ExternalLink size={11} aria-hidden /></Link>{' '}
           and per campaign in Bounds above — one owner each; this block only reports.
         </p>
+        {/* S9 — the between-visits half: this page's failure and refusal events also notify. */}
+        <p className="h10-bd8-foot">
+          Refusals and terminal write failures also reach the notification bell as they happen —
+          identical failures collapse to one unread notice per 6&nbsp;hours, so a storm reads as one line, not a thousand.
+        </p>
       </div>
     </section>
   )

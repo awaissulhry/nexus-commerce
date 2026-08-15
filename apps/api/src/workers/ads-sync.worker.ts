@@ -524,6 +524,26 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         /* swallow */
       })
     await stampEntitySync(payload, 'FAILED', result.error) // A2 — surface the failure on the entity itself
+    /**
+     * BID.S9 — a write that terminally failed must not wait to be discovered on page-load: the
+     * 2026-07 phantom cuts sat undetected for 32 days because nothing said "Amazon refused this".
+     * `warn`, so the 6h body-keyed dedupe applies — the body carries entityType+field+error but
+     * NOT the entity id, so a routing bug rejecting 200 writes with one error is one notice, while
+     * distinct errors still notify separately. Best-effort, never fails the settle.
+     */
+    const fields = [...new Set((payload.fieldChanges ?? []).map((c) => c.field))].join(', ') || 'unknown field'
+    void import('../services/advertising/ads-automation-notify.service.js')
+      .then(({ notifyAutomation }) => notifyAutomation({
+        type: 'ads_write_failed',
+        severity: 'warn',
+        title: 'An Amazon write failed — the change did not land',
+        body: `${payload.entityType} · ${fields} · ${(result.error ?? 'no error text').slice(0, 140)}`,
+        href: fields.includes('bid')
+          ? '/marketing/ads/rules-automation/bid#bid-activity'
+          : '/marketing/ads/rules-automation/automations?view=ledger',
+        meta: { queueId, entityType: payload.entityType, entityId: payload.entityId },
+      }))
+      .catch(() => { /* a notification failure never breaks settlement */ })
   }
   return { status: 'FAILED', queueId }
 }
@@ -630,6 +650,17 @@ export async function reclaimCrashedAdWrites(
     })
     for (const r of stale) await settleAdMutations(r.id, 'FAILED', { isDead: true, error: reason })
     logger.warn('[ads-sync.worker] dead-lettered stale IN_PROGRESS ad writes', { count: stale.length })
+    // BID.S9 — one summarised notice per sweep, not one per row: the count is the story here.
+    void import('../services/advertising/ads-automation-notify.service.js')
+      .then(({ notifyAutomation }) => notifyAutomation({
+        type: 'ads_write_failed',
+        severity: 'warn',
+        title: 'Staged ad writes expired unsent',
+        body: `${stale.length} write${stale.length === 1 ? '' : 's'} crashed mid-dispatch and went stale — dead-lettered, not re-applied.`,
+        href: '/marketing/ads/rules-automation/automations?view=ledger',
+        meta: { count: stale.length },
+      }))
+      .catch(() => { /* best-effort */ })
   }
 
   if (fresh.length) {
