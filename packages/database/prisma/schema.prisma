@@ -16386,6 +16386,65 @@ model AdWriteRefusal {
   @@index([createdAt])
 }
 
+/// AUTO.P0 — the durable record of an AUTOMATION refusal: a rule that matched and was not allowed
+/// to act. `AdWriteRefusal` above is its sibling and covers the other side — a write that reached
+/// the gate and was refused there. Two tables because they answer different questions and, far more
+/// importantly, because they have volumes three orders of magnitude apart.
+///
+/// 🔴 A COUNTER, not a row per refusal, and the volume is the whole argument. Measured on prod
+/// 2026-08-11, at the caps in force that day, the enabled rules produced **27,629 refusals per day**
+/// — 10,084,585 rows a year. The pre-2026-08-04 regime wrote one execution row per refusal and
+/// reached 693,704 rows in eight weeks; that volume is exactly what forced ADX.1 to stop writing
+/// them, and re-creating it in a new table would repeat the mistake with better manners. Keyed
+/// (actor, day, reason, entity) this is ~22 rules × a few reasons × 365 = tens of thousands a year.
+///
+/// What a counter gives up is per-instance forensics — "which entity, at 14:32". What it keeps is
+/// everything any surface actually asks: SUB §5.2's ceiling line ("Daily cap 10 — 10 used, 1,947
+/// refused today") and §5.6's fourth empty state ("wanted to act 19,423 times; the daily cap refused
+/// all of them"). `lastReason` holds the sentence VERBATIM because §5.5 requires the UI quote it
+/// unparaphrased, and holding one copy per (actor, day, reason) costs nothing.
+///
+/// ⚠ A refusal is NEVER a failure and must never share a colour, a count or a percentage with one.
+/// This table exists so the two can finally be told apart: `Reduce bids on ACOS spike` carries
+/// maxValueCentsEur=0 and recorded 1,029 refusals as `status='FAILED'` with a NULL errorMessage in
+/// eight days — 100% of its "failures", every one of them a refusal.
+model AutomationRefusalDaily {
+  id String @id @default(cuid())
+
+  /// 'rule' today; 'engine' when the engines become peers (AUTO §3). Never an opaque actor string:
+  /// the two attribution paths in this codebase are mutually exclusive and a ledger built on either
+  /// one alone is wrong (AUTO §0.1).
+  actorKind String
+  actorId   String
+
+  /// UTC calendar day, 'YYYY-MM-DD'. UTC because the cap it records is UTC-day-based
+  /// (`setUTCHours(0,0,0,0)` in automation-rule.service.ts) — a local-day bucket here would
+  /// disagree with the counter it describes, and that disagreement is invisible to both tsc
+  /// and the eye.
+  dayUtc String
+
+  /// Why it was refused. 'DAILY_CAP_EXCEEDED' (maxExecutionsPerDay) | 'WRITE_CAP_REACHED'
+  /// (maxWritesPerDay — a DEMOTION to dry-run, not a full refusal, and named differently for that
+  /// reason) | 'VALUE_CAP_EXCEEDED' (maxValueCentsEur).
+  reason String
+
+  count Int @default(0)
+
+  /// The most recent instance, so a refusal can be shown on the row where it was noticed without
+  /// storing every instance. `lastReason` is the operator-facing sentence, verbatim.
+  lastAt         DateTime
+  lastReason     String
+  lastEntityType String?
+  lastEntityId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([actorKind, actorId, dayUtc, reason])
+  @@index([dayUtc, reason])
+  @@index([actorId, dayUtc])
+}
+
 /// KT.6 — one bid proposal raised from a Keyword Tracker row, and the ledger that makes
 /// "how much has this page committed today" answerable.
 ///

@@ -42,6 +42,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { notCapRefusal } from './automation-cap-predicate.js'
+import { recordAutomationRefusal } from './automation-refusals.service.js'
 
 // ─── Conditions DSL ───────────────────────────────────────────────
 
@@ -467,6 +468,23 @@ function extractExecutionContext(ctx: unknown): { marketplace: string | null; ca
   }
 }
 
+/**
+ * AUTO.P0 — the entity a refusal was noticed on, for the refusal record's last-instance fields.
+ *
+ * Deliberately narrow: it names the campaign when the trigger context carries one and nothing
+ * otherwise. Half the advertising triggers are account-grain — a SCHEDULE context is
+ * `{ budget, trigger, marketplace }` with no entity at all — and inventing one from the
+ * marketplace would put a refusal on a row it did not happen to.
+ */
+function refusalEntityOf(ctx: unknown): { entityType?: string | null; entityId?: string | null } {
+  const c = ctx as Record<string, unknown> | null | undefined
+  const campaignId = (c?.campaign as Record<string, unknown> | undefined)?.id
+  if (typeof campaignId === 'string' && campaignId) return { entityType: 'CAMPAIGN', entityId: campaignId }
+  const targetId = (c?.adTarget as Record<string, unknown> | undefined)?.id
+  if (typeof targetId === 'string' && targetId) return { entityType: 'AD_TARGET', entityId: targetId }
+  return {}
+}
+
 export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRuleResult> {
   const startedAt = Date.now()
   const rule = await prisma.automationRule.findUnique({ where: { id: args.ruleId } })
@@ -619,6 +637,17 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       },
     })
     if (todayCount >= rule.maxExecutionsPerDay) {
+      // AUTO.P0 — the durable half. The publish below reaches an in-process 50-event, 5-minute
+      // ring buffer on one instance, which is why the `capped` chip has rendered 0 for every rule
+      // since 2026-08-04 while rules were being refused tens of thousands of times a day. NOT an
+      // execution row — ADX.1 removed that for good reason (the cap counted its own refusals and
+      // ratcheted itself); this is an aggregated counter that can never feed back into the cap.
+      void recordAutomationRefusal({
+        actorId: rule.id,
+        reason: 'DAILY_CAP_EXCEEDED',
+        detail: `${rule.name} reached its daily cap of ${rule.maxExecutionsPerDay} and was refused. Further matches today are refused, not queued.`,
+        ...refusalEntityOf(args.context),
+      })
       // No execution row: that is the bug. Still publish to the activity feed so a
       // capped rule is visible rather than silent.
       void import('./ads-execution-events.service.js').then(m => {
@@ -684,6 +713,16 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       logger.warn('[automation-rule] write cap reached — execution demoted to dry-run', {
         ruleId: rule.id, ruleName: rule.name, writesToday, cap: rule.maxWritesPerDay,
       })
+      // AUTO.P0 — recorded under its OWN reason, never folded into DAILY_CAP_EXCEEDED. This is a
+      // demotion, not a refusal to run: the rule keeps evaluating, keeps proposing and keeps
+      // telling you, and only stops writing. A surface that showed the two as one number would
+      // report a working rule as a silenced one.
+      void recordAutomationRefusal({
+        actorId: rule.id,
+        reason: 'WRITE_CAP_REACHED',
+        detail: `${rule.name} reached its daily write cap of ${rule.maxWritesPerDay} and was demoted to dry-run for the rest of today. It still evaluates and still proposes; it does not write.`,
+        ...refusalEntityOf(args.context),
+      })
     }
   }
 
@@ -718,6 +757,19 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
           type: action.type,
           ok: false,
           error: 'VALUE_CAP_EXCEEDED',
+        })
+        // AUTO.P0 — the third refusal family, and the one already doing visible damage. This sets
+        // `anyFailed`, so the execution lands as status='FAILED' with a NULL errorMessage and is
+        // indistinguishable from a real breakage. Measured: `Reduce bids on ACOS spike` carries
+        // maxValueCentsEur=0, `0 >= 0` is true on its FIRST action, and 1,029 of 1,029 of its
+        // "failures" in eight days were this. A rule that is switched off reads as a rule that is
+        // broken. Recording it here does not fix the status — that is a separate change with its
+        // own blast radius — but it makes the two countable apart for the first time.
+        void recordAutomationRefusal({
+          actorId: rule.id,
+          reason: 'VALUE_CAP_EXCEEDED',
+          detail: `${rule.name} refused its \`${action.type}\` action: this execution had already committed ${projected}¢ against a per-execution cap of ${rule.maxValueCentsEur}¢.${rule.maxValueCentsEur === 0 ? ' The cap is 0¢, so every action of this rule is refused on its first step — the rule is effectively off, not failing.' : ''}`,
+          ...refusalEntityOf(args.context),
         })
         anyFailed = true
         continue
