@@ -2195,6 +2195,19 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const { getRankRuntime } = await import('../services/advertising/rank-runtime.service.js')
     return getRankRuntime()
   })
+
+  /**
+   * AUTO.A0 — the non-rule half of the actor list: engines (normalised from the Levers registry
+   * into the section's vocabulary) plus every OBSERVED actor string the last window's log
+   * carries that no rule and no engine claims. The rules half stays on
+   * `GET /advertising/autonomy/rules` — one owner per read; the client merges.
+   * Path grep-a'd against both route files — a duplicate registration is a boot crash.
+   */
+  fastify.get('/advertising/actors', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=30')
+    const { getActors } = await import('../services/advertising/ads-actors.service.js')
+    return getActors()
+  })
 }
 
 export default advertisingIntelRoutes

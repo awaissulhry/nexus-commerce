@@ -6477,7 +6477,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         where: { domain: 'advertising' },
         select: {
           id: true, name: true, trigger: true, enabled: true, dryRun: true, autonomyLevel: true,
-          actions: true, maxExecutionsPerDay: true, maxValueCentsEur: true,
+          actions: true, maxExecutionsPerDay: true, maxValueCentsEur: true, maxWritesPerDay: true,
           maxDailyAdSpendCentsEur: true, scopeMarketplace: true,
           scopePortfolioId: true, scopeCampaignId: true,
           evaluationCount: true, matchCount: true, executionCount: true,
@@ -6674,6 +6674,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           perDay: r.maxExecutionsPerDay,
           perExecutionCents: r.maxValueCentsEur,
           perDayCents: r.maxDailyAdSpendCentsEur,
+          // AUTO.A2 (additive) — the demote-to-dry-run write cap (CAP step 6, armed 2026-08-14).
+          writesPerDay: r.maxWritesPerDay,
         },
         // The accountability strip: what it has actually done, not what it might do.
         week: {

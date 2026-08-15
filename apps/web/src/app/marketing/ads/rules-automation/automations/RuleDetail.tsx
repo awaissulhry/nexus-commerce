@@ -46,7 +46,13 @@ export interface DetailRule {
     /** RA.GRAIN — the fourth grain, resolved to a name by the server. */
     product?: { id: string; sku: string | null; name: string | null; isLine: boolean; variations: number; variationsInCatalogue?: number; missing: boolean } | null
   }
-  caps: { perDay: number | null; perExecutionCents: number | null; perDayCents: number | null }
+  caps: {
+    perDay: number | null
+    perExecutionCents: number | null
+    perDayCents: number | null
+    /** AUTO.A2 (additive) — the demote-to-dry-run write cap (CAP step 6, armed 2026-08-14). */
+    writesPerDay?: number | null
+  }
   week: { acted: number; proposed: number; failed: number; capped: number }
   lifetime: { evaluations: number; matches: number; executions: number }
   lastExecutedAt: string | null

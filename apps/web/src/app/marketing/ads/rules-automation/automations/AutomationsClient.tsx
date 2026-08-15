@@ -28,17 +28,31 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { HistoryDrawer } from '../tabs/RuleListTab'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ModeNotches, RANK, type Level } from './ModeNotches'
 import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
+import { EngineDetail, type EngineActor, type ObservedActor } from './EngineDetail'
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { detectConflicts, triggerText } from './ruleText'
 
 interface Rule extends DetailRule {
   category: string
 }
+
+/**
+ * AUTO.A2 — the grid's row is an ACTOR, not a rule. Rules stay the majority kind; engines come
+ * from `GET /advertising/actors` (A0), and `observed` are actor strings the last window's log
+ * carries that no rule and no engine claims — the list is declared ∪ observed because the
+ * registry provably misses authors (9,598 writes with a null userId when this was measured).
+ */
+type ActorRow =
+  | { k: 'rule'; r: Rule }
+  | { k: 'engine'; e: EngineActor }
+  | { k: 'obs'; o: ObservedActor }
+type ActorKind = 'all' | 'rules' | 'engines'
 
 /** Stable order for the type filter, matching `rule-category.ts`'s own family order. */
 const CATEGORY_ORDER = ['bid', 'budget', 'harvest', 'negative', 'placement', 'guard', 'alert', 'other'] as const
@@ -66,6 +80,21 @@ export function AutomationsClient() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
   const [bulk, setBulk] = useState<{ kind: 'mode'; level: Level } | { kind: 'delete' } | null>(null)
+  // AUTO.A2 — the non-rule actors, and the All ⇄ Rules ⇄ Engines segment (?kind= in the URL).
+  const [actors, setActors] = useState<{ engines: EngineActor[]; observed: ObservedActor[] } | null>(null)
+  const [actorsErr, setActorsErr] = useState<string | null>(null)
+  const [engineKey, setEngineKey] = useState<string | null>(null)
+  const [kind, setKind] = useState<ActorKind>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const v = new URLSearchParams(window.location.search).get('kind')
+    return v === 'rules' || v === 'engines' ? v : 'all'
+  })
+  const setKindAndUrl = (k: ActorKind) => {
+    setKind(k)
+    const u = new URL(window.location.href)
+    if (k === 'all') u.searchParams.delete('kind'); else u.searchParams.set('kind', k)
+    window.history.replaceState(null, '', u)
+  }
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +114,15 @@ export function AutomationsClient() {
       setGrad(new Map(all.map((x) => [x.ruleId, x])))
       setWeeksRequired(Number(gj?.weeksRequired ?? 3))
     } catch { setGrad(new Map()) }
+    // AUTO.A0 — the engine/observed half. Also independent: a failed actors read must degrade to
+    // "engines could not load", never blank the rules an operator may be about to switch off.
+    try {
+      const a = await fetch(`${getBackendUrl()}/api/advertising/actors`, { cache: 'no-store' })
+      if (!a.ok) throw new Error(`Could not load engines (${a.status})`)
+      const aj = await a.json()
+      setActors({ engines: Array.isArray(aj?.engines) ? aj.engines : [], observed: Array.isArray(aj?.observed) ? aj.observed : [] })
+      setActorsErr(null)
+    } catch (e) { setActorsErr((e as Error).message); setActors({ engines: [], observed: [] }) }
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -163,6 +201,21 @@ export function AutomationsClient() {
     [all, market],
   )
 
+  /**
+   * AUTO.A2 — the grid's population, by kind. Engines survive the market switch for the same
+   * L1 reason unscoped rules do: an engine acts in every market, so narrowing the view must
+   * keep it. `observed` rows ride with the engines segment — they are the log's answer to
+   * "who else", and hiding them under Rules would bury the one list nothing else shows.
+   */
+  const gridRows = useMemo<ActorRow[]>(() => {
+    const ruleRows: ActorRow[] = rows.map((r) => ({ k: 'rule', r }))
+    const engineRows: ActorRow[] = (actors?.engines ?? []).map((e) => ({ k: 'engine', e }))
+    const obsRows: ActorRow[] = (actors?.observed ?? []).map((o) => ({ k: 'obs', o }))
+    if (kind === 'rules') return ruleRows
+    if (kind === 'engines') return [...engineRows, ...obsRows]
+    return [...ruleRows, ...engineRows, ...obsRows]
+  }, [rows, actors, kind])
+
   const conflicts = useMemo(() => detectConflicts(all), [all])
 
   const counts = useMemo(() => ({
@@ -192,11 +245,23 @@ export function AutomationsClient() {
       .map((c) => ({ value: c, label: `${seen.get(c)!.label} (${seen.get(c)!.n})` }))
   }, [all])
 
-  const columns: GridColumn<Rule>[] = useMemo(() => [
+  const columns: GridColumn<ActorRow>[] = useMemo(() => [
     {
       key: 'mode', label: 'Mode', metric: false, sortable: true,
-      sortValue: (r) => RANK[r.level],
-      render: (r) => {
+      sortValue: (a) => (a.k === 'rule' ? RANK[a.r.level] : a.k === 'engine' ? RANK[a.e.posture] : -1),
+      render: (a) => {
+        if (a.k === 'obs') return <span className="h10-au-obsdash" title="Appears only in the write log — it has no mode to set">—</span>
+        if (a.k === 'engine') {
+          // An engine renders its posture in the same four words, READ-ONLY — its notches are env
+          // flags, and a dial here that could not turn would be worse than a word that says so.
+          return (
+            <span className={`h10-au-eposture ${a.e.posture.toLowerCase()}`} title={a.e.postureReason}>
+              {LEVEL_WORD[a.e.posture]}
+              <em>{a.e.haltBehaviour === 'honours' ? 'honours halt' : a.e.haltBehaviour === 'gated' ? 'gated at the write gate' : 'halt-exempt'}</em>
+            </span>
+          )
+        }
+        const r = a.r
         const g = grad.get(r.id)
         return (
           <ModeNotches
@@ -214,44 +279,125 @@ export function AutomationsClient() {
     },
     {
       key: 'trigger', label: 'When', metric: false, sortable: true,
-      sortValue: (r) => r.trigger,
-      render: (r) => <span className="h10-au-trg">{triggerText(r.trigger)}</span>,
+      sortValue: (a) => (a.k === 'rule' ? a.r.trigger : a.k === 'engine' ? (a.e.schedule ?? a.e.cron ?? '') : ''),
+      render: (a) => (
+        a.k === 'rule' ? <span className="h10-au-trg">{triggerText(a.r.trigger)}</span>
+          : a.k === 'engine' ? <span className="h10-au-trg">{a.e.schedule ?? a.e.cron ?? '—'}</span>
+            : <span className="h10-au-obsdash">—</span>
+      ),
     },
     {
       key: 'scope', label: 'Scope', metric: false, sortable: true,
-      sortValue: (r) => r.scope.kind,
-      render: (r) => (
-        <span className={`h10-au-scope ${r.scope.kind}`}>
-          {r.scope.kind === 'account' ? 'Whole account' : `${r.scope.kind}: ${r.scope.name ?? r.scope.id}`}
-          {r.marketplace && <em> · {r.marketplace}</em>}
-        </span>
-      ),
+      sortValue: (a) => (a.k === 'rule' ? a.r.scope.kind : a.k === 'engine' ? 'engine' : 'obs'),
+      render: (a) => {
+        if (a.k === 'obs') return <span className="h10-au-obsdash" title={a.o.label}>—</span>
+        if (a.k === 'engine') return <span className="h10-au-scope engine">{a.e.scope ?? 'account-wide'}</span>
+        const r = a.r
+        return (
+          <span className={`h10-au-scope ${r.scope.kind}`}>
+            {r.scope.kind === 'account' ? 'Whole account' : `${r.scope.kind}: ${r.scope.name ?? r.scope.id}`}
+            {r.marketplace && <em> · {r.marketplace}</em>}
+          </span>
+        )
+      },
+    },
+    {
+      /**
+       * AUTO.A2 — the Ceiling cell: the caps in force, never a bare number. Renderable at last —
+       * the row cap has been enforced since 2026-08-14 (the null-safe counter) and the write cap
+       * demotes past its bound. `capped` is the week's refusals; a cap with zero refusals may be
+       * working or may be governing a quiet trigger, so the cell never claims "working".
+       */
+      key: 'ceiling', label: 'Caps', metric: false, sortable: false,
+      render: (a) => {
+        if (a.k !== 'rule') return <span className="h10-au-obsdash" title="Engines carry their own bounds in their own services">—</span>
+        const c = a.r.caps
+        return (
+          <span className="h10-au-caps">
+            {c.perDay != null && <em title="Row cap: matches dispatched per day. Reaching it refuses further matches (no row is written).">{num(c.perDay)}/day</em>}
+            {c.writesPerDay != null && <em title="Write cap: writes per day, counted by actor. Reaching it demotes the rule to dry-run — it keeps proposing, stops writing.">{num(c.writesPerDay)} wr/day</em>}
+            {c.perDayCents != null && <em title="Spend ceiling per day.">€{(c.perDayCents / 100).toFixed(0)}</em>}
+            {c.perDay == null && c.writesPerDay == null && c.perDayCents == null && (
+              <i className="h10-au-nocap" title="No cap of any kind is set on this rule.">uncapped</i>
+            )}
+          </span>
+        )
+      },
     },
     {
       key: 'week', label: 'This week', metric: false, sortable: true,
-      sortValue: (r) => r.week.acted,
-      render: (r) => (
-        <span className="h10-au-week">
-          <b>{num(r.week.acted)}</b> acted
-          <em>{num(r.week.proposed)} proposed</em>
-          {r.week.failed > 0 && <i className="bad">{num(r.week.failed)} failed</i>}
-          {r.week.capped > 0 && (
-            <i className="cap" title="Its own daily cap declined to run it. Not a failure — but it bounds how much of the account the rule reaches.">
-              {num(r.week.capped)} capped
-            </i>
-          )}
-        </span>
-      ),
+      sortValue: (a) => (a.k === 'rule' ? a.r.week.acted : a.k === 'engine' ? a.e.writes7d : a.o.writes7d),
+      render: (a) => {
+        if (a.k === 'obs') return <span className="h10-au-week"><b>{num(a.o.writes7d)}</b> writes</span>
+        if (a.k === 'engine') {
+          return (
+            <span className="h10-au-week">
+              <b>{num(a.e.writes7d)}</b> writes
+              <em>{num(a.e.runs7d)} runs</em>
+              {a.e.failures7d > 0 && <i className="bad">{num(a.e.failures7d)} failed</i>}
+            </span>
+          )
+        }
+        const r = a.r
+        return (
+          <span className="h10-au-week">
+            <b>{num(r.week.acted)}</b> acted
+            <em>{num(r.week.proposed)} proposed</em>
+            {r.week.failed > 0 && <i className="bad">{num(r.week.failed)} failed</i>}
+            {r.week.capped > 0 && (
+              <i className="cap" title="Its own daily cap declined to run it. Not a failure — but it bounds how much of the account the rule reaches.">
+                {num(r.week.capped)} capped
+              </i>
+            )}
+          </span>
+        )
+      },
     },
     {
       key: 'lastRun', label: 'Last run', metric: false, sortable: true,
-      sortValue: (r) => (r.lastExecutedAt ? new Date(r.lastExecutedAt).getTime() : 0),
-      render: (r) => <span className={r.lastExecutedAt ? '' : 'h10-au-never'}>{ago(r.lastExecutedAt)}</span>,
+      sortValue: (a) => {
+        const iso = a.k === 'rule' ? a.r.lastExecutedAt : a.k === 'engine' ? a.e.lastRunAt : a.o.lastWriteAt
+        return iso ? new Date(iso).getTime() : 0
+      },
+      render: (a) => {
+        const iso = a.k === 'rule' ? a.r.lastExecutedAt : a.k === 'engine' ? a.e.lastRunAt : a.o.lastWriteAt
+        return <span className={iso ? '' : 'h10-au-never'}>{ago(iso)}</span>
+      },
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [grad, busy])
 
-  const renderFirst = (r: Rule) => {
+  const renderFirst = (a: ActorRow) => {
+    if (a.k === 'engine') {
+      const e = a.e
+      return (
+        <span className="h10-au-namew">
+          <span className="h10-au-kindtag engine" aria-hidden>engine</span>
+          <span className="h10-au-nm">
+            <button type="button" className="h10-au-name" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }}>
+              {e.name}
+            </button>
+            <em>{e.what}</em>
+          </span>
+          {e.warning && <span className="h10-au-badge conf" title={e.warning}><AlertTriangle size={10} aria-hidden /> attention</span>}
+          <button type="button" className="h10-au-open" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }} aria-label={`Open ${e.name}`}>
+            <Sliders size={11} aria-hidden /> Details
+          </button>
+        </span>
+      )
+    }
+    if (a.k === 'obs') {
+      return (
+        <span className="h10-au-namew">
+          <span className="h10-au-kindtag obs" aria-hidden>observed</span>
+          <span className="h10-au-nm">
+            <span className="h10-au-name asname">{a.o.actor}</span>
+            <em>{a.o.label}</em>
+          </span>
+        </span>
+      )
+    }
+    const r = a.r
     const conf = conflicts.get(r.id)
     const g = grad.get(r.id)
     return (
@@ -284,7 +430,12 @@ export function AutomationsClient() {
     )
   }
 
-  /** The ceiling is per rule, so a bulk mode change partially succeeds. Say so before it runs. */
+  /**
+   * The ceiling is per rule, so a bulk mode change partially succeeds. Say so before it runs.
+   * A2 — the selection can now contain engine/observed rows; they are counted and NAMED as
+   * skipped rather than silently dropped: their posture is env-owned, not this page's to set.
+   */
+  const nonRuleSel = useMemo(() => [...sel].filter((id) => id.startsWith('engine:') || id.startsWith('obs:')).length, [sel])
   const bulkPreview = useMemo(() => {
     if (!bulk || bulk.kind !== 'mode') return null
     const chosen = all.filter((r) => sel.has(r.id))
@@ -442,28 +593,54 @@ export function AutomationsClient() {
         </p>
       )}
 
-      <AdsDataGrid<Rule>
-        rows={rows}
+      {/* AUTO.A2 — the population switch. Counts are stated per kind so "All (63)" is a claim the
+          grid can be checked against; a failed engines read says so instead of rendering 0. */}
+      <div className="h10-au-kindrow">
+        <SegmentedControl
+          size="sm"
+          value={kind}
+          onChange={(v) => setKindAndUrl(v as ActorKind)}
+          options={[
+            { value: 'all', label: `All (${rows.length + (actors ? actors.engines.length + actors.observed.length : 0)})` },
+            { value: 'rules', label: `Rules (${rows.length})` },
+            { value: 'engines', label: `Engines (${actors ? actors.engines.length : '…'})` },
+          ]}
+        />
+        {actorsErr && <span className="h10-au-actorserr" role="alert"><AlertTriangle size={12} aria-hidden /> {actorsErr} — the rules below are unaffected.</span>}
+        {kind !== 'rules' && actors && actors.observed.length > 0 && (
+          <span className="h10-au-obsnote">
+            + {actors.observed.length} observed actor{actors.observed.length === 1 ? '' : 's'} the registry does not declare
+          </span>
+        )}
+      </div>
+
+      <AdsDataGrid<ActorRow>
+        rows={gridRows}
         loading={rules === null}
-        rowId={(r) => r.id}
-        noun="Automation"
-        firstColLabel="Automation"
+        rowId={(a) => (a.k === 'rule' ? a.r.id : a.k === 'engine' ? `engine:${a.e.key}` : `obs:${a.o.actor}`)}
+        noun="Actor"
+        firstColLabel="Actor"
         renderFirst={renderFirst}
-        firstSortValue={(r) => r.name}
+        firstSortValue={(a) => (a.k === 'rule' ? a.r.name : a.k === 'engine' ? a.e.name : a.o.actor)}
         columns={columns}
         customizable={false}
         searchable
-        searchPlaceholder="Search automations…"
-        searchValue={(r) => `${r.name} ${r.description ?? ''} ${r.trigger} ${r.categoryLabel} ${r.actionTypes.join(' ')}`}
+        searchPlaceholder="Search actors…"
+        searchValue={(a) => (a.k === 'rule'
+          ? `${a.r.name} ${a.r.description ?? ''} ${a.r.trigger} ${a.r.categoryLabel} ${a.r.actionTypes.join(' ')}`
+          : a.k === 'engine' ? `${a.e.name} ${a.e.what} engine` : `${a.o.actor} ${a.o.label}`)}
         selectable
         selected={sel}
         onSelectedChange={setSel}
         defaultSort={{ key: 'mode', dir: 'desc' }}
         pagerCentered
-        rowClassName={(r) => (conflicts.has(r.id) ? 'h10-au-rowconf' : undefined)}
-        emptyLabel="No automations match this filter."
+        rowClassName={(a) => (a.k === 'rule' && conflicts.has(a.r.id) ? 'h10-au-rowconf' : a.k !== 'rule' ? 'h10-au-rowactor' : undefined)}
+        emptyLabel="No actors match this filter."
         filters={[
-          { key: 'category', label: 'Type', kind: 'multiselect', options: categoryOpts, placeholder: 'All types', wide: true, value: (r) => (r as Rule).category },
+          // Rule-property filters. An ACTIVE selection names rule facts, so engine/observed rows
+          // (whose accessor returns nothing) drop out while it is set — a filtered view never
+          // silently carries rows the filter cannot describe.
+          { key: 'category', label: 'Type', kind: 'multiselect', options: categoryOpts, placeholder: 'All types', wide: true, value: (a) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.category : '') },
           {
             key: 'mode', label: 'Mode', kind: 'multiselect', placeholder: 'All modes',
             options: [
@@ -472,7 +649,7 @@ export function AutomationsClient() {
               { value: 'OBSERVE', label: `Observe (${counts.observe})` },
               { value: 'OFF', label: `Off (${counts.off})` },
             ],
-            value: (r) => (r as Rule).level,
+            value: (a) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.level : ''),
           },
           {
             key: 'scopeKind', label: 'Scope', kind: 'select', placeholder: 'Any scope',
@@ -481,7 +658,7 @@ export function AutomationsClient() {
               { value: 'portfolio', label: 'One portfolio' },
               { value: 'campaign', label: 'One campaign' },
             ],
-            value: (r) => (r as Rule).scope.kind,
+            value: (a) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.scope.kind : ''),
           },
         ]}
         selectionActions={(ids, clear) => (
@@ -515,6 +692,11 @@ export function AutomationsClient() {
 
       {historyRule && <HistoryDrawer rule={historyRule} onClose={() => setHistoryRule(null)} />}
 
+      {engineKey && !bulk && (() => {
+        const e = actors?.engines.find((x) => x.key === engineKey)
+        return e ? <EngineDetail engine={e} onClose={() => setEngineKey(null)} /> : null
+      })()}
+
       {bulk && (
         <div className="h10-ntm-back" onClick={() => setBulk(null)}>
           <div className="h10-ntm" role="dialog" aria-modal="true" aria-label={bulk.kind === 'delete' ? 'Delete automations' : 'Set mode'} onClick={(e) => e.stopPropagation()}>
@@ -526,7 +708,8 @@ export function AutomationsClient() {
                 ? 'Their execution history goes with them. This cannot be undone.'
                 : bulkPreview && bulkPreview.refused > 0
                   ? `${bulkPreview.total - bulkPreview.refused} of ${bulkPreview.total} will change. ${bulkPreview.refused} sit above their graduation ceiling and the server will refuse them: ${bulkPreview.names.slice(0, 3).join(', ')}${bulkPreview.names.length > 3 ? '…' : ''}.`
-                  : `All ${sel.size} will change. Each is checked against its own ceiling by the server.`}
+                  : `All ${bulkPreview?.total ?? sel.size} will change. Each is checked against its own ceiling by the server.`}
+              {nonRuleSel > 0 && ` ${nonRuleSel} selected ${nonRuleSel === 1 ? 'row is not a rule' : 'rows are not rules'} (engines/observed) and will be skipped — their posture is not set from this page.`}
             </div>
             {bulk.kind === 'mode' && bulk.level === 'AUTO' && bulkPreview && bulkPreview.willWrite > 0 && (
               <div className="h10-ntm-b">
