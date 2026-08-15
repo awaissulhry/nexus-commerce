@@ -372,7 +372,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // KT.1b measured this ordering as most of a 6.6s first paint when it was serial. The period
   // groupBy and both freshness probes depend on nothing but the market, so they belong here.
   const [campaigns, ads, watchlists, periodGroups, nonZeroGroups, sqpLatest, adsLatest, protections, searchTerms, biddedTargets] = await Promise.all([
-    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true } }),
+    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true, externalCampaignId: true } }),
     prisma.adProductAd.findMany({
       where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
       select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
@@ -430,10 +430,18 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
 
   // ── SOV.2 — the ad side per query, scoped to the resolved campaigns ─────────────────────────
   const scopeCampaignSet = new Set(scope.campaignIds)
+  // 🔴 AmazonAdsSearchTerm.campaignId is the EXTERNAL Amazon id (the schema says so in as many
+  // words) — the same external-vs-local trap the placement report already charged this repo for.
+  // Compared raw against local Campaign.id it matches NOTHING, and the first deploy shipped
+  // "0 of 480 queries carry any ad activity" over a table with fresh rows. Resolve through
+  // externalCampaignId before the scope test.
+  const localByExternal = new Map<string, string>()
+  for (const c of campaigns) if (c.externalCampaignId) localByExternal.set(c.externalCampaignId, c.id)
   interface AdAgg { impr: number; clicks: number; costCents: number; campaigns: Set<string> }
   const adAgg = new Map<string, AdAgg>()
   for (const t of searchTerms) {
-    if (!scopeCampaignSet.has(t.campaignId)) continue
+    const localId = localByExternal.get(t.campaignId) ?? t.campaignId
+    if (!scopeCampaignSet.has(localId)) continue
     const key = normTerm(t.query ?? '')
     if (!key) continue
     let a = adAgg.get(key)
@@ -441,7 +449,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     a.impr += t.impressions
     a.clicks += t.clicks
     a.costCents += Number(t.costMicros) / 10_000
-    a.campaigns.add(t.campaignId)
+    a.campaigns.add(localId)
   }
   const adSpendTotalCents = [...adAgg.values()].reduce((n, a) => n + a.costCents, 0)
   // SOV.3 — the signal bars, ALL medians. The legacy outbid bar compared impressions to the MEAN,
@@ -987,7 +995,7 @@ export async function getSovRowDetail(args: {
 }) {
   const { query, market } = args
   const [campaigns, ads, sqpRows, searchTerms, targets] = await Promise.all([
-    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true } }),
+    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true, externalCampaignId: true } }),
     prisma.adProductAd.findMany({
       where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
       select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
@@ -1079,14 +1087,19 @@ export async function getSovRowDetail(args: {
   // ── the campaigns buying it: observed (search terms, 30d) vs declared (enabled targets) ──
   const nq = normTerm(query)
   const campName = new Map(campaigns.map((c) => [c.id, c.name] as const))
+  // Same external-vs-local resolution as the grid's ad join — the schema calls this column an
+  // external Amazon id.
+  const rowLocalByExternal = new Map<string, string>()
+  for (const c of campaigns) if (c.externalCampaignId) rowLocalByExternal.set(c.externalCampaignId, c.id)
   const observed = new Map<string, { impressions: number; clicks: number; spendCents: number }>()
   for (const t of searchTerms) {
     if (normTerm(t.query ?? '') !== nq) continue
-    const o = observed.get(t.campaignId) ?? { impressions: 0, clicks: 0, spendCents: 0 }
+    const localId = rowLocalByExternal.get(t.campaignId) ?? t.campaignId
+    const o = observed.get(localId) ?? { impressions: 0, clicks: 0, spendCents: 0 }
     o.impressions += t.impressions
     o.clicks += t.clicks
     o.spendCents += Number(t.costMicros) / 10_000
-    observed.set(t.campaignId, o)
+    observed.set(localId, o)
   }
   const declared = targets
     .filter((t) => normTerm(t.expressionValue ?? '') === nq && t.adGroup?.campaign)
