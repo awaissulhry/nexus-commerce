@@ -228,6 +228,10 @@ at all.
 | `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — landed `858a21ae6`, 51 lines, staged as a rebuilt BLOB not a hunk; see §5's new trap |
 | `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lacked) | 2026-08-12 | **released** — landed `f4bc68eb7`. **All ten routed tabs are now covered**; `?tab=automations` and `?tab=dayparting` are fixed too — see §4 |
 
+| `…/rules-automation/dayparting/*` | RD.P4 (signal & freshness) | 2026-08-16 | **claimed** — page-own |
+| `apps/api/src/services/advertising/rank-runtime.service.ts` | RD.P4 (`signalFor` — contributor basis + the three states) | 2026-08-16 | **claimed** — RD.P2 created this file; `sqp.service.ts` is NOT touched |
+| `docs/2026-08-10-ra-session-locks.md` | RD.P4 (§2 rows + the SQP hand-off) | 2026-08-16 | **claimed** |
+
 **Two findings from KT.1 that bind every page in this section:**
 
 1. 🔴 **The page gutter is ZERO, not 24px.** Measured on prod at 1728px: `.h10-hdr`,
@@ -397,8 +401,8 @@ builder slugs and is not this session's to delete (see §4).
 | `…/rules-automation/rules-automation.css` | KT.10 (`.h10-kt-delta em.mkt` at EOF) | 2026-08-15 | **released** — appended at EOF only |
 | `…/rules-automation/rules-automation.css` | BID.S3 (`h10-bd3-*` at EOF — the drawer's log, the dangling segment, the cycle toggle) | 2026-08-16 | **released** — ONE hunk at EOF, `git diff -U0` confirmed sole occupant; class↔stylesheet checked both ways, 0 orphans. ⚠ Recorded at COMMIT time, not before the edit — protocol §1.2 says before, and this session got the order wrong. No harm (EOF-append, own prefix, tree clean) but noting it rather than back-dating |
 | `apps/api/src/services/advertising/bid-grid.service.ts` | BID.S3 (P0: the `manual` bidder predicate) | 2026-08-16 | **released** — landed `4ba32e133`. Own file, no claim needed; listed because it CHANGES A SHIPPED NUMBER other sessions may have quoted: `manual` 12 → 6, `No bidder` 41 → **47** enabled campaigns |
-| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.6 (`?period=` on the EXISTING share-of-voice route + saved-view CRUD) | 2026-08-16 | **claimed** — hunk-staged, not file-staged |
-| `…/rules-automation/rules-automation.css` | SOV.6 (`h10-sov-*` at EOF) | 2026-08-16 | **claimed** — EOF-append; staged as a REBUILT BLOB from the CURRENT parent, not a hunk (SOV.1 §5 trap) |
+| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.6 (`?period=` on the EXISTING share-of-voice route) | 2026-08-16 | **released** — landed `ca46c2314`, ONE hunk past another session's two. No saved-view route was needed: `/api/saved-views` already exists (§4) |
+| `…/rules-automation/rules-automation.css` | SOV.6 (`h10-sov-*` at EOF) | 2026-08-16 | **released** — 42 lines, rebuilt blob from the CURRENT parent, insertions-only verified |
 
 ### HV.10 — the market control, 2026-08-16
 
@@ -763,6 +767,35 @@ and check the commit's own stat before pushing — an insertions-only append mus
 time `git commit` ran a second later — the commit silently carried fewer files than staged. **Check
 `git show --stat HEAD` after every commit**, and prefer staging and committing in a single shell
 invocation rather than as two steps.
+
+🔴 **`git commit` IGNORES `GIT_INDEX_FILE`. SOV.6, 2026-08-16.** The private-index trick is the
+obvious answer to a shared index that other sessions keep rewriting — build your own index, commit
+from it, touch nobody. **It does not work with porcelain.** `GIT_INDEX_FILE=/tmp/x git read-tree
+HEAD && git apply --cached … && git commit` produced a commit containing **17 files**: my 3 plus 14
+of another session's in-flight `ScopeBar` refactor, including two file creations and a deletion.
+Undone with `git reset --soft HEAD~1` before pushing; nothing was lost, and their worktree was
+authoritative throughout.
+
+**What does work is plumbing all the way down:**
+
+```
+OLD=$(git rev-parse main)
+export GIT_INDEX_FILE=/tmp/mine && rm -f $GIT_INDEX_FILE && git read-tree $OLD
+git apply --cached --recount /tmp/only-my-hunks.patch     # or: git hash-object -w + update-index
+git update-index --add <my own files>
+git diff --cached $OLD --stat                             # ← verify BEFORE writing the tree
+TREE=$(git write-tree); unset GIT_INDEX_FILE
+NEW=$(git commit-tree $TREE -p $OLD -F msg)
+git update-ref refs/heads/main $NEW $OLD                  # ← compare-and-swap: fails if main moved
+```
+
+`commit-tree` takes the tree you built and nothing else, and the three-argument `update-ref` is a
+compare-and-swap that refuses if another session committed while you were writing the message. This
+is now the safest way to commit a shared file in this tree, and it is strictly better than
+`--only` — which still takes the other session's hunks in any file you name.
+
+⚠ It skips pre-commit hooks. The pre-**push** hook still runs and is the gate that matters, but
+verify the commit in a detached worktree first, as always.
 
 **NEG.1 finding that binds every routed tab, `next.config.js`.** NEG.1 added a
 `has: [{ type: 'query', key: 'tab', … }]` redirect for `?tab=negative-targeting`, because
