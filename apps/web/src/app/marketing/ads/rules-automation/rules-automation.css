@@ -4593,3 +4593,16 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-au-recbtns { display: flex; gap: 8px; flex-wrap: wrap; }
 .h10-au-simres { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: #1c2530; background: #f0f6ff; border: 1px solid #c9ddf6; border-radius: 8px; padding: 8px 10px; }
 .h10-au-simres.bad { color: #b42318; background: #fef3f2; border-color: #f6c6c2; }
+
+/* BUD.2 — guardrails & the baseline */
+.h10-bud2 { background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
+.h10-bud2 h3 { margin: 0 0 6px; font-size: 13.5px; color: #1c2530; display: flex; align-items: center; gap: 6px; }
+.h10-bud2-sub { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: #4b5563; max-width: 860px; }
+.h10-bud2-census { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 10px; font-size: 12.5px; color: #3f4754; }
+.h10-bud2-census .warn { display: inline-flex; align-items: center; gap: 5px; color: #92400e; }
+.h10-bud2-ok { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 10px; font-size: 12.5px; color: #177a41; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 8px 10px; }
+.h10-bud2-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.h10-bud2-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #3f4754; }
+.h10-bud-base { display: inline-flex; flex-direction: column; gap: 2px; }
+.h10-bud-base em { font-style: normal; font-size: 11.5px; font-variant-numeric: tabular-nums; color: #3f4754; background: #eef1f5; border-radius: 5px; padding: 1px 6px; width: fit-content; }
+.h10-bud-nobase { color: #98a2b3; }

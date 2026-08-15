@@ -28,7 +28,10 @@
  */
 
 import type { BudSlotProps } from './slot-contract'
+import { BudGuardrails } from './BudGuardrails'
 
-export function BudgetSections(_props: BudSlotProps) {
-  return null
+export function BudgetSections(props: BudSlotProps) {
+  // BUD.2 — the first section, and the first that writes. The remaining shells (BUD.3–BUD.7)
+  // stay unmounted: hidden, not disabled.
+  return <BudGuardrails {...props} />
 }

@@ -778,12 +778,41 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // the absolute value. Extended onto this route rather than a new one — a second
       // Fastify registration of the same path is a boot crash.
       minBidCents?: number | null; maxBidCents?: number | null
+      // BUD.2 — the budget twin: bounds enforced at the gate, and the baseline every RELATIVE
+      // budget rule anchors to (which is what makes a −20% rule idempotent instead of a ratchet).
+      minBudgetCents?: number | null; maxBudgetCents?: number | null; budgetBaselineCents?: number | null
     }
     const c = await prisma.campaign.findUnique({
-      where: { id }, select: { dynamicBidding: true, name: true, minBidCents: true, maxBidCents: true },
+      where: { id },
+      select: {
+        dynamicBidding: true, name: true, minBidCents: true, maxBidCents: true,
+        minBudgetCents: true, maxBudgetCents: true, budgetBaselineCents: true,
+      },
     })
     if (!c) { reply.status(404); return { error: 'campaign not found' } }
     const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+
+    // BUD.2 — budget bounds + baseline. Validated here, enforced at the gate. €1 is Amazon's own
+    // hard floor, so anything below 100 cents is a value the gate could never honour.
+    let budgetData: Record<string, number | null> = {}
+    if (b.minBudgetCents !== undefined || b.maxBudgetCents !== undefined || b.budgetBaselineCents !== undefined) {
+      const norm = (v: number | null | undefined, cur: number | null): number | null =>
+        v === undefined ? cur : v == null ? null : Math.round(Number(v))
+      const minB = norm(b.minBudgetCents, c.minBudgetCents)
+      const maxB = norm(b.maxBudgetCents, c.maxBudgetCents)
+      const base = norm(b.budgetBaselineCents, c.budgetBaselineCents)
+      for (const [name, v] of [['minBudgetCents', minB], ['maxBudgetCents', maxB], ['budgetBaselineCents', base]] as const) {
+        if (v != null && (!Number.isFinite(v) || v < 100)) {
+          reply.status(400)
+          return { ok: false, error: `${name} must be ≥ 100 cents (Amazon's own floor is €1) or null` }
+        }
+      }
+      if (minB != null && maxB != null && minB > maxB) {
+        reply.status(400)
+        return { ok: false, error: `minBudgetCents (€${(minB / 100).toFixed(2)}) is above maxBudgetCents (€${(maxB / 100).toFixed(2)})` }
+      }
+      budgetData = { minBudgetCents: minB, maxBudgetCents: maxB, budgetBaselineCents: base }
+    }
 
     let boundsData: Record<string, number | null> = {}
     if (b.minBidCents !== undefined || b.maxBidCents !== undefined) {
@@ -805,7 +834,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       if (n > 0) db.maxWritesPerDay = n
       else delete db.maxWritesPerDay
     }
-    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never, ...boundsData } })
+    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never, ...boundsData, ...budgetData } })
+
+    // BUD.2 — its own audit row, cents-keyed (this is OUR governance columns, distinct from
+    // AD_BUDGET_UPDATE whose payloads are euros).
+    if (Object.keys(budgetData).length > 0) {
+      await prisma.advertisingActionLog.create({
+        data: {
+          userId: actorFromHeaders(request.headers as Record<string, unknown>),
+          actionType: 'set_campaign_budget_bounds', entityType: 'CAMPAIGN', entityId: id,
+          payloadBefore: { minBudgetCents: c.minBudgetCents, maxBudgetCents: c.maxBudgetCents, budgetBaselineCents: c.budgetBaselineCents },
+          payloadAfter: budgetData, amazonResponseStatus: 'SUCCESS',
+          evidence: { metric: 'operator_guardrail', note: 'Budget bounds + baseline; bounds enforced at the write gate, the baseline anchors relative budget rules. Never pushed to Amazon.' },
+        },
+      }).catch(() => { /* an audit row must never fail the write it describes */ })
+    }
 
     // ADX A2 — record WHY, using the evidence column that phase added. Bid bounds are
     // local governance: nothing is pushed to Amazon, which has no concept of them.
@@ -826,7 +869,49 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       maxWritesPerDay: db.maxWritesPerDay ?? null,
       minBidCents: boundsData.minBidCents !== undefined ? boundsData.minBidCents : c.minBidCents,
       maxBidCents: boundsData.maxBidCents !== undefined ? boundsData.maxBidCents : c.maxBidCents,
+      minBudgetCents: budgetData.minBudgetCents !== undefined ? budgetData.minBudgetCents : c.minBudgetCents,
+      maxBudgetCents: budgetData.maxBudgetCents !== undefined ? budgetData.maxBudgetCents : c.maxBudgetCents,
+      budgetBaselineCents: budgetData.budgetBaselineCents !== undefined ? budgetData.budgetBaselineCents : c.budgetBaselineCents,
     }
+  })
+
+  /**
+   * BUD.2 — capture budget baselines for an explicit set of campaigns: baseline := the current
+   * dailyBudget. Explicit ids, never a scope resolved server-side — the page already holds the
+   * rows it is showing, and "capture for what I can see" must capture exactly that. Skips
+   * campaigns that already carry a baseline unless `overwrite` — re-anchoring to a ratcheted
+   * value is precisely the mistake a default must not make (58 campaigns sit at €1 today, and a
+   * captured €1 baseline would enshrine the damage).
+   */
+  fastify.post('/advertising/budget-baselines/capture', async (request, reply) => {
+    const b = request.body as { campaignIds?: string[]; overwrite?: boolean }
+    const ids = Array.isArray(b?.campaignIds) ? b.campaignIds.slice(0, 500) : []
+    if (ids.length === 0) { reply.code(400); return { error: 'campaignIds required' } }
+    const rows = await prisma.campaign.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, dailyBudget: true, budgetBaselineCents: true },
+    })
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    let captured = 0
+    let skipped = 0
+    for (const c of rows) {
+      if (c.budgetBaselineCents != null && !b.overwrite) { skipped++; continue }
+      const baseline = Math.round(Number(c.dailyBudget) * 100)
+      if (!Number.isFinite(baseline) || baseline < 100) { skipped++; continue }
+      await prisma.campaign.update({ where: { id: c.id }, data: { budgetBaselineCents: baseline } })
+      await prisma.advertisingActionLog.create({
+        data: {
+          userId: actor,
+          actionType: 'set_campaign_budget_bounds', entityType: 'CAMPAIGN', entityId: c.id,
+          payloadBefore: { budgetBaselineCents: c.budgetBaselineCents },
+          payloadAfter: { budgetBaselineCents: baseline },
+          amazonResponseStatus: 'SUCCESS',
+          evidence: { metric: 'operator_guardrail', note: 'Baseline captured from the current daily budget.' },
+        },
+      }).catch(() => { /* an audit row must never fail the write it describes */ })
+      captured++
+    }
+    return { ok: true, captured, skipped, notFound: ids.length - rows.length }
   })
 
   // ── CBN.2h.6: Bid Automation + Target ACoS (Ad Manager Bulk Actions) ────

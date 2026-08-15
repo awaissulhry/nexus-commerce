@@ -64,6 +64,11 @@ export interface BudCampaignRow {
   status: string
   dailyBudgetCents: number
   currency: string
+  /** BUD.2 — the anchor relative budget rules compute from; null = not captured. */
+  budgetBaselineCents: number | null
+  /** BUD.2 — gate-enforced bounds; null = unbounded. */
+  minBudgetCents: number | null
+  maxBudgetCents: number | null
   atFloor: boolean
   /** `Campaign.liveBidWritesEnabled` — gates DISPATCH to Amazon, NOT the local cut. */
   gateOpen: boolean

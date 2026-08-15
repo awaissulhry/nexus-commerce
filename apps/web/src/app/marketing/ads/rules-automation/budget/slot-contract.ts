@@ -82,17 +82,18 @@ export interface BudSlotProps {
 /**
  * The grid's write-capable props, explicitly absent.
  *
- * BUD.2 is the first section allowed to replace this object, and when it does it replaces it — it
- * does not quietly stop passing it. Until then every one of these is `null` at the point of use, so
- * a reviewer can see that the read-only property is *stated* rather than inferred from what is
- * missing from a props list.
+ * BUD.2 REPLACED `NO_WRITE_ACTIONS` with this object on 2026-08-15 — the read-only era was stated,
+ * and its end is stated too. The page writes now: the guardrail editor and the baseline capture
+ * live in `BudGuardrails` (its own panel, its own endpoints), which is why `onGuardrailChange`
+ * here says where the write went rather than staying null. The GRID-level hooks stay null until
+ * the section that owns each arrives: BUD.5's approve, BUD.6's transfer.
  */
-export const NO_WRITE_ACTIONS = {
+export const WRITE_ACTIONS = {
   selectionActions: null,
   onRowAction: null,
   editMode: null,
-  /** BUD.2's guardrail editor, BUD.5's approve, BUD.6's transfer — none of them exists yet. */
-  onGuardrailChange: null,
+  /** BUD.2 — writes via BudGuardrails' own panel (PATCH guardrails + POST budget-baselines/capture). */
+  onGuardrailChange: 'bud2-panel',
   onApproveProposal: null,
   onTransfer: null,
 } as const

@@ -53,7 +53,7 @@ import {
   BUD_STATES, LEVEL_LABEL, STATE_LABEL,
   type BudCampaignRow, type BudGridPayload, type BudRuleRow, type BudState, type BudView,
 } from './types'
-import { NO_WRITE_ACTIONS, type BudSlotProps } from './slot-contract'
+import { WRITE_ACTIONS, type BudSlotProps } from './slot-contract'
 import { BudgetSections } from './BudgetSections'
 // Interim, until BUD.4 replaces it: rendered exactly as the tab rendered it, so nothing is lost in
 // the move off `?tab=budget`.
@@ -255,6 +255,27 @@ export function BudgetClient() {
       ),
       sortValue: (r) => r.dailyBudgetCents, filterValue: (r) => r.dailyBudgetCents / 100,
       total: (vis) => eur(vis.reduce((s, r) => s + r.dailyBudgetCents, 0)),
+    },
+    {
+      // BUD.2 — the anchor and the bounds, on the row they govern. A blank is honest: it means
+      // relative rules on this campaign still compound from the current value.
+      key: 'baseline', label: 'Baseline · bounds',
+      tip: 'The baseline anchors relative budget rules (−20% of the baseline is the same target every tick — no compounding). Floor/ceiling are denied at the write gate. Set below, in Guardrails & the baseline.',
+      render: (r) => (
+        r.budgetBaselineCents == null && r.minBudgetCents == null && r.maxBudgetCents == null
+          ? <span className="h10-bud-nobase" title="No baseline captured and no bounds set — relative rules compound from the current value here.">—</span>
+          : (
+            <span className="h10-bud-base">
+              {r.budgetBaselineCents != null && <em title="Baseline — the anchor relative rules compute from.">⚓ {eur(r.budgetBaselineCents)}</em>}
+              {(r.minBudgetCents != null || r.maxBudgetCents != null) && (
+                <em title="Gate-enforced bounds: a cut below the floor or a raise above the ceiling is denied.">
+                  {r.minBudgetCents != null ? eur(r.minBudgetCents) : '—'}·{r.maxBudgetCents != null ? eur(r.maxBudgetCents) : '—'}
+                </em>
+              )}
+            </span>
+          )
+      ),
+      sortValue: (r) => r.budgetBaselineCents ?? -1,
     },
     {
       key: 'spend', label: `${days}d spend`,
@@ -744,8 +765,8 @@ export function BudgetClient() {
           totalFirst={`${num(campaigns.length)} shown`}
           /* 🔴 BUD.1 is read-only. Passed as explicit absence rather than omitted. */
           selectable={false}
-          selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
-          onRowClick={NO_WRITE_ACTIONS.onRowAction ?? undefined}
+          selectionActions={WRITE_ACTIONS.selectionActions ?? undefined}
+          onRowClick={WRITE_ACTIONS.onRowAction ?? undefined}
           exportable
           onExport={csv}
           pagerCentered

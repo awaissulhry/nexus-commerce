@@ -388,19 +388,30 @@ ACTION_HANDLERS.adjust_ad_budget = async (action, context, meta): Promise<Action
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
   const c = await prisma.campaign.findUnique({
     where: { id },
-    select: { dailyBudget: true, dailyBudgetCurrency: true },
+    select: { dailyBudget: true, dailyBudgetCurrency: true, budgetBaselineCents: true },
   })
   if (!c) return { type: action.type, ok: false, error: 'Campaign not found' }
   const current = Number(c.dailyBudget)
+  // BUD.2 — a RELATIVE change anchors to the BASELINE when one is captured. −20% of the current
+  // value compounds (€100 → €1 in 39 ticks, measured); −20% of a €100 baseline is €80 on every
+  // tick — the same rule, idempotent. NULL baseline = the old behaviour, so nothing changes
+  // until an operator captures one.
+  const anchor = c.budgetBaselineCents != null ? c.budgetBaselineCents / 100 : current
   let next: number
   if (action.newDailyBudget != null) {
     next = Number(action.newDailyBudget)
   } else if (action.percent != null) {
-    next = current * (1 + Number(action.percent) / 100)
+    next = anchor * (1 + Number(action.percent) / 100)
   } else {
     return { type: action.type, ok: false, error: 'Specify newDailyBudget or percent' }
   }
   next = Math.max(1, Math.round(next * 100) / 100) // floor €1
+  // BUD.2 — at the target already: say so and stop. Without this, a baseline-anchored rule
+  // re-issues the identical write every tick — the 488-row loop BUD.1 measured, re-created
+  // politely.
+  if (next === current) {
+    return { type: action.type, ok: true, estimatedValueCentsEur: 0, output: { campaignId: id, noChange: true, dailyBudget: next, anchoredToBaseline: c.budgetBaselineCents != null } }
+  }
   const delta = Math.max(0, Math.round((next - current) * 100))
   if (meta.dryRun) {
     return {
@@ -1299,12 +1310,16 @@ const clampRange = (x: number, min: number, max: number | null) => Math.min(max 
 ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResult> => {
   const id = ctxCampaignId(action, context)
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
-  const c = await prisma.campaign.findUnique({ where: { id }, select: { dailyBudget: true } })
+  const c = await prisma.campaign.findUnique({ where: { id }, select: { dailyBudget: true, budgetBaselineCents: true } })
   if (!c) return { type: action.type, ok: false, error: 'Campaign not found' }
   const current = Number(c.dailyBudget)
+  // BUD.2 — every RELATIVE op (inc/dec, % or absolute) anchors to the baseline when captured:
+  // −20% or −€2 of a fixed anchor is the same target on every tick, which is what makes the
+  // rule idempotent instead of compounding. 'set' is absolute and ignores the anchor anyway.
+  const anchor = c.budgetBaselineCents != null ? c.budgetBaselineCents / 100 : current
   const minEur = Math.max(1, Number(action.minEur ?? 1)) // never below Amazon's €1 floor
   const maxEur = action.maxEur != null ? Number(action.maxEur) : null
-  const next = Math.round(clampRange(applyBuilderOp(action.op as string, current, Number(action.value) || 0), minEur, maxEur) * 100) / 100
+  const next = Math.round(clampRange(applyBuilderOp(action.op as string, anchor, Number(action.value) || 0), minEur, maxEur) * 100) / 100
   const delta = Math.max(0, Math.round((next - current) * 100))
   if (meta.dryRun) {
     return { type: action.type, ok: true, estimatedValueCentsEur: delta, output: { dryRun: true, campaignId: id, wouldChange: `€${current.toFixed(2)} → €${next.toFixed(2)}` } }

@@ -2760,6 +2760,23 @@ model Campaign {
   maxBidCents   Int?
   targetAcosPct Int?
 
+  // BUD.2 — the same idea, applied to the DAILY BUDGET, which is where the ratchet lived.
+  //
+  // `budgetBaselineCents` is the anchor every RELATIVE budget rule computes from: −20% of a
+  // €100 baseline is €80 today, tomorrow and on the 39th tick — the compounding that walked
+  // GALE EXACT DE €100 → €1 in one day is arithmetic on the CURRENT value, and a baseline
+  // makes the same rule idempotent without touching the rule. NULL = no anchor captured; the
+  // handlers fall back to current-value behaviour, so every existing row is unchanged until
+  // an operator captures a baseline.
+  //
+  // `minBudgetCents`/`maxBudgetCents` are gate-enforced bounds beside the bid bounds, on the
+  // same read: a cut below the floor or a raise above the ceiling is DENIED (never clamped),
+  // by every engine and rule automatically, because the gate is the only way to Amazon.
+  // Amazon's own hard floor is €1; a floor here must be ≥ that. NULL = unbounded.
+  budgetBaselineCents Int?
+  minBudgetCents      Int?
+  maxBudgetCents      Int?
+
   // ACR.1.2b — PER-DIMENSION AUTHORITY PINS ("hands off placement / bids / budget").
   //
   // The bounds above say how FAR automation may move a number. These say whether it may

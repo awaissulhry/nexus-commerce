@@ -93,6 +93,11 @@ export interface BudCampaignRow {
   status: string
   dailyBudgetCents: number
   currency: string
+  /** BUD.2 — the anchor relative budget rules compute from; null = not captured (old behaviour). */
+  budgetBaselineCents: number | null
+  /** BUD.2 — gate-enforced bounds; null = unbounded. */
+  minBudgetCents: number | null
+  maxBudgetCents: number | null
   /** at or below Amazon's €1 minimum — where every trim rule becomes a no-op */
   atFloor: boolean
   /** 🔴 `Campaign.liveBidWritesEnabled`. Gates DISPATCH, not the local cut. See header note 2. */
@@ -410,6 +415,8 @@ export async function getBudgetGrid(req: BudGridRequest): Promise<BudGridResult>
     select: {
       id: true, name: true, marketplace: true, status: true,
       dailyBudget: true, dailyBudgetCurrency: true, liveBidWritesEnabled: true,
+      // BUD.2 — the baseline + bounds ride the same read.
+      budgetBaselineCents: true, minBudgetCents: true, maxBudgetCents: true,
     },
     // An explicit order, so the cap is a result set rather than a random sample.
     orderBy: [{ dailyBudget: 'desc' }, { id: 'asc' }],
@@ -513,6 +520,9 @@ export async function getBudgetGrid(req: BudGridRequest): Promise<BudGridResult>
       market: c.marketplace ?? '—',
       status: c.status,
       dailyBudgetCents,
+      budgetBaselineCents: c.budgetBaselineCents,
+      minBudgetCents: c.minBudgetCents,
+      maxBudgetCents: c.maxBudgetCents,
       currency: c.dailyBudgetCurrency,
       atFloor: dailyBudgetCents <= BUDGET_FLOOR_CENTS,
       gateOpen: c.liveBidWritesEnabled,

@@ -232,6 +232,8 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         // AUTO.A7 — same read again: the spend-ceiling check needs the current budget (for the
         // increase delta) and the campaign's containing scopes.
         dailyBudget: true, portfolioId: true, marketplace: true,
+        // BUD.2 — the budget bounds, enforced below beside the bid bounds.
+        minBudgetCents: true, maxBudgetCents: true,
       },
     })
     if (!campaign?.liveBidWritesEnabled) {
@@ -307,6 +309,32 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
      * is deliberate here and is exactly why BUD.2's baseline exists for the ratchet.
      * Inert until an operator creates a ceiling row (0 rows exist as this ships).
      */
+    /**
+     * BUD.2 — entity BUDGET bounds, the bid bounds' twin, and the brake `liveBidWritesEnabled`
+     * never was (BUD.1 §1.2: the local cut lands before the gate runs, so the allowlist makes a
+     * campaign DIVERGE, not survive). A DENY, never a clamp, for the same reason as the bid
+     * bounds: a clamp rewrites an engine's intent without telling anyone. The floor is the
+     * direct counter to the ratchet's end state — 58 campaigns pinned at Amazon's €1 floor
+     * because nothing above €1 existed to refuse the cut.
+     */
+    if (ctx.field === 'dailyBudget' && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
+      const v = ctx.intendedValueCents as number
+      if (campaign.maxBudgetCents != null && v > campaign.maxBudgetCents) {
+        return {
+          allowed: false,
+          reason: `budget €${(v / 100).toFixed(2)} exceeds Campaign.maxBudgetCents=€${(campaign.maxBudgetCents / 100).toFixed(2)} on ${ctx.campaignId}`,
+          deniedAt: 'entity_bounds',
+        }
+      }
+      if (campaign.minBudgetCents != null && v < campaign.minBudgetCents) {
+        return {
+          allowed: false,
+          reason: `budget €${(v / 100).toFixed(2)} is below Campaign.minBudgetCents=€${(campaign.minBudgetCents / 100).toFixed(2)} on ${ctx.campaignId} — the floor exists precisely so a cut-only rule cannot walk this to €1`,
+          deniedAt: 'entity_bounds',
+        }
+      }
+    }
+
     if (ctx.field === 'dailyBudget' && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
       const denial = await spendCeilingDenial({
         campaignId: ctx.campaignId,
