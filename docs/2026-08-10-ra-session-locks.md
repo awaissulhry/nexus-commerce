@@ -220,10 +220,10 @@ at all.
 | `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **released** — landed `1ddda88e2`, prod-verified with the 401-vs-404 trick (`401 {"required":"ads.view"}`, control path 404) **before** the web commit that reads it. Staged as ONE hunk against HEAD, not `commit --only`: NEG.3's `/advertising/negatives/retire` was uncommitted in the same file |
 | `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **released** — landed `fd62f057e`. One keyword; no row edited, no ceiling raised, no schedule armed |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **released** |
-| `apps/api/src/routes/advertising.routes.ts` | BSP.2·binding (`GET /advertising/budget-binding`, additive) | 2026-08-16 | **claimed** — `grep -a`ed BOTH route files: `budget-binding` has **zero** hits, so it collides with nothing; registered beside the other budget-manager routes (`:7553-7590`) |
-| `apps/api/src/routes/advertising-intel.routes.ts` | BSP.2·binding (`action-log` honours the `campaignId` it already destructures — **no route registered**) | 2026-08-16 | **claimed** — one additive line in an existing handler; see §4 |
-| `…/rules-automation/rules-automation.css` | BSP.2·binding (`h10-bsp-*` at EOF) | 2026-08-16 | **claimed** — EOF-append only, no `.dark` block (§8.16); will `git diff` every hunk before committing (§5) |
-| `docs/2026-08-10-ra-session-locks.md` | BSP.2·binding (§2 rows + §4 note) | 2026-08-16 | **claimed** |
+| `apps/api/src/routes/advertising.routes.ts` | BSP.2·binding (`GET /advertising/budget-binding`, additive) | 2026-08-16 | **released** — landed `3aab2ae22`; `grep -a` confirms exactly ONE registration; **401-verified on prod before the web half was pushed** |
+| `apps/api/src/routes/advertising-intel.routes.ts` | BSP.2·binding (`action-log` honours the `campaignId` it already destructures — **no route registered**) | 2026-08-16 | **released** — landed `3aab2ae22`; one line, additive. **See §4 — this one matters to every page.** |
+| `…/rules-automation/rules-automation.css` | BSP.2·binding (`h10-bsp-*` at EOF) | 2026-08-16 | **released** — 🔴 the 58 lines shipped inside PLC.3's `b0172818c`, not in a BSP.2 commit. See §4 |
+| `docs/2026-08-10-ra-session-locks.md` | BSP.2·binding (§2 rows + §4 notes) | 2026-08-16 | **released** |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.1 (two sort keys on the EXISTING `share-of-voice-page` route) | 2026-08-12 | **released** — landed `2f620b8ef`, hunk-staged past a PLC.1 session's four uncommitted hunks |
 | `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — landed `858a21ae6`, 51 lines, staged as a rebuilt BLOB not a hunk; see §5's new trap |
 | `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lacked) | 2026-08-12 | **released** — landed `f4bc68eb7`. **All ten routed tabs are now covered**; `?tab=automations` and `?tab=dayparting` are fixed too — see §4 |
@@ -1040,6 +1040,41 @@ y-scales on one unit is the single most misleading thing a chart can do, so BSP.
 Palette validated rather than eyeballed: the two identity-bearing marks (#1f6fde, #b3261e) are ΔE
 28.7 apart under deuteranopia and 33.5 for normal vision. The forecast deliberately reuses the
 actual series' hue and is separated by dash, because a projection is the same entity, not a new one.
+
+**🔴 BSP.2 · binding → EVERY page: `GET /advertising/action-log` was ignoring `campaignId`.**
+Substrate §4 makes that route the ONE ledger query for all eleven pages — *"every other page gets
+the same route filtered; one query shape, eleven filters."* It destructured `campaignId` into `q`
+and then never put it in the `where`, so `?campaignId=X` returned **every campaign's rows**. Any
+page rendering "this entity's history" was going to caption another entity's writes as its own,
+silently and plausibly. Same defect shape as `budget-schedules/hourly-performance` destructuring
+`marketplace` and never using it (BS study §2.8).
+
+Fixed in the route rather than filtered client-side, because the next page to use it would have hit
+the same wall and the workaround does not survive a second caller. One additive line; a caller that
+omits the param is byte-identical to before. For a `CAMPAIGN` row `entityId` IS the local campaign
+id — verified against `Campaign.id` in `_bs-page-binding.mts`, not assumed. **If you filter that
+route by anything else, check the param is actually applied before trusting it.**
+
+**🔴 BSP.2 · binding — the EOF-append convention failed on ORDER, and then the sweep happened anyway.**
+The convention assumes the shared stylesheet only ever grows at the end, so two sessions' blocks
+cannot collide. That holds for *content* and failed for *order*: PLC.3's block sat uncommitted in my
+tree while SOV.6 committed theirs, so HEAD and my working copy carried the same blocks in opposite
+orders. **`git diff --stat` reported one clean insertion and was wrong about why** — a byte
+comparison against `git show HEAD:<file>` is what caught it. I staged HEAD + my block via
+`hash-object` + `update-index` and verified every added rule matched `h10-bsp-*`.
+
+**It did not survive, and the reason is worth more than the workaround.** `git commit --only <paths>
+--amend` rebuilds the index from the amended commit's tree plus the listed paths — so a blob staged
+by hand for a file that is *not* in that path list is silently discarded. The CSS dropped out of my
+commit twice for exactly that reason, and PLC.3's next commit (`b0172818c`) then swept the 58 lines
+in. Nothing broke — disjoint prefixes, EOF-appended, which is why the convention exists — but this
+is now the **fourth** misattribution in this file's history and the third in the BSP family alone.
+
+Two rules that would have prevented it, for whoever hits this next:
+1. **A hand-staged blob and `commit --only` do not compose.** If you stage by plumbing, commit with
+   a bare `git commit` over exactly that index — do not pass paths, and do not `--amend` afterwards.
+2. **`git diff` looking clean is not evidence the file is a pure append.** Byte-compare against
+   `git show HEAD:<file>` before trusting it.
 
 **🔴 BSP.0 — the `commit --only` trap fired again, and this time it shipped a broken tab to prod.**
 All four of BSP.0's shared-file edits — `_shared/tabs.tsx`, `RulesAutomationClient.tsx`,

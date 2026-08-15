@@ -68,6 +68,9 @@ import { PacingBand } from './PacingBand'
 import { SectionShell, SectionPending } from './SectionShell'
 import { InspectorRail } from './InspectorRail'
 import { SchedulesSection } from './SchedulesSection'
+import { BindingSection } from './BindingSection'
+import { CampaignBindingRail } from './CampaignBindingRail'
+import type { BindingCampaignRow } from './slot-contract'
 import type { BudgetManagerResult, ScopeOptionsPayload } from './slot-contract'
 import { useAdsSync } from '../_shared/adsBus'
 
@@ -282,6 +285,10 @@ export function BudgetSchedulesClient() {
 
   const openRail = useCallback((open: BspOpen) => push({ open: serialiseOpen(open) }), [push])
 
+  // Lifted so the `campaign:` rail reads the SAME rows the grid is showing. One fetch, two
+  // surfaces — the rule this page has followed since the pacing band and the plan rail.
+  const [bindingRows, setBindingRows] = useState<BindingCampaignRow[]>([])
+
   const subtitle = rulesTabByKey('budget-schedules')?.subtitle ?? ''
 
   return (
@@ -341,9 +348,16 @@ export function BudgetSchedulesClient() {
               onToggle={() => toggle(s.id)}
               focused={url.section === s.id}
             >
-              {s.id === 'schedules'
-                ? <SchedulesSection />
-                : <SectionPending session={s.owner ?? ''} what={s.pending ?? ''} />}
+              {/* 🔴 BSP.2 · binding — the slot contract has existed since BSP.0 and had never been
+                  wired: every section rendered propless. `binding` is its first real consumer, so
+                  it takes `scope`/`weeks`/`openRail` from the contract rather than reaching for
+                  `useSearchParams` (D8). `SchedulesSection` stays propless deliberately — it
+                  predates the contract and regressing it is not this session's business. */}
+              {s.id === 'binding'
+                ? <BindingSection scope={reach} weeks={url.weeks} openRail={openRail} onRows={setBindingRows} />
+                : s.id === 'schedules'
+                  ? <SchedulesSection />
+                  : <SectionPending session={s.owner ?? ''} what={s.pending ?? ''} />}
             </SectionShell>
           ))}
         </div>
@@ -352,6 +366,14 @@ export function BudgetSchedulesClient() {
           <InspectorRail
             open={url.open}
             onClose={() => push({ open: '' })}
+            /* BSP.2 — the `campaign:` rail is fed from the rows the section already fetched, so
+               opening it costs no second request and can never disagree with the grid behind it. */
+            campaignBody={url.open.kind === 'campaign' ? (
+              <CampaignBindingRail
+                row={bindingRows.find((r) => r.id === (url.open as BspOpen).id) ?? null}
+                loading={bindingRows.length === 0}
+              />
+            ) : undefined}
             planBody={url.open.kind === 'plan' && pacing ? (
               <PlanEditor
                 marketplace={url.open.id}

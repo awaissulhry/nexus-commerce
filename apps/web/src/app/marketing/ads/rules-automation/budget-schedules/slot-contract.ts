@@ -193,3 +193,51 @@ export type WriteOutcome =
   | { state: 'saved'; at: number }
   | { state: 'refused'; message: string }
   | { state: 'broke'; message: string }
+
+// ── BSP.2 · binding ───────────────────────────────────────────────────────────────────────────
+// `GET /advertising/budget-binding`. Mirrors `ads-budget-binding.service.ts` exactly; that service
+// owns the method and this is the wire shape, so a field added there is added here and nowhere else.
+
+export interface BindingDayRow {
+  date: string
+  spendCents: number
+  /** The budget in force when that Rome day CLOSED. null when it could not be reconstructed. */
+  budgetCents: number | null
+  ratio: number | null
+}
+
+export interface BindingCampaignRow {
+  id: string
+  name: string
+  marketplace: string
+  status: string
+  currentBudgetCents: number
+  daysWithSpend: number
+  /** Days at or over the budget in force — the section's own heading. */
+  daysBinding: number
+  /** Days at or over 90% of it — the band the `ran-nothing` sentence speaks in. */
+  daysNear: number
+  maxRatio: number
+  spendCents: number
+  /** 0..23 Rome, modal across binding days. What an hourly schedule would act on. */
+  lastDeliveringHour: number | null
+  /** 🔴 No budget history: every ratio is against TODAY's budget. The row is marked `≈`. */
+  approximate: boolean
+  days: BindingDayRow[]
+  lastBudgetWrite: { at: string; actor: string | null; fromCents: number | null; toCents: number | null } | null
+}
+
+export interface BindingResult {
+  coverage: {
+    from: string | null
+    to: string | null
+    daysUsable: number
+    daysRequested: number
+    firstUsableDay: string | null
+    /** Usable days the guard could not cross-check, because the DAILY report is itself empty. */
+    daysUnverifiable: number
+  }
+  /** The census the card is required to print — see the service header. */
+  reconstruction: { writesRead: number; chainBreaks: number; campaignsWithoutLog: number }
+  campaigns: BindingCampaignRow[]
+}

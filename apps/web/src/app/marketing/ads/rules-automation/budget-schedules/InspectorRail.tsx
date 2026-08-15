@@ -46,7 +46,7 @@ const RAIL: Record<BspOpen['kind'], { title: (id: string) => string; session: st
 }
 
 export function InspectorRail({
-  open, onClose, planBody,
+  open, onClose, planBody, campaignBody,
 }: {
   open: BspOpen
   onClose: () => void
@@ -55,6 +55,8 @@ export function InspectorRail({
    * pacing fetch. The rail stays a frame: it knows what each kind is called, not what it contains.
    */
   planBody?: ReactNode
+  /** BSP.2 · binding — same arrangement as `planBody`: the client composes it and the rail frames it. */
+  campaignBody?: ReactNode
 }) {
   const def = RAIL[open.kind]
 
@@ -68,7 +70,8 @@ export function InspectorRail({
       </div>
 
       <div className="h10-bsp-railbd">
-        {open.kind === 'plan' && planBody ? planBody : (
+        {open.kind === 'plan' && planBody ? planBody
+          : open.kind === 'campaign' && campaignBody ? campaignBody : (
           <div className="h10-bsp-pending">
             <b>Not built yet — {def.session}.</b>
             <span>{def.what}</span>
