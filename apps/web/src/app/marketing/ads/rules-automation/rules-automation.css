@@ -4742,3 +4742,8 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-bd7-posture.observe { background: #f1f3f6; color: #3f4754; }
 .h10-bd7-posture.propose { background: #eef4fd; color: #17436f; }
 .h10-bd7-posture.auto { background: #e9f7ef; color: #116b3a; }
+
+/* S8 polish — keep the foot links' external-link icon on the same line as their text, and mark
+   unnamed targets as a description rather than an identifier. */
+.h10-bd8-foot a, .h10-bd8-refline a, .rd-p5-foot a { white-space: nowrap; }
+.h10-bd8-tbl .t.unnamed { color: #6b7585; font-style: italic; }

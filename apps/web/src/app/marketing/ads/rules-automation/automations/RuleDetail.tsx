@@ -252,7 +252,9 @@ export function RuleDetail({
               <ul className="h10-au-list">
                 <li>{num(rule.week.acted)} acted · {num(rule.week.proposed)} proposed{rule.week.failed > 0 ? ` · ${num(rule.week.failed)} failed` : ''} this week</li>
                 <li>{num(rule.lifetime.evaluations)} evaluations, {num(rule.lifetime.matches)} matches, {num(rule.lifetime.executions)} executions all time</li>
-                <li>Last run {rule.lastExecutedAt ? new Date(rule.lastExecutedAt).toLocaleString('en-IE') : 'never'}{rule.ageDays != null ? ` · ${rule.ageDays} days old` : ''}</li>
+                {/* Two facts, named apart: `ageDays` is the RULE's age since creation. Glued to
+                    "Last run" it read as "the last run is 76 days old" beside a 5-day-old date. */}
+                <li>Last run {rule.lastExecutedAt ? new Date(rule.lastExecutedAt).toLocaleString('en-IE') : 'never'}{rule.ageDays != null ? ` · rule created ${rule.ageDays === 0 ? 'today' : `${rule.ageDays} day${rule.ageDays === 1 ? '' : 's'} ago`}` : ''}</li>
               </ul>
               <div className="h10-au-recbtns">
                 <button type="button" className="h10-am-btn sm" onClick={onHistory}>

@@ -147,7 +147,10 @@ export function BidActivity({ scope, campaigns, loading }: BidSlotProps) {
                 {visible.slice(0, 25).map((r) => (
                   <tr key={r.id} className={r.delivery?.state === 'FAILED' ? 'failed' : ''}>
                     <td className="nw">{when(r.at)}</td>
-                    <td><span className="t" title={r.entity.id}>{r.entity.name ?? r.entity.id}</span></td>
+                    {/* A null name is a product/audience target with no text expression — a raw
+                        cuid tells the operator nothing, so say what it IS and keep the id in the
+                        title for correlation. */}
+                    <td><span className={r.entity.name ? 't' : 't unnamed'} title={r.entity.id}>{r.entity.name ?? 'unnamed target'}</span></td>
                     <td><span className="t">{r.campaign?.name ?? campName.get(r.campaign?.id ?? '') ?? '—'}</span></td>
                     <td className="nw">{eurFromCents(r.oldValue)} → <b>{eurFromCents(r.newValue)}</b></td>
                     <td><span className="t" title={r.reason ?? undefined}>{r.origin?.name ?? (r.source === 'external' ? 'outside Nexus' : r.source)}</span></td>

@@ -927,6 +927,7 @@ export function BidClient() {
           targetId={reserved.target}
           row={(view === 'targets' ? (rows as BidTargetRow[]) : []).find((r) => r.id === reserved.target) ?? null}
           series={data?.series?.[reserved.target]}
+          loading={loading}
           onClose={closeTarget}
         />
       )}

@@ -28,10 +28,14 @@ const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const num = (n: number) => n.toLocaleString('en-IE')
 const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
 
-export function BidTargetDrawer({ targetId, row, series, onClose }: {
+export function BidTargetDrawer({ targetId, row, series, loading = false, onClose }: {
   targetId: string
   row: BidTargetRow | null
   series: BidSeriesPoint[] | undefined
+  /** True while the GRID is still fetching — a missing row then means "not loaded yet", and the
+   *  drawer must not claim "not in this view" about a view that has not answered (seen live on a
+   *  full page load with ?target=: the banner accused the filters while the grid showed skeletons). */
+  loading?: boolean
   onClose: () => void
 }) {
   const [fetched, setFetched] = useState<BidSeriesPoint[] | null>(null)
@@ -70,13 +74,13 @@ export function BidTargetDrawer({ targetId, row, series, onClose }: {
             <span>
               {row
                 ? <>{row.kind.replace(/_/g, ' ').toLowerCase()} · {row.match.replace(/_/g, ' ').toLowerCase()} · {row.market}{row.derived && ' · name derived from its targeting group'}</>
-                : 'outside the current view'}
+                : loading ? 'loading…' : 'outside the current view'}
             </span>
           </div>
           <button type="button" onClick={onClose} aria-label="Close"><X size={18} aria-hidden /></button>
         </div>
         <div className="h10-au-db">
-          {!row && (
+          {!row && !loading && (
             <p className="h10-au-conf" role="note">
               <AlertTriangle size={13} aria-hidden />
               This target is not in the current view&rsquo;s scope or filters, so its identity, bid and
