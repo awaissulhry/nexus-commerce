@@ -5,20 +5,13 @@
  * the other seven, and so nobody has to rediscover them from the study. Every one is backend work
  * on files HV.1 was explicitly forbidden to touch.
  *
- *   1. 🔴 **The auto-targeting blind spot, on the RULE path.** HV.1 repaired it for the READ only.
- *      `advertising-rule-evaluator.job.ts:685` still filters
- *      `matchType IN ('BROAD','PHRASE') OR matchType IS NULL`, with a comment explaining the null
- *      branch as "auto-targeting, no match type" — and **not one row in this account has a NULL
- *      matchType.** Auto campaigns carry `TARGETING_EXPRESSION_PREDEFINED`, product targeting
- *      carries `TARGETING_EXPRESSION`: 2,798 rows and 26 orders, structurally invisible to
- *      `promote_to_exact`. One array literal.
- *   2. 🔴 **The adapter drops six of the eleven metrics the builder offers.**
- *      `ads-rule-adapter.service.ts`'s `SEARCHTERM_METRIC` map holds five (Orders, PPC Orders,
- *      Clicks, Spend, Sales); `translateConditions` logs a warning and `continue`s on ACOS, ROAS,
- *      Impressions, CVR, CTR and CPC — all reachable from the UI today. **Dropping an
- *      AND-condition makes the rule LOOSER, not stricter:** "PPC Orders ≥ 2 AND ACoS ≤ 25%"
- *      executes as "PPC Orders ≥ 2", and the ACoS ceiling is the one condition standing between
- *      harvesting and buying unprofitable traffic. Map them, or refuse the rule at save time.
+ *   1. ✅ CLOSED (HV.8c) — the auto-targeting blind spot on the RULE path: the evaluator's
+ *      search-term filter now includes TARGETING_EXPRESSION / TARGETING_EXPRESSION_PREDEFINED
+ *      alongside BROAD/PHRASE, with the null branch kept and the reason documented in place.
+ *   2. ✅ CLOSED (Phase 2 of the 2026-08-15 finish programme) — `ads-rule-adapter.service.ts` now
+ *      maps ALL eleven builder metrics, and an untranslatable condition REFUSES the save
+ *      (`untranslatable_conditions`, metrics named) instead of logging and dropping — a dropped
+ *      AND-condition made the rule looser. Pinned by `ads-rule-adapter.vitest.test.ts`.
  *   3. **Delete the `bidEur` overrides** at `automation-action-handlers.ts:904/906/1034` — CPC
  *      inheritance already exists in `applyHarvest` and the constants defeat it. See HvPromote.
  *   4. **Give the standalone rule a `destinations` map**, and with it the H.3 isolation negative.

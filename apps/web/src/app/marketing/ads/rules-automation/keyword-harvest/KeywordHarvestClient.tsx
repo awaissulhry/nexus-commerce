@@ -37,7 +37,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, ArrowUpRight, Check, Copy, Info, Plus } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, Check, Copy, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
@@ -61,8 +61,7 @@ import { HvQueue } from './HvQueue'
 import { HvRepairs } from './HvRepairs'
 // Interim, until HV.6 and HV.7 replace it: the rule list exactly as the tab rendered it, so
 // nothing is lost in the move off `?tab=keyword-harvest`.
-import { RuleListTab } from '../tabs/RuleListTab'
-import { NoDataIllus } from '../_shared/NoDataIllus'
+import { TabRules } from '../_shared/TabRules'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -724,24 +723,17 @@ export function KeywordHarvestClient() {
       <HvPromote {...slotProps} />
 
       <HvActors {...slotProps} />
-      {/* Interim until HV.6/HV.7: the rule list exactly as the tab rendered it, so the move off
-          `?tab=keyword-harvest` loses nothing — except the bug. `liveType` is now the TAB KEY,
-          which is the whole of defect D1: this list was passed 'keyword-harvesting', an action
-          type that is not a key of RULE_TAB_ACTION_TYPES, so it filtered out all 51 rules and
-          rendered empty under a badge that said 5. */}
-      <RuleListTab
-        noun="Keyword Harvesting Rule"
-        seed={[]}
-        liveType="keyword-harvest"
-        editHref={(id) => `/marketing/ads/rules-automation/builder/keyword-harvesting?ruleId=${id}`}
-        onAddRule={() => { window.location.href = '/marketing/ads/rules-automation/builder/keyword-harvesting' }}
-        emptyNode={(
-          <span className="h10-rr-empty">
-            <NoDataIllus size={104} />
-            <b>Create a Keyword Harvesting Rule to graduate converting search terms!</b>
-            <a className="h10-am-btn primary" href="/marketing/ads/rules-automation/builder/keyword-harvesting"><Plus size={13} /> Create Rule</a>
-          </span>
-        )}
+      {/* HV close-out — the interim RuleListTab retired onto the shared TabRules (BID.S7's
+          shape): the badge and this section share ruleBelongsToTab, the record lives on
+          Automations, and creation stays one click into the builder. */}
+      <TabRules
+        tabKey="keyword-harvest"
+        sectionId="hv-rules"
+        heading="who may graduate a search term"
+        subject="harvest besides the engine"
+        builderHref="/marketing/ads/rules-automation/builder/keyword-harvesting"
+        builderLabel="Harvest Rule"
+        emptyLine="No rule is allowed to graduate search terms — the engine (disarmed) and the operator are the whole story until one is created."
       />
 
       <HvQueue {...slotProps} />
