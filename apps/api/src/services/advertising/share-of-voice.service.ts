@@ -256,6 +256,17 @@ export interface ShareOfVoiceQuery {
   signal?: string | null
   /** SOV.4 — 'unbid' narrows to measured presence with no ad activity and no keyword target. */
   view?: string | null
+  /**
+   * SOV.6 — look at a period the GATE REJECTED, deliberately. `YYYY-MM-DD`.
+   *
+   * 🔴 An override, never a gate change. `chooseViewPeriod` is shared with Keyword Tracker and its
+   * rule is right: a share from a 93%-complete week wearing the same label as a whole one is worse
+   * than a blank. What was wrong was that the page declined newer data *silently*. This makes the
+   * refusal visible and reversible without touching the constant that produces it.
+   *
+   * It must never become the default, be remembered, or be pre-selected.
+   */
+  period?: string | null
 }
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
@@ -371,7 +382,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // ── one round trip for everything that depends only on `market` ─────────────
   // KT.1b measured this ordering as most of a 6.6s first paint when it was serial. The period
   // groupBy and both freshness probes depend on nothing but the market, so they belong here.
-  const [campaigns, ads, watchlists, periodGroups, nonZeroGroups, sqpLatest, adsLatest, protections, searchTerms, biddedTargets] = await Promise.all([
+  const [campaigns, ads, watchlists, periodGroups, nonZeroGroups, asinPeriodRows, sqpLatest, adsLatest, protections, searchTerms, biddedTargets] = await Promise.all([
     prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true, externalCampaignId: true } }),
     prisma.adProductAd.findMany({
       where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
@@ -388,6 +399,12 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     // `gt: 0` on a non-nullable Int with default 0 — no null branch to spell out.
     prisma.searchQueryPerformance.groupBy({
       by: ['startDate'], where: { marketplace: market, impressionsBrand: { gt: 0 } }, _count: { _all: true },
+    }),
+    // SOV.6 — distinct ASINs per period. The CAUSE of a rejected week is upstream and it is an ASIN
+    // count, not a row count: 2026-08-02 carries 15 ASINs where 07-19 carried 25. Stating rows
+    // without ASINs names the symptom and hides the reason.
+    prisma.searchQueryPerformance.findMany({
+      where: { marketplace: market }, select: { startDate: true, asin: true }, distinct: ['startDate', 'asin'],
     }),
     prisma.searchQueryPerformance.findFirst({ where: { marketplace: market }, orderBy: { startDate: 'desc' }, select: { startDate: true } }),
     prisma.amazonAdsSearchTerm.findFirst({ where: { marketplace: market }, orderBy: { date: 'desc' }, select: { date: true } }),
@@ -494,10 +511,97 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // Market-level on purpose, exactly as KT: the gate measures whether the FEED wrote a whole week,
   // which is a property of the feed, not of a scope. It also means every scope in a market renders
   // the same week, so two views of one market can be compared with each other.
-  const chosen = chooseViewPeriod(
+  const gateChoice = chooseViewPeriod(
     periodGroups.map((p) => ({ start: p.startDate, rows: p._count._all })),
     { lookbackDays: weeks * 7 },
   )
+
+  /**
+   * SOV.6 — `?period=` resolved, and every way it can be refused.
+   *
+   * Accepted only when the period EXISTS for this market. Anything else — a malformed date, a week
+   * this market has no rows for, a week outside the stored range — yields the gate's choice plus a
+   * STATED refusal. Never a silent fallback: a link that quietly showed a different week from the
+   * one it names is the defect this whole section exists to remove, one level up.
+   */
+  const periodOverride = (() => {
+    const raw = (q.period ?? '').trim()
+    if (!raw) return { start: null as Date | null, refused: null as string | null }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { start: null, refused: 'malformed' }
+    const want = new Date(`${raw}T00:00:00.000Z`)
+    if (Number.isNaN(+want)) return { start: null, refused: 'malformed' }
+    const hit = periodGroups.find((p) => +p.startDate === +want)
+    if (!hit) return { start: null, refused: 'not-in-market' }
+    return { start: hit.startDate, refused: null }
+  })()
+
+  /**
+   * The view's period. When the override resolves, EVERY share-derived number below comes from it —
+   * the row values, the census, the scope Δ, the summary pair. Half-applying it would produce a page
+   * whose headline and grid disagree about which week they describe.
+   *
+   * `rows`/`baselineRows`/`threshold` are recomputed for the overridden week so the page can state
+   * its completeness honestly rather than quoting the gate's numbers for a different period.
+   */
+  const chosen = (() => {
+    if (!periodOverride.start) return gateChoice
+    const rows = periodGroups.find((p) => +p.startDate === +periodOverride.start!)?._count._all ?? 0
+    return {
+      ...gateChoice,
+      start: periodOverride.start,
+      rows,
+      // Below the bar is exactly why it had to be asked for; say so in the same vocabulary the
+      // rejection line uses, rather than inventing a second one.
+      reason: rows >= gateChoice.threshold ? gateChoice.reason : ('incomplete-week' as typeof gateChoice.reason),
+      truncated: rows < gateChoice.threshold,
+    }
+  })()
+
+  /**
+   * 🔴 SOV.6 — THE REJECTION RECKONING. The page must say it is DECLINING newer data, not merely
+   * that its data is old. Those are different facts and only the second is actionable.
+   *
+   * Measured 2026-08-16: a 2026-08-02 period exists in all four markets and the gate will never show
+   * it — IT holds 259 rows against a threshold of 279, **short by 21**, on **15 ASINs where 07-19
+   * carried 25**. The gate is behaving exactly as designed; what was wrong is that nothing said so.
+   *
+   * 🔴 A REJECTED period is not an EXCLUDED period. `chooseViewPeriod` rejects a week for being too
+   * thin (fixable upstream, by the feed); `choosePriorPeriod` excludes one for carrying a zero
+   * our-side count on every row (the pre-ACR.0.2 parser defect, fixable only by re-ingest). They
+   * have different causes and different owners, so they keep their own channels and are never
+   * merged into one "unavailable" list.
+   */
+  const asinsByPeriod = (() => {
+    const m = new Map<number, number>()
+    for (const r of asinPeriodRows) if (r.asin) m.set(+r.startDate, (m.get(+r.startDate) ?? 0) + 1)
+    return m
+  })()
+  const rejection = (() => {
+    // Only periods NEWER than what the view renders, and only those the gate actually refused.
+    const newer = gateChoice.rejected
+      .filter((r) => chosen.start && Date.parse(r.start) > +chosen.start)
+      .sort((a, b) => Date.parse(b.start) - Date.parse(a.start))
+    if (!newer.length) return null
+    const top = newer[0]
+    const rows = top.rows
+    const threshold = Math.round(gateChoice.threshold)
+    return {
+      /** the newest period the gate declined, and the one the page names */
+      asOf: top.start,
+      ageDays: ageDays(new Date(`${top.start}T00:00:00.000Z`)),
+      rows,
+      threshold,
+      /** how short it is. "Incomplete" is not a fact anyone can act on; "short by 21" is */
+      shortBy: Math.max(0, threshold - rows),
+      pctOfBar: threshold > 0 ? Math.round((rows / threshold) * 100) : null,
+      /** the CAUSE, and what makes the hand-off legible from the page itself */
+      asins: asinsByPeriod.get(Date.parse(`${top.start}T00:00:00.000Z`)) ?? 0,
+      chosenAsins: chosen.start ? asinsByPeriod.get(+chosen.start) ?? 0 : 0,
+      /** when several were declined, how many — the page names the newest and counts the rest */
+      count: newer.length,
+      others: newer.slice(1).map((r) => ({ asOf: r.start, rows: r.rows })),
+    }
+  })()
 
   // ── the watchlist, as a FILTER over the market — never as the population ────
   const chosenList = q.list && q.list !== 'all' ? watchlists.find((w) => w.id === q.list) ?? null : null
@@ -920,7 +1024,35 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       reason: chosen.reason,
       truncated: chosen.truncated,
       /** newer periods the gate refused, newest first — so the page can name what it skipped */
-      rejected: chosen.rejected,
+      rejected: gateChoice.rejected,
+      /**
+       * 🔴 The page is DECLINING newer data, not merely holding old data. Null when nothing newer
+       * was rejected — the line must not render then, because a permanent "everything is fine"
+       * banner is furniture.
+       */
+      rejection,
+      /**
+       * SOV.6 — `?period=`. `active` is the overridden week; `refused` says why an override was not
+       * honoured ('malformed' | 'not-in-market'), so a bad link states its refusal instead of
+       * silently rendering a different week. `gateAsOf` is always the gate's own choice, so the page
+       * can offer the way back.
+       */
+      override: {
+        active: iso(periodOverride.start),
+        refused: periodOverride.refused,
+        gateAsOf: iso(gateChoice.start),
+        /** true when the week being rendered is below the bar — the persistent marker's trigger */
+        belowBar: !!periodOverride.start && chosen.rows < Math.round(gateChoice.threshold),
+        pctOfBar: periodOverride.start && gateChoice.threshold > 0
+          ? Math.round((chosen.rows / gateChoice.threshold) * 100)
+          : null,
+        asins: periodOverride.start ? asinsByPeriod.get(+periodOverride.start) ?? 0 : 0,
+      },
+      /** every period this market has, newest first — the override's domain, so the UI can offer it */
+      available: periodGroups
+        .map((p) => ({ asOf: iso(p.startDate)!, rows: p._count._all, asins: asinsByPeriod.get(+p.startDate) ?? 0 }))
+        .sort((a, b) => Date.parse(b.asOf) - Date.parse(a.asOf))
+        .slice(0, 14),
       /**
        * SOV.1 — the week a Δ is measured against, and everything the page needs to name it.
        * `gapDays` is NOT always 7: at `?market=ES&weeks=4` the chosen period is 2026-07-26 and the

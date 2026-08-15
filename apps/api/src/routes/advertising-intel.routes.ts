@@ -1054,6 +1054,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       adWindow: q.adWindow ? Number(q.adWindow) : null,
       signal: q.signal || null,
       view: q.view || null,
+      // SOV.6 — look at a week the gate declined, deliberately. Validated in the service against the
+      // periods this market actually has; a malformed or unknown value yields the gate's own choice
+      // plus a STATED refusal, never a silent fallback to a different week than the link names.
+      period: q.period || null,
     })
     // Short private cache: one grouped scan of SQP joined to the campaign/ad graph, and both feeds
     // underneath move once a night at most.
