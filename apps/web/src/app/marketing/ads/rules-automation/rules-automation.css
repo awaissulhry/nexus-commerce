@@ -4860,3 +4860,33 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-bd3-writes th, .h10-bd3-writes td { vertical-align: top; }
 .h10-bd3-writes td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-bd3-writes td b.bad { color: #9a3412; font-weight: 800; }
+
+/* ══ RA.SPINE S4b — the tab bar's three AA failures ════════════════════════════════════════════
+   Measured on prod 2026-08-16 at innerWidth 1380, composited against the REAL ground: the bar has
+   no background of its own, so its text sits on `.h10-shell`'s #f4f6f9, NOT on white. Trusting
+   getComputedStyle's declared colour against an assumed white ground is what hid these.
+
+     .h10-cd-tab.on              #1f6fde on #f4f6f9  = 4.42:1  at 14.5px/600  → needs 4.5  FAIL
+     .h10-cd-tabn                #6b7280 on #eef1f5  = 4.27:1  at 11.5px/700  → needs 4.5  FAIL
+     .h10-cd-tab.on .h10-cd-tabn #1f6fde on #e7f0fd  = 4.17:1  at 11.5px/700  → needs 4.5  FAIL
+
+   🔴 All three PRE-DATE S4 and none is a regression it introduced — S4 made them matter by putting
+   eleven tabs and five badges on every page in the section. They live in the shared `h10-cd-*`
+   family, which the campaign-detail tabs elsewhere in the ads console also use, so these overrides
+   are SCOPED to `.h10-rules-tabs` and change nothing outside these eleven pages. Fixing the shared
+   family is a console-wide change and belongs to whoever owns it.
+
+   Both replacements are colours this stylesheet ALREADY uses (#1a61c6 = `.h10-ar-lnk`,
+   #55606d = `.h10-ar-said`), so the palette gains nothing and the DS ratchet sees no new hex.
+   #1a61c6 = 5.43:1 on the ground and 5.12:1 on the active badge; #55606d = 5.65:1 on #eef1f5.
+
+   No `!important`: each selector adds `.h10-rules-tabs` and therefore outranks the original by one
+   class, which holds regardless of which stylesheet loads first — these live in a different file
+   from the rules they override, so source order is not the lever here. */
+.h10-rules-tabs .h10-cd-tab.on { color: #1a61c6; border-bottom-color: #1a61c6; }
+.h10-rules-tabs .h10-cd-tabn { color: #55606d; }
+.h10-rules-tabs .h10-cd-tab.on .h10-cd-tabn { color: #1a61c6; }
+/* The focus ring is the one place #1f6fde still appears on this bar; at 2px solid on #f4f6f9 it is
+   a non-text indicator needing 3:1 (WCAG 1.4.11) and clears it at 4.42:1. Moved anyway so the bar
+   speaks one blue. */
+.h10-rules-tabs:focus-visible { outline-color: #1a61c6; }
