@@ -113,6 +113,43 @@ A `budget_day_move` refusal joins `spend_ceiling` and the budget bounds on the n
 bound an operator set themselves, this one has a **default** — so the first time it fires may be the
 first they hear it exists.
 
+### Prod verification — the guard has not fired, so it was exercised instead
+
+No budget rule has written since **2026-08-11**, so `budget_day_move` has never fired on prod. *"It
+is deployed"* is not *"it works"*. `_auto-p0-guard4.mts` calls `budgetDayMoveDenial` — the same
+function the gate calls — against live campaigns and their real logged openings. Read-only.
+
+**The actual ratchet, replayed against a day opening at €4.42:**
+
+```
+the day's floor at −30% : €3.09
+
+€4.42 → €3.54   ✅ allowed          ← one step is not a ratchet; the first move is legal
+€4.42 → €2.83   🔴 REFUSED
+€4.42 → €2.26   🔴 REFUSED
+€4.42 → €1.81   🔴 REFUSED
+€4.42 → €1.45   🔴 REFUSED
+€4.42 → €1.16   🔴 REFUSED
+€4.42 → €1.00   🔴 REFUSED
+```
+
+**The ratchet stops at €3.09 instead of €1.00 — ~5 days to reach the floor instead of the 2¾ hours
+it actually took.** Five days is five chances for a person to notice, where one day was none.
+
+**And the trap avoided, on all 58 real at-floor campaigns:**
+
+```
+GALE EXACT IT   €1.00 → €10.00  ✅ allowed     ← the flat allowance; repair is possible
+GALE EXACT IT   €1.00 → €50.00  🔴 refused     ← past it; still bounded
+…58 of 58 behave identically
+```
+
+A percentage-only ceiling would have refused both and trapped every one of them at the floor.
+
+The EUROS reading confirmed against the newest real logged write: `payloadBefore.dailyBudget = 3.11`
+→ €3.11. Read as cents it is €0.03, every floor collapses, and the guard silently permits everything
+it exists to refuse.
+
 ### Tests
 
 Ten cases; **six fail with the guard disabled**, verified by disabling it. The other four are the
