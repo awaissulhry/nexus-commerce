@@ -4903,6 +4903,111 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
 .h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   PLC.3 — control: the inline lane editor, the bulk panel with its preview, and the refusal.
+
+   EOF-appended, `h10-plc3-*` only (a new prefix so PLC.0/1's `h10-plc-*` block stays one thing),
+   no `.dark` block. Every colour checked against the REAL ground: `.h10-shell` is #f4f6f9, not
+   white, where the section's #1f6fde is 4.42:1 — a fail. On-ground links use #1a61c6 (5.43:1).
+
+   No horizontal margin anywhere: the gutter inside `.h10-rules-page` is ZERO.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the inline lane editor, in the multiplier cell ─────────────────────────────────────────── */
+.h10-plc3-edit { display: inline-flex; align-items: center; gap: 4px; }
+.h10-plc3-edit input { width: 62px; padding: 3px 6px; border: 1px solid #1a61c6; border-radius: 6px; font: inherit; font-size: 12.5px; font-weight: 700; color: #1c2530; text-align: right; font-variant-numeric: tabular-nums; background: #fff; }
+.h10-plc3-edit input:focus { outline: 2px solid #1a61c6; outline-offset: 1px; }
+.h10-plc3-edit em { font-style: normal; font-size: 11px; font-weight: 700; color: #55606d; }
+.h10-plc3-edit button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #e3e7ec; border-radius: 6px; background: #fff; color: #55606d; cursor: pointer; }
+.h10-plc3-edit button.go { border-color: #1a61c6; background: #1a61c6; color: #fff; }
+.h10-plc3-edit button:disabled { opacity: .5; cursor: default; }
+/* The affordance on a cell that is NOT being edited. Invisible until the row is hovered, so 660
+   rows do not each shout a pencil at you. */
+.h10-plc3-pencil { margin-left: 6px; border: 0; background: none; padding: 0; color: #8a94a2; cursor: pointer; opacity: 0; transition: opacity .12s; }
+tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
+.h10-plc3-pencil:hover { color: #1a61c6; }
+
+/* ── the bulk panel ────────────────────────────────────────────────────────────────────────── */
+/* Fixed + portalled to the page root, NOT inside the grid card: a card with `overflow` clips a
+   panel, and the section has already paid for that once (`reference_gridcard_clips_dropdowns`). */
+.h10-plc3-back { position: fixed; inset: 0; z-index: 1200; background: rgba(20, 28, 38, .38); display: flex; align-items: flex-start; justify-content: center; padding: 48px 24px; overflow: auto; }
+.h10-plc3-panel { width: min(980px, 100%); background: #fff; border-radius: 14px; box-shadow: 0 18px 48px rgba(20, 28, 38, .28); display: flex; flex-direction: column; }
+.h10-plc3-ph { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 20px; border-bottom: 1px solid #e3e7ec; }
+.h10-plc3-ph h3 { margin: 0 0 3px; font-size: 15px; font-weight: 800; color: #1c2530; }
+.h10-plc3-ph p { margin: 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-plc3-ph button { border: 0; background: none; padding: 0; color: #55606d; cursor: pointer; }
+.h10-plc3-pb { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* the action row: lane + value + which rows */
+.h10-plc3-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.h10-plc3-field { display: flex; flex-direction: column; gap: 4px; }
+.h10-plc3-field .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: #667080; }
+.h10-plc3-field input, .h10-plc3-field select { font: inherit; font-size: 12.5px; font-weight: 600; color: #1c2530; background: #fff; border: 1px solid #e3e7ec; border-radius: 7px; padding: 6px 9px; }
+.h10-plc3-field input { width: 92px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.h10-plc3-field input:focus, .h10-plc3-field select:focus { outline: 2px solid #1a61c6; outline-offset: -1px; border-color: #1a61c6; }
+
+/* the preview's verdict counters */
+.h10-plc3-tally { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.h10-plc3-tallycell { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
+.h10-plc3-tallycell b { font-size: 18px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-plc3-tallycell span { font-size: 10.5px; font-weight: 600; line-height: 1.4; color: #55606d; }
+.h10-plc3-tallycell.warn { border-color: #f0dcbe; background: #fff6e8; }
+.h10-plc3-tallycell.warn b { color: #8a5316; }
+.h10-plc3-tallycell.warn span { color: #7a4812; }
+.h10-plc3-tallycell.stop { border-color: #f0c9c9; background: #fdecec; }
+.h10-plc3-tallycell.stop b { color: #8f2828; }
+.h10-plc3-tallycell.stop span { color: #8f2828; }
+
+/* the per-campaign preview table */
+.h10-plc3-rows { max-height: 320px; overflow: auto; border: 1px solid #e3e7ec; border-radius: 10px; }
+.h10-plc3-rows table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.h10-plc3-rows th { position: sticky; top: 0; z-index: 1; background: #f7f8fa; text-align: left; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: #55606d; padding: 7px 10px; border-bottom: 1px solid #e3e7ec; }
+.h10-plc3-rows td { padding: 6px 10px; border-bottom: 1px solid #eef1f5; color: #1c2530; vertical-align: top; }
+.h10-plc3-rows tr:last-child td { border-bottom: 0; }
+.h10-plc3-rows td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-plc3-rows .skip { padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.h10-plc3-rows .rev { padding: 1px 6px; border-radius: 5px; background: #fff6e8; color: #7a4812; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.h10-plc3-rows .go { padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: #14724d; font-size: 10px; font-weight: 800; white-space: nowrap; }
+
+/* the confirm footer */
+.h10-plc3-pf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid #e3e7ec; }
+.h10-plc3-confirm { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #55606d; }
+.h10-plc3-confirm input { font: inherit; font-size: 12.5px; font-weight: 700; color: #1c2530; border: 1px solid #c68a2e; border-radius: 7px; padding: 6px 9px; width: 150px; background: #fff; }
+.h10-plc3-actions { display: flex; align-items: center; gap: 8px; }
+.h10-plc3-btn { font: inherit; font-size: 12px; font-weight: 700; padding: 7px 14px; border-radius: 8px; border: 1px solid #e3e7ec; background: #fff; color: #1c2530; cursor: pointer; }
+.h10-plc3-btn:hover:not(:disabled) { border-color: #aab3bf; }
+.h10-plc3-btn.primary { border-color: #1a61c6; background: #1a61c6; color: #fff; }
+.h10-plc3-btn.primary:hover:not(:disabled) { background: #14509c; border-color: #14509c; }
+.h10-plc3-btn:disabled { opacity: .5; cursor: default; }
+
+/* ── the refusal renderer — the gate's own sentence, never paraphrased ──────────────────────── */
+.h10-plc3-refusal { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #f0c9c9; border-radius: 9px; background: #fdecec; color: #8f2828; font-size: 11.5px; line-height: 1.55; }
+.h10-plc3-refusal svg { flex-shrink: 0; margin-top: 2px; }
+.h10-plc3-refusal b { font-weight: 800; color: #7a1f1f; }
+.h10-plc3-refusal .where { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; background: #f6d9d9; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
+/* The governed warning is a caution, not a refusal: the write DOES land. Different colour, and
+   deliberately not the red one — telling an operator "refused" about a write that succeeded and
+   was then undone would be a third wrong story. */
+.h10-plc3-warn { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #f0dcbe; border-radius: 9px; background: #fff6e8; color: #7a4812; font-size: 11.5px; line-height: 1.55; }
+.h10-plc3-warn svg { flex-shrink: 0; margin-top: 2px; }
+.h10-plc3-warn b { font-weight: 800; color: #6d3f10; }
+.h10-plc3-warn .lnk { font: inherit; font-weight: 700; color: #1a61c6; text-decoration: underline; }
+
+/* the per-row result line after a bulk runs */
+.h10-plc3-result { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-plc3-result b { font-weight: 800; color: #1c2530; }
+
+/* ── the pin toggle, in the inspector rail ─────────────────────────────────────────────────── */
+.h10-plc3-pin { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 0; padding: 11px 13px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; font-size: 11.5px; line-height: 1.55; color: #55606d; }
+.h10-plc3-pin b { font-weight: 800; color: #1c2530; }
+.h10-plc3-pin.on { border-color: #c68a2e; background: #fff6e8; color: #7a4812; }
+.h10-plc3-pin.on b { color: #6d3f10; }
+
+@media (max-width: 900px) {
+  .h10-plc3-tally { grid-template-columns: repeat(2, 1fr); }
+  .h10-plc3-back { padding: 20px 12px; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════
    SOV.6 — the freshness reckoning, the override marker, and saved views.
 
@@ -4944,3 +5049,62 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-sov-savedlist .pin { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 5px; background: #fdeaea; color: #8a2020; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-sov-savedlist .del { flex-shrink: 0; border: 0; background: none; padding: 4px; color: #9099a6; cursor: pointer; display: inline-flex; }
 .h10-sov-savedlist .del:hover { color: #8a2020; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   BSP.2 · binding — the grid, its method card, and the campaign rail.
+   Appended at EOF under the existing `h10-bsp-*` prefix. No existing selector is touched, and
+   there is no `.dark` block (substrate §8.16 — this shell is pinned light).
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── the method + coverage card ───────────────────────────────────────────────────────────────
+   ON the card, never a tooltip: an operator acting on these rows from page 6 is entitled to know
+   how the number was made without hovering to find out. */
+.h10-bsp-method { display: flex; flex-direction: column; gap: 5px; margin: 0 0 10px; padding: 9px 12px; background: #f8fafc; border: 1px solid #e3e7ec; border-radius: 9px; }
+.h10-bsp-method p { margin: 0; font-size: 11.5px; line-height: 1.6; color: #55606d; }
+.h10-bsp-method b { font-weight: 800; color: #1c2530; }
+
+/* The approximate marker. Amber, not red: an approximation is not an error. */
+.h10-bsp-approx { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 800; color: #8a5316; cursor: help; }
+
+/* ── grid cells ───────────────────────────────────────────────────────────────────────────── */
+.h10-bsp-mkt { font-size: 11.5px; font-weight: 700; color: #55606d; }
+.h10-bsp-bind { font-size: 12px; color: #667080; font-variant-numeric: tabular-nums; }
+.h10-bsp-bind b { font-weight: 800; color: #667080; }
+.h10-bsp-bind.on b { color: #b3261e; }
+/* Over 100% is NORMAL — Amazon overshoots a daily budget and settles the month. It is marked,
+   deliberately, in the same amber the approximate flag uses rather than in an error red. */
+.h10-bsp-ratio { font-size: 12px; font-weight: 700; color: #55606d; font-variant-numeric: tabular-nums; }
+.h10-bsp-ratio.over { color: #8a5316; }
+.h10-bsp-lw { font-size: 11.5px; color: #55606d; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-bsp-lw i { font-style: normal; font-weight: 700; color: #1c2530; }
+
+/* The campaign name opens the rail. A button, because the rail is a view of THIS page, not a
+   destination — but it must still read and behave as the primary cell affordance.
+   🔴 The shared grid paints its first column blue at (0,3,1) via `.h10-am-grid td.nm .t`; this
+   matches that specificity rather than reaching for !important. */
+.h10-bsp-open { padding: 0; background: none; border: 0; font: inherit; font-size: 13px; font-weight: 600; color: #1f6fde; text-align: left; cursor: pointer; }
+.h10-bsp-open:hover { text-decoration: underline; }
+
+/* ── the one affordance that leaves the page (§8.13 · D9) ─────────────────────────────────── */
+.h10-bsp-cause { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #10457f; text-decoration: none; white-space: nowrap; }
+.h10-bsp-cause:hover { background: #e8f1fd; border-color: #1f6fde; }
+
+/* ── the campaign rail ────────────────────────────────────────────────────────────────────── */
+.h10-bsp-days { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.h10-bsp-days li { display: flex; align-items: baseline; gap: 7px; padding: 4px 7px; background: #fff; border: 1px solid #eef1f5; border-radius: 6px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.h10-bsp-days li.on { background: #fdf3e3; border-color: #f0dcb8; }
+.h10-bsp-days .d { min-width: 52px; font-weight: 700; color: #1c2530; }
+.h10-bsp-days .v { font-weight: 700; color: #1c2530; }
+.h10-bsp-days .b { color: #667080; }
+.h10-bsp-days .r { margin-left: auto; font-weight: 800; color: #55606d; }
+.h10-bsp-days li.on .r { color: #8a5316; }
+
+.h10-bsp-writes { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.h10-bsp-writes li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 5px 7px; background: #fff; border: 1px solid #eef1f5; border-radius: 6px; font-size: 11px; }
+.h10-bsp-writes .t { color: #667080; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-bsp-writes .a { font-weight: 700; color: #55606d; }
+.h10-bsp-writes .v { margin-left: auto; color: #55606d; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-bsp-writes .v b { font-weight: 800; color: #1c2530; }
+/* PENDING is IN FLIGHT, not failed — 488 of 2,387 writes sit here and a red badge would describe
+   a working queue as a broken one (substrate §5.8). */
+.h10-bsp-writes .p { padding: 1px 6px; background: #e8f1fd; border-radius: 5px; font-size: 10px; font-weight: 800; color: #10457f; white-space: nowrap; }

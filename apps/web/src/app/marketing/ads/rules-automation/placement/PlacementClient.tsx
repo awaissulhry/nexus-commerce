@@ -49,13 +49,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Info, RefreshCw, Search, X } from 'lucide-react'
+import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PlacementScopeBar, LANE_OPTIONS, type PlcScope, type PlcLaneKey, type ScopeOptionsPayload } from './PlacementScopeBar'
 import { PlcInspector } from './PlcInspector'
+import { PlcBulkPanel } from './PlcBulkPanel'
 import { useCursorPoll } from '../_shared/useCursorPoll'
 import { useAdsSync } from '../_shared/adsBus'
 
@@ -117,6 +118,9 @@ interface Row {
   owner: OwnerKind
   ownerLabel: string | null
   hasReportRow: boolean
+  /** PLC.3 — from THIS payload, not the cached campaigns endpoint. See the service. */
+  pinPlacement: boolean
+  gateOpen: boolean
   flags: RowFlags
 }
 
@@ -251,6 +255,15 @@ export function PlacementClient() {
   const dir = params.get('dir') === 'asc' ? 'asc' : 'desc'
   // P2 — the inspector rail. `?campaign=` is the scope grain, so the rail gets its own param.
   const rowParam = params.get('row') ?? ''
+  /**
+   * PLC.3 — `?edit=<campaignId>:<lane>` keeps a half-finished edit across a reload, and `?bulk=1`
+   * makes the bulk panel linkable. The VALUE being typed is deliberately NOT in the URL: a
+   * half-typed multiplier in a shareable link is an invitation to paste someone else's mistake.
+   */
+  const editParam = params.get('edit') ?? ''
+  const [editCampaign, editLaneRaw] = editParam.split(':')
+  const editLane = (['top', 'rest', 'product'] as const).includes(editLaneRaw as LaneKey) ? (editLaneRaw as LaneKey) : null
+  const bulkOpen = params.get('bulk') === '1'
 
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -277,6 +290,7 @@ export function PlacementClient() {
         || (k === 'market' && v === DEFAULT_MARKET)
         || (k === 'lane' && v === 'all')
         || (k === 'flag' && v === 'all')
+        || (k === 'bulk' && v !== '1')
         || (k === 'preset' && v === DEFAULT_PRESET)
         || (k === 'sort' && v === 'spend')
         || (k === 'dir' && v === 'desc')
@@ -362,6 +376,53 @@ export function PlacementClient() {
     if (scope.campaign) p.campaign = scope.campaign
     return p
   }, [market, scope.line, scope.portfolio, scope.campaign])
+
+  /**
+   * PLC.3 — the single-row lane write.
+   *
+   * Goes through `PATCH /advertising/placements/:id/lane`, which takes ONE lane and merges
+   * server-side via `buildManualAdjustments`. The client never assembles an `adjustments[]` array,
+   * and that is deliberate: `updatePlacementBidding` writes the array wholesale, so a client that
+   * sent only the lane it changed would erase the other two — silently, on every row it touched.
+   * Making the client unable to express that shape is the fix.
+   */
+  const [saving, setSaving] = useState<string | null>(null)
+  const [rowRefusal, setRowRefusal] = useState<{ campaignId: string; name: string; reason: string; deniedAt?: string } | null>(null)
+
+  const writeLane = useCallback(async (row: Row, pct: number) => {
+    const key = `${row.campaignId}:${row.laneKey}`
+    setSaving(key); setRowRefusal(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/placements/${row.campaignId}/lane`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lane: row.laneKey,
+          percentage: pct,
+          reason: `manual — ${LANE_LABEL[row.laneKey]} ${row.multiplierPct}% → ${pct}%`,
+        }),
+      })
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; mode?: string; reason?: string; deniedAt?: string; error?: string }
+      if (!r.ok) { setRowRefusal({ campaignId: row.campaignId, name: row.name, reason: j.error ?? `The request failed (${r.status})` }); return }
+      if (j.ok === false) {
+        // 🔴 `reason`, never `j.error`: a blocked placement write returns HTTP 200, so the
+        // section's existing bulk pattern would report "HTTP 200" as the reason a write was
+        // refused. The gate writes a full sentence; this prints it.
+        setRowRefusal({
+          campaignId: row.campaignId, name: row.name,
+          reason: j.reason ?? (j.mode === 'blocked' ? 'The write gate refused this campaign.' : j.error ?? 'Refused, with no reason given.'),
+          deniedAt: j.deniedAt,
+        })
+        return
+      }
+      push({ edit: '' })
+      // Refetch from the SERVER rather than patching local state — a grid that edits its own
+      // useState and calls it done is the RuleListTab defect this page exists to correct.
+      setReloadTick((n) => n + 1)
+    } catch (e) {
+      setRowRefusal({ campaignId: row.campaignId, name: row.name, reason: (e as Error).message })
+    } finally { setSaving(null) }
+  }, [push])
 
   const { stale, check } = useCursorPoll<PlcCursor>({
     url: `${getBackendUrl()}/api/advertising/placements/cursor`,
@@ -477,11 +538,29 @@ export function PlacementClient() {
     {
       key: 'multiplier', label: 'Multiplier',
       tip: 'The bid adjustment on this placement, 0–900%. Amazon adjustments are one-directional: you cannot bid a placement DOWN, only raise the others or zero this one. A lane absent from the campaign and a lane set to 0 are the same instruction, so both read “not set”.',
-      render: (r) => (
-        r.multiplierPct > 0
-          ? <span className={`h10-plc-mult${r.multiplierPct >= 100 ? ' hot' : ''}`}>+{num(r.multiplierPct)}%</span>
-          : <span className="h10-plc-notset" title="No bid adjustment on this placement. Amazon treats an absent lane and a lane set to 0 identically.">not set</span>
-      ),
+      render: (r) => {
+        const key = `${r.campaignId}:${r.laneKey}`
+        if (editCampaign === r.campaignId && editLane === r.laneKey) {
+          return <LaneEditor row={r} busy={saving === key} onCancel={() => push({ edit: '' })} onSave={(pct) => writeLane(r, pct)} />
+        }
+        return (
+          <span className="h10-plc3-cell">
+            {r.multiplierPct > 0
+              ? <span className={`h10-plc-mult${r.multiplierPct >= 100 ? ' hot' : ''}`}>+{num(r.multiplierPct)}%</span>
+              : <span className="h10-plc-notset" title="No bid adjustment on this placement. Amazon treats an absent lane and a lane set to 0 identically.">not set</span>}
+            {/* The affordance appears on row hover only — 660 rows each shouting a pencil is
+                noise, and this cell's job is to be read far more often than it is edited. */}
+            <button
+              type="button" className="h10-plc3-pencil"
+              aria-label={`Edit ${LANE_LABEL[r.laneKey]} multiplier for ${r.name}`}
+              title={r.owner === 'none'
+                ? 'Edit this multiplier. Nothing steers this campaign, so the value will stick.'
+                : `Edit this multiplier. ⚠ ${r.ownerLabel ?? 'A rank schedule'} steers this campaign and will snap it back within ~15 minutes.`}
+              onClick={() => push({ edit: key })}
+            ><Pencil size={11} aria-hidden /></button>
+          </span>
+        )
+      },
       sortValue: (r) => r.multiplierPct,
       filterValue: (r) => r.multiplierPct,
       total: (visible) => {
@@ -587,7 +666,7 @@ export function PlacementClient() {
       },
       sortValue: (r) => `${r.owner}:${r.ownerLabel ?? ''}`,
     },
-  ], [nullLast])
+  ], [nullLast, editCampaign, editLane, saving, push, writeLane])
 
   const activeTab = rulesTabByKey('placement')
 
@@ -761,6 +840,23 @@ export function PlacementClient() {
 
       {err && <p className="h10-plc-blind"><AlertTriangle size={13} /><span>{err}</span></p>}
 
+      {/* 🔴 PLC.3 — the refusal renderer. The gate's OWN sentence, verbatim, naming which gate
+          refused. Never "HTTP 200", which is what a blocked placement write actually returns and
+          what the section's existing bulk pattern would have printed. */}
+      {rowRefusal && (
+        <p className="h10-plc3-refusal" role="alert">
+          <AlertTriangle size={13} aria-hidden />
+          <span>
+            <b>{rowRefusal.name}</b>
+            {rowRefusal.deniedAt && <span className="where">{rowRefusal.deniedAt}</span>}
+            {' — '}{rowRefusal.reason}
+            {rowRefusal.deniedAt === 'authority_pin' && <> The pin for this page&rsquo;s dimension is on the campaign&rsquo;s row rail — open it with the campaign name.</>}
+            {rowRefusal.deniedAt === 'campaign_allowlist' && <> The per-campaign write gate lives on Apply Rules.</>}
+            {' '}<button type="button" className="lnk" onClick={() => setRowRefusal(null)}>Dismiss</button>
+          </span>
+        </p>
+      )}
+
       <AdsDataGrid<Row>
         rows={rows}
         loading={loading}
@@ -832,6 +928,15 @@ export function PlacementClient() {
                 <button type="button" aria-label="Clear search" onClick={() => push({ q: '' })}><X size={12} /></button>
               )}
             </span>
+            {/* PLC.3 — the scope-bulk trigger. It opens a PREVIEW, never a write: the label says
+                so, because a button that writes on click is the wrong shape for an action whose
+                blast radius is "every campaign in the current scope". */}
+            <button
+              type="button" className="h10-plc-toggle" onClick={() => push({ bulk: '1' })}
+              title="Set one lane's multiplier across the current scope. Opens a preview first — nothing is written until you confirm."
+            >
+              <Sliders size={12} aria-hidden /> Set across scope…
+            </button>
             <span className="h10-plc-lanes" role="tablist" aria-label="Placement lane">
               {LANE_OPTIONS.map((l) => (
                 <button
@@ -863,6 +968,18 @@ export function PlacementClient() {
           campaignId={rowParam}
           lanes={(data?.rows ?? []).filter((r) => r.campaignId === rowParam)}
           onClose={closeRow}
+          onChanged={() => setReloadTick((n) => n + 1)}
+        />
+      )}
+
+      {/* PLC.3 — the bulk panel. Portalled to document.body from inside the component, so the
+          grid card's overflow cannot clip it. */}
+      {bulkOpen && (
+        <PlcBulkPanel
+          scope={{ market, line: scope.line, portfolio: scope.portfolio, campaign: scope.campaign, flag }}
+          lane={lane}
+          onClose={() => push({ bulk: '' })}
+          onDone={() => setReloadTick((n) => n + 1)}
         />
       )}
     </div>
@@ -880,6 +997,60 @@ const FLAG_DENOM_LABEL: Record<FlagKey, string> = {
   compounding: 'campaigns on up-and-down bidding',
   unmanaged: 'campaigns carrying a multiplier',
   decorative: 'campaigns an engine governs',
+}
+
+/**
+ * PLC.3 — the inline lane editor.
+ *
+ * A plain number input, deliberately: a dropdown or a stepper inside a grid cell is the shape this
+ * section has already had clipped by the card's own overflow, and a multiplier is a number an
+ * operator types rather than picks from a list.
+ *
+ * 🔴 A GOVERNED row warns BEFORE the write, not after. `ad-rank-defend` runs every 15 minutes and
+ * snaps the multiplier back to the active target's `biasPct`, so on the 33 governed campaigns a
+ * manual value survives at most one tick. Letting that write go through silently would be a
+ * control that appears to work and is undone before the operator looks again — worse than one that
+ * refuses. The write is still ALLOWED, because it is legitimate to want it for the next fifteen
+ * minutes; it just costs a second, deliberate click.
+ */
+function LaneEditor({ row, busy, onSave, onCancel }: {
+  row: Row
+  busy: boolean
+  onSave: (pct: number) => void
+  onCancel: () => void
+}) {
+  const [draft, setDraft] = useState(String(row.multiplierPct))
+  const [ackGoverned, setAckGoverned] = useState(false)
+  const pct = Number(draft)
+  const valid = Number.isFinite(pct) && pct >= 0 && pct <= 900
+  const governed = row.owner !== 'none'
+  const needsAck = governed && !ackGoverned
+  const unchanged = valid && Math.round(pct) === row.multiplierPct
+
+  return (
+    <span className="h10-plc3-edit">
+      <input
+        autoFocus inputMode="numeric" value={draft} disabled={busy}
+        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onCancel()
+          if (e.key === 'Enter' && valid && !unchanged && !needsAck) onSave(Math.round(pct))
+        }}
+        aria-label={`${LANE_LABEL[row.laneKey]} multiplier percent, 0 to 900`}
+      />
+      <em>%</em>
+      <button
+        type="button" className="go" disabled={!valid || busy || unchanged}
+        title={
+          unchanged ? 'Already at this value — writing it would add a ledger row and change nothing.'
+            : needsAck ? `⚠ ${row.ownerLabel ?? 'A rank schedule'} steers this campaign. The write will land and the engine will snap it back within ~15 minutes. Click again to do it anyway.`
+              : 'Save'
+        }
+        onClick={() => { if (needsAck) { setAckGoverned(true); return } if (valid && !unchanged) onSave(Math.round(pct)) }}
+      >{needsAck ? <AlertTriangle size={12} aria-hidden /> : <Check size={12} aria-hidden />}</button>
+      <button type="button" onClick={onCancel} disabled={busy} title="Cancel"><X size={12} aria-hidden /></button>
+    </span>
+  )
 }
 
 /** "No delivery in this window" is not zero, and the two must never share a glyph. */
