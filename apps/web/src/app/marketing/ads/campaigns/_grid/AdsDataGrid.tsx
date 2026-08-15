@@ -9,15 +9,25 @@
  * It reproduces the proven `h10-am-*` markup (filters panel · toolbar · sticky checkbox +
  * first column · sortable metric columns with (i) tips · pinned Total row · pager + rows-
  * per-page · "Latest Report" footer) and composes the already-shared controls from
- * ./FilterDropdown (FilterDropdown · H10Select · HoverCard) and ./InfoTip. No restyling of
- * the shared CSS — only a small CBN.3.2 block adds the Total-row + Customize-popover bits.
+ * ./FilterDropdown (H10Select · HoverCard) and ./AdsFilterBar. No restyling of the shared
+ * CSS — only a small CBN.3.2 block adds the Total-row + Customize-popover bits.
+ *
+ * FB.1 — the filters panel moved to ./AdsFilterBar and is rendered from here. It is the same
+ * markup and the same classes; what changed is that a PAGE can now render it too, at the top of
+ * the page rather than directly above this card, which is what the eleven Rules & Automation
+ * pages needed in order to show one bar instead of a scope bar plus a filter bar.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
-import { FilterDropdown, H10Select, HoverCard, MultiSelect } from '../FilterDropdown'
-import { InfoTip } from '../InfoTip'
+import { H10Select, HoverCard } from '../FilterDropdown'
+import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { enabledRank } from './enabledRank'
+
+// FB.1 — the Filters panel now lives in ./AdsFilterBar so a PAGE can render it somewhere other than
+// directly above this card. The grid renders that same component, so there is exactly one filter-bar
+// implementation; `hideFilterPanel` is for the pages that render their own copy at the top.
+export { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 
 // Re-exported so consumers can import the ranking helper from the grid they already use.
 export { enabledRank }
@@ -48,8 +58,8 @@ export interface GridColumn<T> {
 }
 
 export interface GridRangeFilter { key: string; label: string; kind: 'range'; unit?: '€' | '%' | ''; tip?: string; value?: (row: unknown) => number }
-export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
-export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string }
+export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string; tip?: string; disabled?: boolean; note?: string }
+export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string; tip?: string; disabled?: boolean; note?: string }
 
 export type GridFilter = GridRangeFilter | GridSelectFilter | GridMultiSelectFilter
 
@@ -73,8 +83,8 @@ export interface GridEditMode<T> {
   bulk?: boolean
 }
 
-type RangeVal = { min: string; max: string }
-type FilterState = Record<string, RangeVal | string | string[]>
+export type RangeVal = { min: string; max: string }
+export type FilterState = Record<string, RangeVal | string | string[]>
 
 export interface AdsDataGridProps<T> {
   rows: T[]
@@ -193,6 +203,26 @@ export interface AdsDataGridProps<T> {
   onPageChange?: (page: number) => void
   initialSearch?: string
   onSearchChange?: (q: string) => void
+  /**
+   * FB.1 (additive; all three default off) — hand the filter STATE to the page.
+   *
+   * The eleven Rules & Automation pages render one merged bar at the top of the page, above the
+   * summary band, holding both scope and metric filters. They own that state (it is in the URL),
+   * so the grid has to read it rather than keep its own: pass `filterState` +
+   * `onFilterStateChange` and the grid still does all of its client-side range/select filtering
+   * from that state, but stores nothing. `hideFilterPanel` then suppresses the grid's own copy of
+   * the panel, since the page is already rendering one.
+   *
+   * 🔴 Passing `filterState` also disables the BID.S0 seed/emit bridge above — with the page
+   * holding the state there is nothing to seed and nothing to emit, and leaving both live would
+   * put two writers on one URL.
+   *
+   * Omitting all three changes nothing, which is why the twenty-odd grids outside this section
+   * (campaigns, ebay, reporting) are untouched by construction.
+   */
+  filterState?: FilterState
+  onFilterStateChange?: (next: FilterState) => void
+  hideFilterPanel?: boolean
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -220,11 +250,24 @@ export function AdsDataGrid<T>({
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
   onSortChange, onFilterChange,
   initialPage, onPageChange, initialSearch, onSearchChange,
+  filterState, onFilterStateChange, hideFilterPanel,
 }: AdsDataGridProps<T>) {
-  const [filtersOpen, setFiltersOpen] = useState(filtersDefaultOpen)
   const [searchOpen, setSearchOpen] = useState(() => !!initialSearch)
   const [search, setSearch] = useState(initialSearch ?? '')
-  const [fstate, setFstate] = useState<FilterState>(initialFilters ?? {})
+  // FB.1 — controlled when the page passes `filterState`; otherwise the grid keeps its own, exactly
+  // as before. `setFstate` keeps the functional-updater signature either way so every call site
+  // below is unchanged; the ref is what makes an updater correct under control, where there is no
+  // setState to read the previous value from.
+  const [ownFstate, setOwnFstate] = useState<FilterState>(initialFilters ?? {})
+  const filtersControlled = filterState !== undefined
+  const fstate = filtersControlled ? filterState : ownFstate
+  const fstateRef = useRef(fstate)
+  fstateRef.current = fstate
+  const setFstate = (u: FilterState | ((s: FilterState) => FilterState)) => {
+    const next = typeof u === 'function' ? u(fstateRef.current) : u
+    if (filtersControlled) onFilterStateChange?.(next)
+    else setOwnFstate(next)
+  }
   // ── ER3.1 Filter Library (only when filterPresetsKey is set) ──
   const [presets, setPresets] = useState<Array<{ name: string; values: FilterState }>>([])
   const [presetSaveOpen, setPresetSaveOpen] = useState(false)
@@ -420,8 +463,8 @@ export function AdsDataGrid<T>({
   const lastEmitted = useRef<string | null>(null)
   const suppressEmit = useRef(false)
   useEffect(() => {
-    if (!onFilterChange || !initialFilters) return
-    const merged = { ...fstate, ...initialFilters }
+    if (filtersControlled || !onFilterChange || !initialFilters) return
+    const merged = { ...fstateRef.current, ...initialFilters }
     if (JSON.stringify(merged) === JSON.stringify(fstate)) return
     // Merge rather than replace: the seed carries only the params the page puts in the URL, and
     // replacing would silently drop whatever numeric ranges the operator had typed.
@@ -430,7 +473,7 @@ export function AdsDataGrid<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seededFilters])
   useEffect(() => {
-    if (!onFilterChange) return
+    if (filtersControlled || !onFilterChange) return
     const s = JSON.stringify(fstate)
     if (lastEmitted.current === null) { lastEmitted.current = s; return }
     if (lastEmitted.current === s) return
@@ -503,9 +546,6 @@ export function AdsDataGrid<T>({
   const toggleAll = () => { const n = new Set(sel); if (allSel) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id)); setSel(n) }
   const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); setSel(n) }
 
-  const setRange = (key: string, side: 'min' | 'max', v: string) =>
-    setFstate((s) => ({ ...s, [key]: { min: '', max: '', ...(s[key] as RangeVal | undefined), [side]: v } }))
-  const clearFilters = () => { setFstate({}); setPage(1) }
   const hasActiveFilters = Object.values(fstate).some((v) => (Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? !!v : !!(v.min || v.max)))
 
   // edit-mode diffs: a row contributes the fields whose draft differs from its initial
@@ -557,43 +597,15 @@ export function AdsDataGrid<T>({
 
   return (
     <>
-      {/* filter bar */}
-      {filters?.length ? (
-        <div className={`h10-am-fpanel${filtersOpen ? '' : ' is-collapsed'}`}>
-          <div className="fphead">
-            <h3>Filters</h3>
-            <button type="button" className="h10-am-link tog" onClick={() => setFiltersOpen((v) => !v)}>
-              <ChevronDown size={14} className={filtersOpen ? 'up' : ''} />{filtersOpen ? 'Hide Filters' : 'Show Filters'}
-            </button>
-          </div>
-          {filtersOpen && (
-            <>
-              <div className="frow">
-                {filters.map((f) => f.kind === 'select' ? (
-                  <div className={`ffield ${f.wide ? 'wide' : ''}`} key={f.key}><span>{f.label}</span>
-                    <FilterDropdown options={f.options} value={(fstate[f.key] as string) ?? ''} onChange={(v) => { setFstate((s) => ({ ...s, [f.key]: v })); setPage(1) }} emptyLabel={f.placeholder ?? `All`} emptyIsPlaceholder searchable={f.searchable} ariaLabel={f.label} />
-                  </div>
-                ) : f.kind === 'multiselect' ? (
-                  <div className={`ffield ${f.wide ? 'wide' : ''}`} key={f.key}><span>{f.label}</span>
-                    <MultiSelect options={f.options} value={(fstate[f.key] as string[]) ?? []} onChange={(v) => { setFstate((s) => ({ ...s, [f.key]: v })); setPage(1) }} placeholder={f.placeholder ?? 'All'} ariaLabel={f.label} searchable={f.searchable} />
-                  </div>
-                ) : (
-                  <div className="ffield" key={f.key}>
-                    <span>{f.label}{f.tip && <InfoTip tip={f.tip} />}</span>
-                    <div className="mm">
-                      {(['min', 'max'] as const).map((side) => (
-                        <div className={`mmin ${f.unit === '€' ? 'cur' : f.unit === '%' ? 'pct' : ''}`} key={side}>
-                          {f.unit === '€' && <span className="ad">€</span>}
-                          <input inputMode="decimal" placeholder={side === 'min' ? 'Min' : 'Max'} value={(fstate[f.key] as RangeVal | undefined)?.[side] ?? ''} onChange={(e) => { setRange(f.key, side, e.target.value); setPage(1) }} aria-label={`${f.label} ${side}`} />
-                          {f.unit === '%' && <span className="ad">%</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="fft">
-                {filterPresetsKey && (
+      {/* FB.1 — one implementation, rendered here unless the page renders it itself at the top. */}
+      {hideFilterPanel ? null : (
+        <AdsFilterBar
+          filters={filters ?? []}
+          value={fstate}
+          onChange={(next) => setFstate(next)}
+          onAfterChange={() => setPage(1)}
+          defaultOpen={filtersDefaultOpen}
+          presetsSlot={filterPresetsKey ? (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: '#667085' }}>Presets:</span>
                     {presets.map((p) => (
@@ -609,7 +621,13 @@ export function AdsDataGrid<T>({
                             onBlur={() => setPresetRenaming(null)}
                           />
                         ) : (
-                          <button type="button" className="h10-am-btn sm" title="Apply preset · double-click to rename" onClick={() => { setFstate(p.values); setPage(1) }} onDoubleClick={() => setPresetRenaming(p.name)}>{p.name}</button>
+                          <button
+                            type="button" className="h10-am-btn sm" title="Apply preset · double-click to rename"
+                            /* FB.1 — a preset carries metric filters ONLY. It keeps whatever scope keys are
+                               set, because a saved metric view must never move you to another account view. */
+                            onClick={() => { setFstate((cur) => ({ ...Object.fromEntries(Object.entries(cur).filter(([k]) => isServerKey(k))), ...stripServerKeys(p.values) })); setPage(1) }}
+                            onDoubleClick={() => setPresetRenaming(p.name)}
+                          >{p.name}</button>
                         )}
                         <button type="button" className="h10-am-link" aria-label={`Delete preset ${p.name}`} style={{ fontSize: 11 }} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}>✕</button>
                       </span>
@@ -620,7 +638,7 @@ export function AdsDataGrid<T>({
                         aria-label="Preset name"
                         onChange={(e) => setPresetName(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') { const nn = presetName.trim().slice(0, 60); if (nn) persistPresets([...presets.filter((x) => x.name !== nn), { name: nn, values: fstate }]); setPresetName(''); setPresetSaveOpen(false) }
+                          if (e.key === 'Enter') { const nn = presetName.trim().slice(0, 60); if (nn) persistPresets([...presets.filter((x) => x.name !== nn), { name: nn, values: stripServerKeys(fstate) }]); setPresetName(''); setPresetSaveOpen(false) }
                           if (e.key === 'Escape') { setPresetName(''); setPresetSaveOpen(false) }
                         }}
                       />
@@ -628,14 +646,9 @@ export function AdsDataGrid<T>({
                       <button type="button" className="h10-am-link" style={{ fontSize: 12 }} disabled={!hasActiveFilters} onClick={() => setPresetSaveOpen(true)}>Save preset</button>
                     )}
                   </span>
-                )}
-                <span className="grow" />
-                <button type="button" className="h10-am-btn sm" onClick={clearFilters} disabled={!hasActiveFilters}>Clear</button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : null}
+          ) : undefined}
+        />
+      )}
 
       {/* one card: toolbar + grid + pager share the grid rectangle (H10 — toolbar sits inside it) */}
       <div className="h10-am-card">

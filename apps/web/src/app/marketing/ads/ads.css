@@ -431,6 +431,20 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-am-fpanel .fphead .tog { display: inline-flex; align-items: center; gap: 5px; }
 .h10-am-fpanel .fphead .tog svg { transition: transform .15s; }
 .h10-am-fpanel .fphead .tog svg.up { transform: rotate(180deg); }
+/* FB.1 — the collapsed header names what is SET. Every Rules & Automation page loads this panel
+   collapsed, and it now holds scope: without this, a one-portfolio view is indistinguishable from
+   an account-wide one. `margin-right:auto` beats the head's space-between (auto margins eat the
+   free space first), so the summary hugs the title and the toggle stays right. */
+.h10-am-fpanel .fphead .fpsum {
+  margin: 0 12px 0 10px; margin-right: auto; min-width: 0; flex: 0 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; color: #475467;
+}
+/* one sentence under a field saying why it cannot narrow this page */
+.h10-am-fpanel .ffield .ffnote { font-size: 11px; font-style: normal; line-height: 1.35; color: #667085; }
+/* a grain another grain has overridden: visible, legible, inert (WCAG 1.4.3 exempts disabled) */
+.h10-dd.is-off .h10-dd-btn { background: #f2f4f7; color: #667085; cursor: not-allowed; }
+.h10-dd.is-off .h10-dd-btn svg { color: #98a2b3; }
 .fppresets { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
 .fppresets .lbl { font-size: 13px; font-weight: 600; color: #5b6573; }
 .h10-libwrap { position: relative; }

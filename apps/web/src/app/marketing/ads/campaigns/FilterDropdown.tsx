@@ -29,7 +29,7 @@ function useClickAway<T extends HTMLElement>(onAway: () => void) {
 
 export function FilterDropdown({
   options, value: controlledValue, onChange, emptyLabel,
-  emptyIsPlaceholder = false, searchable = false, searchPlaceholder = 'Search…', ariaLabel,
+  emptyIsPlaceholder = false, searchable = false, searchPlaceholder = 'Search…', ariaLabel, disabled = false,
 }: {
   options: Opt[]
   /** Controlled value. Omit both value + onChange for a self-managed (cosmetic) dropdown. */
@@ -39,6 +39,9 @@ export function FilterDropdown({
   emptyLabel: string
   /** Render the empty label greyed (a placeholder, e.g. "Select a Portfolio") vs a real default (e.g. "All"). */
   emptyIsPlaceholder?: boolean
+  /** FB.1 — an overridden grain stays VISIBLE and inert rather than vanishing: a bar that silently
+   *  dropped a selection would lie about the URL you are about to share. Pair with `note`. */
+  disabled?: boolean
   /** Force the in-popover search box (otherwise it auto-shows past 7 options). */
   searchable?: boolean
   searchPlaceholder?: string
@@ -62,12 +65,12 @@ export function FilterDropdown({
   const pick = (v: string) => { setValue(v); setOpen(false); setQ(''); setActive(0) }
 
   return (
-    <div className={`h10-dd ${open ? 'open' : ''}`} ref={ref}>
-      <button type="button" className="h10-dd-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}>
+    <div className={`h10-dd ${open && !disabled ? 'open' : ''} ${disabled ? 'is-off' : ''}`} ref={ref}>
+      <button type="button" className="h10-dd-btn" disabled={disabled} onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open && !disabled} aria-label={ariaLabel}>
         <span className={!selected && emptyIsPlaceholder ? 'ph' : ''}>{selected ? selected.label : emptyLabel}</span>
         <ChevronDown size={14} />
       </button>
-      {open && (
+      {open && !disabled && (
         <div className="h10-dd-pop" role="listbox">
           {showSearch && (
             <div className="h10-dd-search">
