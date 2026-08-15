@@ -1267,6 +1267,34 @@ filters already live in the URL should prefer it (it deletes the merging seed an
 suppression outright). And the `__` prefix on a filter key is now **load-bearing**, not decoration:
 `isServerKey` treats it as page-owned, so a saved preset preserves it instead of clobbering it.
 
+**BUD.8 → tab 4 (BSP), 2026-08-16 — `AdSpendCeiling` shipped with 0 rows, and the recovery of the 58
+is yours, not tab 6's.** Two hand-offs, both measured:
+
+1. **`AdSpendCeiling` has 0 rows.** A7 (`d5fff1a6d`) shipped per-scope spend ceilings and wired them
+   into the write gate; nobody has created one. Ceilings at four grains are BSP's D2. Not built here.
+
+2. 🔴 **56 of the 58 campaigns at the €1 floor were floored by `budget-manager-cron` — tab 4's own
+   engine — not by tab 6's rules.** 55 of them inside one hour on 2026-08-05, in single `€100 → €1`
+   writes, when pacing was still prescriptive. `2026-08-11-bs-budget-schedules-page.md` §541 records
+   the opposite ("all theirs… they own the cause"); it has a dated correction now. Recovery is a
+   **monthly-plan** decision and belongs to `AdBudgetPlan`: the pre-floor ask is €1,278.16/day
+   against a €4,000/month plan (€129.03/day), and the pacing envelope currently absorbs **€12.62/day
+   of extra spend in IT**. A restore larger than that flips `pacingNeeded` and re-floors by spend
+   share. Full arithmetic in [the BUD.8 record](2026-08-16-bud-8-armed.md) §3.
+
+**BUD.8 → whoever holds `ads-mutation.service.ts`, 2026-08-16 — the budget floor cannot bind where it
+is.** `Campaign.minBudgetCents` has one reader, `ads-write-gate.ts:349`, which runs at **dispatch**.
+`updateCampaignWithSync` writes the local row first and the mutation service has no gate call at all,
+so a floor does not refuse a cut — it makes the campaign diverge, which is precisely what BUD.1 §1.2
+measured for `liveBidWritesEnabled`. Evidence that this is not theoretical: the four MOSS campaigns
+have absorbed **488 denied cuts, 122 each**, local value restored by resync each time — protected on
+Amazon by a permanent repeat-write loop. Moving the bounds check to before `prisma.campaign.update`
+turns the floor into a real brake and removes the loop. Until then, setting `minBudgetCents` on the
+56 IT campaigns would manufacture 56 more MOSS loops, so BUD.8 left it unset with the derivation
+ready (record §2).
+
+---
+
 ## 5 · Traps this repo has already paid for
 
 - 🔴 **`AdsDataGrid.selectable` defaults to TRUE.** A grid mounted without the prop renders a
