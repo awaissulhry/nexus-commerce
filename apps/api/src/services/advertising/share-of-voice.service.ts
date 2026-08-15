@@ -87,7 +87,7 @@ export const SOV_DEFAULT_WEEKS = 8
 
 export type SovWeeks = (typeof SOV_WEEKS)[number]
 export type SovKind = 'keyword' | 'asin' | 'all'
-export type SovSortKey = 'query' | 'volume' | 'rank' | 'share' | 'clickShare' | 'delta' | 'asins'
+export type SovSortKey = 'query' | 'volume' | 'rank' | 'share' | 'clickShare' | 'delta' | 'asins' | 'adSpend'
 
 /**
  * SOV.1 — why a row has no Δ. **The fifth state SOV.0's contract asks for, declared explicitly.**
@@ -197,7 +197,44 @@ export interface SovRow {
   asinLike: boolean
   /** on the chosen watchlist for this market */
   onList: boolean
+  /**
+   * SOV.2 — the AD side of the same query, over `?adWindow=` days (its OWN window: the SQP side is
+   * weekly and ~17 days behind, the ad side is daily and ~2 behind — one control must never move
+   * both grains). From AmazonAdsSearchTerm, scoped to the resolved campaigns. `null` = no ad
+   * activity on this query in the window, which is a fact, not an absence of data.
+   */
+  ad: {
+    impressions: number
+    clicks: number
+    spendCents: number
+    /** null, never 0, when there were no clicks */
+    cpcCents: number | null
+    /** this query's spend as a share of the SCOPE's ad spend in the window; null on a zero total */
+    spendShare: number | null
+    campaigns: number
+  } | null
+  /**
+   * SOV.3 — the judgement signals, re-cut against MEDIANS (the legacy service's outbid bar used
+   * the MEAN of impressions, which 1,925 of 1,992 queries sit below — a flag firing on 32% of the
+   * account is a census, not a signal). A row can carry several; the filter matches inclusion.
+   *   outbid          — above-median CPC AND below-median ad impressions: probably losing the auction
+   *   weak-relevance  — ≥50 ad impressions AND CTR under half the median: we show, we are not chosen
+   *   cannibalized    — ≥2 of our campaigns buying the same query
+   */
+  signals: SovSignal[]
+  /**
+   * SOV.4 — demand we already appear in organically and never buy: measured presence this period
+   * (our impressions > 0), no ad activity in the window, and no ENABLED positive keyword target
+   * with this text. The boundary with Keyword Harvest is deliberate: harvest promotes terms we
+   * already PAID on; these were never touched.
+   */
+  unbid: boolean
 }
+
+export type SovSignal = 'outbid' | 'weak-relevance' | 'cannibalized'
+export const SOV_SIGNALS: readonly SovSignal[] = ['outbid', 'weak-relevance', 'cannibalized']
+export const SOV_AD_WINDOWS = [7, 14, 30] as const
+export const SOV_DEFAULT_AD_WINDOW = 30
 
 export interface ShareOfVoiceQuery {
   market: string
@@ -213,6 +250,12 @@ export interface ShareOfVoiceQuery {
   dir?: 'asc' | 'desc'
   limit?: number
   offset?: number
+  /** SOV.2 — the AD side's own window in days (7|14|30). Independent of `weeks` by design. */
+  adWindow?: number | null
+  /** SOV.3 — narrow the grid to one signal. Census counts stay pre-narrowing. */
+  signal?: string | null
+  /** SOV.4 — 'unbid' narrows to measured presence with no ad activity and no keyword target. */
+  view?: string | null
 }
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
@@ -319,11 +362,16 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   const sortKey: SovSortKey = q.sort ?? 'volume'
   const dir = q.dir === 'asc' ? 'asc' : 'desc'
   const needle = (q.q ?? '').trim().toLowerCase()
+  // SOV.2/3/4 — the ad window, the signal narrowing, and the unbid view. Unknown values fall back.
+  const adWindowDays: number = (SOV_AD_WINDOWS as readonly number[]).includes(q.adWindow ?? 0) ? q.adWindow! : SOV_DEFAULT_AD_WINDOW
+  const signal: SovSignal | null = (SOV_SIGNALS as readonly string[]).includes(q.signal ?? '') ? (q.signal as SovSignal) : null
+  const view: 'unbid' | null = q.view === 'unbid' ? 'unbid' : null
+  const adSince = new Date(Date.now() - adWindowDays * 86_400_000)
 
   // ── one round trip for everything that depends only on `market` ─────────────
   // KT.1b measured this ordering as most of a 6.6s first paint when it was serial. The period
   // groupBy and both freshness probes depend on nothing but the market, so they belong here.
-  const [campaigns, ads, watchlists, periodGroups, nonZeroGroups, sqpLatest, adsLatest, protections] = await Promise.all([
+  const [campaigns, ads, watchlists, periodGroups, nonZeroGroups, sqpLatest, adsLatest, protections, searchTerms, biddedTargets] = await Promise.all([
     prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true } }),
     prisma.adProductAd.findMany({
       where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
@@ -348,6 +396,19 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       where: { mode: 'WHITELIST' },
       select: { term: true, matchType: true, isPrefix: true, marketplace: true },
     }),
+    // SOV.2 — the AD side, fetched for the whole market and narrowed to the resolved campaigns
+    // in memory (scope resolves after this round trip). The same table the legacy cockpit service
+    // read; the aggregation below re-cuts its signals against MEDIANS (SOV.3).
+    prisma.amazonAdsSearchTerm.findMany({
+      where: { marketplace: market, date: { gte: adSince } },
+      select: { query: true, campaignId: true, impressions: true, clicks: true, costMicros: true },
+    }),
+    // SOV.4 — every ENABLED positive keyword target in this market, for the "never bought" half
+    // of unbid. One market-wide read and a Set: no per-query lookups.
+    prisma.adTarget.findMany({
+      where: { isNegative: false, status: 'ENABLED', expressionValue: { not: null }, adGroup: { campaign: { marketplace: market } } },
+      select: { expressionValue: true },
+    }),
   ])
 
   const productIds = [...new Set(ads.map((a) => a.productId).filter((x): x is string => !!x))]
@@ -366,6 +427,52 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
   // which campaigns a portfolio reaches. Cascading, most-specific-wins; archived campaigns are out
   // of the coarse grains but still reachable by an explicit ?campaign=.
   const scope = resolveScope(graph, { market, line: q.line, portfolio: q.portfolio, campaign: q.campaign })
+
+  // ── SOV.2 — the ad side per query, scoped to the resolved campaigns ─────────────────────────
+  const scopeCampaignSet = new Set(scope.campaignIds)
+  interface AdAgg { impr: number; clicks: number; costCents: number; campaigns: Set<string> }
+  const adAgg = new Map<string, AdAgg>()
+  for (const t of searchTerms) {
+    if (!scopeCampaignSet.has(t.campaignId)) continue
+    const key = normTerm(t.query ?? '')
+    if (!key) continue
+    let a = adAgg.get(key)
+    if (!a) { a = { impr: 0, clicks: 0, costCents: 0, campaigns: new Set() }; adAgg.set(key, a) }
+    a.impr += t.impressions
+    a.clicks += t.clicks
+    a.costCents += Number(t.costMicros) / 10_000
+    a.campaigns.add(t.campaignId)
+  }
+  const adSpendTotalCents = [...adAgg.values()].reduce((n, a) => n + a.costCents, 0)
+  // SOV.3 — the signal bars, ALL medians. The legacy outbid bar compared impressions to the MEAN,
+  // which 1,925 of 1,992 queries sit below; a median splits the population by construction.
+  const medianAdImpr = median([...adAgg.values()].filter((a) => a.impr > 0).map((a) => a.impr))
+  const medianAdCpc = median([...adAgg.values()].filter((a) => a.clicks > 0).map((a) => a.costCents / a.clicks))
+  const medianAdCtr = median([...adAgg.values()].filter((a) => a.impr > 0).map((a) => a.clicks / a.impr))
+  const biddedSet = new Set(biddedTargets.map((t) => normTerm(t.expressionValue ?? '')).filter(Boolean))
+
+  /** The ad columns + signals for one query, shared by both row branches. */
+  const adSideOf = (query: string): { ad: SovRow['ad']; signals: SovSignal[] } => {
+    const a = adAgg.get(normTerm(query))
+    if (!a) return { ad: null, signals: [] }
+    const cpcCents = a.clicks > 0 ? a.costCents / a.clicks : null
+    const ctr = a.impr > 0 ? a.clicks / a.impr : null
+    const signals: SovSignal[] = []
+    if (cpcCents != null && medianAdCpc > 0 && cpcCents > medianAdCpc * 1.25 && a.impr < medianAdImpr) signals.push('outbid')
+    if (a.impr >= 50 && ctr != null && medianAdCtr > 0 && ctr < medianAdCtr * 0.5) signals.push('weak-relevance')
+    if (a.campaigns.size >= 2) signals.push('cannibalized')
+    return {
+      ad: {
+        impressions: a.impr,
+        clicks: a.clicks,
+        spendCents: Math.round(a.costCents),
+        cpcCents: cpcCents != null ? Math.round(cpcCents) : null,
+        spendShare: adSpendTotalCents > 0 ? a.costCents / adSpendTotalCents : null,
+        campaigns: a.campaigns.size,
+      },
+      signals,
+    }
+  }
 
   const [lineProduct, portfolioRow, campaignRow] = await Promise.all([
     q.line ? prisma.product.findUnique({ where: { id: q.line }, select: { id: true, sku: true, name: true } }) : null,
@@ -525,6 +632,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       // A prior ROW that carries no market total is not a prior VALUE — it cannot anchor a Δ, so it
       // is `delta-no-prior` exactly like a missing row. Both are "nothing to compare against".
       const comparable = share != null && priorShare != null
+      const adSide = adSideOf(query)
       return {
         query, marketplace: market,
         marketVolume: mine.vol, marketRank: mine.rank,
@@ -541,6 +649,11 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
         asinsCompeting: mine.asins.size,
         state: 'measured', lastSeen: null, lastSeenAgeDays: null,
         branded, asinLike, onList,
+        ad: adSide.ad,
+        signals: adSide.signals,
+        // SOV.4 — presence with no ad activity and no keyword target. `brand > 0`, not `share`,
+        // because a null share (no market total) can still carry real appearances.
+        unbid: mine.brand > 0 && adSide.ad == null && !biddedSet.has(normTerm(query)),
       }
     }
     const seen = lastSeen.get(query) ?? null
@@ -563,6 +676,10 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       asinsCompeting: 0,
       state, lastSeen: iso(seen), lastSeenAgeDays: ageDays(seen),
       branded, asinLike, onList,
+      // A query with no SQP presence can still be BOUGHT — the ad side renders on blank rows too,
+      // which is how "we spend on this and Brand Analytics never shows us" becomes visible.
+      ...adSideOf(query),
+      unbid: false,
     }
   })
 
@@ -593,7 +710,20 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     /** rows whose market denominator is below the period's median — too small to rank */
     lowConfidence: filtered.filter((r) => r.lowConfidence).length,
     lowConfidenceClicks: filtered.filter((r) => r.lowConfidenceClicks).length,
+    // SOV.3/4 — counted BEFORE the signal/view narrowing (their own dimension), so each chip
+    // advertises exactly what turning it on would show.
+    outbid: filtered.filter((r) => r.signals.includes('outbid')).length,
+    weakRelevance: filtered.filter((r) => r.signals.includes('weak-relevance')).length,
+    cannibalized: filtered.filter((r) => r.signals.includes('cannibalized')).length,
+    unbid: filtered.filter((r) => r.unbid).length,
+    /** rows carrying any ad activity in the ad window — the ad columns' own denominator */
+    withAdActivity: filtered.filter((r) => r.ad != null).length,
   }
+
+  // SOV.3/4 — the GRID narrows; the census, the band and the scope Δ above keep describing the
+  // SCOPE. A signal chip's count and its result share one predicate by construction.
+  const gridRows = filtered.filter((r) =>
+    (signal == null || r.signals.includes(signal)) && (view !== 'unbid' || r.unbid))
 
   const measured = filtered.filter((r) => r.state === 'measured' && r.share !== null)
 
@@ -698,6 +828,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       case 'clickShare': return s * ((a.clickShare ?? -1) - (b.clickShare ?? -1))
       case 'delta': return s * ((a.deltaPt ?? Number.NEGATIVE_INFINITY) - (b.deltaPt ?? Number.NEGATIVE_INFINITY))
       case 'asins': return s * (a.asinsCompeting - b.asinsCompeting)
+      case 'adSpend': return s * ((a.ad?.spendCents ?? -1) - (b.ad?.spendCents ?? -1))
       case 'volume':
       default: return s * ((a.marketVolume ?? -1) - (b.marketVolume ?? -1))
     }
@@ -721,7 +852,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
    * demoting rows there would be inventing a second opinion about the operator's own request.
    */
   const confidenceSort = sortKey === 'share' || sortKey === 'clickShare' || sortKey === 'delta'
-  const sorted = [...filtered].sort((a, b) => {
+  const sorted = [...gridRows].sort((a, b) => {
     const ra = stateRank(a), rb = stateRank(b)
     if (ra !== rb) return ra - rb
     // Each share sorts by ITS OWN denominator's confidence — the click floor is two to three
@@ -829,6 +960,149 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     confidenceFloorClicks,
     facets,
     rows: page,
-    total: filtered.length,
+    /** the GRID's total after the signal/view narrowing; the census states the pre-narrowed set */
+    total: gridRows.length,
+    /** SOV.2 — the ad columns' own window, so the header can label them with it */
+    adWindowDays,
+    signal,
+    view,
+  }
+}
+
+/**
+ * SOV.5 — the row drawer's read: one query in one market, through the page's scope.
+ *
+ * Owns what SOV.1 §9 moved here: the weekly SERIES (every period, not just the chosen one, each
+ * with its all-zero parser flag so the drawer never plots a fake collapse), CART-ADD and PURCHASE
+ * share (2.9% and 0.2% row coverage made them drawer facts, not columns), WHICH ASIN holds the
+ * term, and the campaigns buying it — from the ad side (observed) and the keyword targets
+ * (declared), stated apart because a declared bid that never serves is its own finding.
+ */
+export async function getSovRowDetail(args: {
+  query: string
+  market: string
+  line?: string | null
+  portfolio?: string | null
+  campaign?: string | null
+}) {
+  const { query, market } = args
+  const [campaigns, ads, sqpRows, searchTerms, targets] = await Promise.all([
+    prisma.campaign.findMany({ select: { id: true, name: true, marketplace: true, portfolioId: true, status: true } }),
+    prisma.adProductAd.findMany({
+      where: { asin: { not: null }, adGroup: { campaign: { marketplace: market } } },
+      select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
+    }),
+    prisma.searchQueryPerformance.findMany({
+      where: { marketplace: market, searchQuery: query },
+      select: {
+        startDate: true, asin: true,
+        impressionsTotal: true, impressionsBrand: true,
+        clicksTotal: true, clicksBrand: true,
+        cartAddsTotal: true, cartAddsBrand: true,
+        purchasesTotal: true, purchasesBrand: true,
+        searchQueryVolume: true,
+      },
+    }),
+    prisma.amazonAdsSearchTerm.findMany({
+      where: { marketplace: market, date: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+      select: { query: true, campaignId: true, impressions: true, clicks: true, costMicros: true },
+    }),
+    prisma.adTarget.findMany({
+      where: { isNegative: false, status: 'ENABLED', expressionValue: { not: null }, adGroup: { campaign: { marketplace: market } } },
+      select: { expressionValue: true, expressionType: true, bidCents: true, adGroup: { select: { campaign: { select: { id: true, name: true } } } } },
+    }),
+  ])
+
+  const productIds = [...new Set(ads.map((a) => a.productId).filter((x): x is string => !!x))]
+  const products = productIds.length
+    ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, parentId: true } })
+    : []
+  const graph: KtScopeGraph = {
+    campaigns: campaigns.map((c) => ({ ...c, status: String(c.status) })),
+    ads: ads.filter((a) => a.adGroup?.campaignId).map((a) => ({ productId: a.productId, asin: a.asin, campaignId: a.adGroup!.campaignId })),
+    products,
+  }
+  const scope = resolveScope(graph, { market, line: args.line, portfolio: args.portfolio, campaign: args.campaign })
+  const scopedAsins = new Set(scope.asins)
+  const inScope = (asin: string | null) => !scope.asinScoped || (!!asin && scopedAsins.has(asin))
+
+  // ── the weekly series, oldest → newest, with the parser flag per period ──
+  interface P { total: number; brand: number; clicksTotal: number; clicksBrand: number; cartAddsTotal: number; cartAdds: number; purchasesTotal: number; purchases: number; vol: number; periodNonZero: boolean }
+  const byPeriod = new Map<number, P>()
+  for (const r of sqpRows) {
+    if (!inScope(r.asin)) continue
+    const k = +r.startDate
+    let p = byPeriod.get(k)
+    if (!p) { p = { total: 0, brand: 0, clicksTotal: 0, clicksBrand: 0, cartAddsTotal: 0, cartAdds: 0, purchasesTotal: 0, purchases: 0, vol: 0, periodNonZero: false }; byPeriod.set(k, p) }
+    // Same MAX/Σ rule as the grid — whole-market counts repeat on every ASIN row.
+    p.total = Math.max(p.total, r.impressionsTotal)
+    p.brand += r.impressionsBrand
+    p.clicksTotal = Math.max(p.clicksTotal, r.clicksTotal)
+    p.clicksBrand += r.clicksBrand
+    p.cartAddsTotal = Math.max(p.cartAddsTotal, r.cartAddsTotal)
+    p.cartAdds += r.cartAddsBrand
+    p.purchasesTotal = Math.max(p.purchasesTotal, r.purchasesTotal)
+    p.purchases += r.purchasesBrand
+    p.vol = Math.max(p.vol, r.searchQueryVolume)
+  }
+  // The all-zero parser weeks are flagged per MARKET period (a query's own zero week is real when
+  // the market period parsed). One groupBy answers it for every period at once.
+  const nonZero = await prisma.searchQueryPerformance.groupBy({
+    by: ['startDate'], where: { marketplace: market, impressionsBrand: { gt: 0 } }, _count: { _all: true },
+  })
+  const nonZeroSet = new Set(nonZero.map((g) => +g.startDate))
+  const share = (b: number, t: number): number | null => (t > 0 ? Math.max(0, Math.min(1, b / t)) : null)
+  const series = [...byPeriod.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([k, p]) => ({
+      asOf: new Date(k).toISOString().slice(0, 10),
+      share: share(p.brand, p.total),
+      clickShare: share(p.clicksBrand, p.clicksTotal),
+      cartAddShare: share(p.cartAdds, p.cartAddsTotal),
+      purchaseShare: share(p.purchases, p.purchasesTotal),
+      ourImpressions: p.brand,
+      marketImpressions: p.total,
+      marketVolume: p.vol,
+      /** false = the pre-ACR.0.2 parser defect week: OUR side reads 0 market-wide. Never plot as a collapse. */
+      periodParsed: nonZeroSet.has(k),
+    }))
+
+  // ── which ASIN holds the term, newest period ──
+  const newest = series.length ? series[series.length - 1].asOf : null
+  const holders = newest
+    ? sqpRows
+      .filter((r) => r.startDate.toISOString().slice(0, 10) === newest && inScope(r.asin) && r.asin)
+      .map((r) => ({ asin: r.asin!, ourImpressions: r.impressionsBrand, ourClicks: r.clicksBrand }))
+      .sort((a, b) => b.ourImpressions - a.ourImpressions)
+    : []
+
+  // ── the campaigns buying it: observed (search terms, 30d) vs declared (enabled targets) ──
+  const nq = normTerm(query)
+  const campName = new Map(campaigns.map((c) => [c.id, c.name] as const))
+  const observed = new Map<string, { impressions: number; clicks: number; spendCents: number }>()
+  for (const t of searchTerms) {
+    if (normTerm(t.query ?? '') !== nq) continue
+    const o = observed.get(t.campaignId) ?? { impressions: 0, clicks: 0, spendCents: 0 }
+    o.impressions += t.impressions
+    o.clicks += t.clicks
+    o.spendCents += Number(t.costMicros) / 10_000
+    observed.set(t.campaignId, o)
+  }
+  const declared = targets
+    .filter((t) => normTerm(t.expressionValue ?? '') === nq && t.adGroup?.campaign)
+    .map((t) => ({ campaignId: t.adGroup!.campaign!.id, campaign: t.adGroup!.campaign!.name, match: t.expressionType, bidCents: t.bidCents }))
+
+  return {
+    query,
+    market,
+    scope: { boundBy: scope.boundBy, asins: scope.asins.length, asinScoped: scope.asinScoped },
+    series,
+    holders,
+    buying: {
+      observed: [...observed.entries()]
+        .map(([id, o]) => ({ campaignId: id, campaign: campName.get(id) ?? id, ...o, spendCents: Math.round(o.spendCents) }))
+        .sort((a, b) => b.spendCents - a.spendCents),
+      declared,
+    },
   }
 }

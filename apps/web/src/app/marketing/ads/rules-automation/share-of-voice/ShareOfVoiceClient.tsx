@@ -50,6 +50,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 // a change it gets lifted to `_shared/ScopeBar.tsx` with KT's import updated in the same commit.
 // A second scope bar is a second place for the two pages to disagree about what a portfolio means.
 import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from '../keyword-tracker/KeywordScopeBar'
+import { SovRowDrawer } from './SovRowDrawer'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -95,6 +96,19 @@ interface Row {
   branded: boolean
   asinLike: boolean
   onList: boolean
+  /** SOV.2 — the ad side over its OWN daily window. Optional: a commit is two deploys. */
+  ad?: {
+    impressions: number
+    clicks: number
+    spendCents: number
+    cpcCents: number | null
+    spendShare: number | null
+    campaigns: number
+  } | null
+  /** SOV.3 — outbid / weak-relevance / cannibalized, re-cut against medians server-side */
+  signals?: string[]
+  /** SOV.4 — organic presence, no ad activity, no enabled keyword target */
+  unbid?: boolean
 }
 
 interface Payload {
@@ -139,6 +153,9 @@ interface Payload {
     notCovered: number; realZeros: number; noMarketTotal: number
     deltaMeasured?: number; deltaNoPrior?: number
     lowConfidence?: number; lowConfidenceClicks?: number
+    /** SOV.3/4 — counted BEFORE the signal/view narrowing, so each chip states what it delivers */
+    outbid?: number; weakRelevance?: number; cannibalized?: number; unbid?: number
+    withAdActivity?: number
   }
   /** the scope-level Δ, over the intersection of both weeks only. Optional — see `prior`. */
   scopeDelta?: {
@@ -160,6 +177,8 @@ interface Payload {
   }
   rows: Row[]
   total: number
+  /** SOV.2 — the ad columns' own window, so headers can carry it. Optional across the deploy gap. */
+  adWindowDays?: number
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
@@ -221,15 +240,13 @@ export function ShareOfVoiceClient() {
    * The URL contract. Every param round-trips and an absent one means its DOCUMENTED default,
    * never a stored preference — a pasted link must render the same view for whoever opens it.
    *
-   * Reserved, declared here, and deliberately NOT implemented — each names the section that owns it
-   * so the next seven sessions do not invent a second spelling:
-   *   ?adWindow=7d|14d|30d   SOV.2 — the ad-side columns, which are DAILY. Two grains on one page,
-   *                          each labelled, exactly as Keyword Tracker settled it. It is not built
-   *                          because no ad-side column exists yet to move.
-   *   ?view=share|mix|unbid  SOV.4 — the unbid-demand view.
-   *   ?signal=…              SOV.3 — outbid / weak-relevance / cannibalised, once they are re-cut.
-   *   ?row=<query>@<market>  SOV.5 — the detail drawer. Read below so a link survives the deploy
-   *                          that adds the drawer; it opens nothing today.
+   * SOV.2–SOV.5 (2026-08-15) — the four reserved params are LIVE:
+   *   ?adWindow=7|14|30      SOV.2 — the ad-side columns' OWN daily window ('7d' spellings accepted).
+   *                          Two grains on one page, each labelled; one control never moves both.
+   *   ?view=unbid            SOV.4 — organic presence we never buy.
+   *   ?signal=outbid|weak-relevance|cannibalized   SOV.3 — re-cut against medians.
+   *   ?row=<query>@<market>  SOV.5 — the detail drawer (the @market half makes a pasted link
+   *                          self-contained; absent, the page's market is used).
    */
   const market = params.get('market') ?? DEFAULT_MARKET
   const scope: KtScope = {
@@ -244,6 +261,13 @@ export function ShareOfVoiceClient() {
   const q = params.get('q') ?? ''
   const sort = params.get('sort') ?? 'volume'
   const dir = params.get('dir') === 'asc' ? 'asc' : 'desc'
+  // SOV.2/3/4/5 — the four params that were reserved. Unknown values fall back to defaults.
+  const adWindowRaw = Number((params.get('adWindow') ?? '').replace(/d$/i, ''))
+  const adWindow = [7, 14, 30].includes(adWindowRaw) ? adWindowRaw : 30
+  const signalRaw = params.get('signal') ?? ''
+  const signal = ['outbid', 'weak-relevance', 'cannibalized'].includes(signalRaw) ? signalRaw : ''
+  const view = params.get('view') === 'unbid' ? 'unbid' : ''
+  const rowParam = params.get('row') ?? ''
 
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -260,6 +284,7 @@ export function ShareOfVoiceClient() {
         || (k === 'list' && v === 'all')
         || (k === 'branded' && v === '0')
         || (k === 'weeks' && Number(v) === DEFAULT_WEEKS)
+        || (k === 'adWindow' && Number(v) === 30)
       if (isDefault) next.delete(k)
       else next.set(k, v)
     }
@@ -309,6 +334,11 @@ export function ShareOfVoiceClient() {
     if (list && list !== 'all') qs.set('list', list)
     if (branded) qs.set('branded', '1')
     if (q) qs.set('q', q)
+    // SOV.2/3/4 — the ad window rides always (the columns need their label even at the default);
+    // signal and view only when narrowing.
+    qs.set('adWindow', String(adWindow))
+    if (signal) qs.set('signal', signal)
+    if (view) qs.set('view', view)
     void fetch(`${getBackendUrl()}/api/advertising/share-of-voice-page?${qs.toString()}`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Could not load Share of Voice (${r.status})`)
@@ -318,7 +348,7 @@ export function ShareOfVoiceClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, weeks, q, sort, dir])
+  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, weeks, q, sort, dir, adWindow, signal, view])
 
   const rows = data?.rows ?? []
   const s = data?.scope
@@ -488,6 +518,39 @@ export function ShareOfVoiceClient() {
       sortValue: (r) => r.asinsCompeting,
       filterValue: (r) => r.asinsCompeting,
     },
+    // ── SOV.2 — the AD side, on its OWN daily window. The label carries the window so the two
+    //    grains on this page can never be read as one; a dash means no ad activity, a fact. ──
+    {
+      key: 'adSpend', label: `Ad spend · ${data?.adWindowDays ?? 30}d`, unit: '€',
+      tip: `What the scoped campaigns spent buying this query over the last ${data?.adWindowDays ?? 30} days (search-term report, ~2 days behind — a different clock from the weekly market columns). The hover carries impressions, clicks and this query's share of the scope's ad spend.`,
+      render: (r) => (r.ad == null
+        ? <span className="h10-sov-nd" title="No ad activity on this query in the window — a fact, not missing data.">—</span>
+        : <span title={`${num(r.ad.impressions)} ad impressions · ${num(r.ad.clicks)} clicks · ${r.ad.spendShare != null ? `${(r.ad.spendShare * 100).toFixed(1)}% of this scope's ad spend` : 'share of spend unavailable'} · ${r.ad.campaigns} campaign${r.ad.campaigns === 1 ? '' : 's'}`}>€{(r.ad.spendCents / 100).toFixed(2)}</span>),
+      sortValue: (r) => r.ad?.spendCents ?? -1,
+      filterValue: (r) => (r.ad?.spendCents ?? 0) / 100,
+    },
+    {
+      key: 'adCpc', label: `Ad CPC · ${data?.adWindowDays ?? 30}d`,
+      tip: 'Spend ÷ clicks on this query in the ad window. Blank when there were no clicks — never €0.00.',
+      render: (r) => (r.ad?.cpcCents == null ? <span className="h10-sov-nd">—</span> : `€${(r.ad.cpcCents / 100).toFixed(2)}`),
+      sortValue: (r) => r.ad?.cpcCents ?? -1,
+    },
+    // ── SOV.3 — the judgement, re-cut against medians server-side. ──
+    {
+      key: 'signal', label: 'Signal', metric: false,
+      tip: 'outbid = above-median CPC and below-median ad impressions (probably losing the auction) · weak = we show and are not clicked (CTR under half the median on ≥50 impressions) · cannibalized = two or more of our campaigns buying the same query. Re-cut against MEDIANS — the old mean-based bar fired on 32% of the account.',
+      render: (r) => {
+        const sg = r.signals ?? []
+        if (r.unbid) return <span className="h10-sov-sig unbid" title="We appear organically on this query and never buy it: no ad activity in the window and no enabled keyword target.">unbid</span>
+        if (sg.length === 0) return <span className="h10-sov-nd">—</span>
+        return (
+          <span className="h10-sov-sigs">
+            {sg.map((s) => <span key={s} className={`h10-sov-sig ${s === 'weak-relevance' ? 'weak' : s}`}>{s === 'weak-relevance' ? 'weak' : s}</span>)}
+          </span>
+        )
+      },
+      sortValue: (r) => (r.unbid ? 'unbid' : (r.signals ?? []).join(',')),
+    },
     {
       key: 'asOf', label: 'As of', metric: false,
       tip: 'The week this WHOLE grid renders — one period for every row, so two rows can be compared with each other. A blank row shows the last week Brand Analytics did report that query, if there is one.',
@@ -504,7 +567,7 @@ export function ShareOfVoiceClient() {
       },
       sortValue: (r) => (r.state === 'measured' ? (p?.asOf ?? '') : (r.lastSeen ?? '')),
     },
-  ], [p?.asOf, p?.ageDays, data?.confidenceFloor, data?.confidenceFloorClicks, sink])
+  ], [p?.asOf, p?.ageDays, data?.confidenceFloor, data?.confidenceFloorClicks, data?.adWindowDays, sink])
 
   const activeTab = rulesTabByKey('share-of-voice')
 
@@ -602,7 +665,7 @@ export function ShareOfVoiceClient() {
               <span className={`h10-sov-feed ${ageClass(f.ads.ageDays)}`}>
                 <b>Ad data</b>
                 {f.ads.latest ? <> {dayMonth(f.ads.latest)} · {f.ads.ageDays}d old</> : <> none</>}
-                <i>not on this grid until SOV.2</i>
+                <i>the Ad spend / CPC / Signal columns · last {data?.adWindowDays ?? 30} days</i>
               </span>
               <span className="h10-sov-feed">
                 <b>Coverage</b>
@@ -807,6 +870,32 @@ export function ShareOfVoiceClient() {
 
           {err && <p className="h10-sov-blind"><AlertTriangle size={13} /><span>{err}</span></p>}
 
+          {/* SOV.3/4 — the judgement chips. Counts come from the census BEFORE the narrowing
+              (their own dimension), so each chip advertises exactly what clicking delivers;
+              clicking an active chip clears it. `unbid` is a VIEW, not a signal — organic demand
+              we never buy — and it composes with nothing (it replaces the signal narrowing). */}
+          {c && (c.outbid != null || c.unbid != null) && (
+            <div className="h10-sov-chips" role="group" aria-label="Signals">
+              {([['outbid', c.outbid ?? 0, 'Above-median CPC and below-median ad impressions — probably losing the auction. Raise the bid or let it go, but decide.'],
+                ['weak-relevance', c.weakRelevance ?? 0, 'We show and are not clicked: CTR under half the median on ≥50 ad impressions. A creative or match-type problem, not a bid problem.'],
+                ['cannibalized', c.cannibalized ?? 0, 'Two or more of our campaigns buying the same query — paying to outbid ourselves.']] as const
+              ).map(([k, n, tip]) => (
+                <button key={k} type="button" className={`h10-sov-chip${signal === k ? ' on' : ''}${n === 0 ? ' zero' : ''}`}
+                  aria-pressed={signal === k} title={tip}
+                  onClick={() => push({ signal: signal === k ? '' : k, view: '' })}>
+                  <b>{num(n)}</b> {k === 'weak-relevance' ? 'weak relevance' : k}
+                </button>
+              ))}
+              <button type="button" className={`h10-sov-chip unbid${view === 'unbid' ? ' on' : ''}${(c.unbid ?? 0) === 0 ? ' zero' : ''}`}
+                aria-pressed={view === 'unbid'}
+                title="Demand we already appear in organically and never buy: measured presence, no ad activity in the window, no enabled keyword target. Not Keyword Harvest's terms — harvest promotes what we already PAID on; these were never touched."
+                onClick={() => push({ view: view === 'unbid' ? '' : 'unbid', signal: '' })}>
+                <b>{num(c.unbid ?? 0)}</b> unbid demand
+              </button>
+              <span className="h10-sov-chipnote">{num(c.withAdActivity ?? 0)} of {num(c.total)} queries carry any ad activity in the {data?.adWindowDays ?? 30}d window</span>
+            </div>
+          )}
+
           <AdsDataGrid<Row>
             rows={rows}
             loading={loading}
@@ -815,7 +904,14 @@ export function ShareOfVoiceClient() {
             firstColLabel="Search query"
             renderFirst={(r) => (
               <div className="h10-sov-q">
-                <span className="t" title={r.query}>{r.query}</span>
+                {/* SOV.5 — the first column is a real control again: it opens the row drawer.
+                    A PUSH, so Back closes; the @market half makes a copied link self-contained. */}
+                <button type="button" className="t" title={`${r.query} — open the drawer: every measured week, the funnel, who holds it, who buys it`}
+                  onClick={() => {
+                    const next = new URLSearchParams(params.toString())
+                    next.set('row', `${r.query}@${r.marketplace}`)
+                    router.push(`?${next.toString()}`, { scroll: false })
+                  }}>{r.query}</button>
                 {r.branded && <span className="bd" title="Contains one of the 10 protected brand terms">brand</span>}
                 {r.onList && <span className="ls" title="On this market’s Keyword Tracker watchlist">watched</span>}
               </div>
@@ -854,7 +950,7 @@ export function ShareOfVoiceClient() {
                     FR have no complete week inside the bound and both fall to the truncated-week
                     branch. It moves the share columns and says so. */}
                 <span className="h10-sov-weeks">
-                  <span className="cap" title="How far back this view may reach for the one week it renders. It moves the share column only — the ad-side columns arrive in SOV.2 with their own daily control.">Share weeks</span>
+                  <span className="cap" title="How far back this view may reach for the one week it renders. It moves the SHARE columns only — the ad columns have their own daily control beside this one; one control never moves both grains.">Share weeks</span>
                   <span className="h10-svt-seg" role="tablist" aria-label="Lookback in weeks">
                     {WEEKS.map((w) => (
                       <button
@@ -862,6 +958,21 @@ export function ShareOfVoiceClient() {
                         className={`seg ${weeks === w ? 'on' : ''}`}
                         onClick={() => push({ weeks: String(w) })}
                       >{w}</button>
+                    ))}
+                  </span>
+                </span>
+
+                {/* SOV.2 — the AD columns' own window. Daily, ~2 days behind, a different clock
+                    from the weekly market columns — which is why it is a second control. */}
+                <span className="h10-sov-weeks">
+                  <span className="cap" title="The window for the Ad spend / Ad CPC / Signal columns, in days. It moves the AD columns only.">Ad window</span>
+                  <span className="h10-svt-seg" role="tablist" aria-label="Ad window in days">
+                    {[7, 14, 30].map((w) => (
+                      <button
+                        key={w} type="button" role="tab" aria-selected={adWindow === w}
+                        className={`seg ${adWindow === w ? 'on' : ''}`}
+                        onClick={() => push({ adWindow: String(w) })}
+                      >{w}d</button>
                     ))}
                   </span>
                 </span>
@@ -965,6 +1076,27 @@ export function ShareOfVoiceClient() {
           />
         </>
       )}
+
+      {/* SOV.5 — the row drawer. `?row=<query>@<market>` makes a pasted link self-contained; a
+          missing @market half falls back to the page's market. */}
+      {rowParam && (() => {
+        const at = rowParam.lastIndexOf('@')
+        const rowQuery = at > 0 ? rowParam.slice(0, at) : rowParam
+        const rowMarket = at > 0 ? rowParam.slice(at + 1) : market
+        return (
+          <SovRowDrawer
+            query={rowQuery}
+            market={rowMarket}
+            scope={scope}
+            onClose={() => {
+              const next = new URLSearchParams(params.toString())
+              next.delete('row')
+              const qs = next.toString()
+              router.replace(qs ? `?${qs}` : '?', { scroll: false })
+            }}
+          />
+        )
+      })()}
     </div>
   )
 }

@@ -1026,15 +1026,40 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       // low-confidence rows below confident ones when either is the sort key: the top of a
       // share-descending page is otherwise `sappnetta knee spider nero`, 50.00% of FOUR market
       // impressions, followed by five typos.
-      sort: oneOf(q.sort, ['query', 'volume', 'rank', 'share', 'clickShare', 'delta', 'asins'] as const),
+      sort: oneOf(q.sort, ['query', 'volume', 'rank', 'share', 'clickShare', 'delta', 'asins', 'adSpend'] as const),
       dir: q.dir === 'asc' ? 'asc' : 'desc',
       limit: q.limit ? Number(q.limit) : undefined,
       offset: q.offset ? Number(q.offset) : undefined,
+      // SOV.2/3/4 — the ad side's own window, the signal narrowing, and the unbid view.
+      adWindow: q.adWindow ? Number(q.adWindow) : null,
+      signal: q.signal || null,
+      view: q.view || null,
     })
     // Short private cache: one grouped scan of SQP joined to the campaign/ad graph, and both feeds
     // underneath move once a night at most.
     reply.header('Cache-Control', 'private, max-age=60')
     return out
+  })
+
+  /**
+   * SOV.5 — the row drawer's read: one query in one market, through the page's scope. The weekly
+   * series with the parser flag, cart-add/purchase share (drawer facts, not columns — 2.9% / 0.2%
+   * row coverage), which ASIN holds the term, and the campaigns buying it (observed vs declared).
+   */
+  fastify.get('/advertising/share-of-voice-page/row', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const market = (q.market ?? '').toUpperCase()
+    if (!SOV_MARKETS.includes(market as (typeof SOV_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${SOV_MARKETS.join('/')}`, code: 'market_required' }
+    }
+    if (!q.query?.trim()) { reply.status(400); return { error: 'query is required', code: 'query_required' } }
+    const { getSovRowDetail } = await import('../services/advertising/share-of-voice.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return getSovRowDetail({
+      query: q.query, market,
+      line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
+    })
   })
 
   // ── HV.2 — the harvest policy ───────────────────────────────────────
