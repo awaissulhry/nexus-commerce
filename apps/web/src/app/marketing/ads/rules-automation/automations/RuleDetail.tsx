@@ -274,7 +274,9 @@ export function RuleDetail({
                       {sim.contextsInScope != null && sim.contextsInScope !== sim.contextsBuilt && <>, {num(sim.contextsInScope)} inside this rule&rsquo;s scope</>}
                       , <b>{num(sim.matched ?? 0)}</b> matched.
                       {(sim.matched ?? 0) > 0 && sim.firstAction && <> First match would: {sim.firstAction}.</>}
-                      {' '}Nothing reached Amazon; the dry run wrote {num(sim.wroteAuditRows ?? 0)} execution row{(sim.wroteAuditRows ?? 0) === 1 ? '' : 's'} to this rule&rsquo;s history.
+                      {/* {' '} — the build strips a bare space after an expression on this line;
+                          detected on prod as "rowsto" (the documented </b>-space trap's sibling). */}
+                      {' '}Nothing reached Amazon; the dry run wrote {num(sim.wroteAuditRows ?? 0)} execution row{(sim.wroteAuditRows ?? 0) === 1 ? '' : 's'}{' '}to this rule&rsquo;s history.
                     </>}
                 </p>
               )}
