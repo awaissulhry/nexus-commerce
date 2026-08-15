@@ -4588,3 +4588,8 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-au-qlist .qe a { color: #1f6fde; display: inline-flex; }
 .h10-au-qlist .qacts { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .h10-au-qlist .qedit { width: 90px; height: 30px; border: 1px solid #c7cdd6; border-radius: 7px; padding: 0 8px; font: inherit; font-size: 13px; }
+
+/* AUTO.A3 — Simulate in the drawer */
+.h10-au-recbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.h10-au-simres { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: #1c2530; background: #f0f6ff; border: 1px solid #c9ddf6; border-radius: 8px; padding: 8px 10px; }
+.h10-au-simres.bad { color: #b42318; background: #fef3f2; border-color: #f6c6c2; }

@@ -14,8 +14,9 @@
  * are reused as-is.
  */
 
-import { useMemo } from 'react'
-import { AlertTriangle, Clock, GraduationCap, ShieldAlert, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { AlertTriangle, Clock, FlaskConical, GraduationCap, ShieldAlert, X } from 'lucide-react'
+import { getBackendUrl } from '@/lib/backend-url'
 import { ScopeForm, type ScopeOptions, type ScopeValue } from './ScopeForm'
 import { conditionText, actionLines, triggerText } from './ruleText'
 import type { Level } from './ModeNotches'
@@ -79,6 +80,25 @@ export function RuleDetail({
   onClose: () => void
 }) {
   const cond = useMemo(() => conditionText(rule.conditions), [rule.conditions])
+  // AUTO.A3 — Simulate. State is local to the drawer; closing it discards the result, which is
+  // right: a simulation is a reading of live data at a moment, not a property of the rule.
+  const [simBusy, setSimBusy] = useState(false)
+  const [sim, setSim] = useState<{ err?: string; contextsBuilt?: number; contextsInScope?: number; matched?: number; wroteAuditRows?: number; firstAction?: string } | null>(null)
+  const simulate = async () => {
+    setSimBusy(true); setSim(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${rule.id}/simulate`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(j?.error ?? `(${r.status})`)
+      const firstMatched = (j?.results as Array<{ matched?: boolean; actions?: Array<{ type?: string; error?: string; output?: { wouldChange?: string } }> }> | undefined)?.find((x) => x.matched)
+      const fa = firstMatched?.actions?.[0]
+      setSim({
+        contextsBuilt: j?.contextsBuilt, contextsInScope: j?.contextsInScope, matched: j?.matched,
+        wroteAuditRows: j?.wroteAuditRows,
+        firstAction: fa ? (fa.output?.wouldChange ?? fa.error ?? fa.type ?? undefined) : undefined,
+      })
+    } catch (e) { setSim({ err: (e as Error).message }) } finally { setSimBusy(false) }
+  }
   // `actionTypes` is the fallback, never the primary: it is filtered and parameterless, so it can
   // say WHAT a rule does but not by how much. See actionLines' own note.
   const then = useMemo(() => actionLines(rule.actions, rule.actionTypes), [rule.actions, rule.actionTypes])
@@ -234,9 +254,30 @@ export function RuleDetail({
                 <li>{num(rule.lifetime.evaluations)} evaluations, {num(rule.lifetime.matches)} matches, {num(rule.lifetime.executions)} executions all time</li>
                 <li>Last run {rule.lastExecutedAt ? new Date(rule.lastExecutedAt).toLocaleString('en-IE') : 'never'}{rule.ageDays != null ? ` · ${rule.ageDays} days old` : ''}</li>
               </ul>
-              <button type="button" className="h10-am-btn sm" onClick={onHistory}>
-                <Clock size={12} aria-hidden /> Execution history
-              </button>
+              <div className="h10-au-recbtns">
+                <button type="button" className="h10-am-btn sm" onClick={onHistory}>
+                  <Clock size={12} aria-hidden /> Execution history
+                </button>
+                {/* AUTO.A3 — Simulate, allowed ONLY here (SUB §8.12) and only because the route is
+                    `simulateOneRule`: this rule, no other, forceDryRun, works on a DISABLED rule
+                    without arming it. The old endpoint void-ran the whole evaluator live. */}
+                <button type="button" className="h10-am-btn sm" disabled={simBusy} onClick={() => void simulate()}>
+                  <FlaskConical size={12} aria-hidden /> {simBusy ? 'Simulating…' : 'Simulate'}
+                </button>
+              </div>
+              {sim && (
+                <p className={`h10-au-simres ${sim.err ? 'bad' : ''}`} role="status">
+                  {sim.err
+                    ? <>Simulation failed: {sim.err}</>
+                    : <>
+                      Against live data, right now: <b>{num(sim.contextsBuilt ?? 0)}</b> context{(sim.contextsBuilt ?? 0) === 1 ? '' : 's'} built
+                      {sim.contextsInScope != null && sim.contextsInScope !== sim.contextsBuilt && <>, {num(sim.contextsInScope)} inside this rule&rsquo;s scope</>}
+                      , <b>{num(sim.matched ?? 0)}</b> matched.
+                      {(sim.matched ?? 0) > 0 && sim.firstAction && <> First match would: {sim.firstAction}.</>}
+                      {' '}Nothing reached Amazon; the dry run wrote {num(sim.wroteAuditRows ?? 0)} execution row{(sim.wroteAuditRows ?? 0) === 1 ? '' : 's'} to this rule&rsquo;s history.
+                    </>}
+                </p>
+              )}
             </section>
           </div>
         </div>
