@@ -96,7 +96,9 @@ export function PlcInspector({ campaignId, lanes, onClose }: {
             <section className="h10-plc2-lanes">
               {lanes.map((l) => (
                 <div key={l.laneKey} className="h10-plc2-lane">
-                  <span className="k">{l.lane}</span>
+                  {/* The payload's `lane` arrived as the raw enum on prod — map it through the
+                      same words the ledger uses, falling back to whatever the payload said. */}
+                  <span className="k">{LANE_WORD[l.lane] ?? l.lane}</span>
                   <b>+{l.multiplierPct}%</b>
                   <span className="v">€{(l.spendCents / 100).toFixed(2)} spent · ROAS {l.roas != null ? l.roas.toFixed(1) : '—'}</span>
                 </div>
