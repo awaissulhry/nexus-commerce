@@ -213,6 +213,14 @@ Eleven studies, one account. What they add up to:
 
 1. **The budget ratchet** (study 6) — two AUTO rules compounding 15–20% per tick, no cooldown;
    €4.42 → €1.00 in 2¾ hours; **58 of 86 live campaigns pinned at the €1 floor.** Still running.
+
+> 🔴 **Correction, 2026-08-16 (BUD.8).** The attribution of the €1 floor to the two AUTO rules is
+> wrong for 56 of the 58 campaigns. Measured on prod: **56 were floored by
+> `automation:budget-manager-cron` in single writes** (`€100 → €1`), 55 of them inside one hour on
+> 2026-08-05; only **2** reached €1 by rule compounding, and both were already at ~€1 when the
+> rules reached them. The ratchet is real; it is not what emptied the account. Full derivation in
+> [the study's §0 correction](2026-08-11-bud-budget-study.md) and
+> [the BUD.8 record](2026-08-16-bud-8-armed.md).
 2. **The SQP feed died on 2026-07-26** (studies 1, 2, 5) — and it is the feedback loop of
    `ad-rank-defend`, which reads it with **no recency guard**. Every live schedule is chasing a 10%
    goal on a signal reading 0.15%.

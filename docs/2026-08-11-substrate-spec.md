@@ -774,7 +774,7 @@ at a time per D3).
 |---|---|---|
 | **SQP recency guard** in `sqpImpressionShareForAsins` | **S3** | measured **16.5 days** stale today, read by `ad-rank-defend` with no age check. Live, and moving money now. |
 | 🔴 **repair the daily-cap counter** (+ re-size the caps first) | **S5, and arguably today** | verified on prod: a rule capped at **10/day ran 265 times today** and the counter read 0. The cap was **the only stated brake on the budget ratchet — so there is currently no brake at all.** |
-| **budget-rule per-entity cooldown** + treat `PENDING` as current + a daily total-reduction cap | **before page 6** | the ratchet is still running: two AUTO rules compounding 15–20%/tick, 58 of 86 live campaigns at the €1 floor |
+| **budget-rule per-entity cooldown** + treat `PENDING` as current + a daily total-reduction cap | **before page 6** | the ratchet is still running: two AUTO rules compounding 15–20%/tick, 58 of 86 live campaigns at the €1 floor — ⚠ **corrected 2026-08-16 (BUD.8): 56 of those 58 were floored by the pacer in single writes, not by the rules; see the note below §871 and the [BUD.8 record](2026-08-16-bud-8-armed.md)** |
 | **`keyword-harvesting` → `keyword-harvest`; add `sov`, `keyword-tracker`** | **S6** | three tabs filter every rule out of themselves |
 | **negative retirement path** | **before 7 ships** | it is the code's own stated blocker on AUTO negation, and the whitelist precondition is already satisfied (10 terms) |
 | **refusals separated from failures** | **S5** | the 693,704 historical rows read as breakage today, and every future refusal has nowhere to be recorded |
@@ -869,6 +869,14 @@ these.
    Give me one market's number and I will build the shape around it.
 3. 🔴 **The ratchet is still running, and its only brake is broken.** Two AUTO rules compounding,
    58 of 86 live campaigns pinned at the €1 floor — and `maxExecutionsPerDay`, the one stated
+
+> 🔴 **Correction, 2026-08-16 (BUD.8).** The attribution of the €1 floor to the two AUTO rules is
+> wrong for 56 of the 58 campaigns. Measured on prod: **56 were floored by
+> `automation:budget-manager-cron` in single writes** (`€100 → €1`), 55 of them inside one hour on
+> 2026-08-05; only **2** reached €1 by rule compounding, and both were already at ~€1 when the
+> rules reached them. The ratchet is real; it is not what emptied the account. Full derivation in
+> [the study's §0 correction](2026-08-11-bud-budget-study.md) and
+> [the BUD.8 record](2026-08-16-bud-8-armed.md).
    bound on them, **has not tripped for any rule since 2026-08-04** (verified today: cap 10, ran
    265). Stop it now — disable the two AUTO rules — or wait for the cooldown in lane B?
    *(BUD Q1, unanswered since yesterday; the cap finding makes it more urgent, not less.)*

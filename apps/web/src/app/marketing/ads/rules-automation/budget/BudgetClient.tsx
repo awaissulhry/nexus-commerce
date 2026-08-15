@@ -807,17 +807,18 @@ export function BudgetClient() {
         <p className="h10-bud-note bad">
           <AlertTriangle size={12} />
           <span>
-            <b>{num(census.atFloor)} of {num(census.campaigns)} campaigns sit at Amazon&rsquo;s €1 minimum</b>
-            {census.rulesCutOnly > 0 && <>, and {census.rulesCutOnly === 1 ? 'a rule that only cuts is' : `${census.rulesCutOnly} rules that only cut are`} still running on their own</>}.
-            Each applies its percentage to the <b>current</b> budget rather than to a baseline, every
-            15 minutes — ten applications of −20% of the CURRENT value leave a budget at 11% of
-            where it started. The {num(census.cuttable)} campaigns still above €1 are the entire
-            reachable surface. <b>The caps now bound how OFTEN, not how far</b>: the daily-cap
-            counter was repaired and armed on 2026-08-14 (its first tick held 19 of 20 rules) and
-            the write cap demotes past its bound — but a bounded rule still compounds. What stops
-            the compounding itself is a <b>baseline</b>: capture one in{' '}
-            <a href="#bud-guardrails">Guardrails &amp; the baseline</a> below and every relative
-            rule anchors to it instead of walking.
+            <b>{num(census.atFloor)} of {num(census.campaigns)} campaigns sit at Amazon&rsquo;s €1 minimum</b>,
+            and <b>the budget rules did not put most of them there</b>. Measured 2026-08-16:{' '}
+            <b>56 of them were floored by the pacing engine in single writes</b> — €100 → €1,
+            €60 → €1 — and 55 of those inside one hour on 2026-08-05, when pacing still rewrote every
+            budget to its target whether or not the monthly cap was at risk. That behaviour is fixed;
+            it now acts only when the month is projected past its cap. Exactly <b>2</b> campaigns
+            reached €1 by rule compounding, and both were already near €1 when the rules arrived.
+            {census.rulesCutOnly > 0 && <> The compounding is still real, though: {census.rulesCutOnly === 1 ? 'one rule that only cuts is' : `${census.rulesCutOnly} rules that only cut are`} still on
+            AUTO, applying their percentage to the <b>current</b> budget, so anything raised above €1
+            gets walked back down.</>} What stops that is a <b>baseline</b>: capture one in{' '}
+            <a href="#bud-guardrails">Guardrails &amp; the baseline</a> below and every relative rule
+            anchors to it instead of walking.
           </span>
         </p>
       )}
