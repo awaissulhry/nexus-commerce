@@ -83,7 +83,7 @@
 .rd-mode.mixed  { color: #1f4e8c; background: #e3edfb; }
 /* Mode carries the longest sentences ("Capped 0% — base €2.41 over the €2.00 ceiling"), so it gets
    a little more room than the other two. */
-.rd-mode { max-width: 215px; }
+.rd-mode { max-width: 190px; }
 .rd-sig  { max-width: 165px; }
 .rd-ceil { max-width: 165px; }
 /* The first column is content-driven too: 45 campaign names took it to 360px. */
@@ -131,7 +131,11 @@
    across the columns that carry the argument. */
 .rd-trunc {
   display: inline-block;
-  max-width: 190px;
+  /* 140, not 190. Measured on prod after the caps landed: the row still ran 53px past the card,
+     and the two columns sitting AT their cap were the only ones with slack to give. The first
+     column is 360px of AdsDataGrid's own sticky sizing (its content is 274px) and is shared CSS,
+     so it is not this page's to reclaim. */
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
