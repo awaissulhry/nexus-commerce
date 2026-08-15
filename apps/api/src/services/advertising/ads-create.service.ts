@@ -961,7 +961,25 @@ export interface PlacementBiddingInput {
   // intent that caused it rather than only to the schedule that ran.
   targetKey?: string
 }
-export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<{ ok: boolean; adjustments: Array<{ placement: string; percentage: number }>; mode: string }> {
+/**
+ * PLC.3 — the refused shape, so a refusal can be RENDERED rather than only logged.
+ *
+ * `reason` and `deniedAt` are optional and only ever set when `mode === 'blocked'`, so every
+ * existing caller compiles and behaves identically. Before this, the gate's sentence — which
+ * `pinDenial` writes in full, in the operator's own words — was computed, logged, written into the
+ * audit row's `note`, and then **dropped at the return**. The one surface a human uses could not
+ * say why their write was refused, which is exactly what substrate spec §5.5 forbids.
+ */
+export interface PlacementBiddingResult {
+  ok: boolean
+  adjustments: Array<{ placement: string; percentage: number }>
+  mode: string
+  /** the gate's own sentence, verbatim — never paraphrased. Set only when blocked. */
+  reason?: string
+  /** which gate refused: authority_pin · campaign_allowlist · automation_halted · … */
+  deniedAt?: string
+}
+export async function updatePlacementBidding(input: PlacementBiddingInput): Promise<PlacementBiddingResult> {
   const c = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, dynamicBidding: true } })
   if (!c) throw new Error('campaign not found')
   const adjustments = input.adjustments
@@ -992,6 +1010,9 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
    * Only a genuine refusal suppresses the local mutation.
    */
   let gateDenial: string | null = null
+  // PLC.3 — which gate refused, kept beside the sentence so the UI can link to the control that
+  // clears it (`authority_pin` → this page's pin toggle; `campaign_allowlist` → Apply Rules).
+  let gateDeniedAt: string | null = null
   if (c.externalCampaignId && c.marketplace) {
     const ctx = await resolveCtx(c.marketplace)
     if (ctx) {
@@ -1004,7 +1025,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement' })
       if (!gate.allowed) {
         gateDenial = (gate as { reason?: string }).reason ?? 'write gate denied'
-        logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: gateDenial })
+        gateDeniedAt = (gate as { deniedAt?: string }).deniedAt ?? null
+        logger.warn('[AX2.2] placement write gated', { campaignId: input.campaignId, reason: gateDenial, deniedAt: gateDeniedAt })
       } else {
         const r = await updateCampaign(ctx, c.externalCampaignId, { placementBidding: adjustments, biddingStrategy: input.biddingStrategy })
         mode = r.mode
@@ -1026,7 +1048,9 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       'FAILED',
       { targetKey: input.targetKey, metric: 'placementBidding', note: `blocked: ${gateDenial}` },
     ).catch(() => { /* an audit row must never fail the write it describes */ })
-    return { ok: false, adjustments: priorAdjustments, mode: 'blocked' }
+    // PLC.3 — carry the sentence out. The audit row above, the history rows, the log line and the
+    // allowed path below are all unchanged; this return gains two optional fields.
+    return { ok: false, adjustments: priorAdjustments, mode: 'blocked', reason: gateDenial, ...(gateDeniedAt ? { deniedAt: gateDeniedAt } : {}) }
   }
 
   await prisma.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: db as never, ...(syncStamp ?? {}), ...(input.biddingStrategy ? { biddingStrategy: input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES' } : {}) } })

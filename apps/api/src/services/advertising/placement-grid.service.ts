@@ -59,6 +59,9 @@ import { biasBand, strategyHeadroom, type RankTargetSpec } from './rank-controll
 // side-effecting transitive import is already in the routes file's graph) and imports `isGoalMode`
 // from it — that proof is reused here rather than re-litigated.
 import { applyTargetOverrides } from '../../jobs/ad-rank-defend.job.js'
+// PLC.3 — the manual merge and the max-base-bid lift. See that file's header for why the merge is
+// not inline and why the base-bid derivation is a lift rather than a second opinion.
+import { resolveMaxBaseBidByCampaign } from './ads-placement-manual.js'
 // The engine's own predicate for "this schedule is owned by the rank-defend loop", not a copy of
 // it. `ad-dayparting.job.ts:16` already imports it for exactly this reason — two definitions of
 // goal mode would let this page call a campaign governed that the engine never visits.
@@ -181,6 +184,17 @@ export interface PlcRow {
   ownerLabel: string | null
   /** false ⇒ "no delivery in this window", which is not zero */
   hasReportRow: boolean
+  /**
+   * PLC.3 — the two facts that decide whether this row can be written to at all.
+   *
+   * They live on the row rather than being read from `GET /advertising/campaigns`, which sits
+   * behind `cached(key, 300)`: a pin toggled here would read back its OLD value for up to five
+   * minutes, which is the worst possible behaviour for a control whose whole job is to say
+   * "this campaign is held by hand".
+   */
+  pinPlacement: boolean
+  /** the per-campaign write gate. Every PAUSED campaign in this account has it shut. */
+  gateOpen: boolean
   /**
    * PLC.1 — campaign-level verdicts, repeated on each of the campaign's three rows.
    *
@@ -908,6 +922,8 @@ export async function getPlacementGrid(req: PlcRequest): Promise<PlcPayload> {
     select: {
       id: true, name: true, marketplace: true, status: true, adProduct: true,
       biddingStrategy: true, externalCampaignId: true, dynamicBidding: true,
+      // PLC.3 — see `PlcRow.pinPlacement`.
+      pinPlacement: true, liveBidWritesEnabled: true,
     },
     orderBy: { name: 'asc' },
   })
@@ -1060,6 +1076,8 @@ export async function getPlacementGrid(req: PlcRequest): Promise<PlcPayload> {
         owner: own?.kind ?? 'none',
         ownerLabel: own?.label ?? null,
         hasReportRow: m != null,
+        pinPlacement: c.pinPlacement,
+        gateOpen: c.liveBidWritesEnabled,
         flags,
       })
     }
@@ -1265,5 +1283,180 @@ export async function getPlacementGrid(req: PlcRequest): Promise<PlcPayload> {
     flag: req.flag,
     rows: sorted,
     total: sorted.length,
+  }
+}
+
+// ── PLC.3 · the preview ───────────────────────────────────────────────────────────────────────
+//
+// 🔴 No bulk write commits without this. It is the whole safety story of the session: the page
+// already knows which campaigns an engine will overwrite within fifteen minutes, which are pinned,
+// which have the gate shut and which are already at the value — and an operator who cannot see
+// that before committing is being asked to trust a number.
+
+/** Why a campaign in scope will NOT be written. Ordered by the order the write itself would hit. */
+export type PlcSkipReason = 'archived' | 'pinned' | 'gate-closed' | 'no-change'
+
+export interface PlcPreviewRow {
+  campaignId: string
+  name: string
+  marketplace: string | null
+  status: string
+  biddingStrategy: string | null
+  owner: PlcOwnerKind
+  ownerLabel: string | null
+  /** the campaign's three lanes as they stand */
+  current: Record<PlcLaneKey, number>
+  /** …and as they would stand. Always all three — see `buildManualAdjustments`. */
+  proposed: Record<PlcLaneKey, number>
+  /** null when this row would be written; otherwise why it will not be */
+  skip: PlcSkipReason | null
+  /**
+   * 🔴 The engine will undo this within ~15 minutes. Not a skip — the write WOULD land — but the
+   * operator must choose it deliberately, so it is surfaced separately from the refusals.
+   */
+  revertedByEngine: boolean
+  /** the campaign's highest live base bid, in cents; null when it has no bid at all */
+  maxBaseBidCents: number | null
+  /** base × (1 + pct/100) × strategy headroom — what Amazon can actually charge, before → after */
+  effectiveBidBefore: number | null
+  effectiveBidAfter: number | null
+  /** true when the PROPOSAL would create a compounding campaign that is not one today */
+  compoundingAfter: boolean
+}
+
+export interface PlcPreview {
+  lane: PlcLaneKey
+  pct: number
+  scope: { market: string; boundBy: PlcGrain; campaigns: number; contradiction: string | null }
+  counts: {
+    /** campaigns the write would actually touch */
+    willWrite: number
+    /** …of which an engine reverts within ~15 minutes */
+    revertedByEngine: number
+    skipped: Record<PlcSkipReason, number>
+    /** proposals that would newly pair up-and-down bidding with Top > 100% */
+    compoundingCreated: number
+  }
+  rows: PlcPreviewRow[]
+  /**
+   * Amazon's multipliers are 0–900 and ONE-DIRECTIONAL — you cannot bid a lane down. Stated in the
+   * payload so the UI cannot invent a "lower Top" affordance that does not exist (study §6.1).
+   */
+  note: string
+}
+
+export interface PlcPreviewRequest extends Pick<PlcRequest, 'market' | 'line' | 'portfolio' | 'campaign' | 'lane' | 'flag'> {
+  lane: PlcLaneKey
+  pct: number
+  /** narrow to the campaign statuses the grid is showing; 'enabled' is the safe default */
+  status: 'enabled' | 'all'
+}
+
+/**
+ * What a scope-bulk write would do, campaign by campaign, without doing any of it.
+ *
+ * Deliberately NOT filtered by `?q=`: the search narrows what you are LOOKING at, and a bulk action
+ * that silently followed a half-typed search term would be the worst possible reading of the same
+ * defect PLC.0 already fixed on the counts.
+ */
+export async function previewPlacementBulk(req: PlcPreviewRequest): Promise<PlcPreview> {
+  const lane = LANE_BY_KEY[req.lane]
+  const pct = Math.max(0, Math.min(900, Math.round(req.pct)))
+
+  const scope = await resolveScope({ ...req, preset: null, start: null, end: null, q: null, sort: null, dir: 'desc' } as PlcRequest)
+  const noCampaigns = scope.campaignIds != null && scope.campaignIds.length === 0
+
+  const campaigns = noCampaigns ? [] : await prisma.campaign.findMany({
+    where: {
+      ...(scope.campaignIds ? { id: { in: scope.campaignIds } } : {}),
+      ...(req.status === 'enabled' ? { status: 'ENABLED' } : {}),
+    },
+    select: {
+      id: true, name: true, marketplace: true, status: true, biddingStrategy: true,
+      dynamicBidding: true, pinPlacement: true, liveBidWritesEnabled: true,
+    },
+    orderBy: { name: 'asc' },
+  })
+
+  const ownership = await resolveOwnership()
+  // The flag filter is applied to the SAME campaign set the grid flags, so "apply to the inverted
+  // ones" means exactly the rows the operator is looking at.
+  const flagged = req.flag === 'all' ? campaigns : campaigns.filter((c) => {
+    const m = laneMultipliers(c.dynamicBidding)
+    const own = ownership.byCampaign.get(c.id)
+    if (req.flag === 'unmanaged') return !own && PLC_LANES.some((l) => m[l] > 0)
+    if (req.flag === 'decorative') return (ownership.decorativeByCampaign.get(c.id)?.decorative.length ?? 0) > 0
+    if (req.flag === 'compounding') return compoundingOf(c.biddingStrategy, m[PLACEMENT_TOP]).at
+    // `inverted` needs the window's per-lane ROAS, which a preview over an unbounded scope does not
+    // load. The UI only offers a flag it can honour, and the route refuses this one explicitly.
+    return true
+  })
+
+  const maxBase = await resolveMaxBaseBidByCampaign(flagged.map((c) => c.id))
+
+  const rows: PlcPreviewRow[] = flagged.map((c) => {
+    const cur = laneMultipliers(c.dynamicBidding)
+    const own = ownership.byCampaign.get(c.id)
+    const proposedLanes = { ...cur, [lane]: pct } as Record<PlcLane, number>
+
+    // The order matters and mirrors the order the write itself hits them: the gate refuses before
+    // Amazon is ever called, and a no-op is not a refusal at all.
+    const skip: PlcSkipReason | null =
+      c.status === 'ARCHIVED' ? 'archived'
+        : c.pinPlacement ? 'pinned'
+          : !c.liveBidWritesEnabled ? 'gate-closed'
+            : cur[lane] === pct ? 'no-change'
+              : null
+
+    const base = maxBase.get(c.id) ?? null
+    const headroom = strategyHeadroom(c.biddingStrategy)
+    const eff = (p: number) => (base == null ? null : Math.round(base * (1 + p / 100) * headroom))
+
+    return {
+      campaignId: c.id,
+      name: c.name,
+      marketplace: c.marketplace,
+      status: c.status,
+      biddingStrategy: c.biddingStrategy,
+      owner: own?.kind ?? 'none',
+      ownerLabel: own?.label ?? null,
+      current: { top: cur[PLACEMENT_TOP], rest: cur[PLACEMENT_REST], product: cur[PLACEMENT_PRODUCT] },
+      proposed: { top: proposedLanes[PLACEMENT_TOP], rest: proposedLanes[PLACEMENT_REST], product: proposedLanes[PLACEMENT_PRODUCT] },
+      skip,
+      // Only meaningful for a row that would actually be written.
+      revertedByEngine: skip == null && !!own,
+      maxBaseBidCents: base,
+      effectiveBidBefore: eff(cur[lane]),
+      effectiveBidAfter: eff(pct),
+      // Reuses the flag's own function so the warning and the chip cannot disagree.
+      compoundingAfter: skip == null
+        && compoundingOf(c.biddingStrategy, proposedLanes[PLACEMENT_TOP]).at
+        && !compoundingOf(c.biddingStrategy, cur[PLACEMENT_TOP]).at,
+    }
+  })
+
+  const skipped: Record<PlcSkipReason, number> = { archived: 0, pinned: 0, 'gate-closed': 0, 'no-change': 0 }
+  for (const r of rows) if (r.skip) skipped[r.skip] += 1
+
+  return {
+    lane: req.lane,
+    pct,
+    scope: {
+      market: req.market,
+      // `boundByOf` reads only the three scope grains, so it takes them directly rather than a
+      // cast that claims this request is a grid request when it is not.
+      boundBy: req.campaign ? 'campaign' : req.portfolio ? 'portfolio' : req.line ? 'line' : 'market',
+      campaigns: campaigns.length,
+      contradiction: scope.contradiction,
+    },
+    counts: {
+      willWrite: rows.filter((r) => r.skip == null).length,
+      revertedByEngine: rows.filter((r) => r.revertedByEngine).length,
+      skipped,
+      compoundingCreated: rows.filter((r) => r.compoundingAfter).length,
+    },
+    rows,
+    note: 'Amazon placement multipliers are 0–900% and one-directional: a lane cannot be bid DOWN. '
+      + 'A correction is always “raise the other lane” or “zero this one”.',
   }
 }

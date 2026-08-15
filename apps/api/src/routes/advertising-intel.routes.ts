@@ -32,10 +32,11 @@ import {
   type BudState, type BudStatusFilter, type BudView,
 } from '../services/advertising/budget-grid.service.js'
 import {
-  getPlacementGrid, getPlacementCursorForRequest,
+  getPlacementGrid, getPlacementCursorForRequest, previewPlacementBulk,
   PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, PLC_FLAG_KEYS, LANE_BY_KEY,
   type PlcLaneKey, type PlcSortKey, type PlcFlagKey,
 } from '../services/advertising/placement-grid.service.js'
+import { buildManualAdjustments, type ManagedPlacement } from '../services/advertising/ads-placement-manual.js'
 import { getShareOfVoice, SOV_MARKETS, SOV_WEEKS } from '../services/advertising/share-of-voice.service.js'
 import { envEnabled } from '../utils/env-flag.js'
 import { cronStartupState } from '../jobs/cron-startup-state.js'
@@ -1292,6 +1293,96 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       failed: outcomes.filter((o) => o.outcome === 'failed').length,
       outcomes,
     }
+  })
+
+  // ── PLC.3 — what a scope-bulk write WOULD do ────────────────────────
+  //
+  // Read-only. No bulk write may commit without this, because the page already knows four things
+  // the operator cannot see on the grid: which campaigns an engine overwrites within fifteen
+  // minutes, which are pinned, which have the write gate shut, and which are already at the value.
+  //
+  // Deliberately NOT filtered by `?q=` — the search narrows what you are looking at, not what you
+  // are acting on, and a bulk that quietly followed a half-typed search term is the worst possible
+  // reading of the defect PLC.0 already fixed on the counts.
+  fastify.get('/advertising/placements/preview', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const raw = (q.market ?? '').trim()
+    const market = raw.toLowerCase() === PLC_MARKET_ALL ? PLC_MARKET_ALL : raw.toUpperCase()
+    if (market !== PLC_MARKET_ALL && !PLC_MARKETS.includes(market as (typeof PLC_MARKETS)[number])) {
+      reply.status(400)
+      return { error: `market is required and must be one of ${PLC_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    }
+    const lane = (Object.keys(LANE_BY_KEY) as PlcLaneKey[]).includes(q.lane as PlcLaneKey) ? (q.lane as PlcLaneKey) : null
+    if (!lane) { reply.status(400); return { error: 'lane must be one of top/rest/product', code: 'lane_required' } }
+    const pct = Number(q.pct)
+    if (!Number.isFinite(pct)) { reply.status(400); return { error: 'pct must be a number 0-900', code: 'pct_required' } }
+    // `inverted` is the one flag a preview cannot honour: it needs the window's per-lane ROAS, and
+    // this endpoint is scope-shaped rather than window-shaped. Refused by name rather than silently
+    // widened to every campaign, which would apply a bulk to 220 campaigns instead of 9.
+    const flag = (PLC_FLAG_KEYS as readonly string[]).includes(q.flag ?? '') ? (q.flag as PlcFlagKey) : 'all'
+    if (flag === 'inverted') {
+      reply.status(400)
+      return { error: 'a bulk cannot be scoped to “inverted”: the verdict depends on the date window, so select those campaigns individually', code: 'flag_not_bulkable' }
+    }
+    const out = await previewPlacementBulk({
+      market,
+      line: q.line || null,
+      portfolio: q.portfolio || null,
+      campaign: q.campaign || null,
+      lane,
+      pct,
+      flag,
+      status: q.status === 'all' ? 'all' : 'enabled',
+    })
+    reply.header('Cache-Control', 'no-store')
+    return out
+  })
+
+  // ── PLC.3 — the one manual placement write ──────────────────────────
+  //
+  // 🔴 It takes ONE lane and merges server-side. That is the whole point.
+  //
+  // `updatePlacementBidding` writes `placementBidding` WHOLESALE (`ads-create.service.ts:972`), so
+  // a caller sending only the lane it changed leaves the other two absent — and absent is 0 to
+  // Amazon. A one-lane payload is therefore a silent two-lane erase, and the obvious client is the
+  // one that writes it. Accepting a lane rather than an array makes that shape unreachable from
+  // this route: `buildManualAdjustments` (unit-tested, 12 cases) always emits all three.
+  //
+  // `PATCH /advertising/campaigns/:id/placements` keeps its `adjustments[]` contract untouched for
+  // the callers that already send a full profile.
+  fastify.patch('/advertising/placements/:campaignId/lane', async (request, reply) => {
+    const { campaignId } = request.params as { campaignId: string }
+    const b = (request.body ?? {}) as { lane?: string; percentage?: number; reason?: string }
+    const lane = (Object.keys(LANE_BY_KEY) as PlcLaneKey[]).includes(b.lane as PlcLaneKey) ? LANE_BY_KEY[b.lane as PlcLaneKey] : null
+    if (!lane) { reply.status(400); return { error: 'lane must be one of top/rest/product', code: 'lane_required' } }
+    if (!Number.isFinite(Number(b.percentage))) { reply.status(400); return { error: 'percentage must be a number 0-900', code: 'percentage_required' } }
+
+    const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
+    if (!c) { reply.status(404); return { error: 'campaign not found' } }
+    const existing = ((c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> })?.placementBidding) ?? []
+    const adjustments = buildManualAdjustments(existing, lane as ManagedPlacement, Number(b.percentage))
+
+    const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+    try {
+      // The result now carries `reason` + `deniedAt` on a refusal (PLC.3, ads-create.service.ts),
+      // so the UI can print the gate's own sentence instead of "HTTP 200".
+      //
+      // Actor from `authUser`, this file's own convention (NEG.3 `:527`), not the `x-actor-id`
+      // header sniff `advertising.routes.ts:120` uses — that helper is module-private there, and
+      // real auth beats a header a client sets for itself.
+      //
+      // The ads read cache is flushed by this plugin's own `onResponse` hook (`:58`), which fires
+      // on any non-GET under `/advertising/` that returns < 400. Verified rather than assumed:
+      // `GET /advertising/campaigns` sits behind `cached(key, 300)` and feeds the Ad Manager and
+      // the Control Room, so without a flush a multiplier this route changed would read five
+      // minutes stale on both.
+      return await updatePlacementBidding({
+        campaignId,
+        adjustments,
+        actor: `user:${(request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'}` as never,
+        reason: typeof b.reason === 'string' && b.reason.trim() ? b.reason.trim() : undefined,
+      })
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── BID.S0 — the poll cursor ────────────────────────────────────────
@@ -2600,15 +2691,54 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const since = new Date(Date.now() - days * 86_400_000)
     const where = { createdAt: { gte: since }, ...(q.entityType ? { entityType: q.entityType } : {}) }
     reply.header('Cache-Control', 'private, max-age=30')
-    const [byKind, recent] = await Promise.all([
+    // AUTO.P0 — the AUTOMATION refusal family, on this route rather than a second one. Two routes
+    // returning the same counts drift, and `/advertising/write-refusals` is already the question
+    // "what was refused"; a rule refused by its own cap is the same question with a different
+    // subject. `automation` is a COUNTER (27,629 refusals/day measured — a row each would be 10M
+    // a year), so it carries counts and one verbatim last-instance per (actor, day, reason),
+    // where `byKind`/`recent` above carry the gate's per-instance rows.
+    const sinceDay = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10)
+    const [byKind, recent, autoRows] = await Promise.all([
       prisma.adWriteRefusal.groupBy({ by: ['deniedAt'], where, _count: { _all: true } }),
       prisma.adWriteRefusal.findMany({ where, orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.automationRefusalDaily.findMany({
+        where: { dayUtc: { gte: sinceDay } },
+        orderBy: [{ dayUtc: 'desc' }, { count: 'desc' }],
+      }),
     ])
+    const ruleNames = autoRows.length
+      ? new Map((await prisma.automationRule.findMany({
+        where: { id: { in: [...new Set(autoRows.map((r) => r.actorId))] } },
+        select: { id: true, name: true, maxExecutionsPerDay: true },
+      })).map((r) => [r.id, r]))
+      : new Map()
+    const byActor = new Map<string, { actorId: string; actorKind: string; actorName: string | null; cap: number | null; total: number; byReason: Record<string, number>; lastAt: Date; lastReason: string }>()
+    for (const r of autoRows) {
+      const cur = byActor.get(r.actorId)
+      if (!cur) {
+        const named = ruleNames.get(r.actorId)
+        byActor.set(r.actorId, {
+          actorId: r.actorId, actorKind: r.actorKind,
+          actorName: named?.name ?? null, cap: named?.maxExecutionsPerDay ?? null,
+          total: r.count, byReason: { [r.reason]: r.count }, lastAt: r.lastAt, lastReason: r.lastReason,
+        })
+        continue
+      }
+      cur.total += r.count
+      cur.byReason[r.reason] = (cur.byReason[r.reason] ?? 0) + r.count
+      if (r.lastAt > cur.lastAt) { cur.lastAt = r.lastAt; cur.lastReason = r.lastReason }
+    }
     return {
       recordStarts: '2026-08-15',
       windowDays: days,
       byKind: byKind.map((g) => ({ deniedAt: g.deniedAt, count: g._count._all })),
       recent,
+      // 🔴 A refusal is never a failure. Nothing in here may be folded into a failure rate.
+      automation: {
+        recordStarts: '2026-08-16',
+        byActor: [...byActor.values()].sort((a, b) => b.total - a.total),
+        byDay: autoRows.map((r) => ({ dayUtc: r.dayUtc, actorId: r.actorId, reason: r.reason, count: r.count })),
+      },
     }
   })
 }
