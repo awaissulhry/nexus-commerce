@@ -56,6 +56,7 @@ import { BidSpark } from './BidSpark'
 import { NO_WRITE_ACTIONS, type BidSlotProps } from './slot-contract'
 import { BidSections } from './BidSections'
 import { BidTargetDrawer } from './BidTargetDrawer'
+import { BidBidderBand } from './BidBidderBand'
 // Interim, until S7 replaces it: rendered exactly as the tab rendered it, so nothing is lost in the
 // move off `?tab=bid`.
 import { RuleListTab } from '../tabs/RuleListTab'
@@ -691,6 +692,9 @@ export function BidClient() {
         contradiction={sc?.contradiction ?? null}
         onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign })}
       />
+
+      {/* S1 — the bidder band, above the grid where the seam comment placed it. */}
+      <BidBidderBand {...slotProps} />
 
       {resolution && (
         <p className="h10-bd-said">

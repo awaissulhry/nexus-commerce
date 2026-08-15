@@ -143,6 +143,9 @@ export interface BidGridPayload {
     liveCampaigns: number
     measured: number
     spendCents: number
+    /** BID.S1 — the bidder split at CAMPAIGN grain, ENABLED campaigns in scope. */
+    bidders: { schedule: number; goal: number; manual: number; none: number }
+    noBidder: { campaigns: number; spendCents: number; gatesOpen: number }
   }
   facets: {
     kind: BidFacet[]

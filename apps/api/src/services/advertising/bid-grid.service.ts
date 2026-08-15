@@ -709,6 +709,25 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
    * applied a filter their count did not match. `spend` carries no click for exactly that reason:
    * there is no filter that would return "the rows summing to €X", so it is a stat, not a button.
    */
+  /**
+   * BID.S1 — the bidder split at CAMPAIGN grain, over the ENABLED campaigns in scope. This is
+   * the page's real finding given a number: 41 live campaigns receive no bid write from anything
+   * (23.3% of live spend when measured), their gates OPEN — nothing is stopping a bidder from
+   * reaching them, and nothing is trying. Spend is THIS WINDOW's, and the band says so.
+   */
+  const byCampaign = new Map<string, { bidder: BidderKind; spendCents: number }>()
+  for (const r of all) {
+    if (r.campaignStatus !== 'ENABLED') continue
+    const c = byCampaign.get(r.campaignId) ?? { bidder: r.bidder, spendCents: 0 }
+    c.spendCents += r.spendCents
+    byCampaign.set(r.campaignId, c)
+  }
+  const noBidderIds = [...byCampaign.entries()].filter(([, c]) => c.bidder === 'none').map(([id]) => id)
+  const gatesOpen = noBidderIds.length
+    ? await prisma.campaign.count({ where: { id: { in: noBidderIds }, liveBidWritesEnabled: true } })
+    : 0
+  const bidderCount = (k: BidderKind) => [...byCampaign.values()].filter((c) => c.bidder === k).length
+
   const census = {
     targets: all.length,
     campaigns: new Set(all.map((r) => r.campaignId)).size,
@@ -716,6 +735,13 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     liveCampaigns: new Set(all.filter((r) => r.campaignStatus === 'ENABLED').map((r) => r.campaignId)).size,
     measured: all.filter((r) => r.measured).length,
     spendCents: all.reduce((s, r) => s + r.spendCents, 0),
+    // S1 (additive)
+    bidders: { schedule: bidderCount('schedule'), goal: bidderCount('goal'), manual: bidderCount('manual'), none: bidderCount('none') },
+    noBidder: {
+      campaigns: noBidderIds.length,
+      spendCents: noBidderIds.reduce((s, id) => s + (byCampaign.get(id)?.spendCents ?? 0), 0),
+      gatesOpen,
+    },
   }
 
   // ── the campaign roll-up ──────────────────────────────────────────────────────────────────────

@@ -4631,3 +4631,12 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-bd3-writes th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: #667080; padding: 3px 10px 5px 0; border-bottom: 1px solid #e3e7ec; }
 .h10-bd3-writes td { padding: 5px 10px 5px 0; border-bottom: 1px solid #eef1f5; color: #1c2530; font-variant-numeric: tabular-nums; }
 .h10-bd3-writes tr.failed td { color: #b42318; }
+
+/* BID.S1 — the bidder band */
+.h10-bd1 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; font-size: 12.5px; color: #3f4754; }
+.h10-bd1-k { font-weight: 700; color: #1c2530; }
+.h10-bd1-seg b { font-variant-numeric: tabular-nums; }
+.h10-bd1-seg.ok { color: #177a41; }
+.h10-bd1-none { appearance: none; font: inherit; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 7px; padding: 3px 9px; }
+.h10-bd1-none:hover { border-color: #f6c344; }
+.h10-bd1-none b { font-variant-numeric: tabular-nums; }
