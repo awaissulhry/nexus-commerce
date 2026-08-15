@@ -12,14 +12,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const campaignFindUnique = vi.fn()
+const campaignFindMany = vi.fn(async () => [] as unknown[])
 const connFindFirst = vi.fn()
 const protectionFindMany = vi.fn(async () => [] as unknown[])
+// AUTO.A7 — the ceiling check's reads. Empty by default so every pre-existing case is untouched.
+const ceilingFindMany = vi.fn(async () => [] as unknown[])
+const actionLogFindMany = vi.fn(async () => [] as unknown[])
+const productAdFindMany = vi.fn(async () => [] as unknown[])
+const refusalCreate = vi.fn(async () => ({}))
 
 vi.mock('../../db.js', () => ({
   default: {
-    campaign: { get findUnique() { return campaignFindUnique } },
+    campaign: { get findUnique() { return campaignFindUnique }, get findMany() { return campaignFindMany } },
     amazonAdsConnection: { get findFirst() { return connFindFirst } },
     adKeywordProtection: { get findMany() { return protectionFindMany } },
+    adSpendCeiling: { get findMany() { return ceilingFindMany } },
+    advertisingActionLog: { get findMany() { return actionLogFindMany } },
+    adProductAd: { get findMany() { return productAdFindMany } },
+    adWriteRefusal: { get create() { return refusalCreate } },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))
@@ -45,16 +55,26 @@ const OPEN_CAMPAIGN = {
   minBidCents: null as number | null, maxBidCents: null as number | null,
   // ACR.1.2b — unpinned is every existing row's state, so the default fixture carries it.
   pinPlacement: false, pinBids: false, pinBudget: false, pinNote: null as string | null,
+  // AUTO.A7 — the ceiling check reads these off the same row.
+  dailyBudget: 5, portfolioId: null as string | null, marketplace: 'IT' as string | null,
 }
 
 beforeEach(() => {
   campaignFindUnique.mockReset()
+  campaignFindMany.mockReset()
   connFindFirst.mockReset()
   protectionFindMany.mockReset()
+  ceilingFindMany.mockReset()
+  actionLogFindMany.mockReset()
+  productAdFindMany.mockReset()
   connFindFirst.mockResolvedValue(LIVE_CONN)
   automationState.mockResolvedValue({ autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: false, degraded: false })
   campaignFindUnique.mockResolvedValue(OPEN_CAMPAIGN)
+  campaignFindMany.mockResolvedValue([])
   protectionFindMany.mockResolvedValue([])
+  ceilingFindMany.mockResolvedValue([])
+  actionLogFindMany.mockResolvedValue([])
+  productAdFindMany.mockResolvedValue([])
 })
 
 const base = { marketplace: 'IT', payloadValueCents: 100, campaignId: 'camp-1' }
@@ -407,6 +427,55 @@ describe('ACR.1.2b — pins bind AT THE GATE', () => {
 
   it('an unpinned campaign is unchanged — every existing row behaves as before', async () => {
     const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, fields: ['bid', 'dailyBudget'] })
+    expect(r.allowed).toBe(true)
+  })
+})
+
+// AUTO.A7 — per-scope spend ceilings, at the gate.
+describe('AUTO.A7 — per-scope spend ceilings', () => {
+  const budgetWrite = { ...base, field: 'dailyBudget', intendedValueCents: 2_000 } // €5 → €20
+
+  it('no ceiling rows ⇒ untouched (today\'s account)', async () => {
+    const r = await checkAdsWriteGate(budgetWrite)
+    expect(r.allowed).toBe(true)
+  })
+
+  it('refuses a budget increase past a CAMPAIGN ceiling, naming it', async () => {
+    ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the GALE EXACT IT campaign', dailyCapCents: 1_000 }])
+    const r = await checkAdsWriteGate(budgetWrite) // +€15 vs a €10/day ceiling
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) {
+      expect(r.deniedAt).toBe('spend_ceiling')
+      expect(r.reason).toContain('the GALE EXACT IT campaign')
+      expect(r.reason).toContain('€10.00')
+    }
+  })
+
+  it('counts today\'s prior authorised increases against the cap', async () => {
+    ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 2_000 }])
+    // €8 of increases already authorised today (payloads are EUROS)
+    actionLogFindMany.mockResolvedValue([{ payloadBefore: { dailyBudget: 2 }, payloadAfter: { dailyBudget: 10 } }])
+    const r = await checkAdsWriteGate(budgetWrite) // +€15 more vs €20 cap with €8 used
+    expect(r.allowed).toBe(false)
+  })
+
+  it('a budget CUT never trips a spend ceiling', async () => {
+    ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 100 }])
+    const r = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 100 }) // €5 → €1
+    expect(r.allowed).toBe(true)
+  })
+
+  it('a MARKET ceiling binds through the campaign\'s marketplace', async () => {
+    ceilingFindMany.mockResolvedValue([{ grain: 'MARKET', scopeId: 'IT', label: 'the IT market', dailyCapCents: 500 }])
+    campaignFindMany.mockResolvedValue([{ id: 'camp-1' }, { id: 'camp-2' }])
+    const r = await checkAdsWriteGate(budgetWrite) // +€15 vs €5/day market ceiling
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.reason).toContain('the IT market')
+  })
+
+  it('under every ceiling ⇒ allowed', async () => {
+    ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 10_000 }])
+    const r = await checkAdsWriteGate(budgetWrite) // +€15 vs €100/day
     expect(r.allowed).toBe(true)
   })
 })

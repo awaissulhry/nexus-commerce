@@ -363,23 +363,34 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   // when it carries several we surface the bid field, which is the bounded one.
   const bidChange = payload.fieldChanges.find((c) => c.field === 'bid' || c.field === 'defaultBid')
   const intendedBidCents = bidChange?.newValue != null ? Number(bidChange.newValue) : null
+  // AUTO.A7 — a budget change carries its intended value too, so the per-scope spend ceilings
+  // can bind it. `dailyBudget` fieldChanges are EUR (Campaign.dailyBudget is Decimal EUR) — the
+  // one ads money field that is not cents; the gate wants cents.
+  const budgetChange = !bidChange ? payload.fieldChanges.find((c) => c.field === 'dailyBudget') : undefined
+  const intendedBudgetCents = budgetChange?.newValue != null && Number.isFinite(Number(budgetChange.newValue))
+    ? Math.round(Number(budgetChange.newValue) * 100)
+    : null
   const gate = await checkAdsWriteGate({
     marketplace,
     payloadValueCents,
     campaignId,
-    field: bidChange?.field ?? payload.fieldChanges[0]?.field ?? null,
+    field: bidChange?.field ?? budgetChange?.field ?? payload.fieldChanges[0]?.field ?? null,
     // ACR.1.2b — the authority pins need EVERY field, not the one representative field the
     // A1 bounds want. A payload carrying both a bid and a budget change would otherwise be
     // judged against whichever one `field` happened to surface, so a budget pin would hold
     // on single-field payloads and silently miss the combined one.
     fields: payload.fieldChanges.map((c) => c.field),
-    intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : null,
+    intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : intendedBudgetCents,
     // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a min bound
     // must not block it.
     isSuppression: payload.force === true,
   })
   if (gate.allowed === false) {
-    logGateDeny({ queueId, marketplace, payloadValueCents }, gate.reason, gate.deniedAt)
+    logGateDeny(
+      { queueId, marketplace, payloadValueCents, campaignId, entityType: payload.entityType ?? null, entityId: payload.entityId ?? null },
+      gate.reason,
+      gate.deniedAt,
+    )
     await prisma.outboundSyncQueue.update({
       where: { id: queueId },
       data: {

@@ -2221,6 +2221,68 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const { getConflicts } = await import('../services/advertising/ads-conflicts.service.js')
     return getConflicts(windowDays)
   })
+
+  /**
+   * AUTO.A7 — the per-scope spend ceilings (AdSpendCeiling, KT.6's model), CRUD at last. KT.6
+   * shipped the read deliberately and left setting values to this page — "the values are set on
+   * Automations" is the substrate arbitration's line. The gate half (`spend_ceiling` denials on
+   * budget increases) lives in ads-write-gate.ts and is inert until a row exists.
+   */
+  fastify.get('/advertising/spend-ceilings', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const rows = await prisma.adSpendCeiling.findMany({ orderBy: [{ grain: 'asc' }, { label: 'asc' }] })
+    return { ceilings: rows }
+  })
+
+  fastify.put('/advertising/spend-ceilings', async (request, reply) => {
+    const b = request.body as { grain?: string; scopeId?: string; label?: string; dailyCapCents?: number | null; enabled?: boolean; note?: string | null }
+    const GRAINS = new Set(['CAMPAIGN', 'LINE', 'PORTFOLIO', 'MARKET'])
+    if (!b?.grain || !GRAINS.has(b.grain) || !b.scopeId || !b.label?.trim()) {
+      reply.code(400)
+      return { error: 'grain (CAMPAIGN|LINE|PORTFOLIO|MARKET) + scopeId + label required' }
+    }
+    if (b.dailyCapCents != null && (!Number.isFinite(b.dailyCapCents) || b.dailyCapCents < 0)) {
+      reply.code(400)
+      return { error: 'dailyCapCents must be a non-negative integer, or null for "opened but not set"' }
+    }
+    const row = await prisma.adSpendCeiling.upsert({
+      where: { grain_scopeId: { grain: b.grain, scopeId: b.scopeId } },
+      create: { grain: b.grain, scopeId: b.scopeId, label: b.label.trim(), dailyCapCents: b.dailyCapCents ?? null, enabled: b.enabled ?? true, note: b.note ?? null, createdBy: 'operator' },
+      update: { label: b.label.trim(), dailyCapCents: b.dailyCapCents ?? null, ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.note !== undefined ? { note: b.note } : {}) },
+    })
+    return { ceiling: row }
+  })
+
+  fastify.delete('/advertising/spend-ceilings', async (request, reply) => {
+    const q = request.query as { grain?: string; scopeId?: string }
+    if (!q.grain || !q.scopeId) { reply.code(400); return { error: 'grain + scopeId required' } }
+    const existing = await prisma.adSpendCeiling.findUnique({ where: { grain_scopeId: { grain: q.grain, scopeId: q.scopeId } } })
+    if (!existing) { reply.code(404); return { error: 'not_found' } }
+    await prisma.adSpendCeiling.delete({ where: { id: existing.id } })
+    return { ok: true }
+  })
+
+  /**
+   * AUTO.A7 / substrate S5 — the gate's refusal record, countable at last. The table starts
+   * 2026-08-15 (the payload says so): earlier refusals exist only in the application log, and a
+   * surface must never read this zero as "the gate refused nothing before then".
+   */
+  fastify.get('/advertising/write-refusals', async (request, reply) => {
+    const q = request.query as { days?: string }
+    const days = q.days && Number.isFinite(Number(q.days)) ? Math.min(60, Math.max(1, Number(q.days))) : 7
+    const since = new Date(Date.now() - days * 86_400_000)
+    reply.header('Cache-Control', 'private, max-age=30')
+    const [byKind, recent] = await Promise.all([
+      prisma.adWriteRefusal.groupBy({ by: ['deniedAt'], where: { createdAt: { gte: since } }, _count: { _all: true } }),
+      prisma.adWriteRefusal.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+    ])
+    return {
+      recordStarts: '2026-08-15',
+      windowDays: days,
+      byKind: byKind.map((g) => ({ deniedAt: g.deniedAt, count: g._count._all })),
+      recent,
+    }
+  })
 }
 
 export default advertisingIntelRoutes

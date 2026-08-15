@@ -16309,6 +16309,37 @@ model AdSpendCeiling {
   @@index([enabled])
 }
 
+/// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
+///
+/// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could
+/// count refusals by the gate — NEG.8 renders an em-dash where that number should be, and the
+/// AUTO study called refusals "unsourceable since 2026-08-04". The record is written INSIDE
+/// `logGateDeny` so no caller can forget it, and a failed insert is error-logged loudly, never
+/// swallowed — a refusal record that silently fails to write is worse than none, because the
+/// surface then reports zero. Surfaces reading this must state the record starts 2026-08-15;
+/// earlier refusals exist only in the application log.
+model AdWriteRefusal {
+  id String @id @default(cuid())
+
+  /// The GateDeniedAt value ('value_cap' | 'campaign_allowlist' | 'spend_ceiling' | …).
+  deniedAt String
+  reason   String
+
+  marketplace String?
+  campaignId  String?
+  entityType  String?
+  entityId    String?
+
+  payloadValueCents Int
+  queueId           String?
+
+  createdAt DateTime @default(now())
+
+  @@index([deniedAt, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([createdAt])
+}
+
 /// KT.6 — one bid proposal raised from a Keyword Tracker row, and the ledger that makes
 /// "how much has this page committed today" answerable.
 ///

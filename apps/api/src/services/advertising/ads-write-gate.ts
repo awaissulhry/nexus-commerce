@@ -37,6 +37,9 @@ export type GateDeniedAt =
   | 'automation_halted'
   // ACR.1.2b — the campaign's placement/bids/budget is pinned: held by hand.
   | 'authority_pin'
+  // AUTO.A7 — a per-SCOPE spend ceiling (AdSpendCeiling: campaign ⊂ line ⊂ portfolio ⊂ market)
+  // refuses a budget increase that would take today's authorised increases past its cap.
+  | 'spend_ceiling'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -226,6 +229,9 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         minBidCents: true, maxBidCents: true,
         // ACR.1.2b — same read, so a pin costs no extra query.
         pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true,
+        // AUTO.A7 — same read again: the spend-ceiling check needs the current budget (for the
+        // increase delta) and the campaign's containing scopes.
+        dailyBudget: true, portfolioId: true, marketplace: true,
       },
     })
     if (!campaign?.liveBidWritesEnabled) {
@@ -287,6 +293,31 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         }
       }
     }
+    /**
+     * AUTO.A7 — per-SCOPE spend ceilings, at the one door every write passes.
+     *
+     * The operator's standing ask, verbatim: a cap "for portfolios or for certain campaigns or
+     * for certain markets", and at the cap "refuse further writes and tell me". `AdSpendCeiling`
+     * (KT.6's model — four grains, campaign ⊂ line ⊂ portfolio ⊂ market) held the values; nothing
+     * enforced them outside KT's own apply path. This binds BUDGET INCREASES: today's authorised
+     * increases (our own ledger — Amazon's spend is 2 days old at best, so the only number that
+     * is correct at the moment of refusal is the one we keep) plus this delta, against every
+     * enabled ceiling whose scope contains the campaign. The TIGHTEST containing scope refuses
+     * first and the refusal names it. A budget CUT never trips a spend ceiling — that asymmetry
+     * is deliberate here and is exactly why BUD.2's baseline exists for the ratchet.
+     * Inert until an operator creates a ceiling row (0 rows exist as this ships).
+     */
+    if (ctx.field === 'dailyBudget' && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
+      const denial = await spendCeilingDenial({
+        campaignId: ctx.campaignId,
+        currentBudgetCents: Math.round(Number(campaign.dailyBudget ?? 0) * 100),
+        intendedCents: ctx.intendedValueCents as number,
+        portfolioId: campaign.portfolioId,
+        marketplace: campaign.marketplace,
+      })
+      if (denial) return denial
+    }
+
     // WC — the maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
     // unlimited bid writes). It counted +1 per ENTITY, so a per-hour rank schedule
     // (~12 entities × ~12–24 flips/day) blew through a small cap by mid-morning and then
@@ -352,11 +383,106 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
 }
 
 /**
+ * AUTO.A7 — the spend-ceiling denial, extracted so the check reads as one sentence above.
+ *
+ * Order of work is cheapest-first: the ceiling rows are fetched before any campaign-set or
+ * ledger query, so an account with no ceilings (today's account) pays one indexed read and
+ * nothing else. LINE ceilings are resolved only if any exist at all.
+ */
+async function spendCeilingDenial(args: {
+  campaignId: string
+  currentBudgetCents: number
+  intendedCents: number
+  portfolioId: string | null
+  marketplace: string | null
+}): Promise<GateDecision | null> {
+  const deltaCents = args.intendedCents - args.currentBudgetCents
+  if (deltaCents <= 0) return null
+
+  const direct = await prisma.adSpendCeiling.findMany({
+    where: {
+      enabled: true,
+      dailyCapCents: { not: null },
+      OR: [
+        { grain: 'CAMPAIGN', scopeId: args.campaignId },
+        ...(args.portfolioId ? [{ grain: 'PORTFOLIO', scopeId: args.portfolioId }] : []),
+        ...(args.marketplace ? [{ grain: 'MARKET', scopeId: args.marketplace }] : []),
+        { grain: 'LINE' },
+      ],
+    },
+    select: { grain: true, scopeId: true, label: true, dailyCapCents: true },
+  })
+  if (direct.length === 0) return null
+
+  // LINE rows matched broadly above; keep only the lines this campaign actually advertises.
+  let ceilings = direct
+  const lineRows = direct.filter((c) => c.grain === 'LINE')
+  if (lineRows.length > 0) {
+    const ads = await prisma.adProductAd.findMany({
+      where: { adGroup: { campaignId: args.campaignId } },
+      select: { product: { select: { parentId: true } } },
+    })
+    const parents = new Set(ads.map((a) => a.product?.parentId).filter((x): x is string => !!x))
+    ceilings = direct.filter((c) => c.grain !== 'LINE' || parents.has(c.scopeId))
+    if (ceilings.length === 0) return null
+  }
+
+  // Tightest containing scope refuses first — an operator clearing the wrong ceiling would be
+  // told the wrong thing about why the account is quiet.
+  const GRAIN_ORDER: Record<string, number> = { CAMPAIGN: 0, LINE: 1, PORTFOLIO: 2, MARKET: 3 }
+  ceilings.sort((a, b) => (GRAIN_ORDER[a.grain] ?? 9) - (GRAIN_ORDER[b.grain] ?? 9))
+
+  const midnightUtc = new Date(`${utcDayKey()}T00:00:00.000Z`)
+  for (const c of ceilings) {
+    // The campaigns this ceiling contains.
+    let campaignIds: string[]
+    if (c.grain === 'CAMPAIGN') campaignIds = [args.campaignId]
+    else if (c.grain === 'PORTFOLIO') campaignIds = (await prisma.campaign.findMany({ where: { portfolioId: c.scopeId }, select: { id: true } })).map((x) => x.id)
+    else if (c.grain === 'MARKET') campaignIds = (await prisma.campaign.findMany({ where: { marketplace: c.scopeId }, select: { id: true } })).map((x) => x.id)
+    else campaignIds = (await prisma.adProductAd.findMany({ where: { product: { parentId: c.scopeId } }, select: { adGroup: { select: { campaignId: true } } } })).map((x) => x.adGroup.campaignId)
+
+    // Today's AUTHORISED budget increases inside the scope — our own ledger, in EUROS in the
+    // payloads (the one ads money field that is not cents; assuming cents inflates 100×).
+    const rows = await prisma.advertisingActionLog.findMany({
+      where: {
+        actionType: 'AD_BUDGET_UPDATE',
+        entityType: 'CAMPAIGN',
+        entityId: { in: campaignIds },
+        createdAt: { gte: midnightUtc },
+        rolledBackAt: null,
+      },
+      select: { payloadBefore: true, payloadAfter: true },
+    })
+    let usedCents = 0
+    for (const r of rows) {
+      const before = Number((r.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+      const after = Number((r.payloadAfter as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+      if (Number.isFinite(before) && Number.isFinite(after) && after > before) usedCents += Math.round((after - before) * 100)
+    }
+    const cap = c.dailyCapCents as number
+    if (usedCents + deltaCents > cap) {
+      return {
+        allowed: false,
+        reason: `raising this budget by €${(deltaCents / 100).toFixed(2)} would take ${c.label} past its €${(cap / 100).toFixed(2)}/day ceiling — €${(usedCents / 100).toFixed(2)} of increases already authorised today (our ledger; Amazon's own spend lags ~2 days)`,
+        deniedAt: 'spend_ceiling',
+      }
+    }
+  }
+  return null
+}
+
+/**
  * Convenience: log a deny decision in the structured format that
  * grep `[ADS-WRITE-GATE-DENY]` will pick up.
+ *
+ * AUTO.A7 / substrate S5 — and, from 2026-08-15, the DURABLE record. Written here so no caller
+ * can forget it. The insert is fire-and-forget so a slow row can never delay the deny path, but
+ * a failure is error-logged LOUDLY — a refusal record that silently fails to write is worse than
+ * none, because every surface reading the table then reports zero. Surfaces must state that the
+ * record starts 2026-08-15; earlier refusals exist only in the application log.
  */
 export function logGateDeny(
-  context: { queueId: string; marketplace: string | null; payloadValueCents: number },
+  context: { queueId: string; marketplace: string | null; payloadValueCents: number; campaignId?: string | null; entityType?: string | null; entityId?: string | null },
   reason: string,
   deniedAt: GateDeniedAt,
 ): void {
@@ -367,6 +493,26 @@ export function logGateDeny(
     reason,
     deniedAt,
   })
+  void prisma.adWriteRefusal
+    .create({
+      data: {
+        deniedAt,
+        reason,
+        marketplace: context.marketplace,
+        campaignId: context.campaignId ?? null,
+        entityType: context.entityType ?? null,
+        entityId: context.entityId ?? null,
+        payloadValueCents: context.payloadValueCents,
+        queueId: context.queueId,
+      },
+    })
+    .catch((err) => {
+      logger.error('[ADS-WRITE-GATE-DENY] refusal record FAILED to persist — refusal surfaces will under-count', {
+        queueId: context.queueId,
+        deniedAt,
+        error: (err as Error).message,
+      })
+    })
 }
 
 /**

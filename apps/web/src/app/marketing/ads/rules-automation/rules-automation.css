@@ -4525,3 +4525,29 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-au-stat.tilebtn:hover { border-color: #c7cdd6; }
 .h10-au-stat.tilebtn.on { border-color: #1f6fde; box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
 .h10-au-stat.exposure .v { color: #b42318; }  /* 5.9:1 on the card ground */
+
+/* AUTO.A7 — the Limits view */
+.h10-au-viewrow { margin: 2px 0 10px; }
+.h10-au-limits { display: flex; flex-direction: column; gap: 18px; }
+.h10-au-limitsec { background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; padding: 14px 16px; }
+.h10-au-limitsec h3 { margin: 0 0 6px; font-size: 13.5px; color: #1c2530; }
+.h10-au-limitsub { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: #4b5563; max-width: 860px; }
+.h10-au-posture { margin: 0; font-size: 13px; color: #1c2530; }
+.h10-au-posture em.bad { font-style: normal; color: #b42318; font-weight: 700; }
+.h10-au-posture .sub, .h10-au-refusals .sub { display: block; margin-top: 4px; font-size: 12px; color: #6b7585; }
+.h10-au-posture a, .h10-au-refusals a { color: #1f6fde; }
+.h10-au-posture.muted, .h10-au-refusals.muted { color: #6b7585; }
+.h10-au-limiterr { display: flex; align-items: center; gap: 6px; color: #b42318; font-size: 12.5px; }
+.h10-au-limitempty { margin: 0 0 10px; font-size: 12.5px; color: #6b7585; }
+.h10-au-limittbl { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.h10-au-limittbl th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: #667080; padding: 4px 10px 6px 0; border-bottom: 1px solid #e3e7ec; }
+.h10-au-limittbl td { padding: 7px 10px 7px 0; border-bottom: 1px solid #eef1f5; color: #1c2530; }
+.h10-au-limittbl tr.off td { color: #98a2b3; }
+.h10-au-limittbl td i { font-style: normal; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
+.h10-au-limitdel { appearance: none; border: none; background: none; color: #98a2b3; cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.h10-au-limitdel:hover { color: #b42318; background: #fef3f2; }
+.h10-au-limitadd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h10-au-limitcap { display: inline-flex; align-items: center; gap: 4px; height: 34px; border: 1px solid #c7cdd6; border-radius: 8px; padding: 0 10px; background: #fff; }
+.h10-au-limitcap input { border: none; outline: none; font: inherit; font-size: 13px; width: 90px; color: #1c2530; }
+.h10-au-limitcap .pf, .h10-au-limitcap .sf { color: #6b7585; font-size: 12.5px; }
+.h10-au-refusals { margin: 0; font-size: 13px; color: #1c2530; display: block; }

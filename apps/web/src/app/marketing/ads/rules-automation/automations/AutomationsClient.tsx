@@ -35,6 +35,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { ModeNotches, RANK, type Level } from './ModeNotches'
 import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
 import { EngineDetail, type EngineActor, type ObservedActor } from './EngineDetail'
+import { LimitsView } from './LimitsView'
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { triggerText } from './ruleText'
 
@@ -81,7 +82,7 @@ export function AutomationsClient() {
   const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
   const [bulk, setBulk] = useState<{ kind: 'mode'; level: Level } | { kind: 'delete' } | null>(null)
   // AUTO.A2 — the non-rule actors, and the All ⇄ Rules ⇄ Engines segment (?kind= in the URL).
-  const [actors, setActors] = useState<{ engines: EngineActor[]; observed: ObservedActor[] } | null>(null)
+  const [actors, setActors] = useState<{ engines: EngineActor[]; observed: ObservedActor[]; global?: { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean } } | null>(null)
   const [actorsErr, setActorsErr] = useState<string | null>(null)
   const [engineKey, setEngineKey] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState<number | null>(null)
@@ -114,6 +115,18 @@ export function AutomationsClient() {
     const v = new URLSearchParams(window.location.search).get('kind')
     return v === 'rules' || v === 'engines' ? v : 'all'
   })
+  // AUTO.A0 — the view switcher (?view=). Actors is the default (decision D1: a person arriving
+  // at the section wants the control plane). Views land as they are built.
+  const [view, setView] = useState<'actors' | 'limits'>(() => {
+    if (typeof window === 'undefined') return 'actors'
+    return new URLSearchParams(window.location.search).get('view') === 'limits' ? 'limits' : 'actors'
+  })
+  const setViewAndUrl = (v: 'actors' | 'limits') => {
+    setView(v)
+    const u = new URL(window.location.href)
+    if (v === 'actors') u.searchParams.delete('view'); else u.searchParams.set('view', v)
+    window.history.replaceState(null, '', u)
+  }
   const setKindAndUrl = (k: ActorKind) => {
     setKind(k)
     const u = new URL(window.location.href)
@@ -145,7 +158,7 @@ export function AutomationsClient() {
       const a = await fetch(`${getBackendUrl()}/api/advertising/actors`, { cache: 'no-store' })
       if (!a.ok) throw new Error(`Could not load engines (${a.status})`)
       const aj = await a.json()
-      setActors({ engines: Array.isArray(aj?.engines) ? aj.engines : [], observed: Array.isArray(aj?.observed) ? aj.observed : [] })
+      setActors({ engines: Array.isArray(aj?.engines) ? aj.engines : [], observed: Array.isArray(aj?.observed) ? aj.observed : [], global: aj?.global })
       setActorsErr(null)
     } catch (e) { setActorsErr((e as Error).message); setActors({ engines: [], observed: [] }) }
     // AUTO.A1 — the queue, in one number. null (not 0) on failure: "no queue" and "could not
@@ -627,10 +640,25 @@ export function AutomationsClient() {
         )}
       </div>
 
+      {/* AUTO.A0 — the view switcher. Views land as they are built; Actors is D1's default. */}
+      <div className="h10-au-viewrow">
+        <SegmentedControl
+          size="sm"
+          value={view}
+          onChange={(v) => setViewAndUrl(v as 'actors' | 'limits')}
+          options={[
+            { value: 'actors', label: 'Actors' },
+            { value: 'limits', label: 'Limits' },
+          ]}
+        />
+      </div>
+
       {err && <div className="h10-au-banner err" role="alert"><AlertTriangle size={15} aria-hidden /><span>{err}</span></div>}
       {note && <div className="h10-au-banner ok" role="status"><Info size={15} aria-hidden /><span>{note}</span></div>}
 
-      {counts.allFailing.length > 0 && (
+      {view === 'limits' && <LimitsView scopeOptions={scopeOptions} global={actors?.global ?? null} />}
+
+      {view === 'actors' && counts.allFailing.length > 0 && (
         <div className="h10-au-banner warn">
           <AlertTriangle size={15} aria-hidden />
           <span>
@@ -643,6 +671,7 @@ export function AutomationsClient() {
         </div>
       )}
 
+      {view === 'actors' && (<>
       {protectedTerms === 0 && (
         <div className="h10-au-banner warn">
           <ShieldAlert size={15} aria-hidden />
@@ -774,6 +803,7 @@ export function AutomationsClient() {
           </span>
         )}
       />
+      </>)}
 
       {detail && (
         <RuleDetail
