@@ -148,10 +148,16 @@ export function BidTargetDrawer({ targetId, row, loading = false, onClose }: {
     return () => { alive = false }
   }, [targetId])
 
-  // `listChanges` returns newest-first and includes operation rows with no numeric value (the
-  // `create_target` row on the fixture). A point needs a number; a log row does not.
+  // `listChanges` returns newest-first and includes operation rows with no value at all — the
+  // `create_target` row on the fixture is one. A point needs a number; a log row does not.
+  //
+  // 🔴 The null check is NOT redundant with `Number.isFinite`. `Number(null)` is **0**, which is
+  // finite, so filtering on `isFinite` alone admits every valueless row and renders it as a change
+  // to €0.00. Seen on production: the fixture's create row showed as "1 Jul 17:35 · €0.00 ·
+  // System · not recorded", and it also put a phantom zero at the left end of the delivered line
+  // and inflated the tally by one.
   const writes = useMemo(
-    () => (changes ?? []).filter((c) => Number.isFinite(Number(c.newValue))).slice().reverse(),
+    () => (changes ?? []).filter((c) => c.newValue != null && Number.isFinite(Number(c.newValue))).slice().reverse(),
     [changes],
   )
   const shown = useMemo(
