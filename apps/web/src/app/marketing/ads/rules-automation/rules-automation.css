@@ -4747,3 +4747,29 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
    unnamed targets as a description rather than an identifier. */
 .h10-bd8-foot a, .h10-bd8-refline a, .rd-p5-foot a { white-space: nowrap; }
 .h10-bd8-tbl .t.unnamed { color: #6b7585; font-style: italic; }
+
+/* PLC.P2 — the inspector rail. The first column became a control again (a BUTTON, so the P0
+   un-link rule on span.t no longer applies); lanes + owner + the ledger inside the shared drawer. */
+.h10-plc-camp button.t {
+  appearance: none; background: none; border: 0; padding: 0; font: inherit; text-align: left;
+  color: #1f6fde; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.h10-plc-camp button.t:hover { text-decoration: underline; }
+.h10-plc2-lanes { margin: 0 0 14px; }
+.h10-plc2-lane { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid #f3f5f8; font-size: 12.5px; color: #3f4754; }
+.h10-plc2-lane .k { flex: 0 0 120px; color: #6b7585; }
+.h10-plc2-lane b { font-size: 13.5px; color: #16202b; font-variant-numeric: tabular-nums; }
+.h10-plc2-lane .v { color: #6b7585; }
+.h10-plc2-owner { margin: 10px 0 0; font-size: 12.5px; color: #3f4754; line-height: 1.5; }
+.h10-plc2-owner a { color: #1f6fde; white-space: nowrap; }
+.h10-plc2-ledger h4 { margin: 0 0 8px; font-size: 12.5px; color: #1c2530; }
+.h10-plc2-ledger ul { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.h10-plc2-ledger li { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: #3f4754; flex-wrap: wrap; }
+.h10-plc2-ledger li .nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-plc2-ledger li .lane { color: #6b7585; flex: 0 0 auto; }
+.h10-plc2-ledger li .who { color: #17436f; font-weight: 600; }
+.h10-plc2-ledger li .why { color: #6b7585; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-plc2-ledger li.more { color: #6b7585; }
+.h10-plc2-muted { margin: 4px 0; font-size: 12.5px; color: #6b7585; line-height: 1.5; }
+.h10-plc2-err { margin: 4px 0; font-size: 12.5px; color: #b42318; display: flex; align-items: center; gap: 6px; }
+.h10-plc2-foot { margin: 0; font-size: 11.5px; color: #6b7585; line-height: 1.5; }

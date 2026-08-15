@@ -55,6 +55,7 @@ import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { PlacementScopeBar, LANE_OPTIONS, type PlcScope, type PlcLaneKey, type ScopeOptionsPayload } from './PlacementScopeBar'
+import { PlcInspector } from './PlcInspector'
 import { useCursorPoll } from '../_shared/useCursorPoll'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
@@ -247,6 +248,8 @@ export function PlacementClient() {
     ? (params.get('sort') as SortKey)
     : 'spend'
   const dir = params.get('dir') === 'asc' ? 'asc' : 'desc'
+  // P2 — the inspector rail. `?campaign=` is the scope grain, so the rail gets its own param.
+  const rowParam = params.get('row') ?? ''
 
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -275,6 +278,19 @@ export function PlacementClient() {
       if (isDefault) next.delete(k)
       else next.set(k, v)
     }
+    const qs = next.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+  }, [params, router])
+
+  // P2 — opening the rail is a navigation (a PUSH), so Back closes it; closing in-place replaces.
+  const openRow = useCallback((id: string) => {
+    const next = new URLSearchParams(params.toString())
+    next.set('row', id)
+    router.push(`?${next.toString()}`, { scroll: false })
+  }, [params, router])
+  const closeRow = useCallback(() => {
+    const next = new URLSearchParams(params.toString())
+    next.delete('row')
     const qs = next.toString()
     router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [params, router])
@@ -748,11 +764,9 @@ export function PlacementClient() {
         firstColLabel="Campaign"
         renderFirst={(r) => (
           <div className="h10-plc-camp">
-            {/* 🔴 `.h10-am-grid td.nm .t` paints this blue at (0,3,1), sets `cursor: pointer` and
-                underlines on hover, because every other consumer of this grid makes the first
-                column a link. This one is not a link — P1 gives the row an inspector — so all
-                three halves of that promise are undone in the CSS at matching specificity. */}
-            <span className="t" title={r.name}>{r.name}</span>
+            {/* P2 — the name opens the inspector rail (`?row=`), so the first column is a real
+                control again; the P0 un-link CSS targeted span.t and this is a button. */}
+            <button type="button" className="t" title={`${r.name} — open the inspector: three lanes, owner, and the change ledger`} onClick={() => openRow(r.campaignId)}>{r.name}</button>
             {r.owner === 'none' && r.multiplierPct > 0 && (
               <span className="fl warn" title="This campaign carries a multiplier on this lane and no engine governs it. Whatever the number is, nothing will revisit it.">unmanaged</span>
             )}
@@ -836,6 +850,16 @@ export function PlacementClient() {
         emptyNode={<EmptyState loading={loading} data={data} q={q} lane={lane} flag={flag} push={push} />}
         reportLabel={data?.dataThrough ? `Amazon placement report · through ${dayMonth(data.dataThrough)}` : undefined}
       />
+
+      {/* P2 — the inspector rail. Lane facts from the loaded payload (no second fetch); the
+          ledger fetched by id, so a deep link outside the current filters still answers. */}
+      {rowParam && (
+        <PlcInspector
+          campaignId={rowParam}
+          lanes={(data?.rows ?? []).filter((r) => r.campaignId === rowParam)}
+          onClose={closeRow}
+        />
+      )}
     </div>
   )
 }
