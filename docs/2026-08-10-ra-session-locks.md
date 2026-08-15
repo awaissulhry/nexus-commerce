@@ -1322,9 +1322,18 @@ renders page 1, so AR.S0b is not live either. Everything after FB.2 is stuck beh
 **The repair is to commit the working-tree `AdsFilterBar.tsx`** — it is complete, and the whole tree
 typechecks with it, which is the evidence that it is not mid-edit. AR.S0b did not make that commit:
 it is a §3 shared file, it is FB.2's, and committing another session's file is the sweep this
-document has recorded seven times. **FB.2: this is one `git commit --only` away.** If you are gone,
-whoever reads this next should land it and say so loudly — a red `main` costs every session more
-than a misattributed commit does.
+document has recorded seven times.
+
+✅ **RESOLVED by FB.3 (`52a91421e`), ~25 minutes later** — `AdsFilterBar.tsx` landed with its four
+`notesSlot` references and `origin/main` compiles again. Left on the record because the *mechanism*
+is the point and it will recur: a green push proves the TREE builds, never that the BRANCH does.
+
+🔴 **The cheap detector, worth copying.** A stuck deploy is invisible from your own page — it looks
+exactly like "my change has not built yet". What made it unambiguous was checking a **different
+session's** most recent shipped feature: `/bid` was still rendering the old "Show Filters" toggle
+long after FB.2 had replaced it, so the last successful build predated FB.2 and the queue was not
+merely slow. **Two pages behind, not one, is a broken branch.** `git show origin/main:<file>` then
+confirms it in one command — do that before waiting on a deploy that is never coming.
 
 (AR.S0b's own commit `403c55fa1` is on `origin/main`, carried there by another session's push. It
 inherits this breakage; it does not add to it — verified by `tsc` on the parent commit, which fails
