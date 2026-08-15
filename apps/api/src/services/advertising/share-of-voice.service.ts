@@ -406,7 +406,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     // SOV.4 — every ENABLED positive keyword target in this market, for the "never bought" half
     // of unbid. One market-wide read and a Set: no per-query lookups.
     prisma.adTarget.findMany({
-      where: { isNegative: false, status: 'ENABLED', NOT: { expressionValue: null }, adGroup: { campaign: { marketplace: market } } },
+      where: { isNegative: false, status: 'ENABLED', expressionValue: { gt: '' }, adGroup: { campaign: { marketplace: market } } },
       select: { expressionValue: true },
     }),
   ])
@@ -1008,7 +1008,7 @@ export async function getSovRowDetail(args: {
       select: { query: true, campaignId: true, impressions: true, clicks: true, costMicros: true },
     }),
     prisma.adTarget.findMany({
-      where: { isNegative: false, status: 'ENABLED', NOT: { expressionValue: null }, adGroup: { campaign: { marketplace: market } } },
+      where: { isNegative: false, status: 'ENABLED', expressionValue: { gt: '' }, adGroup: { campaign: { marketplace: market } } },
       select: { expressionValue: true, expressionType: true, bidCents: true, adGroup: { select: { campaign: { select: { id: true, name: true } } } } },
     }),
   ])
