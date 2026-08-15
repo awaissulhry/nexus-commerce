@@ -182,6 +182,9 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | PLC.0 (`dateRange?` — the existing date control becomes optionally CONTROLLED, additive) | 2026-08-12 | **released** — landed `341d08e31`; prod-verified: `?preset=custom&start=…&end=…` renders in the header's own label.
 | `apps/api/src/routes/advertising-intel.routes.ts` | PLC.1 (`GET /advertising/placements/cursor`, additive) | 2026-08-12 | **claimed** — `grep -a`ed both route files; the path is disjoint from every registered route including PLC.0's own `/advertising/placements` (Fastify treats the two as distinct) and from BID.S0's `/advertising/bid-grid/cursor` |
 | `…/rules-automation/rules-automation.css` | PLC.1 (`h10-plc-*` at EOF, flags + census strip) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
+| `apps/api/src/services/advertising/ads-create.service.ts` | PLC.3 (**carry the gate's refusal reason out of `updatePlacementBidding`**, additive) | 2026-08-16 | **claimed** — ONE return statement (`:1029`) plus its type gains `reason` + `deniedAt`. The audit row, the history rows, the log line and the allowed path are all untouched; every existing caller keeps working because both fields are optional |
+| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.3 (`GET /advertising/placements/preview` + `PATCH /advertising/placements/:campaignId/lane`, additive) | 2026-08-16 | **claimed** — `grep -a`ed BOTH route files: neither path has any hit. Disjoint from NEG.3's `negatives/retire`, RD.P2's `rank-runtime` and PLC.1's `placements/cursor` |
+| `…/rules-automation/rules-automation.css` | PLC.3 (`h10-plc-*` editor/bulk/refusal at EOF) | 2026-08-16 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
 
 | `apps/api/src/routes/advertising-intel.routes.ts` | BUD.1 (`GET /advertising/budget-grid` + `/budget-grid/cursor`, additive) | 2026-08-12 | **released** — landed `97c960b55`, both 401-verified on prod. Paths disjoint from HV.1's, KT.2's, BID.S0's and SOV.0/1's; `grep -a budget-grid` returned nothing across BOTH route files first |
 | `…/rules-automation/_shared/tabs.tsx` | BUD.1 (`budget` → `routed: true` + relabel "Budget Rules" + subtitle) | 2026-08-12 | **released** — landed `c9d564cf9`, hunk verified sole occupant with `git diff -U0` before staging |
@@ -208,10 +211,10 @@ there is no duplicate-registration risk), no `tabs.tsx`, no `rules-automation.cs
 every unit is a single Vercel deploy and the two-deploy ordering trap does not apply to this session
 at all.
 
-| `…/rules-automation/dayparting/*` + `…/tabs/RankGoalsList.tsx` | RD.P2 (the two-grain grid) | 2026-08-12 | **claimed** — page-own, re-claimed after RD.P0 released them |
-| `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **claimed** — `grep -a`ed BOTH route files: `rank-runtime` has **zero** hits, so it collides with nothing, including PLC.1's `/advertising/placements/cursor` and the 20 `/advertising/rank-*` paths already in the 600 KB file |
-| `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **claimed** — the page must derive Mode from the engine's own spec mapping rather than a second copy that is free to drift; nothing else in the engine is touched |
-| `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **claimed** |
+| `…/rules-automation/dayparting/*` + `…/tabs/RankGoalsList.tsx` | RD.P2 (the two-grain grid) | 2026-08-12 | **released** — landed `715aa9372` + `588383417` + `fc6baf017` |
+| `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **released** — landed `1ddda88e2`, prod-verified with the 401-vs-404 trick (`401 {"required":"ads.view"}`, control path 404) **before** the web commit that reads it. Staged as ONE hunk against HEAD, not `commit --only`: NEG.3's `/advertising/negatives/retire` was uncommitted in the same file |
+| `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **released** — landed `fd62f057e`. One keyword; no row edited, no ceiling raised, no schedule armed |
+| `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **released** |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.1 (two sort keys on the EXISTING `share-of-voice-page` route) | 2026-08-12 | **released** — landed `2f620b8ef`, hunk-staged past a PLC.1 session's four uncommitted hunks |
 | `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — landed `858a21ae6`, 51 lines, staged as a rebuilt BLOB not a hunk; see §5's new trap |
 | `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lacked) | 2026-08-12 | **released** — landed `f4bc68eb7`. **All ten routed tabs are now covered**; `?tab=automations` and `?tab=dayparting` are fixed too — see §4 |
@@ -385,6 +388,8 @@ builder slugs and is not this session's to delete (see §4).
 | `…/rules-automation/rules-automation.css` | KT.10 (`.h10-kt-delta em.mkt` at EOF) | 2026-08-15 | **released** — appended at EOF only |
 | `…/rules-automation/rules-automation.css` | BID.S3 (`h10-bd3-*` at EOF — the drawer's log, the dangling segment, the cycle toggle) | 2026-08-16 | **released** — ONE hunk at EOF, `git diff -U0` confirmed sole occupant; class↔stylesheet checked both ways, 0 orphans. ⚠ Recorded at COMMIT time, not before the edit — protocol §1.2 says before, and this session got the order wrong. No harm (EOF-append, own prefix, tree clean) but noting it rather than back-dating |
 | `apps/api/src/services/advertising/bid-grid.service.ts` | BID.S3 (P0: the `manual` bidder predicate) | 2026-08-16 | **released** — landed `4ba32e133`. Own file, no claim needed; listed because it CHANGES A SHIPPED NUMBER other sessions may have quoted: `manual` 12 → 6, `No bidder` 41 → **47** enabled campaigns |
+| `apps/api/src/routes/advertising-intel.routes.ts` | SOV.6 (`?period=` on the EXISTING share-of-voice route + saved-view CRUD) | 2026-08-16 | **claimed** — hunk-staged, not file-staged |
+| `…/rules-automation/rules-automation.css` | SOV.6 (`h10-sov-*` at EOF) | 2026-08-16 | **claimed** — EOF-append; staged as a REBUILT BLOB from the CURRENT parent, not a hunk (SOV.1 §5 trap) |
 
 ## 3 · Shared files — claim before editing
 
@@ -1131,6 +1136,74 @@ holds **every** session's push. It belongs to whoever is adding the disabled sta
 Recorded only so the next red push is not re-diagnosed from scratch — this is the fourth time this
 shape has cost a session time (HV.1's `KeywordHarvestClient`, NEG's `NegativeTargetingClient`,
 dayparting's `scheduleHealth`, now this).
+
+**RD.P2 → P1 and P4, 2026-08-12 — the grain is built; here is what you inherit.**
+
+`GET /advertising/rank-runtime` returns BOTH grains from one derivation (`rank-runtime.ts`, pure and
+21-tested; `rank-runtime.service.ts`, the I/O). Do not re-derive any of it — add a field to the
+service.
+
+**P1 (the fleet band) can count its tiles off `campaigns[].mode.kind` and nothing else.** Measured
+2026-08-12 12:00 Rome, and stable across the hour:
+
+| tile | source | today |
+|---|---|---|
+| Holding | `mode.kind === 'holding'` | 11 |
+| Chasing | `mode.kind === 'chasing'` | **0** |
+| All-out | `mode.kind === 'all-out'` | 11 |
+| Capped | `capped-base` + `capped-floor` | 5 + 6 = 11 |
+| Cannot converge | `canConverge === false` | 22 |
+| Not running | `mode.kind === 'not-running'` | 12 |
+
+🔴 **The band's six tiles as the structure doc lists them do not survive contact with the data.**
+"Chasing 4" is 0 right now, and "Blind 10" is a *signal* count, not a mode. Two things P1 must
+decide rather than inherit: all-out needs a tile of its own (11 campaigns climbing to 900% bounded
+only by CPC is the largest single cohort and it is not "chasing"), and every count is
+**hour-dependent** — at `own-top` hours the same config reads 29 open-loop / 4 chasing / 10 capped.
+A band that does not say which hour it is describing will look wrong twice a day.
+
+**P4 (signal & freshness) inherits a seam, not a solution.** `campaigns[].signal` already carries
+`{kind, lane, valuePct, ageDays, rows, label}` keyed to the ACTIVE target's placement, and the two
+states that must never merge are already distinct: `no-signal` (a lane with a source that returned
+nothing) vs `no-coverage` (ASINs that have never appeared in Brand Analytics at all). What P2
+deliberately did NOT build: the stale chip, and `rows` against a trailing norm — `rows` is populated
+only for the no-coverage case today. The refinement that makes it necessary is measured and still
+true: IT's newest SQP week is **8 rows against 655 the week before**, so a pure age guard passes a
+collapsed partial.
+
+**Corrections to the study every later section should carry.** The library is unchanged since
+2026-08-11 (`maxBiasPct` null on all five, verified), but two of its numbers were misread:
+`{biasPct:0, acosCapPct:15}` is on **7** schedules, not 8 (7 + 4 closed-loop + 1 disabled = the 12);
+and the Top-of-Search signal is **healthy** — 861 of 1,413 Top rows carry `topOfSearchIS`, 556 in
+the last 14 days. A first probe here read `topOfSearchIS` off `analyzeTopOfSearch`'s rows, where the
+key is **`topIS`**, and got a zero that looked exactly like a dead feed.
+
+**RD.P2 → anyone adding columns to an `AdsDataGrid`, 2026-08-16 — the overflow is invisible to the
+obvious check, and I shipped it twice.**
+
+`AdsDataGrid` is `table-layout: auto` and `.h10-shell` is `overflow-x: hidden`. Together they make a
+too-wide grid fail silently in a way that defeats the two checks you would reach for first:
+
+- **`document.scrollWidth === clientWidth` returns "no overflow"** — because the shell clips it.
+  There is no scrollbar to find. That check PASSED on a grid with 1558px off-screen.
+- **A screenshot looks correct** — the visible columns are laid out perfectly; the missing ones are
+  simply not in frame.
+
+The only check that finds it is per-column rect arithmetic: sum the `<th>` widths and compare the
+LAST column's `right` against the card's `right`. On the 14-column Campaigns grain the columns
+summed to 3159px inside a table reporting 1600.
+
+🔴 **And the trap has a second bite, which I walked into.** The first fix capped the one runaway cell
+(a 144-character schedule name, 962px) and I re-measured *that column* — 962 → 219 — and shipped.
+Still 1069px off-screen, because the widest column was now a different one. **Re-measure the ROW,
+not the column you just fixed.**
+
+Two causes worth knowing, both of them authoring mistakes rather than grid bugs:
+`max-width: 100%` on a cell constrains NOTHING under `table-layout: auto` (the percentage resolves
+against the column's own content-driven width — use px); and a label that is a sentence
+("no coverage — these ASINs have never appeared in Brand Analytics") lays itself out at full width.
+Labels are labels; the sentence goes in `title`. Beyond about ten columns nothing fits 1602px
+regardless, and the honest answer is `defaultHidden` on the ones addressable another way.
 
 ## 5 · Traps this repo has already paid for
 
