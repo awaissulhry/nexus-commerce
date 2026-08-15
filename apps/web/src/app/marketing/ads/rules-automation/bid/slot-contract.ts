@@ -67,13 +67,8 @@ export interface BidSlotProps {
 }
 
 /**
- * The grid's write-capable props, explicitly absent.
- *
- * S4 replaces this object; until then every one of these is `null` at the point of use, so a
- * reviewer can see that the read-only property is stated rather than inferred from what is missing.
+ * `NO_WRITE_ACTIONS` lived here from S0 until BID.S4 replaced it, as the contract required:
+ * the targets grid's `selectionActions` is now `BidSelectionActions` (BidEditing.tsx) — three
+ * verbs, floor-state exclusion, the gated bulk path, the 5-minute hold. The campaigns view stays
+ * selection-free until S6 gives it its own row action; that absence is still deliberate.
  */
-export const NO_WRITE_ACTIONS = {
-  selectionActions: null,
-  onRowAction: null,
-  editMode: null,
-} as const

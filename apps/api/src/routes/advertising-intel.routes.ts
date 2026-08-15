@@ -2396,6 +2396,63 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * BID.S4 — the staged tray's account-wide read.
+   *
+   * `GET /advertising/campaigns/:id/pending-writes` answers this per campaign, which is one
+   * request per campaign for an account-wide tray. This is its bulk sibling for the GRACE WINDOW:
+   * every PENDING Amazon-bound queue row, flattened to one item per field change, with entity and
+   * campaign names resolved server-side. Cancellation stays on the existing
+   * `POST /advertising/queued-mutations/:queueId/cancel` — this route only reads.
+   */
+  fastify.get('/advertising/staged-writes', async (request, reply) => {
+    const q = request.query as { field?: string }
+    reply.header('Cache-Control', 'no-store')
+    const rows = await prisma.outboundSyncQueue.findMany({
+      where: { targetChannel: 'AMAZON', syncStatus: 'PENDING' },
+      select: { id: true, payload: true, holdUntil: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    })
+    type Staged = {
+      queueId: string; entityType: string | null; entityId: string
+      field: string; oldValue: string | null; newValue: string | null
+      holdUntil: Date | null; createdAt: Date
+    }
+    const flat: Staged[] = []
+    for (const r of rows) {
+      const p = (r.payload ?? {}) as { entityType?: string; entityId?: string; fieldChanges?: Array<{ field: string; oldValue: string | null; newValue: string | null }> }
+      if (!p.entityId) continue
+      for (const c of p.fieldChanges ?? []) {
+        if (q.field && c.field !== q.field) continue
+        flat.push({ queueId: r.id, entityType: p.entityType ?? null, entityId: p.entityId, field: c.field, oldValue: c.oldValue, newValue: c.newValue, holdUntil: r.holdUntil, createdAt: r.createdAt })
+      }
+    }
+    const targetIds = [...new Set(flat.filter((f) => f.entityType === 'AD_TARGET' || f.entityType == null).map((f) => f.entityId))]
+    const campaignIds = [...new Set(flat.filter((f) => f.entityType === 'CAMPAIGN').map((f) => f.entityId))]
+    const [targets, camps] = await Promise.all([
+      targetIds.length ? prisma.adTarget.findMany({ where: { id: { in: targetIds } }, select: { id: true, expressionValue: true, expressionType: true, kind: true, adGroup: { select: { campaign: { select: { id: true, name: true } } } } } }) : [],
+      campaignIds.length ? prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } }) : [],
+    ])
+    const { labelFor } = await import('../services/advertising/bid-grid.service.js')
+    const targetById = new Map(targets.map((t) => [t.id, t] as const))
+    const campById = new Map(camps.map((c) => [c.id, c] as const))
+    return {
+      // The server's clock rides along so the client's countdown is skew-proof.
+      now: new Date().toISOString(),
+      items: flat.map((f) => {
+        const t = targetById.get(f.entityId)
+        const camp = f.entityType === 'CAMPAIGN' ? campById.get(f.entityId) : t?.adGroup?.campaign
+        return {
+          ...f,
+          entityName: t ? labelFor(t.expressionValue, t.kind, t.expressionType).label : campById.get(f.entityId)?.name ?? f.entityId,
+          campaignId: camp?.id ?? null,
+          campaignName: camp?.name ?? null,
+        }
+      }),
+    }
+  })
+
   fastify.get('/advertising/write-refusals', async (request, reply) => {
     // BID.S8 (additive) — `entityType` lets a page ask for its own slice (AD_TARGET = bid writes).
     // `recent` now carries the SAME window and filter as `byKind`: before this, the list was

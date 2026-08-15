@@ -8,8 +8,8 @@
  * it bought — over the whole account, at two grains, for four markets. The other three quarters are
  * S1–S9 and every one of them is a slot at the bottom of this file.
  *
- * 🔴 **Read-only, and stated rather than implied.** No bid moves from this page in S0. The grid's
- * write-capable props are passed as explicit nulls via `NO_WRITE_ACTIONS`.
+ * S0 shipped read-only with `NO_WRITE_ACTIONS` as explicit absence; BID.S4 replaced it — the
+ * targets selection now carries the three write verbs, every write gated and grace-held.
  *
  * What replaced the tab: `?tab=bid` used to render `<RuleListTab liveType="bid" />` and nothing
  * else — three columns of rules, and not one bid. The rule list is still here, at the bottom,
@@ -53,7 +53,8 @@ import {
   resolveBidStates, hasBidState, BID_STATE_KEYS, BID_STATE_LABEL, type BidStateKey,
 } from './bidState'
 import { BidSpark } from './BidSpark'
-import { NO_WRITE_ACTIONS, type BidSlotProps } from './slot-contract'
+import { type BidSlotProps } from './slot-contract'
+import { BidSelectionActions } from './BidEditing'
 import { BidSections } from './BidSections'
 import { BidTargetDrawer } from './BidTargetDrawer'
 import { BidBidderBand } from './BidBidderBand'
@@ -809,10 +810,12 @@ export function BidClient() {
           onSortChange={onSortChange}
           showTotal
           totalFirst={`${num(rows.length)} shown`}
-          /* 🔴 S0 is read-only. Passed as explicit absence rather than omitted. */
-          selectable={false}
-          selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
-          onRowClick={NO_WRITE_ACTIONS.onRowAction ?? undefined}
+          /* BID.S4 — the first write section replaced NO_WRITE_ACTIONS: selection carries the
+             three verbs (Set bid · Boost % · Bid to win), every write gated + grace-held. */
+          selectable
+          selectionActions={(ids, clearSel) => (
+            <BidSelectionActions ids={ids} clear={clearSel} rows={rows} reload={slotProps.reload} />
+          )}
           exportable
           onExport={csv}
           pagerCentered

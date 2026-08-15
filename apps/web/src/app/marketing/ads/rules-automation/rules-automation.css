@@ -4677,3 +4677,40 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-bd8-reflist .t { display: inline-block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .h10-bd8-foot { margin: 0; font-size: 12px; color: #6b7585; }
 .h10-bd8-foot a { color: #1f6fde; }
+
+/* BID.S4 — editing: the selection verbs, the confirm dialog, the staged tray. */
+.h10-bd4-bar { display: inline-flex; gap: 6px; }
+.h10-bd4-verb {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; font-size: 12px;
+  color: #17436f; background: #eef4fd; border: 1px solid #b7d0f2; border-radius: 7px; cursor: pointer;
+}
+.h10-bd4-verb:hover { border-color: #1f6fde; }
+.h10-bd4-back { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 160; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.h10-bd4-card { width: 480px; max-width: 100%; max-height: 90vh; overflow-y: auto; background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 18px 48px rgba(20,28,38,.28); }
+.h10-bd4-card h3 { margin: 0 0 12px; font-size: 14px; color: #1c2530; }
+.h10-bd4-field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; font-size: 12px; color: #3f4754; }
+.h10-bd4-field input { padding: 7px 10px; border: 1px solid #d7dde5; border-radius: 7px; font-size: 13px; color: #16202b; }
+.h10-bd4-field input:focus { outline: 2px solid #1f6fde; outline-offset: -1px; }
+.h10-bd4-sub { margin: -4px 0 10px; font-size: 11.5px; color: #6b7585; }
+.h10-bd4-plan { margin: 4px 0 8px; font-size: 12.5px; line-height: 1.5; color: #3f4754; }
+.h10-bd4-plan b { color: #16202b; }
+.h10-bd4-sample { list-style: none; margin: 0 0 10px; padding: 8px 10px; background: #f7f9fb; border-radius: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #3f4754; font-variant-numeric: tabular-nums; }
+.h10-bd4-sample .t { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; margin-right: 6px; }
+.h10-bd4-sample .more { color: #6b7585; }
+.h10-bd4-err { margin: 0 0 10px; font-size: 12.5px; color: #b42318; display: flex; align-items: center; gap: 6px; }
+.h10-bd4-ok { margin: 0 0 12px; font-size: 12.5px; color: #116b3a; display: flex; align-items: flex-start; gap: 6px; line-height: 1.5; }
+.h10-bd4-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.h10-bd4-cancel { padding: 7px 14px; font-size: 12.5px; color: #3f4754; background: #fff; border: 1px solid #d7dde5; border-radius: 7px; cursor: pointer; }
+.h10-bd4-primary { padding: 7px 14px; font-size: 12.5px; color: #fff; background: #1f6fde; border: 1px solid #1f6fde; border-radius: 7px; cursor: pointer; }
+.h10-bd4-primary:disabled { background: #9db9dd; border-color: #9db9dd; cursor: default; }
+.h10-bd4-foot { margin: 10px 0 0; font-size: 11.5px; color: #6b7585; line-height: 1.5; }
+.h10-bd4-tray { background: #fffdf4; border: 1px solid #e8dfae; border-radius: 10px; padding: 12px 16px; margin-top: 16px; }
+.h10-bd4-tray h4 { margin: 0 0 8px; font-size: 12.5px; color: #6b5a10; display: flex; align-items: center; gap: 6px; }
+.h10-bd4-tray ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.h10-bd4-tray li { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #3f4754; }
+.h10-bd4-tray li .t { flex: 0 1 auto; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-bd4-tray li .nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-bd4-tray li .cd { color: #6b5a10; font-weight: 700; min-width: 44px; }
+.h10-bd4-tray li button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 11.5px; color: #8f3225; background: #fff; border: 1px solid #e0c9c4; border-radius: 6px; cursor: pointer; }
+.h10-bd4-tray li button:hover { border-color: #b42318; }
+.h10-bd4-tray li.more { color: #6b7585; }
