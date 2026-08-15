@@ -608,6 +608,30 @@ That single line is three verifications at once:
 resting below its cap means its trigger stopped producing contexts, which is a different condition
 and must not be read as the cap working. `_cap-watch.mts` distinguishes them (`AT CAP` vs `quiet`).
 
+### ✅ Step 5 closed — the clean day, measured 2026-08-15 22:52 UTC (`_cap8-cleanday.mts`)
+
+**16 of 19 capped rules sat at *exactly* their cap. Not one exceeded it.**
+
+| day | execution rows | notifications | |
+|---|---|---|---|
+| 2026-08-13 | 29,174 | 44,094 | |
+| 2026-08-14 | 21,165 | 31,284 | ← armed 18:35 UTC |
+| **2026-08-15** | **1,714** | **186** | ← first day that began armed |
+
+**Rows −94%** against a prediction of ~1,987 (§6.4) — measured **1,714**. **Notifications −99.6%**
+against a prediction of ~3,062, or ~1,350 with dedupe — measured **186**, because the dedupe
+compounds with the caps rather than adding to them.
+
+The three rules at **0** — `Trim budget on weak ACOS`, `Boost budget on profitable campaigns`,
+`Stale campaign cleanup` — are the condition §10c warned about: their triggers produce no contexts,
+which is *not* the cap working and must never be counted as it. The script reports `AT CAP`,
+`under cap — trigger ran dry` and `OVER CAP` as three distinct states for exactly this reason.
+
+🔴 **The script refused to assert, and it was right to.** 2026-08-15 was still in progress (22:52 of
+24 hours), so `_cap8-cleanday.mts` exits non-zero with *"no complete clean day yet — nothing to
+assert"*. The numbers above are real; the pass/fail is deliberately withheld until a whole UTC day
+has elapsed. A verification that grades an incomplete day is how a partial result becomes a claim.
+
 ---
 
 ## 10d · ✅ STEP 6 — `maxWritesPerDay`, the cap in the unit damage is measured in
