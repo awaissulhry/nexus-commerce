@@ -4471,8 +4471,12 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 
 /* Edge fade: the scrollbar is hidden (ads.css:2063), so this is the only sign that
    tabs continue off-screen. `.on` is set from scrollLeft; the 1px bottom inset
-   keeps the bar's underline visible through the fade. Page ground is #f4f6f9. */
-.h10-rt-fade { position: absolute; top: 0; bottom: 1px; width: 34px; pointer-events: none; opacity: 0; transition: opacity 120ms ease; }
+   keeps the bar's underline visible through the fade. Page ground is #f4f6f9.
+   🔴 NO transition, deliberately: with `transition: opacity 120ms` the deployed fade sat at
+   computed opacity 0 while carrying `.on` — measured on prod 2026-08-15, and even an inline
+   `opacity: 1` read back as 0 until the transition was cleared. A stuck transition on a class
+   applied around first paint is not worth a 120ms nicety; the fade snaps and always shows. */
+.h10-rt-fade { position: absolute; top: 0; bottom: 1px; width: 34px; pointer-events: none; opacity: 0; }
 .h10-rt-fade.l { left: 0; background: linear-gradient(90deg, #f4f6f9 18%, rgba(244, 246, 249, 0)); }
 .h10-rt-fade.r { right: 0; background: linear-gradient(270deg, #f4f6f9 18%, rgba(244, 246, 249, 0)); }
 .h10-rt-fade.on { opacity: 1; }
