@@ -2536,6 +2536,57 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  /**
+   * RT.2 — the five page cursors. Shapes, and the reason each field is not the obvious one, are in
+   * `ads-cursors.service.ts`; the measurement that disqualified the obvious ones is in
+   * `scripts/_rt-cursor-probe.mts`.
+   *
+   * `no-store` on every one of them: a cached cursor is a cursor that cannot detect a change,
+   * which is its only job.
+   *
+   * 🔴 Budget Pacing & Schedules deliberately has NO cursor — `BudgetSchedule` holds 0 rows and the
+   * page's real movers are either operator-only or a continuously-moving Σ. See the closing note in
+   * the service.
+   */
+  fastify.get('/advertising/apply-rules/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const { getApplyRulesCursor } = await import('../services/advertising/ads-cursors.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return getApplyRulesCursor({
+      market: q.market ?? 'all', line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
+    })
+  })
+
+  fastify.get('/advertising/automations/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const { getAutomationsCursor } = await import('../services/advertising/ads-cursors.service.js')
+    reply.header('Cache-Control', 'no-store')
+    // The page's four reads are account-wide, so the cursor takes no scope — a scoped cursor would
+    // describe a different row set from the grid. `view` only decides whether `actedAt` rides along.
+    return getAutomationsCursor(q.view ?? 'actors')
+  })
+
+  fastify.get('/advertising/dayparting/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const { getDaypartingCursor } = await import('../services/advertising/ads-cursors.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return getDaypartingCursor({ market: q.market ?? 'all', portfolio: q.portfolio || null, campaign: q.campaign || null })
+  })
+
+  fastify.get('/advertising/keyword-harvest/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const { getHarvestCursor } = await import('../services/advertising/ads-cursors.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return getHarvestCursor({ market: q.market ?? 'all', campaign: q.campaign || null })
+  })
+
+  fastify.get('/advertising/negatives/cursor', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>
+    const { getNegativesCursor } = await import('../services/advertising/ads-cursors.service.js')
+    reply.header('Cache-Control', 'no-store')
+    return getNegativesCursor({ market: q.market ?? 'all', campaign: q.campaign || null })
+  })
+
   fastify.get('/advertising/write-refusals', async (request, reply) => {
     // BID.S8 (additive) — `entityType` lets a page ask for its own slice (AD_TARGET = bid writes).
     // `recent` now carries the SAME window and filter as `byKind`: before this, the list was
