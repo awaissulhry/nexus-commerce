@@ -33,9 +33,15 @@
 
 import type { BidSlotProps } from './slot-contract'
 import { BidBounds } from './BidBounds'
+import { BidActivity } from './BidActivity'
 
 export function BidSections(props: BidSlotProps) {
-  // S5 — bounds. (S1's band mounts above the grid in BidClient; S3's drawer floats; the
-  // remaining sections land here as they are built — hidden, not disabled.)
-  return <BidBounds {...props} />
+  // S5 — bounds, then S8 — activity. (S1's band mounts above the grid in BidClient; S3's drawer
+  // floats; the remaining sections land here as they are built — hidden, not disabled.)
+  return (
+    <>
+      <BidBounds {...props} />
+      <BidActivity {...props} />
+    </>
+  )
 }

@@ -2397,13 +2397,17 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/advertising/write-refusals', async (request, reply) => {
-    const q = request.query as { days?: string }
+    // BID.S8 (additive) — `entityType` lets a page ask for its own slice (AD_TARGET = bid writes).
+    // `recent` now carries the SAME window and filter as `byKind`: before this, the list was
+    // all-time while the counts were windowed — two answers under one heading.
+    const q = request.query as { days?: string; entityType?: string }
     const days = q.days && Number.isFinite(Number(q.days)) ? Math.min(60, Math.max(1, Number(q.days))) : 7
     const since = new Date(Date.now() - days * 86_400_000)
+    const where = { createdAt: { gte: since }, ...(q.entityType ? { entityType: q.entityType } : {}) }
     reply.header('Cache-Control', 'private, max-age=30')
     const [byKind, recent] = await Promise.all([
-      prisma.adWriteRefusal.groupBy({ by: ['deniedAt'], where: { createdAt: { gte: since } }, _count: { _all: true } }),
-      prisma.adWriteRefusal.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.adWriteRefusal.groupBy({ by: ['deniedAt'], where, _count: { _all: true } }),
+      prisma.adWriteRefusal.findMany({ where, orderBy: { createdAt: 'desc' }, take: 50 }),
     ])
     return {
       recordStarts: '2026-08-15',
