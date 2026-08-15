@@ -65,7 +65,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AlertTriangle, Info, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -73,7 +73,7 @@ import { useCursorPoll } from '../_shared/useCursorPoll'
 import { getBackendUrl } from '@/lib/backend-url'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import {
-  DELIVERY_LABEL, MARKETS, STATUS_LABEL,
+  DELIVERY_LABEL, MARKETS, STATUS_LABEL, STRATEGY_LABEL,
   type CampaignRow, type GuardrailPayload, type RawCampaign, type RawGuardrailRow,
   type ScopeOptionsPayload,
 } from './types'
@@ -144,6 +144,8 @@ export function ApplyRulesClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // AR.S1 — the campaign whose bid-band dialog is open. Local state: an action, not a view.
+  const [boundsFor, setBoundsFor] = useState<CampaignRow | null>(null)
 
   /** The one writer of page state. '' or a default value deletes the param. */
   const push = useCallback((patch: Record<string, string>) => {
@@ -238,6 +240,8 @@ export function ApplyRulesClient() {
         suppressedAt: g?.suppressedAt ?? null,
         suppressedBy: g?.suppressedBy ?? null,
         authorityMissing: !g,
+        targetAcosPct: g?.targetAcosPct ?? null,
+        boundRules: Array.isArray(g?.boundRules) ? g.boundRules.length : 0,
       }
     })
   }, [campaigns, guardrails, options])
@@ -434,7 +438,7 @@ export function ApplyRulesClient() {
    * view cannot use.
    */
   const SORTABLE: Record<ApplyRulesGrain, string[]> = {
-    campaign: ['__first', 'status', 'delivery', 'portfolio', 'lines'],
+    campaign: ['__first', 'status', 'delivery', 'portfolio', 'lines', 'managed', 'bounds', 'strategy', 'tacos'],
     market: ['__first', 'n', 'live', 'delivering'],
     portfolio: ['__first', 'n', 'live', 'delivering'],
     line: ['__first', 'n', 'live', 'delivering'],
@@ -515,7 +519,59 @@ export function ApplyRulesClient() {
         )
       },
     },
-  ], [portfolioNames, lineNames, push])
+    // ── AR.S1 — the four connected columns ───────────────────────────────────────────────────
+    {
+      key: 'managed',
+      label: 'Automations',
+      metric: false,
+      tip: 'The write gate\'s verdict, which is the most useful sentence on this grid: MANAGED means armed automation can write to this campaign; OFF-LIMITS means rules still match it and every write is refused at campaign_allowlist. Resuming a paused campaign does NOT re-open the gate.',
+      sortValue: (r) => (r.managed ? 1 : 0),
+      render: (r) => {
+        if (r.authorityMissing) return <span className="h10-ar-nd" title="The guardrail grid returned no row for this campaign — authority unknown, not open">unknown</span>
+        const nAcct = totals?.accountWideRules ?? 0
+        return r.managed
+          ? <span className="h10-ar-pill mg-on" title={`The gate is OPEN: the ${nAcct} account-wide rules (count includes market-scoped ones — the payload's own caveat) plus ${r.boundRules} bound to this campaign can write here, inside their caps.`}>Managed{r.boundRules > 0 ? ` · ${r.boundRules} bound` : ''}</span>
+          : <span className="h10-ar-pill mg-off" title={`The gate is SHUT: the same ${nAcct} account-wide rules match this campaign and every write is refused at campaign_allowlist. A refusal is the gate working, not a failure.`}>Off-limits</span>
+      },
+    },
+    {
+      key: 'bounds',
+      label: 'Min · Max bid',
+      metric: false,
+      tip: 'The band the write gate enforces on this campaign\'s bids — DENIED at the gate, never clamped. "not set" is not a band of zero: nothing bounds this campaign\'s bids but the €0.02 suppression floor. The pencil edits both ends; measured 2026-08-12, minBidCents was set on 0 of 220 — this is its first UI.',
+      sortValue: (r) => r.maxBidCents ?? -1,
+      render: (r) => (
+        <span className="h10-ar-bounds">
+          {r.minBidCents == null && r.maxBidCents == null
+            ? <span className="h10-ar-nd">not set</span>
+            : <b>{r.minBidCents != null ? `€${(r.minBidCents / 100).toFixed(2)}` : '—'} – {r.maxBidCents != null ? `€${(r.maxBidCents / 100).toFixed(2)}` : '—'}</b>}
+          <button type="button" className="h10-ar-edit" title={`Set the bid band for ${r.name}`} aria-label={`Set the bid band for ${r.name}`} onClick={() => setBoundsFor(r)}>
+            <Pencil size={11} aria-hidden />
+          </button>
+        </span>
+      ),
+    },
+    {
+      key: 'strategy',
+      label: 'Bidding strategy',
+      metric: false,
+      tip: 'Amazon\'s campaign bidding strategy — a real, varying field (the column it replaces read a key the payload never contained and printed a constant). Up & down lets Amazon add up to +100% on top of placement multipliers.',
+      sortValue: (r) => r.biddingStrategy ?? '',
+      render: (r) => (r.biddingStrategy
+        ? <span title={r.biddingStrategy}>{STRATEGY_LABEL[r.biddingStrategy] ?? r.biddingStrategy}</span>
+        : <span className="h10-ar-nd">not reported</span>),
+    },
+    {
+      key: 'tacos',
+      label: 'Target ACoS',
+      metric: false,
+      tip: 'The campaign\'s DECLARED target ACoS, from the guardrail grid. A dash means unset — the optimiser falls back to a flat 30% when asked, but a fallback is not a setting and this column no longer asserts it on 220 rows.',
+      sortValue: (r) => r.targetAcosPct ?? -1,
+      render: (r) => (r.targetAcosPct == null
+        ? <span className="h10-ar-nd">—</span>
+        : <span>{r.targetAcosPct}%</span>),
+    },
+  ], [portfolioNames, lineNames, push, totals?.accountWideRules])
 
   // ── aggregate-grain columns ───────────────────────────────────────────────────────────────────
   //
@@ -789,6 +845,61 @@ export function ApplyRulesClient() {
       )}
 
       <ApplyRulesSections {...slotProps} />
+
+      {/* AR.S1 — the bid-band dialog: the two enforced guardrails become settable from the page
+          the operator said they should be set from. Writes ride PATCH /guardrails (the gate's own
+          columns) and never touch Amazon — the bounds are local governance. */}
+      {boundsFor != null && (
+        <ArBoundsDialog
+          row={boundsFor}
+          onClose={() => setBoundsFor(null)}
+          onDone={() => { setBoundsFor(null); setReloadTick((n) => n + 1) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ArBoundsDialog({ row, onClose, onDone }: { row: CampaignRow; onClose: () => void; onDone: () => void }) {
+  const [minS, setMinS] = useState(row.minBidCents != null ? (row.minBidCents / 100).toFixed(2) : '')
+  const [maxS, setMaxS] = useState(row.maxBidCents != null ? (row.maxBidCents / 100).toFixed(2) : '')
+  const [busy, setBusy] = useState(false)
+  const [errS, setErrS] = useState<string | null>(null)
+  const toCents = (s: string) => (s.trim() === '' ? null : Math.round(Number(s) * 100))
+  const minC = toCents(minS)
+  const maxC = toCents(maxS)
+  const invalid = (minC != null && (!Number.isFinite(minC) || minC < 2))
+    || (maxC != null && (!Number.isFinite(maxC) || maxC < 2))
+    || (minC != null && maxC != null && minC > maxC)
+  const save = async () => {
+    if (busy || invalid) return
+    setBusy(true); setErrS(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}/guardrails`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minBidCents: minC, maxBidCents: maxC }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(j?.error ?? `Save failed (${r.status})`)
+      onDone()
+    } catch (e) { setErrS((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="h10-bd4-back" role="dialog" aria-modal="true" aria-label="Bid band" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
+      <div className="h10-bd4-card">
+        <h3>Bid band — {row.name}</h3>
+        <p className="h10-bd4-sub">Enforced at the write gate on every bid write to this campaign — a write outside the band is DENIED and recorded, never clamped. An existing bid outside it stays where it is until something tries to move it. Blank clears an end.</p>
+        <div className="h10-bd6-goalrow">
+          <label className="h10-bd4-field">Floor (€)<input type="number" step="0.01" min="0.02" value={minS} onChange={(e) => setMinS(e.target.value)} /></label>
+          <label className="h10-bd4-field">Ceiling (€)<input type="number" step="0.01" min="0.02" value={maxS} onChange={(e) => setMaxS(e.target.value)} /></label>
+        </div>
+        {invalid && <p className="h10-bd4-err" role="alert"><AlertTriangle size={13} aria-hidden /> Each end must be ≥ €0.02 and the floor must not exceed the ceiling.</p>}
+        {errS != null && <p className="h10-bd4-err" role="alert"><AlertTriangle size={13} aria-hidden /> {errS}</p>}
+        <div className="h10-bd4-row">
+          <button type="button" className="h10-bd4-cancel" disabled={busy} onClick={onClose}>Cancel</button>
+          <button type="button" className="h10-bd4-primary" disabled={busy || invalid} onClick={() => void save()}>{busy ? 'Saving…' : 'Save band'}</button>
+        </div>
+      </div>
     </div>
   )
 }

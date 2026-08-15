@@ -139,6 +139,14 @@ export interface CampaignRow {
   suppressedBy: string | null
   /** true when the guardrail grid had no row for this campaign — never silently zero */
   authorityMissing: boolean
+  /**
+   * AR.S1 — from the GUARDRAIL grid, not the campaigns payload: the campaigns payload's
+   * `targetAcos` carries the 30% engine fallback on every row (§4's "the 30.00%"), which is a
+   * default wearing a setting's clothes. `null` here means genuinely unset.
+   */
+  targetAcosPct: number | null
+  /** how many rules are BOUND to this campaign (scope pinned to it) — 0 almost everywhere */
+  boundRules: number
 }
 
 /**
@@ -160,6 +168,16 @@ export const minMaxBid = (r: { minBidCents: number | null; maxBidCents: number |
     : null
 
 // ── labels ───────────────────────────────────────────────────────────────────────────────────────
+
+/** Amazon's two live values on this account, plus the legacy spelling. */
+export const STRATEGY_LABEL: Record<string, string> = {
+  LEGACY_FOR_SALES: 'Down only',
+  AUTO_FOR_SALES: 'Up & down',
+  MANUAL: 'Fixed',
+  legacyForSales: 'Down only',
+  autoForSales: 'Up & down',
+  manual: 'Fixed',
+}
 
 export const STATUS_LABEL: Record<string, string> = {
   ENABLED: 'Enabled', PAUSED: 'Paused', ARCHIVED: 'Archived',
