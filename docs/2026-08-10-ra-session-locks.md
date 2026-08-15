@@ -408,9 +408,9 @@ builder slugs and is not this session's to delete (see §4).
 
 | file / area | session | since | state |
 |---|---|---|---|
-| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | HV.10 (`allowAllMarkets?`, defaulted TRUE — today's behaviour for all ~12 consumers; plus `marketValues?`/`onMarketValuesChange?` pass-through) | 2026-08-16 | **claimed** |
-| `apps/web/src/app/marketing/ads/_shell/MarketSelect.tsx` | HV.10 (optional multi-select: `values?`/`onValuesChange?`. Absent ⇒ byte-identical single-select) | 2026-08-16 | **claimed** |
-| `apps/api/src/services/advertising/keyword-harvest.service.ts` + its route | HV.10 (`market` accepts a comma list beside `all` and a single code) | 2026-08-16 | **claimed** — page-owned service |
+| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | HV.10 (`allowAllMarkets?`, defaulted TRUE — today's behaviour for all ~12 consumers; plus `marketValues?`/`onMarketValuesChange?` pass-through) | 2026-08-16 | **released** |
+| `apps/web/src/app/marketing/ads/_shell/MarketSelect.tsx` | HV.10 (optional multi-select: `values?`/`onValuesChange?`. Absent ⇒ byte-identical single-select) | 2026-08-16 | **released** |
+| `apps/api/src/services/advertising/keyword-harvest.service.ts` + its route | HV.10 (`market` accepts a comma list beside `all` and a single code) | 2026-08-16 | **released** — page-owned service |
 | `apps/api/src/services/advertising/ads-write-gate.ts` | AUTO.P0 (guard ④ — the daily budget MOVEMENT bound: one new `GateDeniedAt`, one denial fn, one call site beside BUD.2's budget bounds) | 2026-08-16 | **released** — landed `e121dc627`, additive only |
 | `apps/api/src/services/advertising/ads-write-gate-bounds.vitest.test.ts` | AUTO.P0 (one mock field + three A7 assertions retargeted) | 2026-08-16 | **released** — landed `e121dc627`. The three cases asserted the WHOLE gate allowed a write; guard ④ correctly refuses both fixtures (€5→€20 is +300%, €5→€1 is the ratchet cut), so they now assert their actual intent — that a *spend ceiling* did not refuse it |
 | `apps/api/src/services/automation-rule.service.ts` | AUTO.P0 (record a refusal durably — 3 call sites: `maxExecutionsPerDay`, `maxWritesPerDay`, `maxValueCentsEur`) | 2026-08-16 | **released** — landed `0f916ce56`. CAP's predicate untouched; I add only the record write |

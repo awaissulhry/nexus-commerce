@@ -51,6 +51,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
   showLearn = true, showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
+  allowAllMarkets = true, marketValues, onMarketValuesChange,
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
@@ -104,6 +105,22 @@ export function AdsPageHeader({
    * they are reading, which is worse than a picker built from the wrong list.
    */
   showMarket?: boolean
+  /**
+   * 🔴 HV.10 — whether "All markets" is offered. Defaults TRUE, which is what this header
+   * hardcoded, so every existing consumer is unchanged.
+   *
+   * It is a prop because it was a lie on at least one page: the Keyword Tracker's route returns
+   * **400** for `market=all` (`KT_MARKETS` is IT/DE/ES/FR), so the option was offered on a page
+   * that cannot serve it — the request only failed quietly because that page's `push` happened to
+   * drop the param and fall back to IT. A page that cannot serve `all` should not show it.
+   */
+  allowAllMarkets?: boolean
+  /**
+   * HV.10 — pass BOTH to turn the picker into a multi-select. Absent ⇒ unchanged single-select.
+   * `[]` means "all markets".
+   */
+  marketValues?: string[]
+  onMarketValuesChange?: (codes: string[]) => void
   /** Opt in on pages that own or receive recorded changes. Off everywhere else by default. */
   showChangeLog?: boolean
   primaryAction?: HeaderPrimary
@@ -156,7 +173,9 @@ export function AdsPageHeader({
             markets={marketOptions}
             value={market}
             onChange={onMarketChange}
-            allowAll
+            values={marketValues}
+            onValuesChange={onMarketValuesChange}
+            allowAll={allowAllMarkets}
             brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
           />
         )}

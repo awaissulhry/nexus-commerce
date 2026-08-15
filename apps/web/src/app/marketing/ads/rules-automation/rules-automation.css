@@ -5108,3 +5108,13 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* PENDING is IN FLIGHT, not failed — 488 of 2,387 writes sit here and a red badge would describe
    a working queue as a broken one (substrate §5.8). */
 .h10-bsp-writes .p { padding: 1px 6px; background: #e8f1fd; border-radius: 5px; font-size: 10px; font-weight: 800; color: #10457f; white-space: nowrap; }
+
+/* ── HV.10 · the market picker's multi-select ───────────────────────────────────────────────
+   Appended at EOF. The checkbox glyph and the commit row only render when a page passes
+   `marketValues` — every other consumer of MarketSelect is untouched. */
+.h10-menu .mk-box { display: inline-block; width: 14px; margin-right: 2px; font-size: 12px; color: #55606d; }
+.h10-menu-foot { display: flex; align-items: center; gap: 8px; padding: 7px 10px 3px; margin-top: 4px; border-top: 1px solid #e3e7ec; }
+.h10-menu-foot .mk-cancel { flex: none; padding: 4px 10px; border: 1px solid #e3e7ec; border-radius: 6px; background: #fff; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-menu-foot .mk-cancel:hover { background: #f1f4f8; }
+.h10-menu-foot .mk-apply { flex: 1; padding: 4px 10px; border: 1px solid #10457f; border-radius: 6px; background: #10457f; font-size: 11.5px; font-weight: 800; color: #fff; cursor: pointer; text-align: center; }
+.h10-menu-foot .mk-apply:hover { background: #0d3868; }

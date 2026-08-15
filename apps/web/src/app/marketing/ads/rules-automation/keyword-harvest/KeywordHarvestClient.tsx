@@ -558,6 +558,17 @@ export function KeywordHarvestClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '', adGroup: '' })}
+        /**
+         * HV.10 — this page is the first multi-select consumer. `market` carries either `all`, one
+         * code, or a comma list, and the read accepts all three. Clearing the selection means all
+         * markets, which is what `[]` encodes.
+         *
+         * Campaign and ad group are cleared alongside, exactly as the single-select path does: a
+         * campaign chosen in DE is not a campaign in IT, and leaving it set would filter the new
+         * scope down to nothing while the scope bar still displayed it.
+         */
+        marketValues={market === 'all' ? [] : market.split(',').filter(Boolean)}
+        onMarketValuesChange={(codes) => push({ market: codes.length ? codes.join(',') : 'all', campaign: '', adGroup: '' })}
         showLearn={false}
         showDataSync={false}
         /* No date range. The window is a harvest parameter (30/60/90), not a report range, and it

@@ -89,8 +89,39 @@ export const HV_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
  */
 export const HV_MARKET_ALL = 'all'
 
-const inScopeMarket = (m: string | null | undefined, market: string): boolean =>
-  market === HV_MARKET_ALL ? HV_MARKETS.includes((m ?? '') as (typeof HV_MARKETS)[number]) : m === market
+/**
+ * 🔴 HV.10 — `market` accepts a COMMA LIST beside `all` and a single code.
+ *
+ * `all` and one code were the only two scopes this page could express, and the gap between them is
+ * real: measured 2026-08-14, `all` = 6 candidates across DE/ES/IT, and an operator working DE+IT
+ * had to choose between 4, 1, or everything including ES. Additive — `all` and a bare code behave
+ * exactly as before, and a list is only produced by a caller that asks for one.
+ *
+ * An unknown code in the list is dropped rather than erroring: a stale link naming a market that
+ * has since been disconnected should narrow the view, not break it.
+ */
+export function parseMarketScope(raw: string): { kind: 'all' } | { kind: 'list'; codes: string[] } {
+  const v = (raw ?? '').trim()
+  if (!v || v.toLowerCase() === HV_MARKET_ALL) return { kind: 'all' }
+  const codes = [...new Set(v.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean))]
+    .filter((c) => (HV_MARKETS as readonly string[]).includes(c))
+  // Every code was unknown, or the list was empty after cleaning — fall back to the widest honest
+  // answer rather than silently returning nothing.
+  return codes.length ? { kind: 'list', codes } : { kind: 'all' }
+}
+
+/** The Prisma filter for a scope. `all` adds no constraint; a list becomes an IN. */
+export const marketWhere = (market: string): Record<string, unknown> => {
+  const s = parseMarketScope(market)
+  if (s.kind === 'all') return {}
+  return s.codes.length === 1 ? { marketplace: s.codes[0] } : { marketplace: { in: s.codes } }
+}
+
+const inScopeMarket = (m: string | null | undefined, market: string): boolean => {
+  const s = parseMarketScope(market)
+  if (s.kind === 'all') return HV_MARKETS.includes((m ?? '') as (typeof HV_MARKETS)[number])
+  return s.codes.includes((m ?? '').toUpperCase())
+}
 
 export type HvGrain = 'market' | 'line' | 'portfolio' | 'campaign' | 'adGroup'
 export type HvKind = 'keyword' | 'product'
@@ -479,7 +510,7 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   // AmazonAdsSearchTerm carries EXTERNAL ids and AdGroup is keyed locally.
   const termAdGroups = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['adGroupId'],
-    where: { date: { gte: since }, ...(req.market === HV_MARKET_ALL ? {} : { marketplace: req.market }) },
+    where: { date: { gte: since }, ...marketWhere(req.market) },
     _count: true,
   })
   const termsByExtAdGroup = new Map(termAdGroups.map((g) => [g.adGroupId, g._count]))
@@ -525,7 +556,7 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
     by: ['query', 'campaignId', 'adGroupId', 'marketplace', 'matchType'],
     where: {
       date: { gte: since },
-      ...(req.market === HV_MARKET_ALL ? {} : { marketplace: req.market }),
+      ...marketWhere(req.market),
       campaignId: { in: scopedCampaignExtIds },
       ...(scopedAdGroupExtIds ? { adGroupId: { in: scopedAdGroupExtIds } } : {}),
     },

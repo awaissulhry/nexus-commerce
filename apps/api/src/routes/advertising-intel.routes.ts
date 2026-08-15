@@ -832,11 +832,19 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     // `all` is accepted, as on Negative Targeting: a candidate count and a spend total both sum
     // honestly across markets, and every row carries its own market.
+    // 🔴 HV.10 — `all`, a single code, or a COMMA LIST (`IT,DE`). The list is validated by
+    // `parseMarketScope`, which drops unknown codes rather than erroring, so a stale link naming a
+    // disconnected market narrows the view instead of 400-ing. A request that names ONLY unknown
+    // codes is still a mistake worth reporting, so it is refused here rather than silently widened.
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : raw.toUpperCase()
-    if (market !== HV_MARKET_ALL && !HV_MARKETS.includes(market as (typeof HV_MARKETS)[number])) {
-      reply.status(400)
-      return { error: `market is required and must be one of ${HV_MARKETS.join('/')} or "all"`, code: 'market_required' }
+    if (market !== HV_MARKET_ALL) {
+      const named = market.split(',').map((c) => c.trim()).filter(Boolean)
+      const known = named.filter((c) => HV_MARKETS.includes(c as (typeof HV_MARKETS)[number]))
+      if (named.length === 0 || known.length === 0) {
+        reply.status(400)
+        return { error: `market is required and must be one of ${HV_MARKETS.join('/')}, a comma list of them, or "all"`, code: 'market_required' }
+      }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
