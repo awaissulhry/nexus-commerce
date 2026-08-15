@@ -4,70 +4,184 @@
  * BID.S3 — one target, in full: the drawer `?target=` opens.
  *
  * The grid's first column is a real link now (S3 deleted the two CSS rules that un-blued it),
- * and this is where it lands. Two data paths, honestly distinguished:
- *   · the target is IN the loaded grid → everything renders from the row + the payload's own
- *     series (no second fetch, no chance of disagreeing with the grid);
- *   · a deep link outside the current scope/filters → the curve is fetched by id
- *     (`bid-history?entityIds=`), and the drawer SAYS the identity facts are not in this view
- *     rather than inventing them.
+ * and this is where it lands.
  *
- * The curve is a WRITE LIST first and a sparkline second: a bid is a step function (it holds
- * until something writes it), so the honest detail is each write — when, from→to, and whether
- * it LANDED (a recorded cut that never reached Amazon renders as exactly that). 79% of targets
- * have no write in 60 days; that renders as its own sentence, never as an empty box.
+ * ── 🔴 One request, and it is `listChanges`, not `bid-history` ─────────────────────────────────
+ *
+ * An earlier cut of this drawer read the grid payload's `series` (and `bid-history` for a deep
+ * link). That is enough to draw a line and nothing else: it carries `at / to / from / delivered`
+ * and no actor, no reason, no evidence, no Amazon error and no undo state — which is most of what
+ * "why is this bid this number" means.
+ *
+ * `GET /advertising/changes?entityType=AD_TARGET&entityId=…&field=bid` returns all of it in ONE
+ * call, already resolved: `automation:rank-defend-cmr2697…` arrives as **"IT GALE JACKET"** via
+ * `parseActor` + `resolveOrigins`. Verified on the fixture below: 56 rows, delivery APPLIED 22 /
+ * FAILED 34, three origins, four reason strings, and undo blocked-reasons already written as
+ * prose. Using it also collapses the two data paths into one — the deep-link case is no longer
+ * special, because the call does not care whether the grid is showing the row.
+ *
+ * ── The story this has to tell, from the fixture ───────────────────────────────────────────────
+ *
+ * `cmr28mgl50019qq010p4nqnhg` (B072XH2LB2, GALE | IT | PAT): between 01 Jul and 02 Aug the rank
+ * engine recorded **33 cuts of €0.38 → €0.02, one a night, and every one FAILED at Amazon.** The
+ * bid never left €0.38. On 03 Aug `automation:dl-requeue` wrote 38→38 after the /sp/keywords
+ * routing fix and every write since has landed.
+ *
+ * 🔴 So the two facts must be drawn apart, and NOT as two connected lines. In the failed phase
+ * every write's `oldValue` is 38 while the previous write's `newValue` was 2 — because the
+ * unaudited hourly resync put it back. A connected "intended" line would draw 38→2→38→2 and
+ * assert the engine raised it each morning. It never did. So:
+ *
+ *   · **delivered** — a step line built from APPLIED writes only, held forward. Flat at €0.38 for
+ *     all of July. This is the truthful spine.
+ *   · **intended**  — one row per write in the log, each stating whether it landed. A cut that
+ *     never reached Amazon reads as exactly that, and the line above it does not move.
+ *
+ * ── The dangling segment ───────────────────────────────────────────────────────────────────────
+ *
+ * When `row.unrecorded` is true the live bid disagrees with the last audited value, so the curve's
+ * last point is NOT where the bid is now. That gap is drawn and named, never closed — closing it
+ * would fabricate a change no table records, which is the failure this whole drawer exists to
+ * prevent.
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { BidSpark } from './BidSpark'
+import { BidSpark, type SparkPoint } from './BidSpark'
 import { resolveBidStates } from './bidState'
-import type { BidSeriesPoint, BidTargetRow } from './types'
+import type { BidTargetRow } from './types'
+
+/** The subset of `ChangeRow` this drawer reads. Mirrors `ads-changes.service.ts`. */
+interface ChangeRow {
+  id: string
+  at: string
+  source: string
+  origin: { kind: string; id: string | null; name: string }
+  field: string
+  oldValue: string | null
+  newValue: string | null
+  reason: string | null
+  evidence: Record<string, unknown> | null
+  delivery: { state: string; attempts: number; lastError: string | null } | null
+  undoable: boolean
+  undoActionLogId: string | null
+  undoBlockedReason?: string
+}
 
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const num = (n: number) => n.toLocaleString('en-IE')
 const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
 
-export function BidTargetDrawer({ targetId, row, series, loading = false, onClose }: {
+/**
+ * Two reason strings, one mechanism. "pause target → bids floored (no-pause)" is the pre-MB.1
+ * wording for what is now "Min bid → bids floored to €0.02". Presenting them as two causes would
+ * invent a second engine; they are grouped and the grouping is stated.
+ */
+const FLOOR_REASONS = ['pause target → bids floored', 'Min bid → bids floored']
+const isFloorCycle = (r: ChangeRow) => {
+  const s = r.reason ?? ''
+  return FLOOR_REASONS.some((f) => s.includes(f)) || s.includes('serve target → restore prior bids')
+}
+
+/** APPLIED is the only state that moved the bid at Amazon. `null` is "no record", never success. */
+const landed = (r: ChangeRow) => r.delivery?.state === 'APPLIED'
+
+export function BidTargetDrawer({ targetId, row, loading = false, onClose }: {
   targetId: string
   row: BidTargetRow | null
-  series: BidSeriesPoint[] | undefined
   /** True while the GRID is still fetching — a missing row then means "not loaded yet", and the
    *  drawer must not claim "not in this view" about a view that has not answered (seen live on a
    *  full page load with ?target=: the banner accused the filters while the grid showed skeletons). */
   loading?: boolean
   onClose: () => void
 }) {
-  const [fetched, setFetched] = useState<BidSeriesPoint[] | null>(null)
-  const [fetchErr, setFetchErr] = useState<string | null>(null)
+  const [changes, setChanges] = useState<ChangeRow[] | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [structuralOnly, setStructuralOnly] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const returnTo = useRef<HTMLElement | null>(null)
 
+  /**
+   * Focus: remember where we came from, move in, trap, and put it back on close.
+   *
+   * 🔴 Not verifiable by script — a synthetic `.focus()` fires no focus event and a synthetic
+   * Escape never reaches a real listener, so this was checked by hand on production. The DS
+   * `Drawer` solves the same problem, and is deliberately not used here: it portals to `<body>`
+   * and this section pins `color-scheme: light` on `.h10-shell`, which a portaled panel escapes
+   * (KT.4 hit exactly that and hand-rolled its own for the same reason).
+   */
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', k)
-    return () => document.removeEventListener('keydown', k)
+    returnTo.current = document.activeElement as HTMLElement | null
+    const panel = panelRef.current
+    panel?.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key !== 'Tab' || !panel) return
+      const f = [...panel.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+        .filter((el) => el.offsetParent !== null)
+      if (f.length === 0) return
+      const first = f[0], last = f[f.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      // Only restore if focus is still inside the drawer — otherwise we would yank it away from
+      // wherever the operator has since deliberately put it.
+      if (!panel || panel.contains(document.activeElement)) returnTo.current?.focus?.()
+    }
   }, [onClose])
 
-  // Deep-link path only: the grid payload has no series for a row it is not showing.
+  // One request. Sixty days, not the metric window: `?window=` is the METRIC window (S0's contract
+  // says so), and tying the history to it would shorten the curve when someone changed a column.
   useEffect(() => {
-    if (row || series) return
     let alive = true
-    ;(async () => {
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/bid-history?entityIds=${encodeURIComponent(targetId)}`, { cache: 'no-store' })
-        if (!r.ok) throw new Error(`(${r.status})`)
-        const j = await r.json()
-        if (alive) setFetched((j?.series?.[targetId] as BidSeriesPoint[] | undefined) ?? [])
-      } catch (e) { if (alive) setFetchErr((e as Error).message) }
-    })()
+    setChanges(null); setErr(null)
+    const from = new Date(Date.now() - 60 * 86400_000).toISOString()
+    const qs = new URLSearchParams({ entityType: 'AD_TARGET', entityId: targetId, field: 'bid', from, limit: '500' })
+    fetch(`${getBackendUrl()}/api/advertising/changes?${qs}`, { cache: 'no-store' })
+      .then(async (r) => { if (!r.ok) throw new Error(`(${r.status})`); return r.json() })
+      .then((j) => { if (alive) setChanges((j?.items ?? []) as ChangeRow[]) })
+      .catch((e) => { if (alive) setErr((e as Error).message) })
     return () => { alive = false }
-  }, [targetId, row, series])
+  }, [targetId])
 
-  const curve = series ?? fetched ?? undefined
+  // `listChanges` returns newest-first and includes operation rows with no numeric value (the
+  // `create_target` row on the fixture). A point needs a number; a log row does not.
+  const writes = useMemo(
+    () => (changes ?? []).filter((c) => Number.isFinite(Number(c.newValue))).slice().reverse(),
+    [changes],
+  )
+  const shown = useMemo(
+    () => (structuralOnly ? writes.filter((w) => !isFloorCycle(w)) : writes),
+    [writes, structuralOnly],
+  )
+  const cycleCount = writes.length - writes.filter((w) => !isFloorCycle(w)).length
+
+  /** The delivered spine: APPLIED writes only, held forward. */
+  const deliveredPoints: SparkPoint[] = useMemo(
+    () => writes.filter(landed).map((w) => ({ at: w.at, to: Number(w.newValue), from: w.oldValue == null ? null : Number(w.oldValue), delivered: 'SUCCESS' })),
+    [writes],
+  )
+  const failedCount = writes.filter((w) => w.delivery?.state === 'FAILED').length
+  const noRecordCount = writes.filter((w) => w.delivery == null).length
+  const lastAudited = writes.length ? Number(writes[writes.length - 1].newValue) : null
+
   const chips = row ? resolveBidStates(row, 99) : []
+  const close = useCallback(() => onClose(), [onClose])
 
   return (
-    <div className="h10-au-back" onClick={onClose}>
-      <div className="h10-au-drawer" role="dialog" aria-modal="true" aria-label={`Target — ${row?.label ?? targetId}`} onClick={(e) => e.stopPropagation()}>
+    <div className="h10-au-back" onClick={close}>
+      <div
+        ref={panelRef}
+        className="h10-au-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Target — ${row?.label ?? targetId}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="h10-au-dh">
           <div>
             <b>{row ? row.label : 'Target'}</b>
@@ -77,8 +191,9 @@ export function BidTargetDrawer({ targetId, row, series, loading = false, onClos
                 : loading ? 'loading…' : 'outside the current view'}
             </span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} aria-hidden /></button>
+          <button type="button" data-autofocus onClick={close} aria-label="Close"><X size={18} aria-hidden /></button>
         </div>
+
         <div className="h10-au-db">
           {!row && !loading && (
             <p className="h10-au-conf" role="note">
@@ -98,6 +213,7 @@ export function BidTargetDrawer({ targetId, row, series, loading = false, onClos
                   {!row.liveNow && <em className="h10-bd3-off"> — not in any auction (target or campaign not enabled)</em>}
                 </span>
               </div>
+
               <div className="h10-au-defrow">
                 <span className="k">Bid</span>
                 <span className="v">
@@ -105,9 +221,52 @@ export function BidTargetDrawer({ targetId, row, series, loading = false, onClos
                   {row.minBidCents != null || row.maxBidCents != null
                     ? <> · band {row.minBidCents != null ? eur(row.minBidCents) : 'no floor declared'} – {row.maxBidCents != null ? eur(row.maxBidCents) : 'no ceiling declared'}</>
                     : <> · <em className="h10-bd3-mut">no band declared</em></>}
-                  {row.bidder !== 'none' && <> · bidder: {row.bidderName ?? row.bidder}</>}
                 </span>
               </div>
+
+              {/* 🔴 A sample, not a ceiling. The rank engine steps the placement multiplier +25%
+                  every 15 minutes and snaps it to 0 when the lane goes above plan, so this number
+                  expires at the next tick. Saying "at most" without saying "right now" is the
+                  reading that would send someone into S5 with a stale bound. */}
+              {row.effectiveMaxCpcCents != null && (
+                <div className="h10-au-defrow">
+                  <span className="k">Most a click can cost</span>
+                  <span className="v">
+                    <b>{eur(row.effectiveMaxCpcCents)}</b>{' '}
+                    <em className="h10-bd3-mut">
+                      right now — {eur(row.bidCents)}
+                      {row.placementPct > 0 && ` × +${row.placementPct}% placement`}
+                      {row.biddingStrategy === 'AUTO_FOR_SALES' && ' × up-and-down bidding'}.
+                      The multiplier moves every 15 minutes, so this is a reading, not a ceiling.
+                    </em>
+                  </span>
+                </div>
+              )}
+
+              <div className="h10-au-defrow">
+                <span className="k">Bidder</span>
+                <span className="v">
+                  {row.bidder === 'none'
+                    ? <em className="h10-bd3-off">Nobody. No schedule, no goal, and no operator has moved a bid in this campaign in 60 days.</em>
+                    : row.bidder === 'schedule'
+                      ? <><b>{row.bidderName}</b> · <Link href="/marketing/ads/rules-automation/dayparting">rank schedule <ExternalLink size={11} aria-hidden /></Link></>
+                      : row.bidder === 'goal' ? <b>Target-ACoS goal</b> : <b>An operator, in the last 60 days</b>}
+                </span>
+              </div>
+
+              {/* What this bid will go back to, if anything remembers. Two different fields, and a
+                  bid at €0.02 with neither is the third floor state S2 named. */}
+              {(row.suppressedFromBidCents != null || row.inMinBidWindow) && (
+                <div className="h10-au-defrow">
+                  <span className="k">Memory</span>
+                  <span className="v">
+                    {row.suppressedFromBidCents != null
+                      ? <>Suppressed — restores to <b>{eur(row.suppressedFromBidCents)}</b>.</>
+                      : <>In a Min-bid window; the schedule restores it when the window ends.</>}
+                  </span>
+                </div>
+              )}
+
               {chips.length > 0 && (
                 <div className="h10-au-defrow">
                   <span className="k">States</span>
@@ -116,6 +275,7 @@ export function BidTargetDrawer({ targetId, row, series, loading = false, onClos
                   </span>
                 </div>
               )}
+
               <div className="h10-au-defrow">
                 <span className="k">Window</span>
                 <span className="v">
@@ -129,27 +289,101 @@ export function BidTargetDrawer({ targetId, row, series, loading = false, onClos
 
           <section className="h10-bd3-curve">
             <h4>The bid, over 60 days</h4>
-            {fetchErr && <p className="h10-au-limiterr" role="alert"><AlertTriangle size={13} aria-hidden /> Could not load the write history: {fetchErr}</p>}
-            {curve === undefined && !fetchErr && <p className="h10-bd3-mut">Loading…</p>}
-            {curve !== undefined && curve.length === 0 && (
+
+            {err && <p className="h10-au-limiterr" role="alert"><AlertTriangle size={13} aria-hidden /> Could not load the change history: {err}</p>}
+            {changes === null && !err && <p className="h10-bd3-mut">Loading…</p>}
+
+            {changes !== null && writes.length === 0 && (
               <p className="h10-bd3-mut">
-                No write in 60 days — nobody and nothing has touched this bid in the window. That is
-                a fact about the bid, not a gap in the record.
+                No recorded change in 60 days — nobody and nothing has written this bid in the
+                window{row ? <>, so it has been {eur(row.bidCents)} for at least that long</> : null}. That
+                is a fact about the bid, not a gap in the record: 2,336 of the 2,944 enabled targets
+                are in the same position.
               </p>
             )}
-            {curve !== undefined && curve.length > 0 && (
+
+            {changes !== null && writes.length > 0 && (
               <>
+                {/* The delivered spine. Drawn from APPLIED writes only — on the fixture that is a
+                    flat line at €0.38 through all of July while 33 recorded cuts sit in the log
+                    below, none of which moved it. */}
                 <div className="h10-bd3-spark">
-                  <BidSpark points={curve} label={row?.label ?? targetId} format={(n) => eur(n)} />
+                  {deliveredPoints.length > 0
+                    ? <BidSpark points={deliveredPoints} label={row?.label ?? targetId} format={eur} />
+                    : <em className="h10-bd3-mut">No write reached Amazon in 60 days, so there is no delivered line to draw.</em>}
                 </div>
+
+                <p className="h10-bd3-sum">
+                  <b>{num(writes.length)}</b> recorded {writes.length === 1 ? 'change' : 'changes'} ·{' '}
+                  <b>{num(deliveredPoints.length)}</b> landed
+                  {failedCount > 0 && <> · <b className="bad">{num(failedCount)} never reached Amazon</b></>}
+                  {noRecordCount > 0 && <> · {num(noRecordCount)} with no delivery record</>}
+                </p>
+
+                {/* 🔴 The dangling segment. The curve ends at the last AUDITED value; the bid is
+                    somewhere else. Named, never closed. */}
+                {row?.unrecorded && lastAudited != null && (
+                  <p className="h10-bd3-dangle">
+                    <AlertTriangle size={13} aria-hidden />
+                    <span>
+                      The last recorded change left this at <b>{eur(lastAudited)}</b>; it is now{' '}
+                      <b>{eur(row.bidCents)}</b>, and <b>nothing recorded the difference</b>. Usually
+                      the nightly restore, which is audited on most campaigns and not on this one —
+                      in the last 24 hours 483 floors were audited and 359 restores were. A Seller
+                      Central edit looks identical from here, and the hourly inbound sync overwrites
+                      the local value either way without leaving a row.
+                    </span>
+                  </p>
+                )}
+
+                {cycleCount > 0 && (
+                  <label className="h10-bd3-toggle">
+                    <input type="checkbox" checked={structuralOnly} onChange={(e) => setStructuralOnly(e.target.checked)} />
+                    Hide the nightly floor/restore cycle ({num(cycleCount)} of {num(writes.length)})
+                  </label>
+                )}
+
                 <table className="h10-bd3-writes">
-                  <thead><tr><th>When</th><th>Change</th><th>Landed</th></tr></thead>
+                  <thead>
+                    <tr><th>When</th><th>Change</th><th>Who</th><th>Why</th><th>Landed</th></tr>
+                  </thead>
                   <tbody>
-                    {[...curve].reverse().map((p, i) => (
-                      <tr key={`${p.at}-${i}`} className={p.delivered === 'FAILED' ? 'failed' : ''}>
-                        <td>{when(p.at)}</td>
-                        <td>{p.from != null ? `${eur(p.from)} → ` : ''}{eur(p.to)}</td>
-                        <td>{p.delivered === 'SUCCESS' ? 'yes' : p.delivered === 'FAILED' ? <b title="Recorded here and never accepted by Amazon — the bid did not move.">no</b> : p.delivered === 'PENDING' ? 'pending' : '—'}</td>
+                    {[...shown].reverse().map((w) => (
+                      <tr key={w.id} className={w.delivery?.state === 'FAILED' ? 'failed' : ''}>
+                        <td>{when(w.at)}</td>
+                        <td className="num">
+                          {w.oldValue != null && Number.isFinite(Number(w.oldValue)) ? `${eur(Number(w.oldValue))} → ` : ''}
+                          {eur(Number(w.newValue))}
+                        </td>
+                        <td title={`${w.origin.kind} · ${w.source}`}>{w.origin.name}</td>
+                        <td>
+                          {w.reason ?? <em className="h10-bd3-mut">not recorded</em>}
+                          {/* Evidence sits on 81 of 23,705 rows account-wide. Absent is NORMAL and
+                              must not render as an error; present, sampleSize matters most —
+                              a decision resting on 1 day of data where the account has 56 should
+                              say so on its face. */}
+                          {w.evidence && (
+                            <i className="h10-bd3-ev" title={JSON.stringify(w.evidence)}>
+                              {Object.entries(w.evidence).slice(0, 3).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}
+                            </i>
+                          )}
+                        </td>
+                        <td>
+                          {w.delivery == null
+                            ? <span className="h10-bd3-mut" title="No delivery row was recorded for this change. That is not the same as success.">no record</span>
+                            : w.delivery.state === 'APPLIED' ? 'yes'
+                              : w.delivery.state === 'FAILED'
+                                ? <b className="bad" title={w.delivery.lastError ?? 'Recorded here and never accepted by Amazon — the bid did not move.'}>no</b>
+                                : w.delivery.state.toLowerCase()}
+                          {/* §7 — the STATE, not a button. S4 wires the write, alongside the grace
+                              window, so every write on this page arrives through one reviewed path.
+                              A disabled control would be its own kind of lie. */}
+                          {w.undoable
+                            ? <i className="h10-bd3-undo ok" title="This change can still be reversed. The control arrives with the staged tray in S4.">undoable</i>
+                            : w.undoBlockedReason
+                              ? <i className="h10-bd3-undo" title={w.undoBlockedReason}>not undoable</i>
+                              : null}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

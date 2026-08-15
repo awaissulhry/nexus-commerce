@@ -931,7 +931,9 @@ export function BidClient() {
         <BidTargetDrawer
           targetId={reserved.target}
           row={(view === 'targets' ? (rows as BidTargetRow[]) : []).find((r) => r.id === reserved.target) ?? null}
-          series={data?.series?.[reserved.target]}
+          /* S3 — no `series` prop any more. The drawer reads `GET /advertising/changes`, which
+             carries the actor, reason, evidence, Amazon error and undo state that the grid's
+             `series` does not, and works identically for a deep link outside the current scope. */
           loading={loading}
           onClose={closeTarget}
         />

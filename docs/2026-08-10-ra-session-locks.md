@@ -383,6 +383,8 @@ builder slugs and is not this session's to delete (see §4).
 | `apps/api/src/services/advertising/keyword-tracker.service.ts` | KT.10 (`marketDeltaPct` per row; `window.market` like-for-like movement; `SQP_QUERIES_PER_ASIN_CAP`) | 2026-08-15 | **released** |
 | `…/keyword-tracker/KeywordTrackerClient.tsx` | KT.10 (the Δ cell's denominator, the reach line's cap, the health line's market half) | 2026-08-15 | **released** |
 | `…/rules-automation/rules-automation.css` | KT.10 (`.h10-kt-delta em.mkt` at EOF) | 2026-08-15 | **released** — appended at EOF only |
+| `…/rules-automation/rules-automation.css` | BID.S3 (`h10-bd3-*` at EOF — the drawer's log, the dangling segment, the cycle toggle) | 2026-08-16 | **released** — ONE hunk at EOF, `git diff -U0` confirmed sole occupant; class↔stylesheet checked both ways, 0 orphans. ⚠ Recorded at COMMIT time, not before the edit — protocol §1.2 says before, and this session got the order wrong. No harm (EOF-append, own prefix, tree clean) but noting it rather than back-dating |
+| `apps/api/src/services/advertising/bid-grid.service.ts` | BID.S3 (P0: the `manual` bidder predicate) | 2026-08-16 | **released** — landed `4ba32e133`. Own file, no claim needed; listed because it CHANGES A SHIPPED NUMBER other sessions may have quoted: `manual` 12 → 6, `No bidder` 41 → **47** enabled campaigns |
 
 ## 3 · Shared files — claim before editing
 
