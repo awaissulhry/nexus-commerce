@@ -20,18 +20,47 @@ export const PC_OPERATORS = [
   { value: 'lt', label: 'Less than <' },
   { value: 'lte', label: 'Less than or equal to <=' },
 ]
-export const PC_LOOKBACK = ['Last 7 Days', 'Last 14 Days', 'Last 30 Days', 'Last 60 Days', 'Last 90 Days', 'Lifetime'].map((l) => ({ value: l, label: l }))
-export const PC_EXCLUDE = ['None', 'Last 1 Day', 'Last 3 Days', 'Last 7 Days', 'Last 14 Days', 'Last 30 Days'].map((l) => ({ value: l, label: l }))
+/**
+ * P2.1 — the measurement window is the TRIGGER'S, not the rule author's. The engine evaluates
+ * each trigger over its own fixed window (`ruleWindowBounds`, which also excludes the last 2
+ * still-settling days), and nothing ever read the stored lookback/exclude — so the old
+ * Lookback/Exclude selects were controls whose value changed no behaviour: a stored
+ * "Last 60 Days" beside a 7-day evaluation was a lie with a dropdown. The sentence below states
+ * the real window; the stored lookback/exclude fields now carry that truth for the record.
+ */
+export const PC_WINDOW_DAYS: Record<string, number | null> = {
+  budget: 7, placement: 7, bid: 14,
+  'keyword-harvesting': 30, 'negative-targeting': 30, sov: 30,
+  'keyword-tracker': null, // rank = latest snapshot; its spend/ACOS metrics cover 30 days
+}
+export const pcWindowLabel = (slug: string): string => {
+  const d = PC_WINDOW_DAYS[slug]
+  return d == null ? 'Latest snapshot' : `Last ${d} Days`
+}
+export const PC_TRUTH_EXCLUDE = 'Last 2 Days'
+export function PcWindowNote({ slug }: { slug: string }) {
+  const d = PC_WINDOW_DAYS[slug]
+  return (
+    <p className="h10-pc-winnote">
+      {d == null
+        ? 'Rank is the latest snapshot; spend and ACOS cover the last 30 days. The most recent 2 days are still settling and are excluded.'
+        : `Measured over the last ${d} days — this trigger's fixed window. The most recent 2 days are still settling and are excluded.`}
+    </p>
+  )
+}
 export const PC_METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
   Sales: 'eur', Spend: 'eur', CPC: 'eur',
   ACOS: 'pct', CTR: 'pct', CVR: 'pct',
   ROAS: '', Clicks: '', Impressions: '', 'PPC Orders': '', Orders: '',
   'Budget Utilization': 'pct',
-  'Share of Voice': 'pct', 'Top Campaign Share': 'pct', 'Impression Share': 'pct', 'Organic Share': 'pct', 'Sponsored Share': 'pct',
+  'Share of Voice': 'pct', 'Top Campaign Share': 'pct', 'Impression Share': 'pct',
   'Organic Rank': '', 'Sponsored Rank': '', 'Rank Change': '', 'Search Volume': '',
 }
 const METRICS_BASE = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders']
-const METRICS_SOV = ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'Organic Share', 'Sponsored Share', 'ACOS', 'Spend', 'Sales', 'Orders']
+// P2.1 — 'Organic Share' and 'Sponsored Share' are REMOVED: no signal source exists anywhere
+// (analyzeShareOfVoice reports sovPct/topCampaignSharePct only), so a condition on either could
+// never match and the adapter now refuses rather than drops. Re-offer them when a source ships.
+const METRICS_SOV = ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'ACOS', 'Spend', 'Sales', 'Orders']
 const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend']
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
@@ -48,7 +77,7 @@ export const pcDefaultCondition = (slug: string): Condition =>
         : slug === 'keyword-tracker' ? { metric: 'Organic Rank', op: 'gt', value: '' }
           : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' }
             : { metric: 'Sales', op: 'eq', value: '0' }
-export const pcDefaultGroup = (slug: string): CriteriaGroup => ({ conditions: [pcDefaultCondition(slug)], lookback: 'Last 60 Days', exclude: 'Last 3 Days' })
+export const pcDefaultGroup = (slug: string): CriteriaGroup => ({ conditions: [pcDefaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE })
 
 /** The criteria rows (metric · operator · value+unit, AND-joined) + lookback/exclude windows. */
 export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvesting' }: { value: CriteriaGroup; onChange: (g: CriteriaGroup) => void; slug?: string }) {
@@ -71,10 +100,7 @@ export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvestin
         )
       })}
       <button type="button" className="h10-pc-add" onClick={addCond}><Plus size={13} /> Add condition</button>
-      <div className="h10-pc-windows">
-        <label className="h10-pc-win"><span>Lookback period</span><H10Select width={190} options={PC_LOOKBACK} value={value.lookback} onChange={(v) => onChange({ ...value, lookback: v })} ariaLabel="Lookback period" /></label>
-        <label className="h10-pc-win"><span>Exclude</span><H10Select width={190} options={PC_EXCLUDE} value={value.exclude} onChange={(v) => onChange({ ...value, exclude: v })} ariaLabel="Exclude window" /></label>
-      </div>
+      <PcWindowNote slug={slug} />
     </div>
   )
 }

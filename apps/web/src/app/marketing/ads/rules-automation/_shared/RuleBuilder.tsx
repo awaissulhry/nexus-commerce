@@ -17,7 +17,7 @@ import { ruleTypeBySlug } from './ruleTypes'
 import { NoDataIllus } from './NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
-import { type Condition, PC_OPERATORS, PC_LOOKBACK, PC_EXCLUDE, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition } from './PerformanceCriteria'
+import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -27,8 +27,8 @@ const METRICS_BUDGET = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'PPC Orders'
 const METRICS_SOV = PC_METRICS_SOV
 const METRICS_RANK = PC_METRICS_RANK
 const OPERATORS = PC_OPERATORS
-const LOOKBACK = PC_LOOKBACK
-const EXCLUDE = PC_EXCLUDE
+// P2.1 — the Lookback/Exclude selects are gone: nothing ever read their value (each trigger
+// evaluates over its own fixed window). `PcWindowNote` states the real window instead.
 const FREQUENCY = ['Custom', 'Daily', 'Weekly', 'Monthly', 'Hourly'].map((f) => ({ value: f, label: f }))
 // Budget rule marketplace scope (best-in-class) — limit a rule to one EU market.
 const MARKETS = [{ value: 'all', label: 'All markets' }, ...([['DE', 'Germany'], ['IT', 'Italy'], ['FR', 'France'], ['ES', 'Spain'], ['NL', 'Netherlands'], ['BE', 'Belgium'], ['SE', 'Sweden'], ['PL', 'Poland']] as const).map(([v, n]) => ({ value: v, label: `${n} (${v})` }))]
@@ -133,7 +133,7 @@ let _bid = 1
 interface CriteriaGroup { id: number; conditions: Condition[]; lookback: string; exclude: string; budgetOp?: string; budgetValue?: string; placeTarget?: string } // placeTarget = placement THEN target
 let _cid = 1
 const defaultCondition = pcDefaultCondition
-const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: 'Last 60 Days', exclude: 'Last 3 Days', budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
+const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
 
 // per-type Rule Setup config — Negative vs Positive/Harvest differ in heading, copy,
 // targets-panel title, and whether Harvest's "Ad Group Mapping" button + info banner show.
@@ -245,7 +245,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const isCampaign = isBudget || isBidLike || isPlacement // all campaign-scoped surfaces share the CampaignPicker + THEN-action + templates
   const advLookback = isBudget || isPlacement // Budget + Placement put Lookback in Advanced (one window for the rule); Bid/SOV/Rank keep it per-criteria
   const isNegative = slug === 'negative-targeting' // N2 features (Negation Level · protect-converting) are negative-only, NOT "everything that isn't harvest"
-  const close = useCallback(() => router.push('/marketing/ads/rules-automation'), [router])
+  // P2.2 — the bare index is a redirect now (landing decision 2026-08-15); close/save land on the
+  // rule's OWN tab, where the rule the operator just made is actually visible. `tab: 'rules'`
+  // routes at /apply-rules (the one key≠path pair in tabs.tsx).
+  const ownTab = rt?.tab && rt.tab !== 'rules' ? rt.tab : 'apply-rules'
+  const close = useCallback(() => router.push(`/marketing/ads/rules-automation/${ownTab}`), [router, ownTab])
 
   const [ruleName, setRuleName] = useState('')
   const [groups, setGroups] = useState<CriteriaGroup[]>(() => [newGroup(slug)])
@@ -291,12 +295,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [negationLevel, setNegationLevel] = useState<'adgroup' | 'campaign' | 'both'>('adgroup')
   // ── Budget rule (campaign-budget surface) — inline picker + global lookback (B1/B3 fill) ──
   const [selCampaigns, setSelCampaigns] = useState<BudgetCampaign[]>([])
-  const [budgetLookback, setBudgetLookback] = useState('Last 60 Days')
-  const [budgetExclude, setBudgetExclude] = useState('Last 3 Days')
   // ── B5 guardrails (budget) ──
   const [budgetFloor, setBudgetFloor] = useState('1') // Amazon €1 daily-budget minimum
   const [budgetCeiling, setBudgetCeiling] = useState('')
   const [maxAdSpend, setMaxAdSpend] = useState('')
+  const [maxWrites, setMaxWrites] = useState('')
   const [scopeMarket, setScopeMarket] = useState('all')
   // ── Placement guardrails (P4) — % modifier caps (Amazon allows 0–900%) ──
   const [placeFloor, setPlaceFloor] = useState('0')
@@ -324,7 +327,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
     return () => { alive = false }
   }, [isCampaign, slug])
   // Bid keeps lookback per-criteria (group[0] is canonical for the template); Budget keeps its global lookback.
-  const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: isBidLike ? (groups[0]?.lookback ?? 'Last 60 Days') : budgetLookback, exclude: isBidLike ? (groups[0]?.exclude ?? 'Last 3 Days') : budgetExclude, schedule: { frequency, everyN, interval, onDay, time, timezone } })
+  const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, schedule: { frequency, everyN, interval, onDay, time, timezone } })
   const saveTemplate = async () => {
     const name = tmplName.trim(); if (!name) return
     try {
@@ -335,9 +338,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
   }
   const applyTemplate = (t: { payload?: unknown }) => {
     const p = (t.payload ?? {}) as { conditions?: Array<{ conditions?: Condition[]; action?: { op?: string; value?: string } }>; lookback?: string; exclude?: string; schedule?: Record<string, string> }
-    if (Array.isArray(p.conditions) && p.conditions.length) setGroups(p.conditions.map((c) => ({ id: _cid++, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: p.lookback ?? 'Last 60 Days', exclude: p.exclude ?? 'Last 3 Days', budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '' })))
-    if (p.lookback) setBudgetLookback(p.lookback)
-    if (p.exclude) setBudgetExclude(p.exclude)
+    // P2.1 — a template's stored lookback/exclude are ignored: the trigger's window is fixed.
+    if (Array.isArray(p.conditions) && p.conditions.length) setGroups(p.conditions.map((c) => ({ id: _cid++, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '' })))
     const s = p.schedule ?? {}
     if (s.frequency) setFrequency(s.frequency)
     if (s.time) setTime(s.time)
@@ -479,11 +481,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const addCondition = (gid: number) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, conditions: [...g.conditions, { metric: 'Clicks', op: 'gte', value: '' }] } : g))
   const removeCondition = (gid: number, i: number) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, conditions: g.conditions.filter((_, j) => j !== i) } : g).filter((g) => g.conditions.length > 0))
   const setCond = (gid: number, i: number, patch: Partial<Condition>) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, conditions: g.conditions.map((c, j) => j === i ? { ...c, ...patch } : c) } : g))
-  const setLookback = (gid: number, v: string) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, lookback: v } : g))
   const addGroup = () => setGroups((gs) => [...gs, newGroup(slug)])
   const dupGroup = (gid: number) => setGroups((gs) => { const g = gs.find((x) => x.id === gid); return g ? [...gs, { ...g, id: _cid++, conditions: g.conditions.map((c) => ({ ...c })) }] : gs })
   const delGroup = (gid: number) => setGroups((gs) => (gs.length > 1 ? gs.filter((g) => g.id !== gid) : gs))
-  const setExclude = (gid: number, v: string) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, exclude: v } : g))
   const setBudgetAct = (gid: number, patch: { budgetOp?: string; budgetValue?: string; placeTarget?: string }) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, ...patch } : g))
 
   const adGroupCount = blocks.reduce((n, b) => n + b.groups.length, 0)
@@ -502,7 +502,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
         name: ruleName.trim(),
         description: `${rt?.label ?? 'Rule'} — ${isEdit ? 'edited' : 'created'} in Rule Builder`,
         trigger: TRIGGER_BY_SLUG[slug] ?? 'SCHEDULE',
-        conditions: groups.map((g) => ({ match: 'all', lookback: advLookback ? budgetLookback : g.lookback, exclude: advLookback ? budgetExclude : g.exclude, conditions: g.conditions, ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '', ...(isPlacement ? { placeTarget: g.placeTarget ?? 'tos' } : {}) } } : {}) })),
+        // P2.1 — lookback/exclude store the TRUTH (the trigger's fixed window), never a select's
+        // unread value. The engine evaluates over ruleWindowBounds regardless; these fields are
+        // the record of what the author was told.
+        conditions: groups.map((g) => ({ match: 'all', lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, conditions: g.conditions, ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '', ...(isPlacement ? { placeTarget: g.placeTarget ?? 'tos' } : {}) } } : {}) })),
         actions: [{
           type: slug, control, dedupe, negateInSource, bid: { mode: bidMode, value: bidValue }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: { frequency, everyN, interval, onDay, time, timezone },
           ...(isNegative ? { protectConverting, protectDays: Math.max(0, Math.round(Number(protectDays) || 30)), negationLevel } : {}),
@@ -512,14 +515,19 @@ export function RuleBuilder({ slug }: { slug: string }) {
           ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types })) })),
         }],
-        ...(isBudget ? { maxDailyAdSpendCentsEur: maxAdSpend.trim() ? Math.round(Number(maxAdSpend) * 100) : undefined, scopeMarketplace: scopeMarket === 'all' ? undefined : scopeMarket } : {}),
+        // P2.2 — ceiling, write cap and market scope are sent for EVERY rule type. They used to be
+        // budget-only, so every other builder rule was created account-wide with no way to scope
+        // it from here, and with the maxWritesPerDay brake unset.
+        maxDailyAdSpendCentsEur: maxAdSpend.trim() ? Math.round(Number(maxAdSpend) * 100) : undefined,
+        maxWritesPerDay: maxWrites.trim() ? Math.max(1, Math.round(Number(maxWrites))) : undefined,
+        scopeMarketplace: scopeMarket === 'all' ? undefined : scopeMarket,
       }
       const base = `${getBackendUrl()}/api/advertising/automation-rules`
       const r = await fetch(isEdit ? `${base}/${ruleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
-      if (r.ok && j?.error == null) router.push('/marketing/ads/rules-automation')
+      if (r.ok && j?.error == null) router.push(`/marketing/ads/rules-automation/${ownTab}`)
     } finally { setCreating(false) }
-  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetLookback, budgetExclude, budgetFloor, budgetCeiling, maxAdSpend, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -532,8 +540,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         if (!alive || !rule) return
         setRuleName(rule.name ?? '')
         const conds = Array.isArray(rule.conditions) ? rule.conditions : []
-        if (conds.length) setGroups(conds.map((c: { conditions?: Condition[]; lookback?: string; exclude?: string; action?: { op?: string; value?: string; placeTarget?: string } }) => ({ id: ++_cid, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: c.lookback ?? 'Last 60 Days', exclude: c.exclude ?? 'Last 3 Days', budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '', placeTarget: c.action?.placeTarget ?? 'tos' })))
-        if (advLookback && conds[0]) { if (conds[0].lookback) setBudgetLookback(conds[0].lookback); if (conds[0].exclude) setBudgetExclude(conds[0].exclude) }
+        if (conds.length) setGroups(conds.map((c: { conditions?: Condition[]; lookback?: string; exclude?: string; action?: { op?: string; value?: string; placeTarget?: string } }) => ({ id: ++_cid, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '', placeTarget: c.action?.placeTarget ?? 'tos' })))
         const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) ?? {}
         setControl(a.control === 'automate' ? 'automate' : 'manual')
         setDedupe(a.dedupe !== false)
@@ -544,9 +551,12 @@ export function RuleBuilder({ slug }: { slug: string }) {
         if (isBudget) {
           if (a.budgetFloor != null) setBudgetFloor(String(a.budgetFloor))
           if (a.budgetCeiling != null) setBudgetCeiling(String(a.budgetCeiling))
-          if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
-          if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
         }
+        // P2.2 — ceiling, write cap and market scope hydrate for EVERY rule type, matching the
+        // controls below that are no longer budget-only.
+        if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
+        if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
+        if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
         if (isPlacement) {
           if (a.placeFloor != null) setPlaceFloor(String(a.placeFloor))
           if (a.placeCeiling != null) setPlaceCeiling(String(a.placeCeiling))
@@ -688,12 +698,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   </div>
                   {(surface === 'search-terms' || isBidLike) && (
                   <div className="h10-rb-lookback">
-                    <label>Lookback period <i>*</i>{isBidLike && <HoverCard text="The window of performance data this rule evaluates. “Exclude” drops the most-recent days (still settling) from that window." placement="above"><span className="h10-rb-lbl-i" aria-hidden="true"><Info size={14} /></span></HoverCard>}</label>
-                    <div className="lbrow">
-                      <H10Select width={220} options={LOOKBACK} value={g.lookback} onChange={(v) => setLookback(g.id, v)} ariaLabel="Lookback period" />
-                      <span className="exc">Exclude</span>
-                      <H10Select width={180} options={EXCLUDE} value={g.exclude} onChange={(v) => setExclude(g.id, v)} ariaLabel="Exclude period" />
-                    </div>
+                    <label>Measurement window</label>
+                    <PcWindowNote slug={slug} />
                   </div>
                   )}
                 </div>
@@ -744,13 +750,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <div className="h10-rb-card adv">
                 {advLookback && (
                 <div className="advblock">
-                  <b>Lookback period</b>
-                  <p>Set the time range of the data used to trigger this rule</p>
-                  <div className="lbrow">
-                    <H10Select width={205} options={LOOKBACK} value={budgetLookback} onChange={setBudgetLookback} ariaLabel="Lookback period" />
-                    <span className="exc">Exclude</span>
-                    <H10Select width={180} options={EXCLUDE} value={budgetExclude} onChange={setBudgetExclude} ariaLabel="Exclude period" />
-                  </div>
+                  <b>Measurement window</b>
+                  <PcWindowNote slug={slug} />
                 </div>
                 )}
                 <div className="advblock">
@@ -785,19 +786,28 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" value={budgetFloor} onChange={(e) => setBudgetFloor(e.target.value)} aria-label="Min daily budget" /></span>
                     <span className="lbl">Max</span>
                     <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={budgetCeiling} onChange={(e) => setBudgetCeiling(e.target.value)} aria-label="Max daily budget" /></span>
-                    <span className="lbl">Max daily ad spend</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} aria-label="Max daily ad spend" /></span>
                   </div>
                   {floorOverCeiling && <div className="h10-rb-warn">Min budget (€{budgetFloor}) is above Max (€{budgetCeiling}) — increases would be capped at the Max.</div>}
                 </div>
                 )}
-                {isBudget && (
+                {/* P2.2 — spend ceiling + write cap + market scope for EVERY rule type. These were
+                    budget-only, so a bid or negation rule was created account-wide and uncapped
+                    with no control ever offered. */}
+                <div className="advblock">
+                  <b>Spend ceiling &amp; write cap</b>
+                  <p>Refuse further work past the ceiling; past the write cap the rule keeps proposing but stops writing</p>
+                  <div className="freqrow">
+                    <span className="lbl">Max daily ad spend</span>
+                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} aria-label="Max daily ad spend" /></span>
+                    <span className="lbl">Max writes per day</span>
+                    <span className="h10-rb-val bidv"><input inputMode="numeric" placeholder="No cap" value={maxWrites} onChange={(e) => setMaxWrites(e.target.value)} aria-label="Max writes per day" /></span>
+                  </div>
+                </div>
                 <div className="advblock">
                   <b>Marketplace</b>
-                  <p>Limit this rule to a single marketplace (budgets differ per market)</p>
+                  <p>Limit this rule to a single marketplace — unscoped, it acts in every market</p>
                   <H10Select width={260} options={MARKETS} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
                 </div>
-                )}
                 {isPlacement && (
                 <div className="advblock">
                   <b>Placement Guardrails</b>

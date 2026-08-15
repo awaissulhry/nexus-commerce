@@ -1,20 +1,30 @@
 'use client'
 
 /**
- * RuleListTab — the shared rules-grid body used by every rule sub-tab (Negative Targeting ·
- * Bid · Keyword Harvest · Budget · Dayparting · Budget Schedules · Placement · …). Renders
- * through the ONE shared AdsDataGrid with:
- *   • per-row hover pencils on Criteria + Frequency, and a row-hover "Open" link
- *   • multi-select bulk toolbar (Automation · Criteria · Frequency · Delete) → bulk-edit dialogs
- * Parameterised by `noun` + `seed` rows; tabs without a recording reference seed representative
- * placeholder rules so the page stays whole.
+ * RuleListTab — the shared rules-grid body used by the interim rule sections (Bid · Budget ·
+ * Keyword Harvest) and the exporter of `HistoryDrawer` (Automations). Renders through the ONE
+ * shared AdsDataGrid.
+ *
+ * P2.5 — every control on this grid now WRITES or says it cannot. The old version mutated React
+ * state under a modal reading "This cannot be undone": Delete removed a row that returned on
+ * reload, the Automation toggle flipped a pixel, and the Criteria/Frequency pencils edited a
+ * display string no rule ever read. The pencils and their bulk dialogs are REMOVED (a criteria
+ * summary cannot round-trip into stored conditions — the builder's Open link is the editor);
+ * Delete calls the real endpoint; the Automation toggle PATCHes the builder rule's `control`
+ * field, and is disabled with the reason on engine rules, whose mode lives on Automations.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Plus, Trash2, ExternalLink, Clock, X, RotateCcw } from 'lucide-react'
-import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../campaigns/_grid/AdsDataGrid'
-import { H10Select } from '../../campaigns/FilterDropdown'
+import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
+import { RULE_TYPES } from '../_shared/ruleTypes'
+
+const BUILDER_SLUGS = new Set(RULE_TYPES.map((r) => r.slug))
+const isBuilderRule = (rule: Record<string, unknown> | undefined): boolean => {
+  const a0 = (Array.isArray(rule?.actions) ? rule!.actions[0] : null) as { type?: string } | null
+  return !!a0?.type && BUILDER_SLUGS.has(a0.type)
+}
 
 export interface RuleRow { id: string; name: string; automation: boolean; criteria: string; freqDay: string; freqTime: string; live?: boolean }
 
@@ -38,17 +48,14 @@ function ruleToRow(rule: Record<string, unknown>): RuleRow {
   return { id: String(rule.id), name: String(rule.name ?? 'Untitled'), automation: a?.control === 'automate', criteria: summariseRule(rule as never), freqDay: s.frequency ?? 'Daily', freqTime: label, live: true }
 }
 
-const FREQ_DAYS = ['Daily', 'Weekly', 'Monthly'].map((v) => ({ value: v, label: v }))
-const TIMES = Array.from({ length: 24 }, (_, h) => {
-  const label = h === 0 ? '12:00 AM' : h < 12 ? `${String(h).padStart(2, '0')}:00 AM` : h === 12 ? '12:00 PM' : `${String(h - 12).padStart(2, '0')}:00 PM`
-  return { value: label, label }
-})
-
-type BulkKind = 'automation' | 'criteria' | 'frequency' | 'delete'
+type BulkKind = 'automation' | 'delete'
 
 export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNode }: { noun: string; seed: RuleRow[]; onAddRule: () => void; liveType?: string; editHref?: (id: string) => string; emptyNode?: ReactNode }) {
   const [rows, setRows] = useState<RuleRow[]>(liveType ? [] : seed)
   const [sel, setSel] = useState<Set<string>>(new Set())
+  // P2.5 — the raw rules by id, kept so a toggle can PATCH the real actions array rather than
+  // reconstructing it from a display row.
+  const [raw, setRaw] = useState<Map<string, Record<string, unknown>>>(new Map())
   // B6: when liveType is set (Budget), load REAL rules of that type instead of placeholder seeds.
   useEffect(() => {
     if (!liveType) return
@@ -60,7 +67,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         // `liveType` is the TAB KEY, not an action type — see RULE_TAB_ACTION_TYPES for why
         // comparing the two directly matched nothing and emptied every live tab.
         const mine = all.filter((r) => ruleBelongsToTab(r.actions, liveType))
-        if (alive) setRows(mine.map(ruleToRow))
+        if (alive) { setRows(mine.map(ruleToRow)); setRaw(new Map(mine.map((r) => [String(r.id), r]))) }
       } catch { if (alive) setRows([]) }
     })()
     return () => { alive = false }
@@ -69,13 +76,49 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
   const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
   const nounLower = noun.toLowerCase()
 
-  const patch = (id: string, p: Partial<RuleRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)))
-  const toggleAutomation = (id: string) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: !r.automation } : r)))
+  /**
+   * P2.5 — a REAL toggle, for the rows it can be real on. A builder rule's automation switch is
+   * `actions[0].control` ('automate' auto-applies once graduated; 'manual' always proposes) —
+   * PATCHed here, optimistically, reverted on failure. An engine rule has no such field: its
+   * mode is `autonomyLevel`, owned by the Automations page, so its toggle renders disabled with
+   * that pointer instead of flipping a pixel that wrote nothing (the old behaviour).
+   */
+  const setAutomation = async (id: string, on: boolean): Promise<boolean> => {
+    const rule = raw.get(id)
+    if (!rule || !isBuilderRule(rule)) return false
+    const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) => (i === 0 ? { ...a, control: on ? 'automate' : 'manual' } : a))
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: on } : r)))
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      setRaw((m) => { const n = new Map(m); n.set(id, { ...rule, actions }); return n })
+      return true
+    } catch {
+      setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: !on } : r)))
+      return false
+    }
+  }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [
     {
       key: 'automation', label: 'Automation', metric: false, sortable: false,
-      render: (r) => <button type="button" className={`h10-bktoggle ${r.automation ? 'on' : ''}`} role="switch" aria-checked={r.automation} aria-label={`Automation for ${r.name}`} onClick={() => toggleAutomation(r.id)}><span /></button>,
+      render: (r) => {
+        const builder = isBuilderRule(raw.get(r.id))
+        return (
+          <button
+            type="button"
+            className={`h10-bktoggle ${r.automation ? 'on' : ''}`}
+            role="switch"
+            aria-checked={r.automation}
+            aria-label={`Automation for ${r.name}`}
+            disabled={r.live && !builder}
+            title={r.live && !builder ? 'This rule’s mode is set on the Automations page' : undefined}
+            onClick={() => { if (!r.live || builder) void setAutomation(r.id, !r.automation) }}
+          ><span /></button>
+        )
+      },
     },
     { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit">{r.criteria}</span> },
     {
@@ -83,25 +126,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
       render: (r) => <span className="h10-nt-freq"><b>{r.freqDay}</b><span>{r.freqTime}</span></span>,
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [])
-
-  const editMode: GridEditMode<RuleRow> = useMemo(() => ({
-    label: 'Edit', bulk: false,
-    fields: [
-      { key: 'criteria', initial: (r) => r.criteria, render: (v, set) => <input className="h10-nt-edit" value={v} onChange={(e) => set(e.target.value)} aria-label="Criteria" autoFocus /> },
-      {
-        key: 'frequency', initial: (r) => `${r.freqDay}|${r.freqTime}`,
-        render: (v, set) => { const [d, t] = v.split('|'); return (<span className="h10-nt-freqedit"><H10Select width={150} options={FREQ_DAYS} value={d} onChange={(nv) => set(`${nv}|${t}`)} ariaLabel="Frequency day" /><H10Select width={150} options={TIMES} value={t} onChange={(nv) => set(`${d}|${nv}`)} ariaLabel="Frequency time" /></span>) },
-      },
-    ],
-    onApply: (edits) => {
-      for (const e of edits) {
-        if (e.values.criteria != null) patch(e.id, { criteria: e.values.criteria })
-        if (e.values.frequency != null) { const [d, t] = e.values.frequency.split('|'); patch(e.id, { freqDay: d, freqTime: t }) }
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [])
+  ], [raw])
 
   const renderFirst = (r: RuleRow): ReactNode => {
     const href = editHref && r.live ? editHref(r.id) : null
@@ -117,16 +142,31 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
     )
   }
 
-  const applyBulk = (kind: BulkKind, ids: string[], payload?: { on?: boolean; criteria?: string; freqDay?: string; freqTime?: string }) => {
-    if (kind === 'delete') { setRows((rs) => rs.filter((r) => !ids.includes(r.id))); setSel(new Set()) }
-    else setRows((rs) => rs.map((r) => {
-      if (!ids.includes(r.id)) return r
-      if (kind === 'automation') return { ...r, automation: !!payload?.on }
-      if (kind === 'criteria') return { ...r, criteria: payload?.criteria ?? r.criteria }
-      if (kind === 'frequency') return { ...r, freqDay: payload?.freqDay ?? r.freqDay, freqTime: payload?.freqTime ?? r.freqTime }
-      return r
-    }))
+  /**
+   * P2.5 — bulk actions call the endpoints they always claimed to. Delete removes only the rows
+   * whose DELETE succeeded (a failure stays visible instead of vanishing locally); Automation
+   * applies to the builder rules in the selection and reports how many engine rules it could
+   * not touch. Live rows only — seeds have nothing behind them to write.
+   */
+  const applyBulk = async (kind: BulkKind, ids: string[], payload?: { on?: boolean }) => {
     setBulk(null)
+    if (kind === 'delete') {
+      if (!liveType) { setRows((rs) => rs.filter((r) => !ids.includes(r.id))); setSel(new Set()); return }
+      const deleted: string[] = []
+      for (const id of ids) {
+        try {
+          const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { method: 'DELETE' })
+          if (res.ok) deleted.push(id)
+        } catch { /* row stays — visibly not deleted */ }
+      }
+      setRows((rs) => rs.filter((r) => !deleted.includes(r.id)))
+      setRaw((m) => { const n = new Map(m); for (const id of deleted) n.delete(id); return n })
+      setSel(new Set())
+      return
+    }
+    // automation
+    for (const id of ids) await setAutomation(id, !!payload?.on)
+    setSel(new Set())
   }
 
   return (
@@ -140,7 +180,6 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         renderFirst={renderFirst}
         firstSortValue={(r) => r.name}
         columns={columns}
-        editMode={editMode}
         selectable
         selected={sel}
         onSelectedChange={setSel}
@@ -156,51 +195,48 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
             <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</button>
-            <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'criteria', ids })}>Criteria</button>
-            <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'frequency', ids })}>Frequency</button>
             <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'delete', ids })}><Trash2 size={13} /> Delete</button>
           </span>
         )}
       />
-      {bulk && <BulkModal kind={bulk.kind} count={bulk.ids.length} nounLower={nounLower} onApply={(p) => applyBulk(bulk.kind, bulk.ids, p)} onClose={() => setBulk(null)} />}
+      {bulk && <BulkModal kind={bulk.kind} count={bulk.ids.length} nounLower={nounLower} engineCount={liveType ? bulk.ids.filter((id) => !isBuilderRule(raw.get(id))).length : 0} onApply={(p) => void applyBulk(bulk.kind, bulk.ids, p)} onClose={() => setBulk(null)} />}
       {historyRule && <HistoryDrawer rule={historyRule} onClose={() => setHistoryRule(null)} />}
     </>
   )
 }
 
-function BulkModal({ kind, count, nounLower, onApply, onClose }: {
+function BulkModal({ kind, count, nounLower, engineCount, onApply, onClose }: {
   kind: BulkKind; count: number; nounLower: string
-  onApply: (p?: { on?: boolean; criteria?: string; freqDay?: string; freqTime?: string }) => void
+  /** selected rows that are ENGINE rules — Automation cannot touch them (mode lives on Automations) */
+  engineCount: number
+  onApply: (p?: { on?: boolean }) => void
   onClose: () => void
 }) {
   const [on, setOn] = useState(true)
-  const [criteria, setCriteria] = useState('Sales=0, Clicks≥20')
-  const [freqDay, setFreqDay] = useState('Daily')
-  const [freqTime, setFreqTime] = useState('06:00 AM')
-  const TITLE: Record<BulkKind, string> = { automation: 'Set Automation', criteria: 'Edit Criteria', frequency: 'Set Frequency', delete: 'Delete Rules' }
+  const TITLE: Record<BulkKind, string> = { automation: 'Set Automation', delete: 'Delete Rules' }
   const ruleNoun = count === 1 ? nounLower : `${nounLower}s`
-  const submit = () => {
-    if (kind === 'automation') onApply({ on })
-    else if (kind === 'criteria') onApply({ criteria })
-    else if (kind === 'frequency') onApply({ freqDay, freqTime })
-    else onApply()
-  }
   return (
     <div className="h10-ntm-back" onClick={onClose}>
       <div className="h10-ntm" role="dialog" aria-modal="true" aria-label={TITLE[kind]} onClick={(e) => e.stopPropagation()}>
         <div className="h10-ntm-h"><b>{TITLE[kind]}</b></div>
-        <div className="h10-ntm-sub">{kind === 'delete' ? `Delete ${count} ${ruleNoun}? This cannot be undone.` : `Apply to ${count} selected ${ruleNoun}.`}</div>
+        <div className="h10-ntm-sub">
+          {kind === 'delete'
+            // P2.5 — the warning is finally TRUE (this used to remove rows from React state), and
+            // it says the whole cost: AutomationRuleExecution rows cascade with the rule, so its
+            // history — the evidence of what it did — is destroyed with it.
+            ? `Delete ${count} ${ruleNoun}? This deletes the rule AND its execution history, and cannot be undone.`
+            : `Apply to ${count} selected ${ruleNoun}.`}
+          {kind === 'automation' && engineCount > 0 && ` ${engineCount} of them ${engineCount === 1 ? 'is an engine rule' : 'are engine rules'} whose mode is set on the Automations page — ${engineCount === 1 ? 'it' : 'they'} will be skipped.`}
+        </div>
         <div className="h10-ntm-b">
           {kind === 'automation' && (
             <label className="h10-ntm-tog"><button type="button" className={`h10-bktoggle ${on ? 'on' : ''}`} role="switch" aria-checked={on} aria-label="Automation" onClick={() => setOn((v) => !v)}><span /></button> Automation {on ? 'On' : 'Off'}</label>
           )}
-          {kind === 'criteria' && <input className="h10-rb-input" style={{ width: '100%' }} value={criteria} onChange={(e) => setCriteria(e.target.value)} aria-label="Criteria" />}
-          {kind === 'frequency' && <span className="h10-nt-freqedit"><H10Select width={170} options={FREQ_DAYS} value={freqDay} onChange={setFreqDay} ariaLabel="Frequency day" /><H10Select width={170} options={TIMES} value={freqTime} onChange={setFreqTime} ariaLabel="Frequency time" /></span>}
         </div>
         <div className="h10-ntm-f">
           <button type="button" className="cancel" onClick={onClose}>Cancel</button>
           <span className="grow" />
-          <button type="button" className={`apply ${kind === 'delete' ? 'danger' : ''}`} onClick={submit}>{kind === 'delete' ? 'Delete' : 'Apply'}</button>
+          <button type="button" className={`apply ${kind === 'delete' ? 'danger' : ''}`} onClick={() => onApply(kind === 'automation' ? { on } : undefined)}>{kind === 'delete' ? 'Delete' : 'Apply'}</button>
         </div>
       </div>
     </div>
