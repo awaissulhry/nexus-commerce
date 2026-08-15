@@ -31,6 +31,26 @@
  */
 import prisma from '../../db.js'
 
+/**
+ * Hash the fold to a short hex string.
+ *
+ * 🔴 Not cosmetic. The raw folds are multi-kilobyte — dayparting's `plan` is 33 schedules × a
+ * 7×24 window list — and this payload is fetched every 45 seconds by every open tab. Measured on
+ * the first deploy: `plan` and `applied` were ~4 KB each. The cursor only ever needs to answer
+ * "same or different", which a hash answers in 8 characters.
+ *
+ * FNV-1a, 32-bit. Collisions are theoretically possible and the consequence is a missed banner on
+ * one refresh, not a wrong number on screen — the same failure class as the poll interval itself.
+ */
+function hash(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
 /** Fold an object to a stable string, dropping keys whose value is a wall-clock stamp. */
 function digest(v: unknown): string {
   if (v == null) return ''
@@ -137,7 +157,7 @@ export async function getAutomationsCursor(view: string): Promise<AutoCursor> {
     orderBy: { id: 'asc' },
   })
   const pending = await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } })
-  const out: AutoCursor = { n: rules.length, cfg: digest(rules), pending }
+  const out: AutoCursor = { n: rules.length, cfg: hash(digest(rules)), pending }
   if (view === 'ledger') {
     const log = await prisma.advertisingActionLog.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } })
     out.actedAt = log?.createdAt.toISOString() ?? null
@@ -180,7 +200,7 @@ export async function getDaypartingCursor(scope: { market: string; portfolio?: s
   ])
   return {
     n: scheds.length,
-    plan: digest(scheds.map((s) => [s.id, s.windows, s.defaultTargetKey, s.targetOverrides])),
+    plan: hash(digest(scheds.map((s) => [s.id, s.windows, s.defaultTargetKey, s.targetOverrides]))),
     /**
      * 🔴 The hour is deliberately NOT in this cursor. The page's mode/capped/min-bid values are
      * hour-derived, so carrying the clock would fire 24×/day — the exact ratio Budget rejected
@@ -189,7 +209,7 @@ export async function getDaypartingCursor(scope: { market: string; portfolio?: s
      * boundary the page renders differently before the engine catches up; the alternative is two
      * banners per boundary, every day, forever.
      */
-    applied: digest(scheds.map((s) => [s.id, s.lastApplied])),
+    applied: hash(digest(scheds.map((s) => [s.id, s.lastApplied]))),
     targetsAt: targets._max.updatedAt?.toISOString() ?? null,
     planAt: version?.createdAt.toISOString() ?? null,
   }
