@@ -192,16 +192,16 @@ export function RankGoalsList() {
       tip: 'What the controller will actually do this hour across this schedule\u2019s campaigns. Where they disagree, every state is listed.',
       render: (r) => (r.runtime
         ? <ModeSpreadCell summary={r.runtime.modeSummary} mixed={r.runtime.mixed} members={r.runtime.members} />
-        : <span className="rd-none">\u2014</span>),
+        : <span className="rd-none">—</span>),
     },
     {
       key: 'goal', label: 'Goal vs actual', metric: false, sortable: true,
       sortValue: (r) => -(r.runtime?.goalsLive ?? -1),
       tip: 'How many of this schedule\u2019s campaigns have a goal the controller actually reads. A dash means none do.',
       render: (r) => {
-        if (!r.runtime) return <span className="rd-none">\u2014</span>
+        if (!r.runtime) return <span className="rd-none">—</span>
         if (r.runtime.goalsLive === 0) {
-          return <span className="rd-goal dead" title="No campaign in this schedule has a goal the controller reads \u2014 every one of them either holds a fixed placement or is all-out."><span className="v">\u2014</span><span className="was">no goal is read</span></span>
+          return <span className="rd-goal dead" title="No campaign in this schedule has a goal the controller reads — every one of them either holds a fixed placement or is all-out."><span className="v">—</span><span className="was">no goal is read</span></span>
         }
         return <span className="rd-goal" title={`${r.runtime.goalsLive} of ${r.runtime.members} campaigns are chasing a live goal.`}><b>{r.runtime.goalsLive}</b><span className="vs">of</span><span className="v">{r.runtime.members}</span><span className="unit">live</span></span>
       },
@@ -211,7 +211,7 @@ export function RankGoalsList() {
       tip: 'The feedback lane the ACTIVE targets drive across this schedule. "No signal" and "no coverage" are different problems.',
       render: (r) => (r.runtime
         ? <SignalCell signal={{ kind: r.runtime.signalSummary.includes('coverage') ? 'no-coverage' : r.runtime.signalSummary.includes('no signal') ? 'no-signal' : 'top-is', lane: null, valuePct: null, ageDays: null, rows: null, label: r.runtime.signalSummary }} />
-        : <span className="rd-none">\u2014</span>),
+        : <span className="rd-none">—</span>),
     },
     {
       // RDX/B1 — the column that makes the header's market switch mean something. Multi-market
@@ -276,7 +276,7 @@ export function RankGoalsList() {
       // Unmeasurable sorts LAST rather than as 0%, which would read as perfect efficiency.
       sortValue: (r) => (r.acos == null ? Number.MAX_SAFE_INTEGER : r.acos),
       tip: 'Spend \u00f7 sales across the whole schedule. Derived from the summed totals, not averaged across campaigns.',
-      render: (r) => (r.acos == null ? <span className="h10-rg-none" title="No attributed sales in the window">\u2014</span> : <span>{r.acos}%</span>),
+      render: (r) => (r.acos == null ? <span className="h10-rg-none" title="No attributed sales in the window">—</span> : <span>{r.acos}%</span>),
       total: (rows) => {
         const c = rows.reduce((n, r) => n + r.spendCents, 0), sl = rows.reduce((n, r) => n + r.salesCents, 0)
         return <span>{sl > 0 ? `${Math.round((c / sl) * 1000) / 10}%` : '\u2014'}</span>
