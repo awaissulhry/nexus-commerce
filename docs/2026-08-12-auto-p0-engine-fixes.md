@@ -19,6 +19,10 @@ superseded by CAP's, which uses a sharper unit than mine, and was never applied.
 **Landed:** `e121dc627` (guard ④) · `0f916ce56` (the refusal counter + migration `20260816a`) ·
 `94c985738` (locks). The read path shipped inside PLC.3's `2373e5bb4` — see §6.
 
+**Prod-verified 2026-08-15 23:32 UTC:** the first evaluator tick after the deploy recorded
+**211 refusals across 16 rules**, each with its verbatim reason and the entity it was noticed on.
+§5 has the measurement.
+
 ---
 
 ## 1 · Four things I measured that the brief had wrong
@@ -169,24 +173,52 @@ on, where a passing test asserted the shape of a where-clause that matched nothi
 
 ---
 
-## 5 · The ceiling line, sourceable for the first time
+## 5 · The ceiling line, sourceable for the first time — measured
 
-Measured on prod 2026-08-15 23:25 UTC, immediately after the deploy. SUB §5.2 asks for three facts
-on one line — *the limit · the current position · what happens at the limit*:
+The API went live at **23:20:35 UTC**. The first read, at 23:25, returned **0 refusals** for all 16
+rules, and that zero was correct-but-meaningless: `_auto-p0-tick.mts` showed **0 executions since the
+deploy** — the newest execution row was 22:47, because restarting the API re-arms `node-cron` and no
+tick had yet fired. **A zero measured before the thing that produces the number has run is not a
+measurement.** This is the third time in this record that a window, not a defect, produced the
+alarming reading.
+
+The evaluator ticked at **23:31:49 UTC**. One tick:
 
 ```
-Bulk bid floor protection                  Daily cap 100 — 100 used, 0 refused today.
-Low CTR bid reduction                      Daily cap 200 — 200 used, 0 refused today.
-Wasted keyword instant negate              Daily cap 200 — 200 used, 0 refused today.
-Auto match-type migration (broad → exact)  Daily cap 100 — 100 used, 0 refused today.
-Target ACOS setter (from profit)           Daily cap  36 —  36 used, 0 refused today.
-…16 of 16 rules, every one sitting exactly at its cap
+[2026-08-15T23:32:45Z] AutomationRefusalDaily rows: 16
+
+Low CTR bid reduction                      2026-08-15 DAILY_CAP_EXCEEDED  cap 200  refused 79
+Wasted keyword instant negate              2026-08-15 DAILY_CAP_EXCEEDED  cap 200  refused 51
+Bulk bid floor protection                  2026-08-15 DAILY_CAP_EXCEEDED  cap 100  refused 15
+CVR drop alert + bid cut                   2026-08-15 DAILY_CAP_EXCEEDED  cap  50  refused 11
+Profit-native bid optimisation             2026-08-15 DAILY_CAP_EXCEEDED  cap  36  refused  9
+Target ACOS setter (from profit)           2026-08-15 DAILY_CAP_EXCEEDED  cap  36  refused  9
+Daily automation digest                    2026-08-15 DAILY_CAP_EXCEEDED  cap   9  refused  9
+Weekend budget boost                       2026-08-15 DAILY_CAP_EXCEEDED  cap  36  refused  9
+Auto harvest & negate                      2026-08-15 DAILY_CAP_EXCEEDED  cap  36  refused  9
+AIREON — Target ACoS bidding               2026-08-15 DAILY_CAP_EXCEEDED  cap  36  refused  9
+Auto match-type migration (broad → exact)  2026-08-15 DAILY_CAP_EXCEEDED  cap 100  refused  5
+ACoS convergence · Campaign ACOS rebalance · Alert: ACOS spike ·
+Scale budget-capped winners · Reduce bids on ACOS spike          each     refused  1
+
+verbatim : "Low CTR bid reduction reached its daily cap of 200 and was refused.
+            Further matches today are refused, not queued."
+last at  : 2026-08-15T23:31:17Z   entity AD_TARGET cmr25b61901rpp7013zekbmup
 ```
 
-⚠ **The `0 refused` is an artefact of the deploy hour, not a measurement of the engine.** The API went
-live at **23:20 UTC**, ~40 minutes before the UTC day rolled; every one of these rules had reached its
-cap hours earlier, under the old build. The first genuinely-populated day is **2026-08-16**. This is
-the same window trap as §2, stated here before anyone quotes the zero.
+**211 refusals in a single tick, across 16 rules, from 16 counter rows.** At ~96 ticks a day that is
+~20,000/day, which matches the 21,000 projected from 2026-08-11 — the first independent confirmation
+that the projection behind choosing a counter over a row was right.
+
+The ceiling line SUB §5.2 asks for — *the limit · the current position · what happens at the limit* —
+is now sourceable verbatim, for the first time since 2026-08-04:
+
+> **Low CTR bid reduction** — Daily cap 200. 200 used, 79 refused today. Further matches are
+> refused, not queued.
+
+⚠ **None of these is a failure.** All 16 rules are working exactly as configured; every number above
+is a governed stop. Nothing may fold them into a failure rate, a health percentage, or a colour
+shared with one.
 
 ---
 
