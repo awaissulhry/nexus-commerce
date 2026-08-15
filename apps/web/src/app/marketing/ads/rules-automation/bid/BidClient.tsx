@@ -215,8 +215,13 @@ export function BidClient() {
     baseline: (data?.cursor ?? null) as unknown as Record<string, unknown> | null,
   })
 
-  const allRows = view === 'targets' ? ((data?.rows ?? []) as BidTargetRow[]) : []
-  const allCampaigns = view === 'campaigns' ? ((data?.rows ?? []) as BidCampaignRow[]) : []
+  // 🔴 The cast is gated on the PAYLOAD's own view, not just the URL's. The URL flips
+  // synchronously on a view switch while `data` still holds the other view's rows for one
+  // fetch round-trip — and a target row rendered through campaignColumns crashes the page on
+  // `r.targets.toLocaleString()` (found live: the S1 band's no-bidder click). During the
+  // transition both arrays are empty and the grid shows its loading state instead.
+  const allRows = view === 'targets' && data?.view === 'targets' ? ((data?.rows ?? []) as BidTargetRow[]) : []
+  const allCampaigns = view === 'campaigns' && data?.view === 'campaigns' ? ((data?.rows ?? []) as BidCampaignRow[]) : []
 
   /**
    * BID.S2 — the state filter runs HERE, not on the server: the vocabulary is a client module so
