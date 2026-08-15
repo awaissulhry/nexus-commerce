@@ -16,6 +16,7 @@ import { AlertTriangle, Check, Ruler, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import type { BidSlotProps } from './slot-contract'
+import { emitAdsChange } from '../_shared/adsBus'
 
 interface BidPolicy {
   id: string
@@ -112,6 +113,8 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
       setNote(`Band saved for “${selectedCamp.name}” — the campaign grain overrides every policy below it.`)
       setCampId('')
       reload()
+      // RT.1 — a bound is enforced at the write gate, so Apply Rules renders it too.
+      emitAdsChange('ads.guardrail.changed')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 

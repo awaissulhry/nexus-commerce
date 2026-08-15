@@ -57,6 +57,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { PlacementScopeBar, LANE_OPTIONS, type PlcScope, type PlcLaneKey, type ScopeOptionsPayload } from './PlacementScopeBar'
 import { PlcInspector } from './PlcInspector'
 import { useCursorPoll } from '../_shared/useCursorPoll'
+import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -263,6 +264,10 @@ export function PlacementClient() {
   useEffect(() => { setQDraft(q) }, [q])
   // The cursor poll OFFERS a refresh; this is what taking it re-runs. It never fires on its own.
   const [reloadTick, setReloadTick] = useState(0)
+
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.placement.changed', 'ads.schedule.changed'], () => setReloadTick((n) => n + 1))
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())

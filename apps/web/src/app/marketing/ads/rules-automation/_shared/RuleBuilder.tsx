@@ -18,6 +18,7 @@ import { NoDataIllus } from './NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
 import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
+import { emitAdsChange } from './adsBus'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -526,6 +527,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const r = await fetch(isEdit ? `${base}/${ruleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
       if (r.ok && j?.error == null) router.push(`/marketing/ads/rules-automation/${ownTab}`)
+      // RT.1 — a saved rule moves every tab badge and every page's rule section.
+      emitAdsChange('ads.rule.changed')
     } finally { setCreating(false) }
   }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 

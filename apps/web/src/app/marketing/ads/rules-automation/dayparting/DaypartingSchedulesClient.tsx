@@ -27,6 +27,7 @@ import { useRdUrlState } from './_rd/useRdUrlState'
 import { RdSection } from './_rd/RdSection'
 import { RdCeilings } from './RdCeilings'
 import { RdFleetBand } from './RdFleetBand'
+import { useAdsSync } from '../_shared/adsBus'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -46,6 +47,11 @@ function DaypartingSchedulesBody() {
   // fetches this component used to own are gone: `/advertising/campaigns?limit=500` (markets) is
   // covered by `/scope-options`, and `/rank-schedule-groups` was being fetched here AND in the grid.
   const { groups, markets, refresh } = useRdData()
+
+  // RT.1 — your own writes, from any tab, applied silently. Schedules and placement multipliers are
+  // the two subjects this page renders; a plan edited on Placement moves rows here. An ENGINE's
+  // 15-minute tick arrives on the other rail (the cursor poll) and offers a banner instead.
+  useAdsSync(['ads.schedule.changed', 'ads.placement.changed'], refresh)
   // RD.P0 — the header's market switch writes `?market=`, and the URL is the only state. It is the
   // one scope control the page ships: `?portfolio=`, `?product=` and `?grain=` are parsed and
   // honoured, but their pickers wait for P2 rather than becoming a fourth copy of a scope bar three

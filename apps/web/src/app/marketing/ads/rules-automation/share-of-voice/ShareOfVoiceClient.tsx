@@ -51,6 +51,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 // A second scope bar is a second place for the two pages to disagree about what a portfolio means.
 import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from '../keyword-tracker/KeywordScopeBar'
 import { SovRowDrawer } from './SovRowDrawer'
+import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -269,6 +270,9 @@ export function ShareOfVoiceClient() {
   const view = params.get('view') === 'unbid' ? 'unbid' : ''
   const rowParam = params.get('row') ?? ''
 
+  // RT.1 — this page had no refetch handle at all: its one fetch was a `useEffect` keyed only on
+  // URL params, so nothing short of a navigation could re-read it. The tick is the handle.
+  const [reloadTick, setReloadTick] = useState(0)
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -348,7 +352,12 @@ export function ShareOfVoiceClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, weeks, q, sort, dir, adWindow, signal, view])
+  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, weeks, q, sort, dir, adWindow, signal, view, reloadTick])
+
+  // RT.1 — your own writes, from any tab, applied silently. This page does NOT poll a cursor: its
+  // market side is a weekly Brand Analytics period rendering 24–31 days old, so a 45s poll could
+  // only ever report "nothing changed". A watchlist edit, though, is instant and yours.
+  useAdsSync(['ads.keyword.changed'], () => setReloadTick((n) => n + 1))
 
   const rows = data?.rows ?? []
   const s = data?.scope

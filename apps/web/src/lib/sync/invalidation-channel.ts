@@ -103,6 +103,25 @@ export type InvalidationType =
   | 'po.deleted'
   | 'po.restored'
   | 'po.received'
+  // RT.1 — Rules & Automation. The eleven ads pages were the last silo in the app: a bid band set
+  // on Apply Rules was invisible on Bid until a manual reload, and the tab badges were fetched once
+  // per session. Nine subjects, not eleven pages, because pages share subjects — a negation shows on
+  // both Negative Targeting and Keyword Harvest, and both should refresh from one emit.
+  //
+  // 🔴 These carry the operator's OWN writes only. A change made by an ENGINE arrives on the other
+  // rail (the per-page cursor poll in `_shared/useCursorPoll.ts`) and deliberately offers a banner
+  // instead of applying itself — "never yank rows out from under someone reading". That the two
+  // rails are separate is what makes "mine instant, theirs offered" free: nothing has to tag or
+  // compare an origin, because only your own tabs can emit here.
+  | 'ads.rule.changed'
+  | 'ads.bid.changed'
+  | 'ads.budget.changed'
+  | 'ads.placement.changed'
+  | 'ads.schedule.changed'
+  | 'ads.negative.changed'
+  | 'ads.keyword.changed'
+  | 'ads.guardrail.changed'
+  | 'ads.suggestion.changed'
 
 export interface InvalidationEvent {
   type: InvalidationType

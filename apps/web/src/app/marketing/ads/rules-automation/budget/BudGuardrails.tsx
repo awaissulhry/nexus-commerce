@@ -24,6 +24,7 @@ import { AlertTriangle, Anchor, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import type { BudSlotProps } from './slot-contract'
+import { emitAdsChange } from '../_shared/adsBus'
 
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
@@ -61,6 +62,9 @@ export function BudGuardrails({ campaigns, loading, reload }: BudSlotProps) {
       if (!r.ok) throw new Error(j?.error ?? `Capture failed (${r.status})`)
       setNote(`Captured ${j.captured} baseline${j.captured === 1 ? '' : 's'} from current budgets${j.skipped ? ` · ${j.skipped} skipped` : ''}. Relative rules on those campaigns now anchor here instead of compounding.`)
       reload()
+      // RT.1 — baselines and bounds are what every relative budget rule anchors to.
+      emitAdsChange('ads.budget.changed')
+      emitAdsChange('ads.guardrail.changed')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -87,6 +91,9 @@ export function BudGuardrails({ campaigns, loading, reload }: BudSlotProps) {
       setNote(`Guardrails saved for “${selected.name}”. Bounds are enforced at the write gate from the next write.`)
       setEditId('')
       reload()
+      // RT.1 — baselines and bounds are what every relative budget rule anchors to.
+      emitAdsChange('ads.budget.changed')
+      emitAdsChange('ads.guardrail.changed')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 

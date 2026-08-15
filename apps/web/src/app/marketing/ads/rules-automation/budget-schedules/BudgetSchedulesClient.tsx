@@ -64,6 +64,7 @@ import { SectionShell, SectionPending } from './SectionShell'
 import { InspectorRail } from './InspectorRail'
 import { SchedulesSection } from './SchedulesSection'
 import type { BudgetManagerResult, ScopeOptionsPayload } from './slot-contract'
+import { useAdsSync } from '../_shared/adsBus'
 
 /** The six sections, in order. Every one names the session that fills it. */
 const SECTION_DEFS: Array<{
@@ -123,6 +124,10 @@ export function BudgetSchedulesClient() {
   // Parsed once, in one module, and never mirrored into `useState`. That is what makes back and
   // forward restore a view exactly: there is no second copy of the state to fall out of step.
   const url = useMemo(() => parseUrlState(params), [params])
+
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.schedule.changed', 'ads.budget.changed'], () => setReloadTick((n) => n + 1))
 
   const push = useCallback((patch: Record<string, string>) => {
     const qs = patchUrlState(params, patch)

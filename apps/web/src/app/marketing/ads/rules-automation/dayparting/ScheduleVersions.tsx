@@ -22,6 +22,7 @@ import { gridFromWindows, type RankWin } from '../_rank/rank-grid-model'
 import { ChangeList } from './ScheduleActivity'
 import { WeekShape } from './WeekShape'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitAdsChange } from '../_shared/adsBus'
 
 interface Version {
   id: string; name: string; windows: unknown[]; defaultTargetKey: string | null
@@ -125,6 +126,8 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
         : 'Restored. This schedule is paused, so nothing runs until you arm it.')
       setConfirming(null)
       setReload((n) => n + 1)
+      // RT.1 — restoring a version rewrites the plan every campaign in it resolves against.
+      emitAdsChange('ads.schedule.changed')
     } catch { setMsg('Request failed — please retry.') }
     finally { setBusy(false) }
   }

@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowRight, Check, ExternalLink, Info, Layers, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps, HarvestRow, DestinationCandidate, HvDestStatus } from './slot-contract'
+import { emitAdsChange } from '../_shared/adsBus'
 
 const num = (n: number) => n.toLocaleString('en-IE')
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
@@ -162,6 +163,8 @@ function DestinationPicker({ row, scope, onClose, reload }: {
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j?.ok === false) throw new Error(j?.error ?? `HTTP ${res.status}`)
       setSaving('done'); reload()
+      // RT.1 — a destination change re-routes where every future promotion lands.
+      emitAdsChange('ads.keyword.changed')
     } catch (e) { setSaving('error'); setErr((e as Error).message) }
   }, [grain, scopeId, d?.createType, negate, reload])
 

@@ -83,6 +83,7 @@ import {
   type ApplyRulesTotals,
 } from './slot-contract'
 import { ApplyRulesSections } from './ApplyRulesSections'
+import { useAdsSync } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
 const DEFAULT_GRAIN: ApplyRulesGrain = 'campaign'
@@ -148,6 +149,10 @@ export function ApplyRulesClient() {
   const [boundsFor, setBoundsFor] = useState<CampaignRow | null>(null)
 
   /** The one writer of page state. '' or a default value deletes the param. */
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.budget.changed', 'ads.guardrail.changed', 'ads.bid.changed', 'ads.rule.changed'], () => setReloadTick((n) => n + 1))
+
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries(patch)) {

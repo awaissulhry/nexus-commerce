@@ -42,6 +42,26 @@ import { cronStartupState } from '../jobs/cron-startup-state.js'
 import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
 
 const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
+  /**
+   * RT.0 — invalidate the ads read cache after any successful write from THIS plugin.
+   *
+   * `advertising.routes.ts` has carried this hook since Phase 4; this file never did, and it has
+   * grown to **48 write routes** (bid policies, spend ceilings, campaign goals, harvest policies and
+   * destinations, watchlists, budget baselines…). Meanwhile `GET /advertising/campaigns` is
+   * `cached(…, 300)` — so a write through any of those 48 left the Apply Rules grid serving a
+   * five-minute-old answer, and no amount of client-side polling can see past a cache.
+   *
+   * Verbatim copy of the sibling hook, deliberately: two flush policies for one cache is how they
+   * start to disagree about what a write invalidates.
+   */
+  fastify.addHook('onResponse', async (request, reply) => {
+    if (request.method === 'GET' || request.method === 'HEAD') return
+    if (reply.statusCode >= 400) return
+    if (!request.url.includes('/advertising/')) return
+    const { flushAdsCache } = await import('../services/advertising/ads-cache.js')
+    void flushAdsCache()
+  })
+
   // Apex — diagnostic probe for the ads-cron gate. Reads the SAME process.env
   // the boot-time cron block reads (single process serves HTTP + crons), so this
   // definitively shows whether the running process sees the flag as enabled and

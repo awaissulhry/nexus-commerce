@@ -40,6 +40,7 @@ import { LedgerView } from './LedgerView'
 import { QueueView } from './QueueView'
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { triggerText } from './ruleText'
+import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 
 interface Rule extends DetailRule {
   category: string
@@ -187,6 +188,12 @@ export function AutomationsClient() {
 
   useEffect(() => { void load() }, [load])
 
+  // RT.1 — your own writes, from any tab, applied silently. This page is the control plane, so it
+  // hears the three subjects it owns: rule edits (from the builder or any page's rule section),
+  // queue decisions, and the limits it enforces. An ENGINE's write arrives on the other rail (the
+  // cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.rule.changed', 'ads.suggestion.changed', 'ads.guardrail.changed'], () => { void load() })
+
   /**
    * RA.GRAIN — one read feeds every grain's picker and the local reach maths.
    *
@@ -226,6 +233,8 @@ export function AutomationsClient() {
           : (j.error ?? `Could not change mode (${r.status})`))
       }
       await load()
+      // RT.1 — a rule mode, scope or bulk change moves every tab badge and every page's rule section.
+      emitAdsChange('ads.rule.changed')
       setNote(`“${rule.name}” is now ${LEVEL_WORD[level]}.`)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
@@ -243,6 +252,8 @@ export function AutomationsClient() {
         throw new Error(j.message ?? j.error ?? `Could not bind scope (${r.status})`)
       }
       await load()
+      // RT.1 — a rule mode, scope or bulk change moves every tab badge and every page's rule section.
+      emitAdsChange('ads.rule.changed')
       setNote(j.reach
         ? `Scope updated for “${rule.name}” — it now covers ${j.reach.campaigns} of ${j.reach.total} campaigns.`
         : `Scope updated for “${rule.name}”.`)
@@ -563,6 +574,8 @@ export function AutomationsClient() {
       }
       setSel(new Set()); setBulk(null); setDetailId(null)
       await load()
+      // RT.1 — a rule mode, scope or bulk change moves every tab badge and every page's rule section.
+      emitAdsChange('ads.rule.changed')
       setNote([
         `${ok} ${bulk.kind === 'delete' ? 'deleted' : 'updated'}`,
         refused ? `${refused} refused by their ceiling (${refusedNames.slice(0, 3).join(', ')}${refusedNames.length > 3 ? '…' : ''})` : null,
@@ -668,7 +681,11 @@ export function AutomationsClient() {
 
       {view === 'limits' && <LimitsView scopeOptions={scopeOptions} global={actors?.global ?? null} />}
       {view === 'ledger' && <LedgerView />}
-      {view === 'queue' && <QueueView onDecided={() => void load()} />}
+      {/* RT.1 — a queue decision is the one write on this page other pages care about: approving a
+          harvest proposal creates a keyword, so Keyword Harvest must hear it too. */}
+      {view === 'queue' && (
+        <QueueView onDecided={() => { void load(); emitAdsChange('ads.suggestion.changed'); emitAdsChange('ads.keyword.changed') }} />
+      )}
 
       {view === 'actors' && counts.allFailing.length > 0 && (
         <div className="h10-au-banner warn">

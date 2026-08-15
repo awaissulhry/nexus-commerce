@@ -36,6 +36,7 @@ import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps, NegationRow } from './slot-contract'
+import { emitAdsChange } from '../_shared/adsBus'
 
 type Delivery = 'not_applicable' | 'enqueued' | 'refused' | 'failed'
 type OutcomeKind = 'retired' | 'removed_local' | 'skipped' | 'refused' | 'failed'
@@ -185,6 +186,8 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
       if (!r.ok) { setErr(body?.error ?? `The retirement was refused (${r.status})`); return }
       setResult(body as RetireResult)
       reload()
+      // RT.1 — a retired negation changes what is blocking, here and on Keyword Harvest.
+      emitAdsChange('ads.negative.changed')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 

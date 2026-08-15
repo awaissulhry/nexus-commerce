@@ -33,6 +33,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Info, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps, HarvestCriteria, HvPolicyGrain } from './slot-contract'
+import { emitAdsChange } from '../_shared/adsBus'
 
 const GRAIN_LABEL: Record<HvPolicyGrain | 'default', string> = {
   account: 'account', market: 'market', line: 'product line', portfolio: 'portfolio',
@@ -86,6 +87,8 @@ export function HvThresholds({ criteria, attrition, census, scope, push, reload,
       // numbers while claiming they are still a temporary filter.
       if (method === 'PUT') push({ minOrders: '', minClicks: '', maxAcos: '', window: '', matched: '' })
       reload()
+      // RT.1 — a threshold change re-decides every candidate row.
+      emitAdsChange('ads.keyword.changed')
     } catch (e) { setSaving('error'); setErr((e as Error).message) }
   }
 

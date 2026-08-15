@@ -41,6 +41,7 @@ import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from './Keywo
 import { WatchlistPanel } from './WatchlistPanel'
 import { TermDrawer } from './TermDrawer'
 import { buildCsv } from './csv'
+import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -220,6 +221,11 @@ export function KeywordTrackerClient() {
   // KT.2 — the watchlist editor, and a nonce so any write to it re-reads the grid
   const [editing, setEditing] = useState(false)
   const [reload, setReload] = useState(0)
+
+  // RT.1 — your own writes, from any tab, applied silently. This page does NOT poll a cursor:
+  // its feed is a weekly Brand Analytics period rendering 24-31 days old, so a 45s poll could
+  // only ever report 'nothing changed'. Watchlist edits, though, are instant and yours.
+  useAdsSync(['ads.keyword.changed'], () => setReload((n) => n + 1))
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -761,6 +767,8 @@ export function KeywordTrackerClient() {
                 // a write may have changed which list exists, which is default, or its terms
                 if (selectId !== undefined) push({ list: selectId ?? '' })
                 setReload((n) => n + 1)
+                // RT.1 — the watchlist is the population Share of Voice filters by, so it hears this too.
+                emitAdsChange('ads.keyword.changed')
               }}
             />
           )}

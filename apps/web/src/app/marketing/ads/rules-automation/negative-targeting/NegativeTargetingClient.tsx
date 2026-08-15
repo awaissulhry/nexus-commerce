@@ -45,6 +45,7 @@ import { NegProtectedTerms } from './NegProtectedTerms'
 import { NegWastefulWords } from './NegWastefulWords'
 import { NegRules } from './NegRules'
 import { NegRecord } from './NegRecord'
+import { useAdsSync } from '../_shared/adsBus'
 // NEG.5 and NEG.7 have both landed, so the two interim renders — `ProtectedTermsPanel` and
 // `RuleListTab` — are gone from this client. Both FILES stay: each has other importers.
 
@@ -119,6 +120,10 @@ export function NegativeTargetingClient() {
   const [err, setErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.negative.changed', 'ads.keyword.changed', 'ads.rule.changed'], () => setReloadTick((n) => n + 1))
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())

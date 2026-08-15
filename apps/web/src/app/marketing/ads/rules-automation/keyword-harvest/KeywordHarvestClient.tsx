@@ -62,6 +62,7 @@ import { HvRepairs } from './HvRepairs'
 // Interim, until HV.6 and HV.7 replace it: the rule list exactly as the tab rendered it, so
 // nothing is lost in the move off `?tab=keyword-harvest`.
 import { TabRules } from '../_shared/TabRules'
+import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -181,6 +182,10 @@ export function KeywordHarvestClient() {
    * picker was not broken; it was being overruled one line later.
    */
   const ALL_IS_A_VALUE = new Set(['market'])
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.keyword.changed', 'ads.negative.changed', 'ads.suggestion.changed', 'ads.rule.changed'], () => setReloadTick((n) => n + 1))
+
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries(patch)) {

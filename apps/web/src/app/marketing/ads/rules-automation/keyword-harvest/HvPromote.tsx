@@ -36,6 +36,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ArrowRight, ExternalLink, Loader2, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
+import { emitAdsChange } from '../_shared/adsBus'
 
 interface PlanRow {
   candidateId: string
@@ -109,6 +110,9 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
       if (!res.ok || j?.ok === false) throw new Error(j?.error ?? `HTTP ${res.status}`)
       setResult(j as WriteResult)
       reload()
+      // RT.1 — a promotion creates a keyword AND negates it at source — two subjects, one operation.
+      emitAdsChange('ads.keyword.changed')
+      emitAdsChange('ads.negative.changed')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }, [ids, scope, reload])
 

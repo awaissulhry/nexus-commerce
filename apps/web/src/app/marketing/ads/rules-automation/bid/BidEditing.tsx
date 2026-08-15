@@ -28,6 +28,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { hasBidState } from './bidState'
 import { BID_STAGED_EVENT } from './BidStagedTray'
 import type { BidTargetRow } from './types'
+import { emitAdsChange } from '../_shared/adsBus'
 
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
@@ -131,6 +132,8 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
       if (!r.ok || j?.ok === false) throw new Error(j?.error ?? `(${r.status})`)
       setResult({ applied: j.applied ?? 0, skipped: j.skipped ?? 0, failed: j.failed ?? 0, clamps: Array.isArray(j.cpcClamps) ? j.cpcClamps.length : 0 })
       window.dispatchEvent(new Event(BID_STAGED_EVENT))
+      // RT.1 — staged bid writes: the tray is same-tab, this reaches every other tab.
+      emitAdsChange('ads.bid.changed')
     } catch (e) {
       setErr((e as Error).message)
     } finally {

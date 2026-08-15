@@ -54,6 +54,7 @@ import { BudgetSections } from './BudgetSections'
 // Interim, until BUD.4 replaces it: rendered exactly as the tab rendered it, so nothing is lost in
 // the move off `?tab=budget`.
 import { H10Select } from '../../campaigns/FilterDropdown'
+import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -131,6 +132,10 @@ export function BudgetClient() {
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferEur, setTransferEur] = useState('')
   const [transferFrom, setTransferFrom] = useState<string>('')
+
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.budget.changed', 'ads.rule.changed', 'ads.guardrail.changed'], () => setReloadTick((n) => n + 1))
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())

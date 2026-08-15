@@ -62,6 +62,7 @@ import { BidBidderBand } from './BidBidderBand'
 // Interim, until S7 replaces it: rendered exactly as the tab rendered it, so nothing is lost in the
 // move off `?tab=bid`.
 import { BidRules } from './BidRules'
+import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -147,6 +148,10 @@ export function BidClient() {
   // S6 — the campaign whose bidder dialog is open. Local state, not URL: assignment is an
   // action, not a shareable view (the `?bidder=` param is the FILTER, per the URL contract).
   const [goalFor, setGoalFor] = useState<BidCampaignRow | null>(null)
+
+  // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
+  // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
+  useAdsSync(['ads.bid.changed', 'ads.guardrail.changed', 'ads.rule.changed'], () => setReloadTick((n) => n + 1))
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
