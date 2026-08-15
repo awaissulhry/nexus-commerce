@@ -21,6 +21,7 @@ import { relTime } from './scheduleHealth'
 import { useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { campaignMatchesScope } from './_rd/scope'
+import { isTileKey, tileMatch } from './_rd/tiles'
 import { GrainSwitch } from './_rd/GrainSwitch'
 import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
@@ -32,8 +33,11 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
   const { state: url, set: setUrl } = useRdUrlState()
   const [sel, setSel] = useState<Set<string>>(new Set())
 
+  // P1 — the fleet band's tile filter composes with scope, through the SAME predicate the band
+  // counted with, so a tile's number and its result cannot disagree. An unknown ?tile= value
+  // filters nothing rather than blanking the grid.
   const rows = useMemo(
-    () => campaigns.filter((r) => campaignMatchesScope(r, url)),
+    () => campaigns.filter((r) => campaignMatchesScope(r, url) && (!isTileKey(url.tile) || tileMatch(r, url.tile))),
     [campaigns, url],
   )
 

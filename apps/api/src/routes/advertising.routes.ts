@@ -9377,6 +9377,27 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const g = await prisma.rankScheduleGroup.update({ where: { id }, data })
         if (b.enabled !== undefined) await prisma.adSchedule.updateMany({ where: { groupId: id }, data: { enabled: !!b.enabled } })
+        /**
+         * RD.P7 — the most consequential click on the page (Enable/Pause) took this lightweight
+         * path and wrote NO version, so the history could not answer "who paused this and when".
+         * Snapshot with the same meaningful-change comparison saveRankScheduleGroup uses; a
+         * failed snapshot warns and never fails the write it describes.
+         */
+        try {
+          const members = await prisma.adSchedule.count({ where: { groupId: id } })
+          const last = await prisma.rankScheduleVersion.findFirst({ where: { groupId: id }, orderBy: { createdAt: 'desc' }, select: { name: true, windows: true, defaultTargetKey: true, campaignCount: true, enabled: true } })
+          const changed = !last
+            || last.name !== g.name
+            || (last.defaultTargetKey ?? null) !== (g.defaultTargetKey ?? null)
+            || last.campaignCount !== members
+            || last.enabled !== g.enabled
+            || JSON.stringify(last.windows) !== JSON.stringify(g.windows)
+          if (changed) {
+            await prisma.rankScheduleVersion.create({
+              data: { groupId: id, name: g.name, windows: g.windows as never, defaultTargetKey: g.defaultTargetKey ?? null, campaignCount: members, enabled: g.enabled, changedBy: actorFromHeaders(request.headers as Record<string, unknown>) },
+            })
+          }
+        } catch (e) { logger.warn('[RD.P7] version snapshot failed on lightweight PATCH', { id, error: (e as Error).message }) }
         return g
       } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
     }

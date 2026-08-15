@@ -25,6 +25,8 @@ import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { RdSection } from './_rd/RdSection'
+import { RdCeilings } from './RdCeilings'
+import { RdFleetBand } from './RdFleetBand'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -91,7 +93,9 @@ function DaypartingSchedulesBody() {
           Unbuilt sections are NOT MOUNTED. An empty placeholder card is dead space, and the
           standard for this foundation is that the page must look no worse than it did before. */}
 
-      {/* P1 · Fleet state band — fleet grain. Six tiles, each a filter onto the grid. */}
+      {/* P1 · Fleet state band — fleet grain. Five tiles, each a filter onto the grid;
+          "unscheduled" stays with Coverage (P6), which owns that number. */}
+      <RdFleetBand />
 
       {/* P2 · The grid — group ⇄ campaign. The section that fixes the page's structural flaw:
           the list is group-grained and every defect the study measured is campaign-grained.
@@ -100,7 +104,9 @@ function DaypartingSchedulesBody() {
         <RankGrid />
       </RdSection>
 
-      {/* P5 · Guardrails & scope ceilings — spend ceilings per scope, refusals made visible. */}
+      {/* P5 · Guardrails & scope ceilings — the CPC ceiling's refusals made visible; spend
+          ceilings live on Automations → Limits (one owner) and the section says so. */}
+      <RdCeilings />
 
       {/* P6 · Evidence — the hourly grid and what no schedule covers.
           It sits BELOW the grid now, which is the one visible change P0 makes: the page's own
