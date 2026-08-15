@@ -58,8 +58,8 @@ export interface GridColumn<T> {
 }
 
 export interface GridRangeFilter { key: string; label: string; kind: 'range'; unit?: '€' | '%' | ''; tip?: string; value?: (row: unknown) => number }
-export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string; tip?: string; disabled?: boolean; note?: string }
-export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string; tip?: string; disabled?: boolean; note?: string }
+export interface GridSelectFilter { key: string; label: string; kind: 'select'; options: Array<{ value: string; label: string; title?: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string; tip?: string; disabled?: boolean; note?: string }
+export interface GridMultiSelectFilter { key: string; label: string; kind: 'multiselect'; options: Array<{ value: string; label: string; title?: string }>; placeholder?: string; wide?: boolean; searchable?: boolean; value?: (row: unknown) => string; tip?: string; disabled?: boolean; note?: string }
 
 export type GridFilter = GridRangeFilter | GridSelectFilter | GridMultiSelectFilter
 

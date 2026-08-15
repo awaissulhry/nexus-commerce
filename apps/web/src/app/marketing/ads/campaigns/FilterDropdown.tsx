@@ -12,7 +12,10 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { searchOptions } from '@/lib/option-search'
 
-type Opt = { value: string; label: string }
+/** FB.3 — `title` is the hover explanation for ONE option. Placement's four placement-lane
+ *  strings are per-option facts ("PLACEMENT_TOP. The only lane Amazon publishes an impression
+ *  share for."), and a single filter-level tip cannot carry four of them. Defaults to the label. */
+type Opt = { value: string; label: string; title?: string }
 
 /** Past this many options a picker becomes a scroll-hunt, so the search box appears on its own. */
 const SEARCH_THRESHOLD = 7
@@ -101,7 +104,7 @@ export function FilterDropdown({
                 className={`h10-dd-opt ${o.value === value ? 'on' : ''} ${showSearch && i === active ? 'active' : ''}`}
                 onClick={() => pick(o.value)}
                 onMouseEnter={() => showSearch && setActive(i)}
-                title={o.label}
+                title={o.title ?? o.label}
               >{o.label}</button>
             ))}
           </div>

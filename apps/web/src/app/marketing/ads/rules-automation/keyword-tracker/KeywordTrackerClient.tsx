@@ -37,7 +37,9 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
-import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from './KeywordScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue as KtScope } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
 import { WatchlistPanel } from './WatchlistPanel'
 import { TermDrawer } from './TermDrawer'
 import { buildCsv } from './csv'
@@ -441,6 +443,24 @@ export function KeywordTrackerClient() {
   const activeTab = rulesTabByKey('keyword-tracker')
   const s = data?.scope
   const f2 = data?.feed
+
+  // FB.2 — the three grains, as filters in the merged bar. `boundBy` puts the bar on
+  // most-specific-wins, which is what this page's server does; 'market' means nothing was picked.
+  const scopeFilters = useMemo(
+    () => buildScopeFilters({
+      options, market, value: scope,
+      boundBy: s?.boundBy && s.boundBy !== 'market' ? s.boundBy : null,
+    }),
+    [options, market, scope.line, scope.portfolio, scope.campaign, s?.boundBy],
+  )
+  const urlValues = useMemo(
+    () => scopeToFilterState(scope),
+    [scope.line, scope.portfolio, scope.campaign],
+  )
+  const onUrlChange = useCallback((next: Record<string, string>) => {
+    push({ line: next.__line ?? '', portfolio: next.__portfolio ?? '', campaign: next.__campaign ?? '' })
+  }, [push])
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange })
   // KT.10 — null below five overlapping (query, ASIN) pairs: ES had 4 on this window and FR had 1,
   // and a market movement quoted off one pair is an anecdote wearing a percentage sign.
   const m2 = data?.window.market ?? null
@@ -523,12 +543,25 @@ export function KeywordTrackerClient() {
         </div>
       ) : (
         <>
-          <KeywordScopeBar
-            options={options}
-            market={market}
-            scope={scope}
-            boundBy={s?.boundBy ?? null}
-            onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign })}
+          {/* FB.2 — ONE bar. The scope bar that stood here and the portfolio blind-spot note that
+              stood below the resolution line were the same subject in two places; the note is a fact
+              about the grain in use, so it now sits under the controls that chose it. */}
+          <AdsFilterBar
+            filters={scopeFilters}
+            value={filterState}
+            onChange={setFilterState}
+            defaultOpen
+            notesSlot={s?.unreachable ? (
+              <p className="h10-ra-note bad">
+                <AlertTriangle size={13} />
+                <span>
+                  <b>This portfolio view cannot see {num(s.unreachable.campaignsWithoutPortfolio)} of
+                  the {num(s.unreachable.campaignsInMarket)} {s.market} campaigns.</b>{' '}
+                  They carry no portfolio id, so no portfolio-scoped view reaches them. Their ASINs are
+                  excluded from the share figures below.
+                </span>
+              </p>
+            ) : undefined}
           />
 
           {resolution && (
@@ -545,20 +578,6 @@ export function KeywordTrackerClient() {
                 {num(data.topOfSearch.campaignsInScope)} campaigns with a reading
                 {data.topOfSearch.asOf ? ` (to ${dayMonth(data.topOfSearch.asOf)})` : ''}</>
               )}
-            </p>
-          )}
-
-          {/* 🔴 The portfolio grain has a hole in it, and a portfolio-scoped view must not look
-              complete. Measured 2026-08-11: only 72 of 220 campaigns carry a portfolioId. */}
-          {s?.unreachable && (
-            <p className="h10-kt-blind">
-              <AlertTriangle size={13} />
-              <span>
-                <b>This portfolio view cannot see {num(s.unreachable.campaignsWithoutPortfolio)} of
-                the {num(s.unreachable.campaignsInMarket)} {s.market} campaigns.</b>{' '}
-                They carry no portfolio id, so no portfolio-scoped view reaches them. Their ASINs are
-                excluded from the share figures below.
-              </span>
             </p>
           )}
 

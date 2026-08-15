@@ -32,7 +32,12 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
-import { NegativeScopeBar, type NegScope, type ScopeOptionsPayload } from './NegativeScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
+
+/** This page carries the ad-group grain, so its scope is the shared one with `adGroup` required. */
+type NegScope = ScopeValue & { adGroup: string }
 import {
   type NegationRow, type TermRow, type NegCensus, type NegSlotProps, type NegGrain, type NegMatchType,
 } from './slot-contract'
@@ -339,6 +344,30 @@ export function NegativeTargetingClient() {
   const activeTab = rulesTabByKey('negative-targeting')
   const s = data?.scope
 
+  // FB.2 — the four grains, as filters in the merged bar. The ad-group options are the SERVER's:
+  // ad groups holding at least one negative inside the resolved scope, with their counts.
+  const scopeFilters = useMemo(
+    () => buildScopeFilters({
+      options, market, value: scope,
+      boundBy: s?.boundBy && s.boundBy !== 'market' ? (s.boundBy as 'adGroup' | 'campaign' | 'portfolio' | 'line') : null,
+      adGroupOptions: (s?.adGroupOptions ?? []).map((g) => ({
+        value: g.id, label: `${g.name} · ${g.negatives} negative${g.negatives === 1 ? '' : 's'}`,
+      })),
+    }),
+    [options, market, scope.line, scope.portfolio, scope.campaign, scope.adGroup, s?.boundBy, s?.adGroupOptions],
+  )
+  const urlValues = useMemo(
+    () => scopeToFilterState(scope),
+    [scope.line, scope.portfolio, scope.campaign, scope.adGroup],
+  )
+  const onScopeUrlChange = useCallback((next: Record<string, string>) => {
+    push({
+      line: next.__line ?? '', portfolio: next.__portfolio ?? '',
+      campaign: next.__campaign ?? '', adGroup: next.__adGroup ?? '',
+    })
+  }, [push])
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange: onScopeUrlChange })
+
   /** The one sentence stating what resolved. */
   const resolution = (() => {
     if (!s || !census) return null
@@ -417,13 +446,24 @@ export function NegativeTargetingClient() {
 
       <RulesTabs active="negative-targeting" />
 
-      <NegativeScopeBar
-        options={options}
-        market={market}
-        scope={scope}
-        boundBy={s?.boundBy ?? null}
-        adGroupOptions={s?.adGroupOptions ?? []}
-        onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign, adGroup: next.adGroup })}
+      {/* FB.2 — ONE bar. The portfolio blind-spot note travelled with it: it is a fact about the
+          grain in use, so it belongs under the control that chose the grain. */}
+      <AdsFilterBar
+        filters={scopeFilters}
+        value={filterState}
+        onChange={setFilterState}
+        defaultOpen
+        notesSlot={s?.unreachable ? (
+          <p className="h10-ra-note bad">
+            <AlertTriangle size={13} />
+            <span>
+              <b>This portfolio view cannot see {num(s.unreachable.negativesWithoutPortfolio)} of
+              the {num(s.unreachable.negativesTotal)} negatives in this market.</b>{' '}
+              They sit in {num(s.unreachable.campaignsWithoutPortfolio)} of {num(s.unreachable.campaignsInMarket)} campaigns
+              that carry no portfolio id, so no portfolio-scoped view reaches them.
+            </span>
+          </p>
+        ) : undefined}
       />
 
       {resolution && (
@@ -431,21 +471,6 @@ export function NegativeTargetingClient() {
           <b>{resolution}</b>
           {data?.freshness.newestAddedAt && <> · newest added {dayMonth(data.freshness.newestAddedAt)}</>}
           {census && census.addedInWindow > 0 && <> · {num(census.addedInWindow)} in the last {data?.window.days}d</>}
-        </p>
-      )}
-
-      {/* 🔴 The portfolio grain has a hole in it, and a portfolio-scoped view must not look
-          complete. Measured 2026-08-12: 1,310 of 2,059 negatives account-wide sit in campaigns
-          carrying no portfolioId. */}
-      {s?.unreachable && (
-        <p className="h10-ng-blind">
-          <AlertTriangle size={13} />
-          <span>
-            <b>This portfolio view cannot see {num(s.unreachable.negativesWithoutPortfolio)} of
-            the {num(s.unreachable.negativesTotal)} negatives in this market.</b>{' '}
-            They sit in {num(s.unreachable.campaignsWithoutPortfolio)} of {num(s.unreachable.campaignsInMarket)} campaigns
-            that carry no portfolio id, so no portfolio-scoped view reaches them.
-          </span>
         </p>
       )}
 

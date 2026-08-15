@@ -43,7 +43,12 @@ import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
-import { HarvestScopeBar, type HvScope, type ScopeOptionsPayload } from './HarvestScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
+
+/** This page carries the ad-group grain, so its scope is the shared one with `adGroup` required. */
+type HvScope = ScopeValue & { adGroup: string }
 import {
   // 🔴 NO_WRITE_ACTIONS is gone: HV.4 supplies the selection action, which is what the seam was
   // holding open. `onRowClick` still patches the URL rather than mutating anything.
@@ -252,6 +257,31 @@ export function KeywordHarvestClient() {
   const rows = data?.rows ?? []
   const census = data?.census ?? null
   const s = data?.scope
+
+  // FB.2 — the four grains, as filters in the merged bar. The ad-group options are the SERVER's:
+  // ad groups holding at least one search term inside the resolved scope, with their counts. An
+  // empty list still renders the control, disabled, because that is a real answer about this scope.
+  const scopeFilters = useMemo(
+    () => buildScopeFilters({
+      options, market, value: scope,
+      boundBy: s?.boundBy && s.boundBy !== 'market' ? (s.boundBy as 'adGroup' | 'campaign' | 'portfolio' | 'line') : null,
+      adGroupOptions: (s?.adGroupOptions ?? []).map((g) => ({
+        value: g.id, label: `${g.name} · ${g.terms} term${g.terms === 1 ? '' : 's'}`,
+      })),
+    }),
+    [options, market, scope.line, scope.portfolio, scope.campaign, scope.adGroup, s?.boundBy, s?.adGroupOptions],
+  )
+  const urlValues = useMemo(
+    () => scopeToFilterState(scope),
+    [scope.line, scope.portfolio, scope.campaign, scope.adGroup],
+  )
+  const onScopeUrlChange = useCallback((next: Record<string, string>) => {
+    push({
+      line: next.__line ?? '', portfolio: next.__portfolio ?? '',
+      campaign: next.__campaign ?? '', adGroup: next.__adGroup ?? '',
+    })
+  }, [push])
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange: onScopeUrlChange })
 
   const slotProps: HvSlotProps = {
     // HV.6 reads its own two params off the URL here rather than reaching for `params` itself, so
@@ -539,14 +569,8 @@ export function KeywordHarvestClient() {
 
       <RulesTabs active="keyword-harvest" />
 
-      <HarvestScopeBar
-        options={options}
-        market={market}
-        scope={scope}
-        boundBy={s?.boundBy ?? null}
-        adGroupOptions={s?.adGroupOptions ?? []}
-        onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign, adGroup: next.adGroup })}
-      />
+      {/* FB.2 — ONE bar: controls, then the numbers they produce, then the rows. */}
+      <AdsFilterBar filters={scopeFilters} value={filterState} onChange={setFilterState} defaultOpen />
 
       {/* 🔴 HV.2 sits HERE, not in the slot list below the grid where its stub lived.
           Measured on prod: rendered in stub order it landed at y=1301 with the census it governs

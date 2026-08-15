@@ -58,7 +58,12 @@ import { PlanEditor } from './PlanEditor'
 import { CampaignLimitsModal } from './CampaignLimitsModal'
 import { usePlanWrites } from './usePlanWrites'
 import type { AdsMode, BmCampaignsResult, EnforcementResult } from './slot-contract'
-import { BudgetScopeBar, ScopeNote, resolveScope, type BspScopeValue } from './BudgetScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { ScopeNotes } from '../_shared/ScopeNotes'
+import { buildScopeFilters, scopeToFilterState } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
+import { resolveScope, type BspScopeValue } from './scopeReach'
+import { MAX_WEEKS, MIN_WEEKS } from './urlState'
 import { PacingBand } from './PacingBand'
 import { SectionShell, SectionPending } from './SectionShell'
 import { InspectorRail } from './InspectorRail'
@@ -230,6 +235,35 @@ export function BudgetSchedulesClient() {
 
   const reach = useMemo(() => resolveScope(options, url.market, scope), [options, url.market, scope.portfolio, scope.campaign, scope.line])
 
+  // ── FB.2 — one bar. The three grains, plus the window this page has always owned.
+  //
+  //    The window stays in the bar rather than moving to a grid toolbar, because this page has no
+  //    grid: six sections read one resolved scope, and the number of weeks is part of what they
+  //    resolve. It is weeks and not days because `/advertising/dayparting/heatmap` counts whole
+  //    weeks so every weekday carries equal samples; a rolling day count reintroduces that bias.
+  const scopeFilters = useMemo(() => [
+    ...buildScopeFilters({ options, market: url.market, value: { ...scope, line: scope.line } }),
+    {
+      key: '__weeks', label: 'Window', kind: 'select' as const, placeholder: '8 weeks',
+      options: [1, 2, 4, 8, 12, 26]
+        .filter((w) => w >= MIN_WEEKS && w <= MAX_WEEKS)
+        .map((w) => ({ value: String(w), label: w === 1 ? '1 week' : `${w} weeks` })),
+      tip: 'Whole weeks, so every weekday carries the same number of samples. A rolling day count would bias the weekday comparison this page is built on.',
+    },
+  ], [options, url.market, scope.line, scope.portfolio, scope.campaign])
+
+  const urlValues = useMemo(
+    () => ({ ...scopeToFilterState({ ...scope, line: scope.line }), __weeks: String(url.weeks) }),
+    [scope.line, scope.portfolio, scope.campaign, url.weeks],
+  )
+  const onScopeUrlChange = useCallback((next: Record<string, string>) => {
+    push({
+      line: next.__line ?? '', portfolio: next.__portfolio ?? '', campaign: next.__campaign ?? '',
+      weeks: next.__weeks || String(url.weeks),
+    })
+  }, [push, url.weeks])
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange: onScopeUrlChange })
+
   // ── sections ────────────────────────────────────────────────────────────────────────────────
   // All six expanded by default. `?section=` is a jump target, not persisted accordion state, so
   // collapsing one does not rewrite the URL — an operator who tidies the page has not thereby
@@ -268,16 +302,18 @@ export function BudgetSchedulesClient() {
       <RulesTabs active="budget-schedules" />
 
       {/* ── the two sticky bars ─────────────────────────────────────────────────────────────── */}
+      {/* FB.2 — ONE bar, at the top and NOT inside the sticky pin: the pin has a 120px chrome
+          budget measured to the pixel, and a panel that grows when you open it would blow it. The
+          pacing band stays pinned; the controls scroll with the page like the other ten. */}
+      <AdsFilterBar
+        filters={scopeFilters}
+        value={filterState}
+        onChange={setFilterState}
+        defaultOpen
+        notesSlot={<ScopeNotes applied={reach.applied} contradiction={reach.contradiction} intersectionCopy={() => 'narrow these sections together — the same intersection a rule scoped this way would reach.'} />}
+      />
+
       <div className="h10-bsp-pin">
-        <BudgetScopeBar
-          options={options}
-          market={url.market}
-          scope={scope}
-          weeks={url.weeks}
-          reach={reach}
-          onChange={(next) => push({ portfolio: next.portfolio, campaign: next.campaign, line: next.line })}
-          onWeeks={(w) => push({ weeks: String(w) })}
-        />
         <PacingBand
           data={pacing}
           loading={pacingLoading}
@@ -290,7 +326,6 @@ export function BudgetSchedulesClient() {
         />
       </div>
 
-      <ScopeNote reach={reach} market={url.market} scope={scope} />
 
       {/* ── content + rail ──────────────────────────────────────────────────────────────────── */}
       <div className={`h10-bsp-body${url.open ? ' railed' : ''}`}>

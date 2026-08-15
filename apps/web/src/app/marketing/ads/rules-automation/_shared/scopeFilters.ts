@@ -19,17 +19,30 @@
  * carries it in the URL. Adding an accessor here would filter the rows a second time on the client,
  * and every row the client and the server disagreed about would silently vanish.
  *
- * ── The one cascade, and why it is the only one ────────────────────────────────────────────────
+ * ── Two precedence models, and the bar reports whichever its page has ──────────────────────────
  *
- * `adsScope.ts` rule 4: portfolio and campaign are mutually exclusive and campaign wins, because a
- * campaign has at most one portfolio, so holding both is redundant or contradictory. Line ANDs with
- * everything and stays live.
+ * The section genuinely holds two, and neither is wrong:
  *
- * The operator decision for this merge was that an overridden grain stays VISIBLE and inert rather
- * than vanishing — a bar that silently dropped a selection would lie about the URL you are about to
- * share. What it shows while inert is the campaign's OWN portfolio, which is a fact rather than a
- * stale selection, so nothing is dropped and nothing is invented. It rides in as the placeholder
- * because a disabled select with an empty value renders its placeholder.
+ *   · **AND** (Bid, Budget, Apply Rules) — every grain narrows, because that is what
+ *     `automation-rule-scope.ts:ruleMatchesScope` does, and a preview that combined them any other
+ *     way would disagree with enforcement. Here only ONE pair collides: `adsScope.ts` rule 4 —
+ *     portfolio and campaign are mutually exclusive and campaign wins, since a campaign has at most
+ *     one portfolio, so holding both is redundant or contradictory.
+ *   · **Most-specific-wins** (Keyword Tracker, Share of Voice, Placement, Harvest, Negatives) — the
+ *     server reports which grain actually bound the read as `boundBy`, and the coarser ones stop
+ *     mattering entirely.
+ *
+ * Pass `boundBy` and you get the second; omit it and you get the first. The bar never asserts a
+ * precedence of its own — it renders the verdict its page's server returned.
+ *
+ * ── What an overridden grain does ──────────────────────────────────────────────────────────────
+ *
+ * The operator decision for this merge was that it stays VISIBLE and inert rather than vanishing —
+ * a bar that silently dropped a selection would lie about the URL you are about to share. Under AND
+ * the inert Portfolio shows the campaign's OWN portfolio, which is a fact rather than a stale
+ * selection, so nothing is dropped and nothing is invented; it rides in as the placeholder because
+ * a disabled select with an empty value renders its placeholder. Under most-specific-wins the
+ * selection you made stays on screen, greyed, with one sentence naming the grain that beat it.
  */
 import type { GridFilter, GridSelectFilter } from '../../campaigns/_grid/AdsDataGrid'
 
@@ -84,14 +97,25 @@ export function scopePatchFromFilterState(s: Record<string, unknown>): Record<st
 const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`
 
 export function buildScopeFilters({
-  options, market, value, adGroups,
+  options, market, value, adGroupOptions, boundBy,
 }: {
   options: ScopeOptionsPayload | null
   /** `'all'` is legal on nine of the eleven pages; the two share pages never pass it. */
   market: string
   value: ScopeValue
-  /** Pass to add the ad-group grain. Omit and the page has three grains, not four. */
-  adGroups?: Array<{ id: string; name: string; campaignId: string | null }> | null
+  /**
+   * Pass to add the ad-group grain; omit and the page has three grains, not four. An EMPTY array
+   * still renders the control, disabled — Harvest and Negative Targeting get this list from the
+   * server (ad groups holding a term inside the resolved scope, with their counts), so an empty
+   * one is a real answer about the current scope, not a missing control.
+   */
+  adGroupOptions?: Array<{ value: string; label: string }> | null
+  /**
+   * The server's `boundBy` — which grain actually bound the last read. Passing it switches the bar
+   * to most-specific-wins; omitting it leaves the AND model. `null` while the page is still loading
+   * is treated as "nothing has been decided yet", which is why it is separate from `undefined`.
+   */
+  boundBy?: 'adGroup' | 'campaign' | 'portfolio' | 'line' | null
 }): GridFilter[] {
   // 'all' is a real market value on most of these pages, so the pickers must not filter to a
   // marketplace that does not exist. Every campaign is in scope when no market is chosen.
@@ -136,16 +160,36 @@ export function buildScopeFilters({
 
   const loading = options == null
 
+  // Most-specific-wins, when the page passes the server's verdict. Under AND this stays empty and
+  // only the portfolio/campaign pair collides.
+  const specific = boundBy !== undefined
+  const RANK = { line: 0, portfolio: 1, campaign: 2, adGroup: 3 } as const
+  /** The grain that beat this one, or null. Coarser loses to narrower; equal never beats itself. */
+  const beaten = (grain: 'line' | 'portfolio' | 'campaign'): string | null => {
+    if (!specific || !boundBy) return null
+    return RANK[boundBy] > RANK[grain] ? (boundBy === 'adGroup' ? 'ad group' : boundBy) : null
+  }
+  const beatenNote = (winner: string) =>
+    `The ${winner} is the narrowest grain you picked, so it decides these rows on its own.`
+
+  const lineBeatenBy = beaten('line')
   const line: GridSelectFilter = {
     key: SCOPE_KEYS.line, label: 'Product line', kind: 'select', wide: true, options: lineOpts,
     placeholder: 'All product lines',
     searchable: lineOpts.length > 7,
-    disabled: loading || lines.length === 0,
-    note: loading ? undefined
+    disabled: loading || lines.length === 0 || !!lineBeatenBy,
+    note: lineBeatenBy ? beatenNote(lineBeatenBy)
+      : loading ? undefined
       : lines.length === 0 ? 'No advertised campaign resolves to a product line in this market.' : undefined,
   }
 
-  const portfolio: GridSelectFilter = value.campaign
+  const pfBeatenBy = beaten('portfolio')
+  const portfolio: GridSelectFilter = pfBeatenBy
+    ? {
+      key: SCOPE_KEYS.portfolio, label: 'Portfolio', kind: 'select', wide: true, options: pfOpts,
+      placeholder: 'All portfolios', disabled: true, note: beatenNote(pfBeatenBy),
+    }
+    : value.campaign
     ? {
       key: SCOPE_KEYS.portfolio, label: 'Portfolio', kind: 'select', wide: true, options: pfOpts,
       // A disabled select with an empty value renders its placeholder, which is where the campaign's
@@ -163,28 +207,28 @@ export function buildScopeFilters({
         : portfolios.length === 0 ? 'No campaign in this market belongs to a portfolio.' : undefined,
     }
 
+  const campBeatenBy = beaten('campaign')
   const campaign: GridSelectFilter = {
     key: SCOPE_KEYS.campaign, label: 'Campaign', kind: 'select', wide: true, options: campOpts, searchable: true,
     placeholder: 'All campaigns',
-    disabled: loading || campaignsInScope.length === 0,
-    note: loading || campaignsInScope.length > 0 ? undefined
+    disabled: loading || campaignsInScope.length === 0 || !!campBeatenBy,
+    note: campBeatenBy ? beatenNote(campBeatenBy)
+      : loading || campaignsInScope.length > 0 ? undefined
       : 'No campaign matches the grains above, so nothing can be chosen here.',
   }
 
   const out: GridFilter[] = [line, portfolio, campaign]
 
-  if (adGroups) {
-    // Ad groups belong to a campaign, so this grain only means something once one is chosen. It is
-    // shown either way, for the same reason the overridden portfolio is: a control that appears and
-    // disappears makes the bar a different shape on every click.
-    const inCampaign = value.campaign ? adGroups.filter((g) => g.campaignId === value.campaign) : []
+  if (adGroupOptions) {
+    // Shown whether or not it has anything to offer, for the same reason an overridden grain stays
+    // visible: a control that appears and disappears makes the bar a different shape on every click.
     out.push({
       key: SCOPE_KEYS.adGroup, label: 'Ad group', kind: 'select', wide: true, searchable: true,
-      options: [{ value: '', label: 'All ad groups' }].concat(inCampaign.map((g) => ({ value: g.id, label: g.name }))),
+      options: [{ value: '', label: 'All ad groups' }].concat(adGroupOptions),
       placeholder: 'All ad groups',
-      disabled: !value.campaign || inCampaign.length === 0,
-      note: !value.campaign ? 'Choose a campaign first — an ad group belongs to one.'
-        : inCampaign.length === 0 ? 'This campaign has no ad groups in the loaded options.' : undefined,
+      disabled: adGroupOptions.length === 0,
+      note: adGroupOptions.length === 0
+        ? 'No ad group inside this scope holds a term to narrow by.' : undefined,
     })
   }
 

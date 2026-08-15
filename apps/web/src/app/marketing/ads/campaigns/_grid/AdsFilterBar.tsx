@@ -64,7 +64,7 @@ function summaryOf(filters: GridFilter[], state: FilterState): string[] {
 }
 
 export function AdsFilterBar({
-  filters, value, onChange, defaultOpen = false, onAfterChange, presetsSlot,
+  filters, value, onChange, defaultOpen = false, onAfterChange, presetsSlot, notesSlot,
 }: {
   filters: GridFilter[]
   value: FilterState
@@ -75,9 +75,17 @@ export function AdsFilterBar({
   /** AdsDataGrid's Filter Library controls, rendered in the footer. It owns the localStorage
    *  and the naming; this component only gives it a place to stand. */
   presetsSlot?: ReactNode
+  /**
+   * What the server said about this scope: a contradiction, the intersection note, the portfolio
+   * blind spot. Rendered at the BOTTOM of the panel and OUTSIDE the collapsible body — under the
+   * controls when open, under the head when collapsed. 🔴 A contradiction ("nothing can match this
+   * scope") that a collapsed panel could hide would leave an empty grid with no explanation.
+   */
+  notesSlot?: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
-  if (!filters.length) return null
+  // Notes are the server's verdict on the scope and outlive an empty control list.
+  if (!filters.length && !notesSlot) return null
 
   const set = (next: FilterState) => { onChange(next); onAfterChange?.() }
   const setKey = (key: string, v: string | string[]) => set({ ...value, [key]: v })
@@ -164,6 +172,7 @@ export function AdsFilterBar({
           </div>
         </>
       )}
+      {notesSlot}
     </div>
   )
 }
