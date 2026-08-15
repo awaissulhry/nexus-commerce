@@ -49,8 +49,12 @@ import { getBackendUrl } from '@/lib/backend-url'
 // options, market, scope, onChange and boundBy, and has no watchlist coupling. The moment it needs
 // a change it gets lifted to `_shared/ScopeBar.tsx` with KT's import updated in the same commit.
 // A second scope bar is a second place for the two pages to disagree about what a portfolio means.
-import { KeywordScopeBar, type KtScope, type ScopeOptionsPayload } from '../keyword-tracker/KeywordScopeBar'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue as KtScope } from '../_shared/scopeFilters'
+import { useMergedFilters } from '../_shared/useMergedFilters'
 import { SovRowDrawer } from './SovRowDrawer'
+import { buildSovCsv, sovCsvFilename } from './sovExport'
+import { SovSavedViews } from './SovSavedViews'
 import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
@@ -144,6 +148,25 @@ interface Payload {
       reason: 'comparable' | 'no-older-period' | 'all-older-excluded'
     }
     excludedPeriods?: Array<{ asOf: string; rows: number; reason: 'all-zero' | 'below-threshold' }>
+    /**
+     * SOV.6 — the newest period the GATE DECLINED, or null when nothing newer was rejected.
+     * Optional for the same deploy-gap reason as `prior`.
+     */
+    rejection?: {
+      asOf: string; ageDays: number | null; rows: number; threshold: number
+      shortBy: number; pctOfBar: number | null; asins: number; chosenAsins: number
+      count: number; others: Array<{ asOf: string; rows: number }>
+    } | null
+    /** SOV.6 — `?period=`: what was overridden, or why an override was refused */
+    override?: {
+      active: string | null
+      refused: 'malformed' | 'not-in-market' | null
+      gateAsOf: string | null
+      belowBar: boolean
+      pctOfBar: number | null
+      asins: number
+    }
+    available?: Array<{ asOf: string; rows: number; asins: number }>
   }
   freshness: {
     sqp: { latest: string | null; ageDays: number | null }
@@ -260,6 +283,12 @@ export function ShareOfVoiceClient() {
   const weeks = (WEEKS as readonly number[]).includes(weeksRaw) ? weeksRaw : DEFAULT_WEEKS
   const branded = params.get('branded') === '1'
   const q = params.get('q') ?? ''
+  /**
+   * SOV.6 — `?period=`. A deliberate look at a week the gate declined.
+   * 🔴 Never defaulted, never remembered, never pre-selected: the gate's choice is the honest
+   * default and this is an override you have to ask for, by name, in the URL.
+   */
+  const period = params.get('period') ?? ''
   const sort = params.get('sort') ?? 'volume'
   const dir = params.get('dir') === 'asc' ? 'asc' : 'desc'
   // SOV.2/3/4/5 — the four params that were reserved. Unknown values fall back to defaults.
@@ -338,6 +367,7 @@ export function ShareOfVoiceClient() {
     if (list && list !== 'all') qs.set('list', list)
     if (branded) qs.set('branded', '1')
     if (q) qs.set('q', q)
+    if (period) qs.set('period', period)
     // SOV.2/3/4 — the ad window rides always (the columns need their label even at the default);
     // signal and view only when narrowing.
     qs.set('adWindow', String(adWindow))
@@ -352,7 +382,7 @@ export function ShareOfVoiceClient() {
       .catch((e) => { if (alive) { setErr((e as Error).message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, weeks, q, sort, dir, adWindow, signal, view, reloadTick])
+  }, [market, isMarket, scope.line, scope.portfolio, scope.campaign, list, branded, weeks, q, period, sort, dir, adWindow, signal, view, reloadTick])
 
   // RT.1 — your own writes, from any tab, applied silently. This page does NOT poll a cursor: its
   // market side is a weekly Brand Analytics period rendering 24–31 days old, so a 45s poll could
@@ -361,12 +391,32 @@ export function ShareOfVoiceClient() {
 
   const rows = data?.rows ?? []
   const s = data?.scope
+
+  // FB.2 — the three grains, as filters in the merged bar. This page's server reports most-specific-
+  // wins as `boundBy`; 'market' means nothing narrower was picked.
+  const scopeFilters = useMemo(
+    () => buildScopeFilters({
+      options, market, value: scope,
+      boundBy: s?.boundBy && s.boundBy !== 'market' ? s.boundBy : null,
+    }),
+    [options, market, scope.line, scope.portfolio, scope.campaign, s?.boundBy],
+  )
+  const urlValues = useMemo(
+    () => scopeToFilterState(scope),
+    [scope.line, scope.portfolio, scope.campaign],
+  )
+  const onScopeUrlChange = useCallback((next: Record<string, string>) => {
+    push({ line: next.__line ?? '', portfolio: next.__portfolio ?? '', campaign: next.__campaign ?? '' })
+  }, [push])
+  const { filterState, setFilterState } = useMergedFilters({ urlValues, onUrlChange: onScopeUrlChange })
   const p = data?.period
   const f = data?.freshness
   const c = data?.census
   const sd = data?.scopeDelta
   const ss = data?.shareSummary
   const fc = data?.funnelCoverage
+  const rj = data?.period.rejection
+  const ov = data?.period.override
 
   /**
    * 🔴 The sort discipline has to be expressed in `sortValue`, not only server-side.
@@ -594,6 +644,47 @@ export function ShareOfVoiceClient() {
   })()
 
   /**
+   * SOV.6 — the export. `AdsDataGrid` already owns the button (`exportable` + `onExport`), so this
+   * supplies only the file. See `sovExport.ts` for why the header block is the substance.
+   *
+   * 🔴 It exports the FULL FILTERED SET, not the page on screen: the read requests one page of
+   * 2,000 and the grid pages locally, so `data.rows` IS every row in scope. `rowsExported` vs
+   * `rowsInScope` goes into the header regardless, so the file says so if that ever stops being
+   * true rather than quietly shipping one page and calling it a scope.
+   */
+  const onExport = useCallback(() => {
+    if (!data || !p) return
+    const csv = buildSovCsv(data.rows, {
+      market,
+      periodAsOf: p.asOf, periodAgeDays: p.ageDays, periodRows: p.rows,
+      periodThreshold: p.threshold, periodBaseline: p.baselineRows, periodComplete: !p.truncated,
+      overrideActive: ov?.active ?? null, overridePctOfBar: ov?.pctOfBar ?? null,
+      rejectionAsOf: rj?.asOf ?? null, rejectionRows: rj?.rows, rejectionShortBy: rj?.shortBy,
+      adWindowDays: adWindow, adLatest: f?.ads.latest ?? null, adAgeDays: f?.ads.ageDays ?? null,
+      priorAsOf: p.prior?.asOf ?? null, priorGapDays: p.prior?.gapDays ?? null,
+      scopeLabel: reach ?? market,
+      campaignsResolved: s?.resolved.campaigns ?? 0,
+      campaignsInMarket: s?.resolved.campaignsInMarket ?? 0,
+      asins: s?.resolved.asins ?? 0,
+      asinsWithRows: s?.resolved.asinsWithSqpRowsEver ?? 0,
+      filters: Object.fromEntries(
+        Object.entries({
+          list, branded: branded ? '1' : '0', kind: params.get('kind') ?? '', signal, view, q,
+          weeks: String(weeks), period: ov?.active ?? '',
+        }).filter(([, v]) => v && v !== 'all'),
+      ) as Record<string, string>,
+      rowsExported: data.rows.length,
+      rowsInScope: data.total,
+    })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const el = document.createElement('a')
+    el.href = URL.createObjectURL(blob)
+    el.download = sovCsvFilename(market, p.asOf)
+    el.click()
+    URL.revokeObjectURL(el.href)
+  }, [data, p, ov, rj, f, s, market, adWindow, list, branded, params, signal, view, q, weeks, reach])
+
+  /**
    * A scope that can measure nothing is a RENDERED state naming which pair conflicts — never a
    * silently empty grid.
    *
@@ -646,12 +737,24 @@ export function ShareOfVoiceClient() {
         </div>
       ) : (
         <>
-          <KeywordScopeBar
-            options={options}
-            market={market}
-            scope={scope}
-            boundBy={s?.boundBy ?? null}
-            onChange={(next) => push({ line: next.line, portfolio: next.portfolio, campaign: next.campaign })}
+          {/* FB.2 — ONE bar. The portfolio blind-spot note travelled with it: it is a fact about the
+              grain in use, so it belongs under the control that chose the grain. */}
+          <AdsFilterBar
+            filters={scopeFilters}
+            value={filterState}
+            onChange={setFilterState}
+            defaultOpen
+            notesSlot={s?.boundBy === 'portfolio' && s.resolved.campaignsWithoutPortfolio > 0 ? (
+              <p className="h10-ra-note bad">
+                <AlertTriangle size={13} />
+                <span>
+                  <b>This portfolio view cannot see {num(s.resolved.campaignsWithoutPortfolio)} of the{' '}
+                  {num(s.resolved.campaignsInMarket)} {s.market} campaigns.</b>{' '}
+                  They carry no portfolio id, so no portfolio-scoped view reaches them, and their ASINs
+                  are excluded from every share below.
+                </span>
+              </p>
+            ) : undefined}
           />
 
           {reach && <p className="h10-sov-said"><b>{reach}</b></p>}
@@ -689,6 +792,61 @@ export function ShareOfVoiceClient() {
               account, and the gap is the finding: we hold a couple of percent of hundreds of tiny
               queries and almost nothing of the big ones. Showing only the median would flatter the
               account; showing only the weighted figure would hide where we actually win. */}
+            {/* 🔴 SOV.6 — THE REJECTION RECKONING. The page is DECLINING newer data, and until now
+                it only said its data was old. Those are different facts and only this one can be
+                acted on. Renders ONLY when something newer was actually rejected — a permanent
+                "everything is fine" banner is furniture. */}
+            {rj && !ov?.active && (
+              <p className="h10-sov-decline">
+                <AlertTriangle size={13} />
+                <span>
+                  <b>A newer week exists and this page is not showing it.</b>{' '}
+                  The week of <b>{dayMonth(rj.asOf)}</b> ({rj.ageDays}d) holds{' '}
+                  <b>{num(rj.rows)} of the {num(rj.threshold)} rows</b> this market's recent weeks
+                  average — {rj.pctOfBar}% of the bar, <b>short by {num(rj.shortBy)}</b> — on{' '}
+                  <b>{num(rj.asins)} ASINs</b> against {num(rj.chosenAsins)} in the week below.
+                  {rj.count > 1 && <> {rj.count - 1} older week{rj.count - 1 === 1 ? '' : 's'} {rj.count - 1 === 1 ? 'was' : 'were'} declined too.</>}
+                  {' '}A share from a part-week wearing the same label as a whole one is worse than a
+                  blank, so the grid keeps the complete week.{' '}
+                  <button type="button" className="lnk" onClick={() => push({ period: rj.asOf })}>
+                    Show {dayMonth(rj.asOf)} anyway
+                  </button>
+                </span>
+              </p>
+            )}
+
+            {/* The override, marked persistently and unmissably for as long as it is on. */}
+            {ov?.active && (
+              <p className="h10-sov-override">
+                <AlertTriangle size={13} />
+                <span>
+                  <b>You are looking at {dayMonth(ov.active)}, a week the gate declined.</b>{' '}
+                  It holds {num(p?.rows ?? 0)} of {num(p?.threshold ?? 0)} rows
+                  {ov.pctOfBar != null && <> — <b>{ov.pctOfBar}% complete</b></>}, on {num(ov.asins)} ASINs.
+                  <b> Every share on this view under-reports.</b>{' '}
+                  <button type="button" className="lnk" onClick={() => push({ period: '' })}>
+                    Back to {ov.gateAsOf ? dayMonth(ov.gateAsOf) : 'the complete week'}
+                  </button>
+                </span>
+              </p>
+            )}
+
+            {/* A refused override says so. Never a silent fallback to a week the link does not name. */}
+            {ov?.refused && (
+              <p className="h10-sov-decline">
+                <AlertTriangle size={13} />
+                <span>
+                  <b>That link asks for a week this market does not have.</b>{' '}
+                  {ov.refused === 'malformed'
+                    ? <>“{period}” is not a date in <code>YYYY-MM-DD</code> form.</>
+                    : <>Brand Analytics has no <b>{period}</b> period for {market}.</>}{' '}
+                  Showing {ov.gateAsOf ? dayMonth(ov.gateAsOf) : 'the gate\u2019s choice'} instead, which is
+                  what this page would show without the link.{' '}
+                  <button type="button" className="lnk" onClick={() => push({ period: '' })}>Clear it</button>
+                </span>
+              </p>
+            )}
+
           {ss && p && (
             <p className="h10-sov-summary">
               <span className="h10-sov-stat">
@@ -805,20 +963,6 @@ export function ShareOfVoiceClient() {
                     )}
                   </>
                 )}
-              </span>
-            </p>
-          )}
-
-          {/* 🔴 The portfolio grain has a hole in it and a portfolio-scoped view must not look
-              complete: only 72 of 220 campaigns account-wide carry a portfolioId. */}
-          {s?.boundBy === 'portfolio' && s.resolved.campaignsWithoutPortfolio > 0 && (
-            <p className="h10-sov-blind">
-              <AlertTriangle size={13} />
-              <span>
-                <b>This portfolio view cannot see {num(s.resolved.campaignsWithoutPortfolio)} of the{' '}
-                {num(s.resolved.campaignsInMarket)} {s.market} campaigns.</b>{' '}
-                They carry no portfolio id, so no portfolio-scoped view reaches them, and their ASINs
-                are excluded from every share below.
               </span>
             </p>
           )}
@@ -940,8 +1084,14 @@ export function ShareOfVoiceClient() {
             searchable={false}
             pagerCentered
             storageKey="nexus.sov.cols"
+            exportable
+            onExport={onExport}
             toolbarLeft={(
               <span className="h10-sov-tools">
+                <SovSavedViews
+                  currentQs={params.toString()}
+                  onApply={(qs) => router.replace(qs ? `?${qs}` : '?', { scroll: false })}
+                />
                 <span className="h10-sov-search">
                   <Search size={13} />
                   <input

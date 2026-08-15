@@ -4902,3 +4902,45 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-am-fpanel .h10-ra-note.bad svg { color: #8a5316; }
 .h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
 .h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   SOV.6 — the freshness reckoning, the override marker, and saved views.
+
+   EOF, `h10-sov-*` only, no `.dark` block, every margin `… 0 0` because the page gutter is ZERO
+   (measured 96→2046 on prod; a `margin: … 24px` would be the only staggered block on the page).
+
+   The decline line and the override marker are deliberately DIFFERENT colours. One says "there is
+   newer data and we are not showing it" — a fact about the feed, amber like every other coverage
+   warning on this page. The other says "you are looking at a week we declined, and every share here
+   under-reports" — a fact about THIS view, and it has to be unmissable for as long as it is on, so
+   it is the only red-tinted block on the page.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.h10-sov-decline { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-sov-decline svg { flex-shrink: 0; margin-top: 2px; }
+.h10-sov-decline b { font-weight: 800; color: #7a4512; }
+.h10-sov-decline .lnk { font: inherit; font-size: inherit; font-weight: 800; color: #7a4512; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+
+/* The override: red, bordered, and persistent. It is on only because someone asked for it. */
+.h10-sov-override { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border: 1px solid #f0c2c2; border-radius: 8px; background: #fdeaea; color: #8a2020; font-size: 11.5px; line-height: 1.55; }
+.h10-sov-override svg { flex-shrink: 0; margin-top: 2px; }
+.h10-sov-override b { font-weight: 800; color: #7a1a1a; }
+.h10-sov-override .lnk { font: inherit; font-size: inherit; font-weight: 800; color: #7a1a1a; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+
+/* ── saved views ────────────────────────────────────────────────────────────────────────────── */
+.h10-sov-saved { position: relative; display: inline-flex; }
+.h10-sov-savedpop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 320px; padding: 10px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px rgba(28, 37, 48, .12); }
+.h10-sov-savedrow { display: flex; align-items: center; gap: 6px; }
+.h10-sov-savedrow input { flex: 1 1 auto; min-width: 0; padding: 6px 9px; border: 1px solid #e3e7ec; border-radius: 7px; font: inherit; font-size: 11.5px; color: #1c2530; }
+.h10-sov-savedrow input::placeholder { color: #9099a6; }
+.h10-sov-savedrow .x { border: 0; background: none; padding: 2px; color: #667080; cursor: pointer; display: inline-flex; }
+.h10-sov-savedrow .x:hover { color: #1c2530; }
+.h10-sov-savednote { margin: 8px 0 0; font-size: 10.5px; line-height: 1.5; color: #667080; }
+.h10-sov-savederr { margin: 6px 0 0; font-size: 11px; color: #8a2020; }
+.h10-sov-savedlist { list-style: none; margin: 8px 0 0; padding: 0; max-height: 240px; overflow-y: auto; }
+.h10-sov-savedlist li { display: flex; align-items: center; gap: 4px; }
+.h10-sov-savedlist .nm { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 12px; font-weight: 600; color: #1c2530; text-align: left; cursor: pointer; }
+.h10-sov-savedlist .nm:hover { background: #f1f4f8; }
+.h10-sov-savedlist .pin { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 5px; background: #fdeaea; color: #8a2020; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.h10-sov-savedlist .del { flex-shrink: 0; border: 0; background: none; padding: 4px; color: #9099a6; cursor: pointer; display: inline-flex; }
+.h10-sov-savedlist .del:hover { color: #8a2020; }
