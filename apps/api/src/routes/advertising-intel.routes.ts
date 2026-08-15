@@ -2397,6 +2397,44 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * BID.S6 — declare (or clear) a campaign's target-ACoS goal.
+   *
+   * Writes `Campaign.dynamicBidding.targetAcos` — the field five services READ and
+   * `Campaign.targetAcosPct` is documented as a mistake. This is a LOCAL declaration: Amazon has
+   * no concept of it, nothing is synced, and today no engine acts on it unprompted — the bid
+   * optimizer runs flat-30%/profit targets and the bid rules carry their own `action.targetAcos`.
+   * What it changes immediately is the bidder derivation: `bidderByCampaign` reads this exact key,
+   * so the row flips to "Goal" the next load. The AIREON `30` trap is refused, never guessed:
+   * a value above 1 is a percentage in the wrong unit and the error says exactly that.
+   */
+  fastify.put('/advertising/campaigns/:id/goal', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const b = (request.body ?? {}) as { targetAcos?: number | null }
+    if (b.targetAcos != null && (!Number.isFinite(b.targetAcos) || b.targetAcos <= 0 || b.targetAcos > 1)) {
+      reply.code(400)
+      return { error: `targetAcos must be a fraction between 0 and 1 (0.3 = 30%) or null to clear — got ${JSON.stringify(b.targetAcos)}, which would be read as ${(Number(b.targetAcos) * 100).toFixed(0)}%` }
+    }
+    const c = await prisma.campaign.findUnique({ where: { id }, select: { id: true, dynamicBidding: true } })
+    if (!c) { reply.code(404); return { error: 'campaign not found' } }
+    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
+    const before = typeof db.targetAcos === 'number' ? db.targetAcos : null
+    if (b.targetAcos == null) delete db.targetAcos
+    else db.targetAcos = b.targetAcos
+    await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
+    const actorRaw = (request.headers as Record<string, unknown>)['x-actor-id']
+    await prisma.advertisingActionLog.create({
+      data: {
+        userId: typeof actorRaw === 'string' && actorRaw ? `user:${actorRaw}` : 'user:anonymous',
+        actionType: 'set_campaign_goal', entityType: 'CAMPAIGN', entityId: id,
+        payloadBefore: { targetAcos: before }, payloadAfter: { targetAcos: b.targetAcos ?? null },
+        amazonResponseStatus: 'SUCCESS',
+        evidence: { metric: 'operator_goal', note: 'Local declaration — read by the bidder derivation and the target-ACoS tooling; never pushed to Amazon; no engine acts on it unprompted.' },
+      },
+    }).catch(() => { /* an audit row must never fail the write it describes */ })
+    return { ok: true, targetAcos: b.targetAcos ?? null }
+  })
+
+  /**
    * BID.S4 — the staged tray's account-wide read.
    *
    * `GET /advertising/campaigns/:id/pending-writes` answers this per campaign, which is one

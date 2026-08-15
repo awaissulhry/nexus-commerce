@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Info, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -46,7 +46,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { BidScopeBar, type BidScopeValue, type ScopeOptionsPayload } from './BidScopeBar'
 import { useCursorPoll } from '../_shared/useCursorPoll'
 import {
-  BAND_LABEL, BID_BANDS,
+  BAND_LABEL, BID_BANDS, BIDDER_LABEL,
   type BidCampaignRow, type BidGridPayload, type BidTargetRow, type BidView, type BidderKind,
 } from './types'
 import {
@@ -55,6 +55,7 @@ import {
 import { BidSpark } from './BidSpark'
 import { type BidSlotProps } from './slot-contract'
 import { BidSelectionActions } from './BidEditing'
+import { BidGoalDialog } from './BidGoalDialog'
 import { BidSections } from './BidSections'
 import { BidTargetDrawer } from './BidTargetDrawer'
 import { BidBidderBand } from './BidBidderBand'
@@ -110,9 +111,14 @@ export function BidClient() {
   const stateParam = params.get('state') ?? ''
   const state = (BID_STATE_KEYS as readonly string[]).includes(stateParam) ? (stateParam as BidStateKey) : null
 
-  // S3 — `target=` is LIVE: it opens the single-target drawer. `bidder=` stays reserved for S6.
+  // BID.S6 — `bidder=` is LIVE: a client-side filter over the derived bidder kind, same pattern
+  // as `state=`. An unknown value filters nothing rather than blanking the grid.
+  const bidderParam = params.get('bidder') ?? ''
+  const bidder = (['schedule', 'goal', 'manual', 'none'] as const).find((k) => k === bidderParam) ?? null
+
+  // S3 — `target=` opens the single-target drawer. All three reserved params are live now.
   const reserved = {
-    bidder: params.get('bidder'),
+    bidder: bidderParam || null,
     state: stateParam || null,
     target: params.get('target'),
   }
@@ -139,6 +145,9 @@ export function BidClient() {
   const [err, setErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // S6 — the campaign whose bidder dialog is open. Local state, not URL: assignment is an
+  // action, not a shareable view (the `?bidder=` param is the FILTER, per the URL contract).
+  const [goalFor, setGoalFor] = useState<BidCampaignRow | null>(null)
 
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
@@ -208,7 +217,7 @@ export function BidClient() {
   })
 
   const allRows = view === 'targets' ? ((data?.rows ?? []) as BidTargetRow[]) : []
-  const campaigns = view === 'campaigns' ? ((data?.rows ?? []) as BidCampaignRow[]) : []
+  const allCampaigns = view === 'campaigns' ? ((data?.rows ?? []) as BidCampaignRow[]) : []
 
   /**
    * BID.S2 — the state filter runs HERE, not on the server: the vocabulary is a client module so
@@ -223,13 +232,33 @@ export function BidClient() {
   const stateCounts = useMemo(() => {
     const m = {} as Record<BidStateKey, number>
     for (const k of BID_STATE_KEYS) m[k] = 0
-    for (const r of allRows) for (const k of BID_STATE_KEYS) if (hasBidState(r, k)) m[k] += 1
+    // S6 — the OTHER live client-side filter (bidder) applies here, so each state option
+    // advertises what it would deliver under the current bidder narrowing.
+    const src = bidder ? allRows.filter((r) => r.bidder === bidder) : allRows
+    for (const r of src) for (const k of BID_STATE_KEYS) if (hasBidState(r, k)) m[k] += 1
     return m
-  }, [allRows])
+  }, [allRows, bidder])
+
+  // S6 — bidder facet counts, excluding their own dimension but honouring `state=`, at the grain
+  // the current view shows.
+  const bidderCounts = useMemo(() => {
+    const m: Record<string, number> = { schedule: 0, goal: 0, manual: 0, none: 0 }
+    if (view === 'targets') {
+      const src = state ? allRows.filter((r) => hasBidState(r, state)) : allRows
+      for (const r of src) m[r.bidder] += 1
+    } else {
+      for (const r of allCampaigns) m[r.bidder] += 1
+    }
+    return m
+  }, [allRows, allCampaigns, state, view])
 
   const rows = useMemo(
-    () => (state ? allRows.filter((r) => hasBidState(r, state)) : allRows),
-    [allRows, state],
+    () => allRows.filter((r) => (!state || hasBidState(r, state)) && (!bidder || r.bidder === bidder)),
+    [allRows, state, bidder],
+  )
+  const campaigns = useMemo(
+    () => (bidder ? allCampaigns.filter((r) => r.bidder === bidder) : allCampaigns),
+    [allCampaigns, bidder],
   )
   const census = data?.census ?? null
 
@@ -396,8 +425,16 @@ export function BidClient() {
     // ── BID.S2 — the two campaign-grain facts, at the grain they are enforced at ────────────────
     {
       key: 'bidder', label: 'Bidder', metric: false,
-      tip: 'Who moves this campaign\'s bids. Measured over the 86 enabled campaigns: schedule 33 · goal 0 · manual 12 · no bidder 41.',
-      render: (r) => <BidderCell kind={r.bidder} name={r.bidderName} />,
+      tip: 'Who moves this campaign\'s bids. Measured over the 86 enabled campaigns: schedule 33 · goal 0 · manual 12 · no bidder 41. The pencil assigns: declare a goal here, or add the campaign to a schedule on Rank & Dayparting.',
+      render: (r) => (
+        <span className="h10-bd6-cell">
+          <BidderCell kind={r.bidder} name={r.bidderName} />
+          {/* S6 — assignment lives at the grain the bidder is a fact of. */}
+          <button type="button" className="h10-bd6-edit" title={`Assign a bidder to ${r.name}`} onClick={() => setGoalFor(r)} aria-label={`Assign a bidder to ${r.name}`}>
+            <Pencil size={11} aria-hidden />
+          </button>
+        </span>
+      ),
       sortValue: (r) => `${r.bidder}:${r.bidderName ?? ''}`,
     },
     {
@@ -464,8 +501,20 @@ export function BidClient() {
         ],
       },
     ]
+    // BID.S6 — `?bidder=`, reserved by S0 and now live. Counts come from the same predicate the
+    // filter uses (r.bidder), at the grain the view shows, so every option delivers its number.
+    const bidderFilter: GridFilter = {
+      key: '__bidder', label: 'Bidder', kind: 'select', placeholder: 'Any bidder',
+      options: [
+        { value: '', label: 'Any bidder' },
+        ...(['schedule', 'goal', 'manual', 'none'] as const).map((k) => ({
+          value: k, label: `${BIDDER_LABEL[k]} (${num(bidderCounts[k] ?? 0)})`,
+        })),
+      ],
+    }
     if (view === 'campaigns') {
       return [...common,
+        bidderFilter,
         { key: 'targets', label: 'Targets', kind: 'range' },
         { key: 'spend', label: 'Spend', kind: 'range', unit: '€' },
         { key: 'acos', label: 'ACoS', kind: 'range', unit: '%' },
@@ -473,6 +522,7 @@ export function BidClient() {
     }
     return [
       ...common,
+      bidderFilter,
       {
         key: '__kind', label: 'Kind', kind: 'select', placeholder: 'Any kind', wide: true,
         options: [{ value: '', label: 'Any kind' }, ...(f?.kind ?? []).map((x) => ({
@@ -513,18 +563,18 @@ export function BidClient() {
       { key: 'acos', label: 'ACoS', kind: 'range', unit: '%' },
       { key: 'clicks', label: 'Clicks', kind: 'range' },
     ]
-  }, [data, view])
+  }, [data, view, bidderCounts, stateCounts])
 
   // The four server-side chips ride the URL, so the grid's own filter state is only used for the
   // numeric ranges. Bridging them here rather than inside AdsDataGrid keeps that component
   // untouched apart from the additive sort callback.
   const initialFilters = useMemo(() => ({
-    __status: status, __kind: kind, __match: match, __band: band, __measured: measured, __state: stateParam,
-  }), [status, kind, match, band, measured, stateParam])
+    __status: status, __kind: kind, __match: match, __band: band, __measured: measured, __state: stateParam, __bidder: bidderParam,
+  }), [status, kind, match, band, measured, stateParam, bidderParam])
 
   const onFilterChange = useCallback((next: Record<string, unknown>) => {
     const s = (k: string) => (typeof next[k] === 'string' ? (next[k] as string) : '')
-    push({ status: s('__status'), kind: s('__kind'), match: s('__match'), band: s('__band'), measured: s('__measured'), state: s('__state') })
+    push({ status: s('__status'), kind: s('__kind'), match: s('__match'), band: s('__band'), measured: s('__measured'), state: s('__state'), bidder: s('__bidder') })
   }, [push])
 
   const activeTab = rulesTabByKey('bid')
@@ -545,12 +595,14 @@ export function BidClient() {
    * summing to €X", and a cell whose click did something adjacent to its number is worse than a
    * cell you cannot click.
    */
-  const CLEAR = { kind: '', match: '', band: '', measured: 'all', q: '' }
+  // S2 added `state`, S6 added `bidder` — "clear every filter" must clear the client-side pair
+  // too, or the census cell's number and the grid disagree while the cell claims to be active.
+  const CLEAR = { kind: '', match: '', band: '', measured: 'all', q: '', state: '', bidder: '' }
   const strip = census ? [
     {
       key: 'targets', n: num(census.targets), label: census.targets === 1 ? 'target' : 'targets',
       tip: 'Every positive AdTarget in this scope at the current status. Click to clear every filter.',
-      on: !kind && !match && !band && measured === 'all' && !q && view === 'targets',
+      on: !kind && !match && !band && measured === 'all' && !q && !state && !bidder && view === 'targets',
       apply: () => push({ view: 'targets', ...CLEAR }),
     },
     {
@@ -873,6 +925,14 @@ export function BidClient() {
         />
       )}
 
+      {/* S6 — the bidder assignment dialog, opened from a campaign row's Bidder cell. */}
+      {goalFor != null && (
+        <BidGoalDialog
+          campaign={goalFor}
+          onClose={() => setGoalFor(null)}
+          onDone={() => { setGoalFor(null); slotProps.reload() }}
+        />
+      )}
 
       {/* Interim until S7: the rule list exactly as `?tab=bid` rendered it, so routing the tab
           takes nothing out of the product. S7 deletes this block and its two imports. */}
