@@ -55,6 +55,7 @@ import {
 import { BidSpark } from './BidSpark'
 import { NO_WRITE_ACTIONS, type BidSlotProps } from './slot-contract'
 import { BidSections } from './BidSections'
+import { BidTargetDrawer } from './BidTargetDrawer'
 // Interim, until S7 replaces it: rendered exactly as the tab rendered it, so nothing is lost in the
 // move off `?tab=bid`.
 import { RuleListTab } from '../tabs/RuleListTab'
@@ -107,12 +108,23 @@ export function BidClient() {
   const stateParam = params.get('state') ?? ''
   const state = (BID_STATE_KEYS as readonly string[]).includes(stateParam) ? (stateParam as BidStateKey) : null
 
-  // 🔴 Still reserved, read by NOBODY, so a link shared today survives the section that gives it
-  // meaning: bidder= (S6) · target= (S3).
+  // S3 — `target=` is LIVE: it opens the single-target drawer. `bidder=` stays reserved for S6.
   const reserved = {
     bidder: params.get('bidder'),
     state: stateParam || null,
     target: params.get('target'),
+  }
+
+  /** S3 — the drawer link: current URL + target=<id>. A PUSH (Link default), so Back closes. */
+  const targetHref = (id: string) => {
+    const p = new URLSearchParams(params.toString())
+    p.set('target', id)
+    return `?${p.toString()}`
+  }
+  const closeTarget = () => {
+    const p = new URLSearchParams(params.toString())
+    p.delete('target')
+    router.replace(`?${p.toString()}`, { scroll: false })
   }
 
   const [sortKey, sortDir] = (() => {
@@ -770,15 +782,16 @@ export function BidClient() {
           firstColLabel="Target"
           renderFirst={(r) => (
             <div className="h10-bd-target">
-              {/* The shared grid paints the first column blue at (0,3,1) because every other
-                  consumer makes it a link. This one is not a link yet — S3 makes it open the bid
-                  curve — so the colour is overridden at matching specificity in the CSS. */}
-              <span
+              {/* S3 — a REAL link at last (the two CSS rules that un-blued it are deleted): it
+                  opens the target's drawer via ?target=, so middle-click and Back both behave. */}
+              <Link
+                href={targetHref(r.id)}
+                scroll={false}
                 className={r.derived ? 't derived' : 't'}
                 title={r.derived
-                  ? `This target has no text expression — Amazon identifies it by its targeting group. Shown as "${r.label}", derived from ${r.match.replace(/_/g, ' ').toLowerCase()}.`
-                  : r.label}
-              >{r.label}</span>
+                  ? `This target has no text expression — Amazon identifies it by its targeting group. Shown as "${r.label}", derived from ${r.match.replace(/_/g, ' ').toLowerCase()}. Opens the bid curve.`
+                  : `${r.label} — open the bid curve`}
+              >{r.label}</Link>
               {!r.liveNow && <span className="fl off" title="This bid is not in any auction: the target or its campaign is not enabled">not bidding</span>}
             </div>
           )}
@@ -840,6 +853,17 @@ export function BidClient() {
       {/* ── The nine sections that follow. Every one attaches in BidSections, which renders null
              today; nobody restructures this client to add one. ─────────────────────────────────── */}
       <BidSections {...slotProps} />
+
+      {/* S3 — the target drawer. The row and its series come from the loaded payload when the
+          target is in view; a deep link outside it fetches only the curve and says so. */}
+      {reserved.target && (
+        <BidTargetDrawer
+          targetId={reserved.target}
+          row={(view === 'targets' ? (rows as BidTargetRow[]) : []).find((r) => r.id === reserved.target) ?? null}
+          series={data?.series?.[reserved.target]}
+          onClose={closeTarget}
+        />
+      )}
 
 
       {/* Interim until S7: the rule list exactly as `?tab=bid` rendered it, so routing the tab

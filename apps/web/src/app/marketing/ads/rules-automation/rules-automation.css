@@ -1731,8 +1731,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    promise are undone here at (0,3,2), matched on `span.t` so the CAMPAIGNS view — where the cell
    really is an `<a>` — keeps the blue it has earned. KT.1 fixed the colour and left the pointer
    and the underline, which is why this rule undoes all three. */
-.h10-am-grid td.nm .h10-bd-target span.t { color: #1c2530; font-weight: 700; cursor: default; }
-.h10-am-grid td.nm .h10-bd-target span.t:hover { text-decoration: none; }
+/* S3 — the two rules that un-blued the first column are DELETED: the target is a real link now
+   (it opens the bid-curve drawer), so the shared grid's link styling is finally telling the truth. */
 
 @media (max-width: 1200px) {
   .h10-bd-census { grid-template-columns: repeat(3, 1fr); }
@@ -2037,7 +2037,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    operator must be able to tell "Substitutes" (a name we constructed) from "motorrad jacke"
    (a string Amazon stores). Italic + a lighter weight, never a different colour: colour in this
    column already means "is a link". */
-.h10-am-grid td.nm .h10-bd-target span.t.derived { font-style: italic; font-weight: 600; color: #55606d; }
+/* S3 — `.t` is an <a> now; derived keeps its italic marker but inherits the link colour. */
+.h10-am-grid td.nm .h10-bd-target .t.derived { font-style: italic; font-weight: 600; }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    BSP.0 — Budget Pacing & Schedules
@@ -4614,3 +4615,19 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-bud-xferrow { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13px; color: #3f4754; }
 .h10-bud-xferrow > span:first-child { width: 60px; }
 .h10-bud-xferto { margin: 0 0 10px 70px; font-size: 13px; color: #1c2530; }
+
+/* BID.S3 — the target drawer */
+.h10-bd3-off { font-style: normal; color: #b42318; }
+.h10-bd3-mut { font-style: normal; color: #6b7585; }
+.h10-bd3-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.h10-bd3-chip { font-style: normal; font-size: 11.5px; border-radius: 5px; padding: 1px 7px; }
+.h10-bd3-chip.bad { color: #b42318; background: #fef3f2; border: 1px solid #f6c6c2; }
+.h10-bd3-chip.warn { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+.h10-bd3-chip.mute { color: #4b5563; background: #f3f4f6; border: 1px solid #e5e7eb; }
+.h10-bd3-curve h4 { margin: 14px 0 8px; font-size: 12.5px; color: #1c2530; }
+.h10-bd3-spark { margin: 0 0 10px; transform-origin: left top; }
+.h10-bd3-spark svg { width: 100%; height: 44px; }
+.h10-bd3-writes { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.h10-bd3-writes th { text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: #667080; padding: 3px 10px 5px 0; border-bottom: 1px solid #e3e7ec; }
+.h10-bd3-writes td { padding: 5px 10px 5px 0; border-bottom: 1px solid #eef1f5; color: #1c2530; font-variant-numeric: tabular-nums; }
+.h10-bd3-writes tr.failed td { color: #b42318; }
