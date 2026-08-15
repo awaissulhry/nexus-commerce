@@ -19,6 +19,10 @@ const protectionFindMany = vi.fn(async () => [] as unknown[])
 const ceilingFindMany = vi.fn(async () => [] as unknown[])
 const bidPolicyFindMany = vi.fn(async () => [] as unknown[])
 const actionLogFindMany = vi.fn(async () => [] as unknown[])
+// AUTO.P0 guard ④ — the daily-movement check reads the day's OPENING budget with findFirst.
+// Null by default = "no budget write logged today", so the opening is the campaign's current
+// value and the first write of a day is always allowed: every pre-existing case is untouched.
+const actionLogFindFirst = vi.fn(async () => null as unknown)
 const productAdFindMany = vi.fn(async () => [] as unknown[])
 const refusalCreate = vi.fn(async () => ({}))
 
@@ -29,7 +33,7 @@ vi.mock('../../db.js', () => ({
     adKeywordProtection: { get findMany() { return protectionFindMany } },
     adSpendCeiling: { get findMany() { return ceilingFindMany } },
     adBidPolicy: { get findMany() { return bidPolicyFindMany } },
-    advertisingActionLog: { get findMany() { return actionLogFindMany } },
+    advertisingActionLog: { get findMany() { return actionLogFindMany }, get findFirst() { return actionLogFindFirst } },
     adProductAd: { get findMany() { return productAdFindMany } },
     adWriteRefusal: { get create() { return refusalCreate } },
   },
@@ -439,9 +443,21 @@ describe('ACR.1.2b — pins bind AT THE GATE', () => {
 describe('AUTO.A7 — per-scope spend ceilings', () => {
   const budgetWrite = { ...base, field: 'dailyBudget', intendedValueCents: 2_000 } // €5 → €20
 
-  it('no ceiling rows ⇒ untouched (today\'s account)', async () => {
+  /**
+   * AUTO.P0 — these three cases used to assert `allowed === true`, which was a claim about the
+   * WHOLE gate rather than about spend ceilings. Guard ④ (daily budget movement) now also
+   * inspects every `dailyBudget` write, and it correctly refuses both fixtures: €5 → €20 is
+   * +300% and €5 → €1 is exactly the ratchet cut it exists to stop. The A7 intent — "a spend
+   * ceiling did not do this" — is unchanged and is what these now assert. A test that says
+   * "nothing refused this" cannot survive a new guard without lying about one of them.
+   */
+  const expectNotDeniedBySpendCeiling = (r: Awaited<ReturnType<typeof checkAdsWriteGate>>) => {
+    if (r.allowed === false) expect(r.deniedAt).not.toBe('spend_ceiling')
+  }
+
+  it('no ceiling rows ⇒ untouched by the ceiling check', async () => {
     const r = await checkAdsWriteGate(budgetWrite)
-    expect(r.allowed).toBe(true)
+    expectNotDeniedBySpendCeiling(r)
   })
 
   it('refuses a budget increase past a CAMPAIGN ceiling, naming it', async () => {
@@ -466,7 +482,7 @@ describe('AUTO.A7 — per-scope spend ceilings', () => {
   it('a budget CUT never trips a spend ceiling', async () => {
     ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 100 }])
     const r = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 100 }) // €5 → €1
-    expect(r.allowed).toBe(true)
+    expectNotDeniedBySpendCeiling(r) // guard ④ does refuse this cut — see the note above
   })
 
   it('a MARKET ceiling binds through the campaign\'s marketplace', async () => {
@@ -477,10 +493,10 @@ describe('AUTO.A7 — per-scope spend ceilings', () => {
     if (r.allowed === false) expect(r.reason).toContain('the IT market')
   })
 
-  it('under every ceiling ⇒ allowed', async () => {
+  it('under every ceiling ⇒ the ceiling does not refuse', async () => {
     ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 10_000 }])
     const r = await checkAdsWriteGate(budgetWrite) // +€15 vs €100/day
-    expect(r.allowed).toBe(true)
+    expectNotDeniedBySpendCeiling(r)
   })
 })
 

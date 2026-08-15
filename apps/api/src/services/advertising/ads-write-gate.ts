@@ -40,6 +40,10 @@ export type GateDeniedAt =
   // AUTO.A7 — a per-SCOPE spend ceiling (AdSpendCeiling: campaign ⊂ line ⊂ portfolio ⊂ market)
   // refuses a budget increase that would take today's authorised increases past its cap.
   | 'spend_ceiling'
+  // AUTO.P0 guard ④ — cumulative daily MOVEMENT on one campaign's budget, across every writer.
+  // The only budget guard keyed to the ENTITY rather than to a rule, which is why it is the one
+  // that survives the pacer, a budget schedule, and a rule nobody has written yet.
+  | 'budget_day_move'
 
 export type GateDecision =
   | { allowed: true; mode: 'sandbox' }
@@ -362,6 +366,31 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       if (denial) return denial
     }
 
+    /**
+     * AUTO.P0 guard ④ — the daily MOVEMENT bound. The last of the four §2.4 guards, and the only
+     * one keyed to the ENTITY rather than to a rule.
+     *
+     * Every other budget brake bounds one actor: `maxExecutionsPerDay` and `maxWritesPerDay` bound
+     * a rule's rate, `maxDailyAdSpendCentsEur` bounds a rule's spend, a spend ceiling bounds a
+     * scope's INCREASES. None of them bounds what actually happened to `GALE EXACT IT`, which was
+     * €4.42 → €1.00 in 2¾ hours with TWO writers taking turns — the pacer raising and a rule
+     * cutting it back within the same minute, 41% of the audit chain broken by the collision.
+     * A per-rule brake cannot see that; a per-entity one does not need to.
+     *
+     * CAP §6.5 reached the same conclusion independently: "a cap bounds the RATE of a ratchet, not
+     * its DESTINATION… the thing actually missing is a bound on cumulative change." BUD.2 shipped
+     * `minBudgetCents`, which bounds the destination — but it is set on **0 of 220** campaigns and
+     * is a judgement no default can make. This needs no per-campaign judgement to start working.
+     */
+    if (ctx.field === 'dailyBudget' && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
+      const denial = await budgetDayMoveDenial({
+        campaignId: ctx.campaignId,
+        currentBudgetCents: Math.round(Number(campaign.dailyBudget ?? 0) * 100),
+        intendedCents: ctx.intendedValueCents as number,
+      })
+      if (denial) return denial
+    }
+
     // WC — the maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
     // unlimited bid writes). It counted +1 per ENTITY, so a per-hour rank schedule
     // (~12 entities × ~12–24 flips/day) blew through a small cap by mid-morning and then
@@ -559,6 +588,94 @@ async function spendCeilingDenial(args: {
 }
 
 /**
+ * AUTO.P0 guard ④ — how far one campaign's daily budget may move in one UTC day, across every
+ * writer combined. Defaults from the operator's decision, 2026-08-16: −30% down, +50% up.
+ *
+ * ── Why the down and up bounds are asymmetric ────────────────────────────────────────────────
+ * A cut compounds toward zero and a raise does not. Measured: 1,880 of 2,386 budget writes in 60
+ * days were decreases, and 58 of 86 live campaigns now sit at Amazon's €1 floor. At −30%/day a
+ * €100 budget takes ~13 days to reach €1 instead of the one day it actually took — and each of
+ * those days is a chance for a person to notice, which is the entire point.
+ *
+ * ── 🔴 The absolute rise allowance, and why it is not the operator's number ───────────────────
+ * A pure +50% bound would TRAP every campaign the ratchet already damaged. 58 campaigns sit at
+ * €1.00; restoring one to €10 is +900%, so a percentage-only ceiling would refuse the repair and
+ * make this guard an accomplice to the damage it exists to prevent. Percentages are meaningless
+ * at the bottom of their own range. So the rise allowance is the GREATER of the percentage and a
+ * flat `NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS` (default €10): €1 → up to €11 in a day, €100 → up
+ * to €150. The operator's +50% binds everywhere it is the larger number, which is everywhere it
+ * was meant to bind. Flagged rather than folded in silently.
+ *
+ * The DOWN side needs no such escape: −30% of €1.00 is €0.70, already below Amazon's own €1
+ * floor, so the guard is simply inert for a campaign that cannot fall further.
+ *
+ * ── Where the day's opening value comes from ─────────────────────────────────────────────────
+ * The earliest `payloadBefore.dailyBudget` logged for this campaign today — A7's ledger, read the
+ * same way, with the same unit. ⚠ `payloadBefore/payloadAfter.dailyBudget` is in EUROS, not cents,
+ * unlike every neighbouring ads money field; assuming cents inflates this 100× and produced a
+ * spectacular false reading once already (BUD §2.5). No rows today ⇒ opening is the current value,
+ * so the first write of a day is always allowed and the bound applies from there.
+ *
+ * Reading the EARLIEST row's `before` is deliberately robust to the 41%-broken audit chain: a
+ * mid-sequence break moves intermediate values, not the first row's opening snapshot.
+ */
+const pctEnv = (name: string, fallback: number): number => {
+  const v = Number(process.env[name])
+  return Number.isFinite(v) && v > 0 && v < 100 ? v : fallback
+}
+
+export async function budgetDayMoveDenial(args: {
+  campaignId: string
+  currentBudgetCents: number
+  intendedCents: number
+}): Promise<GateDecision | null> {
+  const dropPct = pctEnv('NEXUS_ADS_BUDGET_DAY_DROP_PCT', 30)
+  const risePct = pctEnv('NEXUS_ADS_BUDGET_DAY_RISE_PCT', 50)
+  const riseAbs = Number(process.env.NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS)
+  const riseAbsCents = Number.isFinite(riseAbs) && riseAbs >= 0 ? riseAbs : 1_000 // €10
+
+  const midnightUtc = new Date(`${utcDayKey()}T00:00:00.000Z`)
+  const first = await prisma.advertisingActionLog.findFirst({
+    where: {
+      actionType: 'AD_BUDGET_UPDATE',
+      entityType: 'CAMPAIGN',
+      entityId: args.campaignId,
+      createdAt: { gte: midnightUtc },
+      rolledBackAt: null,
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { payloadBefore: true },
+  })
+  const loggedOpening = Number((first?.payloadBefore as { dailyBudget?: unknown })?.dailyBudget ?? NaN)
+  const openingCents = Number.isFinite(loggedOpening)
+    ? Math.round(loggedOpening * 100) // EUROS in the payload — see the note above
+    : args.currentBudgetCents
+  if (openingCents <= 0) return null // nothing to measure a move against
+
+  const floorCents = Math.round(openingCents * (1 - dropPct / 100))
+  const ceilCents = Math.max(Math.round(openingCents * (1 + risePct / 100)), openingCents + riseAbsCents)
+  const eur = (c: number) => `€${(c / 100).toFixed(2)}`
+
+  if (args.intendedCents < floorCents) {
+    const movedPct = Math.round((1 - args.intendedCents / openingCents) * 100)
+    return {
+      allowed: false,
+      reason: `this would move today's budget on ${args.campaignId} from ${eur(openingCents)} to ${eur(args.intendedCents)} — a ${movedPct}% drop, past the ${dropPct}%/day limit on total movement. Every writer shares this budget: the day opened at ${eur(openingCents)} and no combination of rules, schedules or the pacer may take it below ${eur(floorCents)} today. It resets at 00:00 UTC.`,
+      deniedAt: 'budget_day_move',
+    }
+  }
+  if (args.intendedCents > ceilCents) {
+    const movedPct = Math.round((args.intendedCents / openingCents - 1) * 100)
+    return {
+      allowed: false,
+      reason: `this would move today's budget on ${args.campaignId} from ${eur(openingCents)} to ${eur(args.intendedCents)} — a ${movedPct}% rise, past the ${risePct}%/day limit on total movement (or ${eur(riseAbsCents)}, whichever is larger). The day opened at ${eur(openingCents)} and today's ceiling is ${eur(ceilCents)}. It resets at 00:00 UTC.`,
+      deniedAt: 'budget_day_move',
+    }
+  }
+  return null
+}
+
+/**
  * Convenience: log a deny decision in the structured format that
  * grep `[ADS-WRITE-GATE-DENY]` will pick up.
  *
@@ -604,12 +721,17 @@ export function logGateDeny(
   // refusal reaches the operator through notifyAutomation; the 6h body-keyed dedupe means one
   // notice per distinct refusal, not one per queued write, and a failed notification never
   // breaks the deny path.
-  if (deniedAt === 'spend_ceiling' || (deniedAt === 'entity_bounds' && reason.startsWith('budget'))) {
+  // AUTO.P0 — guard ④ joins the same list. A movement refusal is the one an operator most needs
+  // to hear about unprompted: unlike a bound they set themselves, this one has a default, so the
+  // first time it fires may well be the first they learn it exists.
+  if (deniedAt === 'spend_ceiling' || deniedAt === 'budget_day_move' || (deniedAt === 'entity_bounds' && reason.startsWith('budget'))) {
     void import('./ads-automation-notify.service.js')
       .then(({ notifyAutomation }) => notifyAutomation({
         type: 'ads_write_refusal',
         severity: 'warn',
-        title: deniedAt === 'spend_ceiling' ? 'A spend ceiling refused a budget raise' : 'A budget bound refused a write',
+        title: deniedAt === 'spend_ceiling' ? 'A spend ceiling refused a budget raise'
+          : deniedAt === 'budget_day_move' ? "A budget moved as far as it may today"
+          : 'A budget bound refused a write',
         body: reason,
         href: '/marketing/ads/rules-automation/automations?view=limits',
       }))
