@@ -9,7 +9,7 @@
  * No `@/` imports — the vitest runner in apps/web has no such alias.
  */
 import { describe, it, expect } from 'vitest'
-import { conditionText, actionLines, triggerText, detectConflicts, targetAcosProblem, NON_WRITING } from './ruleText'
+import { conditionText, actionLines, triggerText, targetAcosProblem, NON_WRITING } from './ruleText'
 
 describe('conditionText — the "If" line', () => {
   it('renders a ratio as a percentage, not a fraction', () => {
@@ -119,70 +119,9 @@ describe('triggerText', () => {
   })
 })
 
-describe('detectConflicts', () => {
-  const base = { trigger: 'CAC_SPIKE', level: 'PROPOSE', marketplace: null, conditions: [] }
-
-  it('flags opposing actions on the same trigger', () => {
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'Raiser', actions: [{ type: 'bid_up' }] },
-      { ...base, id: 'b', name: 'Lowerer', actions: [{ type: 'bid_down' }] },
-    ])
-    expect(m.get('a')?.[0]).toContain('Lowerer')
-    expect(m.get('b')?.[0]).toContain('Raiser')
-  })
-
-  it('ignores rules that cannot run', () => {
-    // An OFF rule is a plan, not a participant. Flagging it as a conflict produces noise an
-    // operator has to dismiss 29 times on this account.
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'Raiser', level: 'OFF', actions: [{ type: 'bid_up' }] },
-      { ...base, id: 'b', name: 'Lowerer', level: 'OFF', actions: [{ type: 'bid_down' }] },
-    ])
-    expect(m.size).toBe(0)
-  })
-
-  it('does not flag rules on different triggers', () => {
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'Raiser', actions: [{ type: 'bid_up' }] },
-      { ...base, id: 'b', name: 'Lowerer', trigger: 'CVR_DROP', actions: [{ type: 'bid_down' }] },
-    ])
-    expect(m.size).toBe(0)
-  })
-
-  it('treats a null market as everywhere, so it can still conflict with a scoped rule', () => {
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'Everywhere', marketplace: null, actions: [{ type: 'bid_up' }] },
-      { ...base, id: 'b', name: 'Italy only', marketplace: 'IT', actions: [{ type: 'bid_down' }] },
-    ])
-    expect(m.size).toBe(2)
-  })
-
-  it('does not flag two rules scoped to different markets', () => {
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'Germany', marketplace: 'DE', actions: [{ type: 'bid_up' }] },
-      { ...base, id: 'b', name: 'Italy', marketplace: 'IT', actions: [{ type: 'bid_down' }] },
-    ])
-    expect(m.size).toBe(0)
-  })
-
-  it('flags exact duplicates', () => {
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'One', actions: [{ type: 'bid_up', percent: 10 }] },
-      { ...base, id: 'b', name: 'Two', actions: [{ type: 'bid_up', percent: 10 }] },
-    ])
-    expect(m.get('a')?.[0]).toContain('Duplicate of')
-  })
-
-  it('reads actionTypes when the full actions array is absent', () => {
-    // `GET /autonomy/rules` strips notify/alert_operator out of `actionTypes`, so the fallback
-    // path has to work on that shape too.
-    const m = detectConflicts([
-      { ...base, id: 'a', name: 'Raiser', actionTypes: ['bid_up'] },
-      { ...base, id: 'b', name: 'Lowerer', actionTypes: ['bid_down'] },
-    ])
-    expect(m.size).toBe(2)
-  })
-})
+// AUTO.A4 — the detectConflicts suite left with the function it pinned. The replacement model
+// (by entity: reach × field × classes) is server-side and its pure core is pinned in
+// apps/api/src/services/advertising/ads-conflicts.vitest.test.ts.
 
 describe('actionLines fallback — the missing-field guard', () => {
   it('never claims "does nothing" when only actionTypes survived', () => {

@@ -228,65 +228,12 @@ export function triggerText(trigger: string): string {
 }
 
 // ── Conflicts ────────────────────────────────────────────────────────────────────────────
-/**
- * Ported from `ads-console/automation/AutomationHub.tsx:131-146`, which is the one piece of
- * logic on that page that works and that nothing else in the app has. Unchanged in behaviour:
- * ENABLED rules only, same trigger, compatible market, then exact-duplicate or opposing-action.
- *
- * `sameScope` treats a null marketplace as "everywhere", so an account-wide rule can conflict
- * with a market-scoped one. That is correct and is why it is not an equality test.
- */
-const OPPOSED: Array<[string, string]> = [
-  ['bid_up', 'bid_down'],
-  ['pause_campaign', 'resume_campaign'],
-  ['pause_campaign', 'enable_campaign'],
-  ['pause_all_campaigns', 'resume_campaign'],
-  ['pause_all_campaigns', 'enable_campaign'],
-  ['pause_ad_group', 'resume_campaign'],
-  ['lower_bid_to_floor', 'bid_up'],
-  ['lower_bid_to_floor', 'raise_bids_for_rank_defense'],
-]
-
-export interface ConflictInput {
-  id: string
-  name: string
-  trigger: string
-  level: string
-  marketplace: string | null
-  actions?: unknown
-  actionTypes?: string[]
-  conditions?: unknown
-}
-
-export function detectConflicts(rules: ConflictInput[]): Map<string, string[]> {
-  const map = new Map<string, string[]>()
-  const add = (id: string, reason: string) => {
-    const a = map.get(id) ?? []
-    if (!a.includes(reason)) a.push(reason)
-    map.set(id, a)
-  }
-  const typesOf = (r: ConflictInput) =>
-    new Set(r.actionTypes ?? (Array.isArray(r.actions) ? r.actions : []).map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean))
-  const sameScope = (a: ConflictInput, b: ConflictInput) => !a.marketplace || !b.marketplace || a.marketplace === b.marketplace
-  // Only rules that can actually run can fight. An OFF rule is a plan, not a participant.
-  const live = rules.filter((r) => r.level !== 'OFF')
-  for (let i = 0; i < live.length; i++) {
-    for (let j = i + 1; j < live.length; j++) {
-      const a = live[i]; const b = live[j]
-      if (a.trigger !== b.trigger || !sameScope(a, b)) continue
-      if (JSON.stringify(a.actions) === JSON.stringify(b.actions) && JSON.stringify(a.conditions) === JSON.stringify(b.conditions)) {
-        add(a.id, `Duplicate of “${b.name}”`)
-        add(b.id, `Duplicate of “${a.name}”`)
-        continue
-      }
-      const sa = typesOf(a); const sb = typesOf(b)
-      for (const [x, y] of OPPOSED) {
-        if ((sa.has(x) && sb.has(y)) || (sa.has(y) && sb.has(x))) {
-          add(a.id, `May fight “${b.name}” on ${triggerText(a.trigger)}`)
-          add(b.id, `May fight “${a.name}” on ${triggerText(a.trigger)}`)
-        }
-      }
-    }
-  }
-  return map
-}
+// AUTO.A4 — `detectConflicts` is DELETED, replaced rather than tuned. Its first line skipped
+// any pair with different triggers (so the budget-ratchet pair was never compared), its
+// `sameScope` read only marketplace, and it could not see the engines or the operator at all —
+// measured: it flagged 0 of 22 live rules. The replacement is server-side
+// (`GET /advertising/autonomy/conflicts` → `ads-conflicts.service.ts`), by ENTITY — reach ×
+// field × {SAME-FIELD · OPPOSED · DUPLICATE · CADENCE} — because reach resolution needs
+// Campaign, AdTarget and the action log, none of which the browser has.
+// (`ads-console/automation/AutomationHub.tsx` still carries its own copy of the old model;
+// that console is being retired, not maintained.)

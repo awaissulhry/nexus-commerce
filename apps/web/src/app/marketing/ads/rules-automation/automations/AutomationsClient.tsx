@@ -36,7 +36,7 @@ import { ModeNotches, RANK, type Level } from './ModeNotches'
 import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
 import { EngineDetail, type EngineActor, type ObservedActor } from './EngineDetail'
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
-import { detectConflicts, triggerText } from './ruleText'
+import { triggerText } from './ruleText'
 
 interface Rule extends DetailRule {
   category: string
@@ -85,6 +85,17 @@ export function AutomationsClient() {
   const [actorsErr, setActorsErr] = useState<string | null>(null)
   const [engineKey, setEngineKey] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState<number | null>(null)
+  // AUTO.A4 — the server's by-entity conflict payload. null = not loaded / failed (the banner
+  // then stays silent rather than claiming "no conflicts", which would be a different fact).
+  const [conflictsData, setConflictsData] = useState<{
+    windowDays: number
+    totalCampaigns: number
+    byField: Array<{ field: string; reachable: number; contested: number; worst: { name: string; actors: Array<{ name: string; kind: string; level: string }> } | null }>
+    pairs: Array<{ cls: string; a: string; b: string; field: string; note: string }>
+    perRule: Record<string, string[]>
+    cadence: Array<{ name: string; pct: number; windowDays: number; capPerDay: number | null; atCapFactor: number }>
+    duplicates: { bodies: string[][]; names: string[][] }
+  } | null>(null)
   // AUTO.A1 — the band tile acting as a filter (?tile=). Clicking the active tile clears it.
   const [tile, setTile] = useState<'writing' | 'unscoped' | 'off' | null>(() => {
     if (typeof window === 'undefined') return null
@@ -144,6 +155,13 @@ export function AutomationsClient() {
       const qj = await q.json()
       setPendingCount(q.ok && typeof qj?.pending === 'number' ? qj.pending : null)
     } catch { setPendingCount(null) }
+    // AUTO.A4 — the by-entity conflicts. Failure leaves null: the banners stay silent instead of
+    // claiming a clean account, and the badges simply do not render.
+    try {
+      const c = await fetch(`${getBackendUrl()}/api/advertising/autonomy/conflicts`, { cache: 'no-store' })
+      if (!c.ok) throw new Error(String(c.status))
+      setConflictsData(await c.json())
+    } catch { setConflictsData(null) }
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -255,7 +273,17 @@ export function AutomationsClient() {
     return [...ruleRows, ...engineRows, ...obsRows]
   }, [rows, actors, kind, tile])
 
-  const conflicts = useMemo(() => detectConflicts(all), [all])
+  /**
+   * AUTO.A4 — conflicts come from the SERVER's by-entity detector now. The client model this
+   * replaced matched on trigger and flagged 0 of 22 live rules; the server resolves every
+   * actor's reach (rules from scope, engines and the operator from the log) and reports
+   * (campaign × field) contests. `conflicts` keeps the Map<ruleId, string[]> shape the grid
+   * badges and drawer already consume.
+   */
+  const conflicts = useMemo(
+    () => new Map(Object.entries(conflictsData?.perRule ?? {})),
+    [conflictsData],
+  )
 
   const counts = useMemo(() => ({
     total: all.length,
@@ -625,13 +653,28 @@ export function AutomationsClient() {
         </div>
       )}
 
-      {conflicts.size > 0 && (
+      {conflictsData && conflictsData.byField.some((f) => f.contested > 0) && (
         <div className="h10-au-banner warn">
           <AlertTriangle size={15} aria-hidden />
           <span>
-            <b>{conflicts.size} rule{conflicts.size > 1 ? 's' : ''} may conflict.</b>{' '}
-            Rules that can run, share a trigger and carry duplicate or opposing actions can fight
-            each other. Open a flagged rule to see which.
+            <b>Contested fields, by entity:</b>{' '}
+            {conflictsData.byField.filter((f) => f.contested > 0).map((f) => `${f.field} — ${num(f.contested)} of ${num(f.reachable)} campaigns have >1 actor`).join(' · ')}.
+            {' '}Worst: {(() => {
+              const w = conflictsData.byField.filter((f) => f.worst).sort((a, b) => (b.worst!.actors.length - a.worst!.actors.length))[0]
+              return w?.worst ? `“${w.worst.name}” — ${w.worst.actors.length} actors can change its ${w.field}` : '—'
+            })()}. Open a flagged rule to see its pairs.
+          </span>
+        </div>
+      )}
+
+      {conflictsData && conflictsData.cadence.length > 0 && (
+        <div className="h10-au-banner warn">
+          <AlertTriangle size={15} aria-hidden />
+          <span>
+            <b>{conflictsData.cadence.length} rule{conflictsData.cadence.length > 1 ? 's' : ''} compound{conflictsData.cadence.length === 1 ? 's' : ''} a percentage on evidence older than {'their'} tick</b>
+            {' '}— {conflictsData.cadence.slice(0, 2).map((c) => `${c.name} (${c.pct > 0 ? '+' : ''}${c.pct}% on a ${c.windowDays}d window; ×${c.atCapFactor} at its cap in one day)`).join(' · ')}
+            {conflictsData.cadence.length > 2 ? ` and ${conflictsData.cadence.length - 2} more` : ''}.
+            The write cap bounds how often; only a baseline (BUD.2) stops the compounding itself.
           </span>
         </div>
       )}

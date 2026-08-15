@@ -2208,6 +2208,19 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const { getActors } = await import('../services/advertising/ads-actors.service.js')
     return getActors()
   })
+
+  /**
+   * AUTO.A4 — conflicts by ENTITY (campaign × field), replacing the trigger-blind client
+   * detector that flags 0 of 22 live rules. Server-side because reach resolution needs
+   * Campaign, AdTarget and the action log. Path grep-a'd against both route files.
+   */
+  fastify.get('/advertising/autonomy/conflicts', async (request, reply) => {
+    const q = request.query as { window?: string }
+    const windowDays = q.window && Number.isFinite(Number(q.window)) ? Math.min(120, Math.max(7, Number(q.window))) : 60
+    reply.header('Cache-Control', 'private, max-age=120')
+    const { getConflicts } = await import('../services/advertising/ads-conflicts.service.js')
+    return getConflicts(windowDays)
+  })
 }
 
 export default advertisingIntelRoutes
