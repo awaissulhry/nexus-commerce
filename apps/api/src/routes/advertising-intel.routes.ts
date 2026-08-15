@@ -8,6 +8,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
@@ -2267,6 +2268,93 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    * 2026-08-15 (the payload says so): earlier refusals exist only in the application log, and a
    * surface must never read this zero as "the gate refused nothing before then".
    */
+  /**
+   * AUTO.A5 / substrate S4 — the account-wide change ledger, honest about its own completeness.
+   *
+   * 44,435 writes existed, attributed, and were rendered nowhere. This is the ONE route over
+   * `AdvertisingActionLog` (other pages filter it; nobody re-derives it). Its defining feature
+   * is stating what it cannot claim: the null-actor share travels on every response, evidence
+   * coverage is reported PER action type (100% on placements, 0% on budgets — a blank where a
+   * reason should be is a claim), and `payloadBefore/After.dailyBudget` is EUROS — the one ads
+   * money field that is not cents — so the client is told rather than left to inflate 100×.
+   * Actor strings resolve server-side ('user:<id>' → the profile's name, 'automation:<ruleId>'
+   * → the rule's name) so every consumer agrees on the words.
+   */
+  fastify.get('/advertising/action-log', async (request, reply) => {
+    const q = request.query as { days?: string; take?: string; before?: string; entityType?: string; actionType?: string; actor?: string; campaignId?: string }
+    const days = q.days && Number.isFinite(Number(q.days)) ? Math.min(60, Math.max(1, Number(q.days))) : 7
+    const take = q.take && Number.isFinite(Number(q.take)) ? Math.min(500, Math.max(1, Number(q.take))) : 100
+    const since = new Date(Date.now() - days * 86_400_000)
+    reply.header('Cache-Control', 'private, max-age=15')
+
+    const where = {
+      createdAt: { gte: since, ...(q.before ? { lt: new Date(q.before) } : {}) },
+      ...(q.entityType ? { entityType: q.entityType } : {}),
+      ...(q.actionType ? { actionType: q.actionType } : {}),
+      ...(q.actor === 'null' ? { userId: null } : q.actor ? { userId: q.actor } : {}),
+    }
+
+    const [rows, total, nullActor, byType, withEvidence] = await Promise.all([
+      prisma.advertisingActionLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: {
+          id: true, createdAt: true, userId: true, executionId: true, actionType: true,
+          entityType: true, entityId: true, payloadBefore: true, payloadAfter: true,
+          evidence: true, rolledBackAt: true, amazonResponseStatus: true,
+        },
+      }),
+      prisma.advertisingActionLog.count({ where: { createdAt: { gte: since } } }),
+      prisma.advertisingActionLog.count({ where: { createdAt: { gte: since }, userId: null } }),
+      prisma.advertisingActionLog.groupBy({ by: ['actionType'], where: { createdAt: { gte: since } }, _count: { _all: true } }),
+      // Json? null filtering needs Prisma's typed nulls: AnyNull matches DB null and JSON null
+      // both, so `not: AnyNull` is "carries any evidence at all".
+      prisma.advertisingActionLog.groupBy({ by: ['actionType'], where: { createdAt: { gte: since }, evidence: { not: Prisma.AnyNull } }, _count: { _all: true } }),
+    ])
+
+    // Resolve actors once for the page of rows: user:<id> → displayName, automation:<ruleId> →
+    // the rule's name. Anything else passes through raw — an invented label is worse than an id.
+    const userIds = [...new Set(rows.map((r) => r.userId).filter((u): u is string => !!u?.startsWith('user:')))].map((u) => u.slice(5))
+    const ruleIds = [...new Set(rows.map((r) => r.userId).filter((u): u is string => !!u?.startsWith('automation:')))].map((u) => u.slice(11))
+    const [users, ruleRows] = await Promise.all([
+      userIds.length ? prisma.userProfile.findMany({ where: { id: { in: userIds } }, select: { id: true, displayName: true, email: true } }) : Promise.resolve([]),
+      ruleIds.length ? prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+    ])
+    const userName = new Map(users.map((u) => [u.id, u.displayName || u.email || u.id]))
+    const ruleName = new Map(ruleRows.map((r) => [r.id, r.name]))
+    const actorLabel = (userId: string | null): string => {
+      if (userId == null) return '(no actor recorded)'
+      if (userId.startsWith('user:')) return userName.get(userId.slice(5)) ?? userId
+      if (userId.startsWith('automation:')) {
+        const bare = userId.slice(11)
+        return ruleName.get(bare) ?? userId
+      }
+      return userId
+    }
+
+    const evidenceByType = new Map(withEvidence.map((g) => [g.actionType, g._count._all]))
+    return {
+      windowDays: days,
+      rows: rows.map((r) => ({ ...r, actorLabel: actorLabel(r.userId) })),
+      summary: {
+        total,
+        nullActor,
+        nullActorNote: nullActor > 0 ? `${nullActor.toLocaleString('en-IE')} of ${total.toLocaleString('en-IE')} writes in this window carry no author at all — this ledger cannot claim completeness of attribution.` : null,
+        byActionType: byType
+          .sort((a, b) => b._count._all - a._count._all)
+          .map((g) => ({
+            actionType: g.actionType,
+            count: g._count._all,
+            evidencePct: g._count._all > 0 ? Math.round(((evidenceByType.get(g.actionType) ?? 0) / g._count._all) * 100) : 0,
+          })),
+      },
+      notes: {
+        budgetsAreEuros: 'payloadBefore/After.dailyBudget is EUROS, not cents — the one ads money field that is not.',
+      },
+    }
+  })
+
   fastify.get('/advertising/write-refusals', async (request, reply) => {
     const q = request.query as { days?: string }
     const days = q.days && Number.isFinite(Number(q.days)) ? Math.min(60, Math.max(1, Number(q.days))) : 7

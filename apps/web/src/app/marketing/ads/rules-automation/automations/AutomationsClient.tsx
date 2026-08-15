@@ -36,6 +36,8 @@ import { ModeNotches, RANK, type Level } from './ModeNotches'
 import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
 import { EngineDetail, type EngineActor, type ObservedActor } from './EngineDetail'
 import { LimitsView } from './LimitsView'
+import { LedgerView } from './LedgerView'
+import { QueueView } from './QueueView'
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { triggerText } from './ruleText'
 
@@ -117,11 +119,12 @@ export function AutomationsClient() {
   })
   // AUTO.A0 — the view switcher (?view=). Actors is the default (decision D1: a person arriving
   // at the section wants the control plane). Views land as they are built.
-  const [view, setView] = useState<'actors' | 'limits'>(() => {
+  const [view, setView] = useState<'actors' | 'conflicts' | 'ledger' | 'queue' | 'limits'>(() => {
     if (typeof window === 'undefined') return 'actors'
-    return new URLSearchParams(window.location.search).get('view') === 'limits' ? 'limits' : 'actors'
+    const v = new URLSearchParams(window.location.search).get('view')
+    return v === 'limits' || v === 'ledger' || v === 'queue' || v === 'conflicts' ? v : 'actors'
   })
-  const setViewAndUrl = (v: 'actors' | 'limits') => {
+  const setViewAndUrl = (v: typeof view) => {
     setView(v)
     const u = new URL(window.location.href)
     if (v === 'actors') u.searchParams.delete('view'); else u.searchParams.set('view', v)
@@ -645,9 +648,11 @@ export function AutomationsClient() {
         <SegmentedControl
           size="sm"
           value={view}
-          onChange={(v) => setViewAndUrl(v as 'actors' | 'limits')}
+          onChange={(v) => setViewAndUrl(v as typeof view)}
           options={[
             { value: 'actors', label: 'Actors' },
+            { value: 'ledger', label: 'Ledger' },
+            { value: 'queue', label: pendingCount != null ? `Queue (${num(pendingCount)})` : 'Queue' },
             { value: 'limits', label: 'Limits' },
           ]}
         />
@@ -657,6 +662,8 @@ export function AutomationsClient() {
       {note && <div className="h10-au-banner ok" role="status"><Info size={15} aria-hidden /><span>{note}</span></div>}
 
       {view === 'limits' && <LimitsView scopeOptions={scopeOptions} global={actors?.global ?? null} />}
+      {view === 'ledger' && <LedgerView />}
+      {view === 'queue' && <QueueView onDecided={() => void load()} />}
 
       {view === 'actors' && counts.allFailing.length > 0 && (
         <div className="h10-au-banner warn">
