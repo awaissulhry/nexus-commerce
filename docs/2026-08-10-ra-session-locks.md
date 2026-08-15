@@ -1123,6 +1123,15 @@ uncommitted — I will `git diff` it and stage only my own.
 
 ---
 
+**BID.S3 blocked on an uncommitted `FilterDropdown.tsx`, 2026-08-16.**
+`apps/web/src/app/marketing/ads/campaigns/FilterDropdown.tsx:32` has an uncommitted change
+declaring `disabled` and never reading it — `TS6133`, which fails the pre-push web build and so
+holds **every** session's push. It belongs to whoever is adding the disabled state to that control
+(`84ee80e50` is the last commit on the file). Not touched: another session's in-flight file.
+Recorded only so the next red push is not re-diagnosed from scratch — this is the fourth time this
+shape has cost a session time (HV.1's `KeywordHarvestClient`, NEG's `NegativeTargetingClient`,
+dayparting's `scheduleHealth`, now this).
+
 ## 5 · Traps this repo has already paid for
 
 - 🔴 **`AdsDataGrid.selectable` defaults to TRUE.** A grid mounted without the prop renders a
