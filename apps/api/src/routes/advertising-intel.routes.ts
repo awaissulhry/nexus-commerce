@@ -2473,6 +2473,15 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       ...(q.entityType ? { entityType: q.entityType } : {}),
       ...(q.actionType ? { actionType: q.actionType } : {}),
       ...(q.actor === 'null' ? { userId: null } : q.actor ? { userId: q.actor } : {}),
+      // 🔴 BSP.2 · binding — `campaignId` was destructured above and never used, so this route has
+      // been advertising a filter it did not apply: `?campaignId=X` returned EVERY campaign's rows.
+      // Same defect shape as `budget-schedules/hourly-performance` destructuring `marketplace` and
+      // ignoring it. Substrate spec §4 makes this route the ONE ledger query for all eleven pages,
+      // so a page rendering "this campaign's history" was going to caption another campaign's
+      // writes as this one's. For a CAMPAIGN row `entityId` IS the local campaign id — verified
+      // against `Campaign.id` in `_bs-page-binding.mts`. Additive: a caller that omits it is
+      // byte-identical to before.
+      ...(q.campaignId ? { entityId: q.campaignId } : {}),
     }
 
     const [rows, total, nullActor, byType, withEvidence] = await Promise.all([

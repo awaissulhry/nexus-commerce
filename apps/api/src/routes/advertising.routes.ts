@@ -7812,6 +7812,31 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=30')
     return computeBudgetEnforcement({ month: q.month })
   })
+
+  /**
+   * BSP.2 · binding — which campaigns spent at or over the budget that was actually IN FORCE.
+   *
+   * Read-only. Reconstructs the budget of each past day by walking `AdvertisingActionLog`, because
+   * nothing in this system stores what a campaign's budget was on a given day. The service owns the
+   * method and its own honesty census (`reconstruction`) — see its header.
+   *
+   * It computes its own usable window and will answer `campaigns: []` with a populated `coverage`
+   * rather than average over the month the hourly feed was dead (2026-07-03 → 08-02: rows present,
+   * `costMicros` zero). A silent partial answer here would read as a measurement.
+   *
+   * Cached for 5 minutes: the grid is computed over COMPLETE Rome days only, so it changes at most
+   * once a day, at the day boundary. Nothing it shows moves in between.
+   */
+  fastify.get('/advertising/budget-binding', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const { computeBudgetBinding } = await import('../services/advertising/ads-budget-binding.service.js')
+    reply.header('Cache-Control', 'private, max-age=300')
+    return computeBudgetBinding({
+      market: q.market,
+      campaignIds: q.campaignIds ? q.campaignIds.split(',').filter(Boolean) : undefined,
+      weeks: q.weeks ? Number(q.weeks) : undefined,
+    })
+  })
   // CP.1 — Control Plane scenario commit: apply a batch of staged changes
   // (budget | limit | suppress | restore) through the gated + audited path.
   // ?dryRun=1 (or body.dryRun) validates without writing. Writes still honour
