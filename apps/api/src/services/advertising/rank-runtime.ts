@@ -162,9 +162,10 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
     ? {
       capPct: cap.capPct, baseAlone: cap.baseAlone, binding,
       maxCpcCents: spec.maxCpcCents ?? null, maxBaseBidCents: input.maxBaseBidCents ?? null,
+      // Short enough to be a column, not a sentence — the sentence is in the tooltip.
       label: cap.baseAlone
-        ? `${eur(input.maxBaseBidCents)} base over a ${eur(spec.maxCpcCents)} ceiling`
-        : `cap ${cap.capPct}% · ${eur(spec.maxCpcCents)} ceiling`,
+        ? `base ${eur(input.maxBaseBidCents)} > ${eur(spec.maxCpcCents)}`
+        : `cap ${cap.capPct}% · ${eur(spec.maxCpcCents)}`,
     }
     : null
 
@@ -205,9 +206,9 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
   if (spec.pause) {
     mode = { kind: 'min-bid', label: `Min bid ${eur(spec.floorBidCents ?? 2)}`, detail: 'This hour holds the minimum bid rather than a rank. Nothing is being pursued.' }
   } else if (cap?.baseAlone) {
-    mode = { kind: 'capped-base', label: `Capped 0% — base ${eur(input.maxBaseBidCents)} over the ${eur(spec.maxCpcCents)} ceiling`, detail: cannotConvergeReason ?? '' }
+    mode = { kind: 'capped-base', label: `Capped 0% · base ${eur(input.maxBaseBidCents)} > ${eur(spec.maxCpcCents)}`, detail: cannotConvergeReason ?? '' }
   } else if (cap && cap.capPct < floor) {
-    mode = { kind: 'capped-floor', label: `Capped ${cap.capPct}% — below its own ${floor}% floor`, detail: cannotConvergeReason ?? '' }
+    mode = { kind: 'capped-floor', label: `Capped ${cap.capPct}% · floor ${floor}%`, detail: cannotConvergeReason ?? '' }
   } else if (spec.allOut) {
     mode = { kind: 'all-out', label: `All-out → ${ceiling}%`, detail: `Climbing toward ${ceiling}% and bounded only by the ${eur(spec.maxCpcCents)} CPC ceiling. All-out ignores both the impression-share goal and the ACoS cap.` }
   } else if (canChase) {

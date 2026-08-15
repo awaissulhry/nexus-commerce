@@ -86,7 +86,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
       render: (r) => <ModeCell mode={r.runtime.mode} />,
     },
     {
-      key: 'placement', label: 'Live placement', metric: false, sortable: true, sortValue: (r) => r.runtime.placement?.top ?? -1,
+      key: 'placement', label: 'Live placement', metric: false, sortable: true, defaultHidden: true, sortValue: (r) => r.runtime.placement?.top ?? -1,
       tip: 'The Top / Rest / Product multipliers Amazon currently holds. The Placement page owns these — this page only reports them.',
       render: (r) => <PlacementCell p={r.runtime.placement} />,
     },
@@ -108,21 +108,21 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
       render: (r) => <CeilingCell ceiling={r.runtime.ceiling} />,
     },
     {
-      key: 'market', label: 'Market', metric: false, sortable: true, sortValue: (r) => r.marketplace ?? '',
+      key: 'market', label: 'Market', metric: false, sortable: true, defaultHidden: true, sortValue: (r) => r.marketplace ?? '',
       render: (r) => (r.marketplace ? <span className="h10-rg-mkts"><span className="mk">{r.marketplace}</span></span> : <span className="rd-none">—</span>),
     },
     {
-      key: 'portfolio', label: 'Portfolio', metric: false, sortable: true, sortValue: (r) => r.portfolioName ?? '',
+      key: 'portfolio', label: 'Portfolio', metric: false, sortable: true, defaultHidden: true, sortValue: (r) => r.portfolioName ?? '',
       render: (r) => (r.portfolioId ? <span className="rd-trunc" title={r.portfolioName ?? ''}>{portfolioNames[r.portfolioId] ?? r.portfolioId}</span> : <span className="rd-none" title="This campaign carries no portfolio, so no portfolio-scoped rule can reach it.">—</span>),
     },
     {
-      key: 'line', label: 'Product line', metric: false, sortable: true, sortValue: (r) => r.productLineIds.join(','),
+      key: 'line', label: 'Product line', metric: false, sortable: true, defaultHidden: true, sortValue: (r) => r.productLineIds.join(','),
       render: (r) => (r.productLineIds.length
         ? <span className="rd-trunc" title={r.productLineIds.map((id) => lineLabel.get(id) ?? id).join(', ')}>{r.productLineIds.map((id) => lineLabel.get(id) ?? id).join(', ')}</span>
         : <span className="rd-none">—</span>),
     },
     {
-      key: 'lastRun', label: 'Last run', metric: false, sortable: true,
+      key: 'lastRun', label: 'Last run', metric: false, sortable: true, defaultHidden: true,
       sortValue: (r) => (r.lastEvaluatedAt ? -new Date(r.lastEvaluatedAt).getTime() : Number.MAX_SAFE_INTEGER),
       render: (r) => <span title={r.lastEvaluatedAt ? new Date(r.lastEvaluatedAt).toLocaleString() : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
     },
@@ -155,7 +155,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
   const renderFirst = (r: RdCampaignRow) => (
     <span className="rg-namecell">
       <span className="rg-namew">
-        <span className="h10-nt-name rg-name" title={r.campaignName}>{r.campaignName}</span>
+        <span className="h10-nt-name rg-name rd-campname" title={r.campaignName}>{r.campaignName}</span>
         {/* Resolves to the PARENT schedule. No groupId → no link, rather than a link to nothing. */}
         {r.groupId && (
           <a className="h10-nt-open" href={builderHref(r.groupId)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>

@@ -87,7 +87,7 @@ const SIGNAL_TONE: Record<RdSignal['kind'], string> = {
  */
 export function SignalCell({ signal }: { signal: RdSignal | null }) {
   if (!signal) return <span className="rd-none">—</span>
-  return <span className={`rd-sig ${SIGNAL_TONE[signal.kind]}`} title={signal.label}>{signal.label}</span>
+  return <span className={`rd-sig ${SIGNAL_TONE[signal.kind]}`} title={signal.detail || signal.label}>{signal.label}</span>
 }
 
 /** The CPC ceiling. Bold only when it is actually deciding, so a harmless cap stays quiet. */

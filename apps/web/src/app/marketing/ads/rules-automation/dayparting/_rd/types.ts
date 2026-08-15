@@ -126,7 +126,10 @@ export interface RdSignal {
   valuePct: number | null
   ageDays: number | null
   rows: number | null
+  /** Short enough to be a column. */
   label: string
+  /** The sentence, for the tooltip. */
+  detail?: string
 }
 
 export interface RdCampaignRuntime {

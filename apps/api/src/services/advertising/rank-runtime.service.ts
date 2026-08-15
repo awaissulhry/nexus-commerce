@@ -33,7 +33,10 @@ export interface RdSignal {
   ageDays: number | null
   /** Rows behind the number, for P4's volume guard. Null where the lane has no row concept. */
   rows: number | null
+  /** Short enough to be a column. */
   label: string
+  /** The sentence, for the tooltip. */
+  detail: string
 }
 
 export interface RdCampaignRow extends RdCampaignRuntime {
@@ -206,22 +209,23 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
   async function signalFor(runtime: RdCampaignRuntime, marketplace: string | null): Promise<RdSignal> {
     const lane = runtime.placement
     if (!lane || !runtime.activeTargetKey) {
-      return { kind: 'not-applicable', lane: null, valuePct: null, ageDays: null, rows: null, label: '—' }
+      return { kind: 'not-applicable', lane: null, valuePct: null, ageDays: null, rows: null, label: '—', detail: 'Nothing is held at this hour, so no lane is being driven.' }
     }
     if (lane === 'PLACEMENT_PRODUCT_PAGE') {
-      return { kind: 'none-by-design', lane, valuePct: null, ageDays: null, rows: null, label: 'Open loop by design — Amazon exposes no product-page impression share' }
+      return { kind: 'none-by-design', lane, valuePct: null, ageDays: null, rows: null, label: 'open loop', detail: 'Open loop by design — Amazon exposes no product-page impression share, so this lane cannot be closed.' }
     }
     if (lane === 'PLACEMENT_TOP') {
       const v = marketplace ? topIsByCampaign.get(runtime.campaignId) ?? null : null
       const age = marketplace ? topAgeByMarket.get(marketplace) ?? null : null
-      if (v == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, label: 'no signal' }
-      return { kind: 'top-is', lane, valuePct: Math.round(v * 1000) / 10, ageDays: age, rows: null, label: `Top-IS ${Math.round(v * 1000) / 10}%${age != null ? ` · ${age}d` : ''}` }
+      if (v == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, label: 'no signal', detail: 'This campaign has a Top-of-Search lane but no impression-share measurement in the reporting window.' }
+      const pct = Math.round(v * 1000) / 10
+      return { kind: 'top-is', lane, valuePct: pct, ageDays: age, rows: null, label: `Top-IS ${pct}%${age != null ? ` · ${age}d` : ''}`, detail: `Top-of-Search impression share ${pct}%${age != null ? `, newest report ${age} day${age === 1 ? '' : 's'} old` : ''}.` }
     }
     // Rest of search — SQP, which is the lane with the onboarding problem.
     const asins = asinsByCampaign.get(runtime.campaignId) ?? []
     const covered = asins.some((a) => everCovered.has(a))
     if (!covered) {
-      return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, label: 'no coverage — these ASINs have never appeared in Brand Analytics' }
+      return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, label: 'no coverage', detail: 'These ASINs have never appeared in Brand Analytics at all. That is an onboarding problem, not a stale feed — a recency guard would not fix it.' }
     }
     if (marketplace && !sqpAgeByMarket.has(marketplace)) {
       const newest = await prisma.searchQueryPerformance.findFirst({ where: { marketplace }, orderBy: { startDate: 'desc' }, select: { startDate: true } })
@@ -229,8 +233,9 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     }
     const share = marketplace ? await sqpImpressionShareForAsins(marketplace, asins) : null
     const age = marketplace ? sqpAgeByMarket.get(marketplace) ?? null : null
-    if (share == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, label: 'no signal' }
-    return { kind: 'sqp', lane, valuePct: Math.round(share * 1000) / 10, ageDays: age, rows: null, label: `SQP ${Math.round(share * 1000) / 10}%${age != null ? ` · ${age}d` : ''}` }
+    if (share == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, label: 'no signal', detail: 'These ASINs have SQP history but the latest week returned no usable impression share.' }
+    const sp = Math.round(share * 1000) / 10
+    return { kind: 'sqp', lane, valuePct: sp, ageDays: age, rows: null, label: `SQP ${sp}%${age != null ? ` · ${age}d` : ''}`, detail: `Brand impression share ${sp}% from the latest weekly SQP report${age != null ? `, ${age} days old` : ''}. Volume is P4's guard, not this column's.` }
   }
 
   const campaignRows: RdCampaignRow[] = []
