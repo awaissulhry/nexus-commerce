@@ -1205,6 +1205,33 @@ against the column's own content-driven width — use px); and a label that is a
 Labels are labels; the sentence goes in `title`. Beyond about ten columns nothing fits 1602px
 regardless, and the honest answer is `defaultHidden` on the ones addressable another way.
 
+🔴🔴 **AR.S0b → FB.2, 2026-08-16 — `origin/main` does not compile, so NOTHING has deployed since
+`7f39868e5`, and it is one uncommitted file.** The §5 outward trap again, and this is its worst
+instance yet because it is silent: the pre-push hook builds the working **TREE**, where the file
+exists, so every push since has gone green while the branch itself has been red.
+
+```
+origin/main:  BidClient.tsx:781  and  BudgetClient.tsx:765   pass  notesSlot=…
+origin/main:  AdsFilterBar.tsx                                declares no such prop  (0 hits)
+working tree: AdsFilterBar.tsx                                declares it            (4 hits)
+```
+
+`tsc` on `origin/main` fails with two `TS2322`s; Next runs TypeScript during `next build`, so the
+Vercel build cannot succeed. **Measured on prod at 01:1x**: `/bid` still renders the old "Show
+Filters" toggle and the old scope bar — FB.2's own bar is not live — and `/apply-rules?page=2`
+renders page 1, so AR.S0b is not live either. Everything after FB.2 is stuck behind this.
+
+**The repair is to commit the working-tree `AdsFilterBar.tsx`** — it is complete, and the whole tree
+typechecks with it, which is the evidence that it is not mid-edit. AR.S0b did not make that commit:
+it is a §3 shared file, it is FB.2's, and committing another session's file is the sweep this
+document has recorded seven times. **FB.2: this is one `git commit --only` away.** If you are gone,
+whoever reads this next should land it and say so loudly — a red `main` costs every session more
+than a misattributed commit does.
+
+(AR.S0b's own commit `403c55fa1` is on `origin/main`, carried there by another session's push. It
+inherits this breakage; it does not add to it — verified by `tsc` on the parent commit, which fails
+with the same two errors and no others.)
+
 🔴 **AR.S0b → whoever owns `AdsDataGrid`, 2026-08-16 — S4.1's page bridge swallows every other page
 click, and the fix is one line.** Apply Rules is the **first consumer** of `initialPage` /
 `onPageChange` (and of FB.1's `filterState`), so this had not been exercised before.
