@@ -169,6 +169,11 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/web/src/design-system/components/index.ts` | BSP.1 (one additive export: `BurnDownChart`) | 2026-08-12 | **released** — one line; the DS is shared app-wide but is not on §3's list, so this row exists rather than an unclaimed edit |
 | `apps/web/src/design-system/styles/components.css` | BSP.1 (`h10-ds-burn-*` at EOF) | 2026-08-12 | **released** — EOF-append only, new prefix, no existing selector touched |
 
+| `apps/api/src/services/advertising/ads-write-gate.ts` | AUTO.P0 (guard ④ — the daily budget MOVEMENT bound: one new `GateDeniedAt`, one new denial fn, one call site beside BUD.2's budget bounds) | 2026-08-16 | **claimed** — additive only. CAP §6.5 and BUD.2 both name this as the remaining gap: a cap bounds a ratchet's *rate*, `minBudgetCents` bounds its *destination* but is set on **0 of 220** campaigns, and neither bounds *cumulative daily movement*. Binds at the gate so it holds for the pacer and a rule nobody has written yet |
+| `apps/api/src/services/automation-rule.service.ts` | AUTO.P0 (record a cap refusal durably — 2 call sites: the `maxExecutionsPerDay` refusal and the `maxWritesPerDay` demotion) | 2026-08-16 | **claimed** — CAP released it after `6ce492420`; I add only the refusal-record write, and touch neither predicate |
+| `packages/database/prisma/schema.prisma` | AUTO.P0 (`AutomationRefusalDaily`, additive — one new model, nothing altered) | 2026-08-16 | **claimed** — disjoint from A7's `AdWriteRefusal` and BUD.2's three `Campaign` columns |
+| `apps/api/src/routes/advertising-intel.routes.ts` | AUTO.P0 (the cap family on the **EXISTING** `GET /advertising/write-refusals` — no new route) | 2026-08-16 | **claimed** — 🔴 `grep -a` first: `write-refusals` has exactly ONE registration (`:2590`, A7's). Extending it rather than adding `/advertising/cap-refusals` is deliberate — two routes returning the same counts drift, and a duplicate registration is a boot crash |
+
 | `…/rules-automation/dayparting/*` | RD.P0 (Rank & Dayparting foundation) | 2026-08-12 | **released** — landed `a993fe6bb` (data layer + scope) · `2381486b0` (URL) · `b1bfe40b2` (slots + stylesheet) |
 | `…/rules-automation/tabs/RankGoalsList.tsx` | RD.P0 (the grid moves onto the page's own data layer) | 2026-08-12 | **released** — landed `a993fe6bb` + `2381486b0`. Still exactly one importer; it now reads `dayparting/_rd/*`, so it is this page's file in everything but its path |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P0 (§2 rows + two §4 hand-offs) | 2026-08-12 | **released** — `a9ec018d2` + this commit |
@@ -215,6 +220,10 @@ at all.
 | `apps/api/src/routes/advertising-intel.routes.ts` | RD.P2 (`GET /advertising/rank-runtime`, additive) | 2026-08-12 | **released** — landed `1ddda88e2`, prod-verified with the 401-vs-404 trick (`401 {"required":"ads.view"}`, control path 404) **before** the web commit that reads it. Staged as ONE hunk against HEAD, not `commit --only`: NEG.3's `/advertising/negatives/retire` was uncommitted in the same file |
 | `apps/api/src/jobs/ad-rank-defend.job.ts` | RD.P2 (**export the existing `toSpec` — one keyword, no behaviour**) | 2026-08-12 | **released** — landed `fd62f057e`. One keyword; no row edited, no ceiling raised, no schedule armed |
 | `docs/2026-08-10-ra-session-locks.md` | RD.P2 (§2 rows + §4 note) | 2026-08-12 | **released** |
+| `apps/api/src/routes/advertising.routes.ts` | BSP.2·binding (`GET /advertising/budget-binding`, additive) | 2026-08-16 | **claimed** — `grep -a`ed BOTH route files: `budget-binding` has **zero** hits, so it collides with nothing; registered beside the other budget-manager routes (`:7553-7590`) |
+| `apps/api/src/routes/advertising-intel.routes.ts` | BSP.2·binding (`action-log` honours the `campaignId` it already destructures — **no route registered**) | 2026-08-16 | **claimed** — one additive line in an existing handler; see §4 |
+| `…/rules-automation/rules-automation.css` | BSP.2·binding (`h10-bsp-*` at EOF) | 2026-08-16 | **claimed** — EOF-append only, no `.dark` block (§8.16); will `git diff` every hunk before committing (§5) |
+| `docs/2026-08-10-ra-session-locks.md` | BSP.2·binding (§2 rows + §4 note) | 2026-08-16 | **claimed** |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.1 (two sort keys on the EXISTING `share-of-voice-page` route) | 2026-08-12 | **released** — landed `2f620b8ef`, hunk-staged past a PLC.1 session's four uncommitted hunks |
 | `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — landed `858a21ae6`, 51 lines, staged as a rebuilt BLOB not a hunk; see §5's new trap |
 | `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lacked) | 2026-08-12 | **released** — landed `f4bc68eb7`. **All ten routed tabs are now covered**; `?tab=automations` and `?tab=dayparting` are fixed too — see §4 |
@@ -390,6 +399,27 @@ builder slugs and is not this session's to delete (see §4).
 | `apps/api/src/services/advertising/bid-grid.service.ts` | BID.S3 (P0: the `manual` bidder predicate) | 2026-08-16 | **released** — landed `4ba32e133`. Own file, no claim needed; listed because it CHANGES A SHIPPED NUMBER other sessions may have quoted: `manual` 12 → 6, `No bidder` 41 → **47** enabled campaigns |
 | `apps/api/src/routes/advertising-intel.routes.ts` | SOV.6 (`?period=` on the EXISTING share-of-voice route + saved-view CRUD) | 2026-08-16 | **claimed** — hunk-staged, not file-staged |
 | `…/rules-automation/rules-automation.css` | SOV.6 (`h10-sov-*` at EOF) | 2026-08-16 | **claimed** — EOF-append; staged as a REBUILT BLOB from the CURRENT parent, not a hunk (SOV.1 §5 trap) |
+
+### HV.10 — the market control, 2026-08-16
+
+| file / area | session | since | state |
+|---|---|---|---|
+| `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | HV.10 (`allowAllMarkets?`, defaulted TRUE — today's behaviour for all ~12 consumers; plus `marketValues?`/`onMarketValuesChange?` pass-through) | 2026-08-16 | **claimed** |
+| `apps/web/src/app/marketing/ads/_shell/MarketSelect.tsx` | HV.10 (optional multi-select: `values?`/`onValuesChange?`. Absent ⇒ byte-identical single-select) | 2026-08-16 | **claimed** |
+| `apps/api/src/services/advertising/keyword-harvest.service.ts` + its route | HV.10 (`market` accepts a comma list beside `all` and a single code) | 2026-08-16 | **claimed** — page-owned service |
+| `apps/api/src/services/advertising/ads-write-gate.ts` | AUTO.P0 (guard ④ — the daily budget MOVEMENT bound: one new `GateDeniedAt`, one denial fn, one call site beside BUD.2's budget bounds) | 2026-08-16 | **released** — landed `e121dc627`, additive only |
+| `apps/api/src/services/advertising/ads-write-gate-bounds.vitest.test.ts` | AUTO.P0 (one mock field + three A7 assertions retargeted) | 2026-08-16 | **released** — landed `e121dc627`. The three cases asserted the WHOLE gate allowed a write; guard ④ correctly refuses both fixtures (€5→€20 is +300%, €5→€1 is the ratchet cut), so they now assert their actual intent — that a *spend ceiling* did not refuse it |
+| `apps/api/src/services/automation-rule.service.ts` | AUTO.P0 (record a refusal durably — 3 call sites: `maxExecutionsPerDay`, `maxWritesPerDay`, `maxValueCentsEur`) | 2026-08-16 | **released** — landed `0f916ce56`. CAP's predicate untouched; I add only the record write |
+| `packages/database/prisma/schema.prisma` | AUTO.P0 (`AutomationRefusalDaily`, additive — one new model) | 2026-08-16 | **released** — landed `0f916ce56` + migration `20260816a`, applied to prod on the direct host |
+| `apps/api/src/routes/advertising-intel.routes.ts` | AUTO.P0 (the `automation` block on the **EXISTING** `GET /advertising/write-refusals` — no new route) | 2026-08-16 | **released** — 🔴 shipped inside PLC.3's `2373e5bb4`, not in an AUTO.P0 commit and unnamed there; see §4 |
+
+🔴 **Additive by construction.** `MarketSelect` keeps `value: string` / `onChange` exactly as its
+consumers use them; multi-select engages only when `values` is passed. `allowAllMarkets` defaults to
+`true`, which is what `AdsPageHeader:159` hardcoded, so no existing page changes. Keyword Tracker is
+the one page that should set it FALSE — its route returns 400 for `all` — but that is **its** change
+to make, not this session's.
+
+---
 
 ## 3 · Shared files — claim before editing
 
@@ -1267,6 +1297,21 @@ filters already live in the URL should prefer it (it deletes the merging seed an
 suppression outright). And the `__` prefix on a filter key is now **load-bearing**, not decoration:
 `isServerKey` treats it as page-owned, so a saved preset preserves it instead of clobbering it.
 
+**AUTO.P0 → AR.S0b, 2026-08-16 01:15 UTC.** My push of `e121dc627` (engine-only: `ads-write-gate.ts`
++ two test files) is held by the web build, on a file I do not touch:
+
+```
+./src/app/marketing/ads/rules-automation/apply-rules/ApplyRulesClient.tsx:694:24
+Type error: 'setFilterState' is declared but its value is never read.
+```
+
+Recorded only so the next session to hit a red push knows whose it is — the same shape as NEG.1 →
+KT.1b above, and the fourth time this document has recorded it. `useMergedFilters` returns a setter
+that line 694 destructures and never uses; under `noUnusedLocals` that fails the build for everyone.
+Prefix it `_setFilterState` or drop it from the destructure. **No action needed from me** — I will
+retry rather than touch an unclaimed file, and my commit compiles on its own (engine-only, three
+files, no web surface).
+
 **BUD.8 → tab 4 (BSP), 2026-08-16 — `AdSpendCeiling` shipped with 0 rows, and the recovery of the 58
 is yours, not tab 6's.** Two hand-offs, both measured:
 
@@ -1292,6 +1337,30 @@ Amazon by a permanent repeat-write loop. Moving the bounds check to before `pris
 turns the floor into a real brake and removes the loop. Until then, setting `minBudgetCents` on the
 56 IT campaigns would manufacture 56 more MOSS loops, so BUD.8 left it unset with the derivation
 ready (record §2).
+
+**🔴 AUTO.P0's route extension shipped inside PLC.3's `2373e5bb4`, not in an AUTO.P0 commit — and
+unnamed there.** The §5 trap in the direction this document has now recorded seven times. I held
+`advertising-intel.routes.ts` for four hunks (the `automation` block on the EXISTING
+`GET /advertising/write-refusals`) and deliberately left the file OUT of my own commit because PLC.3
+held four others in it; PLC.3 then committed the file whole. Nothing is broken and `main` is
+correct — recorded because PLC.3's title, *"the refusal that can finally be read"*, refers to its own
+`GateDecision.reason` plumbing and reads exactly like it covers mine, which is the sort of
+coincidence that makes a later `git log` lie.
+
+**The generalisable bit, for whoever writes the next brief.** `git commit --only <path>` takes the
+WHOLE file from the working tree, so on a contended file it is **not** a partial commit and cannot
+be made into one. When your hunks are a minority in a shared file there are exactly two honest
+options: land the file and NAME the other blocks in your message (PLC.0's `341d08e31` did this), or
+leave the file out and land it later (AUTO.P0 did this — and lost the race anyway, which is the
+point: leaving it out is not safety, it is a bet on timing). There is no third option that keeps
+history clean.
+
+**⚠ And this document is itself a contended file.** AUTO.P0's §2 claims were written at 01:14 UTC
+and were gone by 01:35 — overwritten wholesale by another session's copy, with no conflict and no
+error. The rows above were re-added afterwards, as *released* rather than *claimed*, which is the
+only reason nothing was lost. **A claim here is not a lock; it is a courtesy that survives only if
+nobody else holds the file open.** For a claim that must survive, commit it immediately rather than
+carrying it in the working tree — the same rule this section already gives for code.
 
 ---
 
