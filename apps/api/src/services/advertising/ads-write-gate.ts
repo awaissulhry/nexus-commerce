@@ -278,19 +278,35 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // point of this phase is that the operator can see why something did not happen.
     // A denial leaves the bid where it was, which is the safe direction for both a
     // ceiling (refuse the raise) and a floor (refuse the cut).
+    //
+    // BID.S5 — the bounds resolve at FOUR grains now, most specific first PER SIDE:
+    // the Campaign column ?? LINE ?? PORTFOLIO ?? MARKET (`AdBidPolicy`). The campaign
+    // column stays the strongest word, so every pre-existing row behaves exactly as
+    // before; the policy walk runs only when a side is null on the campaign AND any
+    // policy rows exist. The refusal names its source — a bound whose origin is a
+    // mystery is a bound the operator clears in the wrong place.
     if (ctx.field && BID_FIELDS.has(ctx.field) && Number.isFinite(ctx.intendedValueCents ?? NaN)) {
       const v = ctx.intendedValueCents as number
-      if (campaign.maxBidCents != null && v > campaign.maxBidCents) {
+      let effMax: { cents: number; source: string } | null =
+        campaign.maxBidCents != null ? { cents: campaign.maxBidCents, source: `Campaign.maxBidCents on ${ctx.campaignId}` } : null
+      let effMin: { cents: number; source: string } | null =
+        campaign.minBidCents != null ? { cents: campaign.minBidCents, source: `Campaign.minBidCents on ${ctx.campaignId}` } : null
+      if (effMax == null || effMin == null) {
+        const policy = await resolveBidPolicy(ctx.campaignId, campaign.portfolioId, campaign.marketplace)
+        if (effMax == null && policy.max) effMax = { cents: policy.max.cents, source: policy.max.label }
+        if (effMin == null && policy.min) effMin = { cents: policy.min.cents, source: policy.min.label }
+      }
+      if (effMax != null && v > effMax.cents) {
         return {
           allowed: false,
-          reason: `bid ${v}¢ exceeds Campaign.maxBidCents=${campaign.maxBidCents}¢ on ${ctx.campaignId}`,
+          reason: `bid ${v}¢ exceeds the ${effMax.cents}¢ ceiling (${effMax.source})`,
           deniedAt: 'entity_bounds',
         }
       }
-      if (campaign.minBidCents != null && v < campaign.minBidCents && !ctx.isSuppression) {
+      if (effMin != null && v < effMin.cents && !ctx.isSuppression) {
         return {
           allowed: false,
-          reason: `bid ${v}¢ is below Campaign.minBidCents=${campaign.minBidCents}¢ on ${ctx.campaignId}`,
+          reason: `bid ${v}¢ is below the ${effMin.cents}¢ floor (${effMin.source})`,
           deniedAt: 'entity_bounds',
         }
       }
@@ -408,6 +424,49 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   }
 
   return { allowed: true, mode: 'live', profileId: conn.profileId }
+}
+
+/**
+ * BID.S5 — resolve the policy half of the bid bounds, most specific first per side:
+ * LINE ?? PORTFOLIO ?? MARKET. Cheapest-first like the spend ceilings: one indexed read for the
+ * candidate rows; the LINE parents are resolved only if any LINE rows matched at all. Each side
+ * resolves independently — a line ceiling and a market floor compose.
+ */
+async function resolveBidPolicy(
+  campaignId: string,
+  portfolioId: string | null,
+  marketplace: string | null,
+): Promise<{ min: { cents: number; label: string } | null; max: { cents: number; label: string } | null }> {
+  const rows = await prisma.adBidPolicy.findMany({
+    where: {
+      enabled: true,
+      OR: [
+        ...(portfolioId ? [{ grain: 'PORTFOLIO', scopeId: portfolioId }] : []),
+        ...(marketplace ? [{ grain: 'MARKET', scopeId: marketplace }] : []),
+        { grain: 'LINE' },
+      ],
+    },
+    select: { grain: true, scopeId: true, label: true, minBidCents: true, maxBidCents: true },
+  })
+  if (rows.length === 0) return { min: null, max: null }
+  let candidates = rows
+  const lineRows = rows.filter((r) => r.grain === 'LINE')
+  if (lineRows.length > 0) {
+    const ads = await prisma.adProductAd.findMany({
+      where: { adGroup: { campaignId } },
+      select: { product: { select: { parentId: true } } },
+    })
+    const parents = new Set(ads.map((a) => a.product?.parentId).filter((x): x is string => !!x))
+    candidates = rows.filter((r) => r.grain !== 'LINE' || parents.has(r.scopeId))
+  }
+  const ORDER: Record<string, number> = { LINE: 0, PORTFOLIO: 1, MARKET: 2 }
+  candidates.sort((a, b) => (ORDER[a.grain] ?? 9) - (ORDER[b.grain] ?? 9))
+  const min = candidates.find((r) => r.minBidCents != null)
+  const max = candidates.find((r) => r.maxBidCents != null)
+  return {
+    min: min ? { cents: min.minBidCents as number, label: min.label } : null,
+    max: max ? { cents: max.maxBidCents as number, label: max.label } : null,
+  }
 }
 
 /**

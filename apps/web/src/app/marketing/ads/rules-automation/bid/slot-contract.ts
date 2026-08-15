@@ -62,6 +62,8 @@ export interface BidSlotProps {
   }
   /** the poll cursor and whether the server has moved since this payload was read */
   refresh: { stale: boolean; lastCheckedAt: string | null; cursor: BidCursor | null }
+  /** S5 (additive) — the scope-options payload, for the bounds panel's grain pickers. */
+  options: import('./BidScopeBar').ScopeOptionsPayload | null
 }
 
 /**

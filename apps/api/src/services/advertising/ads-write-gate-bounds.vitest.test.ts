@@ -17,6 +17,7 @@ const connFindFirst = vi.fn()
 const protectionFindMany = vi.fn(async () => [] as unknown[])
 // AUTO.A7 — the ceiling check's reads. Empty by default so every pre-existing case is untouched.
 const ceilingFindMany = vi.fn(async () => [] as unknown[])
+const bidPolicyFindMany = vi.fn(async () => [] as unknown[])
 const actionLogFindMany = vi.fn(async () => [] as unknown[])
 const productAdFindMany = vi.fn(async () => [] as unknown[])
 const refusalCreate = vi.fn(async () => ({}))
@@ -27,6 +28,7 @@ vi.mock('../../db.js', () => ({
     amazonAdsConnection: { get findFirst() { return connFindFirst } },
     adKeywordProtection: { get findMany() { return protectionFindMany } },
     adSpendCeiling: { get findMany() { return ceilingFindMany } },
+    adBidPolicy: { get findMany() { return bidPolicyFindMany } },
     advertisingActionLog: { get findMany() { return actionLogFindMany } },
     adProductAd: { get findMany() { return productAdFindMany } },
     adWriteRefusal: { get create() { return refusalCreate } },
@@ -65,6 +67,7 @@ beforeEach(() => {
   connFindFirst.mockReset()
   protectionFindMany.mockReset()
   ceilingFindMany.mockReset()
+  bidPolicyFindMany.mockReset()
   actionLogFindMany.mockReset()
   productAdFindMany.mockReset()
   connFindFirst.mockResolvedValue(LIVE_CONN)
@@ -73,6 +76,7 @@ beforeEach(() => {
   campaignFindMany.mockResolvedValue([])
   protectionFindMany.mockResolvedValue([])
   ceilingFindMany.mockResolvedValue([])
+  bidPolicyFindMany.mockResolvedValue([])
   actionLogFindMany.mockResolvedValue([])
   productAdFindMany.mockResolvedValue([])
 })
@@ -476,6 +480,50 @@ describe('AUTO.A7 — per-scope spend ceilings', () => {
   it('under every ceiling ⇒ allowed', async () => {
     ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 10_000 }])
     const r = await checkAdsWriteGate(budgetWrite) // +€15 vs €100/day
+    expect(r.allowed).toBe(true)
+  })
+})
+
+// BID.S5 — bid bounds resolve at four grains, most specific first PER SIDE.
+describe('BID.S5 — four-grain bid bounds', () => {
+  it('a MARKET ceiling binds when the campaign column is null', async () => {
+    bidPolicyFindMany.mockResolvedValue([{ grain: 'MARKET', scopeId: 'IT', label: "the IT market's €0.80 ceiling", minBidCents: null, maxBidCents: 80 }])
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 90 })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) expect(r.reason).toContain("the IT market's €0.80 ceiling")
+  })
+
+  it('the campaign column WINS over any policy — pre-existing rows unchanged', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 200 })
+    bidPolicyFindMany.mockResolvedValue([{ grain: 'MARKET', scopeId: 'IT', label: 'market ceiling', minBidCents: null, maxBidCents: 80 }])
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+    expect(r.allowed).toBe(true) // 150 < campaign 200; the market 80 does not apply
+  })
+
+  it('sides resolve independently — a market floor composes with a line ceiling', async () => {
+    bidPolicyFindMany.mockResolvedValue([
+      { grain: 'MARKET', scopeId: 'IT', label: 'the IT floor', minBidCents: 10, maxBidCents: null },
+      { grain: 'LINE', scopeId: 'parent-1', label: "the GALE line's ceiling", minBidCents: null, maxBidCents: 60 },
+    ])
+    productAdFindMany.mockResolvedValue([{ product: { parentId: 'parent-1' } }])
+    const under = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 5 })
+    expect(under.allowed).toBe(false)
+    if (under.allowed === false) expect(under.reason).toContain('the IT floor')
+    const over = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 70 })
+    expect(over.allowed).toBe(false)
+    if (over.allowed === false) expect(over.reason).toContain("the GALE line's ceiling")
+  })
+
+  it('a LINE row for a line this campaign does not advertise says nothing', async () => {
+    bidPolicyFindMany.mockResolvedValue([{ grain: 'LINE', scopeId: 'other-parent', label: 'other line', minBidCents: null, maxBidCents: 10 }])
+    productAdFindMany.mockResolvedValue([{ product: { parentId: 'parent-1' } }])
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 500 })
+    expect(r.allowed).toBe(true)
+  })
+
+  it('suppression stays exempt from a POLICY floor too', async () => {
+    bidPolicyFindMany.mockResolvedValue([{ grain: 'MARKET', scopeId: 'IT', label: 'the IT floor', minBidCents: 10, maxBidCents: null }])
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, isSuppression: true })
     expect(r.allowed).toBe(true)
   })
 })

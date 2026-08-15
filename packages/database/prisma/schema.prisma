@@ -16326,6 +16326,35 @@ model AdSpendCeiling {
   @@index([enabled])
 }
 
+/// BID.S5 — bid bounds at the three broad grains. The CAMPAIGN grain is not here: it is the
+/// existing `Campaign.minBidCents`/`maxBidCents` columns, which stay the most specific word and
+/// override anything below. Precedence at the gate: campaign column ?? LINE ?? PORTFOLIO ??
+/// MARKET (most specific wins per side, min and max resolved independently). NULL on a side =
+/// that row says nothing about it; an enabled row with both sides null resolves to nothing and
+/// never blocks resolution walking outward.
+model AdBidPolicy {
+  id String @id @default(cuid())
+
+  /// LINE | PORTFOLIO | MARKET (campaign grain = the Campaign columns).
+  grain String
+  /// Product.id (a parent) for LINE · Campaign.portfolioId for PORTFOLIO · 'IT' for MARKET.
+  scopeId String
+  /// What to call it in a refusal: "the GALE line's €0.80 ceiling".
+  label String
+
+  minBidCents Int?
+  maxBidCents Int?
+  enabled     Boolean @default(true)
+
+  note      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([grain, scopeId])
+  @@index([enabled])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

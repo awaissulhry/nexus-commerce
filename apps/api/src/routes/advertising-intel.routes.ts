@@ -2264,6 +2264,47 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * BID.S5 — bid-bounds policies at MARKET/PORTFOLIO/LINE grain (the campaign grain is the
+   * Campaign columns, edited via the guardrails PATCH). Same CRUD shape as the spend ceilings.
+   */
+  fastify.get('/advertising/bid-policies', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const rows = await prisma.adBidPolicy.findMany({ orderBy: [{ grain: 'asc' }, { label: 'asc' }] })
+    return { policies: rows }
+  })
+
+  fastify.put('/advertising/bid-policies', async (request, reply) => {
+    const b = request.body as { grain?: string; scopeId?: string; label?: string; minBidCents?: number | null; maxBidCents?: number | null; enabled?: boolean; note?: string | null }
+    const GRAINS = new Set(['LINE', 'PORTFOLIO', 'MARKET'])
+    if (!b?.grain || !GRAINS.has(b.grain) || !b.scopeId || !b.label?.trim()) {
+      reply.code(400)
+      return { error: 'grain (LINE|PORTFOLIO|MARKET) + scopeId + label required — the CAMPAIGN grain is the Campaign columns, set via the guardrails PATCH' }
+    }
+    for (const [name, v] of [['minBidCents', b.minBidCents], ['maxBidCents', b.maxBidCents]] as const) {
+      if (v != null && (!Number.isFinite(v) || v < 2)) { reply.code(400); return { error: `${name} must be ≥ 2 cents or null` } }
+    }
+    if (b.minBidCents != null && b.maxBidCents != null && b.minBidCents > b.maxBidCents) {
+      reply.code(400)
+      return { error: `minBidCents (${b.minBidCents}¢) is above maxBidCents (${b.maxBidCents}¢)` }
+    }
+    const row = await prisma.adBidPolicy.upsert({
+      where: { grain_scopeId: { grain: b.grain, scopeId: b.scopeId } },
+      create: { grain: b.grain, scopeId: b.scopeId, label: b.label.trim(), minBidCents: b.minBidCents ?? null, maxBidCents: b.maxBidCents ?? null, enabled: b.enabled ?? true, note: b.note ?? null, createdBy: 'operator' },
+      update: { label: b.label.trim(), minBidCents: b.minBidCents ?? null, maxBidCents: b.maxBidCents ?? null, ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.note !== undefined ? { note: b.note } : {}) },
+    })
+    return { policy: row }
+  })
+
+  fastify.delete('/advertising/bid-policies', async (request, reply) => {
+    const q = request.query as { grain?: string; scopeId?: string }
+    if (!q.grain || !q.scopeId) { reply.code(400); return { error: 'grain + scopeId required' } }
+    const existing = await prisma.adBidPolicy.findUnique({ where: { grain_scopeId: { grain: q.grain, scopeId: q.scopeId } } })
+    if (!existing) { reply.code(404); return { error: 'not_found' } }
+    await prisma.adBidPolicy.delete({ where: { id: existing.id } })
+    return { ok: true }
+  })
+
+  /**
    * AUTO.A7 / substrate S5 — the gate's refusal record, countable at last. The table starts
    * 2026-08-15 (the payload says so): earlier refusals exist only in the application log, and a
    * surface must never read this zero as "the gate refused nothing before then".

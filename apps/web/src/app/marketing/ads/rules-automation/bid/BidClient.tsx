@@ -243,6 +243,7 @@ export function BidClient() {
     reload: () => setReloadTick((n) => n + 1),
     reserved,
     refresh: { stale: refresh.stale, lastCheckedAt: refresh.lastCheckedAt, cursor: data?.cursor ?? null },
+    options,
   }
 
   const onSortChange = useCallback((s: { key: string; dir: 'asc' | 'desc' } | null) => {

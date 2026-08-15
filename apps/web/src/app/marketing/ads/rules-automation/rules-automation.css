@@ -4640,3 +4640,8 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-bd1-none { appearance: none; font: inherit; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 7px; padding: 3px 9px; }
 .h10-bd1-none:hover { border-color: #f6c344; }
 .h10-bd1-none b { font-variant-numeric: tabular-nums; }
+
+/* BID.S5 — the bounds panel */
+.h10-bd5 { background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
+.h10-bd5 h3 { margin: 0 0 6px; font-size: 13.5px; color: #1c2530; display: flex; align-items: center; gap: 6px; }
+.h10-bd5-sub { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: #4b5563; max-width: 860px; }
