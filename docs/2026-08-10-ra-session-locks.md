@@ -1434,6 +1434,45 @@ carrying it in the working tree — the same rule this section already gives for
 
 ## 5 · Traps this repo has already paid for
 
+### 🔴 The `commit --only` trap has a SECOND form, and it shipped a red tip to prod (RA.SPINE S4b, 2026-08-16)
+
+Every previous entry in this document is about the trap in its *staging* form: a `git commit --only`
+sweeping up someone else's uncommitted lines. This is the same root cause pointing the other way,
+and it is worse, because nothing local catches it.
+
+**What happened.** RA.SPINE S4b pushed one CSS-only commit. The push carried four *other* sessions'
+already-committed work that had not been pushed yet. The pre-push hook built the **working tree**
+and passed. Vercel then built the **commit tip** and failed:
+
+```
+Type error: '{ … notesSlot: Element; }' is not assignable to
+            '{ … presetsSlot?: ReactNode; }'
+```
+
+That is FB.1's `notesSlot` → `presetsSlot` rename. FB.1 had **committed the caller and left the fix
+uncommitted in the tree**. So the tree compiled, every local gate passed, and the commit did not.
+Two production deploys errored (`qnyy3i65y`, `im1n8wo6t`) before a later commit repaired it ~9
+minutes later.
+
+**Why the existing rule does not cover it.** "Confirm your commit compiles in isolation" is written
+for *your* commit. Here the broken commit was someone else's, already in local history, and pushing
+at all published it. You cannot fix that by inspecting your own diff — RA.SPINE's diff was 30 lines
+of CSS and was clean.
+
+**What to actually do:**
+
+- **Before pushing, look at what you are about to publish, not just at what you wrote:**
+  `git log --oneline origin/main..main`. If it lists commits that are not yours, you are the one
+  publishing them.
+- **A green pre-push is evidence about the TREE.** The only evidence about the tip is a build of the
+  tip. `npx vercel ls` a few minutes after pushing is the cheap version, and it is the difference
+  between finding this in 2 minutes and finding it in 20.
+- **If you commit a rename, commit both halves together.** FB.1's caller and its fix belonged in one
+  commit; split across a commit boundary, the boundary is a build break by construction.
+
+⚠ This does not change the standing rules — `commit --only`, explicit paths, no `-a`, no `-A`, no
+`--no-verify`. It adds one: **check `origin/main..main` before you push.**
+
 - 🔴 **`AdsDataGrid.selectable` defaults to TRUE.** A grid mounted without the prop renders a
   checkbox on every row and a select-all in the header. On a read-only panel that is a control
   leading nowhere — measured 2026-08-13 on HV.6, nine rows of them. Pass `selectable={false}`
