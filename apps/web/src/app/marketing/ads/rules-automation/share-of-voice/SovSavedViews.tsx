@@ -42,9 +42,24 @@ export function SovSavedViews({ currentQs, onApply }: { currentQs: string; onApp
   const load = useCallback(async () => {
     try {
       const r = await fetch(`${getBackendUrl()}/api/saved-views?surface=${SOV_SURFACE}`, { cache: 'no-store' })
+      if (!r.ok) throw new Error(`could not load saved views (${r.status})`)
       const j = await r.json()
-      setViews(Array.isArray(j?.views) ? j.views : Array.isArray(j) ? j : [])
-    } catch { setViews([]) }
+      // 🔴 The list comes back as `{ items: [...] }`. Measured against the deployed route, not
+      // assumed: this component first read `j.views`, so it would have listed NOTHING no matter how
+      // many views existed — and the `catch` below turned that into "No saved views yet", which is
+      // the `.catch(() => [])` trap this programme has now paid for four times. `views` and a bare
+      // array are still accepted because two other surfaces call the same route and this file
+      // should not be the thing that breaks if one of them normalises it.
+      const items = Array.isArray(j?.items) ? j.items
+        : Array.isArray(j?.views) ? j.views
+          : Array.isArray(j) ? j : []
+      setViews(items)
+      setErr(null)
+    } catch (e) {
+      // An empty list and a failed read are different facts and must not share a rendering.
+      setViews([])
+      setErr((e as Error).message)
+    }
   }, [])
   useEffect(() => { if (open) void load() }, [open, load])
 
@@ -101,7 +116,8 @@ export function SovSavedViews({ currentQs, onApply }: { currentQs: string; onApp
           </p>
 
           {views == null ? <p className="h10-sov-savednote">Loading…</p>
-            : views.length === 0 ? <p className="h10-sov-savednote">No saved views yet.</p>
+            : views.length === 0 && !err ? <p className="h10-sov-savednote">No saved views yet.</p>
+              : views.length === 0 ? null
               : (
                 <ul className="h10-sov-savedlist">
                   {views.map((v) => {
