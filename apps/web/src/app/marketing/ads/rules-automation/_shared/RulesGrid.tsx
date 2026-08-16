@@ -156,8 +156,16 @@ function summariseRule(rule: Record<string, unknown>): string {
     const ifs = (g.conditions ?? []).map((c) => clause(c)).filter(Boolean).join(', ')
     const a = g.action
     if (!a?.op) return ifs || 'No conditions'
-    const pct = a.op === 'incPct' || a.op === 'decPct'
-    const then = a.op === 'set' ? `Set ${a.value ?? ''}` : `${ACTION_VERB[a.op] ?? a.op}${a.value ?? ''}${pct ? '%' : ''}`
+    // The THEN value's unit comes from the rule TYPE, not the operator: a placement rule sets a
+    // percentage where every other builder type sets money. "Set 0.30" (no unit) is the kind of
+    // number an operator has to guess at, so the unit is always printed.
+    const pctOp = a.op === 'incPct' || a.op === 'decPct'
+    const pctType = String(a0?.type ?? '') === 'placement'
+    const v = String(a.value ?? '')
+    const then = a.op === 'set'
+      ? (pctType ? `Set ${v}%` : `Set €${v}`)
+      : pctOp ? `${ACTION_VERB[a.op]}${v}%`
+      : `${ACTION_VERB[a.op] ?? a.op}${v}`
     return ifs ? `${ifs} → ${then}` : then
   }
 
@@ -329,6 +337,13 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     return (
       <span className="h10-nt-namew">
         <a className="h10-nt-name" href={href}>{r.name}</a>
+        {/* 🔴 `enabled` and the Automation mode are two different switches, and a row that shows
+            "Automate" while the rule is disabled reads as armed when it can do nothing. Measured on
+            prod 2026-08-16: a rule created in the builder is stored `enabled: false`, so it never
+            runs until it is enabled on Automations. The row says so rather than implying it acts. */}
+        {!r.enabled && (
+          <span className="h10-bd7-posture off" title="This rule is disabled — it is never evaluated, whatever its Automation mode says. Enable it on the Automations page.">off</span>
+        )}
         <span className="h10-nt-acts">
           <a className="h10-nt-open" href={href} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
           <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
