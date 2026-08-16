@@ -5061,3 +5061,20 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    on prod: the icon and the text rendered stacked inside a 36px button.
    Scoped to the toolbar so PLC.0's other uses of the class are untouched. */
 .h10-plc-tools .h10-plc-toggle { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ── U2 — the rules grid's name column must not spill into Criteria ─────────────────────────────
+   Measured on prod 2026-08-17, Placement: four rank rules carry the ASIN title in their name
+   ("Hold top rank ≥ 60% — XAVIA MOSS Giacca Moto con Cappuccio Removibile – …"), which rendered
+   1,227px wide inside a 360px cell — an 881px overflow, printed straight through the Criteria
+   column's text. The Bid tab never showed it because its names are short.
+
+   Same defect and same remedy as the schedules grid's `rg-namew` block above: the table is
+   `table-layout: auto`, so the cell's own max-width is ignored and the cap has to live on the
+   CONTENT. Scoped to `h10-rg-namew` (set only by `_shared/RulesGrid.tsx`) so the class it shares
+   with Budget Pacing's schedules section is untouched. Appended at the END of the sheet because
+   source order beats specificity here (reference_css_source_order_beats_specificity). */
+.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew { min-width: 0; max-width: 340px; }
+.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The chip and the hover actions keep their size; only the name gives way. */
+.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-bd7-posture,
+.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-acts { flex-shrink: 0; }

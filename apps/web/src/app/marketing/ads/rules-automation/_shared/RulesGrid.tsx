@@ -334,9 +334,14 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
 
   const renderFirst = (r: RuleRow): ReactNode => {
     const href = `${builderHref}?ruleId=${r.id}`
+    // `h10-rg-namew` scopes the truncation cap added at the end of rules-automation.css to THIS
+    // grid: the class it sits beside, `h10-nt-namew`, is also used by the Budget Pacing page's
+    // schedules section, and capping a neighbour's column is not this unit's business.
     return (
-      <span className="h10-nt-namew">
-        <a className="h10-nt-name" href={href}>{r.name}</a>
+      <span className="h10-nt-namew h10-rg-namew">
+        {/* title: the cap above truncates long names (rank rules carry the whole ASIN title), so
+            the full name has to stay readable without opening the rule. */}
+        <a className="h10-nt-name" href={href} title={r.name}>{r.name}</a>
         {/* 🔴 `enabled` and the Automation mode are two different switches, and a row that shows
             "Automate" while the rule is disabled reads as armed when it can do nothing. Measured on
             prod 2026-08-16: a rule created in the builder is stored `enabled: false`, so it never
