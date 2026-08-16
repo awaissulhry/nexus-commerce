@@ -1375,22 +1375,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    /rules-automation/keyword-tracker. The one reused family is `.h10-svt-seg` (the section's
    segmented control) and it is used, not restyled. */
 
-/* The scope bar. Product line · Portfolio · Campaign — market is NOT here; it stays in the page
-   header's existing picker, because two controls for one fact is what sank the reverted bar. */
-.h10-kt-scope { display: flex; flex-direction: column; gap: 7px; margin: 14px 0 0; padding: 11px 14px; border: 1px solid #e3e7ec; border-radius: 10px; background: #fff; }
-.h10-kt-scoperow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
-.h10-kt-lbl { flex: 0 0 auto; align-self: center; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
-.h10-kt-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.h10-kt-field .cap { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: #667080; }
-.h10-kt-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11.5px; font-weight: 600; color: #55606d; background: #f1f4f8; border: 0; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
-.h10-kt-clear:hover { color: #1c2530; background: #e7ebf1; }
-
 /* The one sentence that states what resolved, and how old the numbers under it are. */
 .h10-kt-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
 .h10-kt-said b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 
 .h10-kt-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: #55606d; }
-.h10-kt-scope .h10-kt-note { margin: 0; }
 .h10-kt-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
 .h10-kt-note b { font-weight: 800; color: #1c2530; }
 .h10-kt-note.out { padding: 8px 11px; border-radius: 8px; background: #f1f4f8; }
@@ -1452,11 +1441,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-empty b { font-size: 13px; font-weight: 800; color: #1c2530; }
 .h10-kt-empty span { font-size: 12px; line-height: 1.6; color: #55606d; }
 
-@media (max-width: 900px) {
-  .h10-kt-scoperow { gap: 10px; }
-  .h10-kt-field { flex: 1 1 190px; }
-}
-
 /* The marketplace a row belongs to. A row is one keyword × market, and volume/rank/share are all
    per-marketplace, so the market is on the row and not only in the header. */
 .h10-kt-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
@@ -1476,15 +1460,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    gutter, measured on prod at 1728px where `.h10-hdr`, `.h10-rules-tabs` and `.h10-am-card` all
    sit at 96→1698. Every block below is `margin: Npx 0`. A `margin: … 24px` (the pattern
    `.h10-svt-seg` carries) would inset it past everything else on the page. */
-
-/* ── the scope bar ──────────────────────────────────────────────────────────────────────────── */
-.h10-ng-scope { margin: 14px 0 0; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
-.h10-ng-scoperow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
-.h10-ng-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
-.h10-ng-field { display: flex; flex-direction: column; gap: 4px; }
-.h10-ng-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
-.h10-ng-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
-.h10-ng-clear:hover { background: #e8f1fd; color: #1c2530; }
 
 /* ── the sentences under the bar ────────────────────────────────────────────────────────────── */
 .h10-ng-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
@@ -1570,8 +1545,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-ng-census { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 900px) {
-  .h10-ng-scoperow { gap: 10px; }
-  .h10-ng-field { flex: 1 1 190px; }
   .h10-ng-census { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -1646,15 +1619,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    Appended at EOF, `h10-bd-*` only, disjoint from every other family in this file. Source order
    beats specificity in this stylesheet, so an override belongs at the END of what it overrides —
    which is what the two grid rules at the bottom of this block are doing. */
-
-/* ── scope bar ─────────────────────────────────────────────────────────────────────────────── */
-.h10-bd-scope { margin: 14px 0 0; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
-.h10-bd-scoperow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
-.h10-bd-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
-.h10-bd-field { display: flex; flex-direction: column; gap: 4px; }
-.h10-bd-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
-.h10-bd-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
-.h10-bd-clear:hover { background: #e8f1fd; color: #1c2530; }
 
 /* ── the sentences ─────────────────────────────────────────────────────────────────────────── */
 .h10-bd-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
@@ -1738,8 +1702,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-bd-census { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 900px) {
-  .h10-bd-scoperow { gap: 10px; }
-  .h10-bd-field { flex: 1 1 190px; }
   .h10-bd-census { grid-template-columns: repeat(2, 1fr); }
   .h10-bd-search input { width: 100%; }
 }
@@ -1761,15 +1723,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    sit at 96→1698. Every block below is `margin: Npx 0`. A `margin: … 24px` (the pattern
    `.h10-svt-seg` carries, which is where it gets copied from) would inset it past everything else
    on the page and be the only staggered thing on it. */
-
-/* ── the scope bar ──────────────────────────────────────────────────────────────────────────── */
-.h10-hv-scope { margin: 14px 0 0; padding: 10px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
-.h10-hv-scoperow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
-.h10-hv-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
-.h10-hv-field { display: flex; flex-direction: column; gap: 4px; }
-.h10-hv-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
-.h10-hv-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
-.h10-hv-clear:hover { background: #e8f1fd; color: #1c2530; }
 
 /* ── the sentences under the bar ────────────────────────────────────────────────────────────── */
 .h10-hv-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
@@ -1885,8 +1838,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-hv-census { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 900px) {
-  .h10-hv-scoperow { gap: 10px; }
-  .h10-hv-field { flex: 1 1 190px; }
   .h10-hv-census { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -2065,19 +2016,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   box-shadow: 0 -26px 0 0 #f4f6f9, 0 3px 10px rgba(16, 24, 40, .05);
 }
 
-/* ── the scope spine ─────────────────────────────────────────────────────────────────────────── */
-/* Captions sit INLINE before each select rather than above it: stacked caps cost 14px per field
-   and the whole chrome budget for the two pinned bars is 120px. */
-.h10-bsp-spine { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 5px 12px; }
-.h10-bsp-lbl { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
-.h10-bsp-field { display: inline-flex; align-items: center; gap: 6px; }
-.h10-bsp-field .cap { font-size: 11px; font-weight: 700; color: #667080; white-space: nowrap; }
-.h10-bsp-clear { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
-.h10-bsp-clear:hover { background: #e8f1fd; color: #1c2530; }
-.h10-bsp-reach { margin-left: auto; font-size: 12px; font-weight: 600; color: #55606d; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.h10-bsp-reach b { font-weight: 800; color: #1c2530; }
-.h10-bsp-reach .dim { color: #667080; }
-
 /* ── the pinned pacing band ─────────────────────────────────────────────────────────────────── */
 .h10-bsp-band { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid #eef1f5; }
 .h10-bsp-band.broke { background: #fdecea; border-top-color: #f5c6c2; border-radius: 0 0 9px 9px; }
@@ -2181,7 +2119,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-bsp-cols { width: 100%; }
 }
 @media (max-width: 900px) {
-  .h10-bsp-reach, .h10-bsp-sum { margin-left: 0; }
+  .h10-bsp-sum { margin-left: 0; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -2459,24 +2397,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
    The page gutter inside `.h10-rules-page` is ZERO, not 24px: `h10-main`'s 30px padding IS the
    gutter. Re-measured for this page on prod at 1280, where `.h10-hdr`, `.h10-rules-tabs`,
-   `.h10-bd-scope` and `.h10-am-card` all sit at x=96 w=1154. Every block below is `margin: Npx 0`.
+   the filter bar and `.h10-am-card` all sit at x=96 w=1154. Every block below is `margin: Npx 0`.
 
    Height budget: the scope bar and the census together must add ≤120px to the 138px header+tabs
    baseline. The two are sized here to 52 + 64 = 116px at rest; the note rows below them are
    conditional and are not part of the resting height. */
 
-/* ── scope bar ─────────────────────────────────────────────────────────────────────────────── */
-.h10-bud-scope { margin: 14px 0 0; padding: 8px 12px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; }
-.h10-bud-scoperow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
-.h10-bud-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
-/* 🔴 The caption sits INLINE, not above. Stacked it made each field 54px and the bar 72px, which
-   with a one-row census put the pair at 131px against a 120px budget. Inline, the field is the
-   select's own height and the bar is 55px — and the caption survives, which matters because a
-   selected campaign name is the one case where the placeholder no longer names its grain. */
-.h10-bud-field { display: flex; flex-direction: row; align-items: center; gap: 6px; }
-.h10-bud-field .cap { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
-.h10-bud-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
-.h10-bud-clear:hover { background: #e8f1fd; color: #1c2530; }
 
 /* ── the sentences ─────────────────────────────────────────────────────────────────────────── */
 .h10-bud-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
@@ -2612,8 +2538,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   .h10-bud-census { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 900px) {
-  .h10-bud-scoperow { gap: 10px; }
-  .h10-bud-field { flex: 1 1 190px; }
   .h10-bud-census { grid-template-columns: repeat(2, 1fr); }
   .h10-bud-search input { width: 100%; }
 }
@@ -3062,8 +2986,6 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 
 /* An OVERRIDDEN criterion is marked, because "this view only" and "saved for everyone" must never
    look the same. The chip is text, not a colour alone. */
-.h10-hv-field.over .cap { color: #10457f; }
-.h10-hv-field .cap i { margin-left: 5px; padding: 0 4px; border-radius: 4px; background: #e8f1fd; color: #10457f; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 
 /* the number nudger */
 .h10-hv-step { display: inline-flex; align-items: stretch; border: 1px solid #e3e7ec; border-radius: 7px; overflow: hidden; background: #fff; }
@@ -3075,6 +2997,19 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-hv-step input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .h10-hv-step em { display: flex; align-items: center; padding-right: 5px; font-style: normal; font-size: 11px; font-weight: 700; color: #667080; }
 .h10-hv-step.off input { color: #a8b0ba; }
+
+/* 🔴 FB.4 — `h10-hv-field` was SHARED, and the sharing was invisible. Its base rules lived in the
+   deleted scope-bar block while HV.2's threshold `Field` (`HvThresholds.tsx`) has always used the
+   same class. Removing that block silently unstyled six live controls — an undefined class throws
+   nothing and paints nothing. The whole family lives here now, beside the section that still uses
+   it, so the next deletion cannot split it in two. */
+.h10-hv-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
+.h10-hv-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #55606d; cursor: pointer; }
+.h10-hv-clear:hover { background: #e8f1fd; color: #1c2530; }
+.h10-hv-field { display: flex; flex-direction: column; gap: 4px; }
+.h10-hv-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
+.h10-hv-field.over .cap { color: #10457f; }
+.h10-hv-field .cap i { margin-left: 5px; padding: 0 4px; border-radius: 4px; background: #e8f1fd; color: #10457f; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 
 .h10-hv-acos { display: inline-flex; align-items: center; gap: 6px; }
 .h10-hv-ceil { padding: 4px 8px; background: #f1f4f8; border: 1px solid #e3e7ec; border-radius: 7px; font-size: 11px; font-weight: 700; color: #55606d; cursor: pointer; }
