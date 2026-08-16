@@ -48,7 +48,13 @@ export interface SovExportRow {
 
 /** The token a blank carries into the file. Never an empty cell — see the header note. */
 export const BLANK_TOKENS: Record<string, string> = {
+  // A state that carries a value needs no token — the value IS the statement. Only the absences
+  // get a word, because an empty cell cannot say which of four absences it is.
   measured: '',
+  'delta-measured': '',
+  // `delta-not-applicable` means the row is not measured at all, so its share cell already carries
+  // NOT_COVERED / NO_ROW_THIS_WEEK / NEVER_MEASURED. Repeating it in the Δ column would be noise.
+  'delta-not-applicable': '',
   'not-covered': 'NOT_COVERED',
   'no-row-this-period': 'NO_ROW_THIS_WEEK',
   'never-measured': 'NEVER_MEASURED',
