@@ -451,16 +451,18 @@ Two structural facts that shape the plan:
    `AdsDataGrid` + `GridToolbar` ("Showing N <Type> rules" · search · **+ Rule**) with columns
    ☐ · <Type> Rule ⇅ · Automation · Criteria · Frequency, H10's empty state and pager, opening the
    existing builder. Our page header (market picker, Change Log) and tab bar stay.
-2. **Nothing is deleted — sections are PARKED.** Every extra section is unmounted from its page and
-   kept in place (file untouched, a `PARKED` header comment + one manifest,
-   `docs/2026-08-16-ra-parked-sections.md`, naming its candidate new home). No file moves, so no
-   import breakage; the pre-push gate has no dead-code detector, so parked files build. Their API
-   endpoints stay live. When Suggestions / Analytics / Reporting want a section, it is a mount, not a
-   rewrite.
+2. **Nothing is deleted — sections are PARKED IN PLACE** (✅ D7, operator 2026-08-16). Every extra
+   section is unmounted from its page and the file **stays exactly where it is**, gaining a `PARKED`
+   header comment (what it did · why it left · candidate new home) and one line in the manifest
+   `docs/2026-08-16-ra-parked-sections.md`. No file moves ⇒ no import churn on a tree other sessions
+   share; the pre-push gate has no dead-code detector, so parked files still build. Their API
+   endpoints stay live. When Suggestions / Analytics / Reporting want a section, it is a mount, not
+   a rewrite.
 3. **The builders stay.** `_shared/RuleBuilder.tsx` unchanged (except wiring, if any); RD page and
    RD builder untouched; `ScheduleBuilder` reused for Budget Schedules.
-4. **One unit at a time, each approved before its prompt is written, each verified on prod**
-   (`ui-self-verify` + geometry), committed and pushed per verified unit.
+4. **One unit at a time** (✅ D8, operator 2026-08-16): each unit is approved before its prompt is
+   written, click-verified on **prod** (`ui-self-verify` + geometry), then committed and pushed on
+   its own before the next begins — so any regression is traceable to one small change.
 
 ### 7.1 Unit U0 — the shared rules grid (foundation; changes no page yet)
 - Promote `tabs/RuleListTab.tsx` → `_shared/RulesGrid.tsx` (move + rename; `HistoryDrawer` export
@@ -588,7 +590,7 @@ ours.** The decided array (`_shared/tabs.tsx`, `RULES_TABS`):
 | # | key | label | change |
 |---|---|---|---|
 | 1 | `rules` | Apply Rules | — |
-| 2 | `automations` | Automations | not in H10 — placement pending **D2** (today it sits here, 2nd) |
+| 2 | `automations` | Automations | not in H10 — **stays 2nd** (D2, answered) |
 | 3 | `bid` | Bid | moved (was 3rd) |
 | 4 | `keyword-harvest` | Keyword Harvest | **moved up** (was 8th) |
 | 5 | `negative-targeting` | Negative Targeting | **moved up** (was 9th) |
@@ -610,8 +612,9 @@ Two consequences of the reorder, both flagged now rather than discovered later:
    no `RULE_TAB_ACTION_TYPES` entry and no deep link changes. Their subtitles are revisited when
    their pages are reduced (U6/U8), not here.
 - Also in U10: "+ Rule" in the page header on every tab, opening the ACTIVE tab's builder (H10).
-- Automations tab: not in H10. It is the record owner every grid links to and holds the Queue and
-  Limits. Recommendation: keep it for now (11th tab), decide its fate after U1–U8 land (D2).
+- ✅ **D2, operator 2026-08-16: Automations stays, in its current 2nd slot** (right after Apply
+  Rules). It owns every rule record — all other grids link `?rule=` to it — plus the Queue and the
+  Limits. Its longer-term fate is revisited after U1–U8 land, not now.
 
 ### 7.12 Order and size
 U0+U1 (Bid) → U2 (Placement) → U3 (SOV) → U4 (KT) → U5 (NEG) → U6 (Budget Rules) → U7 (Keyword
@@ -620,15 +623,16 @@ grid is proven on prod before the pages with new UI (KH ad-group grid, BSP hourl
 = one small new client (~60–150 lines), one page.tsx edit, PARKED comments + manifest lines, prod
 verification, commit+push. Rough net effect on the section: ~11,000 lines unmounted, ~900 written.
 
-## 8. Decisions needed before U0 starts
+## 8. Decisions — D1 · D2 · D7 · D8 answered 2026-08-16; D3–D6, D9 still open
+(The four answered ones are the ones that gated U0/U1, so the build can start; D3–D6 gate later
+units and are asked when those units come up.)
 - **D1 — Tab bar — ✅ ANSWERED 2026-08-16:** H10's order; relabel `budget` → "Budget" and
   `budget-schedules` → "Budget Schedules"; **the RD tab keeps "Rank & Dayparting Schedules"**. Built
   in U10; the array and its two consequences (cluster hairlines go; keys/routes unchanged) are in
   §7.11. Open sub-question: where does **Automations** sit in that order — 2nd, as today, or last?
   (Folded into D2.)
-- **D2 — Automations tab:** keep as the 11th tab (recommended for now) · retire after U1–U8 · or
-  fold Queue → `/suggestions`, Ledger → Change Log, Actors/Limits → Control Room? **And where does
-  it sit** in the H10 order chosen in D1 — 2nd (where it is today) or last?
+- **D2 — Automations tab — ✅ ANSWERED 2026-08-16:** keep it, in its current **2nd** slot; revisit
+  its fate after U1–U8.
 - **D3 — Keyword Harvest › Ad Group View:** build it with H10's exact columns (§7.8, now known from
   the bundle) — confirm.
 - **D4 — Share of Voice rules:** H10's SOV rule reads an **SOV report** (made under Reporting) for
@@ -639,9 +643,10 @@ verification, commit+push. Rough net effect on the section: ~11,000 lines unmoun
   now, or ship U8 with Campaign Budget (hourly) only?
 - **D6 — Apply Rules delta:** (a) H10 columns, (b) bulk verbs incl. "+ Assign Rule" (needs the
   additive plural-scope schema), (c) keep or drop the four-grain segment — which of the three?
-- **D7 — Parking mechanics:** park in place with a manifest (recommended, zero import churn) or move
-  parked files into `_parked/` folders?
-- **D8 — Verification cadence:** one prod check + commit per unit (recommended), or batch U1–U6?
+- **D7 — Parking mechanics — ✅ ANSWERED 2026-08-16:** park **in place** + `PARKED` header comment +
+  the manifest doc. No file moves.
+- **D8 — Verification cadence — ✅ ANSWERED 2026-08-16:** one prod verification + one commit/push
+  **per unit**.
 - **D9 — (optional, later) builder Setup parity for SOV / Keyword Tracker:** re-shape their Setup
   step to H10's (KT: ASIN → keywords → campaigns; SOV: report/dataset → ASIN → keyword → campaigns)
   or leave the campaign picker as is? Not required for the page reduction; the operator said the
