@@ -580,15 +580,36 @@ time"); for us it needs the additive plural-scope columns noted in the RA memory
 campaign side must ADD a binding, not MOVE the rule); (c) whether the four-grain segment stays (H10
 has campaigns only).
 
-### 7.11 Unit U10 — the tab bar and the header (decisions D1, D2)
-- Order/labels today: Apply Rules · Automations ┊ Bid · Placement · Rank & Dayparting Schedules ┊
-  Budget Rules · Budget Pacing & Schedules ┊ Keyword Harvest · Negative Targeting · Share of Voice ·
-  Keyword Tracker. H10: Apply Rules · Bid · Keyword Harvest · Negative Targeting · Budget ·
-  Dayparting Schedules · Budget Schedules · Placement · Share of Voice · Keyword Tracker.
-  Restoring H10's order and labels is a one-array edit in `_shared/tabs.tsx` (the RD page itself is
-  not touched by relabelling its tab; flagged in D1 because the operator said "no changes to RD").
-- "+ Rule" in the page header on every tab, opening the ACTIVE tab's builder (H10) — additive
-  `primaryAction` per page.
+### 7.11 Unit U10 — the tab bar and the header (D1 ANSWERED; D2 open)
+
+**✅ D1, operator 2026-08-16: H10's ORDER; H10's LABELS for the two budget tabs; the RD tab keeps
+ours.** The decided array (`_shared/tabs.tsx`, `RULES_TABS`):
+
+| # | key | label | change |
+|---|---|---|---|
+| 1 | `rules` | Apply Rules | — |
+| 2 | `automations` | Automations | not in H10 — placement pending **D2** (today it sits here, 2nd) |
+| 3 | `bid` | Bid | moved (was 3rd) |
+| 4 | `keyword-harvest` | Keyword Harvest | **moved up** (was 8th) |
+| 5 | `negative-targeting` | Negative Targeting | **moved up** (was 9th) |
+| 6 | `budget` | **Budget** | **relabelled** (was "Budget Rules") |
+| 7 | `dayparting` | Rank & Dayparting Schedules | **label KEPT** (H10 says "Dayparting Schedules"); moved |
+| 8 | `budget-schedules` | **Budget Schedules** | **relabelled** (was "Budget Pacing & Schedules") |
+| 9 | `placement` | Placement | moved down (was 4th) |
+| 10 | `share-of-voice` | Share of Voice | moved down |
+| 11 | `keyword-tracker` | Keyword Tracker | — |
+
+Two consequences of the reorder, both flagged now rather than discovered later:
+1. 🔴 **The four-cluster hairlines cannot survive it.** `tabs.tsx:358` renders a separator wherever
+   `group` changes, and the array order IS the grouping. Under H10's order the clusters interleave
+   (act · bid-place · terms · terms · spend · bid-place · spend · bid-place · terms · terms) → **8
+   stray dividers**. H10's own bar has none. **Plan: delete the separator render + the `group`
+   field** (`h10-rt-sep` has no other consumer; nothing else reads `.group`). Say so if you want the
+   clusters kept instead — then the order cannot be H10's.
+2. The two relabelled tabs keep their `key` and route (`budget`, `budget-schedules`), so no URL,
+   no `RULE_TAB_ACTION_TYPES` entry and no deep link changes. Their subtitles are revisited when
+   their pages are reduced (U6/U8), not here.
+- Also in U10: "+ Rule" in the page header on every tab, opening the ACTIVE tab's builder (H10).
 - Automations tab: not in H10. It is the record owner every grid links to and holds the Queue and
   Limits. Recommendation: keep it for now (11th tab), decide its fate after U1–U8 land (D2).
 
@@ -600,11 +621,14 @@ grid is proven on prod before the pages with new UI (KH ad-group grid, BSP hourl
 verification, commit+push. Rough net effect on the section: ~11,000 lines unmounted, ~900 written.
 
 ## 8. Decisions needed before U0 starts
-- **D1 — Tab bar:** restore H10's order + labels ("Budget", "Budget Schedules", and "Dayparting
-  Schedules" for the RD tab) or keep our clustered order/labels? (Relabelling the RD tab does not
-  touch the RD page or builder.)
+- **D1 — Tab bar — ✅ ANSWERED 2026-08-16:** H10's order; relabel `budget` → "Budget" and
+  `budget-schedules` → "Budget Schedules"; **the RD tab keeps "Rank & Dayparting Schedules"**. Built
+  in U10; the array and its two consequences (cluster hairlines go; keys/routes unchanged) are in
+  §7.11. Open sub-question: where does **Automations** sit in that order — 2nd, as today, or last?
+  (Folded into D2.)
 - **D2 — Automations tab:** keep as the 11th tab (recommended for now) · retire after U1–U8 · or
-  fold Queue → `/suggestions`, Ledger → Change Log, Actors/Limits → Control Room?
+  fold Queue → `/suggestions`, Ledger → Change Log, Actors/Limits → Control Room? **And where does
+  it sit** in the H10 order chosen in D1 — 2nd (where it is today) or last?
 - **D3 — Keyword Harvest › Ad Group View:** build it with H10's exact columns (§7.8, now known from
   the bundle) — confirm.
 - **D4 — Share of Voice rules:** H10's SOV rule reads an **SOV report** (made under Reporting) for
