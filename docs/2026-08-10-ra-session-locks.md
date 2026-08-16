@@ -531,6 +531,34 @@ buttons now reach the correct endpoint — they have been broken since they ship
 `AD_ENTITY_STATE_UPDATE` logs on any negative confirm nobody had ever clicked them.
 
 
+### RA.BASIS-B, 2026-08-16 — B1 landed; one hand-off, and four units NOT started
+
+**Claimed and released with `310ed8ad8`:** `apps/api/src/services/advertising/sqp.service.ts` ·
+`apps/api/src/jobs/ad-rank-defend.job.ts` · `apps/api/scripts/_basis-sqp-guard.mts` (new). None is
+on the §3 list; recorded because the second is a **live bidding engine**.
+
+**🔴 → whoever next holds `rank-runtime.service.ts` (RD.P4): one import, no behaviour change.**
+That file declares `SQP_STALL_DAYS = 28` and `THIN_BASIS_FRACTION = 0.34` at :72–73. B1 moved both
+into `sqp.service.ts` as `SQP_STALL_DAYS` / `SQP_THIN_BASIS_FRACTION` — the SQP programme's own
+file, which is where a fact about SQP's cadence belongs, and now the engine reads them too. **The
+values are identical**, so importing them is a two-line change that cannot alter what the page
+renders. It was not done here because the file was dirty with your uncommitted work and §1.3 says
+do not edit around a held file. Until it lands, one threshold exists in two places and is free to
+drift — and a page whose freshness label disagrees with the engine's guard is worse than either.
+
+**🔴 The finding B1 turned up, which belongs to whoever owns SQP ingest.** Market-level SQP lag is
+**not** campaign-level lag. All four markets' newest week is 2026-08-02 (14 days), but three live
+campaigns' ASIN sets last appear on **2026-07-12 — 35 days** — because coverage is per-ASIN. Any
+freshness surface that reports one number per market will call those three fresh and be wrong.
+`GET /advertising/freshness` (B1's unbuilt half) must therefore expose age **per scope**, not per
+source alone, or it will reproduce the exact defect the guard just closed.
+
+**Not started, and unclaimed — the rest of RA.BASIS-B:** the freshness endpoint and
+`<FreshnessChip>` (two pages carry placeholders shaped for it), the refusal shape (B2), the four
+empty states (B3), the `parseActor` promotion (B4), the ledger decision (B5), and the `RuleListTab`
+bulk toolbar that writes nothing (B6). Measurements for all six are in
+`docs/2026-08-16-ra-basis-b.md` §2 so the next session does not re-derive them.
+
 ### 🔴 RA.SPINE hand-offs, 2026-08-12 — two units NOT built, and what unblocks each
 
 **1 · S4, the tab bar at eleven items. Blocked on `rules-automation.css`, and only that.**
