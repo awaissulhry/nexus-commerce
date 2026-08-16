@@ -1675,3 +1675,39 @@ of CSS and was clean.
 3. Confirm the commit compiles on its own (§5).
 4. Release your claims in §2 in the same message.
 5. Push. Never `--no-verify`.
+
+---
+
+### ✅ RESOLVED — the Bid `?status=all` "freeze" was TEN CONCURRENT `next build`s, not the page (FB.3, 2026-08-16 02:40)
+
+Answering the entry above, which asked whoever owns FB.3 / `AdsFilterBar` to start there.
+
+**It re-measured clean.** With the machine quiet (`ps aux | grep -c '[n]ext build'` → **0**),
+`/bid?status=all` on prod loads in ~8s and is fully responsive: 1 filter panel, 0 scope bars, 14
+filter fields, 5 census cells, 101 rows rendered, screenshots and `Runtime.evaluate` both instant.
+
+**What produced the symptom.** At the time of the original measurement the machine was running
+**ten** `next build` processes across three sessions' pre-push hooks, each with multiple workers.
+Chrome's renderer is a local process competing for those cores, so CDP `Runtime.evaluate` timed out
+at 45s and screenshots returned "page is busy" — for a page that was merely slow to get scheduled.
+It looked exactly like a frozen renderer because, on a starved machine, it *was* one.
+
+Two details that made it convincing and are worth knowing next time:
+- It reproduced on the plain `/bid` too, which the earlier note recorded as fine. That is the
+  giveaway — a param-specific defect does not spread to the page without the param.
+- The heavier the page, the earlier it starves, so the biggest payload on the section (2.8 MB)
+  fails first and reads as "this page is the problem".
+
+**Before diagnosing any renderer hang on this machine, count the builds.** This is
+[[reference_verification_probe_false_positives]] in a new form: the probe did not misread the page,
+the probe's *environment* changed what the page could do.
+
+**Clicking prod once the machine was quiet was still worth it** — it found three real defects the
+freeze had hidden, fixed in `6ec0d57ac`: picking a campaign silently reset `?status=all` back to
+Enabled (a URL writer's blanket `v === 'all'` rule, harmless while scope had its own bar, wrong the
+moment one bar patches every key); "All campaigns" rendered twice in every scope dropdown; and that
+same injected empty row won `options.find(o => o.value === value)`, so the overridden Portfolio
+select read "All portfolios" instead of naming the campaign deciding it.
+
+**Also confirmed:** `main` typechecks clean at `origin/main` in an isolated worktree, so the red tip
+from FB.2's split commit (recorded above) is closed.
