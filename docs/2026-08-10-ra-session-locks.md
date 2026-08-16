@@ -187,9 +187,10 @@ and a broken shared file blocks *every* session's push. That happened on 2026-08
 | `apps/web/src/app/marketing/ads/_shell/AdsPageHeader.tsx` | PLC.0 (`dateRange?` — the existing date control becomes optionally CONTROLLED, additive) | 2026-08-12 | **released** — landed `341d08e31`; prod-verified: `?preset=custom&start=…&end=…` renders in the header's own label.
 | `apps/api/src/routes/advertising-intel.routes.ts` | PLC.1 (`GET /advertising/placements/cursor`, additive) | 2026-08-12 | **claimed** — `grep -a`ed both route files; the path is disjoint from every registered route including PLC.0's own `/advertising/placements` (Fastify treats the two as distinct) and from BID.S0's `/advertising/bid-grid/cursor` |
 | `…/rules-automation/rules-automation.css` | PLC.1 (`h10-plc-*` at EOF, flags + census strip) | 2026-08-12 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
-| `apps/api/src/services/advertising/ads-create.service.ts` | PLC.3 (**carry the gate's refusal reason out of `updatePlacementBidding`**, additive) | 2026-08-16 | **claimed** — ONE return statement (`:1029`) plus its type gains `reason` + `deniedAt`. The audit row, the history rows, the log line and the allowed path are all untouched; every existing caller keeps working because both fields are optional |
-| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.3 (`GET /advertising/placements/preview` + `PATCH /advertising/placements/:campaignId/lane`, additive) | 2026-08-16 | **claimed** — `grep -a`ed BOTH route files: neither path has any hit. Disjoint from NEG.3's `negatives/retire`, RD.P2's `rank-runtime` and PLC.1's `placements/cursor` |
-| `…/rules-automation/rules-automation.css` | PLC.3 (`h10-plc-*` editor/bulk/refusal at EOF) | 2026-08-16 | **claimed** — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
+| `apps/api/src/services/advertising/ads-create.service.ts` | PLC.3 (**carry the gate's refusal reason out of `updatePlacementBidding`**, additive) | 2026-08-16 | **released** — landed in the PLC.3 API commit; prod-verified, both refusal sentences render. Was — ONE return statement (`:1029`) plus its type gains `reason` + `deniedAt`. The audit row, the history rows, the log line and the allowed path are all untouched; every existing caller keeps working because both fields are optional |
+| `apps/api/src/routes/advertising-intel.routes.ts` | PLC.3 (`GET /advertising/placements/preview` + `PATCH /advertising/placements/:campaignId/lane`, additive) | 2026-08-16 | **released** — both prod-verified 401 before the web shipped. Was — `grep -a`ed BOTH route files: neither path has any hit. Disjoint from NEG.3's `negatives/retire`, RD.P2's `rank-runtime` and PLC.1's `placements/cursor` |
+| `…/rules-automation/rules-automation.css` | PLC.3 (`h10-plc3-*` editor/bulk/refusal at EOF) | 2026-08-16 | **released** — EOF-append only, no `.dark`. ⚠ the first PLC.3 web commit also carries BSP.1's and SOV.1's blocks, named in its own message. Was — EOF-append only, no `.dark` block; will `git diff` every hunk before committing (§5) |
+| `apps/api/src/services/advertising/ads-authority-pins.ts` | PLC.3 (`pinDenial` names the DIMENSION's own page, additive) | 2026-08-16 | **released** — Was — one string, dimension-switched. `placement` now points at this page because its toggle SHIPPED; `bids` and `budget` keep pointing at the Control Room until Bid and Budget ship theirs. All 1,052 API tests pass |
 
 | `apps/api/src/routes/advertising-intel.routes.ts` | BUD.1 (`GET /advertising/budget-grid` + `/budget-grid/cursor`, additive) | 2026-08-12 | **released** — landed `97c960b55`, both 401-verified on prod. Paths disjoint from HV.1's, KT.2's, BID.S0's and SOV.0/1's; `grep -a budget-grid` returned nothing across BOTH route files first |
 | `…/rules-automation/_shared/tabs.tsx` | BUD.1 (`budget` → `routed: true` + relabel "Budget Rules" + subtitle) | 2026-08-12 | **released** — landed `c9d564cf9`, hunk verified sole occupant with `git diff -U0` before staging |
@@ -857,6 +858,33 @@ this shape (KT.1b → NEG.1, HV.1 → BID.S0, NEG.2 → PLC.0). Recorded only so
 a red push knows it is not theirs. Not touched: PLC.0 finished with that file and PLC.1's brief
 explicitly forbids re-opening it. `tsc` with that one file excluded is clean, which is how PLC.1
 confirmed its own files compile. Retrying.
+
+**PLC.3 → whoever next holds `ad-rank-defend.job.ts` with a clean claim, 2026-08-16.** The
+engine's max-base-bid derivation (`:537-556`) is now also a standalone exported function,
+`resolveMaxBaseBidByCampaign` in `ads-placement-manual.ts` — Placement's effective-bid preview and
+the CPC ceiling have to measure against the same number or they disagree about whether a multiplier
+is affordable. It is a LIFT, verbatim in behaviour, and `_plc-page-write.mts` verifies the two agree
+on all 203 campaigns today. **The job was not edited: RD.P2 holds that file.** Swapping its inline
+block for a call to the function is a one-line change and removes the second copy for good.
+
+**PLC.3 → every session, three prod measurements, 2026-08-16.**
+
+🔴 **1. Every one of the 133 PAUSED campaigns has `liveBidWritesEnabled = false`.** Not most — all.
+So a write to any paused campaign is refused at `campaign_allowlist` before Amazon is called, and
+"test it on something paused" is not available on this account. A real-write test has to take its
+safety from DELIVERY instead: there are 14 ENABLED, unmanaged, gate-open campaigns with €0.00 spend
+and 0 impressions in 30 days.
+
+🔴 **2. A blocked placement write returns HTTP 200.** `{ ok: false, mode: 'blocked' }`, no `error`
+field. `GuardrailGrid.tsx:264`'s `j.error ?? \`HTTP ${r.status}\`` therefore prints **"HTTP 200"**
+as the reason an operator's write was refused. `updatePlacementBidding` now returns `reason` and
+`deniedAt` (both optional, every caller unaffected); read those. Verified on prod — the two real
+sentences are `campaign_allowlist`: *"campaign … is not on the live-write allowlist"* and
+`authority_pin`: *"placement is pinned on … held by hand."*
+
+**3. An inline `<svg>` computes to `display: block` in this app**, so an icon added to a
+`display: block` button pushes the label onto a second line. `h10-plc-toggle` was text-only until
+PLC.3 put an icon in one; fixed by scoping `display: inline-flex` to the toolbar's instance.
 
 **PLC.0 → every session whose page keeps a date control, 2026-08-12.** `AdsPageHeader` declares
 `rangePreset` and `onRangePreset` in its props type and **never destructures either** (`:52-53`
