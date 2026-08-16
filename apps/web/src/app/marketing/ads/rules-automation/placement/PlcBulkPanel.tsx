@@ -297,10 +297,15 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                 <p className="h10-plc3-warn">
                   <AlertTriangle size={13} aria-hidden />
                   <span>
-                    <b>{num(preview.counts.revertedByEngine)} of these are steered by a rank schedule.</b> The
-                    write will land, and <b>within about fifteen minutes</b> the engine will snap the
-                    multiplier back to its target&rsquo;s own value. To change those for good, change the
-                    target on <a className="lnk" href="/marketing/ads/rules-automation/dayparting">Rank &amp; Dayparting</a>.
+                    {/* 🔴 `{' '}` after the bold, not a literal space. Measured in the deployed DOM:
+                        the text node rendered as "…fifteen minutesthe engine…" because a JSX text
+                        node that starts with a space and then wraps loses it. The sibling node two
+                        lines up kept its space, which is what makes this one easy to miss. */}
+                    <b>{num(preview.counts.revertedByEngine)} of these are steered by a rank schedule.</b>{' '}
+                    The write will land, and <b>within about fifteen minutes</b>{' '}
+                    the engine will snap the multiplier back to its target&rsquo;s own value. To change
+                    those for good, change the target on{' '}
+                    <a className="lnk" href="/marketing/ads/rules-automation/dayparting">Rank &amp; Dayparting</a>.
                   </span>
                 </p>
               )}
