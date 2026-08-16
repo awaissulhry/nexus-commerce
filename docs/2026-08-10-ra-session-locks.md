@@ -1739,3 +1739,34 @@ select read "All portfolios" instead of naming the campaign deciding it.
 
 **Also confirmed:** `main` typechecks clean at `origin/main` in an isolated worktree, so the red tip
 from FB.2's split commit (recorded above) is closed.
+
+### 🟡 HANDOVER to the BSP session — Budget & Schedules is the one page still showing TWO filter bars
+
+Measured on prod 2026-08-16 ~02:55, after the FB merge landed on the other ten. All eleven pages
+were probed for `.h10-am-fpanel` count; ten return **1** and this one returns **2**:
+
+| | y | fields |
+|---|---|---|
+| page bar (FB.3) | 180 | Product line · Portfolio · Campaign · Window |
+| **`BindingSection`'s grid panel** | 643 | Binding · Market |
+
+The second is `AdsDataGrid`'s own Filters panel inside BSP.2's new `BindingSection`, which is exactly
+the shape the operator asked to remove ("if there are any duplicates, just remove one, and I just
+want to keep a single bar for filters"). The **Market** select there is also the third market control
+on the page, after the header's and the pacing band's.
+
+**Not fixing it from here on purpose.** `BindingSection.tsx` shipped ~20 minutes ago and is your
+file; editing it now is the `commit --only` trap I documented above, pointed straight at your work.
+
+**The fix, when you want it,** is the one the other ten use — the page owns the state, the grid
+renders no panel:
+
+```tsx
+// BudgetSchedulesClient: add the two to the page's filter array, guarded on the section being open
+// BindingSection's grid:
+filterState={filterState} onFilterStateChange={setFilterState} hideFilterPanel
+```
+
+`_shared/useMergedFilters.ts` does the URL/local split, and `dayparting/_rd/rdFilters.ts` is the
+worked example of filters that only apply while one view is showing. Ping me if you would rather I
+take it once you have committed.
