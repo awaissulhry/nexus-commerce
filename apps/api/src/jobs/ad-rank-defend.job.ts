@@ -20,7 +20,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { computeStep, resolveActiveTargetKey, isRankLoss, cpcCapPct, strategyHeadroom, type RankTargetSpec, type LaneSpec, type ScheduleWindow } from '../services/advertising/rank-controller.js'
 import { analyzeTopOfSearch, setSearchPlacement, buildBlendedAdjustments } from '../services/advertising/ads-top-of-search.service.js'
-import { sqpImpressionShareForAsins } from '../services/advertising/sqp.service.js'
+import { sqpShareForAsins, SQP_STALL_DAYS } from '../services/advertising/sqp.service.js'
 import { updateCampaignWithSync, updateAdGroupWithSync, type AdsActor } from '../services/advertising/ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
@@ -564,7 +564,38 @@ export async function runRankDefendOnce(opts: { dryRun?: boolean; onlyPlanId?: s
     for (const c of campaigns) {
       const asins = [...(asinsByCampaign.get(c.id) ?? [])]
       if (!asins.length || !c.marketplace) { sqpByCampaign.set(c.id, null); continue }
-      try { sqpByCampaign.set(c.id, await sqpImpressionShareForAsins(c.marketplace, asins)) } catch { sqpByCampaign.set(c.id, null) }
+      try {
+        /**
+         * 🔴 RA.BASIS-B B1 — the recency guard, at the place the decision is taken.
+         *
+         * This share is the ONLY feedback signal a Rest-of-Search lane has (Amazon exposes no
+         * placement-IS for Rest), and it reaches `laneIS`/`achievedIS` below. Until now it was read
+         * with no age check at all: a report that stopped advancing would keep the bidder
+         * converging toward a rank target using a number from an arbitrarily old week, and nothing
+         * anywhere would have said so.
+         *
+         * Past `SQP_STALL_DAYS` the lane goes OPEN-LOOP (null) rather than acting on a dead number.
+         * Open-loop is the honest failure here and is already this map's contract for "no signal" —
+         * every other branch above sets null for exactly that reason.
+         *
+         * ⚠ Measured 2026-08-16: the newest SQP week is 14 days old against a 28-day limit, so this
+         * branch does not currently fire and live bidding is UNCHANGED by its introduction. It is
+         * armed for the day the feed stalls, which is the day it would otherwise have been silent.
+         *
+         * A skipped signal is logged once per campaign. A guard that moves money without leaving a
+         * trace is the same defect as no guard at all — it just fails in the other direction.
+         */
+        const reading = await sqpShareForAsins(c.marketplace, asins)
+        if (reading.freshness === 'too-old') {
+          sqpByCampaign.set(c.id, null)
+          logger.warn('[rank-defend] SQP too old — Rest-of-Search lane is open-loop for this campaign', {
+            campaignId: c.id, marketplace: c.marketplace, weekStart: reading.weekStart,
+            ageDays: reading.ageDays, limitDays: SQP_STALL_DAYS, reason: reading.reason,
+          })
+        } else {
+          sqpByCampaign.set(c.id, reading.share)
+        }
+      } catch { sqpByCampaign.set(c.id, null) }
     }
   } catch (e) { logger.warn('[rank-defend] SQP signal read failed', { error: (e as Error).message }) }
 

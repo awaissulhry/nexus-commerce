@@ -194,24 +194,132 @@ export async function ourAsinsForMarketplace(marketplace: string, limit = 25): P
 }
 
 /**
- * RM2 — the family's brand IMPRESSION SHARE (0..1) from the latest weekly SQP report. Used as a
- * coarse feedback signal for Rest-of-Search rank targets, which have NO Amazon placement-IS metric.
- * Impression-weighted across the family's ASIN-level rows for the most recent period only (older
- * weeks would dilute it). Returns null when there's no SQP data yet (caller stays open-loop).
+ * 🔴 RA.BASIS-B B1 — how old the newest SQP week may be before a caller should stop ACTING on it.
+ *
+ * 28 days is not a new number. `rank-runtime.service.ts` (RD.P4) measured and chose it, alongside
+ * `THIN_BASIS_FRACTION`, for the freshness label it already renders. This session's mandate is
+ * convergence, so the constants move HERE — the SQP programme's own file, which is where a fact
+ * about SQP's cadence belongs — rather than a second pair being invented next to the engine.
+ *
+ * Why 28 and not 14: SQP is a WEEKLY report and is inherently lagged; four weeks is the point past
+ * which the newest week stops describing anything the bidder can still act on. Measured today
+ * (2026-08-16) the newest row is 2026-08-02 — **14 days** — so this guard is armed and does not
+ * trip. That is deliberate: arming it at 14 would take every Rest-of-Search lane open-loop today,
+ * which is a live bidding change made by a substrate session, and it would contradict the threshold
+ * the section already measured.
+ *
+ * ⚠ `rank-runtime.service.ts` still declares its own copies (`SQP_STALL_DAYS`,
+ * `THIN_BASIS_FRACTION`) — it was held by another session when this landed, so importing these is a
+ * one-line hand-off in locks §4. The VALUES are identical; the fork is the risk, not a disagreement.
  */
-export async function sqpImpressionShareForAsins(marketplace: string, asins: string[]): Promise<number | null> {
-  if (!asins.length) return null
+export const SQP_STALL_DAYS = 28
+export const SQP_THIN_BASIS_FRACTION = 0.34
+
+/**
+ * Four states, because "we hold none of this market" and "this market has never been covered" are
+ * different facts and must never render the same.
+ *
+ *   fresh    — act on it.
+ *   stale    — usable, but say why: too old, or too few of the scope's ASINs in the week, or both.
+ *   too-old  — past `SQP_STALL_DAYS`. A caller that MOVES MONEY should treat this as no signal.
+ *   never    — these ASINs have no SQP row at all. An onboarding problem, not a stale feed; no
+ *              recency guard would fix it.
+ */
+export type SqpFreshness = 'fresh' | 'stale' | 'too-old' | 'never'
+
+export interface SqpShareReading {
+  /** 0..1, or null when the latest week yields no usable share. **0 is a real answer** — it means
+   *  we hold none of the impressions, and it is not the same as null. Never coalesce the two. */
+  share: number | null
+  /** Age in whole days of the week the share came from. Null only when there is no week. */
+  ageDays: number | null
+  /** `YYYY-MM-DD` start of that week, so a caller can name the week rather than say "latest". */
+  weekStart: string | null
+  /** How much of the asked-for scope is actually IN that week — age alone is not enough. A number
+   *  two days old drawn from one ASIN of twenty does not read as healthy. */
+  contributors: { withData: number; total: number }
+  freshness: SqpFreshness
+  /** One sentence naming every reason it is not `fresh`. Null when it is. */
+  reason: string | null
+}
+
+const DAY_MS = 86_400_000
+
+/**
+ * RM2 — the family's brand IMPRESSION SHARE (0..1) from the latest weekly SQP report, **with its
+ * age and its basis**. Used as a coarse feedback signal for Rest-of-Search rank targets, which have
+ * NO Amazon placement-IS metric. Impression-weighted across the family's ASIN-level rows for the
+ * most recent period only (older weeks would dilute it).
+ *
+ * This is the function that had no age check at all for five days after the spec named it, while
+ * being the only signal a live bidder uses to decide whether we are losing a rank we asked to hold.
+ */
+export async function sqpShareForAsins(
+  marketplace: string,
+  asins: string[],
+  now: Date = new Date(),
+): Promise<SqpShareReading> {
+  const none = (freshness: SqpFreshness, reason: string | null): SqpShareReading =>
+    ({ share: null, ageDays: null, weekStart: null, contributors: { withData: 0, total: asins.length }, freshness, reason })
+
+  if (!asins.length) return none('never', 'No advertised ASINs in scope, so there is nothing to look up.')
+
   const rows = await prisma.searchQueryPerformance.findMany({
     where: { marketplace, asin: { in: asins } },
     orderBy: { startDate: 'desc' },
     take: 3000,
-    select: { startDate: true, impressionsBrand: true, impressionsTotal: true },
+    select: { startDate: true, asin: true, impressionsBrand: true, impressionsTotal: true },
   })
-  if (!rows.length) return null
+  if (!rows.length) {
+    return none('never', `None of these ${asins.length} ASINs has ever appeared in Brand Analytics for ${marketplace}. That is an onboarding problem, not a stale feed — no recency guard would fix it.`)
+  }
+
+  // The reader's own selection: the newest week present for THESE ASINs in THIS market.
   const latest = +rows[0].startDate
+  const weekStart = rows[0].startDate.toISOString().slice(0, 10)
+  // Age from the week's START, matching how `rank-runtime` already measures it, so the two agree.
+  const ageDays = Math.max(0, Math.floor((+now - latest) / DAY_MS))
+
   let brand = 0, total = 0
-  for (const r of rows) { if (+r.startDate !== latest) continue; brand += r.impressionsBrand; total += r.impressionsTotal }
-  return total > 0 ? Math.max(0, Math.min(1, brand / total)) : null
+  const withData = new Set<string>()
+  for (const r of rows) {
+    if (+r.startDate !== latest) continue
+    brand += r.impressionsBrand
+    total += r.impressionsTotal
+    withData.add(r.asin)
+  }
+  const contributors = { withData: withData.size, total: asins.length }
+
+  // total === 0 means the week carries rows but no impressions to take a share OF — which is not
+  // the same as "we hold none" (brand 0 of a real total), and not the same as "never covered".
+  const share = total > 0 ? Math.max(0, Math.min(1, brand / total)) : null
+
+  const tooOld = ageDays > SQP_STALL_DAYS
+  const frac = contributors.total ? contributors.withData / contributors.total : 0
+  const thin = contributors.withData <= 1 || frac < SQP_THIN_BASIS_FRACTION
+
+  const reasons: string[] = []
+  if (tooOld) reasons.push(`the newest SQP week is ${ageDays} days old, past the ${SQP_STALL_DAYS}-day limit`)
+  else if (ageDays > 7) reasons.push(`the feed has not advanced in ${ageDays} days`)
+  if (thin) reasons.push(`${contributors.withData} of ${contributors.total} advertised ASIN${contributors.total === 1 ? '' : 's'} appear in that week, so the share describes a fraction of the scope`)
+  if (share === null) reasons.push('the latest week returned no impressions to take a share of')
+
+  const freshness: SqpFreshness = tooOld ? 'too-old' : (thin || reasons.length ? 'stale' : 'fresh')
+
+  return { share, ageDays, weekStart, contributors, freshness, reason: reasons.length ? reasons.join('; ') : null }
+}
+
+/**
+ * The pre-existing signature, unchanged in behaviour and kept for its two callers.
+ *
+ * 🔴 It deliberately does NOT apply the staleness guard: returning null here on age would change
+ * what `rank-runtime.service.ts` renders and what `ad-rank-defend` bids, silently, from inside a
+ * function neither of them asked to change. A caller that moves money opts IN by calling
+ * `sqpShareForAsins` and reading `freshness` — which is what makes the decision legible at the
+ * place it is taken rather than buried here.
+ */
+export async function sqpImpressionShareForAsins(marketplace: string, asins: string[]): Promise<number | null> {
+  return (await sqpShareForAsins(marketplace, asins)).share
 }
 
 export interface SqpProbeResult { available: boolean; reportType: string; marketplace: string; detail: string }
