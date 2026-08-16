@@ -228,9 +228,9 @@ at all.
 | `…/rules-automation/rules-automation.css` | SOV.1 (`h10-sov-*` at EOF) | 2026-08-12 | **released** — landed `858a21ae6`, 51 lines, staged as a rebuilt BLOB not a hunk; see §5's new trap |
 | `apps/web/next.config.js` | SOV.1 (the `?tab=` redirects the four routed tabs still lacked) | 2026-08-12 | **released** — landed `f4bc68eb7`. **All ten routed tabs are now covered**; `?tab=automations` and `?tab=dayparting` are fixed too — see §4 |
 
-| `…/rules-automation/dayparting/*` | RD.P4 (signal & freshness) | 2026-08-16 | **claimed** — page-own |
-| `apps/api/src/services/advertising/rank-runtime.service.ts` | RD.P4 (`signalFor` — contributor basis + the three states) | 2026-08-16 | **claimed** — RD.P2 created this file; `sqp.service.ts` is NOT touched |
-| `docs/2026-08-10-ra-session-locks.md` | RD.P4 (§2 rows + the SQP hand-off) | 2026-08-16 | **claimed** |
+| `…/rules-automation/dayparting/*` | RD.P4 (signal & freshness) | 2026-08-16 | **released** — landed `8283d11c2` |
+| `apps/api/src/services/advertising/rank-runtime.service.ts` | RD.P4 (`signalFor` — contributor basis + the three states) | 2026-08-16 | **released** — landed `8283d11c2`. `sqp.service.ts` untouched, as claimed |
+| `docs/2026-08-10-ra-session-locks.md` | RD.P4 (§2 rows + the SQP hand-off) | 2026-08-16 | **released** |
 
 **Two findings from KT.1 that bind every page in this section:**
 
@@ -1466,6 +1466,49 @@ FAILED type-check on `AdsFilterBar`'s `notesSlot` prop, so the live bundle may n
 **For whoever owns FB.3 / `AdsFilterBar`:** start there. A 6-second read that re-renders a
 2.8 MB payload on every cursor tick would also do it, so the `adsBus` / cursor work (`aa3f99cd7`,
 `7e6935135`) is the other place to look.
+
+**🔴 RD.P4 → the SQP programme, 2026-08-16 — your reader is unreachable by construction, and the
+band change you recommend will not change that.**
+
+`2026-08-12-sqp-feed.md` §18.1 measured *"campaigns where the IS branch is reachable: 0. Where it is
+not: 45"*, and concluded the reader is not the critical path — correctly, for the moment it was
+measured. This page's derivation is hour-resolved, so the same question was asked at every hour of
+the week (`_rd-page-p4-isbranch.mts`, using the engine's own functions):
+
+> **44 of 7,560 (campaign, hour) pairs — 0.58% — on exactly 2 campaigns, 22h each per week.
+> And every one of the 44 is on `PLACEMENT_TOP`.**
+
+The two are `GALE | IT | Exact | Brand` and `GALE | IT | PAT`, which carry the only override with a
+ceiling above its floor (`own-top {biasPct:100, maxBiasPct:200, targetISPct:55}`).
+
+**Zero of the 44 are on `PLACEMENT_REST_OF_SEARCH`** — because `rest-of-search` has `maxBiasPct:
+null`, so `canChase` is false for that lane at all 168 hours. `sqpImpressionShareForAsins` serves
+that lane and only that lane. So the SQP reader is not inert *today*; it is inert **by
+construction**, and no reader change can move a bid until `rest-of-search` specifically gets a
+ceiling.
+
+**Which makes §18.2's ordering the thing to revisit.** "Decide the band first" is right, but the
+band everyone means is `own-top` — that is what the study recommends and what moves 33 campaigns.
+Setting `maxBiasPct` on `own-top` makes the **Top-of-Search** reader live and leaves SQP exactly as
+inert as it is now. Options A/B/C are currently sized against a lane no ceiling decision is
+targeting. **If SQP wants its reader to matter, the ask is a ceiling on `rest-of-search` — a
+different, smaller and much lower-blast-radius decision than the one on the table.**
+
+**What RD.P4 built instead, and what it deliberately left to you.** The page now DISPLAYS the basis
+and never enforces it: `campaigns[].signal` carries `contributors {withData, total}`, a
+`freshness` of fresh/stale/never, and a `staleReason`. Measured on prod with the shipped
+classifier — AIREON's share comes from **1 of 40** advertised ASINs, AIRMESH **0 of 20**, GALE
+**11 of 18**; 22 campaigns read stale, 23 fresh. That confirms your §18 finding at campaign grain
+with independent numbers.
+
+The **guard is still yours**, untouched and unimplemented here, for the reason your §18.1 gives:
+a null is not neutral. `computeStep` falls through a null IS branch to the ACoS branch, which
+*raises*. A page that renders a number must not be the thing that decides to withhold it from an
+engine.
+
+Two constants are exported from `rank-runtime.ts` if you want the page and the guard to agree:
+`SQP_STALL_DAYS = 28` (your Option C, as a stall alarm — 21d and 24d deliberately do NOT trip it,
+because that is the feed's normal range) and `THIN_BASIS_FRACTION = 0.34`.
 
 ## 5 · Traps this repo has already paid for
 
