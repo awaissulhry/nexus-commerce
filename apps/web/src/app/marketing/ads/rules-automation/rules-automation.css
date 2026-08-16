@@ -5073,8 +5073,12 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    CONTENT. Scoped to `h10-rg-namew` (set only by `_shared/RulesGrid.tsx`) so the class it shares
    with Budget Pacing's schedules section is untouched. Appended at the END of the sheet because
    source order beats specificity here (reference_css_source_order_beats_specificity). */
-.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew { min-width: 0; max-width: 340px; }
+.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew { min-width: 0; max-width: 480px; }
 .h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The chip and the hover actions keep their size; only the name gives way. */
+/* The chip and the hover actions keep their size; only the name gives way. The cap is 480 rather
+   than the schedules grid's 340 because the row-hover actions (Open · History, 148px) sit in the
+   same flex line and hold their width whether or not they are visible — measured on prod at a
+   340 cap the name was left 137px of it. 480 leaves ~277px of name, and the column has the room:
+   the grid is 1,600 wide and Criteria's text is short. */
 .h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-bd7-posture,
 .h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-acts { flex-shrink: 0; }
