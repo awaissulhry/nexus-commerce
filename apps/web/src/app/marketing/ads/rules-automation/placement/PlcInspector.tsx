@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-17 (U2) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the per-campaign inspector rail (?row=): three lanes side by side, the owner, and the change ledger.
+ * Why it left: the Placement tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`PlacementRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.8, §7.3).
+ * Candidate home: Analytics › Campaigns, or the Ad Manager campaign row.
+ *
+ * Nothing here was changed and no endpoint was retired — the PLC.3 multiplier write path is still
+ * served. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * PLC.P2 — the inspector rail: one campaign, its three lanes, and the ledger.
  *
  * Opened by `?row=<campaignId>` (`?campaign=` is taken — it is the scope grain). The identity and

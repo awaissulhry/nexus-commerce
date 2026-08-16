@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-17 (U2) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: "Set across scope…" — the preview-then-confirm bulk multiplier write (?bulk=1).
+ * Why it left: the Placement tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`PlacementRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.8, §7.3).
+ * Candidate home: Bulk Operations — a bulk write surface. Its endpoint (`/placements/preview` + `PATCH /placements/:id/lane`) is untouched.
+ *
+ * Nothing here was changed and no endpoint was retired — the PLC.3 multiplier write path is still
+ * served. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * PLC.3 — the scope-bulk editor, and the preview that has to come first.
  *
  * The headline action: *"Set Rest of Search to 60% on every ENABLED campaign in the GALE line, in

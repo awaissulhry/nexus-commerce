@@ -21,7 +21,7 @@
  */
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
+import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -29,14 +29,15 @@ const MARKETS = ['IT', 'DE', 'FR', 'ES']
 export function BidRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const tab = rulesTabByKey('bid')
   const market = params.get('market') || 'all'
 
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
         title="Bid"
-        subtitle={tab?.subtitle ?? 'What each target bids, why it is that number, and who decided'}
+        /* U2 correction: the tab's stored subtitle — "what each target bids, why it is that
+           number" — describes the target grid that U1 parked. This page is the rule list. */
+        subtitle="Rules that change bids — what each one does, and whether it acts on its own"
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => {

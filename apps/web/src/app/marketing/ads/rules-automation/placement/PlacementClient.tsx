@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-17 (U2) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 14-block Placement page — its own scope bar · resolution + freshness sentences · census cells (inverted · compounding · unmanaged · decorative) · the lane split · "the hour" · the campaign×lane grid with the inline lane editor and the row refusal alert.
+ * Why it left: the Placement tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`PlacementRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.8, §7.3).
+ * Candidate home: Analytics — the lane split and the census are measurement; the campaign×lane grid and its editor belong with the write surfaces (Bulk Operations / Ad Manager).
+ *
+ * Nothing here was changed and no endpoint was retired — the PLC.3 multiplier write path is still
+ * served. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * PLC.0 — Placement, its own page. The basis: read-only, live on production.
  *
  * One question: **for every campaign, in which lane are my ads showing, what is each lane worth,

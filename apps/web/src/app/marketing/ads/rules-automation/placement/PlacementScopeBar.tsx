@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-17 (U2) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: this page's own scope bar (Product line · Portfolio · Campaign · Lane) — one of the seven page-local forks of the scope spine.
+ * Why it left: the Placement tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`PlacementRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.8, §7.3).
+ * Candidate home: travels with PlacementClient; the shared `AdsFilterBar` + `buildScopeFilters` supersede it wherever it lands.
+ *
+ * Nothing here was changed and no endpoint was retired — the PLC.3 multiplier write path is still
+ * served. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * PLC.0 — the Placement page's scope bar: Product line · Portfolio · Campaign · Lane.
  *
  * 🔴 Market is deliberately NOT here. `AdsPageHeader` already renders a market picker on every ads
