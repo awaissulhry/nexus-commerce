@@ -14,14 +14,15 @@
  */
 import { useCallback, useMemo, useState } from 'react'
 import { ExternalLink, History } from 'lucide-react'
-import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
+import { AdsDataGrid, type GridColumn, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from './ScheduleActivityDrawer'
 import { relTime } from './scheduleHealth'
 import { useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { campaignMatchesScope } from './_rd/scope'
-import { isTileKey, tileMatch } from './_rd/tiles'
+import { RD_TILE_KEYS, isTileKey, tileMatch } from './_rd/tiles'
+import { rdFilters, rdFilterState, rdUrlPatch } from './_rd/rdFilters'
 import { GrainSwitch } from './_rd/GrainSwitch'
 import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
@@ -29,17 +30,25 @@ import type { RdCampaignRow } from './_rd/types'
 const builderHref = (groupId: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule?groupId=${groupId}`
 
 export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) => string | null; name: (k: string) => string } }) {
-  const { campaigns, groups, loading, clock, portfolioNames, productLines } = useRdData()
+  const { campaigns, groups, loading, clock, portfolioNames, productLines, scopeOptions } = useRdData()
   const { state: url, set: setUrl } = useRdUrlState()
   const [sel, setSel] = useState<Set<string>>(new Set())
 
   // P1 — the fleet band's tile filter composes with scope, through the SAME predicate the band
   // counted with, so a tile's number and its result cannot disagree. An unknown ?tile= value
   // filters nothing rather than blanking the grid.
+  const inScope = useMemo(() => campaigns.filter((r) => campaignMatchesScope(r, url)), [campaigns, url])
   const rows = useMemo(
-    () => campaigns.filter((r) => campaignMatchesScope(r, url) && (!isTileKey(url.tile) || tileMatch(r, url.tile))),
-    [campaigns, url],
+    () => inScope.filter((r) => !isTileKey(url.tile) || tileMatch(r, url.tile)),
+    [inScope, url.tile],
   )
+  // Counted with the band's own predicate, over the rows the SCOPE leaves — so every option in the
+  // Fleet state select delivers exactly the number it advertises.
+  const tileCounts = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const k of RD_TILE_KEYS) out[k] = inScope.filter((r) => tileMatch(r, k)).length
+    return out
+  }, [inScope])
 
   // The inspector is still the SCHEDULE's — a campaign has no history of its own, and its next 24
   // hours are its parent plan's. Opening it from a campaign row is a link to the parent.
@@ -140,17 +149,21 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     },
   ], [palette, portfolioNames, lineLabel, setUrl])
 
-  const filters: GridFilter[] = useMemo(() => [
-    { key: 'mode', label: 'Mode', kind: 'multiselect', placeholder: 'Any mode',
-      options: [...new Set(campaigns.map((r) => r.runtime.mode?.kind).filter(Boolean) as string[])].map((k) => ({ value: k, label: k.replace(/-/g, ' ') })),
-      value: (r) => (r as RdCampaignRow).runtime.mode?.kind ?? '' },
-    { key: 'converge', label: 'Convergence', kind: 'select', placeholder: 'Any',
-      options: [{ value: 'no', label: 'Cannot converge' }, { value: 'yes', label: 'OK' }],
-      value: (r) => ((r as RdCampaignRow).runtime.canConverge ? 'yes' : 'no') },
-    { key: 'signal', label: 'Signal', kind: 'multiselect', placeholder: 'Any signal',
-      options: [...new Set(campaigns.map((r) => r.runtime.signal?.kind).filter(Boolean) as string[])].map((k) => ({ value: k, label: k.replace(/-/g, ' ') })),
-      value: (r) => (r as RdCampaignRow).runtime.signal?.kind ?? '' },
-  ], [campaigns])
+  // FB.3 — the panel moved to the page's one bar, above the fleet band. The grid still does every
+  // bit of the filtering, off the same definitions the bar renders, out of the same URL store.
+  const filters = useMemo(
+    () => rdFilters({ options: scopeOptions, url, campaigns, tileCounts }),
+    [scopeOptions, url, campaigns, tileCounts],
+  )
+  const filterState = useMemo(() => rdFilterState(url), [url])
+  const setFilterState = useCallback(
+    (next: FilterState) => {
+      const flat: Record<string, string> = {}
+      for (const [k, v] of Object.entries(next)) flat[k] = Array.isArray(v) ? v.join(',') : typeof v === 'string' ? v : ''
+      setUrl(rdUrlPatch(flat))
+    },
+    [setUrl],
+  )
 
   const renderFirst = (r: RdCampaignRow) => (
     <span className="rg-namecell">
@@ -184,7 +197,9 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
         firstSortValue={(r) => r.campaignName}
         columns={columns}
         filters={filters}
-        filtersDefaultOpen={false}
+        filterState={filterState}
+        onFilterStateChange={setFilterState}
+        hideFilterPanel
         selectable
         selected={sel}
         onSelectedChange={setSel}

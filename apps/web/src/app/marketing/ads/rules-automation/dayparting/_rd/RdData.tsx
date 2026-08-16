@@ -31,6 +31,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { getBackendUrl } from '@/lib/backend-url'
 import type { RdCampaignRow, RdCampaignRuntime, RdGroupRow, RdGroupRuntime, RdTargetMeta } from './types'
 import { EMPTY_RUNTIME } from './types'
+import type { ScopeOptionsPayload } from '../../_shared/scopeFilters'
 
 /** Built-in keys + the builder's palette, so a row renders before /rank-targets lands. */
 const FALLBACK_TARGETS: Record<string, RdTargetMeta> = {
@@ -50,6 +51,12 @@ export interface RdData {
   portfolioNames: Record<string, string>
   /** Product line id → a label the pickers can show. */
   productLines: Array<{ id: string; label: string }>
+  /**
+   * FB.3 — `/scope-options` in the shape the shared scope pickers take, so this page's bar offers
+   * exactly what the other ten offer. Null until the read lands; `buildScopeFilters` renders the
+   * grains disabled until then rather than pretending an empty account.
+   */
+  scopeOptions: ScopeOptionsPayload | null
   /** Every marketplace the ACCOUNT advertises in — what the header's switch offers. */
   markets: string[]
   /** RD.P2 — the group grain's roll-up, keyed by group id. A SPREAD, never an average. */
@@ -140,6 +147,29 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
       const id = String(p.externalPortfolioId ?? p.portfolioId ?? p.id ?? '')
       if (id) portfolioNames[id] = String(p.name ?? id)
     }
+
+    // The raw payload, kept as the shared pickers want it — the derived maps below stay as they are.
+    const scopeOptions: ScopeOptionsPayload | null = raw?.scope
+      ? {
+        campaigns: scopeCampaigns.map((c) => ({
+          id: String(c.id ?? ''),
+          name: String(c.name ?? c.id ?? ''),
+          marketplace: (c.marketplace as string | null) ?? null,
+          portfolioId: c.portfolioId ? String(c.portfolioId) : null,
+        })).filter((c) => c.id),
+        portfolios: arr(raw?.scope?.['portfolios']).map((p) => ({
+          externalPortfolioId: String(p.externalPortfolioId ?? p.portfolioId ?? p.id ?? ''),
+          name: String(p.name ?? ''),
+        })).filter((p) => p.externalPortfolioId),
+        productLines: arr(raw?.scope?.['productLines']).map((l) => ({
+          id: String(l.id ?? ''),
+          sku: String(l.sku ?? l.id ?? ''),
+          name: String(l.name ?? ''),
+          variations: Number(l.variations ?? 0),
+          campaigns: (Array.isArray(l.campaigns) ? (l.campaigns as unknown[]) : []).map((c) => String(c)),
+        })).filter((l) => l.id),
+      }
+      : null
 
     const productLines: Array<{ id: string; label: string }> = []
     const linesByCampaign = new Map<string, string[]>()
@@ -279,7 +309,7 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
       scopeCampaigns.map((c) => (c.marketplace ? String(c.marketplace) : '')).filter(Boolean),
     )].sort()
 
-    return { groups, campaigns, targets, portfolioNames, productLines, markets, groupRuntime, clock, loading, error, refresh }
+    return { groups, campaigns, targets, portfolioNames, productLines, scopeOptions, markets, groupRuntime, clock, loading, error, refresh }
   }, [raw, loading, error, refresh])
 
   return <RdDataContext.Provider value={value}>{children}</RdDataContext.Provider>

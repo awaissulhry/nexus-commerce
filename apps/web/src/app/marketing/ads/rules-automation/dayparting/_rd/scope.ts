@@ -89,11 +89,34 @@ export interface RdUrlState extends RdScope {
   drawer: string
   /** Which fleet-state tile is filtering the grid. P1 owns the band; P0 carries the value. */
   tile: string
+  /**
+   * FB.3 — the campaigns grid's three filters, lifted into the URL.
+   *
+   * They were `AdsDataGrid`'s private state, in a panel below the census, while scope had no
+   * control at all and the fleet tiles wrote `?tile=` from the band above it. That is three
+   * control surfaces for one grid and two of them unlinkable. One bar now holds all of it, which
+   * means one store, which means the URL. Comma-joined; `converge` is single-valued.
+   */
+  mode: string
+  signal: string
+  converge: string
 }
 
-export const EMPTY_URL_STATE: RdUrlState = { ...EMPTY_SCOPE, grain: 'schedules', row: '', drawer: '', tile: '' }
+export const EMPTY_URL_STATE: RdUrlState = { ...EMPTY_SCOPE, grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '' }
 
 const GRAINS = new Set(['schedules', 'campaigns'])
+
+/**
+ * FB.3 — where a state key and its URL param disagree.
+ *
+ * `product` is honest INSIDE this module (the value is a `Product.id`), but this was the only page
+ * left spelling the grain `?product=` in the address bar while the other ten said `?line=`, so a
+ * link could not be carried between them. The param moved; the field did not. `parseUrlState`
+ * still READS the old spelling, so links already out there keep working, and `applyUrlState`
+ * deletes it the first time anything moves — one grain, one param.
+ */
+const PARAM_OF: Partial<Record<keyof RdUrlState, string>> = { product: 'line' }
+const paramFor = (k: keyof RdUrlState): string => PARAM_OF[k] ?? k
 
 /** Read the whole page state out of the URL. Unknown values fall back rather than throwing. */
 export function parseUrlState(sp: URLSearchParams | null): RdUrlState {
@@ -102,12 +125,15 @@ export function parseUrlState(sp: URLSearchParams | null): RdUrlState {
   return {
     market: get('market') || 'all',
     portfolio: get('portfolio'),
-    product: get('product'),
+    product: get('line') || get('product'),
     campaign: get('campaign'),
     grain: GRAINS.has(grain) ? (grain as RdUrlState['grain']) : 'schedules',
     row: get('row'),
     drawer: get('drawer'),
     tile: get('tile'),
+    mode: get('mode'),
+    signal: get('signal'),
+    converge: get('converge'),
   }
 }
 
@@ -133,8 +159,11 @@ function isDefault(key: keyof RdUrlState, value: string): boolean {
 export function applyUrlState(current: URLSearchParams, patch: Partial<RdUrlState>): string {
   const next = new URLSearchParams(current.toString())
   for (const [k, v] of Object.entries(patch) as Array<[keyof RdUrlState, string]>) {
-    if (isDefault(k, v)) next.delete(k)
-    else next.set(k, v)
+    const param = paramFor(k)
+    if (isDefault(k, v)) next.delete(param)
+    else next.set(param, v)
+    // The superseded spelling never survives a write, or the two would drift apart silently.
+    if (param !== k) next.delete(k)
   }
   return next.toString()
 }

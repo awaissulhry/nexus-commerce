@@ -167,7 +167,10 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
           )}
         </div>
         <div className="h10-dp-panelctl">
-          <H10Select width={210} options={scopeOptions} value={scope} onChange={setScope} ariaLabel="Heatmap scope" />
+          {/* FB.3 — "schedule", not "scope". This picks WHICH SCHEDULE the heatmap draws, and the
+              page now has a real scope bar at the top; two adjacent controls both called scope,
+              about different axes, is one of the duplicates the merge exists to remove. */}
+          <H10Select width={210} options={scopeOptions} value={scope} onChange={setScope} ariaLabel="Heatmap schedule" />
           <H10Select width={140} options={CHART_METRICS} value={metric} onChange={setMetric} ariaLabel="Heatmap metric" />
           <H10Select width={150} options={WINDOWS} value={weeks} onChange={setWeeks} ariaLabel="Heatmap period" />
         </div>

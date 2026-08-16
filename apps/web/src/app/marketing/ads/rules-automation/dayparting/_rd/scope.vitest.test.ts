@@ -98,7 +98,7 @@ describe('campaignMatchesScope — scalars, because a campaign has one of each',
 describe('the URL contract', () => {
   it('reads defaults out of an empty query', () => {
     const s = parseUrlState(new URLSearchParams(''))
-    expect(s).toEqual({ market: 'all', portfolio: '', product: '', campaign: '', grain: 'schedules', row: '', drawer: '', tile: '' })
+    expect(s).toEqual({ market: 'all', portfolio: '', product: '', campaign: '', grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '' })
   })
 
   it('falls back rather than throwing on an unknown grain', () => {
@@ -127,7 +127,33 @@ describe('the URL contract', () => {
   })
 
   it('round-trips every field', () => {
-    const state = { market: 'DE', portfolio: 'p1', product: 'pr1', campaign: 'c1', grain: 'campaigns' as const, row: 'r1', drawer: 'next24', tile: 'capped' }
+    const state = { market: 'DE', portfolio: 'p1', product: 'pr1', campaign: 'c1', grain: 'campaigns' as const, row: 'r1', drawer: 'next24', tile: 'capped', mode: 'holding,chasing', signal: 'no-signal', converge: 'no' }
     expect(parseUrlState(new URLSearchParams(urlStateToQuery(state)))).toEqual(state)
+  })
+})
+
+describe('FB.3 — the line grain moved from ?product= to ?line=', () => {
+  it('reads the new spelling', () => {
+    expect(parseUrlState(new URLSearchParams('line=pr1')).product).toBe('pr1')
+  })
+
+  it('still reads the old one, so links already shared keep working', () => {
+    expect(parseUrlState(new URLSearchParams('product=pr1')).product).toBe('pr1')
+  })
+
+  it('prefers the new spelling when a link somehow carries both', () => {
+    expect(parseUrlState(new URLSearchParams('line=new&product=old')).product).toBe('new')
+  })
+
+  it('writes only the new spelling, and deletes the old one it arrived on', () => {
+    const qs = applyUrlState(new URLSearchParams('product=old'), { product: 'new' })
+    expect(new URLSearchParams(qs).get('line')).toBe('new')
+    expect(new URLSearchParams(qs).get('product')).toBeNull()
+  })
+
+  it('clearing the grain removes both spellings rather than leaving the stale one deciding', () => {
+    const qs = applyUrlState(new URLSearchParams('product=old&line=new'), { product: '' })
+    expect(new URLSearchParams(qs).get('line')).toBeNull()
+    expect(new URLSearchParams(qs).get('product')).toBeNull()
   })
 })

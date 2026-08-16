@@ -28,6 +28,10 @@ import { RdSection } from './_rd/RdSection'
 import { RdCeilings } from './RdCeilings'
 import { RdFleetBand } from './RdFleetBand'
 import { useAdsSync } from '../_shared/adsBus'
+import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { rdFilters, rdFilterState, rdUrlPatch } from './_rd/rdFilters'
+import { campaignMatchesScope } from './_rd/scope'
+import { RD_TILE_KEYS, tileMatch } from './_rd/tiles'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -49,16 +53,19 @@ function DaypartingSchedulesBody() {
   // RD.P0 — markets, schedule pickers and the reload signal all come from the one layer. The two
   // fetches this component used to own are gone: `/advertising/campaigns?limit=500` (markets) is
   // covered by `/scope-options`, and `/rank-schedule-groups` was being fetched here AND in the grid.
-  const { groups, markets, refresh } = useRdData()
+  const { groups, campaigns, markets, scopeOptions, refresh } = useRdData()
 
   // RT.1 — your own writes, from any tab, applied silently. Schedules and placement multipliers are
   // the two subjects this page renders; a plan edited on Placement moves rows here. An ENGINE's
   // 15-minute tick arrives on the other rail (the cursor poll) and offers a banner instead.
   useAdsSync(['ads.schedule.changed', 'ads.placement.changed'], refresh)
-  // RD.P0 — the header's market switch writes `?market=`, and the URL is the only state. It is the
-  // one scope control the page ships: `?portfolio=`, `?product=` and `?grain=` are parsed and
-  // honoured, but their pickers wait for P2 rather than becoming a fourth copy of a scope bar three
-  // other sessions are already forking (locks §4).
+  // RD.P0 — the header's market switch writes `?market=`, and the URL is the only state.
+  //
+  // FB.3 — and the other three grains finally have controls. `?portfolio=`, `?line=` and
+  // `?campaign=` were parsed and honoured from P0 and rendered NO picker, so the only way to
+  // narrow this page by portfolio was to type the URL by hand. P0 declined to write a fourth copy
+  // of the RA scope bar; the answer turned out to be not writing one at all — the grains are
+  // selects in the shared filter bar, like the other ten pages.
   const { state: url, set: setUrl } = useRdUrlState()
   const market = url.market
 
@@ -91,6 +98,21 @@ function DaypartingSchedulesBody() {
 
   const subtitle = useMemo(() => rulesTabByKey('dayparting')?.subtitle ?? '', [])
 
+  // FB.3 — the bar's definitions, from the same module the grid filters with. The tile counts are
+  // the band's own predicate over the rows the scope leaves, so an option's number is what it
+  // delivers. At schedules grain `rdFilters` returns the scope grains alone: the other three read
+  // campaign runtime, and a schedule is a roll-up of many campaigns with no single mode of its own.
+  const inScope = useMemo(() => campaigns.filter((r) => campaignMatchesScope(r, url)), [campaigns, url])
+  const tileCounts = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const k of RD_TILE_KEYS) out[k] = inScope.filter((r) => tileMatch(r, k)).length
+    return out
+  }, [inScope])
+  const filters = useMemo(
+    () => rdFilters({ options: scopeOptions, url, campaigns, tileCounts }),
+    [scopeOptions, url, campaigns, tileCounts],
+  )
+
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
@@ -112,6 +134,22 @@ function DaypartingSchedulesBody() {
       />
       <RulesTabs active="dayparting" />
       <StaleBanner stale={dpRefresh.stale} subject="A schedule, a rank target or the engine's applied state" onRefresh={refresh} />
+
+      {/* FB.3 — ONE bar, at the top: controls, then the numbers they produce, then the rows. It
+          holds the three scope grains always, and the campaigns grid's own Fleet state / Mode /
+          Signal / Convergence filters when that grain is showing. The fleet tiles below write the
+          same `?tile=` this bar's Fleet state select does — one store, two affordances, so a tile
+          and the select can no longer disagree about what is filtered. */}
+      <AdsFilterBar
+        filters={filters}
+        value={rdFilterState(url)}
+        onChange={(next) => {
+          const flat: Record<string, string> = {}
+          for (const [k, v] of Object.entries(next)) flat[k] = Array.isArray(v) ? v.join(',') : typeof v === 'string' ? v : ''
+          setUrl(rdUrlPatch(flat))
+        }}
+        defaultOpen
+      />
 
       {/* ── The section map, structure doc §3, top to bottom ──────────────────────────────────
           Unbuilt sections are NOT MOUNTED. An empty placeholder card is dead space, and the
