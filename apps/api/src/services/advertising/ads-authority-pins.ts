@@ -140,11 +140,24 @@ export function pinDenial(
     const where = write.campaignId ? ` on ${write.campaignId}` : ''
     const note = pins.pinNote ? ` (${pins.pinNote})` : ''
     const { noun, verb } = PIN_LABEL[d]
+    /**
+     * PLC.3 — where to clear it is now dimension-specific.
+     *
+     * Substrate §4 moves each pin to its own dimension's page (`pinPlacement` → Placement,
+     * `pinBids` → Bid, `pinBudget` → Budget). Placement's toggle SHIPPED in PLC.3, so naming only
+     * the Control Room would send an operator to the wrong screen for the one dimension that has
+     * a nearer control. Bids and budget keep pointing at the Control Room because their pages have
+     * not shipped a toggle yet — and a refusal that names a control which does not exist is worse
+     * than one that names a further-away control which does.
+     */
+    const clearAt = d === 'placement'
+      ? 'Clear the pin on the Placement page (Rules & Automation → Placement, open the campaign) or in the Control Room'
+      : 'Clear the pin in the Control Room'
     return {
       dimension: d,
       reason:
         `${noun} is pinned${where}${note} — this campaign's ${noun} ${verb} held by hand. ` +
-        'Clear the pin in the Control Room to let automation write it again.',
+        `${clearAt} to let automation write it again.`,
     }
   }
   return null

@@ -5118,3 +5118,11 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-menu-foot .mk-cancel:hover { background: #f1f4f8; }
 .h10-menu-foot .mk-apply { flex: 1; padding: 4px 10px; border: 1px solid #10457f; border-radius: 6px; background: #10457f; font-size: 11.5px; font-weight: 800; color: #fff; cursor: pointer; text-align: center; }
 .h10-menu-foot .mk-apply:hover { background: #0d3868; }
+
+/* 🔴 PLC.3 — the bulk trigger's label wrapped onto a second line.
+   `h10-plc-toggle` (PLC.0) is `display: block` and was only ever given text; this button adds an
+   icon, and an inline `<svg>` in this codebase computes to `display: block`
+   (`reference_inline_svg_display_block_trap`), which forces the label onto its own line. Measured
+   on prod: the icon and the text rendered stacked inside a 36px button.
+   Scoped to the toolbar so PLC.0's other uses of the class are untouched. */
+.h10-plc-tools .h10-plc-toggle { display: inline-flex; align-items: center; gap: 5px; }

@@ -69,7 +69,27 @@ export function buildManualAdjustments(
 ): PlacementAdjustment[] {
   const cur = currentLanes(existing)
   const next = { ...cur, [lane]: clampPct(pct) }
-  const out: PlacementAdjustment[] = MANAGED_PLACEMENTS.map((p) => ({ placement: p, percentage: next[p as ManagedPlacement] }))
+  /**
+   * 🔴 A lane that is absent AND staying at 0 is not emitted.
+   *
+   * Caught by the first real write on production. Setting Product on a campaign with a bare
+   * profile produced THREE `CampaignBidHistory` rows — `product absent→5` plus `top absent→0` and
+   * `rest absent→0` — because the merge materialised the two untouched lanes as explicit zeroes and
+   * `updatePlacementBidding`'s change-detection reads `undefined !== 0` as a change. Two rows
+   * saying "changed from nothing to nothing", on every first edit.
+   *
+   * The study already measured that 30% of the ENGINE's history rows are writes of 0 over an
+   * absent lane (§4.5). A manual bulk adding two more per campaign would have made this page a
+   * contributor to the noise it exists to expose.
+   *
+   * The anti-erase guarantee is untouched, because it only ever needed the lanes that carry a
+   * value: absent and 0 are the same instruction to Amazon, so a lane at 0 need not be sent — but a
+   * lane at 45 must be, or the wholesale write drops it. That is exactly the rule
+   * `buildBlendedAdjustments` follows ("skip if already 0"), so the two writers now agree.
+   */
+  const out: PlacementAdjustment[] = MANAGED_PLACEMENTS
+    .filter((p) => p === lane || next[p as ManagedPlacement] > 0)
+    .map((p) => ({ placement: p, percentage: next[p as ManagedPlacement] }))
   for (const e of existing ?? []) {
     if (e?.placement && !(MANAGED_PLACEMENTS as readonly string[]).includes(e.placement)) {
       out.push({ placement: e.placement, percentage: e.percentage })

@@ -47,7 +47,7 @@
  * Automations. This page renders outcomes and points at each of them.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -388,6 +388,8 @@ export function PlacementClient() {
    */
   const [saving, setSaving] = useState<string | null>(null)
   const [rowRefusal, setRowRefusal] = useState<{ campaignId: string; name: string; reason: string; deniedAt?: string } | null>(null)
+  // Declared before `writeLane` so the write can re-sync the poll; assigned from the hook below.
+  const checkRef = useRef<() => void>(() => {})
 
   const writeLane = useCallback(async (row: Row, pct: number) => {
     const key = `${row.campaignId}:${row.laneKey}`
@@ -419,6 +421,16 @@ export function PlacementClient() {
       // Refetch from the SERVER rather than patching local state — a grid that edits its own
       // useState and calls it done is the RuleListTab defect this page exists to correct.
       setReloadTick((n) => n + 1)
+      /**
+       * 🔴 …and re-poll, or the page accuses the engine of your own edit.
+       *
+       * Observed on production immediately after the first real write: the banner appeared saying
+       * "the engine has moved since this loaded". It had not. The poll's last cursor predated the
+       * write, the refetched payload's baseline postdated it, so `stale` went true — the page was
+       * NEWER than the poll and reported the opposite. Re-checking re-syncs the cursor to the write
+       * the operator just made.
+       */
+      checkRef.current()
     } catch (e) {
       setRowRefusal({ campaignId: row.campaignId, name: row.name, reason: (e as Error).message })
     } finally { setSaving(null) }
@@ -430,6 +442,7 @@ export function PlacementClient() {
     baseline: data?.cursor ?? null,
     enabled: !loading,
   })
+  useEffect(() => { checkRef.current = check }, [check])
 
   /**
    * The census strip. Each cell is a filter, each states its denominator, and none of them is ever
@@ -821,7 +834,7 @@ export function PlacementClient() {
               whether a multiplier is wrong is not a screen that should reorder itself mid-sentence. */}
           {stale && (
             <button type="button" className="h10-plc-stale" onClick={() => { setReloadTick((n) => n + 1); check() }}>
-              <RefreshCw size={11} /> The engine has moved since this loaded — refresh
+              <RefreshCw size={11} /> A placement multiplier has changed since this loaded — refresh
             </button>
           )}
         </p>

@@ -24,25 +24,47 @@ describe('buildManualAdjustments — one lane in, THREE lanes out', () => {
     expect(pmap(out)).toEqual({ [TOP]: 60, [REST]: 45, [PROD]: 30 })
   })
 
+  it('preserves them on a REAL prod profile shape (all 88 two-lane campaigns behave like this)', () => {
+    // MISANO JACKET BLACK PHRASE, as stored: the naive payload would have zeroed product=6.
+    const out = buildManualAdjustments(
+      [{ placement: TOP, percentage: 28 }, { placement: PROD, percentage: 6 }],
+      TOP, 60,
+    )
+    expect(pmap(out)).toEqual({ [TOP]: 60, [PROD]: 6 })
+  })
+
   it('🔴 the naive one-lane payload would have erased them — this is the regression', () => {
     const existing = [{ placement: TOP, percentage: 150 }, { placement: REST, percentage: 45 }]
     // What a caller writing the obvious thing would send:
     const naive = [{ placement: REST, percentage: 60 }]
     expect(pmap(naive)[TOP]).toBeUndefined()          // Top vanishes → Amazon reads 0
-    // What this function sends instead:
-    expect(pmap(buildManualAdjustments(existing, REST, 60))).toEqual({ [TOP]: 150, [REST]: 60, [PROD]: 0 })
+    // What this function sends instead — Top survives; Product stays absent because it was absent.
+    expect(pmap(buildManualAdjustments(existing, REST, 60))).toEqual({ [TOP]: 150, [REST]: 60 })
   })
 
-  it('always emits all three managed lanes, even from an empty profile', () => {
+  /**
+   * 🔴 Found by the first real write on production, not here.
+   *
+   * The merge used to emit all three lanes always, so a first edit on a bare campaign wrote THREE
+   * ledger rows — the change, plus `top absent→0` and `rest absent→0`, because
+   * `updatePlacementBidding` reads `undefined !== 0` as a change. Absent and 0 are the same
+   * instruction to Amazon, so a lane at 0 need not be sent; a lane with a VALUE must be, or the
+   * wholesale write drops it. Same rule as `buildBlendedAdjustments`.
+   */
+  it('does NOT materialise an absent lane as an explicit 0 (ledger noise)', () => {
     const out = buildManualAdjustments([], TOP, 100)
-    expect(out).toHaveLength(3)
-    expect(pmap(out)).toEqual({ [TOP]: 100, [REST]: 0, [PROD]: 0 })
+    expect(pmap(out)).toEqual({ [TOP]: 100 })
+    expect(out).toHaveLength(1)
   })
 
-  it('treats an ABSENT lane as 0 rather than dropping it', () => {
-    // Rest absent from the stored profile — it must come back as an explicit 0, not vanish.
+  it('…but still emits every lane that CARRIES a value, which is the anti-erase guarantee', () => {
     const out = buildManualAdjustments([{ placement: TOP, percentage: 20 }], PROD, 5)
-    expect(pmap(out)).toEqual({ [TOP]: 20, [REST]: 0, [PROD]: 5 })
+    expect(pmap(out)).toEqual({ [TOP]: 20, [PROD]: 5 })   // Rest absent in, absent out
+  })
+
+  it('emits the target lane even when it is being set to 0 — that is how a lane is cleared', () => {
+    const out = buildManualAdjustments([{ placement: TOP, percentage: 150 }], TOP, 0)
+    expect(pmap(out)).toEqual({ [TOP]: 0 })
   })
 
   it('clamps to Amazon\'s 0–900 and rounds to an integer', () => {
@@ -53,7 +75,7 @@ describe('buildManualAdjustments — one lane in, THREE lanes out', () => {
 
   it('clamps values it did not touch, so a corrupt stored profile cannot be written back out', () => {
     const out = buildManualAdjustments([{ placement: REST, percentage: 5000 }], TOP, 10)
-    expect(pmap(out)[REST]).toBe(900)
+    expect(pmap(out)[REST]).toBe(900)   // emitted because it carries a value, and clamped
   })
 
   it('preserves a NON-managed placement Amazon may add (e.g. Amazon Business)', () => {
@@ -61,7 +83,7 @@ describe('buildManualAdjustments — one lane in, THREE lanes out', () => {
       [{ placement: TOP, percentage: 10 }, { placement: 'PLACEMENT_AMAZON_BUSINESS', percentage: 25 }],
       TOP, 40,
     )
-    expect(pmap(out)).toEqual({ [TOP]: 40, [REST]: 0, [PROD]: 0, PLACEMENT_AMAZON_BUSINESS: 25 })
+    expect(pmap(out)).toEqual({ [TOP]: 40, PLACEMENT_AMAZON_BUSINESS: 25 })
   })
 
   it('setting a lane to 0 zeroes only that lane', () => {
@@ -69,7 +91,7 @@ describe('buildManualAdjustments — one lane in, THREE lanes out', () => {
       [{ placement: TOP, percentage: 150 }, { placement: REST, percentage: 45 }],
       TOP, 0,
     )
-    expect(pmap(out)).toEqual({ [TOP]: 0, [REST]: 45, [PROD]: 0 })
+    expect(pmap(out)).toEqual({ [TOP]: 0, [REST]: 45 })
   })
 })
 
