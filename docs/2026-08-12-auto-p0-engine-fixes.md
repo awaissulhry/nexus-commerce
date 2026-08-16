@@ -257,6 +257,30 @@ is now sourceable verbatim, for the first time since 2026-08-04:
 is a governed stop. Nothing may fold them into a failure rate, a health percentage, or a colour
 shared with one.
 
+### The UTC day boundary, and the third family — both verified at 00:13 UTC
+
+The code was live for the last ~40 minutes of 2026-08-15 and recorded **440 refusals** in that
+window. Read again just after midnight UTC:
+
+```
+Low CTR bid reduction        2026-08-15  DAILY_CAP_EXCEEDED  cap 200  refused 158
+Wasted keyword instant negate 2026-08-15 DAILY_CAP_EXCEEDED  cap 200  refused 102
+…14 more rows, all 2026-08-15, all frozen at their final counts
+
+Reduce bids on ACOS spike    2026-08-16  VALUE_CAP_EXCEEDED  cap  10  refused   2   ← NEW
+```
+
+Two things this proves that the tests could only assert in isolation:
+
+1. **The UTC bucket rolls correctly.** A new row opened for `2026-08-16` while every `2026-08-15`
+   row froze. The day key matches the cap counter's own `setUTCHours(0,0,0,0)`, so the record and
+   the counter it describes agree about when a day ends.
+2. 🔴 **The third family is recording, and it is the one that was doing damage.**
+   `Reduce bids on ACOS spike` carries `maxValueCentsEur = 0`. For eight days its refusals were
+   logged as `status='FAILED'` with a null `errorMessage` — 1,029 of 1,029, a switched-off rule
+   wearing a broken rule's colours. **This is the first time in this codebase that its refusals have
+   been recorded as refusals.**
+
 ---
 
 ## 6 · Two ways a shared file was lost, both worth recording
