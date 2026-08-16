@@ -555,8 +555,8 @@ source alone, or it will reproduce the exact defect the guard just closed.
 
 **Not started, and unclaimed — the rest of RA.BASIS-B:** the freshness endpoint and
 `<FreshnessChip>` (two pages carry placeholders shaped for it), the refusal shape (B2), the four
-empty states (B3), the `parseActor` promotion (B4), the ledger decision (B5), and the `RuleListTab`
-bulk toolbar that writes nothing (B6). Measurements for all six are in
+empty states (B3), the `parseActor` promotion (B4) and the ledger decision (B5). **B6 is already fixed** — `RuleListTab`
+now calls the real DELETE endpoint; verified, do not re-open. Measurements are in
 `docs/2026-08-16-ra-basis-b.md` §2 so the next session does not re-derive them.
 
 ### 🔴 RA.SPINE hand-offs, 2026-08-12 — two units NOT built, and what unblocks each
