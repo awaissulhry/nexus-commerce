@@ -366,6 +366,10 @@ export function BudgetSchedulesClient() {
           <InspectorRail
             open={url.open}
             onClose={() => push({ open: '' })}
+            /* The campaign's NAME, not its cuid — the rail is read by a person. */
+            title={url.open.kind === 'campaign'
+              ? bindingRows.find((r) => r.id === (url.open as BspOpen).id)?.name
+              : undefined}
             /* BSP.2 — the `campaign:` rail is fed from the rows the section already fetched, so
                opening it costs no second request and can never disagree with the grid behind it. */
             campaignBody={url.open.kind === 'campaign' ? (

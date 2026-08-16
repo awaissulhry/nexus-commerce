@@ -46,10 +46,19 @@ const RAIL: Record<BspOpen['kind'], { title: (id: string) => string; session: st
 }
 
 export function InspectorRail({
-  open, onClose, planBody, campaignBody,
+  open, onClose, planBody, campaignBody, title,
 }: {
   open: BspOpen
   onClose: () => void
+  /**
+   * BSP.2 · binding — an operator-facing name for the entity, when the caller knows one.
+   *
+   * The `RAIL` map builds a title from the id because in BSP.0 every branch was a placeholder and
+   * an id was all there was. Now that `campaign:` carries real content, `Campaign
+   * cmpee2fun09oioj01764ctbqb` is what an operator reads at the top of it — a cuid identifies the
+   * row to the database and to nobody else.
+   */
+  title?: string
   /**
    * BSP.1 — the `plan:` editor, composed by the client because it owns the writes and the shared
    * pacing fetch. The rail stays a frame: it knows what each kind is called, not what it contains.
@@ -59,11 +68,12 @@ export function InspectorRail({
   campaignBody?: ReactNode
 }) {
   const def = RAIL[open.kind]
+  const heading = title ?? def.title(open.id)
 
   return (
-    <aside className="h10-bsp-rail" aria-label={def.title(open.id)}>
+    <aside className="h10-bsp-rail" aria-label={heading}>
       <div className="h10-bsp-railhd">
-        <b>{def.title(open.id)}</b>
+        <b title={heading}>{heading}</b>
         <button type="button" onClick={onClose} aria-label="Close inspector">
           <X size={14} />
         </button>
