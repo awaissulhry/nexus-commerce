@@ -1,6 +1,18 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-16 (U1) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: "Bounds — the band, at four grains": min/max bid coverage per market · line · portfolio · campaign.
+ * Why it left: the Bid tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BidRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.2, §7.2).
+ * Candidate home: Analytics; the editable band itself already lives on Apply Rules (AR.S1).
+ *
+ * Nothing here was changed, no endpoint was retired, and the file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BID.S5 — bounds as a first-class control: the band, at four grains.
  *
  * The gate resolves each SIDE most-specific-first: the Campaign columns (min/maxBidCents — the

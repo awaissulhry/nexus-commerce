@@ -1,6 +1,18 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-16 (U1) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the seam that mounted Bounds · Activity · Staged tray.
+ * Why it left: the Bid tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BidRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.2, §7.2).
+ * Candidate home: travels with its three sections.
+ *
+ * Nothing here was changed, no endpoint was retired, and the file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BID.S0 — the seam where S1–S9 attach.
  *
  * Every one of the nine sections renders below the grid or over it, and every one of them needs

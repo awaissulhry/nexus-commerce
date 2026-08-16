@@ -1,6 +1,18 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-16 (U1) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the docked grace-window tray for staged bid writes.
+ * Why it left: the Bid tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BidRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.2, §7.2).
+ * Candidate home: Suggestions — a staged write awaiting its window IS a pending suggestion.
+ *
+ * Nothing here was changed, no endpoint was retired, and the file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BID.S4 — the staged tray: the 5-minute grace window, visible and cancellable.
  *
  * The mechanism is the one that already existed (`GRACE_PERIOD_MS` in ads-mutation.service, the

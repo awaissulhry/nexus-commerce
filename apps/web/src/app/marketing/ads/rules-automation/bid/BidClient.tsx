@@ -1,6 +1,18 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-16 (U1) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 15-block Bid page — filter bar · bidder band · resolution sentence · census strip · targets/campaigns grid with the three bulk verbs · the section seam.
+ * Why it left: the Bid tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BidRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.2, §7.2).
+ * Candidate home: Analytics (the census, the grid and the bidder band are measurement, not rule authoring).
+ *
+ * Nothing here was changed, no endpoint was retired, and the file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BID.S0 — Bid, promoted from a tab to its own page, with a live read-only grid.
  *
  * The page answers: **what is each target bidding, why is it that number, who decided, and what is

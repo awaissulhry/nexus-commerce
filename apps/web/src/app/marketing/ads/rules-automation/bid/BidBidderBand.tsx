@@ -1,6 +1,18 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-16 (U1) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the band naming who owns each live campaign's bids.
+ * Why it left: the Bid tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BidRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.2, §7.2).
+ * Candidate home: Analytics — or the Ad Manager campaign row, which is where ownership is acted on.
+ *
+ * Nothing here was changed, no endpoint was retired, and the file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BID.S1 — the bidder band: who owns each live campaign's bids, and the number nothing showed.
  *
  * The page's real finding, from the brief's own measurement: 41 ENABLED campaigns receive no bid
