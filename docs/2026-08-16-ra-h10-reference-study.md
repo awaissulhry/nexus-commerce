@@ -480,7 +480,13 @@ Two structural facts that shape the plan:
 - ~120 lines net; no page mounts change in U0. Prod check: the grid renders on a scratch route or
   behind the first page unit (U1) — I would fold U0 into U1's verification.
 
-### 7.2 Unit U1 — Bid (15 blocks → 1)
+### 7.2 Unit U1 — Bid (15 blocks → 1) — ✅ SHIPPED + prod-verified 2026-08-16
+Commits `5aabc2730` (U0+U1) · `71ed16157` (both rule shapes) · `32d34310d` (disabled chip + units).
+Verification and the three corrections it forced: `docs/2026-08-16-ra-parked-sections.md` § U1.
+🔴 Two facts for every later unit: **a builder-created rule is stored `enabled: false`** (it does
+nothing until enabled on Automations), and **an engine rule has no schedule** — its cadence is its
+trigger, so a Frequency column must not print one.
+
 `bid/page.tsx` mounts a new ~60-line `BidRulesClient` (header · tabs · `RulesGrid tabKey="bid"`).
 Park: `BidClient.tsx` (filter bar, bidder band, resolution, census, notes, targets/campaigns grid,
 selection actions), `BidBounds.tsx`, `BidActivity.tsx`, `BidStagedTray.tsx`, `BidTargetDrawer.tsx`,

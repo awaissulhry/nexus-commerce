@@ -43,6 +43,29 @@ bar · `_shared/RulesGrid` (`tabKey="bid"`). Everything below was unmounted in o
 Not parked (still live, still imported): `bid/types.ts`, `bid/bidState.ts` (+ its test),
 `bid/slot-contract.ts` — types and vocabulary the parked files import.
 
+**Prod verification, 2026-08-16** (D8: one click-through + one commit per unit). The page renders
+H10's shape with no horizontal overflow (card 1602 in a 1728 main); the grid loaded **18 bid rules**
+and the tab badge read 18 — badge and grid share `ruleBelongsToTab`, so they cannot disagree.
+Created a real rule through `/builder/bid` → grid and badge both went **18 → 19**, proving the
+builder SLUG (`bid`) is matched, not just the engine action types. Its Automation toggle wrote for
+real (`actions[0].control` = `automate` on the server after the click, and it survived a redeploy).
+Deleted it from the grid's bulk Delete → gone from the server (51 rules, back to baseline) and from
+the UI (18 rows). Search, Open and History all work; the market picker writes `?market=`.
+
+**Three things the click-through corrected before this unit closed** (each its own commit):
+① Criteria printed "—" on 18 of 18 rows and Frequency printed a fabricated "Daily · 12:00 AM" —
+the grid read only the BUILDER rule shape, while every live bid rule is an ENGINE rule (flat
+`conditions`, no `schedule`, mode in `autonomyLevel`). Both cells now read what the row stores.
+② `targetAcos` is stored as `0.3` on most rules and as **30** on AIREON, which rendered "3000%";
+and a CTR floor of 0.002 rounded to "0%". ③ A rule created in the builder is stored
+**`enabled: false`** — armed-looking but never evaluated — so the row now carries an "off" chip.
+
+🔴 **What the "off" chip immediately surfaced:** **7 of the 18 bid rules are disabled entirely** —
+Aggressive growth · Bid down on profit breach · Bid optimization (profit-native) · Cut bids on high
+ACOS · New-to-brand optimizer · Rank control — Top +100% (IT) · Top-of-Search rank defender. Of the
+11 that are enabled, 5 are AUTO and 6 PROPOSE. Nothing was changed about them; the grid just says so
+now. **Operator decision, not this unit's:** whether any of those seven should be on.
+
 **Endpoints that lost their only UI in U1** (all still served; nothing was retired):
 `/bid-grid`, `/bid-grid/cursor`, `/bid-policies`, `/campaigns/:id/guardrails` (read), `/changes`,
 `/write-refusals`, `/ad-targets/bulk-bid`, `/campaigns/:id/goal`, `/staged-writes`,
