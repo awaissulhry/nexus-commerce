@@ -62,6 +62,14 @@ export interface BindingCoverage {
 export interface BindingReconstruction {
   writesRead: number
   chainBreaks: number
+  /**
+   * 🔴 Counted over the campaigns actually RETURNED, not over the account.
+   *
+   * Account-wide, 136 of 220 non-archived campaigns have no budget write — but 130 of those spent
+   * nothing in the window and so have no row. A card that said "136 campaigns have no history"
+   * beside 6 visible `≈` markers would be describing a different population from the one on
+   * screen, which is precisely the mismatch this section exists to remove.
+   */
   campaignsWithoutLog: number
 }
 
@@ -279,13 +287,11 @@ export async function computeBudgetBinding(opts: {
   }
 
   // A campaign with no usable log keeps today's budget for the whole window — and says so.
-  let campaignsWithoutLog = 0
   const approximate = new Set<string>()
   for (const c of campaigns) {
     if (!steps.has(c.id)) {
       steps.set(c.id, [{ from: new Date(0), cents: eurosToCents(c.dailyBudget) }])
       approximate.add(c.id)
-      campaignsWithoutLog++
     }
   }
 
@@ -355,7 +361,8 @@ export async function computeBudgetBinding(opts: {
 
   return {
     coverage,
-    reconstruction: { writesRead: writes.length, chainBreaks, campaignsWithoutLog },
+    // Counted over the emitted rows — see `BindingReconstruction.campaignsWithoutLog`.
+    reconstruction: { writesRead: writes.length, chainBreaks, campaignsWithoutLog: rows.filter((r) => r.approximate).length },
     campaigns: rows,
   }
 }
