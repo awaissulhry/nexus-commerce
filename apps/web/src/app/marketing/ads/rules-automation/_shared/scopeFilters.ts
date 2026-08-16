@@ -125,18 +125,19 @@ export function buildScopeFilters({
   // A line is offered only where it has a campaign in THIS market. Offering a line that resolves to
   // zero rows in the selected market would look like missing data rather than an empty scope.
   const lines = (options?.productLines ?? []).filter((l) => l.campaigns.some((c) => idsInMarket.has(c)))
-  const lineOpts = [{ value: '', label: 'All product lines' }].concat(
-    lines.map((l) => ({ value: l.id, label: `${l.sku} · ${plural(l.variations, 'variation')}` })),
-  )
+  // 🔴 No `{ value: '', label: 'All …' }` head. `FilterDropdown` renders the clear row itself from
+  // `emptyLabel`, so injecting one produced TWO "All campaigns" rows — and worse, the injected row
+  // MATCHED the empty value, so `options.find(o => o.value === value)` returned it and its label
+  // won over `placeholder`. That is what hid the overridden-portfolio name behind "All portfolios".
+  // The old `H10Select` bars needed the head; this component supplies it.
+  const lineOpts = lines.map((l) => ({ value: l.id, label: `${l.sku} · ${plural(l.variations, 'variation')}` }))
 
   const livePfs = new Set(inMarket.map((c) => c.portfolioId).filter((x): x is string => !!x))
   const portfolios = (options?.portfolios ?? []).filter((p) => livePfs.has(p.externalPortfolioId))
-  const pfOpts = [{ value: '', label: 'All portfolios' }].concat(
-    portfolios.map((p) => ({
-      value: p.externalPortfolioId,
-      label: `${p.name} · ${plural(inMarket.filter((c) => c.portfolioId === p.externalPortfolioId).length, 'campaign')}`,
-    })),
-  )
+  const pfOpts = portfolios.map((p) => ({
+    value: p.externalPortfolioId,
+    label: `${p.name} · ${plural(inMarket.filter((c) => c.portfolioId === p.externalPortfolioId).length, 'campaign')}`,
+  }))
 
   // The campaign list narrows to whatever coarser grain is already picked, so the controls read as
   // one funnel instead of three unrelated selects.
@@ -146,9 +147,7 @@ export function buildScopeFilters({
   const campaignsInScope = inMarket
     .filter((c) => (value.portfolio ? c.portfolioId === value.portfolio : true))
     .filter((c) => (lineCampaigns ? lineCampaigns.has(c.id) : true))
-  const campOpts = [{ value: '', label: 'All campaigns' }].concat(
-    campaignsInScope.map((c) => ({ value: c.id, label: c.name })),
-  )
+  const campOpts = campaignsInScope.map((c) => ({ value: c.id, label: c.name }))
 
   // The chosen campaign's own portfolio — a fact, shown where the operator's overridden selection
   // used to sit. `undefined` when the campaign is not in the loaded options yet (a deep link that
@@ -224,7 +223,7 @@ export function buildScopeFilters({
     // visible: a control that appears and disappears makes the bar a different shape on every click.
     out.push({
       key: SCOPE_KEYS.adGroup, label: 'Ad group', kind: 'select', wide: true, searchable: true,
-      options: [{ value: '', label: 'All ad groups' }].concat(adGroupOptions),
+      options: adGroupOptions,
       placeholder: 'All ad groups',
       disabled: adGroupOptions.length === 0,
       note: adGroupOptions.length === 0

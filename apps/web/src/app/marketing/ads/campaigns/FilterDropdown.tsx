@@ -61,6 +61,7 @@ export function FilterDropdown({
   const ref = useClickAway<HTMLDivElement>(() => { setOpen(false); setQ(''); setActive(0) })
 
   const showSearch = searchable || options.length > SEARCH_THRESHOLD
+  const hasOwnEmpty = options.some((o) => o.value === '')
   const selected = options.find((o) => o.value === value)
   // OS.1 — was `label.toLowerCase().includes(q)`, which could not match across the separators in ad
   // entity names: "gale broad" found nothing in "GALE | IT | Broad | Brand". Now ranked + tokenised.
@@ -94,7 +95,13 @@ export function FilterDropdown({
             </div>
           )}
           <div className="h10-dd-list">
-            <button type="button" className={`h10-dd-opt ${!value ? 'on' : ''}`} onClick={() => pick('')}>{emptyLabel}</button>
+            {/* FB.3 — only when the option list does not already carry one. Several call sites in
+                this section prepend their own `{ value: '', label: 'Any kind' }`, which rendered a
+                SECOND clear row directly under this one. Left to itself the injected row also wins
+                `options.find(o => o.value === value)` at the empty value, so its label overrides
+                `emptyLabel` on the closed control — which is how an overridden grain showed
+                "All portfolios" instead of naming the campaign deciding it. */}
+            {!hasOwnEmpty && <button type="button" className={`h10-dd-opt ${!value ? 'on' : ''}`} onClick={() => pick('')}>{emptyLabel}</button>}
             {matches.length === 0 ? (
               <div className="h10-dd-empty">No matches</div>
             ) : matches.map((o, i) => (

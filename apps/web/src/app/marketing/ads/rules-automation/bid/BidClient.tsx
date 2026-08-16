@@ -159,8 +159,14 @@ export function BidClient() {
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries(patch)) {
+      // 🔴 `v === 'all'` is a default for the two params whose default IS 'all' — and for nothing
+      // else. It used to apply to every key, which was invisible while scope had its own bar
+      // (choosing a campaign patched only the three grains). One merged bar patches every URL key
+      // at once, so it started deleting a live `?status=all`: picking a campaign silently moved the
+      // Status control from "Any status" back to "Enabled" and dropped 416 rows. Measured on prod.
+      const allIsTheDefault = k === 'market' || k === 'measured'
       const isDefault =
-        !v || v === 'all'
+        !v || (allIsTheDefault && v === 'all')
         || (k === 'market' && v === DEFAULT_MARKET)
         || (k === 'view' && v === 'targets')
         || (k === 'status' && v === DEFAULT_STATUS)

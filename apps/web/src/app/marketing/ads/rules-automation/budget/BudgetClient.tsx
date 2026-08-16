@@ -147,8 +147,12 @@ export function BudgetClient() {
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries(patch)) {
+      // 🔴 Same fix as Bid's: `'all'` is a default for `market` alone here. One merged bar patches
+      // every URL key at once, so a blanket rule would delete a live `?status=all` the moment you
+      // touched any other control — the Status select would snap back to Enabled on its own.
+      const allIsTheDefault = k === 'market'
       const isDefault =
-        !v || v === 'all'
+        !v || (allIsTheDefault && v === 'all')
         || (k === 'market' && v === DEFAULT_MARKET)
         || (k === 'view' && v === DEFAULT_VIEW)
         || (k === 'status' && v === DEFAULT_STATUS)
