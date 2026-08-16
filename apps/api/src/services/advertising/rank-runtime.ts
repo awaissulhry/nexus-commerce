@@ -225,6 +225,45 @@ export function deriveCampaignRuntime(input: RdCampaignRuntimeInput): RdCampaign
   }
 }
 
+// ── RD.P4 · is a signal trustworthy? ─────────────────────────────────────────────────────────
+
+/**
+ * Three states, never merged, and the middle one decided by BASIS rather than age.
+ *
+ * The axis is measured, not designed. The SQP programme found 20 of 34 campaigns with a share are
+ * steered by **exactly one ASIN**, and the mean campaign contributes 10% of its ASINs to its own
+ * number (`docs/2026-08-12-sqp-feed.md` §18). A share computed from one ASIN of eighteen is not a
+ * staler number — it is a number about a different thing, and only a contributor count can see it.
+ *
+ * Age is a STALL ALARM here, not a quality test. With `NEXUS_SQP_LOOKBACK=2` the feed can never be
+ * fresher than ~11 days plus the week length, so any threshold tighter than ~21 days nulls every
+ * campaign permanently (their Option C: at 14 days, 0 of 34 keep a signal). 28 days changes nothing
+ * today, which is exactly what an alarm should do.
+ *
+ * Pure, because this is the judgement — the query that feeds it is not.
+ */
+export const SQP_STALL_DAYS = 28
+export const THIN_BASIS_FRACTION = 0.34
+
+export interface SqpFreshness {
+  freshness: 'fresh' | 'stale'
+  thin: boolean
+  stalled: boolean
+  staleReason: string | null
+}
+
+export function classifySqpFreshness(input: { withData: number; total: number; ageDays: number | null }): SqpFreshness {
+  const { withData, total, ageDays } = input
+  const frac = total > 0 ? withData / total : 0
+  // One contributor is thin whatever the fraction says: a single ASIN cannot describe a campaign.
+  const thin = withData <= 1 || frac < THIN_BASIS_FRACTION
+  const stalled = ageDays != null && ageDays > SQP_STALL_DAYS
+  const reasons: string[] = []
+  if (thin) reasons.push(`${withData} of ${total} advertised ASIN${total === 1 ? '' : 's'} appear in that week, so the share describes a fraction of the campaign`)
+  if (stalled) reasons.push(`the feed has not advanced in ${ageDays} days`)
+  return { freshness: thin || stalled ? 'stale' : 'fresh', thin, stalled, staleReason: reasons.length ? reasons.join('; ') : null }
+}
+
 // ── the group grain, as a roll-up ────────────────────────────────────────────────────────────
 
 export interface RdGroupRollUp {

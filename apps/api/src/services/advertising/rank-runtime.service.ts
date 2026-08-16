@@ -15,7 +15,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
-  deriveCampaignRuntime, rollUpGroup,
+  deriveCampaignRuntime, rollUpGroup, classifySqpFreshness,
   type RdCampaignRuntime, type RdGroupRollUp, type RdCampaignRuntimeInput,
 } from './rank-runtime.js'
 import { pickActiveEvents } from '../../jobs/ad-rank-defend.job.js'
@@ -31,13 +31,45 @@ export interface RdSignal {
   lane: string | null
   valuePct: number | null
   ageDays: number | null
-  /** Rows behind the number, for P4's volume guard. Null where the lane has no row concept. */
+  /** Rows behind the number. Null where the lane has no row concept. */
   rows: number | null
+  /**
+   * RD.P4 — the BASIS, which is the axis that decides whether this number may be trusted.
+   *
+   * Not row count. The SQP programme measured it (`2026-08-12-sqp-feed.md` §18): 20 of the 34
+   * campaigns with a share are steered by **exactly one ASIN**, and the mean campaign contributes
+   * 10% of its ASINs to its own number. A row count cannot see that; a contributor count can.
+   * `withData` of `total` advertised ASINs. Null on lanes with no ASIN basis (Top-of-Search IS is
+   * a campaign-level metric).
+   */
+  contributors: { withData: number; total: number } | null
+  /** RD.P4 — the three states, never merged. `fresh` | `stale` | `never` | `none`. */
+  freshness: 'fresh' | 'stale' | 'never' | 'none'
+  /** Why it is stale, when it is. Age, thin basis, or both. */
+  staleReason: string | null
   /** Short enough to be a column. */
   label: string
   /** The sentence, for the tooltip. */
   detail: string
 }
+
+/**
+ * RD.P4 — when is a signal stale?
+ *
+ * Age alone cannot answer it, and the correction is measured rather than designed. With
+ * `NEXUS_SQP_LOOKBACK=2` the SQP feed can never be fresher than ~11 days plus the week length, so
+ * any age threshold tighter than ~21 days nulls every campaign permanently (SQP §18, Option C: at
+ * 14 days, 0 of 34 keep a signal). An age guard is therefore a STALL ALARM — useful at ~28 days,
+ * useless as a quality test.
+ *
+ * The quality test is the basis. A share computed from one ASIN out of eighteen is not a fresher
+ * or staler number, it is a number about a different thing.
+ *
+ * This page DISPLAYS both and enforces neither. Nulling a signal changes what the engine does —
+ * `computeStep` falls through a null IS branch to the ACoS branch, which RAISES — so the guard
+ * belongs to the SQP programme that owns the reader, not to a page that renders it.
+ */
+
 
 export interface RdCampaignRow extends RdCampaignRuntime {
   campaignName: string
@@ -205,27 +237,56 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     for (const r of seen) if (r._count._all > 0) everCovered.add(r.asin)
   }
   const sqpAgeByMarket = new Map<string, number | null>()
+  /** ASINs of `asins` present in the LATEST week the reader would pick for this market. */
+  const latestWeekAsins = new Map<string, Set<string>>()
+  async function contributorsForWeek(marketplace: string, asins: string[]): Promise<number> {
+    if (!asins.length) return 0
+    if (!latestWeekAsins.has(marketplace)) {
+      const newest = await prisma.searchQueryPerformance.findFirst({
+        where: { marketplace }, orderBy: { startDate: 'desc' }, select: { startDate: true },
+      })
+      const set = new Set<string>()
+      if (newest) {
+        const rows = await prisma.searchQueryPerformance.groupBy({
+          by: ['asin'], where: { marketplace, startDate: newest.startDate },
+        })
+        for (const r of rows) if (r.asin) set.add(r.asin)
+      }
+      latestWeekAsins.set(marketplace, set)
+    }
+    const present = latestWeekAsins.get(marketplace) as Set<string>
+    return asins.filter((a) => present.has(a)).length
+  }
 
   async function signalFor(runtime: RdCampaignRuntime, marketplace: string | null): Promise<RdSignal> {
     const lane = runtime.placement
     if (!lane || !runtime.activeTargetKey) {
-      return { kind: 'not-applicable', lane: null, valuePct: null, ageDays: null, rows: null, label: '—', detail: 'Nothing is held at this hour, so no lane is being driven.' }
+      return { kind: 'not-applicable', lane: null, valuePct: null, ageDays: null, rows: null, contributors: null, freshness: 'none', staleReason: null, label: '—', detail: 'Nothing is held at this hour, so no lane is being driven.' }
     }
     if (lane === 'PLACEMENT_PRODUCT_PAGE') {
-      return { kind: 'none-by-design', lane, valuePct: null, ageDays: null, rows: null, label: 'open loop', detail: 'Open loop by design — Amazon exposes no product-page impression share, so this lane cannot be closed.' }
+      return { kind: 'none-by-design', lane, valuePct: null, ageDays: null, rows: null, contributors: null, freshness: 'none', staleReason: null, label: 'open loop', detail: 'Open loop by design — Amazon exposes no product-page impression share, so this lane cannot be closed.' }
     }
     if (lane === 'PLACEMENT_TOP') {
       const v = marketplace ? topIsByCampaign.get(runtime.campaignId) ?? null : null
       const age = marketplace ? topAgeByMarket.get(marketplace) ?? null : null
-      if (v == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, label: 'no signal', detail: 'This campaign has a Top-of-Search lane but no impression-share measurement in the reporting window.' }
+      if (v == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, contributors: null, freshness: 'never', staleReason: 'No Top-of-Search impression share has been reported for this campaign in the window.', label: 'no signal', detail: 'This campaign has a Top-of-Search lane but no impression-share measurement in the reporting window.' }
       const pct = Math.round(v * 1000) / 10
-      return { kind: 'top-is', lane, valuePct: pct, ageDays: age, rows: null, label: `Top-IS ${pct}%${age != null ? ` · ${age}d` : ''}`, detail: `Top-of-Search impression share ${pct}%${age != null ? `, newest report ${age} day${age === 1 ? '' : 's'} old` : ''}.` }
+      // The Top lane is dense and near-daily — measured 861 of 1,413 rows carrying an IS value,
+      // 556 in the last 14 days — so age is the only axis that applies to it.
+      const topStale = age != null && age > 7
+      return {
+        kind: 'top-is', lane, valuePct: pct, ageDays: age, rows: null, contributors: null,
+        freshness: topStale ? 'stale' : 'fresh',
+        staleReason: topStale ? `The newest Top-of-Search report is ${age} days old; this lane is normally within a day or two.` : null,
+        label: `Top-IS ${pct}%${age != null ? ` · ${age}d` : ''}`,
+        detail: `Top-of-Search impression share ${pct}%${age != null ? `, newest report ${age} day${age === 1 ? '' : 's'} old` : ''}.`,
+      }
     }
     // Rest of search — SQP, which is the lane with the onboarding problem.
     const asins = asinsByCampaign.get(runtime.campaignId) ?? []
     const covered = asins.some((a) => everCovered.has(a))
     if (!covered) {
-      return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, label: 'no coverage', detail: 'These ASINs have never appeared in Brand Analytics at all. That is an onboarding problem, not a stale feed — a recency guard would not fix it.' }
+      return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, contributors: { withData: 0, total: asins.length }, freshness: 'never', staleReason: null, label: 'no coverage', detail: `None of this campaign's ${asins.length} advertised ASIN${asins.length === 1 ? ' has' : 's have'} ever appeared in Brand Analytics. That is an onboarding problem, not a stale feed — no recency guard would fix it.` }
     }
     if (marketplace && !sqpAgeByMarket.has(marketplace)) {
       const newest = await prisma.searchQueryPerformance.findFirst({ where: { marketplace }, orderBy: { startDate: 'desc' }, select: { startDate: true } })
@@ -233,9 +294,26 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     }
     const share = marketplace ? await sqpImpressionShareForAsins(marketplace, asins) : null
     const age = marketplace ? sqpAgeByMarket.get(marketplace) ?? null : null
-    if (share == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, label: 'no signal', detail: 'These ASINs have SQP history but the latest week returned no usable impression share.' }
+    if (share == null) {
+      return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, contributors: { withData: 0, total: asins.length }, freshness: 'never', staleReason: 'These ASINs have SQP history, but the latest week returned no usable impression share.', label: 'no signal', detail: 'These ASINs have SQP history but the latest week returned no usable impression share.' }
+    }
     const sp = Math.round(share * 1000) / 10
-    return { kind: 'sqp', lane, valuePct: sp, ageDays: age, rows: null, label: `SQP ${sp}%${age != null ? ` · ${age}d` : ''}`, detail: `Brand impression share ${sp}% from the latest weekly SQP report${age != null ? `, ${age} days old` : ''}. Volume is P4's guard, not this column's.` }
+
+    // ── the BASIS ─────────────────────────────────────────────────────────────────────────────
+    // How many of this campaign's advertised ASINs actually appear in the week the reader chose?
+    // Read here rather than in `sqpImpressionShareForAsins`, which belongs to the SQP programme
+    // and is consumed by KT and SOV — this page must not change what that function returns.
+    // Mirrors the reader's own selection: latest `startDate` present for these ASINs in this market.
+    const withData = marketplace ? await contributorsForWeek(marketplace, asins) : 0
+    const f = classifySqpFreshness({ withData, total: asins.length, ageDays: age })
+    return {
+      kind: 'sqp', lane, valuePct: sp, ageDays: age, rows: withData,
+      contributors: { withData, total: asins.length },
+      freshness: f.freshness,
+      staleReason: f.staleReason,
+      label: `SQP ${sp}%${age != null ? ` · ${age}d` : ''}${f.thin ? ' · thin' : ''}`,
+      detail: `Brand impression share ${sp}% from the latest weekly SQP report${age != null ? `, ${age} days old` : ''}. Basis: ${withData} of ${asins.length} advertised ASINs.`,
+    }
   }
 
   const campaignRows: RdCampaignRow[] = []

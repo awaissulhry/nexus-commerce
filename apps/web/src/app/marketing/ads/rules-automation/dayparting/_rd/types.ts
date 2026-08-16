@@ -126,6 +126,16 @@ export interface RdSignal {
   valuePct: number | null
   ageDays: number | null
   rows: number | null
+  /**
+   * RD.P4 — the BASIS, and the axis that decides whether this number may be trusted.
+   * `withData` of `total` advertised ASINs appear in the week the reader chose. Null on lanes with
+   * no ASIN basis (Top-of-Search IS is a campaign-level metric).
+   */
+  contributors?: { withData: number; total: number } | null
+  /** RD.P4 — three states, never merged. */
+  freshness?: 'fresh' | 'stale' | 'never' | 'none'
+  /** Why it is stale: age, a thin basis, or both. */
+  staleReason?: string | null
   /** Short enough to be a column. */
   label: string
   /** The sentence, for the tooltip. */

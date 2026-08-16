@@ -78,16 +78,33 @@ const SIGNAL_TONE: Record<RdSignal['kind'], string> = {
 }
 
 /**
- * Signal — named by the lane the ACTIVE target drives.
+ * RD.P4 — Signal, in three states that are never merged.
  *
- * `no signal` and `no coverage` are deliberately different states. A feed that lapsed is a cron
- * problem; ASINs that have never appeared in Brand Analytics at all are an onboarding problem, and
- * merging them sends the operator to the wrong place. Full freshness treatment — the stale chip and
- * row-count-against-norm — is P4's; this renders the value, the age and the lane.
+ *   fresh  — a value the controller could act on, with its age
+ *   stale  — a value that exists and should not be trusted, and the reason WHY it should not
+ *   never  — no coverage at all: an onboarding problem, not a cron problem
+ *
+ * The middle state is the one the page did not have, and the reason it needs its own tone is that
+ * a stale number looks exactly like a fresh one. What makes it stale is measured rather than
+ * assumed: the SQP programme found 20 of 34 campaigns steered by exactly ONE ASIN, so the axis is
+ * the BASIS — how much of the campaign the number actually describes — not row count and not age.
+ * Age is a stall alarm here, not a quality test: the feed structurally cannot be fresher than about
+ * 11 days plus the week length, so any tighter age threshold would null every campaign forever.
+ *
+ * This column DISPLAYS and never enforces. Nulling a signal changes what the engine does — a null
+ * IS branch falls through to the ACoS branch, which raises — so the guard belongs to the programme
+ * that owns the reader.
  */
 export function SignalCell({ signal }: { signal: RdSignal | null }) {
   if (!signal) return <span className="rd-none">—</span>
-  return <span className={`rd-sig ${SIGNAL_TONE[signal.kind]}`} title={signal.detail || signal.label}>{signal.label}</span>
+  const stale = signal.freshness === 'stale'
+  const tone = stale ? 'stale' : SIGNAL_TONE[signal.kind]
+  const basis = signal.contributors && signal.contributors.total > 0
+    ? ` Basis: ${signal.contributors.withData} of ${signal.contributors.total} advertised ASINs.`
+    : ''
+  const title = [signal.detail || signal.label, signal.staleReason ? `Not to be trusted: ${signal.staleReason}.` : '', basis]
+    .filter(Boolean).join(' ')
+  return <span className={`rd-sig ${tone}`} title={title}>{signal.label}</span>
 }
 
 /** The CPC ceiling. Bold only when it is actually deciding, so a harmless cap stays quiet. */

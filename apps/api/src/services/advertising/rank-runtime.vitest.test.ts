@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  deriveCampaignRuntime, rollUpGroup, type RdCampaignRuntimeInput,
+  classifySqpFreshness, deriveCampaignRuntime, rollUpGroup, type RdCampaignRuntimeInput,
 } from './rank-runtime.js'
 
 /** A RankTarget row as Prisma returns it, with the library's real defaults. */
@@ -226,5 +226,57 @@ describe('rollUpGroup — a spread, never an average', () => {
     const g = rollUpGroup([...mk('capped-floor', 6), ...mk('holding', 5)] as never)
     expect(g.cannotConverge).toBe(6)
     expect(g.mixed).toBe(true)
+  })
+})
+
+/**
+ * RD.P4 — the freshness classifier.
+ *
+ * These cases come from the SQP programme's measurement, not from the design: 20 of 34 campaigns
+ * with a share are steered by exactly one ASIN, and the feed structurally cannot be fresher than
+ * ~11 days plus the week length. So a one-ASIN basis is stale at any age, and an age threshold is
+ * a stall alarm rather than a quality test.
+ */
+describe('classifySqpFreshness — basis first, age as a stall alarm', () => {
+  it('calls a one-ASIN basis stale however fresh the week is', () => {
+    const f = classifySqpFreshness({ withData: 1, total: 18, ageDays: 0 })
+    expect(f.freshness).toBe('stale')
+    expect(f.thin).toBe(true)
+    expect(f.stalled).toBe(false)
+    expect(f.staleReason).toMatch(/1 of 18/)
+  })
+
+  it('calls a thin FRACTION stale even with several contributors', () => {
+    // 5 of 40 = 12.5%, under the 34% floor
+    expect(classifySqpFreshness({ withData: 5, total: 40, ageDays: 3 }).freshness).toBe('stale')
+  })
+
+  it('accepts a broad basis on a recent week', () => {
+    const f = classifySqpFreshness({ withData: 14, total: 18, ageDays: 14 })
+    expect(f.freshness).toBe('fresh')
+    expect(f.staleReason).toBeNull()
+  })
+
+  it('does NOT fire the stall alarm at the age the feed structurally sits at', () => {
+    // 17-24 days is the feed's normal range; a guard that fired here would null everything forever
+    expect(classifySqpFreshness({ withData: 14, total: 18, ageDays: 21 }).stalled).toBe(false)
+    expect(classifySqpFreshness({ withData: 14, total: 18, ageDays: 24 }).stalled).toBe(false)
+  })
+
+  it('fires the stall alarm past 28 days, and says so separately from the basis', () => {
+    const f = classifySqpFreshness({ withData: 14, total: 18, ageDays: 40 })
+    expect(f.stalled).toBe(true)
+    expect(f.thin).toBe(false)
+    expect(f.staleReason).toMatch(/has not advanced in 40 days/)
+  })
+
+  it('reports BOTH reasons when both apply, rather than picking one', () => {
+    const f = classifySqpFreshness({ withData: 1, total: 20, ageDays: 40 })
+    expect(f.staleReason).toMatch(/1 of 20/)
+    expect(f.staleReason).toMatch(/has not advanced/)
+  })
+
+  it('treats a zero basis as thin rather than dividing by zero', () => {
+    expect(classifySqpFreshness({ withData: 0, total: 0, ageDays: null }).thin).toBe(true)
   })
 })
