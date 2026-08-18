@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U6) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the seam that mounted the guardrails card.
+ * Why it left: the Budget tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BudgetRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.5, §7.7).
+ * Candidate home: travels with BudGuardrails.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired. The budget WRITE GATE is server-side and
+ * untouched, and the €1-floor ratchet condition is still stated on Budget Pacing & Schedules and on
+ * Control Room › Activity. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BUD.1 — the seam where BUD.2–BUD.7 attach.
  *
  * Every one of the six sections renders below the grid, inside it, or over it, and every one needs

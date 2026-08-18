@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U6) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 14-block page — filter bar + ScopeNotes · resolution sentence with the newest budget change · census strip · the €1-floor ratchet warning · truncation and write-status notes · the campaigns/rules grid (?view=) with "Restore N to baseline" and "Transfer…" · the transfer dialog · the "+ New budget rule" footer.
+ * Why it left: the Budget tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BudgetRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.5, §7.7).
+ * Candidate home: **Budget Manager** — the rail item that already owns budget levels and pacing; the census to Analytics.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired. The budget WRITE GATE is server-side and
+ * untouched, and the €1-floor ratchet condition is still stated on Budget Pacing & Schedules and on
+ * Control Room › Activity. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BUD.1 — Budget Rules, promoted from a tab to its own page, with a live read-only grid.
  *
  * The page answers one question: **what is allowed to change a campaign's budget, by how much, and

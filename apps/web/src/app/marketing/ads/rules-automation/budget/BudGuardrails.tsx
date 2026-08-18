@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U6) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: "Guardrails & the baseline" — the per-campaign min/max budget bounds and the captured baselines Restore reads.
+ * Why it left: the Budget tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`BudgetRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.5, §7.7).
+ * Candidate home: **Control Room › Guardrails** — where every other guardrail is edited.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired. The budget WRITE GATE is server-side and
+ * untouched, and the €1-floor ratchet condition is still stated on Budget Pacing & Schedules and on
+ * Control Room › Activity. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BUD.2 — guardrails & the baseline: where the ratchet stops.
  *
  * The mechanism, in one sentence each:
