@@ -277,7 +277,42 @@ mapped now ("On a converting term"), and an unmapped one falls back to "On <trig
 
 ---
 
+## U6 — Budget Rules (2026-08-18, commit `990e47ecf`)
+
+Route `/marketing/ads/rules-automation/budget` now renders `budget/BudgetRulesClient.tsx`: page
+header · tab bar · `_shared/RulesGrid` (`tabKey="budget"`). No map entry needed —
+`adjust_ad_budget` was already mapped. The tab keeps the label "Budget Rules" until **U10** applies
+D1's rename to "Budget" (the label lives in `RULES_TABS`; that is U10's one-array edit).
+
+| file | what it is | candidate home |
+|---|---|---|
+| `budget/BudgetClient.tsx` (1,051) | the 14-block page: filter bar + `ScopeNotes` · resolution + newest budget change · census · the €1-floor ratchet warning · truncation/write-status notes · the campaigns/rules grid (`?view=`) with "Restore N to baseline" and "Transfer…" · transfer dialog · footer | **Budget Manager** (levels + pacing); census → Analytics |
+| `budget/BudGuardrails.tsx` (155) | "Guardrails & the baseline" — per-campaign min/max bounds and the captured baselines Restore reads | **Control Room › Guardrails** |
+| `budget/BudgetSections.tsx` (37) | the seam that mounted the guardrails card | travels with it |
+
+⚠ **The €1-floor ratchet warning left with the census — and is NOT silenced.** The same condition
+is stated on Budget Pacing & Schedules and on Control Room › Activity (checked before parking), and
+the compounding rules now appear on THIS grid with their Automation toggle reading `auto`, which is
+the more actionable framing. The budget write gate is server-side and untouched.
+
+**Prod verification, 2026-08-18.** 6 rules; grid = badge = server. Criteria read correctly
+("ACoS ≥ 40%, campaign spend ≥ €50 → adjust budget"; "ROAS ≥ 5, budget used ≥ 90% → adjust budget").
+
+🔴 **Two facts the grid surfaced at a glance, both operator business, not this unit's:**
+- **The two compounding budget rules are visible as AUTO, account-wide, and live**: "Campaign ACOS
+  rebalance (cut + scale)" (1,301 executions, cap 6/day, **last ran 2026-08-18 01:00**) and "Trim
+  budget on weak ACOS" (1,318 executions, cap 8/day, last ran 08-09). This is the ratchet the memory
+  has flagged repeatedly — now legible from the tab that owns it.
+- **A duplicate rule name**: "Trim budget on weak ACOS" exists **twice** — one AUTO/enabled with
+  1,318 executions, one disabled. Two rules with one name, one of them armed, is a hazard when
+  reading a change log. Nothing was changed about either.
+
+**Endpoints that lost their only UI in U6** (still served): `/budget-grid`, `/budget-grid/cursor`,
+`/budget-baselines/restore`, `/budget-baselines/capture`, `/budget-transfer`,
+`/campaigns/:id/guardrails` (write).
+
+---
+
 ## Still to come
-U6 Budget Rules ·
 U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.

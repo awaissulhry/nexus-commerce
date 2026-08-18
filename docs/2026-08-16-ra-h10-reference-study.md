@@ -548,7 +548,10 @@ proposals); Protected terms → **Control Room › Guardrails** (`ProtectedTerms
 there); the record + negations grid → **Analytics** / **Change Log**.
 ⚠ The gate/whitelist logic is server-side and stays armed; parking the UI removes no protection.
 
-### 7.7 Unit U6 — Budget Rules (14 blocks → 1)
+### 7.7 Unit U6 — Budget Rules (14 blocks → 1) — ✅ SHIPPED + prod-verified 2026-08-18
+Commit `990e47ecf`. 6 rules. 🔴 The grid makes the ratchet legible: both compounding rules show as
+AUTO and account-wide, one having run at 01:00 that morning — and it exposed a DUPLICATE rule name
+("Trim budget on weak ACOS" twice, one armed). Details: parked register § U6.
 `budget/page.tsx` mounts `BudgetRulesClient` (`RulesGrid tabKey="budget"`; "+ Rule" →
 `/builder/budget`). Park: `BudgetClient.tsx` (filter bar, census, ratchet warning, campaigns grid,
 Restore/Transfer, the `?view=rules` grid, footer), `BudGuardrails.tsx`, the transfer dialog.
