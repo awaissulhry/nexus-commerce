@@ -313,6 +313,62 @@ the more actionable framing. The budget write gate is server-side and untouched.
 
 ---
 
+## U7 — Keyword Harvest (2026-08-18, commits `0156e8eca` · `9f12c41db` · `e21d43fb3`)
+
+Route `/marketing/ads/rules-automation/keyword-harvest` now renders
+`keyword-harvest/KeywordHarvestRulesClient.tsx`: page header · tab bar · the pill
+**[ Rules View | Ad Group View ]** · one card. Those are the three things the operator named for
+this page — Rules, Ad Group View, and the builder behind "+ Rule". The pill writes `?view=ad-groups`
+(H10's does not change the URL; ours does, because every other view state in this section is
+linkable).
+
+### The Ad Group View — new UI (`HvAdGroupView.tsx`, D3)
+Columns: **Ad Group · Type · Campaign · Reads terms · Harvest Rule · Creates · Negates**, with
+Campaign / Harvest Rule / Reads-terms filters and search. Built off the mapping the harvest builder
+already stores (`actions[0].mappings`) — no new endpoint.
+
+Two deliberate departures from H10's bundle column list, because inventing a column is worse than
+omitting one:
+- **"Of Target" is not reproduced** — its semantics were never recoverable (the recording never
+  loaded this grid; the bundle gives only the label).
+- **"Keyword BPE" renders P/E/ASIN, not B/P/E** — our builder's positive match types cannot create
+  a Broad target, so a B badge would describe a capability we do not have.
+
+| file | what it is | candidate home |
+|---|---|---|
+| `keyword-harvest/KeywordHarvestClient.tsx` (875) | the 18-block page: multi-market header · filter bar · [Candidates \| Harvested] segment · live criteria bar · census lede + strip · candidates grid + promote queue | **Suggestions** (a candidate IS a suggestion); census → Analytics |
+| `keyword-harvest/HvThresholds.tsx` (259) | the five harvest criteria as live controls over the stored policy | **the rule builder** — criteria belong in the rule, which is H10's shape |
+| `keyword-harvest/HvCohort.tsx` (329) | the harvested cohort — "did the last batch work" | **Analytics** |
+| `keyword-harvest/HvDestination.tsx` (259) | "Where these would go" | travels with the candidates grid |
+| `keyword-harvest/HvPromote.tsx` (277) | the promote dialog — preview then write | **Suggestions** |
+| `keyword-harvest/HvActors.tsx` (403) | the governance panel behind harvesting | **Automations › Engines** |
+| `keyword-harvest/HvQueue.tsx` (103) | "Pending — the harvest slice of the one inbox" | **Suggestions** |
+| `keyword-harvest/HvRepairs.tsx` (34) | the repairs marker (renders null by design) | delete when its subject resolves |
+
+**Prod verification, 2026-08-18.** Rules View: 5 rules, and the badge finally agrees with the grid —
+this is the tab whose badge said 5 over a grid of 0 for months. Ad Group View: with only the five
+engine rules it renders the honest empty state naming the reason; then a real rule was built with
+two mapped ad groups and **the rows appeared immediately** with the rule linking back to the builder.
+Test rule deleted (51 rules, no leftovers).
+
+**Two defects the click-through caught:**
+① (`9f12c41db`) The empty-state sentence rendered as one **1,311px line inside its own 420px box**
+and ran off the card: `.h10-am-grid td` sets `white-space: nowrap` — right for a data cell, wrong
+for a paragraph — and the empty state renders inside a `td`. Scoped wrap added; real cells keep
+their nowrap.
+② (`e21d43fb3`) 🔴 **An ad group can be BOTH source and destination.** The builder's mapping row
+carries `look` and `types` independently — its own table shows them as two columns. The first cut
+collapsed them into one Source/Destination role and suppressed `creates` whenever `look` was set:
+on the test rule (both groups read-from AND creating Phrase + Exact) it showed Role "Source" and
+Creates "—", **hiding targets the rule really creates**. Now mirrors the builder: "Reads terms" is
+its own column and Creates always tells the truth — verified live reading `Yes` + `P E`.
+
+**Endpoints that lost their only UI in U7** (still served): `/keyword-harvest`,
+`/keyword-harvest/cursor`, `/harvest-cohort`, `/harvest-destination`, `/harvest-promote`,
+`/harvest-policy`, `/suggestions`.
+
+---
+
 ## Still to come
-U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
+U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.

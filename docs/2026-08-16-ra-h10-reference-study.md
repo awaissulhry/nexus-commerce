@@ -559,7 +559,12 @@ Candidate homes: campaigns/budget grid + Restore + Transfer → **Budget Manager
 also has); Guardrails & baseline → **Control Room › Guardrails**; census → **Analytics**.
 Keep the H10 distinction explicit: this tab = *rules that change budgets*; the next = *schedules*.
 
-### 7.8 Unit U7 — Keyword Harvest (18 blocks → pill + 1 card)
+### 7.8 Unit U7 — Keyword Harvest (18 blocks → pill + 1 card) — ✅ SHIPPED + prod-verified 2026-08-18
+Commits `0156e8eca` · `9f12c41db` · `e21d43fb3`. The Ad Group View is new UI off the builder's
+stored mapping; D3's column list is followed except "Of Target" (semantics unrecoverable) and B in
+"Keyword BPE" (our builder cannot create Broad). 🔴 An ad group can be BOTH source and destination —
+`look` and `types` are independent — so the grid mirrors the builder's two columns rather than
+inventing a Role. Details: parked register § U7.
 `keyword-harvest/page.tsx` mounts `KeywordHarvestClient` (new, small): pill **[Rules View | Ad Group
 View]** (`?view=rules` default | `?view=ad-groups`).
 - Rules View = `RulesGrid tabKey="keyword-harvest"`; "+ Rule" → `/builder/keyword-harvesting`.
