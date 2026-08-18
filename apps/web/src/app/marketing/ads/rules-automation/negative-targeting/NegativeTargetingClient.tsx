@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U5) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 16-block page — filter bar with the portfolio blind-spot note · resolution sentence · census strip (negatives · terms · blocking now · in a paused campaign · never confirmed at Amazon) · the raw-match-type note · the negations/terms grid with its view toggle.
+ * Why it left: the Negative Targeting tab is now Helium 10's shape — one rules grid and nothing
+ *   else (`NegativeRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.4, §7.6).
+ * Candidate home: **Analytics** — what is blocked and where is measurement.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and NO PROTECTION WAS REMOVED: the
+ * protected-terms whitelist, the converting-term guard and the write gate live on the server and
+ * are still armed. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * NEG.1 — Negative Targeting, its own page.
  *
  * Two questions: **what am I blocking, and what is it costing me?** NEG.1 answers the first, over

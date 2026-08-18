@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U5) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the protected-terms EDITOR (the whitelist the write gate enforces server-side).
+ * Why it left: the Negative Targeting tab is now Helium 10's shape — one rules grid and nothing
+ *   else (`NegativeRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.4, §7.6).
+ * Candidate home: **Control Room › Guardrails** — `ProtectedTermsPanel.tsx` already renders this list there.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and NO PROTECTION WAS REMOVED: the
+ * protected-terms whitelist, the converting-term guard and the write gate live on the server and
+ * are still armed. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * NEG.5 — protected terms: what can never be negated, and the 132 that already contradict it.
  *
  * Absorbs the legacy `ProtectedTermsPanel`, which this page used to render below the inventory.

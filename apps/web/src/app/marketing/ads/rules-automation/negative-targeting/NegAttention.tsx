@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U5) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the Attention section: contradictions, alerts and the negations that need review.
+ * Why it left: the Negative Targeting tab is now Helium 10's shape — one rules grid and nothing
+ *   else (`NegativeRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.4, §7.6).
+ * Candidate home: **Suggestions** — every row is a proposal to act on.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and NO PROTECTION WAS REMOVED: the
+ * protected-terms whitelist, the converting-term guard and the write gate live on the server and
+ * are still armed. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * NEG.4 — attention: what is wrong right now.
  *
  * Read-only. It composes the two sections before it rather than rebuilding them: every row links

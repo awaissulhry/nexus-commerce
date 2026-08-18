@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U5) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: this page's own rules table ("The rules that can negate here"), superseded by the shared `_shared/RulesGrid`.
+ * Why it left: the Negative Targeting tab is now Helium 10's shape — one rules grid and nothing
+ *   else (`NegativeRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.4, §7.6).
+ * Candidate home: **superseded** — kept only for its per-rule governance columns if Automations ever wants them.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and NO PROTECTION WAS REMOVED: the
+ * protected-terms whitelist, the converting-term guard and the write gate live on the server and
+ * are still armed. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * NEG.7 — what can create a negative here, how much one execution would touch, and whether arming
  * it is defensible yet.
  *
