@@ -38,7 +38,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
-import { ruleBelongsToTab } from './tabs'
+import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
 import { NoDataIllus } from './NoDataIllus'
 import { HistoryDrawer } from '../tabs/RuleListTab'
@@ -111,8 +111,14 @@ const TRIGGER_LABEL: Record<string, string> = {
   AD_TARGET_UNDERPERFORMING: 'On underperformance', KEYWORD_LOW_CTR: 'On low CTR',
   KEYWORD_WASTED_SPEND: 'On wasted spend', KEYWORD_ZERO_IMPRESSIONS: 'On zero impressions',
   AD_SPEND_PROFITABILITY_BREACH: 'On profit breach', CAMPAIGN_PERFORMANCE_BUDGET: 'On budget pressure',
+  // U5 — the last three the account actually uses. Measured on prod: the enum has twelve values and
+  // this map had nine, so `SEARCH_TERM_CONVERTING` rendered as a bare lower-case "search term
+  // converting" beside neighbours reading "On wasted spend".
+  SEARCH_TERM_CONVERTING: 'On a converting term', KEYWORD_HIGH_ACOS: 'On high ACoS',
+  FBA_AGE_THRESHOLD_REACHED: 'On stock ageing',
 }
-const humanTrigger = (t: string) => TRIGGER_LABEL[t] ?? t.toLowerCase().replace(/_/g, ' ')
+/** An unmapped trigger still reads like its neighbours rather than shouting its enum. */
+const humanTrigger = (t: string) => TRIGGER_LABEL[t] ?? (t ? `On ${t.toLowerCase().replace(/_/g, ' ')}` : 'No trigger')
 
 const money = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { maximumFractionDigits: 2 })}`
 
@@ -148,10 +154,22 @@ function clause(c: { field?: string; metric?: string; op?: string; value?: unkno
 
 interface BuilderGroup { conditions?: Array<{ metric?: string; op?: string; value?: string }>; action?: { op?: string; value?: string; target?: string } }
 
-/** The Criteria cell — one line for either shape, the way H10 truncates it ("PPC Orders>=1, S…"). */
-function summariseRule(rule: Record<string, unknown>): string {
+/**
+ * The Criteria cell — one line for either shape, the way H10 truncates it ("PPC Orders>=1, S…").
+ *
+ * 🔴 `tabKey` decides WHICH action is summarised, and it matters on a multi-action rule. Membership
+ * is "any action belongs to this tab", so "Daily automation digest" — actions `[bid_to_target_acos,
+ * harvest_and_negate, alert_operator]` — lists on Negative Targeting because of its SECOND action,
+ * and summarising `actions[0]` had it explaining a bid change on the negatives tab (measured on
+ * prod, U5). The line now describes the action that put the rule on the tab you are looking at;
+ * the same rule therefore reads differently on Bid and on Negative Targeting, which is correct —
+ * it does both.
+ */
+function summariseRule(rule: Record<string, unknown>, tabKey?: string): string {
   const conds = Array.isArray(rule.conditions) ? rule.conditions : []
-  const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : null) as Record<string, unknown> | null
+  const actions = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
+  const want = tabKey ? RULE_TAB_ACTION_TYPES[tabKey] : undefined
+  const a0 = (want ? actions.find((a) => want.includes(String(a?.type ?? ''))) ?? actions[0] : actions[0]) ?? null
   const nested = conds.length > 0 && !!conds[0] && typeof conds[0] === 'object' && 'conditions' in (conds[0] as object)
 
   if (nested) {
@@ -183,7 +201,7 @@ function summariseRule(rule: Record<string, unknown>): string {
   return then ? `${ifs} → ${then}` : ifs
 }
 
-function ruleToRow(rule: Record<string, unknown>): RuleRow {
+function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
   const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) as
     { type?: string; control?: string; schedule?: { frequency?: string; time?: string } } | null
   const builder = isBuilderRule(rule)
@@ -212,7 +230,7 @@ function ruleToRow(rule: Record<string, unknown>): RuleRow {
     automation: builder ? a?.control === 'automate' : rule.enabled !== false && rule.autonomyLevel === 'AUTO',
     level: String(rule.autonomyLevel ?? ''),
     enabled: rule.enabled !== false,
-    criteria: summariseRule(rule),
+    criteria: summariseRule(rule, tabKey),
     freqDay,
     freqTime,
   }
@@ -250,7 +268,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         if (!alive) return
         const all = (Array.isArray(j?.rules) ? j.rules : Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : []) as Array<Record<string, unknown>>
         const mine = all.filter((r) => ruleBelongsToTab(r.actions, tabKey))
-        setRows(mine.map(ruleToRow))
+        setRows(mine.map((r) => ruleToRow(r, tabKey)))
         setRaw(new Map(mine.map((r) => [String(r.id), r])))
         setErr(null)
       })
