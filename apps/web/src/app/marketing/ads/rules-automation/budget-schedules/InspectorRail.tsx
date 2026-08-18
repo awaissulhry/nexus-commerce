@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U8) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the rail shell that hosts the binding rail and the plan editor.
+ * Why it left: the Budget Schedules tab is now Helium 10's shape — the hourly-performance card over
+ *   the schedules grid, and nothing else (`BudgetSchedulesTabClient.tsx`; study
+ *   `docs/2026-08-16-ra-h10-reference-study.md` §3.7, §7.9).
+ * Candidate home: travels with its bodies.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired — `/budget-manager*`, `/budget-binding`
+ * and `/budget-schedules*` are all still served. The file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BSP.0 — the inspector rail, opened by `?open=` and closed back to it.
  *
  * 🔴 An in-flow layout COLUMN, not a DS `Drawer`. `Drawer.tsx:140` is `createPortal` to

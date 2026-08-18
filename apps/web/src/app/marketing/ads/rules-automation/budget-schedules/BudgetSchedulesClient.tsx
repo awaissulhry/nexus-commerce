@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U8) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole page shell — filter bar with the weeks window · the pinned pacing band · the six collapsible section cards (Binding now · Hour of day · Schedules · Events · Ceilings & precedence · Change log, four of them never built) · the ?section= jump target.
+ * Why it left: the Budget Schedules tab is now Helium 10's shape — the hourly-performance card over
+ *   the schedules grid, and nothing else (`BudgetSchedulesTabClient.tsx`; study
+ *   `docs/2026-08-16-ra-h10-reference-study.md` §3.7, §7.9).
+ * Candidate home: **Budget Manager** — month cap, MTD spend and pace are that page's subject.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired — `/budget-manager*`, `/budget-binding`
+ * and `/budget-schedules*` are all still served. The file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BSP.0 — Budget Pacing & Schedules. The basis: route, scope spine, URL contract, the pinned pacing
  * band, six section shells and the inspector rail. Seven further sessions fill the sections.
  *

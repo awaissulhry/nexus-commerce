@@ -32,10 +32,11 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Eye, EyeOff, Search, Info, ExternalLink, Trash2 } from 'lucide-react'
+import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { MetricSelect } from '../_schedule/MetricSelect'
+import { HourlyPerformanceCard } from './HourlyPerformanceCard'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SectionEmpty } from './SectionShell'
 
@@ -161,10 +162,10 @@ export function SchedulesSection() {
               <span className="grow" />
               <MetricSelect value={metric2} onChange={setMetric2} dot="#1f6fde" label="Metric 2" />
             </div>
-            <div className="h10-sb-nodata">
-              <span className="ill"><Search size={26} /></span>
-              <span className="t">Hourly data is not available for this marketplace.</span>
-            </div>
+            {/* U8 — was the constant "Hourly data is not available for this marketplace." with two
+                metric pickers that changed nothing. The card reads the endpoint now; that sentence
+                still renders, but only when the endpoint says `hasData: false`. */}
+            <HourlyPerformanceCard metric1={metric1} metric2={metric2} />
           </div>
         )}
       </div>

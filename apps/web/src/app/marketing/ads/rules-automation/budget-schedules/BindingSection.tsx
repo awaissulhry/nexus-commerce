@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U8) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: "Binding now" — the campaigns spending at or over the budget in force.
+ * Why it left: the Budget Schedules tab is now Helium 10's shape — the hourly-performance card over
+ *   the schedules grid, and nothing else (`BudgetSchedulesTabClient.tsx`; study
+ *   `docs/2026-08-16-ra-h10-reference-study.md` §3.7, §7.9).
+ * Candidate home: **Budget Manager** / Analytics.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired — `/budget-manager*`, `/budget-binding`
+ * and `/budget-schedules*` are all still served. The file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * BSP.2 · binding — campaigns spending at or over the budget that was actually in force.
  *
  * The study calls this the highest-value new view on the page, and the reason is one number: budget

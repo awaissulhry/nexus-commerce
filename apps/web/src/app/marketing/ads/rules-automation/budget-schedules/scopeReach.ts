@@ -1,4 +1,17 @@
 /**
+ * ⛔ PARKED 2026-08-18 (U8) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: this page's scope-reach helper.
+ * Why it left: the Budget Schedules tab is now Helium 10's shape — the hourly-performance card over
+ *   the schedules grid, and nothing else (`BudgetSchedulesTabClient.tsx`; study
+ *   `docs/2026-08-16-ra-h10-reference-study.md` §3.7, §7.9).
+ * Candidate home: travels with the page shell.
+ *
+ * ⚠ Nothing here was changed and no endpoint was retired — `/budget-manager*`, `/budget-binding`
+ * and `/budget-schedules*` are all still served. The file stays at this path on purpose:
+ * re-mounting it is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+/**
  * BSP — the client-side scope resolution, lifted out of `BudgetScopeBar` when FB.2 deleted that bar.
  *
  * This page is the one in the section that resolves its own scope: it has no single grid read to

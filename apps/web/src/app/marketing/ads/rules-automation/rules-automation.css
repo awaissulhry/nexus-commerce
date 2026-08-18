@@ -5109,3 +5109,19 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-am-grid td .h10-rr-empty .sub,
 .h10-am-grid td .h10-rr-empty b { white-space: normal; }
 .h10-am-grid td .h10-rr-empty .sub { text-wrap: pretty; }
+
+/* ── U8 — the hourly-performance chart, replacing a hard-coded "not available" sentence ────────
+   24 hourly buckets: Metric 1 as bars (navy, the H10 dot colour), Metric 2 as a line (blue). Drawn
+   as inline SVG — 24 points does not justify a chart dependency, and this section takes none. The
+   <title> inside each bar is the native tooltip, so hovering an hour reads both metrics without a
+   popover layer. */
+.h10-bsp-hourly { padding: 4px 2px 0; }
+.h10-bsp-hourly .chart { width: 100%; height: auto; display: block; }
+.h10-bsp-hourly .grid { stroke: #eef1f5; stroke-width: 1; }
+.h10-bsp-hourly .bar { fill: #0b2447; opacity: .82; rx: 2; }
+.h10-bsp-hourly .bar:hover { opacity: 1; }
+.h10-bsp-hourly .line2 { stroke: #1f6fde; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.h10-bsp-hourly .xlab { fill: #7c8595; font-size: 11px; font-weight: 600; }
+.h10-bsp-hourfoot { margin: 6px 2px 2px; font-size: 12px; color: #55606d; }
+.h10-bsp-hourfoot b { color: #2b3440; font-weight: 700; }
+.h10-bsp-hourfoot i { font-style: normal; color: #7c8595; }
