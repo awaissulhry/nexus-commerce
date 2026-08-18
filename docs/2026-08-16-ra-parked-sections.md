@@ -111,7 +111,52 @@ schedules section is untouched. The first cap (340px, copied from that grid) the
 
 ---
 
+## U3 — Share of Voice (2026-08-18, commits `f10124cce` · `ccc6cd80e`)
+
+Route `/marketing/ads/rules-automation/share-of-voice` now renders
+`share-of-voice/SovRulesClient.tsx`: page header · tab bar · `_shared/RulesGrid`
+(`tabKey="share-of-voice"`), with H10's own SOV empty-state wording ("Create a rule to generate
+campaign suggestions").
+
+🔴 **The tab could not have held a rule before this.** `RULE_TAB_ACTION_TYPES` had no
+`share-of-voice` entry, and `ruleBelongsToTab` returns false for any tab absent from that map — so
+grid AND badge were empty **by construction**, the same defect the old `SovTrackerTab
+liveType="sov"` shipped for months. The entry was added with an **empty engine list on purpose**
+(SOV-driven bidding is expressed as `bid_*` actions, which are the Bid tab's — filing them here too
+would double-count one rule on two tabs); the existing derivation then adds the builder slug `sov`.
+
+| file | what it is | candidate home |
+|---|---|---|
+| `share-of-voice/ShareOfVoiceClient.tsx` (1,261) | the whole 14-block market-share report: one-market gate · filter bar · reach · three-feed freshness band · the rejection reckoning · override banner · summary strip · coverage note · signal chips · the query grid with saved views, share-weeks/ad-window segments, brand toggle, watchlist | **Analytics › Coverage** — it already owns SOV-flavoured columns |
+| `share-of-voice/SovRowDrawer.tsx` (166) | per-query drawer (`?row=query@market`) incl. the parser-week flag | travels with the query grid |
+| `share-of-voice/SovSavedViews.tsx` (148) | saved views for the query grid | travels with the query grid |
+| `share-of-voice/sovExport.ts` (195) | CSV builder + filename | **Reporting** |
+
+**⚖️ D4 decided by measurement, operator may overturn.** H10's grid carries a sixth column, "SOV
+Reports", naming the SOV *report object* the rule reads (created under Reporting, max 20 per
+account, the rule breaks when it is deleted). We have no such object — our share is SQP-derived per
+market and a rule's market already lives in its scope — so the column would restate the scope on
+every row, which is the decorative-column class this programme exists to remove. **Not rendered.**
+Real SOV report objects would be a build, not a column.
+
+**Prod verification, 2026-08-18** — the slug fix proven end to end: created a rule in `/builder/sov`
+→ it appeared on the tab it was created from, grid **0 → 1** and badge **0 → 1** (impossible before
+this unit); Criteria read "Share of Voice < 20 → Set €0.55" (the U1 unit fix holding); bulk Delete
+removed it — server back to 51 rules with no leftovers. No horizontal overflow.
+
+**One defect the click-through caught** (`ccc6cd80e`): after the delete the grid read "Showing 0 SOV
+Rules" while the **tab badge still read 1**. The counts provider refreshes on `ads.rule.changed` and
+the builder emits it on save, but this grid never did — so its own deletes and toggles went
+unannounced. Badge and grid share the membership predicate; sharing a predicate is not sharing a
+fetch. Now emitted after the write settles, once per logical operation (the bulk path passes
+`silent` and emits once after its loop, not once per row).
+
+**Endpoints that lost their only UI in U3** (still served): `/share-of-voice-page`,
+`/share-of-voice-page/row`.
+
+---
+
 ## Still to come
-U3 Share of Voice · U4 Keyword Tracker · U5 Negative Targeting · U6 Budget Rules ·
+U4 Keyword Tracker · U5 Negative Targeting · U6 Budget Rules ·
 U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.

@@ -507,7 +507,12 @@ campaign×lane grid + bulk panel → **Bulk Operations** / Ad Manager (later).
 Note: the multiplier write path (`/placements/:id/lane`, PLC.3) stays intact behind its endpoints;
 nothing on the new page writes multipliers — that is H10's shape too.
 
-### 7.4 Unit U3 — Share of Voice (14 blocks → 1) — **the first tab that gains a rules grid**
+### 7.4 Unit U3 — Share of Voice (14 blocks → 1) — ✅ SHIPPED + prod-verified 2026-08-18
+Commits `f10124cce` (page + the `share-of-voice` map entry) · `ccc6cd80e` (badge refresh).
+🔴 **D4 answered by measurement** (no "SOV Reports" column — we have no report object; it would
+restate the scope) and 🔴 **the map entry was mandatory**: without it `ruleBelongsToTab` is false
+for every rule, so grid and badge are empty by construction. **U4 needs the same for
+`keyword-tracker`.** Details: `docs/2026-08-16-ra-parked-sections.md` § U3.
 `share-of-voice/page.tsx` mounts `SovRulesClient` (`RulesGrid tabKey="share-of-voice"`; builder
 `/builder/sov`; column set = H10's incl. **"SOV Reports"** — the SOV report(s) the rule reads,
 per §5.3; our SOV builder must expose the same Setup: Report · ASIN · Keyword · Campaigns, criteria
