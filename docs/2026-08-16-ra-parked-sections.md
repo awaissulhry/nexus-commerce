@@ -369,6 +369,59 @@ its own column and Creates always tells the truth — verified live reading `Yes
 
 ---
 
+## U8 — Budget Pacing & Schedules (2026-08-18, commit `503854cbe`)
+
+Route `/marketing/ads/rules-automation/budget-schedules` now renders
+`budget-schedules/BudgetSchedulesTabClient.tsx`: page header · tab bar · the two parts H10 has —
+the **Hourly Campaign Performance** card over the **schedules grid** — and nothing else.
+
+### 🔴 The hourly card was a CONSTANT, and the data was there all along
+`SchedulesSection` rendered *"Hourly data is not available for this marketplace."* unconditionally,
+never called an endpoint, and its two metric pickers changed nothing — the stale-constant class the
+RA notes have carried since this tab was built. Measured on prod 2026-08-18:
+`GET /advertising/budget-schedules/hourly-performance` answers **200 with `hasData: true`** and 24
+hourly buckets (spend · sales · orders · clicks · impressions · acos, Europe/Rome). H10's own
+account genuinely has no hourly data and shows that sentence honestly; **ours has it, so the
+sentence was false.**
+
+`HourlyPerformanceCard.tsx` draws Metric 1 as bars and Metric 2 as a line (inline SVG — 24 points
+does not justify a chart dependency), names any picked metric the endpoint does not return instead
+of plotting zero for it, and still shows the original sentence when `hasData` is false. Verified on
+prod: switching Metric 1 Spend → Orders repainted the chart (footer "Orders 6 peak · ACoS 377%
+peak"; per-bar tooltip "12AM · Orders 1 · ACoS 377%"). The shape is immediately useful — spend low
+overnight, climbing from 09:00, and **ACoS at 377% in the midnight hour**.
+
+⚠ **This tab is not a rules grid**, so it does not mount `_shared/RulesGrid` and has no count badge:
+a budget schedule is a `BudgetSchedule` row, not an `AutomationRule`, and a rule count here would be
+counting the wrong objects. That is why `RULE_TAB_ACTION_TYPES` still has **no** `budget-schedules`
+entry — unlike U3/U4, whose tabs really do list rules.
+
+✅ **D5 answered by the code, not by a build.** The schedule builder already offers both of H10's
+types — "Campaign Budget" (hourly) and "Budget Multiplier" (daily) — in
+`_schedule/scheduleConfig.ts`. **Auto-Refill** is the one piece of H10's budget-schedule feature we
+do not have; it is builder/executor work, not a column, so H10's "Auto Refill" column is not
+rendered (a column that could only ever print "—" is the decorative class this programme removes).
+
+| file | what it is | candidate home |
+|---|---|---|
+| `budget-schedules/BudgetSchedulesClient.tsx` (444) | the page shell: filter bar + weeks window · pinned pacing band · six collapsible cards (Binding now · Hour of day · Schedules · Events · Ceilings & precedence · Change log — four never built) | **Budget Manager** |
+| `budget-schedules/PacingBand.tsx` (199) | month cap · MTD spend · pace · month stepper | **Budget Manager** |
+| `budget-schedules/BindingSection.tsx` (261) | "Binding now" — campaigns at/over the budget in force | Budget Manager / Analytics |
+| `budget-schedules/CampaignBindingRail.tsx` (177) · `InspectorRail.tsx` (93) | the rail and its binding body | travel with their sections |
+| `budget-schedules/PlanEditor.tsx` (316) · `CalendarEditor.tsx` (121) · `EnforcementPreview.tsx` (148) | the month-plan editor, its calendar and its preview | **Budget Manager** |
+| `budget-schedules/CampaignLimitsModal.tsx` (185) | per-campaign min/max limits | **Control Room › Guardrails** |
+| `budget-schedules/SectionShell.tsx` (174) · `planMath.ts` · `usePlanWrites.ts` · `scopeReach.ts` · `urlState.ts` | the section shell and the page's own helpers | travel with the shell |
+
+**Kept and improved, not parked:** `SchedulesSection.tsx` — it already rendered H10's grid
+(Budget Schedule Name · Type · Days · Start · End · Exclude Start · Exclude End, with delete and
+"+ Schedule"); U8 replaced its fake chart with the real card. 0 schedules exist, so it shows
+"No budget schedules yet".
+
+**Endpoints that lost their only UI in U8** (still served): `/budget-manager*`, `/budget-binding`,
+`/budget-manager/plans*`, `/budget-manager/campaign-limit`.
+
+---
+
 ## Still to come
 U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.

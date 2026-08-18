@@ -581,7 +581,12 @@ strip, candidates grid), `HvThresholds.tsx`, `HvCohort.tsx`, `HvDestination.tsx`
 **Suggestions** (they are literally the harvest suggestions H10 shows there); cohort ("did the last
 batch work") → **Analytics**; actors → **Automations › Engines**.
 
-### 7.9 Unit U8 — Budget Pacing & Schedules → **Budget Schedules** (7 cards → 2 parts)
+### 7.9 Unit U8 — Budget Pacing & Schedules (7 cards → 2 parts) — ✅ SHIPPED + prod-verified 2026-08-18
+Commit `503854cbe`. 🔴 The hourly card was a CONSTANT and the data was there all along
+(`hasData: true`, 24 buckets) — it is a real chart now, and the metric pickers finally drive it.
+✅ **D5 answered by the code**: the builder already offers Campaign Budget AND Budget Multiplier;
+Auto-Refill is the only missing piece and is builder work, not a column. This tab is not a rules
+grid, so it mounts no RulesGrid and takes no badge. Details: parked register § U8.
 `budget-schedules/page.tsx` mounts `BudgetSchedulesClient` (new, small):
 1. **"Hourly Campaign Performance"** card — two metric selects (Spend / ACoS defaults) over the
    hourly chart from `GET /advertising/budget-schedules/hourly-performance` (17,963 rows — unlike
