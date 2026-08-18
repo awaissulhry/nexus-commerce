@@ -5098,3 +5098,14 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-hv-badges { display: inline-flex; align-items: center; gap: 4px; }
 .h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: .01em; background: #e8f1fd; color: #10457f; }
 .h10-hv-mt.neg { background: #fdeceb; color: #a2231d; }
+
+/* ── U7 — an empty-state sentence inside the grid must be allowed to WRAP ──────────────────────
+   Measured on prod: the Ad Group View's explanation rendered as a single 1,311px line inside its
+   own 420px box, running off the card. `.h10-am-grid td` sets `white-space: nowrap` (right for a
+   data cell, wrong for a paragraph), and the empty state is rendered INSIDE a td — so the box was
+   capped and the text simply painted outside it. `.sub` already had the max-width; it needed the
+   wrap. Scoped to the empty state so real cells keep their nowrap. */
+.h10-am-grid td .h10-rr-empty,
+.h10-am-grid td .h10-rr-empty .sub,
+.h10-am-grid td .h10-rr-empty b { white-space: normal; }
+.h10-am-grid td .h10-rr-empty .sub { text-wrap: pretty; }
