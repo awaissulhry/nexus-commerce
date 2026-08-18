@@ -495,7 +495,10 @@ Candidate homes: census/bounds/activity/bidder band → **Analytics**; staged tr
 target drawer + goal dialog → Ad Manager campaign detail (later).
 Header: `primaryAction` "+ Rule" → `/builder/bid` (H10 has it on every tab).
 
-### 7.3 Unit U2 — Placement (14 blocks → 1)
+### 7.3 Unit U2 — Placement (14 blocks → 1) — ✅ SHIPPED + prod-verified 2026-08-18
+Commits `adaff0950` (page) · `d5779c9c1` + `a9ad3975b` (name-column overflow). Verification and the
+defect it caught: `docs/2026-08-16-ra-parked-sections.md` § U2. 🔴 **All 8 placement rules are
+disabled** — the "off" chip surfaced it; operator decision, not this unit's.
 `placement/page.tsx` mounts `PlacementRulesClient` (`RulesGrid tabKey="placement"`; builder
 `/builder/placement`). Park: `PlacementClient.tsx` (scope bar, census cells, lane split, "the hour",
 campaign×lane grid + inline lane editor, refusal alert), `PlacementScopeBar.tsx`,

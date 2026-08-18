@@ -73,7 +73,45 @@ now. **Operator decision, not this unit's:** whether any of those seven should b
 
 ---
 
+## U2 — Placement (2026-08-17/18, commits `adaff0950` · `d5779c9c1` · `a9ad3975b`)
+
+Route `/marketing/ads/rules-automation/placement` now renders `placement/PlacementRulesClient.tsx`:
+page header · tab bar · `_shared/RulesGrid` (`tabKey="placement"`).
+
+🔴 **This tab GAINED a rules grid rather than trading one.** PLC.0 removed the old
+`RuleListTab liveType="placement"` and never replaced it, so the eight placement rules had had no
+home on their own tab since — reachable only through Automations.
+
+| file | what it is | candidate home |
+|---|---|---|
+| `placement/PlacementClient.tsx` (1,178) | the whole 14-block page: own scope bar · resolution + freshness · census cells (inverted · compounding · unmanaged · decorative) · lane split · "the hour" · campaign×lane grid + inline lane editor + row refusal alert | **Analytics** (lane split, census); the grid + editor with the write surfaces |
+| `placement/PlacementScopeBar.tsx` (200) | the page's own scope bar — one of the seven page-local forks of the scope spine | travels with the client; `AdsFilterBar` + `buildScopeFilters` supersede it |
+| `placement/PlcInspector.tsx` (208) | per-campaign inspector rail (`?row=`): three lanes, owner, change ledger | Analytics › Campaigns, or the Ad Manager campaign row |
+| `placement/PlcBulkPanel.tsx` (393) | "Set across scope…" preview-then-confirm bulk multiplier write (`?bulk=1`) | **Bulk Operations** |
+
+**Prod verification, 2026-08-18.** Grid, tab badge and server all agree at **8 placement rules**;
+"+ Rule" → `/builder/placement`, each name → `?ruleId=`; all 8 toggles correctly disabled (every
+placement rule is an engine rule) and **all 8 carry the "off" chip — not one placement rule is
+enabled**. No horizontal overflow. The Bid tab was re-checked for regression from the shared CSS
+change: unchanged at 18 rows.
+
+**One defect the click-through caught** (`d5779c9c1` + `a9ad3975b`): four rank rules carry the whole
+ASIN title in their name ("Hold top rank ≥ 60% — XAVIA MOSS Giacca Moto con Cappuccio Removibile
+– …"), which rendered **1,227px wide inside a 360px cell — an 881px spill straight through the
+Criteria column**. The Bid tab could never have shown it: its names are short. Fixed the way the
+schedules grid already does it (the table is `table-layout: auto`, so the cap must live on the
+content, not the cell), scoped to a new `h10-rg-namew` so the class shared with Budget Pacing's
+schedules section is untouched. The first cap (340px, copied from that grid) then left the name
+137px — Open · History hold 148px in the same flex line whether visible or not — so the cap is
+480px, leaving 277px of name. Measured after: 0 collisions, 0 spill, every name titled.
+
+**Endpoints that lost their only UI in U2** (all still served; nothing retired): `/placements`,
+`/placements/cursor`, `/placements/preview`, `PATCH /placements/:id/lane` (the PLC.3 write path),
+`/bid-history`, `/campaigns/:id/pins`.
+
+---
+
 ## Still to come
-U2 Placement · U3 Share of Voice · U4 Keyword Tracker · U5 Negative Targeting · U6 Budget Rules ·
+U3 Share of Voice · U4 Keyword Tracker · U5 Negative Targeting · U6 Budget Rules ·
 U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.
