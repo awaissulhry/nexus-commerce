@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U3) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 14-block market-share report — one-market gate · filter bar · reach sentence · three-feed freshness band · the rejection reckoning ("a newer week exists and this page is not showing it") · override banner · summary strip · coverage note · signal chips (outbid · weak relevance · cannibalized · unbid demand) · the query grid with saved views, share-weeks and ad-window segments, brand toggle and watchlist.
+ * Why it left: the Share of Voice tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`SovRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.9, §7.4).
+ * Candidate home: **Analytics › Coverage** — it already owns SOV-flavoured columns and is where market share belongs.
+ *
+ * Nothing here was changed and no endpoint was retired (`/share-of-voice-page` and its row route are
+ * still served). The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * SOV.0 — Share of Voice, its own page. The basis only.
  *
  * One question: **on the queries that matter, how much of each market do we hold?**

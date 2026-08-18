@@ -203,6 +203,21 @@ const RULE_TAB_ACTION_TYPES_BASE: Record<string, string[]> = {
   placement: ['set_placement_multiplier', 'defend_top_of_search'],
   'keyword-harvest': ['promote_to_exact', 'harvest_and_negate'],
   'negative-targeting': ['harvest_and_negate', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns'],
+  /**
+   * U3 — Share of Voice, entered with an EMPTY engine list on purpose.
+   *
+   * The entry has to exist at all: `ruleBelongsToTab` returns false for any tab that is absent from
+   * this map, so before this line the SOV tab's grid and badge were empty **by construction** — a
+   * rule created in `/builder/sov` could never appear on the tab it was created from. That is the
+   * defect this map's own comment predicted, and the one the old `SovTrackerTab liveType="sov"`
+   * shipped for months.
+   *
+   * The list is empty because no ENGINE action type belongs here: SOV-driven bidding is expressed
+   * as `bid_*` actions, which are the Bid tab's, and filing them here too would double-count one
+   * rule on two tabs. The derivation below adds the builder slug `sov`, which is the only thing an
+   * SOV rule can carry — so this tab counts exactly the rules built as SOV rules, and nothing else.
+   */
+  'share-of-voice': [],
 }
 
 /**

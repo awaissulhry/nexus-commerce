@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U3) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: saved views for the query grid (the toolbar's view picker).
+ * Why it left: the Share of Voice tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`SovRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.9, §7.4).
+ * Candidate home: travels with the query grid.
+ *
+ * Nothing here was changed and no endpoint was retired (`/share-of-voice-page` and its row route are
+ * still served). The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * SOV.6 — saved views. **A URL and a name. Nothing else.**
  *
  * 🔴 It captures the QUESTION, never the answer. A view that pinned 2026-07-19 with its rows would

@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U3) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the per-query drawer (?row=query@market), including the parser-week flag.
+ * Why it left: the Share of Voice tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`SovRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.9, §7.4).
+ * Candidate home: travels with the query grid into Analytics › Coverage.
+ *
+ * Nothing here was changed and no endpoint was retired (`/share-of-voice-page` and its row route are
+ * still served). The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * SOV.5 — the row drawer: one query's whole story, deep-linkable as `?row=<query>@<market>`.
  *
  * Owns what SOV.1 §9 moved here: the weekly SERIES (every period, the pre-ACR.0.2 parser weeks
