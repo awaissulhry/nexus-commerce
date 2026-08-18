@@ -156,7 +156,40 @@ fetch. Now emitted after the write settles, once per logical operation (the bulk
 
 ---
 
+## U4 — Keyword Tracker (2026-08-18, commit `92818c79e`)
+
+Route `/marketing/ads/rules-automation/keyword-tracker` now renders
+`keyword-tracker/KeywordTrackerRulesClient.tsx`: page header · tab bar · `_shared/RulesGrid`
+(`tabKey="keyword-tracker"`), with H10's own KT empty state ("Create a Keyword Tracker Rule to
+generate campaign suggestions").
+
+🔴 Same mandatory map entry as U3 — `RULE_TAB_ACTION_TYPES` gains `keyword-tracker`, empty engine
+list (rank-driven bidding is `bid_*` / `raise_bids_for_rank_defense`, the Bid and Placement tabs';
+the derivation adds the builder slug). The page also **drops its one-market gate**: that existed
+because every number on the rank report is a per-marketplace quantity with no honest sum, and a
+rule list has no such number.
+
+| file | what it is | candidate home |
+|---|---|---|
+| `keyword-tracker/KeywordTrackerClient.tsx` (964) | the 11-block rank report: market gate · filter bar · resolution with share age + ToS impression share · the feed-health line (silent nights, green-and-dead runs, cliff date, market-volume Δ) · truncated-week banner · the term grid | **Analytics › Coverage** |
+| `keyword-tracker/WatchlistPanel.tsx` (298) | the watchlist editor (create · import · edit tracked terms) | **the KT builder's Setup step** — H10 puts "+ Create New Keyword Tracker" exactly there |
+| `keyword-tracker/TermDrawer.tsx` (256) | per-term drawer (`?kw=`): header · our ASINs · campaigns bidding it | travels with the term grid |
+| `keyword-tracker/TermChart.tsx` (188) | the rank-history chart in the drawer | travels with the drawer |
+| `keyword-tracker/BidAction.tsx` (433) | act-from-a-row: preview · propose · apply a bid change | **Suggestions** (propose) / Bulk Operations (apply) |
+| `keyword-tracker/ChangeLog.tsx` (236) | per-term change log with undo | **Change Log** |
+| `keyword-tracker/csv.ts` (107) | CSV for the term grid and change list | **Reporting** |
+
+**Prod verification, 2026-08-18** — created a rule in `/builder/keyword-tracker` (86 campaigns via
+Add All) → it appeared on the tab it was created from, grid and badge **0 → 1**; deleted it → server
+back to **51 rules, no leftovers**, and **grid AND badge both read 0 without a page reload**, which
+is the U3 badge-emit fix (`ccc6cd80e`) verified live: in U3 the same sequence left the badge at 1.
+
+**Endpoints that lost their only UI in U4** (still served): `/keyword-tracker`,
+`/keyword-tracker/term`, `/keyword-watchlists*`, `/keyword-actions/*`, `/changes.csv`.
+
+---
+
 ## Still to come
-U4 Keyword Tracker · U5 Negative Targeting · U6 Budget Rules ·
+U5 Negative Targeting · U6 Budget Rules ·
 U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.

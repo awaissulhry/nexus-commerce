@@ -523,7 +523,9 @@ grid with saved views / weeks / ad window / brand toggle / watchlist), `SovRowDr
 **Analytics › Coverage** (which already owns SOV-flavoured columns); export → **Reporting**.
 Also: today's page GATES on one market ("Pick one market") — the rules grid does not need that.
 
-### 7.5 Unit U4 — Keyword Tracker (11 blocks → 1)
+### 7.5 Unit U4 — Keyword Tracker (11 blocks → 1) — ✅ SHIPPED + prod-verified 2026-08-18
+Commit `92818c79e`. Needed the same `RULE_TAB_ACTION_TYPES` entry as U3; drops the one-market gate.
+Its click-through doubled as the live proof of the badge-refresh fix. Details: parked register § U4.
 `keyword-tracker/page.tsx` mounts `KeywordTrackerRulesClient` (`RulesGrid tabKey="keyword-tracker"`;
 builder `/builder/keyword-tracker`, whose Setup step is the ASIN/keyword-list picker — ours already
 takes ASINs via `/keyword-ranks`; verify it matches §4.3's shape). Park: `KeywordTrackerClient.tsx`
