@@ -16,13 +16,13 @@
  *   Phrase, Exact and Product (`MATCH_TYPES_POS`); it cannot create a Broad target, so a B badge
  *   would describe a capability we do not have.
  *
- * 🔴 **Where the rows come from, and why there are none yet.** A mapping is written by the BUILDER
- * (`actions[0].mappings`). Measured on prod 2026-08-18: all five harvest rules are ENGINE rules —
+ * 🔴 **Where the rows come from.** A mapping is written by the BUILDER (`actions[0].mappings`).
+ * Measured on prod 2026-08-18: the five PRE-EXISTING harvest rules are ENGINE rules —
  * `harvest_and_negate` / `promote_to_exact` with threshold parameters (`minOrders`, `windowDays`,
- * `minSpendCents`, `graduationBidEur`) and **no mappings at all**. They harvest by threshold across
- * the account rather than along a mapping. So this view is empty today, and it says exactly that
- * instead of rendering an empty table that implies data is missing. It fills itself the moment a
- * harvest rule is created in the builder.
+ * `minSpendCents`, `graduationBidEur`) and **no mappings at all**: they harvest by threshold across
+ * the account rather than along a mapping. So with only those rules the view is empty and SAYS
+ * exactly that, naming the reason, instead of rendering an empty table that implies data is
+ * missing. Verified by building a rule with two mapped ad groups: the rows appeared immediately.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ExternalLink } from 'lucide-react'
@@ -50,7 +50,17 @@ interface Row {
   adGroup: string
   type: string
   campaign: string
-  role: 'Source' | 'Destination'
+  /**
+   * 🔴 Source and destination are NOT exclusive. The builder's mapping row carries `look` (read
+   * search terms from this ad group) AND `types` (create these targets in it) independently, and
+   * its own table shows them as two columns — "What Ad Groups would you like included in this
+   * rule?" beside "What targets would you like created?". A single Source/Destination role column
+   * therefore has to lie about any ad group that does both, which the first cut of this grid did:
+   * it forced a role and then suppressed `creates` whenever `look` was set, hiding P/E targets the
+   * rule really creates. The grid now mirrors the builder: `reads` is its own column, `creates`
+   * always tells the truth.
+   */
+  reads: boolean
   ruleId: string
   ruleName: string
   creates: string[]
@@ -92,11 +102,11 @@ export function HvAdGroupView() {
               adGroup: g.name,
               type: g.adProduct ?? '—',
               campaign: g.campaignName ?? g.campaignId,
-              role: g.look ? 'Source' : 'Destination',
+              reads: g.look === true,
               ruleId: String(rule.id),
               ruleName: String(rule.name ?? 'Untitled'),
-              creates: g.look ? [] : creates.map(badgeOf),
-              negates: g.look && negateInSource ? ['E'] : [],
+              creates: creates.map(badgeOf),
+              negates: g.look === true && negateInSource ? ['E'] : [],
             })
           }
         }
@@ -110,15 +120,10 @@ export function HvAdGroupView() {
     { key: 'type', label: 'Type', metric: false, render: (r) => <span className="cp-badge prod">{r.type}</span> },
     { key: 'campaign', label: 'Campaign', metric: false, render: (r) => <span className="h10-nt-crit" title={r.campaign}>{r.campaign}</span> },
     {
-      key: 'role', label: 'Role', metric: false,
-      render: (r) => (
-        <span
-          className={`h10-bd7-posture ${r.role === 'Source' ? 'observe' : 'propose'}`}
-          title={r.role === 'Source'
-            ? 'Search terms are read FROM this ad group.'
-            : 'New targets are created IN this ad group.'}
-        >{r.role}</span>
-      ),
+      key: 'reads', label: 'Reads terms', metric: false,
+      render: (r) => (r.reads
+        ? <span className="h10-bd7-posture observe" title="Search terms are read FROM this ad group — the source half of the mapping.">Yes</span>
+        : <span className="h10-bd8-muted" title="This ad group is a destination only: targets are created in it, its own search terms are not read.">—</span>),
     },
     {
       key: 'rule', label: 'Harvest Rule', metric: false,
@@ -127,8 +132,8 @@ export function HvAdGroupView() {
     {
       key: 'creates', label: 'Creates', metric: false, sortable: false,
       render: (r) => (r.creates.length
-        ? <span className="h10-hv-badges">{r.creates.map((t) => <span key={t} className="h10-hv-mt" title={TYPE_LABEL[t === 'ASIN' ? 'product' : t]}>{t}</span>)}</span>
-        : <span className="h10-bd8-muted">—</span>),
+        ? <span className="h10-hv-badges">{r.creates.map((t) => <span key={t} className="h10-hv-mt" title={`Creates a ${TYPE_LABEL[t === 'ASIN' ? 'product' : t]} target here`}>{t}</span>)}</span>
+        : <span className="h10-bd8-muted" title="No target type is selected for this ad group — the rule reads from it but creates nothing in it.">—</span>),
     },
     {
       key: 'negates', label: 'Negates', metric: false, sortable: false,
@@ -144,7 +149,7 @@ export function HvAdGroupView() {
     return [
       { key: 'campaign', label: 'Campaign', kind: 'multiselect', searchable: true, options: uniq((r) => r.campaign).map((v) => ({ value: v, label: v })), value: (r) => (r as Row).campaign },
       { key: 'rule', label: 'Harvest Rule', kind: 'multiselect', searchable: true, options: uniq((r) => r.ruleName).map((v) => ({ value: v, label: v })), value: (r) => (r as Row).ruleName },
-      { key: 'role', label: 'Role', kind: 'select', options: [{ value: 'Source', label: 'Source' }, { value: 'Destination', label: 'Destination' }], value: (r) => (r as Row).role },
+      { key: 'reads', label: 'Reads terms', kind: 'select', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }], value: (r) => ((r as Row).reads ? 'yes' : 'no') },
     ]
   }, [rows])
 
