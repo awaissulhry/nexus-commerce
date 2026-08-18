@@ -189,6 +189,48 @@ is the U3 badge-emit fix (`ccc6cd80e`) verified live: in U3 the same sequence le
 
 ---
 
+## CS — one campaign selector for every builder (2026-08-18, commits `e781d4eab` + placeholder fix)
+
+**Operator instruction:** *"use the shared component for the campaign selector that we built in the
+dayparting and rank goal rule builder … I will simply make changes to one, and it will be
+implemented on all the pages."*
+
+There were **two** pickers, and the criteria builders had the worse one:
+
+| | `_schedule/CampaignSection.tsx` | `RuleBuilder`'s private `CampaignPicker` |
+|---|---|---|
+| used by | schedules + rank goals | bid · budget · placement · sov · keyword-tracker |
+| tabs | All Campaigns · **Portfolios** · Products | **none** |
+| search | ranked (`searchOptions`) | plain substring |
+| bulk | Add All + **per-portfolio Add** | Add All only |
+
+The private copy is **DELETED** (126 lines); `RuleBuilder` renders `CampaignSection`. One file to
+change from here — add a prop, never a fork. Two props absorb every difference: `defaultStatus`
+(H10 opens criteria builders on **Enabled**, schedule builders on **All**) and the optional
+`placements` field on the shared type, which the **Placement** rule's preview reads to show
+current → proposed multipliers (dropping it would have made that preview silently read 0).
+
+🔴 **The Products tab was a stub** — "Scope by product is coming soon" — on a control the operator
+had been told does product selection. It is **real now, with no new endpoint**:
+`/advertising/scope-options` already returns each product line WITH the campaigns it reaches (the
+payload the eleven filter bars read). Search filters products by title/SKU (and says so — the
+placeholder is tab-aware), the status filter still applies to the campaigns underneath, per-product
+**Add** adds that product's campaigns, and **Add All** adds every campaign of the listed products,
+deduped because one campaign can advertise several products.
+
+**Prod verification, 2026-08-18.** Bid builder: the three tabs are there and it opens on Enabled;
+Products lists 7 product lines with real sub-lines ("GALE-JACKET · 18 variations · 36 campaigns")
+and one click on a product's Add added all **36** of its campaigns. Rank-goal builder re-checked for
+regression: unchanged — own layout, own Portfolio-scope select, still opens on **All** — and it
+gains the working Products tab, which is the point of sharing the component.
+
+**Rank & Dayparting was not touched:** no file moved, and no import changed in
+`_rank/RankGoalBuilder.tsx` or `_schedule/ScheduleBuilder.tsx`. The component stayed at its current
+path deliberately — relocating it to `_shared/` would have meant editing the RD builder for no
+functional gain. Say the word if you'd rather it lived in `_shared/`.
+
+---
+
 ## Still to come
 U5 Negative Targeting · U6 Budget Rules ·
 U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own

@@ -204,7 +204,15 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
           {TABS.map((t) => <button key={t} type="button" role="tab" aria-selected={t === tab} className={t === tab ? 'on' : ''} onClick={() => setTab(t)}>{t}</button>)}
         </div>
         <div className="cp-search">
-          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search for Campaigns" aria-label="Search for campaigns" />
+          {/* The Products tab searches PRODUCTS (SKU or title) — the list it filters is products —
+              so the box must not keep promising campaigns. H10 changes the same placeholder per
+              tab ("Search for Product Title、ASIN or SKU"). */}
+          <input
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setPage(1) }}
+            placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for Campaigns'}
+            aria-label={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for campaigns'}
+          />
           <Search size={16} className="ic" />
         </div>
         <div className="cp-statusrow">
