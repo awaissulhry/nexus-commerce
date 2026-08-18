@@ -231,7 +231,53 @@ functional gain. Say the word if you'd rather it lived in `_shared/`.
 
 ---
 
+## U5 — Negative Targeting (2026-08-18, commits `5b22443a1` · `63a262fde`)
+
+Route `/marketing/ads/rules-automation/negative-targeting` now renders
+`negative-targeting/NegativeRulesClient.tsx`: page header · tab bar · `_shared/RulesGrid`
+(`tabKey="negative-targeting"`). The tab also **gains a "+ Rule" button**, which it never had — its
+own rules table only offered "Open in the builder" on rules that already existed.
+
+No map entry needed (unlike U3/U4): `negative-targeting` already maps `add_negative_exact`,
+`add_negative_phrase`, `harvest_and_negate` and `sync_negatives_across_campaigns`.
+
+| file | what it is | candidate home |
+|---|---|---|
+| `negative-targeting/NegativeTargetingClient.tsx` (645) | the 16-block page: filter bar + portfolio blind-spot note · resolution · census (negatives · terms · blocking now · in a paused campaign · never confirmed at Amazon) · raw-match-type note · the negations/terms grid | **Analytics** |
+| `negative-targeting/NegTermDrawer.tsx` (357) | per-term drawer (`?focus=`) | travels with the grid |
+| `negative-targeting/NegRemoval.tsx` (376) | "Stop blocking this term" + the retirement path | **Suggestions** / Bulk Operations |
+| `negative-targeting/NegAttention.tsx` (411) | contradictions, alerts, negations needing review | **Suggestions** — every row is a proposal |
+| `negative-targeting/NegProtectedTerms.tsx` (621) | the protected-terms **editor** | **Control Room › Guardrails** — `ProtectedTermsPanel.tsx` already renders this list there |
+| `negative-targeting/NegWastefulWords.tsx` (500) | the wasteful-words n-gram finder + negate-gram | **Suggestions** |
+| `negative-targeting/NegRules.tsx` (422) | this page's own rules table | **superseded** by `_shared/RulesGrid` |
+| `negative-targeting/NegRecord.tsx` (370) | every negation made, with actor and outcome | **Change Log / Analytics** |
+
+⚠ **No protection was removed.** The whitelist, the converting-term guard and the write gate are
+server-side and still armed; `NegProtectedTerms` was the *editor* for that list, and the same panel
+already lives on Control Room › Guardrails. Every negatives endpoint is still served.
+
+**Prod verification, 2026-08-18.** 7 rules; grid = badge = server. Criteria and Frequency read
+correctly on every row.
+
+**Two honesty defects the click-through caught** (`63a262fde`), both about telling the truth *per
+tab*:
+① **A multi-action rule was summarised by `actions[0]` regardless of why it is listed.** Membership
+is "ANY action belongs to this tab", so "Daily automation digest" (`bid_to_target_acos`,
+`harvest_and_negate`, `alert_operator`) lists on Negative Targeting because of its SECOND action —
+and the Criteria cell explained a **bid change on the negatives tab**. "Auto match-type migration"
+likewise explained `promote_to_exact` there. The cell now summarises the action that matched the
+tab, verified live: the digest reads **"harvest and negate" on Negative Targeting and "bid to
+target ACoS" on Bid** — correct, because it does both.
+② **Three of the twelve triggers were unmapped**, so `SEARCH_TERM_CONVERTING` rendered as a bare
+lower-case "search term converting" beside neighbours reading "On wasted spend". All twelve are
+mapped now ("On a converting term"), and an unmapped one falls back to "On <trigger>".
+
+**Endpoints that lost their only UI in U5** (still served): `/negatives*`, `/keyword-protections*`,
+`/negatives/wasteful-words`, `/negatives/negate-gram`, `/negatives/retire`, `/negatives/record`.
+
+---
+
 ## Still to come
-U5 Negative Targeting · U6 Budget Rules ·
+U6 Budget Rules ·
 U7 Keyword Harvest · U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.

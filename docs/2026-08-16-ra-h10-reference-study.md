@@ -534,7 +534,11 @@ takes ASINs via `/keyword-ranks`; verify it matches §4.3's shape). Park: `Keywo
 **Analytics › Coverage**; watchlist → the KT builder's Setup ("+ Create New Keyword Tracker" is
 exactly what H10 puts there); csv → **Reporting**.
 
-### 7.6 Unit U5 — Negative Targeting (16 blocks → 1)
+### 7.6 Unit U5 — Negative Targeting (16 blocks → 1) — ✅ SHIPPED + prod-verified 2026-08-18
+Commits `5b22443a1` · `63a262fde`. 8 files parked; no protection removed (the whitelist and gate are
+server-side). 🔴 Its click-through fixed the grid for EVERY tab: a multi-action rule now shows the
+action that put it on the tab you are looking at, and all twelve triggers are mapped. Details:
+parked register § U5.
 `negative-targeting/page.tsx` mounts `NegativeRulesClient` (`RulesGrid tabKey="negative-targeting"`;
 "+ Rule" → `/builder/negative-targeting`). Park: `NegativeTargetingClient.tsx` (filter bar, census,
 negations/terms grid), `NegTermDrawer.tsx`, `NegRemoval.tsx`, `NegAttention.tsx`,
