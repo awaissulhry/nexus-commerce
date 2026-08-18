@@ -19,10 +19,12 @@
  * imports it from there too, and moving a file two sessions read is churn this unit does not need.
  *
  * 🔴 Three properties worth keeping when you touch this:
- * ① **Membership is `ruleBelongsToTab`** — the SAME predicate the tab badge counts with, so the
- *    badge and the grid cannot disagree. Four tabs (`share-of-voice`, `keyword-tracker`,
- *    `dayparting`, `budget-schedules`) have NO entry in `RULE_TAB_ACTION_TYPES`, so this grid is
- *    empty-by-construction on them until their unit adds one. Check before mounting it there.
+ * ① **Membership is `ruleBelongsToTab`** — the SAME predicate the tab badge counts with. Sharing a
+ *    predicate is not sharing a fetch, though: the badges are one per-session fetch refreshed by
+ *    `ads.rule.changed`, so every write here emits it (U3 — measured: a delete left the grid at 0
+ *    and the badge at 1). `keyword-tracker`, `dayparting` and `budget-schedules` still have NO
+ *    entry in `RULE_TAB_ACTION_TYPES`, so this grid is empty-by-construction on them until their
+ *    unit adds one, the way U3 added `share-of-voice`. Check before mounting it there.
  * ② **A failed read never renders as an empty list.** RuleListTab caught its fetch and set `[]`,
  *    so a 500 looked exactly like "no rules yet" — the operator's standing law that "never ran"
  *    and "nothing to do" must never render the same. The error is now its own state, and the
@@ -40,6 +42,7 @@ import { ruleBelongsToTab } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
 import { NoDataIllus } from './NoDataIllus'
 import { HistoryDrawer } from '../tabs/RuleListTab'
+import { emitAdsChange } from './adsBus'
 
 const BUILDER_SLUGS = new Set(RULE_TYPES.map((r) => r.slug))
 
@@ -256,8 +259,12 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     return () => { alive = false }
   }, [tabKey])
 
-  /** PATCH `actions[0].control`; optimistic, reverted on failure. Builder rules only. */
-  const setAutomation = useCallback(async (id: string, on: boolean): Promise<boolean> => {
+  /**
+   * PATCH `actions[0].control`; optimistic, reverted on failure. Builder rules only.
+   * `silent` suppresses the bus emit so the bulk path can emit once after its loop instead of
+   * once per row (adsBus rule 1 — 40 rows × 11 open tabs is 440 refetches for one click).
+   */
+  const setAutomation = useCallback(async (id: string, on: boolean, silent = false): Promise<boolean> => {
     const rule = raw.get(id)
     if (!rule || !Array.isArray(rule.actions)) return false
     const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) =>
@@ -269,6 +276,16 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       })
       if (!res.ok) throw new Error(String(res.status))
       setRaw((m) => { const n = new Map(m); n.set(id, { ...rule, actions }); return n })
+      /**
+       * 🔴 Emit AFTER the write settles, so the tab badges (and any other open tab) refetch.
+       * Measured on prod 2026-08-18: deleting the only SOV rule left the grid at 0 and the badge
+       * at 1 — the counts provider refreshes on `ads.rule.changed`, the builder emits it on save,
+       * and this grid did not. Badge and grid share the membership predicate, but sharing a
+       * predicate is not sharing a fetch.
+       *
+       * A single-row toggle emits here; the bulk path emits once after its loop, never per row.
+       */
+      if (!silent) emitAdsChange('ads.rule.changed')
       return true
     } catch {
       setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: !on } : r)))
@@ -289,10 +306,13 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       setRows((rs) => rs.filter((r) => !deleted.includes(r.id)))
       setRaw((m) => { const n = new Map(m); for (const id of deleted) n.delete(id); return n })
       setSel(new Set())
+      // Once per logical operation, after the loop settled — never once per row (adsBus rule 1).
+      if (deleted.length) emitAdsChange('ads.rule.changed')
       return
     }
-    for (const id of ids) await setAutomation(id, !!payload?.on)
+    for (const id of ids) await setAutomation(id, !!payload?.on, true)
     setSel(new Set())
+    emitAdsChange('ads.rule.changed')
   }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [
