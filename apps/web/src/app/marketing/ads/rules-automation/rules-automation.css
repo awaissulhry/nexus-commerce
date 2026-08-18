@@ -4407,7 +4407,9 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 
 /* Cluster hairline — Act ┊ Bid & Place ┊ Spend ┊ Terms. Sized and margined so its
    vertical centre matches the label text (tabs carry 11px underline padding). */
-.h10-rt-sep { flex: 0 0 1px; width: 1px; height: 15px; background: #d9dee6; align-self: center; margin-bottom: 11px; }
+/* U10 — `.h10-rt-sep` (the four-cluster hairline) was DELETED with the `group` field it keyed off.
+   Under Helium 10's tab order the clusters interleave, so the rule that once marked four groups
+   would have painted eight stray dividers; H10's own bar has none. Nothing renders this class. */
 
 /* Edge fade: the scrollbar is hidden (ads.css:2063), so this is the only sign that
    tabs continue off-screen. `.on` is set from scrollLeft; the 1px bottom inset

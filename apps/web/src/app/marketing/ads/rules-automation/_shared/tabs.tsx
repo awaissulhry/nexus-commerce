@@ -39,21 +39,33 @@ export interface RulesTab {
   path?: string
   /** shown under the page title when this tab is active */
   subtitle?: string
-  /**
-   * S4 — which of the four clusters the tab sits in (substrate spec §3 change 3). Rendered as a
-   * hairline separator wherever the group changes; no control, no state. Grouping implies the
-   * array is ORDERED BY GROUP — an entry filed under the wrong neighbour renders a stray divider.
-   */
-  group: 'act' | 'bid-place' | 'spend' | 'terms'
 }
 
 export const RULES_BASE = '/marketing/ads/rules-automation'
 
-// S4 — ordered by CLUSTER, not by the old Helium 10 order: Act ┊ Bid & Place ┊ Spend ┊ Terms
-// (substrate spec §3 change 3). A hairline renders wherever `group` changes, so the array order IS
-// the grouping. "Dayparting Schedules" is renamed because 100% of the live rows are rank-goal
-// schedules (hold an impression share), not classic bid/pause dayparting — the old label described
-// the mode nobody uses.
+/**
+ * U10 — **Helium 10's tab order and labels** (operator decision D1, 2026-08-18).
+ *
+ * The array order IS the bar. H10's order, frame-verified in the recording:
+ *   Apply Rules · Bid · Keyword Harvest · Negative Targeting · Budget · Dayparting Schedules ·
+ *   Budget Schedules · Placement · Share of Voice · Keyword Tracker
+ * `automations` keeps 2nd place (D2): it is not an H10 tab, but it owns every rule record — all the
+ * other grids link `?rule=` to it — plus the Queue and the Limits.
+ *
+ * Two labels moved with the order, and one deliberately did not:
+ *   · `budget`           "Budget Rules"              → **"Budget"**           (H10's word)
+ *   · `budget-schedules` "Budget Pacing & Schedules" → **"Budget Schedules"** (H10's word)
+ *   · `dayparting` **keeps "Rank & Dayparting Schedules"** — the operator's explicit exception:
+ *     100% of the live rows are rank-goal schedules, so H10's plain "Dayparting Schedules" would
+ *     name the mode nobody uses. Renaming a tab does not touch the RD page or its builder.
+ * Both relabelled tabs keep their `key` and route, so no URL, deep link or `RULE_TAB_ACTION_TYPES`
+ * entry moved.
+ *
+ * 🔴 **The four-cluster `group` field is GONE, and had to go.** It rendered a hairline wherever the
+ * group changed, which only reads as grouping while the array is sorted BY group. Under H10's order
+ * the clusters interleave, which would have painted **eight stray dividers**. H10's own bar has
+ * none, so the field and its separator went together rather than leaving a decorative rule behind.
+ */
 export const RULES_TABS: RulesTab[] = [
   // AR.S0 — its own page, at /apply-rules. The tab used to render five columns copied from
   // Helium 10, three of which are fiction: `Bid Rule` reads a field no API returns, `Budget Rule`
@@ -71,7 +83,6 @@ export const RULES_TABS: RulesTab[] = [
     label: 'Apply Rules',
     routed: true,
     path: 'apply-rules',
-    group: 'act',
     subtitle: 'Which campaigns automation may write to, and what it is allowed to change',
   },
   // RA.AUTO — one page for all 51 automations, with the type filter that replaces the five
@@ -81,7 +92,6 @@ export const RULES_TABS: RulesTab[] = [
     key: 'automations',
     label: 'Automations',
     routed: true,
-    group: 'act',
     subtitle: 'Every automation you have, what it can change, and the one control that decides',
   },
   // ── Bid & Place ──────────────────────────────────────────────────────────────────────────────
@@ -91,44 +101,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'bid',
     label: 'Bid',
     routed: true,
-    group: 'bid-place',
     subtitle: 'What each target bids, why it is that number, and who decided',
-  },
-  // PLC.0 — its own page. The tab used to render a placement RULE list: 8 rules, all disabled,
-  // 0 successes ever, last activity 2026-08-03 — while the lever they describe moved 15,366 times
-  // in 60 days and no screen listed one campaign's three lanes side by side.
-  {
-    key: 'placement',
-    label: 'Placement',
-    routed: true,
-    group: 'bid-place',
-    subtitle: 'Which lane your ads show in, what each one is worth, and who put the multiplier there',
-  },
-  { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, group: 'bid-place', subtitle: 'Hold a rank, on a schedule, across many campaigns' },
-  // ── Spend ────────────────────────────────────────────────────────────────────────────────────
-  // BUD.1 — its own page, and relabelled. The tab used to render a rule list whose column edits
-  // changed React state only and whose Delete removed a row while the rule survived — showing
-  // neither the 2,386 budget changes in 60 days nor the two AUTO rules cutting −15%/−20% of the
-  // CURRENT value every 15 minutes with no cooldown and no floor but Amazon's €1. "Budget Rules"
-  // rather than "Budget", because tab 4 is now "Budget Pacing & Schedules" and the two answer
-  // different questions: that one decides how much money exists, this one decides what may spend it.
-  {
-    key: 'budget',
-    label: 'Budget Rules',
-    routed: true,
-    group: 'spend',
-    subtitle: 'What may change a budget, by how much, and what it actually did',
-  },
-  // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
-  // `BudgetSchedule` table has never held a row and its executor has ticked 4,909 times over
-  // nothing — but budget still binds on 32.7% of campaign-days, so the subject is pacing and level,
-  // with the schedule as an instrument below it.
-  {
-    key: 'budget-schedules',
-    label: 'Budget Pacing & Schedules',
-    routed: true,
-    group: 'spend',
-    subtitle: 'Where the money goes, how fast, and whether it lasts the month',
   },
   // ── Terms ────────────────────────────────────────────────────────────────────────────────────
   // HV.1 — its own page. The tab used to render a rule list that filtered every rule out of
@@ -138,7 +111,6 @@ export const RULES_TABS: RulesTab[] = [
     key: 'keyword-harvest',
     label: 'Keyword Harvest',
     routed: true,
-    group: 'terms',
     subtitle: 'Which search terms have earned their own keyword',
   },
   // NEG.1 — its own page. The tab used to render the protections panel above a rule list and
@@ -147,8 +119,40 @@ export const RULES_TABS: RulesTab[] = [
     key: 'negative-targeting',
     label: 'Negative Targeting',
     routed: true,
-    group: 'terms',
     subtitle: 'What you are blocking, where, and who decided',
+  },
+  // ── Spend ────────────────────────────────────────────────────────────────────────────────────
+  // BUD.1 — its own page, and relabelled. The tab used to render a rule list whose column edits
+  // changed React state only and whose Delete removed a row while the rule survived — showing
+  // neither the 2,386 budget changes in 60 days nor the two AUTO rules cutting −15%/−20% of the
+  // CURRENT value every 15 minutes with no cooldown and no floor but Amazon's €1. "Budget Rules"
+  // rather than "Budget", because tab 4 is now "Budget Pacing & Schedules" and the two answer
+  // different questions: that one decides how much money exists, this one decides what may spend it.
+  {
+    key: 'budget',
+    label: 'Budget',
+    routed: true,
+    subtitle: 'What may change a budget, by how much, and what it actually did',
+  },
+  { key: 'dayparting', label: 'Rank & Dayparting Schedules', routed: true, subtitle: 'Hold a rank, on a schedule, across many campaigns' },
+  // BSP.0 — its own page, and renamed for the question it answers rather than for its object. The
+  // `BudgetSchedule` table has never held a row and its executor has ticked 4,909 times over
+  // nothing — but budget still binds on 32.7% of campaign-days, so the subject is pacing and level,
+  // with the schedule as an instrument below it.
+  {
+    key: 'budget-schedules',
+    label: 'Budget Schedules',
+    routed: true,
+    subtitle: 'Where the money goes, how fast, and whether it lasts the month',
+  },
+  // PLC.0 — its own page. The tab used to render a placement RULE list: 8 rules, all disabled,
+  // 0 successes ever, last activity 2026-08-03 — while the lever they describe moved 15,366 times
+  // in 60 days and no screen listed one campaign's three lanes side by side.
+  {
+    key: 'placement',
+    label: 'Placement',
+    routed: true,
+    subtitle: 'Which lane your ads show in, what each one is worth, and who put the multiplier there',
   },
   // SOV.0 — its own page. The tab used to render SovTrackerTab kind="sov": a [ Rules | Report ]
   // segment whose Rules half is the DEFAULT view and can never render a row, over a column that
@@ -157,7 +161,6 @@ export const RULES_TABS: RulesTab[] = [
     key: 'share-of-voice',
     label: 'Share of Voice',
     routed: true,
-    group: 'terms',
     subtitle: 'On the queries that matter, how much of each market do we hold?',
   },
   // KT.1 — its own page. The tab used to render SovTrackerTab kind="tracker": a [ Rules | Report ]
@@ -166,7 +169,6 @@ export const RULES_TABS: RulesTab[] = [
     key: 'keyword-tracker',
     label: 'Keyword Tracker',
     routed: true,
-    group: 'terms',
     subtitle: 'On the keywords you chose — are we on the page, and is it moving?',
   },
 ]
@@ -371,12 +373,10 @@ export function RulesTabs({ active }: { active: string }) {
       {/* tabIndex: the scrollbar is hidden, so the keyboard's only way to reach the overflow is
           focusing the bar and using the arrow keys — native scroll on a focusable container. */}
       <div ref={barRef} className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types" tabIndex={0}>
-        {RULES_TABS.map((t, i) => {
+        {RULES_TABS.map((t) => {
           const n = counts?.[t.key]
-          const prev = i > 0 ? RULES_TABS[i - 1] : undefined
           return (
             <Fragment key={t.key}>
-              {prev && prev.group !== t.group && <span className="h10-rt-sep" aria-hidden="true" />}
               <Link
                 href={rulesTabHref(t)}
                 role="tab"
