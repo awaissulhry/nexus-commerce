@@ -620,7 +620,12 @@ time"); for us it needs the additive plural-scope columns noted in the RA memory
 campaign side must ADD a binding, not MOVE the rule); (c) whether the four-grain segment stays (H10
 has campaigns only).
 
-### 7.11 Unit U10 — the tab bar and the header (D1 ANSWERED; D2 open)
+### 7.11 Unit U10 — the tab bar — ✅ SHIPPED + prod-verified 2026-08-18 (LAST UNIT)
+Commit `2f7beee87`. H10's order, "Budget" and "Budget Schedules" relabelled, RD's name kept, and the
+`group` field + `.h10-rt-sep` deleted (they would have painted 8 stray dividers). Verified: 0
+separators, all eleven routes 200. **The programme is complete — see the parked register.**
+
+#### (superseded planning notes below)
 
 **✅ D1, operator 2026-08-16: H10's ORDER; H10's LABELS for the two budget tabs; the RD tab keeps
 ours.** The decided array (`_shared/tabs.tsx`, `RULES_TABS`):

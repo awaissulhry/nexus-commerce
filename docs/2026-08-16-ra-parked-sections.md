@@ -458,6 +458,46 @@ campaigns account-wide carrying a target ACoS — the exact prior state.
 
 ---
 
-## Still to come
+## U10 — the tab bar (2026-08-18, commit `2f7beee87`) — nothing parked
+
+**D1 built.** Order is now H10's, frame-verified: Apply Rules · Bid · Keyword Harvest · Negative
+Targeting · Budget · Dayparting Schedules · Budget Schedules · Placement · Share of Voice · Keyword
+Tracker, with `automations` keeping 2nd place (D2).
+
+Labels: `budget` "Budget Rules" → **"Budget"**; `budget-schedules` "Budget Pacing & Schedules" →
+**"Budget Schedules"**. `dayparting` **keeps "Rank & Dayparting Schedules"** — the operator's
+explicit exception, since 100% of the live rows are rank-goal schedules. Both relabelled tabs keep
+their `key` and route, so no URL, deep link or `RULE_TAB_ACTION_TYPES` entry moved.
+
+🔴 **The four-cluster `group` field, its render and `.h10-rt-sep` are deleted.** The hairline keyed
+off `group` changing, which only reads as grouping while the array is sorted BY group; under H10's
+order the clusters interleave and it would have painted **eight stray dividers**. H10's own bar has
+none.
+
+**Prod verification, 2026-08-18.** The bar reads in H10's order with both relabels and RD's name
+intact; **0 separators**; no page overflow. All eleven routes return 200.
+
+---
+
+## The programme is complete
+
+Eleven units, U0–U10, every one prod-verified before the next began. **55 files parked, none
+deleted**, and Rank & Dayparting was never touched.
+
+**Still open, deliberately:**
+- **"+ Assign Rule"** (U9/D6) — waits for additive `scope*Ids` columns; single-valued scope would
+  move a rule off its previous campaign.
+- **Auto-Refill** (U8/D5) — the one piece of H10's budget-schedule feature we lack; builder/executor
+  work, not a column.
+- **D9** — SOV/KT builder Setup parity (H10 picks ASINs / Report·ASIN·Keyword; ours picks campaigns).
+- **Operator business, surfaced by the new grids, changed by nobody:** 7 of 18 bid rules disabled ·
+  all 8 placement rules disabled · 3 of 7 negative rules disabled · the two compounding budget rules
+  live and AUTO · a **duplicate rule name** ("Trim budget on weak ACOS" twice, one armed) · ACoS at
+  **377%** in the midnight hour.
+
+## Where the parked code goes next
+Suggestions · Analytics › Coverage · Reporting · Budget Manager · Control Room › Guardrails ·
+Automations › Engines · Change Log. Each row above names its destination; re-mounting one is a
+single import.
 U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.
