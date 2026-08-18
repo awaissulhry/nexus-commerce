@@ -1,10 +1,25 @@
 'use client'
 
 /**
- * Campaign Section picker for the schedule builders — "Select the Campaigns and products you
- * want to include". Left: All Campaigns / Portfolios / Products tabs + search + status filter +
- * Add All + pager. Right: "N Campaigns Added" panel. Reuses the shared cp-* styling from the
- * rule-builder CampaignPicker so the two pickers stay visually identical.
+ * THE campaign selector. One component, every builder — schedules, rank goals, and (since
+ * 2026-08-18) every criteria rule builder in `_shared/RuleBuilder.tsx`.
+ *
+ * "Select the Campaigns and products you want to include". Left: All Campaigns / Portfolios /
+ * Products tabs + search + status filter + Add All + pager. Right: "N Campaigns Added".
+ *
+ * 🔴 **Operator instruction, 2026-08-18: this is the single place to change the picker.** The
+ * criteria builders used to carry their own copy — no Portfolios tab, no Products tab, and a
+ * substring search where this one ranks matches — so the same control behaved differently
+ * depending on which rule you were writing, and any change had to be made twice. That copy is
+ * gone. Change this file and every builder changes with it; add a prop rather than a fork.
+ *
+ * Callers differ in exactly two ways, both props: `defaultStatus` (H10 opens the criteria builders
+ * on Enabled and the schedule builders on All) and whether the campaign objects they hold carry
+ * extra fields. The type below is a superset: `placements` is optional and only the Placement rule
+ * reads it (its preview shows current → proposed multipliers per lane), but it must survive a round
+ * trip through this picker or that preview silently reads 0.
+ *
+ * Styling is the shared `cp-*` block in `rules-automation.css`.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -12,7 +27,18 @@ import { H10Select } from '../../campaigns/FilterDropdown'
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
 
-export interface SchedCampaign { id: string; name: string; marketplace: string | null; status: string; targetingType: string; adProduct: string; dailyBudget: number | null; portfolioId: string | null }
+export interface SchedCampaign {
+  id: string
+  name: string
+  marketplace: string | null
+  status: string
+  targetingType: string
+  adProduct: string
+  dailyBudget: number | null
+  portfolioId: string | null
+  /** Placement rules only — the current per-lane multipliers their preview compares against. */
+  placements?: { tos: number | null; pdp: number | null; ros: number | null }
+}
 
 const prodShort = (it: { type?: string | null; adProduct?: string | null }): string => {
   const t = (it.type ?? '').toUpperCase()
@@ -31,6 +57,7 @@ export const toCampaign = (it: Record<string, unknown>): SchedCampaign => ({
   adProduct: prodShort(it as { type?: string; adProduct?: string }),
   dailyBudget: it.dailyBudget != null ? Number(it.dailyBudget) : null,
   portfolioId: it.portfolioId != null ? String(it.portfolioId) : null,
+  placements: (it.placements as SchedCampaign['placements']) ?? undefined,
 })
 
 const badges = (c: SchedCampaign) => (<>
@@ -41,19 +68,25 @@ const statusText = (s: string) => (s === 'ENABLED' ? 'Enabled' : s === 'PAUSED' 
 
 const TABS = ['All Campaigns', 'Portfolios', 'Products']
 
-export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear }: {
+/** A product line and the campaigns it reaches — `/advertising/scope-options`'s own shape. */
+interface ProductLine { id: string; sku: string; name: string; variations: number; campaigns: string[] }
+
+export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear, defaultStatus = 'all' }: {
   selected: SchedCampaign[]
   onAdd: (c: SchedCampaign) => void
   onAddMany: (cs: SchedCampaign[]) => void
   onRemove: (id: string) => void
   onClear: () => void
+  /** H10 opens the criteria builders on Enabled and the schedule builders on All. */
+  defaultStatus?: 'all' | 'enabled' | 'paused'
 }) {
   const [tab, setTab] = useState('All Campaigns')
   const [all, setAll] = useState<SchedCampaign[]>([])
   const [portfolios, setPortfolios] = useState<Array<{ id: string; name: string }>>([])
+  const [lines, setLines] = useState<ProductLine[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState<'all' | 'enabled' | 'paused'>('all')
+  const [status, setStatus] = useState<'all' | 'enabled' | 'paused'>(defaultStatus)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(50)
 
@@ -61,9 +94,14 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear 
     let alive = true
     ;(async () => {
       try {
-        const [cj, pj] = await Promise.all([
+        const [cj, pj, sj] = await Promise.all([
           fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json()).catch(() => ({ items: [] })),
           fetch(`${getBackendUrl()}/api/advertising/portfolios`).then((r) => r.json()).catch(() => ({ items: [] })),
+          // The Products tab's data. `/advertising/scope-options` already carries every product line
+          // WITH the campaigns it reaches — the same payload the eleven pages' filter bars read — so
+          // the tab needs no new endpoint. A failure here leaves `lines` empty and the tab says so;
+          // it must never take the campaign list down with it.
+          fetch(`${getBackendUrl()}/api/advertising/scope-options`).then((r) => r.json()).catch(() => ({})),
         ])
         if (!alive) return
         const items = (Array.isArray(cj?.items) ? cj.items : Array.isArray(cj) ? cj : []) as Array<Record<string, unknown>>
@@ -73,6 +111,8 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear 
         // silently yielded [] → names never resolved and the tab showed raw numeric ids.
         const praw = (pj.portfolios ?? pj.items ?? (Array.isArray(pj) ? pj : [])) as Array<{ portfolioId?: string | number; id?: string | number; name?: string }>
         setPortfolios((Array.isArray(praw) ? praw : []).map((x) => { const pid = String(x.portfolioId ?? x.id ?? ''); return { id: pid, name: String(x.name ?? pid) } }))
+        const lraw = (sj?.productLines ?? []) as ProductLine[]
+        setLines(Array.isArray(lraw) ? lraw.filter((l) => Array.isArray(l.campaigns) && l.campaigns.length) : [])
       } catch { /* fail soft */ }
       finally { if (alive) setLoading(false) }
     })()
@@ -111,6 +151,40 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear 
     return [...m.values()]
   }, [tab, filtered, portfolios])
 
+  /**
+   * The Products tab. Until 2026-08-18 this tab rendered "Scope by product is coming soon" — a
+   * dead third of a control the operator was told they had. It is real now, off the product lines
+   * `/advertising/scope-options` already returns.
+   *
+   * The search box filters PRODUCTS here (SKU or title), not campaigns, because that is what the
+   * list shows; the status filter still applies to the campaigns underneath, so "Enabled" on a
+   * product means "its enabled campaigns". A product whose campaigns are all filtered out drops
+   * from the list rather than offering an Add that would add nothing.
+   */
+  const productGroups = useMemo(() => {
+    if (tab !== 'Products') return null
+    const byId = new Map(filtered.map((c) => [c.id, c]))
+    const hits = searchOptions(q, lines, (l) => `${l.sku} ${l.name}`)
+    return hits
+      .map((l) => ({ line: l, items: l.campaigns.map((id) => byId.get(id)).filter(Boolean) as SchedCampaign[] }))
+      .filter((g) => g.items.length)
+  }, [tab, lines, q, filtered])
+
+  /** Every not-yet-added campaign under the products currently listed — what Add All means there. */
+  const productAddable = useMemo(() => {
+    if (!productGroups) return []
+    const seen = new Set<string>()
+    const out: SchedCampaign[] = []
+    for (const g of productGroups) {
+      for (const c of g.items) {
+        // One campaign can advertise several products, so dedupe across groups.
+        if (selIds.has(c.id) || seen.has(c.id)) continue
+        seen.add(c.id); out.push(c)
+      }
+    }
+    return out
+  }, [productGroups, selIds])
+
   const row = (c: SchedCampaign) => {
     const added = selIds.has(c.id)
     return (
@@ -138,11 +212,33 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear 
           {(['all', 'enabled', 'paused'] as const).map((s) => (
             <label key={s} className="rad"><input type="radio" name="schedcpstatus" checked={status === s} onChange={() => { setStatus(s); setPage(1) }} /> {s[0].toUpperCase() + s.slice(1)}</label>
           ))}
-          <button type="button" className="cp-addall" disabled={tab === 'Products' || !addable.length} onClick={() => onAddMany(addable)}>Add All</button>
+          {/* On Products, "Add All" means every campaign of the products currently listed — the
+              campaign-level `addable` would not match what the list is showing. */}
+          {tab === 'Products' ? (
+            <button type="button" className="cp-addall" disabled={!productAddable.length} onClick={() => onAddMany(productAddable)}>Add All</button>
+          ) : (
+            <button type="button" className="cp-addall" disabled={!addable.length} onClick={() => onAddMany(addable)}>Add All</button>
+          )}
         </div>
         <div className="cp-list">
           {loading ? <div className="cp-msg">Loading campaigns…</div>
-            : tab === 'Products' ? <div className="cp-msg">Scope by product is coming soon — use All&nbsp;Campaigns or Portfolios.</div>
+            : tab === 'Products' ? (
+              productGroups && productGroups.length ? productGroups.map((grp) => {
+                const add = grp.items.filter((c) => !selIds.has(c.id))
+                return (
+                  <div className="cp-grp" key={grp.line.id}>
+                    <div className="cp-grph">
+                      <span className="gn" title={`${grp.line.name} · ${grp.line.sku}`}>
+                        {grp.line.name || grp.line.sku}
+                        <em className="cp-grpsub">{grp.line.sku}{grp.line.variations > 1 ? ` · ${grp.line.variations} variations` : ''} · {grp.items.length} campaign{grp.items.length === 1 ? '' : 's'}</em>
+                      </span>
+                      <button type="button" className="cp-grpadd" disabled={!add.length} onClick={() => onAddMany(add)}><Plus size={12} /> Add</button>
+                    </div>
+                    {grp.items.map(row)}
+                  </div>
+                )
+              }) : <div className="cp-msg">{lines.length ? 'No products match.' : 'No product lines are mapped to campaigns yet.'}</div>
+            )
             : tab === 'Portfolios' ? (
               portfolioGroups && portfolioGroups.length ? portfolioGroups.map((grp, i) => (
                 <div className="cp-grp" key={i}>

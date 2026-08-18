@@ -443,6 +443,13 @@
 .cp-grp { border-bottom: 1px solid #f1f4f7; }
 .cp-grph { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #f7f9fb; }
 .cp-grph .gn { font-size: 12.5px; font-weight: 700; color: #3a4452; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Products tab (2026-08-18): the product row's second line — SKU · variations · campaign count.
+   A group header on the Portfolios tab is a name alone; a product needs its SKU to be identifiable,
+   and the campaign count is what the Add button is about to add. `display: block` because an inline
+   <em> inside the flex .gn would sit on the same line and be ellipsised away with the name. */
+.cp-grph .cp-grpsub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; font-style: normal; color: #7c8595; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The name column may now be two lines, so the header stops centring its two children. */
+.cp-grph:has(.cp-grpsub) { align-items: flex-start; }
 .cp-grpadd { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #1f6fde; background: #fff; color: #1f6fde; border-radius: 7px; font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
 .cp-grpadd:disabled { color: #aeb6c2; border-color: #e6e9ee; cursor: not-allowed; }
 

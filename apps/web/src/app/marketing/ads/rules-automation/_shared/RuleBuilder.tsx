@@ -11,12 +11,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, ChevronLeft, ChevronRight, Package, Eye, LayoutTemplate } from 'lucide-react'
+import { X, Video, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate } from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'
-import { NoDataIllus } from './NoDataIllus'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
+import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
 import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 import { emitAdsChange } from './adsBus'
 
@@ -110,7 +110,12 @@ const TIMEZONES = [
 // only the hover copy differs (negative vs positive).
 interface MatchType { key: string; product?: boolean; tip: string }
 // a campaign row for the Budget rule's inline picker (B1 fills the panel)
-interface BudgetCampaign { id: string; name: string; marketplace: string | null; status: string; targetingType: string; adProduct: string; dailyBudget: number | null; placements?: { tos: number | null; pdp: number | null; ros: number | null } }
+/**
+ * 🔴 The campaign object this builder holds IS the shared picker's (`SchedCampaign`), aliased so the
+ * ~30 references below read unchanged. It was a separate, near-identical interface until
+ * 2026-08-18; two shapes for one thing is how the two pickers drifted apart in the first place.
+ */
+type BudgetCampaign = SchedCampaign
 const MATCH_TYPES_NEG: MatchType[] = [
   { key: 'P', tip: 'Negative Phrase' },
   { key: 'E', tip: 'Negative Exact' },
@@ -243,7 +248,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const isRank = surface === 'campaign-rank' // Keyword Tracker rule: keyword bid adjustment driven by organic/paid rank criteria
   const isBidLike = isBid || isSov || isRank // Bid · SOV · Keyword Tracker — same campaign picker + per-criteria lookback + Set/Adjust Bid THEN
   const isPlacement = surface === 'campaign-placement' // Placement rule: campaign picker + IF placement-scope + THEN placement-target adjustment (%)
-  const isCampaign = isBudget || isBidLike || isPlacement // all campaign-scoped surfaces share the CampaignPicker + THEN-action + templates
+  const isCampaign = isBudget || isBidLike || isPlacement // all campaign-scoped surfaces share the CampaignSection picker + THEN-action + templates
   const advLookback = isBudget || isPlacement // Budget + Placement put Lookback in Advanced (one window for the rule); Bid/SOV/Rank keep it per-criteria
   const isNegative = slug === 'negative-targeting' // N2 features (Negation Level · protect-converting) are negative-only, NOT "everything that isn't harvest"
   // P2.2 — the bare index is a redirect now (landing decision 2026-08-15); close/save land on the
@@ -645,8 +650,13 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   onRemoveBlock={() => removeBlock(block.id)}
                 />
               ))}
+              {/* THE campaign selector — `_schedule/CampaignSection.tsx`, the same component the
+                  dayparting and rank-goal builders use, adopted here on operator instruction
+                  2026-08-18 so a change to the picker is made once. It brings the Portfolios and
+                  Products tabs and the ranked search this builder's private copy never had.
+                  `defaultStatus="enabled"` keeps H10's opening state for a criteria rule. */}
               {isCampaign && (
-                <CampaignPicker selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} />
+                <CampaignSection selected={selCampaigns} onAdd={addCampaign} onAddMany={addCampaigns} onRemove={removeCampaign} onClear={clearCampaigns} defaultStatus="enabled" />
               )}
             </section>
 
@@ -1096,129 +1106,14 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
 // ── B1: inline campaign picker for the Budget rule's "Budget Rule Setup" (left searchable list
 //    with status filter + Add All + pager; right "N Campaigns Added" panel). Data from
 //    GET /advertising/campaigns; live dailyBudget is carried through for the B4 preview. ──
-const prodShort = (it: { type?: string | null; adProduct?: string | null }): string => {
-  const t = (it.type ?? '').toUpperCase()
-  if (t === 'SP' || t === 'SB' || t === 'SD') return t
-  const a = (it.adProduct ?? '').toUpperCase()
-  if (a.includes('BRAND')) return 'SB'
-  if (a.includes('DISPLAY')) return 'SD'
-  return 'SP'
-}
-const toBudgetCampaign = (it: Record<string, unknown>): BudgetCampaign => ({
-  id: String(it.id),
-  name: String(it.name ?? ''),
-  marketplace: (it.marketplace as string) ?? null,
-  status: String(it.status ?? 'ENABLED').toUpperCase(),
-  targetingType: /auto/i.test(String(it.name ?? '')) ? 'AUTO' : 'MANUAL', // H10 infers Auto/Manual from the name
-  adProduct: prodShort(it as { type?: string; adProduct?: string }),
-  dailyBudget: it.dailyBudget != null ? Number(it.dailyBudget) : null,
-  placements: (it.placements as BudgetCampaign['placements']) ?? undefined,
-})
-
-function CampaignPicker({ selected, onAdd, onAddMany, onRemove, onClear }: {
-  selected: BudgetCampaign[]
-  onAdd: (c: BudgetCampaign) => void
-  onAddMany: (cs: BudgetCampaign[]) => void
-  onRemove: (id: string) => void
-  onClear: () => void
-}) {
-  const [all, setAll] = useState<BudgetCampaign[]>([])
-  const [loading, setLoading] = useState(true)
-  const [q, setQ] = useState('')
-  const [status, setStatus] = useState<'all' | 'enabled' | 'paused'>('enabled')
-  const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(50)
-
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const j = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`).then((r) => r.json())
-        const items = (Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : []) as Array<Record<string, unknown>>
-        if (alive) setAll(items.map(toBudgetCampaign))
-      } catch { if (alive) setAll([]) }
-      finally { if (alive) setLoading(false) }
-    })()
-    return () => { alive = false }
-  }, [])
-
-  const selIds = new Set(selected.map((c) => c.id))
-  const ql = q.trim().toLowerCase()
-  const filtered = all.filter((c) => {
-    if (status === 'enabled' && c.status !== 'ENABLED') return false
-    if (status === 'paused' && c.status !== 'PAUSED') return false
-    if (status === 'all' && c.status === 'ARCHIVED') return false
-    if (ql && !c.name.toLowerCase().includes(ql)) return false
-    return true
-  })
-  const pages = Math.max(1, Math.ceil(filtered.length / perPage))
-  const pg = Math.min(page, pages)
-  const pageItems = filtered.slice((pg - 1) * perPage, pg * perPage)
-  const addable = filtered.filter((c) => !selIds.has(c.id))
-  const badges = (c: BudgetCampaign) => (<>
-    <span className={`cp-badge ${c.targetingType === 'AUTO' ? 'auto' : 'manual'}`} title={c.targetingType === 'AUTO' ? 'Auto' : 'Manual'}>{c.targetingType === 'AUTO' ? 'A' : 'M'}</span>
-    <span className="cp-badge prod" title={c.adProduct}>{c.adProduct}</span>
-  </>)
-
-  return (
-    <div className="h10-rb-camps">
-      <div className="cp-left">
-        <div className="cp-search">
-          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search campaigns" aria-label="Search campaigns" />
-          <Search size={16} className="ic" />
-        </div>
-        <div className="cp-statusrow">
-          <span className="lbl" id="cp-status-lbl">Campaign Status:</span>
-          <span className="rads" role="radiogroup" aria-labelledby="cp-status-lbl">
-            {(['all', 'enabled', 'paused'] as const).map((s) => (
-              <label key={s} className="rad"><input type="radio" name="cpstatus" checked={status === s} onChange={() => { setStatus(s); setPage(1) }} /> {s[0].toUpperCase() + s.slice(1)}</label>
-            ))}
-          </span>
-          <button type="button" className="cp-addall" disabled={!addable.length} aria-label="Add all filtered campaigns" onClick={() => onAddMany(addable)}>Add All</button>
-        </div>
-        <div className="cp-list">
-          {loading ? <div className="cp-msg">Loading campaigns…</div>
-            : pageItems.length === 0 ? <div className="cp-msg">No campaigns match.</div>
-            : pageItems.map((c) => {
-                const added = selIds.has(c.id)
-                return (
-                  <div className="cp-row" key={c.id}>
-                    {badges(c)}
-                    <span className="cp-name" title={c.name}>{c.name}</span>
-                    <span className={`cp-status ${c.status === 'ENABLED' ? 'on' : 'off'}`}>{c.status === 'ENABLED' ? 'Enabled' : c.status === 'PAUSED' ? 'Paused' : 'Archived'}</span>
-                    <button type="button" className={`cp-add ${added ? 'added' : ''}`} disabled={added} aria-pressed={added} aria-label={added ? `${c.name} added to rule` : `Add ${c.name} to rule`} onClick={() => onAdd(c)}>{added ? <><Check size={14} /> Added</> : <><Plus size={14} /> Add</>}</button>
-                  </div>
-                )
-              })}
-        </div>
-        <div className="cp-pager">
-          <button type="button" className="pg" disabled={pg <= 1} onClick={() => setPage(pg - 1)} aria-label="Previous page"><ChevronLeft size={16} /></button>
-          <span className="pgn">{pg}</span>
-          <button type="button" className="pg" disabled={pg >= pages} onClick={() => setPage(pg + 1)} aria-label="Next page"><ChevronRight size={16} /></button>
-          <span className="pp"><H10Select width={88} options={[{ value: '25', label: '25' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} value={String(perPage)} onChange={(v) => { setPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" /></span>
-        </div>
-      </div>
-      <div className="cp-right">
-        <div className="cp-rhead">
-          <b>{selected.length} Campaign{selected.length === 1 ? '' : 's'} Added</b>
-          <button type="button" className="cp-removeall" disabled={!selected.length} onClick={onClear}><Trash2 size={14} /> Remove All</button>
-        </div>
-        <div className="cp-colhdr">Campaign</div>
-        {selected.length === 0 ? (
-          <div className="cp-empty"><NoDataIllus size={96} />No Campaigns Added</div>
-        ) : (
-          <div className="cp-alist">
-            {selected.map((c) => (
-              <div className="cp-arow" key={c.id}>
-                {badges(c)}
-                <span className="cp-name" title={c.name}>{c.name}</span>
-                <span className={`cp-status ${c.status === 'ENABLED' ? 'on' : 'off'}`}>{c.status === 'ENABLED' ? 'Enabled' : c.status === 'PAUSED' ? 'Paused' : 'Archived'}</span>
-                <button type="button" className="cp-rm" onClick={() => onRemove(c.id)} aria-label={`Remove ${c.name}`}><X size={15} /></button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+/*
+ * ⛔ The private `CampaignPicker` that stood here (and its `prodShort` / `toBudgetCampaign` helpers)
+ * was DELETED on 2026-08-18, on operator instruction: "use the shared component … so I will simply
+ * make changes to one, and it will be implemented on all the pages."
+ *
+ * It was a near-copy of `_schedule/CampaignSection.tsx` that had drifted: no Portfolios tab, no
+ * Products tab, and a plain substring search instead of the ranked matcher — so the same control
+ * behaved differently depending on which rule you were writing, and every change had to be made in
+ * two places. This builder now renders `CampaignSection` directly (see the Setup section above).
+ * Do not reintroduce a local picker: add a prop to the shared one.
+ */
