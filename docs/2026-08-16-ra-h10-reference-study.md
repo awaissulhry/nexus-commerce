@@ -604,7 +604,12 @@ Decision D5: the builder's **Campaign Budget (hourly) vs Budget Multiplier (dail
 On Weekends) and its **"Budget Auto-Refill Criteria"** ("If selected campaigns run out of budget →
 Increase Daily Budget … Max", which is what the "Auto Refill" column shows) are new.
 
-### 7.10 Unit U9 — Apply Rules (already the H10 shape; small delta) — decision D6
+### 7.10 Unit U9 — Apply Rules — ✅ SHIPPED + prod-verified 2026-08-18 (D6 answered)
+Commit `88e805543`; additive, nothing parked. **D6:** grains STAY (all four, a documented
+departure) · **no** Bid Rule / Budget Rule columns (0 of 51 rules are campaign- or portfolio-scoped,
+so they would be constants) · three bulk verbs shipped, **"+ Assign Rule" withheld** because
+`scopeCampaignId` is single-valued and would MOVE a rule off its previous campaign. Details:
+parked register § U9.
 Keep the page. Proposed delta only: (a) columns **Bid Rule · Target ACoS · Min/Max Bid · Bid
 Automation · Budget Rule** in H10's order (ours has Target ACoS + Bid bounds; Bid Rule / Budget Rule
 would read the assigned rule names, Bid Automation the campaign's write-gate flag); (b) selection

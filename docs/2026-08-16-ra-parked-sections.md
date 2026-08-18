@@ -422,6 +422,42 @@ rendered (a column that could only ever print "—" is the decorative class this
 
 ---
 
+## U9 — Apply Rules (2026-08-18, commit `88e805543`) — additive, nothing parked
+
+This page was already the closest to H10, so U9 **parks nothing**: it adds the selection toolbar
+H10 has. `apply-rules/ArBulkVerbs.tsx` renders **[Automation] [Target ACoS] [Min/Max Bid]** on the
+CAMPAIGN grain (the verbs write campaign fields; an aggregate row is not a campaign).
+
+### D6, answered by the operator 2026-08-18 — with the measurements that framed it
+- **Grains stay** (all four). H10 has campaigns only; this page keeps Portfolios / Product lines /
+  Markets as a **documented departure** from H10, because "all four grains equally easy" is the
+  operator's own standing law and H10 parity would cost a capability H10 does not have.
+- **No Bid Rule / Budget Rule columns.** Measured: **0 of 51 rules are campaign- or
+  portfolio-scoped** (43 account-wide, 8 market), so either column would print the same value on all
+  220 rows. The existing **Automations** column already carries the truthful version
+  (Managed / Off-limits + bound count).
+- **No "+ Assign Rule."** `scopeCampaignId` is **single-valued**: assigning a rule to a second
+  campaign MOVES it off the first, and with 0 rules campaign-bound today the first use would
+  silently unbind whatever it touched next. It waits for additive `scope*Ids` columns.
+
+### The three verbs, each on an endpoint another surface already proves
+| verb | endpoint | note |
+|---|---|---|
+| Automation | `PATCH /campaigns/:id/live-writes { enabled }` | the **write gate** — what this page's Automations column shows. Deliberately NOT `bidAutomation`, which is the Ad Manager's bid-algorithm switch; setting that from a column showing the gate would be a lie. |
+| Target ACoS | `PATCH /campaigns/:id/automation { targetAcos }` | 🔴 a **FRACTION**. `CampaignsGrid` and the Details tab both divide by 100, and `PUT /goal` refuses the whole-number form (the AIREON 30-vs-0.3 trap). |
+| Min/Max Bid | `PATCH /campaigns/:id/guardrails { minBidCents, maxBidCents }` | AR.S1's route. **Only what was typed is sent** — a blank bound is left alone, never sent as `null`, which would clear it on every selected campaign. |
+
+Each verb reports per-campaign outcomes and names refusals (a refusal at the gate is the gate
+working, not a failure), and emits `ads.guardrail.changed` once after the loop, never per row.
+
+**Prod verification, 2026-08-18.** Checkboxes on 100 campaign rows; selecting one shows "Selected 1
+Campaign" with the three verbs, exactly H10's toolbar, and the four grains still present.
+End-to-end write tested on `DE_Auto_Close`: Target ACoS 35% → server stored `targetAcosPct: 35`
+(confirming the fraction convention round-trips), then **restored to `null`**, verified with 0
+campaigns account-wide carrying a target ACoS — the exact prior state.
+
+---
+
 ## Still to come
 U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
 table here.
