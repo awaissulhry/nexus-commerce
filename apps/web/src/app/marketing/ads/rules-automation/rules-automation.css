@@ -5089,3 +5089,12 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    the grid is 1,600 wide and Criteria's text is short. */
 .h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-bd7-posture,
 .h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-acts { flex-shrink: 0; }
+
+/* ── U7 — the Ad Group View's match-type badges ────────────────────────────────────────────────
+   The mapping table says what a harvest rule CREATES in a destination ad group (Phrase · Exact ·
+   Product) and what it NEGATES back in the source. Same visual language as the builder's own
+   match-type chips so the grid and the builder describe one thing the same way. Defined here
+   because an undefined class is silent (reference_undefined_css_class_is_silent). */
+.h10-hv-badges { display: inline-flex; align-items: center; gap: 4px; }
+.h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: .01em; background: #e8f1fd; color: #10457f; }
+.h10-hv-mt.neg { background: #fdeceb; color: #a2231d; }

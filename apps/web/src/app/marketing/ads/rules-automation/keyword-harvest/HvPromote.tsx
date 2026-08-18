@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U7) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the promote dialog (?confirm=) — preview then write.
+ * Why it left: the Keyword Harvest tab is now Helium 10's shape — the pill
+ *   [ Rules View | Ad Group View ] over one card, and nothing else
+ *   (`KeywordHarvestRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.3, §7.8).
+ * Candidate home: **Suggestions** — the approve action.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and the harvest engine's own arming is
+ * untouched. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * HV.4 — the paired write: promote a candidate and negate it at its source, as one action.
  *
  * 🔴 **The first control on this page that spends money.**

@@ -1,4 +1,17 @@
 /**
+ * ⛔ PARKED 2026-08-18 (U7) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the repairs marker (renders null by design).
+ * Why it left: the Keyword Harvest tab is now Helium 10's shape — the pill
+ *   [ Rules View | Ad Group View ] over one card, and nothing else
+ *   (`KeywordHarvestRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.3, §7.8).
+ * Candidate home: delete when its subject is resolved; kept so the slot's history is not lost.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and the harvest engine's own arming is
+ * untouched. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+/**
  * HV.8 — the rule-path repairs. **A MARKER, NOT A UI SECTION.**
  *
  * This file renders null and always will. It exists so the repairs have a home in the same list as

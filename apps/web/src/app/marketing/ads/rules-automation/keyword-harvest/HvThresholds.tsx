@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U7) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the five harvest criteria as live controls, over the stored policy.
+ * Why it left: the Keyword Harvest tab is now Helium 10's shape — the pill
+ *   [ Rules View | Ad Group View ] over one card, and nothing else
+ *   (`KeywordHarvestRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.3, §7.8).
+ * Candidate home: the harvest rule BUILDER — criteria belong in the rule, which is H10's shape.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and the harvest engine's own arming is
+ * untouched. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * HV.2 — the criteria, as live controls, plus the policy behind them.
  *
  * ── 🔴 Two things, two labels, never one control ──────────────────────────────────────────────

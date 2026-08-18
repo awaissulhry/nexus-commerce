@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U7) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 18-block page — multi-market header · filter bar · the [Candidates | Harvested] view segment · the live criteria bar · resolution sentence · census lede (candidate sentence, tautology caveat, the 1-order finding, attribution caveat, freshness) · census strip · the candidates grid with its promote queue.
+ * Why it left: the Keyword Harvest tab is now Helium 10's shape — the pill
+ *   [ Rules View | Ad Group View ] over one card, and nothing else
+ *   (`KeywordHarvestRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.3, §7.8).
+ * Candidate home: **Suggestions** — a harvest candidate IS a suggestion; the census to Analytics.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and the harvest engine's own arming is
+ * untouched. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * HV.1 — Keyword Harvest, its own page.
  *
  * **One question: which search terms have earned their own keyword — and did the last batch work?**

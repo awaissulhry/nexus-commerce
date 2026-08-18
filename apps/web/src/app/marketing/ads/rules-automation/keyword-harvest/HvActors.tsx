@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U7) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the governance panel: the engine, the rules and the audit log behind harvesting.
+ * Why it left: the Keyword Harvest tab is now Helium 10's shape — the pill
+ *   [ Rules View | Ad Group View ] over one card, and nothing else
+ *   (`KeywordHarvestRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.3, §7.8).
+ * Candidate home: **Automations › Engines**.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and the harvest engine's own arming is
+ * untouched. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * HV.6 — the actors: who else can do this, and what will they actually do?
  *
  * The page's third question. HV.1–HV.4 answer *which terms have earned a keyword*; HV.5 answers

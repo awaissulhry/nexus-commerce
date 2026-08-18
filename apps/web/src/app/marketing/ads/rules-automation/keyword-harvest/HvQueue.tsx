@@ -1,6 +1,20 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U7) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: "Pending — the harvest slice of the one inbox".
+ * Why it left: the Keyword Harvest tab is now Helium 10's shape — the pill
+ *   [ Rules View | Ad Group View ] over one card, and nothing else
+ *   (`KeywordHarvestRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.3, §7.8).
+ * Candidate home: **Suggestions** — it is literally a slice of that inbox.
+ *
+ * ⚠ Nothing here was changed, no endpoint was retired, and the harvest engine's own arming is
+ * untouched. The file stays at this path on purpose: re-mounting it is one import.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * HV.7 — the harvest slice of THE ONE INBOX.
  *
  * §11 C10: Negative Targeting, Keyword Harvest and Bid all queue `AdsRuleSuggestion` rows; they
