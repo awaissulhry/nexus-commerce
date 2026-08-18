@@ -5125,3 +5125,27 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-hourfoot { margin: 6px 2px 2px; font-size: 12px; color: #55606d; }
 .h10-bsp-hourfoot b { color: #2b3440; font-weight: 700; }
 .h10-bsp-hourfoot i { font-style: normal; color: #7c8595; }
+
+/* ── U9 — Apply Rules' three bulk verbs ────────────────────────────────────────────────────────
+   H10 puts [Automation] [Target ACoS] [Min/Max Bid] in the selection toolbar and opens a small
+   popover under each. The popover is positioned relative to its own button (not the toolbar) so
+   three of them cannot overlap, and it sits above the sticky grid header. */
+.h10-ar-bulk { display: inline-flex; align-items: center; gap: 8px; }
+.h10-ar-bulkwrap { position: relative; display: inline-flex; }
+.h10-ar-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 268px; padding: 12px 13px 11px; background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; box-shadow: 0 12px 30px rgba(16, 27, 43, .14); }
+.h10-ar-pop > b { display: block; font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-ar-pop .sub { margin: 3px 0 9px; font-size: 11.5px; color: #7c8595; line-height: 1.45; }
+.h10-ar-pop .rads { display: flex; flex-direction: column; gap: 7px; }
+.h10-ar-pop .rads label { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: #3a4452; line-height: 1.4; }
+.h10-ar-pop .fld { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 12.5px; font-weight: 600; color: #3a4452; }
+.h10-ar-pop .in { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #d8dde4; border-radius: 7px; padding: 4px 8px; background: #fff; }
+.h10-ar-pop .in i { font-style: normal; font-size: 12px; color: #7c8595; }
+.h10-ar-pop .in input { width: 68px; border: 0; outline: 0; font-size: 12.5px; color: #1c2530; text-align: right; }
+.h10-ar-pop .res { margin: 9px 0 0; font-size: 11.5px; line-height: 1.5; }
+.h10-ar-pop .res.ok { color: #1c7c4a; }
+.h10-ar-pop .res.warn { color: #a2231d; }
+.h10-ar-pop .res em { display: block; font-style: normal; color: #7c8595; }
+.h10-ar-pop .acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 11px; }
+.h10-ar-pop .acts .cancel { border: 0; background: none; font-size: 12.5px; font-weight: 600; color: #55606d; cursor: pointer; }
+.h10-ar-pop .acts .apply { border: 1px solid #1f6fde; background: #1f6fde; color: #fff; font-size: 12.5px; font-weight: 700; border-radius: 7px; padding: 6px 13px; cursor: pointer; }
+.h10-ar-pop .acts .apply:disabled { background: #c3d3ea; border-color: #c3d3ea; cursor: default; }

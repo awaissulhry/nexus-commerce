@@ -86,6 +86,7 @@ import {
   type ApplyRulesTotals,
 } from './slot-contract'
 import { ApplyRulesSections } from './ApplyRulesSections'
+import { ArBulkVerbs } from './ArBulkVerbs'
 import { useAdsSync } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
@@ -157,6 +158,12 @@ export function ApplyRulesClient() {
 
   const [campaigns, setCampaigns] = useState<RawCampaign[] | null>(null)
   const [guardrails, setGuardrails] = useState<GuardrailPayload | null>(null)
+  /**
+   * U9 — the checked campaigns for the three bulk verbs. Campaign grain only: the verbs write
+   * campaign fields and an aggregate row is not a campaign, so the other three grains stay
+   * read-only rather than offering a control that could not mean anything there.
+   */
+  const [sel, setSel] = useState<Set<string>>(new Set())
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -884,8 +891,18 @@ export function ApplyRulesClient() {
           totalFirst={`${num(campaignRows.length)} shown`}
           pagerCentered
           reportLabel="Amazon Advertising"
-          /* 🔴 Read-only, stated. S5 replaces this object; it does not stop passing it. */
-          selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
+          /* U9 — the campaign grain writes now: H10's three safe verbs. `onRowClick` stays the
+             explicit null of the S0 contract (the row drawer is S7's, not this unit's). */
+          selectable
+          selected={sel}
+          onSelectedChange={setSel}
+          selectionActions={(picked) => (
+            <ArBulkVerbs
+              ids={picked}
+              names={new Map(campaignRows.map((r) => [r.id, r.name]))}
+              onDone={() => { setSel(new Set()); setReloadTick((n) => n + 1) }}
+            />
+          )}
           onRowClick={NO_WRITE_ACTIONS.onRowAction ?? undefined}
           toolbarLeft={toolbarLeft}
           toolbarRight={toolbarRight}
