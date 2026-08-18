@@ -218,6 +218,12 @@ const RULE_TAB_ACTION_TYPES_BASE: Record<string, string[]> = {
    * SOV rule can carry — so this tab counts exactly the rules built as SOV rules, and nothing else.
    */
   'share-of-voice': [],
+  /**
+   * U4 — Keyword Tracker, empty for the same reason as Share of Voice above: rank-driven bidding
+   * is expressed as `bid_*` / `raise_bids_for_rank_defense`, which are the Bid and Placement tabs'.
+   * The derivation adds the builder slug `keyword-tracker`, so a rule built here lists here.
+   */
+  'keyword-tracker': [],
 }
 
 /**

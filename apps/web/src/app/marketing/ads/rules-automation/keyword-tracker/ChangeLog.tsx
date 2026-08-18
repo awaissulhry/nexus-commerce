@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U4) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the per-term change log inside the drawer, with undo.
+ * Why it left: the Keyword Tracker tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`KeywordTrackerRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.10, §7.5).
+ * Candidate home: **Change Log** — the account-wide one already owns this subject.
+ *
+ * Nothing here was changed and no endpoint was retired (`/keyword-tracker`, `/keyword-watchlists`,
+ * `/keyword-actions/*` are all still served). The file stays at this path on purpose: re-mounting it
+ * is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * KT.7 — the scoped change log, in the drawer beside the campaigns it explains.
  *
  * **Scoped, not a feed.** Measured: `AD_BID_UPDATE` alone is ~925 rows in 24 hours and the no-pause

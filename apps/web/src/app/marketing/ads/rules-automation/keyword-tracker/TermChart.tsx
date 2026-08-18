@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U4) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the rank-history chart inside the term drawer.
+ * Why it left: the Keyword Tracker tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`KeywordTrackerRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.10, §7.5).
+ * Candidate home: travels with the drawer.
+ *
+ * Nothing here was changed and no endpoint was retired (`/keyword-tracker`, `/keyword-watchlists`,
+ * `/keyword-actions/*` are all still served). The file stays at this path on purpose: re-mounting it
+ * is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * KT.4 — one term over time: share above, spend below, on ONE time-proportional axis.
  *
  * ── Why this is hand-rolled SVG and not one of the three things already here ──────────────────────

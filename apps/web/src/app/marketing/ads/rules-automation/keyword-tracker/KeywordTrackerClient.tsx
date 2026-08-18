@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U4) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the whole 11-block rank report — one-market gate · filter bar · resolution sentence with share age and top-of-search impression share · the feed-health line (silent nights, green-and-dead runs, the cliff date, market-volume delta) · truncated-week banner · watchlist notes · the term grid with the measured segment, brand toggle and list select.
+ * Why it left: the Keyword Tracker tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`KeywordTrackerRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.10, §7.5).
+ * Candidate home: **Analytics › Coverage** — rank and share are measurement.
+ *
+ * Nothing here was changed and no endpoint was retired (`/keyword-tracker`, `/keyword-watchlists`,
+ * `/keyword-actions/*` are all still served). The file stays at this path on purpose: re-mounting it
+ * is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * KT.1 — Keyword Tracker, its own page.
  *
  * One question: **on the keywords I chose, are we on the page — and is it moving?**

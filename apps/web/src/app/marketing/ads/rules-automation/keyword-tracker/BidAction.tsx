@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U4) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: act-from-a-row: preview, propose and apply a bid change for the term in view.
+ * Why it left: the Keyword Tracker tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`KeywordTrackerRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.10, §7.5).
+ * Candidate home: **Suggestions** (propose) and Bulk Operations (apply) — a write surface, not a rule list.
+ *
+ * Nothing here was changed and no endpoint was retired (`/keyword-tracker`, `/keyword-watchlists`,
+ * `/keyword-actions/*` are all still served). The file stays at this path on purpose: re-mounting it
+ * is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * KT.6 / KT.7 — the one control on this page that spends money.
  *
  * It lives inside the KT.4 drawer, which already lists the campaigns bidding the term and the ASINs

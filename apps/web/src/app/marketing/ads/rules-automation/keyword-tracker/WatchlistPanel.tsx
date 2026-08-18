@@ -1,6 +1,19 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-18 (U4) — NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the watchlist editor modal (create, import, edit the tracked terms).
+ * Why it left: the Keyword Tracker tab is now Helium 10's shape — one rules grid and nothing else
+ *   (`KeywordTrackerRulesClient.tsx`; study `docs/2026-08-16-ra-h10-reference-study.md` §3.10, §7.5).
+ * Candidate home: the KT rule builder's Setup step — H10 puts "+ Create New Keyword Tracker" exactly there.
+ *
+ * Nothing here was changed and no endpoint was retired (`/keyword-tracker`, `/keyword-watchlists`,
+ * `/keyword-actions/*` are all still served). The file stays at this path on purpose: re-mounting it
+ * is one import. Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ */
+
+/**
  * KT.2 — the watchlist editor: add, remove, import, create, rename, set default, delete.
  *
  * Every destructive control here says what it will do, to how many terms, and whether it can be
