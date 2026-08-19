@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, Lightbulb, ExternalLink, ListChecks, Pencil, Shuffle, Bot } from 'lucide-react'
+import { TargetAcosCell, MinMaxBidCell, BidAutomationCell } from '../_shared/RuleColumnCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -1267,9 +1268,15 @@ export function CampaignsGrid() {
     )
     switch (key) {
       case 'bidRule': return <span className="h10-edcell"><span className="h10-bidrule"><Shuffle size={13} /> {bidAlgoLabel(c)}</span><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
-      case 'targetAcos': return ed(`${((c.targetAcos ?? 0.3) * 100).toFixed(2)}%`, 'targetAcos') // 0.3 = optimizer default when unset
-      case 'minMaxBid': return ed(c.minMaxBid && (c.minMaxBid.min != null || c.minMaxBid.max != null) ? `${c.minMaxBid.min != null ? eur(c.minMaxBid.min) : '—'} – ${c.minMaxBid.max != null ? eur(c.minMaxBid.max) : '—'}` : 'None', 'minMaxBid')
-      case 'bidAutomation': return <span className={`h10-toggle ${c.bidAutomation ? 'on' : 'off'}`} aria-hidden />
+      // U11 — the DISPLAY halves now come from `_shared/RuleColumnCells.tsx`, the same cells Apply
+      // Rules renders, so the two grids cannot drift apart visually. The edit pencils and their
+      // popovers stay exactly as they were; only what the cell paints is shared.
+      // 🔴 The old cell printed `(c.targetAcos ?? 0.3)` — an UNSET target rendered as a confident
+      // "30.00%" on all 220 rows, which is the optimizer's fallback, not this campaign's setting.
+      // The shared cell renders "—" for null, because "nobody set one" is the fact.
+      case 'targetAcos': return ed(<TargetAcosCell fraction={c.targetAcos} />, 'targetAcos')
+      case 'minMaxBid': return ed(<MinMaxBidCell minCents={c.minBidCents} maxCents={c.maxBidCents} />, 'minMaxBid')
+      case 'bidAutomation': return <BidAutomationCell on={c.bidAutomation} />
       case 'delivery': {
         const d = delivery?.campaigns?.[c.id]
         const st = d?.state ?? 'unknown'

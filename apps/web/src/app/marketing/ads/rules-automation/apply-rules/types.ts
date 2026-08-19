@@ -48,6 +48,7 @@ export interface RawCampaign {
   minBidCents?: number | null
   maxBidCents?: number | null
   targetAcos?: number | null
+  /** U11 — H10's "Bid Automation" column reads this. Real field; false on all 220 today. */
   bidAutomation?: boolean | null
   lastSyncedAt?: string | null
 }
@@ -124,6 +125,7 @@ export interface CampaignRow {
   /** converted from the payload's EUROS exactly once, here */
   dailyBudgetCents: number
   biddingStrategy: string | null
+  bidAutomation: boolean | null
   portfolioId: string | null
   portfolioName: string | null
   /** every product line this campaign advertises — a campaign can be in more than one */

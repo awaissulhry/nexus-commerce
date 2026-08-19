@@ -87,6 +87,7 @@ import {
 } from './slot-contract'
 import { ApplyRulesSections } from './ApplyRulesSections'
 import { ArBulkVerbs } from './ArBulkVerbs'
+import { BidRuleCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
 import { useAdsSync } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
@@ -164,6 +165,15 @@ export function ApplyRulesClient() {
    * read-only rather than offering a control that could not mean anything there.
    */
   const [sel, setSel] = useState<Set<string>>(new Set())
+  /**
+   * U11 — the two extra reads behind H10's Bid Rule and Budget Rule columns. Both are per-campaign
+   * facts this page's own three endpoints do not carry: `bidder`/`bidderName` (who owns the bids)
+   * comes from the bid grid, `reachedByRuleIds`/`lastMovedBy` (which budget rule moved it) from the
+   * budget grid. Both are OPTIONAL — a failure leaves those two columns reading "—" and never takes
+   * the page down, because the grid's subject is the write gate, not these two columns.
+   */
+  const [bidOwners, setBidOwners] = useState<Map<string, { bidder: string | null; bidderName: string | null }>>(new Map())
+  const [budgetOwners, setBudgetOwners] = useState<Map<string, { reachedBy: number; lastMovedByKind: string | null; lastMovedBy: string | null }>>(new Map())
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -231,6 +241,31 @@ export function ApplyRulesClient() {
         if (alive) { setError((e as Error).message); setCampaigns(null); setGuardrails(null) }
       })
       .finally(() => { if (alive) setLoading(false) })
+
+    // Fetched separately and deliberately NOT in the Promise.all above: these two feed two columns,
+    // and a bid-grid hiccup must not blank the write-gate grid this page exists for.
+    void fetch(`${backend}/api/advertising/bid-grid?view=campaigns&market=all`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive || !j) return
+        setBidOwners(new Map((j.rows ?? []).map((r: { id: string; bidder?: string; bidderName?: string }) =>
+          [String(r.id), { bidder: r.bidder ?? null, bidderName: r.bidderName ?? null }])))
+      })
+      .catch(() => { /* the two columns read "—"; the page is unaffected */ })
+
+    void fetch(`${backend}/api/advertising/budget-grid?view=campaigns&market=all`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive || !j) return
+        setBudgetOwners(new Map((j.rows ?? []).map((r: { id: string; reachedByRuleIds?: string[]; lastMovedByKind?: string; lastMovedBy?: string }) =>
+          [String(r.id), {
+            reachedBy: (r.reachedByRuleIds ?? []).length,
+            lastMovedByKind: r.lastMovedByKind ?? null,
+            lastMovedBy: r.lastMovedBy ?? null,
+          }])))
+      })
+      .catch(() => { /* as above */ })
+
     return () => { alive = false }
   }, [reloadTick])
 
@@ -264,6 +299,7 @@ export function ApplyRulesClient() {
         // 🔴 EUROS → cents, exactly once and only here. See `types.ts`.
         dailyBudgetCents: Math.round((Number(c.dailyBudget) || 0) * 100),
         biddingStrategy: c.biddingStrategy ?? null,
+        bidAutomation: c.bidAutomation ?? null,
         portfolioId: c.portfolioId ?? null,
         portfolioName: g?.portfolioName ?? null,
         lineIds: linesOf.get(c.id) ?? [],
@@ -561,6 +597,36 @@ export function ApplyRulesClient() {
         )
       },
     },
+    /**
+     * U11 — the three H10 columns this page was missing, on operator instruction 2026-08-19.
+     * They render through `_shared/RuleColumnCells.tsx`, the SAME cells the Ad Manager grid uses,
+     * so the two pages cannot drift apart. Target ACoS and Min · Max bid already existed here (and
+     * were already truthful, unlike the Ad Manager's, which read keys the payload never returns).
+     */
+    {
+      key: 'bidRule',
+      label: 'Bid Rule',
+      metric: false,
+      tip: 'Who owns this campaign\'s bids — a rank plan or schedule, a rule, or nobody. Read from the bid grid\'s own `bidder`, which really varies (measured 2026-08-19: 32 held by a schedule, 6 manual, 45 owned by nothing). H10 shows its bid ALGORITHM here; we have no per-campaign algorithm field, and the bid owner is the same question answered with a field that exists.',
+      sortValue: (r) => bidOwners.get(r.id)?.bidderName ?? '',
+      render: (r) => { const o = bidOwners.get(r.id); return <BidRuleCell bidder={o?.bidder} bidderName={o?.bidderName} /> },
+    },
+    {
+      key: 'bidAutomation',
+      label: 'Bid Automation',
+      metric: false,
+      tip: 'H10\'s bid-algorithm switch (`bidAutomation`). ⚠ NOT the write gate — that is the Automations column beside it. Measured 2026-08-19: OFF on all 220 campaigns, which is a real reading, not a placeholder.',
+      sortValue: (r) => (r.bidAutomation ? 1 : 0),
+      render: (r) => <BidAutomationCell on={r.bidAutomation} />,
+    },
+    {
+      key: 'budgetRule',
+      label: 'Budget Rule',
+      metric: false,
+      tip: 'Whether a budget rule has actually moved this campaign\'s budget, and how many can reach it. All six budget rules are account-wide, so reach alone is the same number everywhere — the cell leads with what varies.',
+      sortValue: (r) => (budgetOwners.get(r.id)?.lastMovedByKind === 'rule' ? 1 : 0),
+      render: (r) => { const o = budgetOwners.get(r.id); return <BudgetRuleCell reachedBy={o?.reachedBy} lastMovedByKind={o?.lastMovedByKind} lastMovedBy={o?.lastMovedBy} /> },
+    },
     // ── AR.S1 — the four connected columns ───────────────────────────────────────────────────
     {
       key: 'managed',
@@ -613,7 +679,11 @@ export function ApplyRulesClient() {
         ? <span className="h10-ar-nd">—</span>
         : <span>{r.targetAcosPct}%</span>),
     },
-  ], [portfolioNames, lineNames, push, totals?.accountWideRules])
+  // 🔴 `bidOwners` / `budgetOwners` MUST be here: the three U11 cells close over those maps, and
+  // they arrive AFTER the first render (separate fetches). Without them the memo keeps the empty
+  // maps it was built with and the columns read "—" forever — the data layer loads and the render
+  // layer never notices.
+  ], [portfolioNames, lineNames, push, totals?.accountWideRules, bidOwners, budgetOwners])
 
   // ── aggregate-grain columns ───────────────────────────────────────────────────────────────────
   //
