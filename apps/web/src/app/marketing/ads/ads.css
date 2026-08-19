@@ -650,6 +650,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-modal-sub { padding: 0 18px 10px; font-size: 11.5px; color: #8a93a1; }
 .h10-modal-b { flex: 1; overflow-y: auto; padding: 4px 12px; border-top: 1px solid #eef1f5; border-bottom: 1px solid #eef1f5; }
 .h10-modal-f { display: flex; align-items: center; gap: 8px; padding: 12px 18px; }
+/* U11d — the shared StrategyModal surfaces a refused write in place, rather than only toasting:
+   Apply Rules has no toast host, and a dialog that closes on a refusal reads as a success. */
+.h10-modal-err { margin: 10px 0 0; font-size: 12px; line-height: 1.45; color: #a3320f; }
 .h10-modal-f .grow { flex: 1; }
 .h10-colrow { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; background: #fff; }
 .h10-colrow:hover { background: #f7f9fb; }

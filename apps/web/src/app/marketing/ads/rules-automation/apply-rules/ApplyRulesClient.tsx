@@ -65,7 +65,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
@@ -76,7 +75,7 @@ import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { getBackendUrl } from '@/lib/backend-url'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import {
-  DELIVERY_LABEL, MARKETS, STATUS_LABEL, STRATEGY_LABEL,
+  DELIVERY_LABEL, MARKETS, STATUS_LABEL,
   type CampaignRow, type GuardrailPayload, type RawCampaign, type RawGuardrailRow,
   type ScopeOptionsPayload,
 } from './types'
@@ -89,6 +88,7 @@ import { ApplyRulesSections } from './ApplyRulesSections'
 import { ArBulkVerbs } from './ArBulkVerbs'
 import { BidRuleCell, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../../_shared/RuleColumnEditors'
+import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal } from '../../_shared/CampaignRowCells'
 import { useAdsSync, emitAdsChange } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
@@ -191,6 +191,10 @@ export function ApplyRulesClient() {
   const [editPop, setEditPop] = useState<{ row: CampaignRow; kind: 'bounds' | 'tacos'; anchor: PopAnchor } | null>(null)
   const [popBusy, setPopBusy] = useState(false)
   const [popErr, setPopErr] = useState<string | null>(null)
+  /** U11d — the campaign whose bidding-strategy dialog is open. */
+  const [stratFor, setStratFor] = useState<CampaignRow | null>(null)
+  const [stratErr, setStratErr] = useState<string | null>(null)
+  const [stratBusy, setStratBusy] = useState(false)
 
   /**
    * U11c — the one write path behind both hover-pencil popovers.
@@ -219,6 +223,28 @@ export function ApplyRulesClient() {
     } catch (e) {
       setPopErr((e as Error).message)
     } finally { setPopBusy(false) }
+  }
+
+  /**
+   * U11d — status and bidding strategy, on the campaign PATCH the Ad Manager already uses.
+   * `applyImmediately` pushes to Amazon on a live market; a refusal at the write gate is the gate
+   * working, so it is surfaced rather than swallowed.
+   */
+  const writeCampaign = async (row: CampaignRow, body: Record<string, string>, what: string) => {
+    setStratBusy(true); setStratErr(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, applyImmediately: true, reason: `Apply Rules ${what}` }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(String(j?.error ?? `Save failed (${r.status})`))
+      setStratFor(null)
+      emitAdsChange('ads.guardrail.changed')
+      setReloadTick((n) => n + 1)
+    } catch (e) {
+      setStratErr((e as Error).message)
+    } finally { setStratBusy(false) }
   }
 
   /** The one writer of page state. '' or a default value deletes the param. */
@@ -574,11 +600,9 @@ export function ApplyRulesClient() {
       key: 'status',
       label: 'Status',
       metric: false,
-      tip: 'What the campaign itself is set to. Amazon enforces it; nothing on this page changes it.',
+      tip: 'What the campaign itself is set to. The chevron archives, pauses or enables it — a gated PATCH that pushes to Amazon on a live market, exactly as the Ad Manager\'s does. Resuming a paused campaign does NOT re-open the write gate; that is the Automations column.',
       sortValue: (r) => r.status,
-      render: (r) => (
-        <span className={`h10-ar-pill st-${r.status.toLowerCase()}`}>{STATUS_LABEL[r.status] ?? r.status}</span>
-      ),
+      render: (r) => <StatusCell status={r.status} name={r.name} onChange={(next) => void writeCampaign(r, { status: next }, `status ${next}`)} />,
     },
     {
       key: 'delivery',
@@ -730,11 +754,9 @@ export function ApplyRulesClient() {
       key: 'strategy',
       label: 'Bidding strategy',
       metric: false,
-      tip: 'Amazon\'s campaign bidding strategy — a real, varying field (the column it replaces read a key the payload never contained and printed a constant). Up & down lets Amazon add up to +100% on top of placement multipliers.',
+      tip: 'Amazon\'s campaign bidding strategy — a real, varying field (the column it replaces read a key the payload never contained and printed a constant). Up & down lets Amazon add up to +100% on top of placement multipliers. The pencil opens the same three-strategy dialog the Ad Manager uses.',
       sortValue: (r) => r.biddingStrategy ?? '',
-      render: (r) => (r.biddingStrategy
-        ? <span title={r.biddingStrategy}>{STRATEGY_LABEL[r.biddingStrategy] ?? r.biddingStrategy}</span>
-        : <span className="h10-ar-nd">not reported</span>),
+      render: (r) => <BiddingStrategyCell strategy={r.biddingStrategy} onEdit={() => { setStratErr(null); setStratFor(r) }} />,
     },
   // 🔴 `bidOwners` / `budgetOwners` MUST be here: the three U11 cells close over those maps, and
   // they arrive AFTER the first render (separate fetches). Without them the memo keeps the empty
@@ -991,17 +1013,16 @@ export function ApplyRulesClient() {
           noun="Campaign"
           firstColLabel="Campaign"
           renderFirst={(r) => (
-            <div className="h10-ar-first">
-              {/* 🔴 `.h10-am-grid td.nm .t` paints the first column #1f6fde at (0,3,1) with a
-                  pointer cursor, because every other consumer of this grid makes that column a
-                  link. This one is not a link — S7 makes the name open the row drawer — so it does
-                  not use `.t` at all and carries its own class. A blue name that does nothing when
-                  clicked is a promise the page cannot keep. */}
-              <span className="h10-ar-nm" title={r.name}>{r.name}</span>
-              <span className="mk">{r.market}</span>
-              <Link className="h10-ar-open" href={`/marketing/ads/campaigns/${r.id}`}
-                title="Open this campaign in the Ad Manager — performance, structure and its ~45 columns">Open</Link>
-            </div>
+            /* U11d — the Ad Manager's own first column, shared. It used to render a dark
+               `.h10-ar-nm` and a plain "Open" text link, on the reasoning that a blue name which
+               does nothing when clicked is a promise the page cannot keep. True about the colour,
+               wrong about the fix: the Ad Manager's name is blue and is not itself a link either —
+               the promise is kept by the Open pill beside it, revealed on row hover, which is the
+               control H10 puts there. */
+            <CampaignNameCell
+              id={r.id} name={r.name} marketplace={r.market} status={r.status}
+              dailyBudgetCents={r.dailyBudgetCents} type={r.type}
+            />
           )}
           firstSortValue={(r) => r.name.toLowerCase()}
           columns={campaignColumns}
@@ -1092,15 +1113,22 @@ export function ApplyRulesClient() {
           governance — it never touches Amazon); Target ACoS writes PATCH /automation, the same
           fraction the bulk verb sends. Both emit on the bus once the write settles, so every other
           open tab re-reads. */}
+      {stratFor && (
+        <StrategyModal
+          strategy={stratFor.biddingStrategy}
+          busy={stratBusy}
+          error={stratErr}
+          onClose={() => setStratFor(null)}
+          onConfirm={(v) => void writeCampaign(stratFor, { biddingStrategy: v }, 'bidding strategy')}
+        />
+      )}
       {editPop && editPop.kind === 'bounds' && (
         <RangePopover
           key={`${editPop.row.id}:bounds`}
-          title="Min/Max Bid"
-          rangeLabel="Set a Min/Max Bid Range"
+          kind="bid"
           minCents={editPop.row.minBidCents}
           maxCents={editPop.row.maxBidCents}
           anchor={editPop.anchor}
-          note="Enforced at the write gate on every bid write to this campaign: outside the band a write is DENIED and recorded, never clamped. A bid already outside it stays put until something tries to move it."
           busy={popBusy}
           error={popErr}
           onClose={() => setEditPop(null)}
@@ -1110,12 +1138,9 @@ export function ApplyRulesClient() {
       {editPop && editPop.kind === 'tacos' && (
         <ValuePopover
           key={`${editPop.row.id}:tacos`}
-          title="Target ACoS"
-          suffix="%"
+          kind="targetAcos"
           initial={editPop.row.targetAcosPct != null ? String(editPop.row.targetAcosPct) : ''}
-          placeholder="unset"
           anchor={editPop.anchor}
-          note="Leave blank and the optimiser uses its own 30% fallback — a fallback is not a setting, which is why this column reads a dash rather than 30%."
           busy={popBusy}
           error={popErr}
           onClose={() => setEditPop(null)}

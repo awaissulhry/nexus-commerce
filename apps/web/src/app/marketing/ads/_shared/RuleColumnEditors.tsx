@@ -41,6 +41,13 @@
  * would open another row's pencil), which is exactly the kind of accident that stops being true
  * later. Every call site passes `key={`${id}:${kind}`}` so the instance is thrown away instead.
  *
+ * ── 🔴 No copy props. The description belongs to the component ──────────────────────────────────
+ * The first version of this file took a `note` prop, and the two pages promptly passed different
+ * sentences — which is how the operator noticed the editors "are not really any shared components".
+ * A prop that lets one caller reword the dialog is a fork with extra steps. The copy below is the
+ * copy, everywhere. If a page needs to say something else, that is a signal the CONTROL differs,
+ * and the answer is a new component, not a string.
+ *
  * ── Styling ─────────────────────────────────────────────────────────────────────────────────────
  * Every class here (`h10-mmbid`, `h10-editpop`, `h10-bulk-inp`, `h10-menu-back`, `h10-am-link`,
  * `h10-am-btn`) is already in `ads.css`, which `marketing/ads/layout.tsx` loads for the whole
@@ -115,23 +122,35 @@ const MIN_CENTS = 2
  * `onApply(null)` means the operator chose **None**: clear both ends. A blank input inside "Set a
  * Range" clears only that end — that is not the same thing, and the copy says so.
  */
+/** The `kind` picks the title, the radio label and the description — all of them, together. */
+const RANGE_COPY = {
+  bid: {
+    title: 'Min/Max Bid',
+    rangeLabel: 'Set a Min/Max Bid Range',
+    note: 'Enforced at the write gate on every bid write to this campaign: outside the band a write is DENIED and recorded, never clamped. A bid already outside it stays put until something tries to move it.',
+    floorCents: MIN_CENTS,
+  },
+  budget: {
+    title: 'Min/Max Budget',
+    rangeLabel: 'Set a Min/Max Budget Range',
+    note: 'Read by Budget Manager when it paces this campaign. Local only — Amazon exposes no min/max budget field.',
+    floorCents: 0,
+  },
+} as const
+
 export function RangePopover({
-  title, rangeLabel, minCents, maxCents, anchor, floorCents = MIN_CENTS, note, busy, error, onApply, onClose,
+  kind, minCents, maxCents, anchor, busy, error, onApply, onClose,
 }: {
-  title: string
-  rangeLabel: string
+  kind: keyof typeof RANGE_COPY
   minCents: number | null
   maxCents: number | null
   anchor: PopAnchor
-  /** the lowest either end may be, in cents. €0.02 on bids — the suppression floor. */
-  floorCents?: number
-  /** one line under the fields, for whatever the page needs to say about enforcement */
-  note?: string
   busy?: boolean
   error?: string | null
   onApply: (mm: { minCents: number | null; maxCents: number | null } | null) => void
   onClose: () => void
 }) {
+  const { title, rangeLabel, note, floorCents } = RANGE_COPY[kind]
   const { ref, pos } = useClampedAnchor(anchor)
   const eur = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2))
   const [range, setRange] = useState(minCents != null || maxCents != null)
@@ -160,7 +179,7 @@ export function RangePopover({
             <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Max" value={max} onChange={(e) => setMax(e.target.value)} aria-label="Max" /></span>
           </div>
         )}
-        {note && <p className="n">{note}</p>}
+        <p className="n">{note}</p>
         {bad && <p className="e" role="alert">Each end must be at least €{(floorCents / 100).toFixed(2)}, and Min must not exceed Max.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
@@ -182,22 +201,30 @@ export function RangePopover({
  * engine's 30% fallback, which made "press Apply without typing" write a target nobody chose.
  * `placeholder` is where a fallback belongs.
  */
+const VALUE_COPY = {
+  targetAcos: {
+    title: 'Target ACoS', prefix: undefined as string | undefined, suffix: '%', placeholder: 'unset',
+    note: 'Leave blank and the optimiser uses its own 30% fallback — a fallback is not a setting, which is why the column reads a dash rather than 30%.',
+  },
+  dailyBudget: {
+    title: 'Daily Budget', prefix: '€', suffix: undefined as string | undefined, placeholder: '',
+    note: 'Amazon resets spend at midnight in the campaign\'s own marketplace timezone.',
+  },
+} as const
+
 export function ValuePopover({
-  title, prefix, suffix, initial, placeholder, anchor, note, busy, error, onApply, onClose,
+  kind, initial, anchor, busy, error, onApply, onClose,
 }: {
-  title: string
-  prefix?: string
-  suffix?: string
+  kind: keyof typeof VALUE_COPY
   /** '' when unset — never the fallback value */
   initial: string
-  placeholder?: string
   anchor: PopAnchor
-  note?: string
   busy?: boolean
   error?: string | null
   onApply: (v: string) => void
   onClose: () => void
 }) {
+  const { title, prefix, suffix, placeholder, note } = VALUE_COPY[kind]
   const { ref, pos } = useClampedAnchor(anchor)
   const [v, setV] = useState(initial)
   const bad = v.trim() !== '' && !Number.isFinite(Number(v))
@@ -211,7 +238,7 @@ export function ValuePopover({
           <input inputMode="decimal" value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} aria-label={title} autoFocus />
           {suffix && <span className="sfx">{suffix}</span>}
         </span>
-        {note && <p className="n">{note}</p>}
+        <p className="n">{note}</p>
         {bad && <p className="e" role="alert">Enter a number.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">

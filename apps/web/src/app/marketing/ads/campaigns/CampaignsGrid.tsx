@@ -9,9 +9,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, Lightbulb, ExternalLink, ListChecks, Pencil, Shuffle, Bot } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Shuffle, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, BidAutomationCell } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
+import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -83,13 +84,11 @@ async function patchJson(url: string, body: Record<string, unknown>): Promise<bo
 }
 const AMZ_PLACEMENT: Record<string, string> = { TOS: 'PLACEMENT_TOP', PP: 'PLACEMENT_PRODUCT_PAGE', ROS: 'PLACEMENT_REST_OF_SEARCH' }
 
-const STRAT_LABEL: Record<string, string> = { LEGACY_FOR_SALES: 'Down only', AUTO_FOR_SALES: 'Up and Down', MANUAL: 'Fixed' }
 const STRAT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'LEGACY_FOR_SALES', label: 'Down only' },
   { value: 'AUTO_FOR_SALES', label: 'Up and Down' },
   { value: 'MANUAL', label: 'Fixed' },
 ]
-const TYPE_LABEL: Record<string, string> = { SPONSORED_PRODUCTS: 'Sponsored Products', SPONSORED_BRANDS: 'Sponsored Brands', SPONSORED_DISPLAY: 'Sponsored Display', SP: 'Sponsored Products', SB: 'Sponsored Brands', SD: 'Sponsored Display' }
 
 // ── column catalog (H10 "Table Customization") — the exact 44-item model ─────
 // One checklist item per entry, in H10's grid order. Campaign is frozen + locked
@@ -601,33 +600,8 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
   )
 }
 
-// P3 — H10 "Campaign Bidding Strategy" modal (3 strategies, verbatim copy).
-// Confirm → gated campaign PATCH (live markets push to Amazon).
-const STRATEGY_DEFS: Array<{ value: string; title: string; desc: string }> = [
-  { value: 'LEGACY_FOR_SALES', title: 'Dynamic Bids - Down only', desc: 'Amazon lowers your bids in real time when your ad may be less likely to convert to a sale.' },
-  { value: 'AUTO_FOR_SALES', title: 'Dynamic Bids - Up and Down', desc: 'Amazon raises your bids (by a maximum of 100%) in real time when your ad may be more likely to convert to a sale, and lower your bids when less likely to convert to a sale.' },
-  { value: 'MANUAL', title: 'Fixed Bid', desc: "Amazon uses your exact bid and any manual adjustments you set, and won't change your bids based on likelihood of a sale." },
-]
-function StrategyModal({ campaign, onConfirm, onClose }: { campaign: Camp; onConfirm: (v: string) => void; onClose: () => void }) {
-  const [v, setV] = useState(campaign.biddingStrategy ?? 'LEGACY_FOR_SALES')
-  return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Campaign Bidding Strategy">
-        <div className="h10-modal-h"><b>Campaign Bidding Strategy</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">Select a strategy to optimize your campaign bidding performance</div>
-        <div className="h10-modal-b">
-          {STRATEGY_DEFS.map((s) => (
-            <label className={`h10-radio-card ${v === s.value ? 'on' : ''}`} key={s.value}>
-              <input type="radio" name="bidstrat" checked={v === s.value} onChange={() => setV(s.value)} />
-              <span className="rc-b"><span className="rc-t">{s.title}</span><span className="rc-d">{s.desc}</span></span>
-            </label>
-          ))}
-        </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" onClick={() => onConfirm(v)}>Confirm</button></div>
-      </div>
-    </div>
-  )
-}
+// U11d — the "Campaign Bidding Strategy" modal and its three verbatim strategy definitions
+// MOVED to `../_shared/CampaignRowCells.tsx`, so Apply Rules opens the identical dialog.
 
 // P3 — H10 "Bid Multiplier" modal (placement % + boosts). Confirm → /placements
 // PATCH (TOS/PP/ROS). The boost toggles are UI-faithful (no Amazon field yet).
@@ -705,15 +679,9 @@ function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: ()
 // the client-derived euro pair) and carry the ≥€0.02 / min≤max validation Apply Rules had and this
 // page did not.
 
-// Row icon cluster (H10): targeting letter (A=auto / M=manual, inferred from the
-// campaign name) + product badge (SP/SB/SD). Status renders as a coloured pill.
-const productBadge = (c: Camp): string => (c.adProduct === 'SPONSORED_BRANDS' || c.type === 'SB') ? 'SB' : (c.adProduct === 'SPONSORED_DISPLAY' || c.type === 'SD') ? 'SD' : 'SP'
-const targetingLetter = (c: Camp): string => /(^|[^a-z])auto([^a-z]|$)/i.test(c.name) ? 'A' : 'M'
-const STATUS_PILL: Record<string, { label: string; cls: string }> = {
-  ENABLED: { label: 'Enabled', cls: 'ok' },
-  PAUSED: { label: 'Paused', cls: 'warn' },
-  ARCHIVED: { label: 'Archived', cls: 'arch' },
-}
+// U11d — the row icon cluster, STATUS_PILL and the A/M + SP/SB/SD helpers moved to
+// `../_shared/CampaignRowCells.tsx`. `targetingLetter` now takes the NAME, not the row, so a grid
+// carrying a different row type can call it.
 
 export function CampaignsGrid() {
   const [rows, setRows] = useState<Camp[]>([])
@@ -751,7 +719,7 @@ export function CampaignsGrid() {
   // P3 — per-row interactions (open a modal/menu for a single campaign)
   const [strategyModal, setStrategyModal] = useState<Camp | null>(null)
   const [multiplierModal, setMultiplierModal] = useState<Camp | null>(null)
-  const [statusMenu, setStatusMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  // U11d — the status menu lives inside `StatusCell` now; the grid only supplies the writer.
   const [rulesModal, setRulesModal] = useState<Camp | null>(null)
   const [bidRuleMenu, setBidRuleMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; anchor: PopAnchor } | null>(null)
@@ -1060,7 +1028,6 @@ export function CampaignsGrid() {
   // P3 — single-campaign writes (operator actions), same gated endpoints as bulk.
   const toast = (m: string) => { setApplyMsg(m); setTimeout(() => setApplyMsg(''), 5000) }
   const setCampaignStatus = async (c: Camp, status: 'ENABLED' | 'PAUSED' | 'ARCHIVED') => {
-    setStatusMenu(null)
     const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}`, { status, applyImmediately: true, reason: `Ad Manager status ${status}` })
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, status } : x)))
     toast(ok ? `${STATUS_PILL[status]?.label ?? status} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
@@ -1304,10 +1271,10 @@ export function CampaignsGrid() {
           </span>
         )
       }
-      case 'status': { const sp = STATUS_PILL[c.status] ?? { label: c.status, cls: '' }; return <span className="h10-statuscell"><span className={`h10-pill ${sp.cls}`}>{sp.label}</span><button type="button" className="ch" aria-label={`Change status for ${c.name}`} onClick={(ev) => { const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); setStatusMenu({ id: c.id, x: Math.max(8, r.right - 156), y: r.bottom + 5 }) }}><ChevronDown size={13} aria-hidden /></button></span> }
+      case 'status': return <StatusCell status={c.status} name={c.name} onChange={(next) => void setCampaignStatus(c, next)} />
       case 'minMaxBudget': return ed(c.minMaxBudget && (c.minMaxBudget.min != null || c.minMaxBudget.max != null) ? `${c.minMaxBudget.min != null ? eur(c.minMaxBudget.min) : '—'} – ${c.minMaxBudget.max != null ? eur(c.minMaxBudget.max) : '—'}` : 'None - None', 'minMaxBudget')
       case 'rules': return <button type="button" className="h10-rules" onClick={() => setRulesModal(c)}><b>0</b> <Settings2 size={12} /></button>
-      case 'biddingStrategy': return <span className="h10-edcell">{STRAT_LABEL[effStrat(c)] ?? '—'}<button type="button" className="h10-editpen" aria-label="Edit bidding strategy" onClick={() => setStrategyModal(c)}><Pencil size={11} /></button></span>
+      case 'biddingStrategy': return <BiddingStrategyCell strategy={effStrat(c)} onEdit={() => setStrategyModal(c)} />
       case 'bidMultiplier': return <button type="button" className="h10-gearbtn" aria-label={`Bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>
       case 'startDate': return fmtDate(c.startDate)
       case 'endDate': return c.endDate ? fmtDate(c.endDate) : '-'
@@ -1595,26 +1562,14 @@ export function CampaignsGrid() {
                 <tr key={c.id} className={sel.has(c.id) ? 'on' : ''}>
                   <td className="ck"><input type="checkbox" checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></td>
                   <td className="nm fz">
-                    <div className="nmw">
-                      {/* lightbulb = Budget Manager Auto Pacing status (own tooltip, below) */}
-                      <HoverCard placement="below" text="This campaign is not managed by Budget Manager Auto Pacing">
-                        <span className="bulb"><Lightbulb size={12} aria-hidden /></span>
-                      </HoverCard>
-                      {/* A/M + SP = campaign info card (above) */}
-                      <HoverCard rows={[
-                        ['Status', STATUS_PILL[c.status]?.label ?? c.status],
-                        ['Daily Budget', c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—'],
-                        ['Targeting Type', targetingLetter(c) === 'A' ? 'Auto' : 'Manual'],
-                        ['Campaign Type', TYPE_LABEL[c.type ?? c.adProduct ?? ''] ?? 'Sponsored Products'],
-                      ]}>
-                        <span className="tg" data-t={targetingLetter(c)}>{targetingLetter(c)}</span>
-                        <span className="pb">{productBadge(c)}</span>
-                      </HoverCard>
-                      <span className="t" title={c.name}>{c.name}</span>
-                      {c.marketplace && <span className="mk">{c.marketplace}</span>}
-                      <a className="h10-open" href={`/marketing/ads/campaigns/${c.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
-                      {c.externalCampaignId && <a className="h10-open" href={`/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=${encodeURIComponent(c.externalCampaignId)}&targetLabel=${encodeURIComponent(c.name)}`} title={`Point a worker at ${c.name} — opens Assignments with this campaign already chosen`} onClick={(e) => e.stopPropagation()}><Bot size={11} /> Assign</a>}
-                    </div>
+                    <CampaignNameCell
+                      id={c.id} name={c.name} marketplace={c.marketplace} status={c.status}
+                      dailyBudgetCents={c.dailyBudget != null && c.dailyBudget !== '' ? Math.round(num(c.dailyBudget) * 100) : null}
+                      type={c.type} adProduct={c.adProduct}
+                      extra={c.externalCampaignId ? (
+                        <a className="h10-open" href={`/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=${encodeURIComponent(c.externalCampaignId)}&targetLabel=${encodeURIComponent(c.name)}`} title={`Point a worker at ${c.name} — opens Assignments with this campaign already chosen`} onClick={(e) => e.stopPropagation()}><Bot size={11} /> Assign</a>
+                      ) : null}
+                    />
                   </td>
                   {physical.map((pc) => <td key={pc.key} data-col={pc.key} className={`${pc.metric ? 'num' : 'ed'} ${drag?.item === physToItem(pc.key) ? 'dragging' : ''}`}>{pc.metric ? renderCol(c, pc.key) : settingsCell(c, pc.key)}</td>)}
                 </tr>
@@ -1704,22 +1659,8 @@ export function CampaignsGrid() {
       </>)}
 
       {/* P3 — per-row Bidding Strategy / Bid Multiplier modals + Status menu */}
-      {strategyModal && <StrategyModal campaign={strategyModal} onConfirm={(v) => void setCampaignStrategy(strategyModal, v)} onClose={() => setStrategyModal(null)} />}
+      {strategyModal && <StrategyModal strategy={strategyModal.biddingStrategy} onConfirm={(v) => void setCampaignStrategy(strategyModal, v)} onClose={() => setStrategyModal(null)} />}
       {multiplierModal && <BidMultiplierModal campaign={multiplierModal} onConfirm={(pl) => void setCampaignPlacements(multiplierModal, pl)} onClose={() => setMultiplierModal(null)} />}
-      {statusMenu && (() => {
-        const c = rows.find((x) => x.id === statusMenu.id)
-        if (!c) return null
-        return (
-          <>
-            <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setStatusMenu(null)} />
-            <div className="h10-statusmenu" style={{ position: 'fixed', left: statusMenu.x, top: statusMenu.y }} role="menu">
-              <button type="button" role="menuitem" onClick={() => void setCampaignStatus(c, 'ARCHIVED')}>Archive</button>
-              <button type="button" role="menuitem" onClick={() => void setCampaignStatus(c, 'PAUSED')}>Pause</button>
-              <button type="button" role="menuitem" onClick={() => void setCampaignStatus(c, 'ENABLED')}>Enable</button>
-            </div>
-          </>
-        )
-      })()}
       {rulesModal && <CampaignRulesModal campaign={rulesModal} onClose={() => setRulesModal(null)} />}
       {bidRuleMenu && (() => {
         const c = rows.find((x) => x.id === bidRuleMenu.id)
@@ -1747,13 +1688,13 @@ export function CampaignsGrid() {
         // so opening the pencil on a campaign with no target pre-filled 30.00 and pressing Apply
         // wrote a target nobody chose — the editor half of the fabricated 30% removed from the
         // display cell on 2026-08-19. The fallback belongs in the placeholder, and now is.
-        if (editPop.kind === 'targetAcos') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} title="Target ACoS" suffix="%" initial={c.targetAcos != null ? (c.targetAcos * 100).toFixed(2) : ''} placeholder="unset" note="Leave blank and the optimiser uses its own 30% fallback — a fallback is not a setting." anchor={editPop.anchor} onApply={(v) => void setCampaignTargetAcos(c, v)} onClose={close} />
-        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} title="Daily Budget" prefix="€" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
+        if (editPop.kind === 'targetAcos') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="targetAcos" initial={c.targetAcos != null ? (c.targetAcos * 100).toFixed(2) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignTargetAcos(c, v)} onClose={close} />
+        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="dailyBudget" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
         // Was `initial={c.minMaxBid}`, a euro pair derived at fetch time purely to feed this
         // popover and its cell — correct, but a second unit for one field. Both now read the
         // cents the endpoint itself takes, and the derived field is gone.
-        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} title="Min/Max Bid" rangeLabel="Set a Min/Max Bid Range" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} note="Enforced at the write gate: a bid outside the band is DENIED and recorded, never clamped." anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
-        return <RangePopover key={`${editPop.id}:${editPop.kind}`} title="Min/Max Budget" rangeLabel="Set a Min/Max Budget Range" minCents={c.minMaxBudget?.min != null ? Math.round(c.minMaxBudget.min * 100) : null} maxCents={c.minMaxBudget?.max != null ? Math.round(c.minMaxBudget.max * 100) : null} floorCents={0} note="Read by Budget Manager. Local only — no Amazon field exists yet." anchor={editPop.anchor} onApply={(mm) => setCampaignMinMaxBudget(c, mm)} onClose={close} />
+        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="bid" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
+        return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="budget" minCents={c.minMaxBudget?.min != null ? Math.round(c.minMaxBudget.min * 100) : null} maxCents={c.minMaxBudget?.max != null ? Math.round(c.minMaxBudget.max * 100) : null} anchor={editPop.anchor} onApply={(mm) => setCampaignMinMaxBudget(c, mm)} onClose={close} />
       })()}
 
       {/* AX-IE.10 — "export exactly what I'm looking at".

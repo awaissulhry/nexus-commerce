@@ -171,15 +171,9 @@ export const minMaxBid = (r: { minBidCents: number | null; maxBidCents: number |
 
 // ── labels ───────────────────────────────────────────────────────────────────────────────────────
 
-/** Amazon's two live values on this account, plus the legacy spelling. */
-export const STRATEGY_LABEL: Record<string, string> = {
-  LEGACY_FOR_SALES: 'Down only',
-  AUTO_FOR_SALES: 'Up & down',
-  MANUAL: 'Fixed',
-  legacyForSales: 'Down only',
-  autoForSales: 'Up & down',
-  manual: 'Fixed',
-}
+// U11d — `STRATEGY_LABEL` removed. It said "Up & down" where the Ad Manager's said "Up and Down",
+// for the same Amazon value, on two pages an operator reads side by side. The one map now lives in
+// `ads/_shared/CampaignRowCells.tsx` as `STRAT_LABEL`.
 
 export const STATUS_LABEL: Record<string, string> = {
   ENABLED: 'Enabled', PAUSED: 'Paused', ARCHIVED: 'Archived',

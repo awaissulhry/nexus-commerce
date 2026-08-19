@@ -2637,16 +2637,19 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1c2530; }
 .h10-ar-first.agg .h10-ar-nm { font-weight: 700; }
 /* The one real link in the cell, so the promise it makes is the only one made. */
-.h10-ar-open { flex: none; font-size: 10.5px; font-weight: 700; color: #1a61c6; text-decoration: none; opacity: 0; transition: opacity .12s; }
-tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration: underline; }
+/* U11d — `.h10-ar-open` DELETED. The campaign column renders `CampaignNameCell`, whose Open
+   control is the Ad Manager's `.h10-open` pill (ads.css:898-900): white on blue, with the
+   external-link icon, revealed on row hover, opening in a new tab. */
 /* Why this aggregate row cannot reach everything. Always rendered where there is one — a reach
    note that is dropped is the double-counting the operator then does in their head. */
 .h10-ar-reach { flex: none; padding: 1px 6px; border-radius: 5px; background: #eef2ff; color: #414a7a; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; cursor: help; }
 
 /* ── row state ────────────────────────────────────────────────────────────────────────────────── */
 .h10-ar-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; }
-.h10-ar-pill.st-enabled, .h10-ar-pill.dl-on { background: #e7f5ed; color: #14663f; }
-.h10-ar-pill.st-paused, .h10-ar-pill.st-archived, .h10-ar-pill.dl-off { background: #eef1f5; color: #4d5763; }
+/* U11d — the `st-*` variants went with the Status column, which now renders the Ad Manager's
+   `.h10-pill` + chevron menu (`StatusCell`). `dl-*` stays: Delivery is this page's own column. */
+.h10-ar-pill.dl-on { background: #e7f5ed; color: #14663f; }
+.h10-ar-pill.dl-off { background: #eef1f5; color: #4d5763; }
 /* 🔴 Enabled + not delivering + gate shut. Resuming a paused campaign does NOT re-open the write
    gate — the write is refused at `campaign_allowlist` and the gate's own comment calls that the
    intended trade — so this row is one nothing may correct. Amber, and only on that intersection. */
@@ -5170,11 +5173,12 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-pop .acts .apply:disabled { background: #c3d3ea; border-color: #c3d3ea; cursor: default; }
 
 /* ── U13 — the "held" look, for a control that refuses but still ANSWERS ────────────────────────
-   A control whose refusal carries a reason must not use the `disabled` attribute: Chrome fires no
-   pointer events on a disabled form control, so its `title` can never be shown and its click does
-   nothing. Measured on prod 2026-08-19 with listeners attached, over a real hover and a real click:
-   0 mouseover, 0 mouseenter, 0 mousemove, 0 click. The Automation toggle and the Automations mode
-   dial both wrote the ceiling's reason onto exactly that element.
+   A control whose refusal carries a reason must not use the `disabled` attribute: a disabled form
+   control takes no focus, takes no click, and shows no `title` tooltip in Chrome, so the reason
+   cannot be reached by any route. Measured 2026-08-19: `b.disabled = true; b.focus()` leaves
+   `document.activeElement` elsewhere, while the held form below focuses normally and a real Enter
+   activates it. The Automation toggle and the Automations mode dial both wrote the ceiling's
+   reason onto exactly that unreachable element.
 
    These two classes carry the disabled LOOK while the element stays live, so hover shows the
    reason, click states it in the page's banner, and focus still reaches it. `cursor: help` rather
