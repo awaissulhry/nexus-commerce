@@ -27,3 +27,12 @@ export { Stepper, type StepperProps, type StepperStep } from './Stepper'
 export { FileDropzone, type FileDropzoneProps } from './FileDropzone'
 export { useClickAway } from './useClickAway'
 export { ColumnGroupModal, type ColumnGroupModalProps, type ColumnGroupProps, type ColumnGroup } from './ColumnGroupModal'
+// MAP.1 — top-right account identity. Replaces the hard-coded marketplace
+// chips in components/layout/TopBar.tsx with real connection state.
+export {
+  AccountSwitcher,
+  type AccountSwitcherProps,
+  type AccountsPayload,
+  type AccountRow as AccountSwitcherRow,
+  type AccountHealth,
+} from './AccountSwitcher'

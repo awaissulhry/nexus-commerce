@@ -1292,3 +1292,114 @@
 .h10-ds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
 .h10-ds-burn-tip i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 .h10-ds-burn-tip em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* ── AccountSwitcher (MAP.1) ───────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched.
+   Colour comes only from tokens, so `.dark` (tokens.css) re-themes it with no
+   rules here. The health dot is never the ONLY carrier of state — every row
+   also prints its status in words, so the control does not depend on hue. */
+.h10-ds-acct { position: relative; display: inline-flex; }
+
+.h10-ds-acct-skeleton { display: block; width: 148px; height: 28px; border-radius: var(--h10-radius-round); background: var(--h10-surface-hover); }
+
+.h10-ds-acct-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid var(--border-subtle); border-radius: var(--h10-radius-round);
+  background: var(--surface-card); color: var(--h10-text);
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; text-decoration: none;
+}
+.h10-ds-acct-trigger:hover { background: var(--h10-surface-hover); }
+.h10-ds-acct-trigger:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: 2px; }
+.h10-ds-acct-trigger.is-muted { color: var(--h10-text-2); font-weight: 500; }
+.h10-ds-acct-summary { padding-left: 2px; }
+
+.h10-ds-acct-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--h10-radius-round);
+  background: var(--h10-surface-sunken); color: var(--h10-text);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.h10-ds-acct-caret { color: var(--h10-text-3); flex: none; }
+/* Count badge on a channel pill — only rendered when that channel holds >1 account. */
+.h10-ds-acct-pill-n {
+  min-width: 15px; padding: 0 4px; margin-left: 1px;
+  border-radius: var(--h10-radius-round);
+  background: var(--h10-blue-600); color: var(--h10-white);
+  font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+}
+
+/* Dots share one class so the legend in the panel and the chip cannot drift. */
+.h10-ds-acct-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--h10-text-3); }
+.h10-ds-acct-dot[data-health='ok'] { background: var(--h10-success); }
+.h10-ds-acct-dot[data-health='warn'] { background: var(--h10-warning); }
+.h10-ds-acct-dot[data-health='error'] { background: var(--h10-danger); }
+.h10-ds-acct-dot[data-health='unknown'] { background: var(--h10-text-3); }
+.h10-ds-acct-dot[data-health='off'] { background: transparent; border: 1.5px solid var(--border-strong); }
+
+.h10-ds-acct-panel {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  /* Above the DS menu (40) and any sticky page header, below Modal (50) so an
+     open modal still covers the chrome. */
+  z-index: 48;
+  width: 320px; max-height: min(70vh, 520px); overflow-y: auto;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle); border-radius: var(--h10-radius-xl);
+  box-shadow: var(--h10-shadow-menu);
+  padding: 6px;
+}
+.h10-ds-acct-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px 8px; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--h10-text-2);
+}
+.h10-ds-acct-count {
+  min-width: 18px; text-align: center; padding: 1px 6px;
+  border-radius: var(--h10-radius-round); background: var(--h10-surface-sunken);
+  color: var(--h10-text-2); font-size: 11px; letter-spacing: 0;
+}
+
+.h10-ds-acct-group + .h10-ds-acct-group { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; }
+.h10-ds-acct-group-head { padding: 4px 8px; font-size: 11px; font-weight: 700; color: var(--h10-text-2); }
+
+.h10-ds-acct-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 8px; border-radius: var(--h10-radius-md);
+  text-decoration: none; color: inherit;
+}
+.h10-ds-acct-row .h10-ds-acct-dot { margin-top: 5px; }
+.h10-ds-acct-row.is-link { cursor: pointer; }
+.h10-ds-acct-row.is-link:hover { background: var(--h10-surface-hover); }
+.h10-ds-acct-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.h10-ds-acct-row-label { font-size: 13px; font-weight: 600; color: var(--h10-text); }
+.h10-ds-acct-row-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--h10-text-2); }
+.h10-ds-acct-row-sub code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--h10-text-2); }
+.h10-ds-acct-row-warn { font-size: 11.5px; color: var(--h10-warning-strong); }
+.h10-ds-acct-row-warn[data-tone='error'] { color: var(--h10-danger-strong); }
+/* Dark-mode tone text.
+   `.dark` (tokens.css) redefines the text/surface/border tokens but NOT
+   --h10-warning-strong, --h10-danger-strong or --h10-text-link. On the dark
+   panel those light-mode values measure 2.94:1 and 3.18:1 — both below AA.
+   Measured in-browser 2026-08-19; the replacements below measure >=4.5:1.
+   This is a DS-wide gap, not one local to this component: the correct fix is a
+   dark override on the tokens themselves, which belongs to the DS-hardening
+   session rather than to MAP.1. Scoped here so nothing else shifts underfoot. */
+.dark .h10-ds-acct-row-warn { color: #f0b46a; }
+.dark .h10-ds-acct-row-warn[data-tone='error'] { color: #f79289; }
+.h10-ds-acct-tag {
+  padding: 1px 6px; border-radius: var(--h10-radius-pill);
+  background: var(--h10-surface-sunken); color: var(--h10-text-2);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+}
+.h10-ds-acct-markets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.h10-ds-acct-market {
+  padding: 1px 5px; border-radius: var(--h10-radius-pill);
+  background: var(--h10-surface-sunken); color: var(--h10-text-2);
+  font-size: 10.5px; font-weight: 700;
+}
+
+.h10-ds-acct-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
+.h10-ds-acct-foot a { font-size: 12px; font-weight: 600; color: var(--h10-text-link); text-decoration: none; }
+.dark .h10-ds-acct-foot a { color: #8ab6f0; }
+.h10-ds-acct-foot a:hover { text-decoration: underline; }

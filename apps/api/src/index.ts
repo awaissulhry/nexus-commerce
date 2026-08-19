@@ -171,6 +171,8 @@ import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import reviewInsertsRoutes from "./routes/review-inserts.routes.js";
 import reviewSendWindowsRoutes from "./routes/review-send-windows.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
+// MAP.0/MAP.1 — uncollapsed account list + the single-account diagnostics proof.
+import accountsRoutes from "./routes/accounts.routes.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import reconciliationRoutes from "./routes/reconciliation.routes.js";
 import ebayPhase3Routes from "./routes/ebay-phase3.routes.js";
@@ -759,6 +761,7 @@ app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(reviewInsertsRoutes, { prefix: '/api' });
 app.register(reviewSendWindowsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
+app.register(accountsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });
 app.register(ebayPhase3Routes, { prefix: '/api' });
 // IS.2 — real-time cross-channel inventory sync routes

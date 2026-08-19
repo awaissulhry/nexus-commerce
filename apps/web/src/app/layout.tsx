@@ -35,6 +35,8 @@ import CommandPalette from "@/components/CommandPalette";
 import CommandMatrixPanel from "@/components/CommandMatrixPanel";
 import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
+// MAP.1 — top-right connected-accounts chip (floats beside NotificationsBell).
+import GlobalAccountChip from "@/components/GlobalAccountChip";
 import { GlobalDlqBanner } from "@/components/dashboard/GlobalDlqBanner";
 import { GlobalAccountHealthBanner } from "@/components/dashboard/GlobalAccountHealthBanner";
 import { CompetitiveAlertWatcher } from "@/components/dashboard/CompetitiveAlertWatcher";
@@ -104,6 +106,7 @@ export default async function RootLayout({
                   <CommandPalette />
                   <CommandMatrixPanel />
                   <NotificationsBell />
+                  <GlobalAccountChip />
                   {/* RT.13 — Buy Box loss alert listener (no visual UI). */}
                   <CompetitiveAlertWatcher />
                 </>
