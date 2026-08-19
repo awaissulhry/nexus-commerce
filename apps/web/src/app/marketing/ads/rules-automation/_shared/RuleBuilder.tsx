@@ -512,16 +512,25 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const setBudgetAct = (gid: number, patch: { budgetOp?: string; budgetValue?: string; placeTarget?: string }) => setGroups((gs) => gs.map((g) => g.id === gid ? { ...g, ...patch } : g))
 
   const adGroupCount = blocks.reduce((n, b) => n + b.groups.length, 0)
-  const criteriaValid = groups.every((g) => g.conditions.length > 0 && g.conditions.every((c) => c.value.trim() !== '') && (!isCampaign || (g.budgetValue ?? '').trim() !== ''))
+  /** every IF row has a value — the only thing a criteria-only save actually writes */
+  const conditionsFilled = groups.every((g) => g.conditions.length > 0 && g.conditions.every((c) => c.value.trim() !== ''))
+  const criteriaValid = conditionsFilled && groups.every((g) => !isCampaign || (g.budgetValue ?? '').trim() !== '')
   const targetsValid = isCampaign ? selCampaigns.length > 0 : adGroupCount > 0
   /**
-   * EA5 — an ENGINE-NATIVE rule is valid on its name and criteria alone. `targetsValid` demands a
-   * campaign selection, which these rules do not carry in the action at all (their scope is the
-   * `scope*` columns), so requiring it would keep Save disabled forever — which is exactly what
-   * made the destructive path look "safe" before anyone noticed it.
+   * 🔴 EA5 — an ENGINE-NATIVE rule is valid on its name and its IF rows alone.
+   *
+   * The two extra demands both describe things this save does NOT write:
+   *  · `targetsValid` wants a campaign selection these rules do not carry in the action at all —
+   *    their scope lives in the `scope*` columns.
+   *  · `criteriaValid` wants the THEN value ("Set Bid to €"), which belongs to the action — and
+   *    the action is exactly what a criteria-only save leaves untouched. There is nothing to
+   *    hydrate it from, so requiring it pins Save shut on every stored rule.
+   *
+   * Getting this wrong is not cosmetic: a permanently-disabled Save is what made the original
+   * destructive path look safe for as long as it did.
    */
   const valid = locked
-    ? ruleName.trim().length > 0 && (locked.level === 'meta' || criteriaValid)
+    ? ruleName.trim().length > 0 && (locked.level === 'meta' || conditionsFilled)
     : ruleName.trim().length > 0 && targetsValid && criteriaValid
   const floorOverCeiling = isBudget && budgetCeiling.trim() !== '' && (Number(budgetFloor) || 0) > (Number(budgetCeiling) || 0)
   const bidFloorOverCeiling = isBidLike && bidCeiling.trim() !== '' && (Number(bidFloor) || 0) > (Number(bidCeiling) || 0)
