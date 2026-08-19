@@ -11,9 +11,20 @@
  *
  * The notch behaviour is ported from `control-room/RulesSection.tsx:227-251` rather than from
  * the AutomationDock, because that component already solved the two things that make this
- * control trustworthy: a notch above the rule's graduation ceiling renders DISABLED but keeps
- * its reason, and a 409 from the server is presented as the policy it is rather than as a
- * failure. Its `acr-*` classes live in `control-room.css`, which another programme also owns,
+ * control trustworthy: a notch above the rule's graduation ceiling keeps its reason, and a 409
+ * from the server is presented as the policy it is rather than as a failure.
+ *
+ * 🔴 U13 (2026-08-19) — "keeps its reason" was not true, and had never been true. The notch
+ * rendered with the `disabled` ATTRIBUTE and its reason in `title`, and **Chrome fires no pointer
+ * events on a disabled form control** — so the tooltip could not appear and the click did nothing.
+ * Measured on prod: **14 of the 51 rules' notches** on this page were refusing in total silence,
+ * and a real hover plus a real click over one produced 0 mouseover / 0 mousemove / 0 click. The
+ * reason was written onto the one element in the DOM that cannot deliver it.
+ *
+ * It is now `aria-disabled` + an `above` class for the look, and clicking it calls `onRefused`
+ * instead of `onSet`: no doomed request, and the ceiling's sentence lands in the page's banner
+ * where the operator is already looking. `disabled` is kept for `busy` alone — a write in flight
+ * needs no explanation because it resolves on its own. Its `acr-*` classes live in `control-room.css`, which another programme also owns,
  * so the markup is restyled here under `h10-au-*` instead of importing across pages.
  *
  * `h10-au-`, NOT `h10-am-`: that prefix is the app-wide Ads Manager grid namespace. This file
@@ -36,7 +47,7 @@ export const LEVEL_META: Record<Level, { label: string; Icon: typeof Zap; hint: 
 }
 
 export function ModeNotches({
-  level, ceiling, ceilingReason, ruleName, busy, earnedAuto, earnedWhy, onSet,
+  level, ceiling, ceilingReason, ruleName, busy, earnedAuto, earnedWhy, onSet, onRefused,
 }: {
   level: Level
   ceiling: Level
@@ -47,6 +58,8 @@ export function ModeNotches({
   earnedAuto: boolean
   earnedWhy?: string
   onSet: (level: Level) => void
+  /** Clicking a notch above the ceiling. Say why, in the ceiling's own words; never write. */
+  onRefused?: (why: string) => void
 }) {
   return (
     <div className="h10-au-dial" role="group" aria-label={`Mode for ${ruleName}`}>
@@ -59,13 +72,16 @@ export function ModeNotches({
           <button
             key={lv}
             type="button"
-            className={`h10-au-notch ${lv.toLowerCase()}${on ? ' on' : ''}${earned ? ' earned' : ''}`}
+            className={`h10-au-notch ${lv.toLowerCase()}${on ? ' on' : ''}${earned ? ' earned' : ''}${above ? ' above' : ''}`}
             aria-pressed={on}
-            disabled={above || busy}
-            // A disabled notch keeps its reason. A control that refuses silently is what
-            // teaches an operator to distrust the whole surface.
+            // 🔴 NEVER `disabled` for `above` — see the U13 note at the top. `busy` is fine: it
+            // needs no explanation and clears itself.
+            disabled={busy}
+            aria-disabled={above || busy}
+            // A refusing notch keeps its reason AND can deliver it. A control that refuses
+            // silently is what teaches an operator to distrust the whole surface.
             title={above ? ceilingReason : earned ? `${earnedWhy ?? ''} Click to graduate this rule to Auto.` : M.hint}
-            onClick={() => onSet(lv)}
+            onClick={() => { if (above) { onRefused?.(ceilingReason); return } onSet(lv) }}
           >
             {earned ? <GraduationCap size={12} aria-hidden /> : <M.Icon size={12} aria-hidden />}
             {M.label}

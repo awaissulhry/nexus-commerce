@@ -407,6 +407,10 @@ export function AutomationsClient() {
             earnedAuto={!!g?.canGraduate}
             earnedWhy={g?.summary}
             onSet={(lv) => void setLevel(r, lv)}
+            /* U13 — a notch above the ceiling now says so instead of refusing in silence. It
+               reuses this page's own banner, so the refusal reads the same whether the ceiling
+               stopped it here or the server's 409 did. */
+            onRefused={(why) => { setNote(null); setErr(`“${r.name}” — ${why}`) }}
           />
         )
       },

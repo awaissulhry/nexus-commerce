@@ -1251,7 +1251,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-dial { display: inline-flex; border: 1px solid #dfe3e9; border-radius: 7px; overflow: hidden; background: #fff; }
 .h10-au-notch { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-right: 1px solid #eef1f5; background: #fff; font-size: 10.5px; font-weight: 700; color: #6b7480; cursor: pointer; white-space: nowrap; }
 .h10-au-notch:last-child { border-right: 0; }
-.h10-au-notch:hover:not(:disabled) { background: #f4f7fb; color: #1c2530; }
+.h10-au-notch:hover:not(:disabled):not(.above) { background: #f4f7fb; color: #1c2530; }
 /* Explicit colours, NOT opacity. A disabled notch is exempt from 1.4.3, but its tooltip is
    the only thing that explains why it refuses, so it has to be readable — and opacity
    composites, so the declared colour stops predicting the rendered one. #5f6875 on
@@ -5168,3 +5168,20 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-pop .acts .cancel { border: 0; background: none; font-size: 12.5px; font-weight: 600; color: #55606d; cursor: pointer; }
 .h10-ar-pop .acts .apply { border: 1px solid #1f6fde; background: #1f6fde; color: #fff; font-size: 12.5px; font-weight: 700; border-radius: 7px; padding: 6px 13px; cursor: pointer; }
 .h10-ar-pop .acts .apply:disabled { background: #c3d3ea; border-color: #c3d3ea; cursor: default; }
+
+/* ── U13 — the "held" look, for a control that refuses but still ANSWERS ────────────────────────
+   A control whose refusal carries a reason must not use the `disabled` attribute: Chrome fires no
+   pointer events on a disabled form control, so its `title` can never be shown and its click does
+   nothing. Measured on prod 2026-08-19 with listeners attached, over a real hover and a real click:
+   0 mouseover, 0 mouseenter, 0 mousemove, 0 click. The Automation toggle and the Automations mode
+   dial both wrote the ceiling's reason onto exactly that element.
+
+   These two classes carry the disabled LOOK while the element stays live, so hover shows the
+   reason, click states it in the page's banner, and focus still reaches it. `cursor: help` rather
+   than `not-allowed`: the control does respond — with an explanation rather than an action, and
+   `not-allowed` would promise the same silence the defect was made of. */
+.h10-bktoggle.held, .h10-bktoggle.busy { opacity: .55; }
+.h10-bktoggle.held { cursor: help; }
+.h10-bktoggle.busy { cursor: progress; }
+.h10-au-notch.above { cursor: help; background: #f4f6f9; color: #5f6875; }
+.h10-au-notch.above svg { opacity: .55; }

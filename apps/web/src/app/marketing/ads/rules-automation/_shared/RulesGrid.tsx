@@ -51,8 +51,23 @@
  *    ceiling with a 409. Structural actions — creating keywords, negatives, pausing — are capped
  *    below AUTO by policy, so those toggles render disabled carrying the ceiling's own sentence
  *    rather than failing on click. 14 of 51 rules are capped that way today.
+ *
+ * 🔴 ⑤ **A control that carries a REASON must never use the `disabled` attribute.** U13,
+ *    2026-08-19, reported from Keyword Harvest — where all five rules are capped, so all five
+ *    toggles were `disabled`. **Chrome fires no pointer events at all on a disabled form control**,
+ *    which means the `title` holding the ceiling's reason could never be shown and the click did
+ *    nothing: measured on prod with listeners attached and a REAL hover plus a REAL click over the
+ *    toggle — **0 mouseover, 0 mouseenter, 0 mousemove, 0 click**. The reason was written onto the
+ *    one element in the DOM that cannot deliver it, so U12 fixed "the toggle does nothing" into
+ *    "the toggle does nothing and won't say why" for 14 of 44 rows.
+ *
+ *    The shape to copy: `aria-disabled` + a `held` class for the look, the handler refusing and
+ *    **answering** (`setNotice`) instead of writing, and `disabled` reserved for states that need
+ *    no explanation. Hover explains, click explains, keyboard focus explains. `scripts/check-silent-disabled.mjs`
+ *    ratchets the count under `rules-automation` so this cannot creep back — the same sweep found
+ *    the Automations mode dial had been silently refusing 14 notches the whole time.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -304,6 +319,11 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   const [pending, setPending] = useState<Set<string>>(new Set())
   /** The last refusal, in the server's own words. Cleared when the next write is attempted. */
   const [notice, setNotice] = useState<string | null>(null)
+  /**
+   * An explanation the operator has to scroll to find is the defect this file just fixed, one step
+   * removed: the toggle they clicked can be row 40, and the banner renders above the grid.
+   */
+  const noticeRef = useRef<HTMLDivElement | null>(null)
   const nounLower = noun.toLowerCase()
 
   useEffect(() => {
@@ -338,6 +358,8 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       .catch(() => { /* the 409 carries the same sentence; see `setAutomation` */ })
     return () => { alive = false }
   }, [tabKey])
+
+  useEffect(() => { noticeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [notice])
 
   /**
    * Set a rule's Automation mode. ONE entry point, TWO write paths — which one is used is decided
@@ -467,27 +489,40 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       render: (r) => {
         const builder = isBuilderRule(raw.get(r.id))
         const cap = ceilings.get(r.id)
-        // A rule whose actions CREATE or DESTROY something is held below AUTO by policy, and the
-        // server refuses it with a 409. Say so on the control instead of letting the click fail —
-        // a disabled notch that keeps its reason is the pattern the mode dial already uses.
         const capped = !builder && !!cap && cap.ceiling !== 'AUTO'
+        // HELD, not disabled. A capped rule can still be turned OFF — the ceiling refuses reaching
+        // AUTO, not leaving it — so only the ON direction is held.
+        const held = capped && !r.automation
         const busy = pending.has(r.id)
+        const why = held
+          ? `${cap!.reason} Its ceiling is ${LEVEL_WORD[cap!.ceiling] ?? cap!.ceiling}, so Automation cannot be turned on here. That is policy about what this rule DOES, not a setting — it is raised in the engine's graduation rules, not on this page.`
+          : builder
+            ? 'On = Automate (the rule applies its own actions). Off = Manual (it proposes them for approval).'
+            : `On = Auto (it acts on its own, inside its daily cap and the write gate). Off = Propose (it queues suggestions; nothing reaches Amazon until you accept them). Currently ${LEVEL_WORD[r.level] ?? (r.level || 'unset')}.${r.enabled ? '' : ' This rule is disabled — turning Automation on will also enable it.'}`
         return (
           <button
             type="button"
-            className={`h10-bktoggle ${r.automation ? 'on' : ''}`}
+            className={`h10-bktoggle${r.automation ? ' on' : ''}${held ? ' held' : ''}${busy ? ' busy' : ''}`}
             role="switch"
             aria-checked={r.automation}
+            /**
+             * 🔴 `aria-disabled`, NEVER the `disabled` attribute — see ⑤ at the top of this file.
+             * Chrome fires NO pointer events on a disabled control, so the `title` explaining the
+             * refusal could never be read and the click did nothing: measured on prod, a real hover
+             * and a real click over this toggle produced 0 mouseover, 0 mousemove and 0 click
+             * events. The operator's report was "the toggle button is still not working", and from
+             * where they sat that is exactly what it was.
+             */
+            aria-disabled={held || busy}
             aria-label={`Automation for ${r.name}`}
-            // Capped rules can still be turned OFF — the refusal is about reaching AUTO, not about
-            // leaving it — but no rule above its ceiling should be at AUTO in the first place.
-            disabled={busy || (capped && !r.automation)}
-            title={builder
-              ? 'On = Automate (the rule applies its own actions). Off = Manual (it proposes them for approval).'
-              : capped
-                ? `${cap!.reason} Its ceiling is ${LEVEL_WORD[cap!.ceiling] ?? cap!.ceiling} — Automation cannot be turned on for this rule.`
-                : `On = Auto (it acts on its own, inside its daily cap and the write gate). Off = Propose (it queues suggestions; nothing reaches Amazon until you accept them). Currently ${LEVEL_WORD[r.level] ?? (r.level || 'unset')}.${r.enabled ? '' : ' This rule is disabled — turning Automation on will also enable it.'}`}
-            onClick={() => { if (!busy && !(capped && !r.automation)) void setAutomation(r.id, !r.automation) }}
+            title={why}
+            onClick={() => {
+              if (busy) return
+              // A held toggle ANSWERS instead of writing: no doomed request, and the reason lands
+              // where the operator is looking rather than in a tooltip they have to discover.
+              if (held) { setNotice(`“${r.name}” — ${why}`); return }
+              void setAutomation(r.id, !r.automation)
+            }}
           ><span /></button>
         )
       },
@@ -555,7 +590,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
           Automations page's banner — it is replaced by the next write and never dismissed by
           hand, so there is no state that can outlive what it describes. */}
       {notice && (
-        <div className="h10-au-banner warn" role="alert">
+        <div className="h10-au-banner warn" role="alert" ref={noticeRef}>
           <AlertTriangle size={15} aria-hidden />
           <span>{notice}</span>
         </div>

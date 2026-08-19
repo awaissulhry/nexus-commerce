@@ -74,6 +74,18 @@ node scripts/ds-conformance-guard.mjs --check || {
 # regen (the rail vars lived that way for five weeks). Fail the push when
 # the two drift. Added in the SAME commit that ported the rail vars into
 # css-vars.ts — this check is only safe once the generator owns them.
+# U13 — a control that refuses must be able to say why. A `title` on a
+# `disabled` element is UNREACHABLE (Chrome fires no pointer events on a
+# disabled form control), so the reason is written where nobody can read it.
+# Measured on prod 2026-08-19: 28 rule toggles + mode notches refusing in
+# total silence. Ratchet over rules-automation; the remedy is `aria-disabled`
+# + a held class + a handler that answers the click.
+echo "→ Checking silent-disabled ratchet (U13)..."
+node scripts/check-silent-disabled.mjs || {
+  echo "❌ silent-disabled check FAILED - see message above"
+  exit 1
+}
+
 echo "→ Checking tokens.css is in sync with css-vars.ts..."
 npm run tokens:check --silent || {
   echo "❌ tokens.css drift — edit tokens/css-vars.ts and run 'npm run tokens:gen'; never hand-edit tokens.css"
