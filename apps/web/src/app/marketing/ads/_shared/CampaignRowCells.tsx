@@ -94,7 +94,7 @@ export function CampaignNameCell({
   dailyBudgetCents?: number | null
   type?: string | null
   adProduct?: string | null
-  /** anything the consuming page needs after the market chip (a badge, a count) */
+  /** anything the consuming page needs AFTER the Open pill (the Ad Manager's Assign link) */
   extra?: ReactNode
 }) {
   const letter = targetingLetter(name)
@@ -116,10 +116,11 @@ export function CampaignNameCell({
       </HoverCard>
       <span className="t" title={name}>{name}</span>
       {marketplace && <span className="mk">{marketplace}</span>}
-      {extra}
       <a className="h10-open" href={`/marketing/ads/campaigns/${id}`} target="_blank" rel="noreferrer"
         title={`Open ${name} in the Ad Manager — performance, structure and its ~45 columns`}
         onClick={(e) => e.stopPropagation()}><ExternalLink size={11} aria-hidden /> Open</a>
+      {/* AFTER Open, never before: Open is the primary action and H10 puts it first. */}
+      {extra}
     </div>
   )
 }
