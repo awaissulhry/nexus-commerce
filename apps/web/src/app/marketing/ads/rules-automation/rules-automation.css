@@ -5217,3 +5217,9 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-au-reach.all em { color: #a06a12; }
 .h10-au-reach.dead { color: #9c2f10; font-weight: 700; }
 .h10-au-reach.dead em { color: #9c2f10; }
+
+/* EA7 — the Order cell. The default (100) is deliberately quiet: it is true and says nothing
+   until someone orders a colliding pair, and a loud number that carries no information trains
+   the operator to ignore the column. */
+.h10-au-prio { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12.5px; font-weight: 700; color: #16202b; font-variant-numeric: tabular-nums; }
+.h10-au-prio.default { font-weight: 500; color: #9aa3ae; }

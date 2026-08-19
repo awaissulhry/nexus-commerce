@@ -416,6 +416,17 @@ export interface EvaluateRuleArgs {
    *  which the cron sets for the whole account under autonomy=SUGGEST. */
   isTestRun?: boolean
   /**
+   * EA7 — the tick's CLAIM SET, shared by every rule in one `evaluateAllRulesForTrigger` call.
+   *
+   * Keyed `<entityId>:<field>`; the value is the rule that took it. A rule whose actions write a
+   * field already claimed by an earlier (higher-priority) rule yields instead of writing — one
+   * budget move per campaign per tick, decided by declared order rather than by row order.
+   *
+   * Absent ⇒ no arbitration, which is what every single-rule caller (the test endpoint, the
+   * per-rule replay) wants: they are not racing anyone.
+   */
+  claims?: Map<string, string>
+  /**
    * RA.AUTO — evaluate a DISABLED rule anyway, without enabling it.
    *
    * `enabled` is the gate on whether a rule runs by itself, and it must stay that. But the
@@ -436,7 +447,12 @@ export interface EvaluateRuleArgs {
 export interface EvaluateRuleResult {
   ruleId: string
   matched: boolean
-  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'DRY_RUN' | 'NO_MATCH' | 'CAP_EXCEEDED'
+  /**
+   * EA7 added `YIELDED`: the rule matched, and a higher-priority rule in the same tick had already
+   * claimed the field it writes. Deliberately its OWN status — it is not NO_MATCH (the rule did
+   * apply) and not CAP_EXCEEDED (nothing was refused; another rule simply went first).
+   */
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'DRY_RUN' | 'NO_MATCH' | 'CAP_EXCEEDED' | 'YIELDED'
   actionResults: ActionResult[]
   durationMs: number
   executionId?: string
@@ -569,6 +585,62 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       status: 'NO_MATCH',
       actionResults: [],
       durationMs: Date.now() - startedAt,
+    }
+  }
+
+  /**
+   * EA7 — PRIORITY ARBITRATION. Does an earlier rule in this tick already own what we write?
+   *
+   * 🔴 The problem this fixes: two rules matching the same campaign both wrote it, and the one
+   * that "won" was whichever the database returned last. Measured on this account, every campaign
+   * has 12+ actors on its bids and 4+ on its budget; the conflict detector could see all of it and
+   * nothing could arbitrate. `Trim budget on weak ACOS` and `Boost budget on profitable campaigns`
+   * are the live pair — different triggers, opposite directions, same field.
+   *
+   * A yield is recorded, never silent. `YIELDED` is a third outcome beside NO_MATCH (the rule did
+   * not apply) and a gate refusal (the rule applied and was stopped) — collapsing it into either
+   * would misreport why nothing happened, which is the whole class of defect this page exists to
+   * remove.
+   *
+   * Entity grain is the CAMPAIGN, because that is the grain every ads action ultimately lands on
+   * and the grain the conflict detector already reasons at.
+   */
+  if (args.claims && rule.domain === 'advertising') {
+    const { ACTION_WRITES_FIELD } = await import('./advertising/ads-conflicts.service.js')
+    /**
+     * The campaign this context is about, read directly rather than through `contextIdentity` —
+     * that function needs per-tick lookup maps its callers build, which this scope does not have.
+     *
+     * ⚠ A search-term context carries only `searchTerm.externalCampaignId`, and translating that
+     * to a local id needs the same map. Those contexts therefore do NOT arbitrate yet, and that is
+     * stated rather than hidden: the collisions this exists for — two rules on one campaign's
+     * budget or bids — are campaign-grain, which is the case covered here.
+     */
+    const c = args.context as { campaign?: { id?: string | null } }
+    const entity = c?.campaign?.id ?? null
+    if (entity) {
+      const acts = (Array.isArray(rule.actions) ? rule.actions : []) as Array<{ type?: unknown }>
+      const fields = [...new Set(acts
+        .map((a) => ACTION_WRITES_FIELD[String(a?.type ?? '')]?.field)
+        .filter((f): f is NonNullable<typeof f> => !!f))]
+      const taken = fields.find((f) => args.claims!.has(`${entity}:${f}`))
+      if (taken) {
+        const winner = args.claims.get(`${entity}:${taken}`)
+        await prisma.automationRule.update({
+          where: { id: rule.id },
+          data: { lastMatchedAt: new Date(), matchCount: { increment: 1 } },
+        })
+        return {
+          ruleId: rule.id,
+          matched: true,
+          status: 'YIELDED',
+          actionResults: [],
+          durationMs: Date.now() - startedAt,
+          errorMessage: `Yielded ${taken} on this campaign to a higher-priority rule (${winner})`,
+        }
+      }
+      // We take the fields we write, so later rules in this tick yield to us.
+      for (const f of fields) args.claims.set(`${entity}:${f}`, rule.id)
     }
   }
 
@@ -906,13 +978,24 @@ export async function evaluateAllRulesForTrigger(args: {
    */
   ruleIds?: string[]
 }): Promise<EvaluateRuleResult[]> {
+  /**
+   * EA7 — ORDER. Lower `priority` runs first; `createdAt` breaks ties.
+   *
+   * 🔴 There was no `orderBy` here at all, so collision outcomes were decided by whatever order
+   * Postgres happened to return. The tie-break is `createdAt` precisely so the day priority ships
+   * nothing reorders: every rule shares the default of 100 and therefore keeps running in creation
+   * order, which is the order it already ran in.
+   */
   const rules = await prisma.automationRule.findMany({
     where: {
       domain: args.domain, trigger: args.trigger, enabled: true,
       ...(args.ruleIds ? { id: { in: args.ruleIds } } : {}),
     },
     select: { id: true },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
   })
+  // One claim set per tick, shared by every rule in it — see `EvaluateRuleArgs.claims`.
+  const claims = new Map<string, string>()
   const results: EvaluateRuleResult[] = []
   for (const r of rules) {
     results.push(
@@ -920,6 +1003,7 @@ export async function evaluateAllRulesForTrigger(args: {
         ruleId: r.id,
         context: args.context,
         forceDryRun: args.forceDryRun,
+        claims,
       }),
     )
   }

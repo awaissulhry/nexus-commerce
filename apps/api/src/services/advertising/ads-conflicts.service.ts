@@ -30,8 +30,15 @@ const DAY = 86_400_000
 export type ConflictField = 'bid' | 'budget' | 'placement' | 'negative' | 'keyword' | 'state'
 type Dir = 'up' | 'down' | 'either' | 'create' | 'destroy'
 
-/** The field each action writes, and which way it pushes. `null` field = notify-only. */
-const FIELD: Record<string, { field: ConflictField | null; dir: Dir }> = {
+/**
+ * The field each action writes, and which way it pushes. `null` field = notify-only.
+ *
+ * EA7 — **exported.** Priority arbitration decides "these two rules both write this campaign's
+ * budget, so the lower-priority one yields", which is the same question this map answers for
+ * conflict DETECTION. Two copies would drift the first time an action type is added, and then the
+ * page would report a collision the engine did not arbitrate — or worse, the reverse.
+ */
+export const ACTION_WRITES_FIELD: Record<string, { field: ConflictField | null; dir: Dir }> = {
   bid_to_target_acos: { field: 'bid', dir: 'either' },
   bid_up: { field: 'bid', dir: 'up' },
   bid_down: { field: 'bid', dir: 'down' },
@@ -118,6 +125,9 @@ export interface ConflictPair {
 }
 
 /** Pure — pinned by tests: the (campaign × field) contest report and the pair classes. */
+/** Internal alias — the map was `FIELD` throughout this file before EA7 exported it. */
+const FIELD = ACTION_WRITES_FIELD
+
 export function classifyConflicts(actors: ConflictActor[]) {
   const FIELDS: ConflictField[] = ['bid', 'budget', 'placement', 'negative', 'keyword', 'state']
   const byField = FIELDS.map((field) => {

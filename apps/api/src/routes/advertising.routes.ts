@@ -6103,6 +6103,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       maxDailyAdSpendCentsEur?: number | null
       maxWritesPerDay?: number | null
       scopeMarketplace?: string | null
+      priority?: number
     }
     // P2.1 — same save-time refusal as the create route. Validate the MERGED rule: a PATCH that
     // touches neither actions nor conditions cannot introduce an untranslatable metric, but one
@@ -6144,6 +6145,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       data.conditions = stored.conditions
     }
     if (body.actions !== undefined) data.actions = body.actions
+    /**
+     * EA7 — run order. Clamped to 1..999 so a value cannot be set outside the band the UI shows,
+     * and rejected rather than coerced if it is not a number: silently turning a typo into 0 would
+     * promote a rule to first place without saying so.
+     */
+    if (body.priority !== undefined) {
+      if (!Number.isFinite(body.priority) || body.priority < 1 || body.priority > 999) {
+        reply.code(400)
+        return { error: 'priority must be a number between 1 and 999 (lower runs first)' }
+      }
+      data.priority = Math.round(body.priority)
+    }
     if (body.maxExecutionsPerDay !== undefined) data.maxExecutionsPerDay = body.maxExecutionsPerDay
     if (body.maxValueCentsEur !== undefined) data.maxValueCentsEur = body.maxValueCentsEur
     if (body.maxDailyAdSpendCentsEur !== undefined) data.maxDailyAdSpendCentsEur = body.maxDailyAdSpendCentsEur
@@ -6695,6 +6708,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         where: { domain: 'advertising' },
         select: {
           id: true, name: true, trigger: true, enabled: true, dryRun: true, autonomyLevel: true,
+          // EA7 — execution order. Lower runs first; ties fall back to createdAt.
+          priority: true,
           actions: true, maxExecutionsPerDay: true, maxValueCentsEur: true, maxWritesPerDay: true,
           maxDailyAdSpendCentsEur: true, scopeMarketplace: true,
           scopePortfolioId: true, scopeCampaignId: true,
@@ -6869,6 +6884,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
          * account, which is what 43 of these rules are whether or not anyone realised.
          */
         reach: reach.get(r.id) ?? null,
+        /** EA7 — where this rule sits in the run order. Lower goes first; 100 is the default. */
+        priority: r.priority,
         trigger: r.trigger,
         marketplace: r.scopeMarketplace,
         level: resolveAutonomy(r),

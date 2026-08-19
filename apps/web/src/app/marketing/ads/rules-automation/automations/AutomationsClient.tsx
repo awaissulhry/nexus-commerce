@@ -441,6 +441,33 @@ export function AutomationsClient() {
     },
     {
       /**
+       * EA7 — ORDER. Where this rule sits in the run order, and who it would yield to.
+       *
+       * 🔴 The column only earns its place because collisions are real: measured on this account
+       * every campaign has 12+ actors on its bids and 4+ on its budget, and until EA7 the winner
+       * of any of those was decided by the order Postgres returned rows in. Lower runs first.
+       *
+       * A rule sharing the default 100 with everything else is shown muted — the number is true
+       * but says nothing yet. It only becomes information once someone orders a colliding pair.
+       */
+      key: 'priority', label: 'Order', metric: false, sortable: true,
+      tip: 'Which rule wins when two of them write the same field on the same campaign in one tick. Lower runs first; 100 is the default. The rule that loses records "yielded" — it matched, and went second.',
+      sortValue: (a) => (a.k === 'rule' ? (a.r.priority ?? 100) : 1000),
+      render: (a) => {
+        if (a.k !== 'rule') return <span className="h10-au-obsdash" title="Engines run on their own cron, not in the rule tick">—</span>
+        const p = a.r.priority ?? 100
+        return (
+          <span className={`h10-au-prio ${p === 100 ? 'default' : ''}`}
+            title={p === 100
+              ? 'The default. Every rule shares it, so ties fall back to creation order — the order they already ran in.'
+              : `Runs ${p < 100 ? 'BEFORE' : 'after'} the default rules. Lower goes first.`}>
+            {p}
+          </span>
+        )
+      },
+    },
+    {
+      /**
        * EA6 — REACH. How many campaigns this rule can currently touch.
        *
        * 🔴 The number that answers "is it safe to arm this?" before the switch is flipped, rather

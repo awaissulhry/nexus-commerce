@@ -40,6 +40,12 @@ export interface DetailRule {
    * account. Null when the server did not send it (an older build) — rendered as unknown, never 0.
    */
   reach?: { campaigns: number; enabledCampaigns: number; total: number } | null
+  /**
+   * EA7 — run order. Lower goes first; 100 is the default every rule shares. Matters only where
+   * two rules write the same field on the same campaign — then the lower number wins and the
+   * other records `yielded`.
+   */
+  priority?: number | null
   level: Level
   ceiling: Level
   ceilingReason: string

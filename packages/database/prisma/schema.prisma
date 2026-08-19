@@ -12911,6 +12911,23 @@ model AutomationRule {
   /// from dryRun so behaviour is identical on the day this ships.
   autonomyLevel String @default("PROPOSE")
 
+  /// EA7 (2026-08-20) — ORDER. Which rule wins when two of them write the same field on the same
+  /// entity in one tick.
+  ///
+  /// 🔴 Before this there was no ordering of ANY kind: `evaluateAllRulesForTrigger` selected rules
+  /// with no `orderBy` and ran them in whatever order Postgres returned, so the outcome of a
+  /// collision was decided by row order. The conflict detector could SEE the collisions — every
+  /// campaign has 12+ actors on its bids — and nothing could resolve one.
+  ///
+  /// Lower runs first. The default of 100 leaves room on both sides without renumbering anything,
+  /// and every existing rule shares it, so the day this ships nothing reorders: ties fall back to
+  /// `createdAt`, which is the order they already ran in.
+  ///
+  /// The convention this encodes, from every platform in the nine-platform study: cost control
+  /// before growth. A rule that yields is NOT silent — it records `yielded`, which is a different
+  /// fact from "did not match" and from "refused at the gate".
+  priority                Int     @default(100)
+
   maxExecutionsPerDay     Int?    @default(100)
   /// CAP (2026-08-14) — the SECOND cap, in the unit damage is actually measured in.
   ///
