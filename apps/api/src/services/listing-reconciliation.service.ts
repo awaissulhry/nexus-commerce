@@ -26,6 +26,7 @@ import {
 import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
+import { primaryConnectionIds } from './connection-resolver.service.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
 export type ReconStatus = 'PENDING' | 'CONFIRMED' | 'CONFLICT' | 'CREATE_NEW' | 'IGNORE'
@@ -489,6 +490,10 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
     ? row.parentAsin!          // parent ASIN → ChannelListing
     : row.externalListingId    // standalone ASIN → ChannelListing
 
+  // MAP.2b — resolved BEFORE the transaction opens. A resolve inside would add a
+  // query to the transaction's lifetime for an answer that does not depend on it.
+  const reconConn = (await primaryConnectionIds([row.channel])).get(row.channel) ?? null
+
   await prisma.$transaction(async (tx) => {
     // ── 1. Upsert ChannelListing (parent-level) ──────────────────────────
     // Use the named unique index (productId, channel, marketplace) so that
@@ -500,6 +505,7 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
           productId: row.matchedProductId!,
           channel: row.channel,
           marketplace: row.marketplace,
+          channelConnectionId: reconConn,
         },
       },
       create: {
@@ -538,6 +544,7 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
             variantId: row.matchedVariationId!,
             channel: row.channel,
             marketplace: row.marketplace,
+            channelConnectionId: reconConn,
           },
         },
         create: {

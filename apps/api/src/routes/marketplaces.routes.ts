@@ -4,6 +4,7 @@ import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js'
+import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 
 const amazonService = new AmazonService()
 
@@ -257,10 +258,14 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         if (!Array.isArray(markets) || markets.length === 0) {
           return reply.code(400).send({ error: 'markets array is required' })
         }
+        // MAP.2b — resolved ONCE for the distinct channels in this batch, not per
+        // row: the answer cannot change during the loop, and per-row resolution
+        // would be one round-trip each.
+        const connByChannel = await primaryConnectionIds(markets.map((m) => m.channel))
         const results = await Promise.all(
           markets.map(({ channel, marketplace, offerActive }) =>
             prisma.channelListing.upsert({
-              where: { productId_channel_marketplace: { productId: id, channel, marketplace } },
+              where: { productId_channel_marketplace: { productId: id, channel, marketplace, channelConnectionId: connByChannel.get(channel) ?? null } },
               update: { offerActive },
               create: {
                 productId: id,
@@ -352,13 +357,15 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             pairs.push({ productId, channel, marketplace })
           }
         }
+        // MAP.2b — resolved once for the whole bulk operation.
+        const bulkConnByChannel = await primaryConnectionIds(pairs.map((p) => p.channel))
         const CHUNK = 50
         for (let i = 0; i < pairs.length; i += CHUNK) {
           const chunk = pairs.slice(i, i + CHUNK)
           await Promise.all(
             chunk.map(({ productId, channel, marketplace }) =>
               prisma.channelListing.upsert({
-                where: { productId_channel_marketplace: { productId, channel, marketplace } },
+                where: { productId_channel_marketplace: { productId, channel, marketplace, channelConnectionId: bulkConnByChannel.get(channel) ?? null } },
                 update: { offerActive },
                 create: {
                   productId,

@@ -259,6 +259,40 @@ export async function tryResolveConnection(
   }
 }
 
+/**
+ * The primary connection id for each of several channels, resolved in ONE query.
+ *
+ * For loops that upsert many rows across a small set of channels — a bulk market
+ * toggle over 50 products, say. Resolving inside the loop would be N round-trips
+ * for an answer that cannot change during it.
+ *
+ * A channel with no active connection maps to `null`, which is a legitimate value:
+ * the unique indexes are declared NULLS NOT DISTINCT, so unattributed rows still
+ * collide with each other exactly as they did before the account column existed.
+ */
+export async function primaryConnectionIds(
+  channels: string[],
+): Promise<Map<string, string | null>> {
+  const wanted = [...new Set(channels)];
+  const rows = await prisma.channelConnection.findMany({
+    where: { channelType: { in: wanted }, isActive: true },
+    orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true, channelType: true, isActive: true, isPrimary: true },
+  });
+  const out = new Map<string, string | null>();
+  for (const channel of wanted) {
+    try {
+      out.set(channel, chooseConnection(rows, { channel, wantPrimary: true }).id);
+    } catch {
+      // No active account for this channel — null, not a throw. These callers are
+      // writing a row, not calling the marketplace, and a DRAFT listing for a
+      // channel nobody has connected yet is a legitimate thing to store.
+      out.set(channel, null);
+    }
+  }
+  return out;
+}
+
 /** Convenience for the many callers that only need the id to pass downstream. */
 export async function resolveConnectionId(scope: ConnectionScope): Promise<string> {
   return (await resolveConnection(scope)).id;

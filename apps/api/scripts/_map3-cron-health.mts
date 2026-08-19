@@ -2,7 +2,7 @@
  *  did they WRITE? Per reference_cron_success_carries_sweeper_error, judge by the
  *  summary/error, never by `status` alone. */
 const { default: prisma } = await import('../src/db.js')
-const DEPLOY = new Date('2026-08-19T15:48:24Z')
+const DEPLOY = new Date('2026-08-19T17:07:31Z')
 const JOBS = ['ebay-feed-poll','ebay-item-status-reconcile','ebay-orders-sync','ebay-status-reconcile','ebay-token-refresh','latency-watchdog']
 const rows = await prisma.cronRun.findMany({
   where: { jobName: { in: JOBS }, startedAt: { gte: DEPLOY } },

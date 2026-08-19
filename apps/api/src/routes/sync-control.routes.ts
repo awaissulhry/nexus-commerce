@@ -30,6 +30,7 @@ import { projectActionAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } fro
 import { closeMarketOffers, reopenMarketOffers } from '../services/amazon-market-offer.service.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
+import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 
 /** SCD.8 — ONE parser for every multi-select filter value. The UI sends
  *  comma-separated selections; each endpoint must apply OR-within-a-dimension.
@@ -1101,8 +1102,11 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
     const channel = body.channel!.trim().toUpperCase()
     const marketplace = body.marketplace!.trim().toUpperCase()
+    // MAP.2b — a sync policy is now per account, so pausing one eBay store does
+    // not pause them all. The primary reproduces today's single-account rows.
+    const policyConn = (await primaryConnectionIds([channel])).get(channel) ?? null
     const existing = await prisma.syncChannelPolicy.findUnique({
-      where: { channel_marketplace: { channel, marketplace } },
+      where: { channel_marketplace: { channel, marketplace, channelConnectionId: policyConn } },
     })
 
     const nextPaused = body.pushesPaused ?? existing?.pushesPaused ?? false
@@ -1123,7 +1127,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       }
     } else {
       const saved = await prisma.syncChannelPolicy.upsert({
-        where: { channel_marketplace: { channel, marketplace } },
+        where: { channel_marketplace: { channel, marketplace, channelConnectionId: policyConn } },
         create: {
           channel, marketplace, pushesPaused: nextPaused, newListingDefaultMode: nextMode,
           newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null,

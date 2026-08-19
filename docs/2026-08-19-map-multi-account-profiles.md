@@ -1,8 +1,8 @@
 # MAP — Multi-Account & Profiles
 
-**Status:** MAP.0, MAP.1, MAP.2a, MAP.3a, MAP.3b **SHIPPED and prod-verified 2026-08-19**.
+**Status:** MAP.0, MAP.1, MAP.2a, MAP.2b, MAP.3a, MAP.3b **SHIPPED and prod-verified 2026-08-19**.
 **Burn-down:** 60 → **12** ambient resolution sites. All 12 remaining are in the untouchable
-`ebay-flat-file.routes.ts`, behind the MAP.6 gate. MAP.2b still folds into the flat-file work.
+`ebay-flat-file.routes.ts`, behind the MAP.6 gate. MAP.2b shipped; MAP.2b-ii (dropping the old keys) is the last step before MAP.4.
 **Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
 **Date:** 2026-08-19
 **Supersedes / absorbs:** [`2026-07-30-ebay-multi-account-ema.md`](2026-07-30-ebay-multi-account-ema.md)
@@ -354,7 +354,7 @@ rather than inferred.
 Each phase is independently shippable and live-by-default (`feedback_ship_live_not_dark`).
 Phases marked **🔒** cannot start without an explicit operator decision — they are listed in §6.
 
-> **MAP.0, MAP.1, MAP.2a, MAP.3a and MAP.3b are SHIPPED and prod-verified, 2026-08-19.**
+> **MAP.0, MAP.1, MAP.2a, MAP.2b, MAP.3a and MAP.3b are SHIPPED and prod-verified, 2026-08-19.**
 > What the build found that this plan did not predict is recorded in §2.4 (the chrome) and §7 (the
 > defect, the DS gap, and two things MAP.4 inherits).
 
@@ -402,24 +402,41 @@ proven against prod inside rolled-back transactions: the real run attributes **9
 refused with *"MAP.2 backfill incomplete: 977 attributable row(s) … Old unique keys NOT dropped"*
 and left the original index in place. A gate that has never refused is an unproven gate.
 
-### MAP.2b — The unique-key widening 🔒 *(deferred, and why)*
-The plan put the `ChannelListing` / `VariantChannelListing` / `SyncChannelPolicy` key changes in
-MAP.2. **Measuring stopped that.** Prisma compiles a compound-unique `upsert` to
-`INSERT … ON CONFLICT (<those exact columns>)` — verified on prod inside a rolled-back transaction —
-and `ON CONFLICT` needs an index matching the named columns *exactly*. The replacement is an
-expression index (`COALESCE`), which cannot match. So dropping those keys would not fail at compile
-time; it would fail at **runtime with 42P10** across all 24 call sites that use them (17 ×
-`productId_channel_marketplace`, 2 × `productId_channelMarket`, 1 ×
-`variantId_channel_marketplace`, 4 × `channel_marketplace`).
+### MAP.2b — The unique keys gain the account ✅ SHIPPED
+`20260819b_map2b_account_unique_keys` (+ rollback), applied to prod 2026-08-19.
 
-They therefore widen **in the same commit as MAP.3's caller conversion**, so the Prisma schema and
-the database never disagree about what is unique. Nothing is lost by waiting: a second account cannot
-exist until MAP.4, and the attribution columns those keys need are already in place and backfilled,
-so MAP.2b is a pure index swap with no data movement.
+The blocker was real and measured: Prisma compiles a compound-unique `upsert` to
+`INSERT … ON CONFLICT (<those exact columns>)`, and `ON CONFLICT` needs an index matching the named
+columns exactly. The first design used expression indexes (`COALESCE`), which cannot match — the
+dry-run confirmed it, returning **42P10** for the old three-column spec once its index was gone.
 
-⚠ Note for MAP.2b: every replacement must wrap the connection id in `COALESCE`. In Postgres NULL is
-never equal to NULL, so a plain four-column unique index would let unlimited duplicates through the
-moment `channelConnectionId` is NULL — the opposite of a constraint.
+**What unblocked it: `NULLS NOT DISTINCT`.** Prod runs PostgreSQL 17.10 (measured), and since 15 a
+unique index can declare that NULL collides with NULL. That buys all three properties at once:
+
+- the column list stays plain, so `ON CONFLICT (a,b,c,d)` matches and every existing upsert works;
+- Prisma can express it as a normal `@@unique`, so the client types carry the compound key and **the
+  compiler forces every caller to name the account** — the 18 errors were the burn-down;
+- an unattributed row still collides exactly as before, so nothing loosens for data no writer has
+  reached.
+
+`channelConnectionId NOT NULL` was the alternative and was rejected: it would block an INSERT for
+any channel with no active connection — a Shopify listing created before Shopify is connected. There
+are none today, but a constraint that depends on that staying true is a trap, not a guarantee.
+
+**Additive only — the old keys are still there.** With the three-column index dropped, a rolling
+deploy would serve the OLD container for a few seconds against the NEW schema, and every
+three-column upsert in that window would throw 42P10. Both keys coexist for one release: the old
+container matches the old index, the new one matches the new index. **MAP.2b-ii drops the old keys**
+and must land before MAP.4 — until then the old index is still what stops a second account's listing
+from being written.
+
+**The verification that mattered.** A caller using the new four-column key must find the *same* row
+it found with the old one; if not, its upsert inserts a duplicate instead of updating. Checked on
+every row: **977/977 resolve to the identical row on both keys, zero mismatches, zero misses.**
+
+18 call sites across 8 files now name the account. Resolution is hoisted out of every loop and out of
+the one `$transaction` — `primaryConnectionIds` answers for several channels in one query, because
+the answer cannot change mid-request and per-row resolution would be a round-trip each.
 
 ### MAP.3a — The resolver, the ratchet, and the jobs ✅ SHIPPED
 

@@ -17,6 +17,7 @@
  */
 
 import type { PrismaClient } from '@nexus/database'
+import { primaryConnectionIds } from '../connection-resolver.service.js'
 
 export type SliceStatus = 'complete' | 'incomplete' | 'skipped' | 'unknown'
 
@@ -1435,12 +1436,17 @@ export class SubmissionService {
     // ASIN. The legacy `channelMarket` composite key is `<CHANNEL>_<REGION>`
     // by Phase 9 convention; `region` mirrors `marketplace` for region-scoped
     // channels. Schema defaults handle everything else.
+    // MAP.2b — resolved once for this publish; both the parent and every child
+    // upsert below use it, so a family lands wholly on one account.
+    const wizardConn = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
+
     await this.prisma.channelListing.upsert({
       where: {
         productId_channel_marketplace: {
           productId: args.productId,
           channel: 'AMAZON',
           marketplace,
+          channelConnectionId: wizardConn,
         },
       },
       create: {
@@ -1481,6 +1487,7 @@ export class SubmissionService {
               productId: v.id,
               channel: 'AMAZON',
               marketplace,
+              channelConnectionId: wizardConn,
             },
           },
           create: {

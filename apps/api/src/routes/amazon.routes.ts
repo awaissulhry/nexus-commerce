@@ -10,6 +10,7 @@ import {
   type ApprovedGroup,
 } from '../services/pim/auto-detect.service.js'
 import { computeAmazonAccountHealth } from '../services/amazon-account-health.service.js'
+import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 import {
   getBuyShippingRates,
   purchaseBuyShippingLabel,
@@ -1243,8 +1244,12 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // MAP.2b — the key carries the account now. AMAZON's primary reproduces
+      // exactly what the backfill wrote on all 725 existing Amazon rows, so this
+      // upsert still finds the same row it always did.
+      const amzConn = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
       await prisma.channelListing.upsert({
-        where: { productId_channelMarket: { productId, channelMarket } },
+        where: { productId_channelMarket: { productId, channelMarket, channelConnectionId: amzConn } },
         create: {
           productId,
           channel: 'AMAZON',
@@ -1427,9 +1432,11 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
               lastAmazonSync: new Date(),
             },
           })
+          // MAP.2b — see above.
+          const amzConn2 = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
           await prisma.channelListing.upsert({
             where: {
-              productId_channelMarket: { productId: product.id, channelMarket },
+              productId_channelMarket: { productId: product.id, channelMarket, channelConnectionId: amzConn2 },
             },
             create: {
               productId: product.id,

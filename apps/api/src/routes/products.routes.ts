@@ -30,6 +30,7 @@ import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.serv
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
+import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 import {
   shadowCompareProductRead,
   isShadowEnabled,
@@ -1866,6 +1867,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       rateLimit: { max: 300, timeWindow: '1 minute' },
     },
   }, async (request, reply) => {
+    // MAP.2b — the ChannelListing keys carry the account now. Resolved ONCE per
+    // request for every connected channel: the answer cannot change mid-request,
+    // and the primary reproduces exactly what MAP.2a backfilled onto all 977 rows.
+    const connFor = await primaryConnectionIds(['AMAZON', 'EBAY', 'SHOPIFY'])
     const { changes, marketplaceContext, marketplaceContexts } =
       request.body ?? {}
     // Effective context list: prefer the new array, fall back to the
@@ -2630,6 +2635,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 productId,
                 channel: ctx.channel,
                 marketplace: ctx.marketplace,
+                channelConnectionId: connFor.get(ctx.channel) ?? null,
               },
             },
             create: {
@@ -4092,6 +4098,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   }>(
     '/products/bulk-schema-update',
     async (request, reply) => {
+    // MAP.2b — the ChannelListing keys carry the account now. Resolved ONCE per
+    // request for every connected channel: the answer cannot change mid-request,
+    // and the primary reproduces exactly what MAP.2a backfilled onto all 977 rows.
+    const connFor = await primaryConnectionIds(['AMAZON', 'EBAY', 'SHOPIFY'])
       const { productIds, marketplaceContexts, attributes, variantAttributes } =
         request.body ?? {}
       if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -4255,6 +4265,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                   productId: tk.productId,
                   channel: tk.channel,
                   marketplace: tk.marketplace,
+                  channelConnectionId: connFor.get(tk.channel) ?? null,
                 },
               },
               create: {
@@ -4321,6 +4332,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       columnsOnly?: boolean
     }
   }>('/products/bulk-replicate', async (request, reply) => {
+    // MAP.2b — the ChannelListing keys carry the account now. Resolved ONCE per
+    // request for every connected channel: the answer cannot change mid-request,
+    // and the primary reproduces exactly what MAP.2a backfilled onto all 977 rows.
+    const connFor = await primaryConnectionIds(['AMAZON', 'EBAY', 'SHOPIFY'])
     const { productIds, sourceContext, targetContexts, columnsOnly } =
       request.body ?? {}
 
@@ -4423,6 +4438,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 productId,
                 channel: sourceContext.channel,
                 marketplace: sourceContext.marketplace,
+                channelConnectionId: connFor.get(sourceContext.channel) ?? null,
               },
             },
             select: { updatedAt: true },
@@ -4509,6 +4525,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                   productId,
                   channel: tc.channel,
                   marketplace: tc.marketplace,
+                  channelConnectionId: connFor.get(tc.channel) ?? null,
                 },
               },
               create: {

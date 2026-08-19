@@ -1407,7 +1407,9 @@ model VariantChannelListing {
   lastSyncError       String?
 
   @@unique([variantId, channelId])
-  @@unique([variantId, channel, marketplace])
+  // MAP.2b — see ChannelListing. ([variantId, channelId] is untouched: channelId
+  // is a legacy Channel FK on a different axis, not an account.)
+  @@unique([variantId, channel, marketplace, channelConnectionId], name: "variantId_channel_marketplace", map: "VariantChannelListing_variantId_channel_marketplace_conn_key")
   @@index([variantId])
   @@index([channelId])
   @@index([channelConnectionId])
@@ -1643,8 +1645,13 @@ model ChannelListing {
   channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
   channelConnectionId String?
 
-  @@unique([productId, channelMarket])
-  @@unique([productId, channel, marketplace], name: "productId_channel_marketplace")
+  // MAP.2b — the account is part of both keys. The client-side `name` is kept
+  // verbatim so every existing `where: { productId_channelMarket: … }` call site
+  // keeps its key name and only gains a field; `map` points at the real index,
+  // which is declared NULLS NOT DISTINCT in raw SQL (Prisma cannot express that,
+  // and without it a NULL connection would defeat the constraint entirely).
+  @@unique([productId, channelMarket, channelConnectionId], name: "productId_channelMarket", map: "ChannelListing_productId_channelMarket_conn_key")
+  @@unique([productId, channel, marketplace, channelConnectionId], name: "productId_channel_marketplace", map: "ChannelListing_productId_channel_marketplace_conn_key")
   @@index([channelConnectionId])
   @@index([productId])
   @@index([channel])
@@ -15297,7 +15304,9 @@ model SyncChannelPolicy {
   channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
   channelConnectionId String?
 
-  @@unique([channel, marketplace])
+  // MAP.2b — without the account dimension an account-level sync pause is
+  // impossible: pausing eBay would pause every eBay account at once.
+  @@unique([channel, marketplace, channelConnectionId], name: "channel_marketplace", map: "SyncChannelPolicy_channel_marketplace_conn_key")
   @@index([channelConnectionId])
 }
 

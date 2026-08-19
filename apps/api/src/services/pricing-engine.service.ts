@@ -25,6 +25,7 @@
 
 import type { PrismaClient } from '@prisma/client'
 import { getFxRate } from './fx-rate.service.js'
+import { primaryConnectionIds } from './connection-resolver.service.js'
 
 export type PriceSource =
   | 'SCHEDULED_SALE'
@@ -230,6 +231,10 @@ export async function resolvePrice(
   }
 
   // ── Resolve ChannelListing (per-marketplace overrides + fees) ───
+  // MAP.2b — a price read must name the account whose listing it means.
+  const pricingConn = productId
+    ? (await primaryConnectionIds([input.channel])).get(input.channel) ?? null
+    : null
   const channelListing = productId
     ? await prisma.channelListing.findUnique({
         where: {
@@ -237,6 +242,7 @@ export async function resolvePrice(
             productId,
             channel: input.channel,
             marketplace: input.marketplace,
+            channelConnectionId: pricingConn,
           },
         },
       })

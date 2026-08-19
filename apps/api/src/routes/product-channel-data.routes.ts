@@ -13,6 +13,7 @@ import prisma from '../db.js'
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
+import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -150,6 +151,9 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
 
     if (!updates?.length) return reply.code(400).send({ error: 'updates must be non-empty' })
 
+    // MAP.2b — one resolve for the whole batch; the answer cannot change during it.
+    const pcdConn = await primaryConnectionIds(updates.map((u) => (u.channel ?? 'AMAZON').toUpperCase()))
+
     const ops = updates.map(async (u) => {
       const mp = u.marketplace.toUpperCase()
       const ch = (u.channel ?? 'AMAZON').toUpperCase()
@@ -164,8 +168,9 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         if (u.salePrice !== undefined) clUpdate.salePrice = u.salePrice
         if (u.quantity !== undefined && u.quantity !== null) { clUpdate.quantity = u.quantity; clUpdate.followMasterQuantity = false }
 
+        // MAP.2b — resolved once for the channels in this batch (see the loop head).
         await prisma.channelListing.upsert({
-          where: { productId_channel_marketplace: { productId: u.variantId, channel: ch, marketplace: mp } },
+          where: { productId_channel_marketplace: { productId: u.variantId, channel: ch, marketplace: mp, channelConnectionId: pcdConn.get(ch) ?? null } },
           update: clUpdate,
           create: {
             productId: u.variantId,
@@ -385,6 +390,9 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       }
     }
 
+    // MAP.2b — one resolve for the whole batch.
+    const pcdConn2 = await primaryConnectionIds(updates.map((u) => (u.channel ?? 'AMAZON').toUpperCase()))
+
     const ops = updates.map(async (u) => {
       const mp = u.marketplace.toUpperCase()
       const ch = (u.channel ?? 'AMAZON').toUpperCase()
@@ -393,7 +401,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       // Keep the ingested fulfillmentChannel mirror in step with the operator's
       // choice so read surfaces reading platformAttributes don't show stale data.
       const existing = await prisma.channelListing.findUnique({
-        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp } },
+        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null } },
         select: { platformAttributes: true },
       })
       const pa = { ...((existing?.platformAttributes as Record<string, unknown> | null) ?? {}) }
@@ -402,7 +410,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const paJson = pa as unknown as Parameters<typeof prisma.channelListing.upsert>[0]['create']['platformAttributes']
 
       await prisma.channelListing.upsert({
-        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp } },
+        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null } },
         update: { fulfillmentMethod: u.fulfillmentMethod, platformAttributes: paJson, lastSyncedAt: new Date(), syncStatus: 'PENDING' },
         create: {
           productId,
