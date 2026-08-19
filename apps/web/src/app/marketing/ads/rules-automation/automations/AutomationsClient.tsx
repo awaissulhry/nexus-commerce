@@ -441,6 +441,40 @@ export function AutomationsClient() {
     },
     {
       /**
+       * EA6 — REACH. How many campaigns this rule can currently touch.
+       *
+       * 🔴 The number that answers "is it safe to arm this?" before the switch is flipped, rather
+       * than after. Measured on prod 2026-08-19: 43 of 51 rules are unscoped and read the full
+       * 220; the 8 that carry scope are market-scoped only, so rules NAMED for one product line
+       * ("Hold top rank ≥ 45% — XAVIA GALE…") reach 150 campaigns. That gap between what a rule is
+       * called and what it can touch is invisible without this column.
+       *
+       * Computed with the evaluator's own `ruleMatchesScope`, so it cannot disagree with what runs.
+       * Engines and observed actors carry their own bounds and show a dash rather than a guess.
+       */
+      key: 'reach', label: 'Reaches', metric: false, sortable: true,
+      tip: 'How many campaigns this rule\'s scope currently admits, resolved the same way the engine resolves it on every tick. 0 means the rule is armed and can act on nothing. The whole-account figure is the total campaign count.',
+      sortValue: (a) => (a.k === 'rule' ? (a.r.reach?.campaigns ?? -1) : -1),
+      render: (a) => {
+        if (a.k !== 'rule') return <span className="h10-au-obsdash" title="Engines and observed actors carry their own bounds, in their own services">—</span>
+        const re = a.r.reach
+        if (!re) return <span className="h10-au-obsdash" title="This build of the server did not report reach">unknown</span>
+        if (re.campaigns === 0) {
+          return <span className="h10-au-reach dead" title="This rule's scope resolves to no campaign at all. It is armed and cannot act — which looks identical to a quiet week until you read this number.">0 <em>dead</em></span>
+        }
+        const all = re.campaigns === re.total
+        return (
+          <span className={`h10-au-reach ${all ? 'all' : ''}`}
+            title={all
+              ? `Every campaign in the account (${re.total}). This rule carries no scope that narrows it — ${re.enabledCampaigns} of them are enabled right now.`
+              : `${re.campaigns} of ${re.total} campaigns match this rule's scope · ${re.enabledCampaigns} enabled right now.`}>
+            <b>{num(re.campaigns)}</b>{all && <em>all</em>}
+          </span>
+        )
+      },
+    },
+    {
+      /**
        * AUTO.A2 — the Ceiling cell: the caps in force, never a bare number. Renderable at last —
        * the row cap has been enforced since 2026-08-14 (the null-safe counter) and the write cap
        * demotes past its bound. `capped` is the week's refusals; a cap with zero refusals may be

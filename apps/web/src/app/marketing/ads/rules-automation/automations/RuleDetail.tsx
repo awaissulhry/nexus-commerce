@@ -34,6 +34,12 @@ export interface DetailRule {
   description?: string | null
   trigger: string
   conditions?: unknown
+  /**
+   * EA6 — how many campaigns this rule's scope currently admits, computed server-side with the
+   * evaluator's own matcher. `campaigns === 0` is a DEAD rule; `campaigns === total` is the whole
+   * account. Null when the server did not send it (an older build) — rendered as unknown, never 0.
+   */
+  reach?: { campaigns: number; enabledCampaigns: number; total: number } | null
   level: Level
   ceiling: Level
   ceilingReason: string

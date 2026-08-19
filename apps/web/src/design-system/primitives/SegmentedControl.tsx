@@ -4,8 +4,19 @@
  * SegmentedControl — a compact single-select toggle on a sunken track, the active
  * segment raised. The space-efficient alternative to a radio group or a row of tabs for
  * 2–4 mutually-exclusive view modes (e.g. List / Board, Live / Official). Accessible
- * `role="radiogroup"` with ArrowLeft/Right roving selection. Requires `styles/primitives.css`.
+ * `role="radiogroup"` with ArrowLeft/Right roving selection.
+ *
+ * 🔴 **It imports its own stylesheet.** The docblock used to say "requires
+ * `styles/primitives.css`" and leave that to the caller — an instruction four routes silently
+ * failed to follow. Measured on prod 2026-08-19: on `/marketing/ads/rules-automation/automations`
+ * **0 of the 8,800 loaded CSS rules defined `.h10-ds-seg`**, so the control rendered as
+ * run-together plain text ("ActorsLedgerQueueLimits") with no padding and no track. An unstyled
+ * component looks like a layout bug, not a missing import, which is why it survived.
+ *
+ * A component that cannot render correctly on its own is not a shared component. Next dedupes the
+ * import, so this costs nothing and cannot regress.
  */
+import '../styles/primitives.css'
 import { useRef, type ReactNode, type KeyboardEvent } from 'react'
 import type { Size } from './size'
 

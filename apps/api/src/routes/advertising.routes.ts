@@ -6830,6 +6830,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      */
     const NON_WRITING = new Set(['notify', 'alert_operator', 'log_only'])
 
+    /**
+     * EA6 — reach: how many campaigns each rule's scope currently admits.
+     *
+     * Computed with the evaluator's own `ruleMatchesScope`, never a parallel query, so the number
+     * on the row cannot disagree with what the engine does on the next tick. One campaign load for
+     * the whole list. Measured 2026-08-19: 43 of 51 rules are unscoped and therefore read 220.
+     */
+    const { reachForRules } = await import('../services/advertising/ads-rule-reach.service.js')
+    const reach = await reachForRules(rules)
+
     const items = rules.map((r) => {
       const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
         .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
@@ -6853,6 +6863,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         actions: r.actions,
         /** Whether ANY of this rule's actions reaches Amazon. AUTO on a notify-only rule writes nothing. */
         writes: actionTypes.some((t) => !NON_WRITING.has(t)),
+        /**
+         * EA6 — blast radius. `{ campaigns, enabledCampaigns, total }`. A `campaigns` of 0 is a
+         * DEAD rule: armed, and its scope resolves to nothing. `campaigns === total` is the whole
+         * account, which is what 43 of these rules are whether or not anyone realised.
+         */
+        reach: reach.get(r.id) ?? null,
         trigger: r.trigger,
         marketplace: r.scopeMarketplace,
         level: resolveAutonomy(r),

@@ -5206,3 +5206,14 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    on each control: the reason belongs in the banner above, and a disabled control cannot show one. */
 .h10-rb-sec.held { opacity: .62; }
 .h10-rb-sec.held::after { content: "read-only"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #f6e7c6; color: #7a4d10; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; vertical-align: middle; }
+
+/* ── EA6 — the Reaches cell on Automations ─────────────────────────────────────────────────────
+   Appended at EOF, `h10-au-reach` only. Three readings, three weights: a plain count, the whole
+   account, and DEAD. The dead state is the one worth noticing, so it is the only coloured one. */
+.h10-au-reach { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12.5px; color: #3f4754; font-variant-numeric: tabular-nums; }
+.h10-au-reach b { font-weight: 700; color: #16202b; }
+.h10-au-reach em { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #7c8595; }
+.h10-au-reach.all b { color: #7a4d10; }
+.h10-au-reach.all em { color: #a06a12; }
+.h10-au-reach.dead { color: #9c2f10; font-weight: 700; }
+.h10-au-reach.dead em { color: #9c2f10; }
