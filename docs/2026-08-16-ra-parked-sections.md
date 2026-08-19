@@ -506,7 +506,7 @@ Two consequences of those measurements, both of which shaped the cells:
 - 🔴 **`/advertising/campaigns` returns no `bidAlgorithm`**, so the Ad Manager's own Bid Rule cell
   falls through to its default and prints **"Target ACOS" on 100 of 100 rows** (verified in the
   deployed DOM). Apply Rules' Bid Rule therefore reads the **bid owner** from the bid grid instead —
-  the same question answered with a field that exists. See the open item below.
+  the same question answered with a field that exists. Its own picker STAYS — see the ⛔ note below.
 - **Budget Rule leads with what varies.** A column printing "6" on all 220 would be decorative — the
   class this whole programme removes — so the cell shows whether a rule has actually *moved* this
   budget, and carries the reach as context ("— 6 can").
@@ -558,16 +558,30 @@ on the rest**, incl. "Rank plan — GALE EXACT DE" and "Campaign ACOS rebalance"
 100 on, Budget Rule "— 6 can" on 85 rows. Ad Manager: Target ACoS "—" ×100, Min/Max 82 bands vs 18
 None, no horizontal page overflow. Nothing parked — every column is additive.
 
-### 🔴 Open, and NOT fixed here
+### ⛔ DECIDED 2026-08-19 — the Ad Manager's Bid Rule picker STAYS. Do not remove it.
 
 The Ad Manager's own **"Bid Rule"** column is the head of its Adtomic cluster and is a
 **bid-algorithm picker** (Target ACOS / Max Impressions / Max Orders), documented in the source as
 *UI-only until Amazon exposes a per-campaign bid-algorithm field*; its editor writes local state and
-toasts "(local — Amazon field pending)". It is therefore a **different control** that happens to
-share H10's label, not a drifted copy of Apply Rules' column — which is why it was left alone rather
-than swapped. Resolving it means either renaming it "Bid Algorithm" (the key it already uses
-internally) and giving the Ad Manager a real Bid Rule column off the bid grid, or retiring the
-picker. Operator decision, not a refactor.
+toasts "(local — Amazon field pending)". It is a **different control** that happens to share H10's
+label, not a drifted copy of Apply Rules' column.
+
+I had recorded it as an open question — rename it, or retire it. **The operator answered: neither.**
+
+> *"I plan on building whatever is missing. Like the algorithm picker, I'll work on them later, so
+> we must not make any changes or remove it from the view."*
+
+So it is not debt and it is not a decorative column to sweep. It is a **placeholder for planned
+work**, and the UI is the roadmap. The constant it prints is a real hazard *only* if someone
+mistakes it for a reading, which the toast already prevents. Marked ⛔ KEEP in the source at both
+ends (`CampaignsGrid.tsx` and `_shared/RuleColumnCells.tsx`) so a later reduction pass does not
+"helpfully" delete it — the whole U0–U11 programme was about removing exactly this shape, which
+makes it the one thing most likely to be removed by accident.
+
+**The general rule this sets**, recorded in memory as `feedback_keep_placeholder_controls`: a
+control that is UI-only *because the operator intends to back it later* is preserved. That is
+different from a dead workaround, which [[feedback_workaround_sweep]] says to remove. When the two
+look alike, ask — do not sweep.
 
 ---
 
@@ -641,8 +655,8 @@ screenshot's pixel dimensions. Recorded in memory under *browser probes lie*.
   editable boxes in the grid**, a bulk governance interaction, not a pencil-and-popover. Left alone.
 - `bid/BidBounds.tsx`, `budget/BudGuardrails.tsx`, `bid/BidGoalDialog.tsx` are **PARKED** — not
   mounted, nothing rendering, no inconsistency visible.
-- The Ad Manager's **Bid Rule** popover is its bid-*algorithm* picker (still local-only). Unchanged,
-  and still the open item recorded under U11.
+- The Ad Manager's **Bid Rule** popover is its bid-*algorithm* picker (still local-only).
+  Unchanged, and ⛔ **kept on purpose** — see the decision under U11.
 
 ---
 
@@ -712,6 +726,9 @@ explicitly every time, because nothing else will catch it.
 Eleven units, U0–U10, every one prod-verified before the next began, plus **U11** — additive
 columns on Apply Rules rather than a reduction. **55 files parked, none deleted**, and Rank &
 Dayparting was never touched.
+
+**⛔ Kept on purpose, not open:** the Ad Manager's Bid Rule / bid-algorithm picker. The operator is
+building the backing field later and asked that nothing be changed or removed from the view.
 
 **Still open, deliberately:**
 - **"+ Assign Rule"** (U9/D6) — waits for additive `scope*Ids` columns; single-valued scope would

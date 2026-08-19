@@ -644,8 +644,15 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
   )
 }
 
-// P3 — bid algorithms (the "Bid Rule" cell dropdown). UI-only until Amazon
-// exposes a per-campaign bid-algorithm field; selection updates local state.
+// P3 — bid algorithms (the "Bid Rule" cell dropdown). UI-only until Amazon exposes a per-campaign
+// bid-algorithm field; selection updates local state.
+//
+// ⛔ **KEEP. Do not delete this, the column, or the menu below.** It prints "Target ACOS" on every
+// row because the payload carries no `bidAlgorithm`, which reads like a decorative column and is
+// exactly the shape this programme has been removing everywhere else. It is the exception:
+// operator decision 2026-08-19 — *"whatever is missing, like the algorithm picker, I'll work on
+// them later, so we must not make any changes or remove it from the view."* The constant is a
+// placeholder for planned work, and the toast already tells the operator it is local.
 const BID_ALGOS: Array<{ value: string; label: string; desc: string }> = [
   { value: 'TARGET_ACOS', label: 'Target ACOS', desc: 'A bid algorithm for products in a performance stage that should target an ACoS for scalable advertising.' },
   { value: 'MAX_IMPRESSIONS', label: 'Max Impressions', desc: 'A bid algorithm for products in a launch stage that need to get as many impressions as possible.' },

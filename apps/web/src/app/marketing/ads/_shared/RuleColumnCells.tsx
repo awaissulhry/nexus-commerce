@@ -18,7 +18,12 @@
  * ── 🔴 What each column may HONESTLY show, measured on prod 2026-08-19 ─────────────────────────
  * · **Bid Rule** — `/advertising/campaigns` returns **no `bidAlgorithm`**, so the Ad Manager's own
  *   Bid Rule cell falls through to its default and reads "Target ACOS" on every row; its editor is
- *   local-only and says so ("Amazon field pending"). The truthful per-campaign source is
+ *   local-only and says so ("Amazon field pending").
+ *   ⛔ **DO NOT REMOVE IT, and do not "fix" it by deleting the column.** Operator decision
+ *   2026-08-19: *"whatever is missing, like the algorithm picker, I'll work on them later, so we
+ *   must not make any changes or remove it from the view."* It is a placeholder for work that is
+ *   planned, not dead code — see `feedback_keep_placeholder_controls` in memory. The truthful
+ *   per-campaign source is
  *   `bidder` / `bidderName` from `/advertising/bid-grid?view=campaigns`, which really varies:
  *   **schedule 32 · none 45 · manual 6**, with names like "Rank plan — GALE EXACT DE". That is what
  *   this cell shows, and it is why Apply Rules' Bid Rule column is NOT the Ad Manager's.

@@ -689,7 +689,7 @@ adopt the other's shape). Change a cell there and both pages change.
 
 - 🔴 `/advertising/campaigns` returns **no `bidAlgorithm`**, which is why H10's "bid algorithm"
   question is answered here with the **bid owner** instead — and why the Ad Manager's own Bid Rule
-  cell prints "Target ACOS" on 100 of 100 rows (§7.11 open item).
+  cell prints "Target ACOS" on 100 of 100 rows — ⛔ kept on purpose, see §7.11.
 - **Budget Rule** leads with whether a rule has *moved* this budget, because reach alone is the same
   number on every row and a constant column is decorative.
 - **Target ACoS** and **Bid Automation** are uniform today. Uniform ≠ fake: both are real, writable
@@ -708,10 +708,12 @@ own left-to-right block. The guardrail grid's `targetAcosPct` is a **percentage*
 cell takes a **fraction**; converted at the call site rather than relying on the cell's `> 1` guard,
 which exists for the one prod rule storing `30` where the rest store `0.3`.
 
-**Still open:** the Ad Manager's "Bid Rule" is its Adtomic-cluster **bid-algorithm picker**
-(UI-only, local state, "Amazon field pending") — a different control sharing H10's label, not a
-drifted copy. Renaming it to "Bid Algorithm" and giving that page a real Bid Rule column is an
-operator decision, not a refactor.
+**⛔ Decided 2026-08-19, and it is NOT an open item:** the Ad Manager's "Bid Rule" is its
+Adtomic-cluster **bid-algorithm picker** (UI-only, local state, "Amazon field pending") — a
+different control sharing H10's label, not a drifted copy. I proposed renaming or retiring it; the
+operator wants **neither**: *"I plan on building whatever is missing … we must not make any changes
+or remove it from the view."* It stays exactly as it is, marked ⛔ KEEP in the source, because a
+column printing a constant is precisely what the rest of this programme deletes.
 
 ## 8. Decisions — D1 · D2 · D7 · D8 answered 2026-08-16; D6 answered 2026-08-18/19; D3–D5, D9 still open
 (The four answered ones are the ones that gated U0/U1, so the build can start; D3–D6 gate later
