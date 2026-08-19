@@ -47,7 +47,7 @@
  * sub-tree — verified in the deployed DOM from the Apply Rules page, where all six resolve. Moving
  * the components needed no CSS at all.
  */
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 
 /** Both popovers are positioned from the pencil's own bounding rect, in fixed coordinates. */
 export interface PopAnchor { x: number; y: number }
@@ -62,6 +62,37 @@ export function anchorFromEvent(ev: React.MouseEvent<HTMLElement>): PopAnchor {
   const td = el.closest('td')
   const r = (td ?? el).getBoundingClientRect()
   return { x: r.left, y: r.bottom + 4 }
+}
+
+/**
+ * 🔴 Keeps the popover ON SCREEN.
+ *
+ * Both popovers are `position: fixed` at the cell's bottom-left corner and have a fixed width. The
+ * Min/Max Bid column sits far right on both grids, so measured on prod 2026-08-19 the Apply Rules
+ * popover opened at **x=1440 in a 1459px viewport** — 233px of a 252px card clipped — and at
+ * **y=765 of 812**, clipped below as well. Anchoring alone is not placement.
+ *
+ * It renders at the anchor first and corrects after measuring, rather than guessing from the CSS
+ * width: the card's height depends on which radio is selected and whether a note or an error is
+ * showing, so a hard-coded number would be wrong the moment the copy changes.
+ */
+function useClampedAnchor(anchor: PopAnchor) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [pos, setPos] = useState(anchor)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const M = 8
+    const { width, height } = el.getBoundingClientRect()
+    const vw = document.documentElement.clientWidth
+    const vh = document.documentElement.clientHeight
+    const x = Math.max(M, Math.min(anchor.x, vw - width - M))
+    // Flip above the cell when there is no room below — `anchor.y` is already the cell's bottom,
+    // so the flip target is that bottom minus the row height and the card.
+    const y = anchor.y + height + M > vh ? Math.max(M, anchor.y - height - 34) : anchor.y
+    setPos({ x, y })
+  }, [anchor.x, anchor.y])
+  return { ref, pos }
 }
 
 const MIN_CENTS = 2
@@ -93,6 +124,7 @@ export function RangePopover({
   onApply: (mm: { minCents: number | null; maxCents: number | null } | null) => void
   onClose: () => void
 }) {
+  const { ref, pos } = useClampedAnchor(anchor)
   const eur = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2))
   const [range, setRange] = useState(minCents != null || maxCents != null)
   const [min, setMin] = useState(eur(minCents))
@@ -110,7 +142,7 @@ export function RangePopover({
   return (
     <>
       <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => { if (!busy) onClose() }} />
-      <div className="h10-mmbid" style={{ position: 'fixed', left: anchor.x, top: anchor.y }} role="dialog" aria-label={title}>
+      <div ref={ref} className="h10-mmbid" style={{ position: 'fixed', left: pos.x, top: pos.y }} role="dialog" aria-label={title}>
         <div className="h">{title}</div>
         <label className="r"><input type="radio" name="rangepop" checked={!range} onChange={() => setRange(false)} /> None</label>
         <label className="r"><input type="radio" name="rangepop" checked={range} onChange={() => setRange(true)} /> {rangeLabel}</label>
@@ -158,12 +190,13 @@ export function ValuePopover({
   onApply: (v: string) => void
   onClose: () => void
 }) {
+  const { ref, pos } = useClampedAnchor(anchor)
   const [v, setV] = useState(initial)
   const bad = v.trim() !== '' && !Number.isFinite(Number(v))
   return (
     <>
       <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => { if (!busy) onClose() }} />
-      <div className="h10-editpop" style={{ position: 'fixed', left: anchor.x, top: anchor.y }} role="dialog" aria-label={title}>
+      <div ref={ref} className="h10-editpop" style={{ position: 'fixed', left: pos.x, top: pos.y }} role="dialog" aria-label={title}>
         <div className="h">{title}</div>
         <span className={`h10-bulk-inp ${suffix ? 'sf' : ''}`}>
           {prefix && <span className="pf">{prefix}</span>}
