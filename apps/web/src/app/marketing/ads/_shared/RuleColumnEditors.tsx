@@ -65,12 +65,20 @@ export function anchorFromEvent(ev: React.MouseEvent<HTMLElement>): PopAnchor {
 }
 
 /**
- * 🔴 Keeps the popover ON SCREEN.
+ * 🔴 Keeps the popover ON SCREEN. Anchoring alone is not placement.
  *
- * Both popovers are `position: fixed` at the cell's bottom-left corner and have a fixed width. The
- * Min/Max Bid column sits far right on both grids, so measured on prod 2026-08-19 the Apply Rules
- * popover opened at **x=1440 in a 1459px viewport** — 233px of a 252px card clipped — and at
- * **y=765 of 812**, clipped below as well. Anchoring alone is not placement.
+ * Both popovers are `position: fixed` at the cell's bottom-left corner, and the card is taller than
+ * a grid row. Measured on prod 2026-08-19, opening the Min/Max Bid editor on a row in the lower
+ * half of the page put the card's bottom at **~1055 in a 962px viewport**. The flip fixes that, and
+ * the deployed page confirms it fires (`flippedUp: true` on the row that used to overflow).
+ *
+ * ⚠ **Correction to this file's own first version, and to the U11c.1 commit message.** Both also
+ * claimed a HORIZONTAL clip — "x=1440 in a 1459px viewport, 233px of a 252px card cut off". That
+ * was wrong: 1459 was the width of a *screenshot*, which the capture scales down; the real viewport
+ * was **1728** (`devicePixelRatio` 2), and the card ended at 1692, comfortably inside. The x clamp
+ * below is therefore DEFENSIVE — the column really does sit at the far right of both grids, so a
+ * narrower window would clip it — not a fix for anything that was measured. Read viewport geometry
+ * from `document.documentElement.clientWidth`, never from a screenshot's pixel dimensions.
  *
  * It renders at the anchor first and corrects after measuring, rather than guessing from the CSS
  * width: the card's height depends on which radio is selected and whether a note or an error is

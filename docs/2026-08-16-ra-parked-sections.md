@@ -571,7 +571,7 @@ picker. Operator decision, not a refactor.
 
 ---
 
-## U11c — the same EDITORS, not just the same readings (2026-08-19, commit pending)
+## U11c — the same EDITORS, not just the same readings (2026-08-19, commits `e52275afd` · `5b052e99d`)
 
 Operator, 2026-08-19: *"I said to make use of the same UI, like, for example, the modal that appears
 when I click on the edit of the Min/Max/Bid column. It should be the same as on the Ad Manager, and
@@ -617,6 +617,23 @@ already matched Apply Rules too.
   instance across two rows would show the first row's values while writing to the second. Today the
   full-screen backdrop makes that unreachable by hand — exactly the kind of accident that stops
   being true later.
+
+### U11c.1 — the popover was opening off the bottom of the screen (`5b052e99d`)
+
+Verified straight after U11c deployed: opening the Min/Max Bid editor on a row in the lower half of
+the page put the card's bottom at **~1055 in a 962px viewport**. `useClampedAnchor` renders at the
+anchor, then measures and corrects — clamp x into the viewport, flip above the cell when there is no
+room below. Measured rather than derived from the CSS width, because the card's height depends on
+which radio is selected and whether a note or an error is showing. The deployed page now reports
+`flippedUp: true` on the row that used to overflow. Anchoring is not placement.
+
+⚠ **Correction to that commit's own message.** It also claimed a HORIZONTAL clip — *"x=1440 in a
+1459px viewport, 233px of a 252px card cut off"*. **Wrong, and mine.** 1459 was the width of a
+*screenshot*, which the capture scales down; the real viewport was **1728** (`devicePixelRatio` 2)
+and the card ended at 1692, comfortably inside. The x clamp is therefore **defensive** — the column
+does sit at the far right of both grids, so a narrower window would clip it — not a fix for anything
+that was measured. Read viewport geometry from `document.documentElement.clientWidth`, never from a
+screenshot's pixel dimensions. Recorded in memory under *browser probes lie*.
 
 ### Scope: what is NOT a fork, checked rather than assumed
 
