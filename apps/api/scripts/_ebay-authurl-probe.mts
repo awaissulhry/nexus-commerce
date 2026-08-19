@@ -1,0 +1,10 @@
+/** Builds the authorize URL both ways. Builds a string; contacts nothing. */
+await import('../src/env.js')
+const { ebayAuthService } = await import('../src/services/ebay-auth.service.js')
+const withPrompt = ebayAuthService.generateAuthorizationUrl('PROBE_STATE', undefined, { promptLogin: true })
+const without  = ebayAuthService.generateAuthorizationUrl('PROBE_STATE')
+console.log('WITHOUT prompt: ', without.includes('prompt=') ? 'has prompt (unexpected)' : 'no prompt param ✓')
+console.log('WITH prompt   : ', withPrompt.includes('prompt=login') ? 'prompt=login present ✓' : 'MISSING')
+console.log('\nhost:', new URL(withPrompt).origin + new URL(withPrompt).pathname)
+console.log('\nfull URL (for a manual check):')
+console.log(withPrompt)

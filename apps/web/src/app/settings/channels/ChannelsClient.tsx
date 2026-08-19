@@ -156,6 +156,9 @@ export function ChannelsClient() {
   }
 
   async function handleConnectEbay() {
+    // Opened SYNCHRONOUSLY, inside the click, before any await. A popup opened
+    // after an await has lost the user gesture that authorises it and is blocked.
+    const authWindow = window.open('', '_blank', 'width=1000,height=800')
     try {
       setConnectingChannel('EBAY')
       setStatusMsg(null)
@@ -179,8 +182,22 @@ export function ChannelsClient() {
       }
 
       sessionStorage.setItem('ebayAuthState', data.state)
-      window.location.href = data.authUrl
+
+      // Open eBay in a SEPARATE window, not this tab. Two reasons, and the
+      // second is why the window is opened before the await above rather than
+      // here: you keep Nexus open behind the sign-in, and a `window.open` that
+      // happens after an await has lost its user-gesture and is blocked by every
+      // popup blocker. `authWindow` was opened synchronously inside the click;
+      // all that is left is to point it at eBay.
+      if (authWindow && !authWindow.closed) {
+        authWindow.location.href = data.authUrl
+      } else {
+        // The popup was blocked, or the operator closed it. Fall back to this
+        // tab rather than leaving the click doing nothing at all.
+        window.location.href = data.authUrl
+      }
     } catch (err) {
+      authWindow?.close()
       const message = err instanceof Error ? err.message : 'Connection failed'
       setStatusMsg({ kind: 'error', text: message })
       setConnectingChannel(null)

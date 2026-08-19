@@ -106,7 +106,12 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
         // Body is accepted for backwards compat with the old frontend
         // but ignored.
         const state = randomBytes(32).toString("hex");
-        const authUrl = ebayAuthService.generateAuthorizationUrl(state);
+        // Default ON. Every connect from the Accounts panel wants a real sign-in
+        // page: either it is a NEW account (so the current eBay session is the
+        // wrong one), or it is a Reconnect (where confirming which account you
+        // are authorising is the entire point). A caller can opt out explicitly.
+        const promptLogin = (request.body as { promptLogin?: boolean } | undefined)?.promptLogin !== false;
+        const authUrl = ebayAuthService.generateAuthorizationUrl(state, undefined, { promptLogin });
 
         logger.info("eBay OAuth2 authorization URL generated", {
           state: state.substring(0, 8) + "...",

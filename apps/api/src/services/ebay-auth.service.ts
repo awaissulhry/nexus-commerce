@@ -66,7 +66,24 @@ export class EbayAuthService {
    * is ignored (kept in the signature for backwards compat with the
    * frontend that used to send it).
    */
-  generateAuthorizationUrl(state: string, _redirectUriIgnored?: string): string {
+  generateAuthorizationUrl(
+    state: string,
+    _redirectUriIgnored?: string,
+    opts?: {
+      /**
+       * Force eBay to show its sign-in page even when the browser already has an
+       * eBay session.
+       *
+       * Without this, eBay silently re-authorises the account you are ALREADY
+       * signed in as and redirects back in under a second — no login page, no
+       * account chooser. Measured on prod 2026-08-19: that is why "connect
+       * another account" appeared to do nothing, and why it kept handing back
+       * the same seller. You cannot add a SECOND account without it unless you
+       * first sign out of eBay or use a private window.
+       */
+      promptLogin?: boolean;
+    },
+  ): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: "code",
@@ -94,6 +111,7 @@ export class EbayAuthService {
         "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
       ].join(" "),
       state,
+      ...(opts?.promptLogin ? { prompt: "login" } : {}),
     });
 
     return `${this.authBaseUrl}/oauth2/authorize?${params.toString()}`;
