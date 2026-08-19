@@ -1379,8 +1379,13 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 .h10-ds-acct-row[data-selected] { background: var(--h10-surface-sunken); }
 /* The tick is never the only marker of the current account — the row is also
    tinted and carries aria-current, so the state does not depend on one glyph. */
-.h10-ds-acct-check { margin-left: auto; align-self: center; color: var(--h10-success); font-weight: 800; font-size: 13px; }
-.dark .h10-ds-acct-check { color: #6ee7a8; }
+/* The tick means SELECTED, not healthy — and the row already carries a health dot
+   two elements to its left, so a green tick conflated two different meanings on
+   one row. It takes the text colour instead: semantically right, and it clears AA
+   where green did not (measured 2.91:1 with --h10-success, 4.43:1 with
+   --h10-success-strong, both under the 4.5 bar for 13px text). Selection is also
+   carried by the row tint and aria-current, so this is never the only signal. */
+.h10-ds-acct-check { margin-left: auto; align-self: center; color: var(--h10-text); font-weight: 800; font-size: 13px; }
 .h10-ds-acct-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .h10-ds-acct-row-label { font-size: 13px; font-weight: 600; color: var(--h10-text); }
 .h10-ds-acct-row-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--h10-text-2); }
@@ -1489,3 +1494,16 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 }
 .h10-ds-acctp-add:hover { background: var(--h10-surface-hover); }
 .dark .h10-ds-acctp-add { color: #8ab6f0; }
+
+/* MAP.4 — the account identity colour. A bar, never the only carrier of identity:
+   every row also prints its account name, so the colour is a shortcut, not the
+   information itself. */
+.h10-ds-acct-swatch { width: 3px; align-self: stretch; border-radius: 2px; flex: none; margin-top: 2px; }
+.h10-ds-acctp-swatches { display: inline-flex; gap: 4px; align-items: center; }
+.h10-ds-acctp-swatch {
+  width: 16px; height: 16px; border-radius: 50%; padding: 0;
+  border: 2px solid transparent; cursor: pointer;
+}
+.h10-ds-acctp-swatch[aria-pressed='true'] { border-color: var(--h10-text); }
+.h10-ds-acctp-swatch:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: 1px; }
+.h10-ds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--border-strong); font-size: 10px; color: var(--h10-text-2); line-height: 1; }

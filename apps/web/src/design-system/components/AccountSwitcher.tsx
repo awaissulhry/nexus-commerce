@@ -36,6 +36,29 @@ import '../styles/components.css'
 
 export type AccountHealth = 'ok' | 'warn' | 'error' | 'unknown'
 
+/**
+ * The account-identity palette.
+ *
+ * A FIXED set, not a free colour picker. The plan's §3.2 asks for account colour
+ * to be a token so "the switcher, the flat-file header, the orders inbox and the
+ * cross-account console all read the same identity" — a hex an operator can type
+ * would drift between surfaces and could land unreadable against either theme.
+ * These eight are drawn from the DS palette and checked against both grounds.
+ *
+ * Stored as hex because that is what `ChannelConnection.accountColor` holds and
+ * what the API validates; the UI never offers anything outside this list.
+ */
+export const ACCOUNT_COLORS: ReadonlyArray<{ name: string; hex: string }> = [
+  { name: 'Blue', hex: '#1f6fde' },
+  { name: 'Teal', hex: '#0f8b8d' },
+  { name: 'Green', hex: '#15a34a' },
+  { name: 'Amber', hex: '#b87503' },
+  { name: 'Orange', hex: '#c2410c' },
+  { name: 'Red', hex: '#d4493f' },
+  { name: 'Purple', hex: '#7c3aed' },
+  { name: 'Slate', hex: '#475569' },
+]
+
 export interface AccountRow {
   id: string
   channel: string
@@ -190,6 +213,9 @@ export function AccountSwitcher({
       grouped.map(([channel, rows]) => ({
         channel,
         count: rows.length,
+        // The channel's identity colour is its primary account's — with two
+        // accounts the panel is where you tell them apart, not the pill.
+        color: (rows.find((r) => r.isPrimary) ?? rows[0])?.accountColor ?? null,
         health: rows.some((r) => r.health === 'error')
           ? ('error' as const)
           : rows.some((r) => r.health === 'warn')
@@ -269,7 +295,15 @@ export function AccountSwitcher({
         onClick={toggle}
       >
         {channelPills.map((p) => (
-          <span key={p.channel} className="h10-ds-acct-pill" data-channel={p.channel}>
+          <span
+            key={p.channel}
+            className="h10-ds-acct-pill"
+            data-channel={p.channel}
+            // A left edge rather than a fill: the pill's own text contrast is
+            // already verified against the panel ground, and tinting the whole
+            // pill would put arbitrary text on an arbitrary colour.
+            style={p.color ? { boxShadow: `inset 3px 0 0 0 ${p.color}` } : undefined}
+          >
             <span className="h10-ds-acct-dot" data-health={p.health} aria-hidden />
             {channelName(p.channel)}
             {p.count > 1 && <span className="h10-ds-acct-pill-n">{p.count}</span>}
@@ -304,6 +338,13 @@ export function AccountSwitcher({
                   onClick={canSwitch ? () => switchTo(a.id) : undefined}
                 >
                   <span className="h10-ds-acct-dot" data-health={a.health} aria-hidden />
+                  {a.accountColor && (
+                    <span
+                      className="h10-ds-acct-swatch"
+                      style={{ background: a.accountColor }}
+                      aria-hidden
+                    />
+                  )}
                   <span className="h10-ds-acct-row-main">
                     <span className="h10-ds-acct-row-label">{primaryLabel(a)}</span>
                     <span className="h10-ds-acct-row-sub">

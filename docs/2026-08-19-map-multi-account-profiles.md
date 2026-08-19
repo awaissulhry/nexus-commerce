@@ -588,6 +588,23 @@ Three details worth keeping:
   disabled controls in the panel, and **0 contrast failures across 27 text nodes in both themes**
   (the disabled button had measured 2.04:1 light / 2.78:1 dark before this change).
 
+**Account colour, wired end to end.** `accountColor` shipped earlier as a validated write with
+nothing that set it and nothing that read it — a dead field of my own making. It is now a **fixed
+eight-swatch palette**, not a colour picker: §3.2 asks for account colour to be a token so every
+surface reads the same identity, and a typed hex would drift between surfaces and could land
+unreadable in one of the two themes. The panel sets it; the chip's channel pill takes its **primary
+account's** colour as a left edge, and each panel row takes its own as a bar. Never a fill behind
+text — the text contrast is verified against the panel ground, and tinting the whole pill would put
+arbitrary text on an arbitrary colour.
+
+**A semantic fix found by measuring.** The selected-account tick was green (`--h10-success`) and
+measured **2.91:1** in light mode; `-strong` only reached **4.43:1**, still under the bar. The real
+problem was not the shade: the tick means *selected*, and the row already carries a **health** dot
+two elements to its left, so green conflated two different meanings on one row. It takes the text
+colour now — semantically right and comfortably passing. Selection is also carried by the row tint
+and `aria-current`, so it was never the only signal. **0 contrast failures across 62 text nodes in
+both themes.**
+
 🔴 **The MAP.3 ratchet caught this work twice** — the connect-flow lookups in `ebay-auth.ts` and the
 sibling count in the disconnect route. Both times the answer was to move the query behind the
 resolver (`findAccountByExternalId`, `countUnidentifiedAccounts`, `listActiveConnections`), not to

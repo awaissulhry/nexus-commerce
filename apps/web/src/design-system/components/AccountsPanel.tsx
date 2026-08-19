@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import '../styles/tokens.css'
 import '../styles/components.css'
-import type { AccountRow, AccountsPayload } from './AccountSwitcher'
+import { ACCOUNT_COLORS, type AccountRow, type AccountsPayload } from './AccountSwitcher'
 
 export interface AccountsPanelProps {
   /** Absolute base URL of the API, e.g. `getBackendUrl()`. */
@@ -135,6 +135,14 @@ export function AccountsPanel({ apiBase, onConnect, confirm, className }: Accoun
     },
     [apiBase, load],
   )
+
+  const setColor = (a: AccountRow, hex: string | null) =>
+    mutate(
+      a.id,
+      '',
+      { method: 'PATCH', body: JSON.stringify({ accountColor: hex }) },
+      hex ? `Colour set for ${a.label}.` : `Colour cleared for ${a.label}.`,
+    )
 
   const makePrimary = (a: AccountRow) =>
     mutate(a.id, '/primary', { method: 'POST' }, `${a.label} is now the primary ${channelName(a.channel)} account.`)
@@ -260,6 +268,35 @@ export function AccountsPanel({ apiBase, onConnect, confirm, className }: Accoun
                     </>
                   )}
                 </span>
+              </div>
+
+              {/* A fixed palette, not a colour picker: identity has to read the
+                  same on every surface, and an arbitrary hex can land unreadable
+                  against one of the two themes. */}
+              <div className="h10-ds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
+                {ACCOUNT_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    className="h10-ds-acctp-swatch"
+                    style={{ background: c.hex }}
+                    aria-label={c.name}
+                    aria-pressed={a.accountColor === c.hex}
+                    disabled={busyId === a.id}
+                    onClick={() => void setColor(a, c.hex)}
+                  />
+                ))}
+                {a.accountColor && (
+                  <button
+                    type="button"
+                    className="h10-ds-acctp-swatch is-clear"
+                    aria-label="Clear colour"
+                    disabled={busyId === a.id}
+                    onClick={() => void setColor(a, null)}
+                  >
+                    ×
+                  </button>
+                )}
               </div>
 
               <div className="h10-ds-acctp-actions">
