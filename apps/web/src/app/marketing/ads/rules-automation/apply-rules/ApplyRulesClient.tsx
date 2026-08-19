@@ -88,7 +88,8 @@ import {
 import { ApplyRulesSections } from './ApplyRulesSections'
 import { ArBulkVerbs } from './ArBulkVerbs'
 import { BidRuleCell, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
-import { useAdsSync } from '../_shared/adsBus'
+import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../../_shared/RuleColumnEditors'
+import { useAdsSync, emitAdsChange } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
 const DEFAULT_GRAIN: ApplyRulesGrain = 'campaign'
@@ -178,8 +179,47 @@ export function ApplyRulesClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
-  // AR.S1 — the campaign whose bid-band dialog is open. Local state: an action, not a view.
-  const [boundsFor, setBoundsFor] = useState<CampaignRow | null>(null)
+  /**
+   * U11c — the open hover-pencil popover: which campaign, which field, anchored where.
+   *
+   * 🔴 This replaced a full-screen modal this page had forked for the SAME field on the SAME
+   * endpoint ("Bid band — <campaign>" · Floor / Ceiling · Save band). Operator, 2026-08-19: *"the
+   * modal that appears when I click on the edit of the Min/Max/Bid column ... should be the same as
+   * on the Ad Manager, and the same with others."* It is now literally the same component —
+   * `_shared/RuleColumnEditors.tsx` — so the two pages cannot diverge again.
+   */
+  const [editPop, setEditPop] = useState<{ row: CampaignRow; kind: 'bounds' | 'tacos'; anchor: PopAnchor } | null>(null)
+  const [popBusy, setPopBusy] = useState(false)
+  const [popErr, setPopErr] = useState<string | null>(null)
+
+  /**
+   * U11c — the one write path behind both hover-pencil popovers.
+   *
+   * Deliberately mirrors `ArBulkVerbs`: the same two endpoints, the same units, the same bus
+   * event. A per-row edit and a bulk edit of the same field must not disagree about either.
+   * 🔴 Target ACoS is a **FRACTION** on the wire (`PUT /goal` refuses the whole-number form — the
+   * AIREON 30-vs-0.3 trap), so the popover's percent string is divided by 100 at the call site.
+   */
+  const applyPop = async (
+    endpoint: 'guardrails' | 'automation',
+    row: CampaignRow,
+    body: Record<string, number | null>,
+  ) => {
+    setPopBusy(true); setPopErr(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}/${endpoint}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(String(j?.error ?? `Save failed (${r.status})`))
+      setEditPop(null)
+      // After the write settles, once.
+      emitAdsChange('ads.guardrail.changed')
+      setReloadTick((n) => n + 1)
+    } catch (e) {
+      setPopErr((e as Error).message)
+    } finally { setPopBusy(false) }
+  }
 
   /** The one writer of page state. '' or a default value deletes the param. */
   // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
@@ -486,7 +526,7 @@ export function ApplyRulesClient() {
     baseline: cursorBaseline,
     // A dialog open on one campaign is a conversation about that campaign; a banner about other
     // rows can wait for it to close.
-    enabled: boundsFor == null,
+    enabled: editPop == null,
   })
 
   const slotProps: ApplyRulesSlotProps = {
@@ -627,7 +667,14 @@ export function ApplyRulesClient() {
       // FRACTION the campaigns payload stores. Converted here, once, rather than leaning on the
       // cell's `> 1 means already a percentage` guard — that guard exists for the one prod rule
       // that stores 30 where the rest store 0.3, and a real 0.5% target would trip it into 50%.
-      render: (r) => <TargetAcosCell fraction={r.targetAcosPct == null ? null : r.targetAcosPct / 100} />,
+      render: (r) => (
+        <span className="h10-edcell">
+          <TargetAcosCell fraction={r.targetAcosPct == null ? null : r.targetAcosPct / 100} />
+          <button type="button" className="h10-editpen" title={`Set the target ACoS for ${r.name}`} aria-label={`Set the target ACoS for ${r.name}`} onClick={(ev) => { setPopErr(null); setEditPop({ row: r, kind: 'tacos', anchor: anchorFromEvent(ev) }) }}>
+            <Pencil size={11} aria-hidden />
+          </button>
+        </span>
+      ),
     },
     {
       key: 'bounds',
@@ -635,14 +682,14 @@ export function ApplyRulesClient() {
       metric: false,
       tip: 'The band the write gate enforces on this campaign\'s bids — DENIED at the gate, never clamped. "None" is not a band of zero: nothing bounds this campaign\'s bids but the €0.02 suppression floor. The pencil edits both ends; measured 2026-08-12, minBidCents was set on 0 of 220 — this is its first UI.',
       sortValue: (r) => r.maxBidCents ?? -1,
-      // The READING is the shared cell; the pencil beside it is this page's, because the Ad Manager
-      // opens its own editor. Sharing the reading is what stops the two pages disagreeing about
-      // what "no band" looks like — this column used to say "not set" where the Ad Manager said
-      // "None", for the same campaign, on the same field.
+      // U11c — reading, pencil AND popover are all the Ad Manager's now (`h10-edcell` /
+      // `h10-editpen` / `RangePopover`), so the hover affordance, the anchor, the copy and the
+      // verb match it exactly. Before U11 this column said "not set" where the Ad Manager said
+      // "None" for the same campaign on the same field, behind a differently-shaped modal.
       render: (r) => (
-        <span className="h10-ar-bounds">
+        <span className="h10-edcell">
           <MinMaxBidCell minCents={r.minBidCents} maxCents={r.maxBidCents} />
-          <button type="button" className="h10-ar-edit" title={`Set the bid band for ${r.name}`} aria-label={`Set the bid band for ${r.name}`} onClick={() => setBoundsFor(r)}>
+          <button type="button" className="h10-editpen" title={`Set the bid band for ${r.name}`} aria-label={`Set the bid band for ${r.name}`} onClick={(ev) => { setPopErr(null); setEditPop({ row: r, kind: 'bounds', anchor: anchorFromEvent(ev) }) }}>
             <Pencil size={11} aria-hidden />
           </button>
         </span>
@@ -1040,63 +1087,49 @@ export function ApplyRulesClient() {
 
       <ApplyRulesSections {...slotProps} />
 
-      {/* AR.S1 — the bid-band dialog: the two enforced guardrails become settable from the page
-          the operator said they should be set from. Writes ride PATCH /guardrails (the gate's own
-          columns) and never touch Amazon — the bounds are local governance. */}
-      {boundsFor != null && (
-        <ArBoundsDialog
-          row={boundsFor}
-          onClose={() => setBoundsFor(null)}
-          onDone={() => { setBoundsFor(null); setReloadTick((n) => n + 1) }}
+      {/* AR.S1 + U11c — the hover-pencil editors, which are H10's anchored popovers shared with the
+          Ad Manager. Min/Max Bid writes PATCH /guardrails (the gate's own columns, local
+          governance — it never touches Amazon); Target ACoS writes PATCH /automation, the same
+          fraction the bulk verb sends. Both emit on the bus once the write settles, so every other
+          open tab re-reads. */}
+      {editPop && editPop.kind === 'bounds' && (
+        <RangePopover
+          key={`${editPop.row.id}:bounds`}
+          title="Min/Max Bid"
+          rangeLabel="Set a Min/Max Bid Range"
+          minCents={editPop.row.minBidCents}
+          maxCents={editPop.row.maxBidCents}
+          anchor={editPop.anchor}
+          note="Enforced at the write gate on every bid write to this campaign: outside the band a write is DENIED and recorded, never clamped. A bid already outside it stays put until something tries to move it."
+          busy={popBusy}
+          error={popErr}
+          onClose={() => setEditPop(null)}
+          onApply={(mm) => void applyPop('guardrails', editPop.row, { minBidCents: mm?.minCents ?? null, maxBidCents: mm?.maxCents ?? null })}
+        />
+      )}
+      {editPop && editPop.kind === 'tacos' && (
+        <ValuePopover
+          key={`${editPop.row.id}:tacos`}
+          title="Target ACoS"
+          suffix="%"
+          initial={editPop.row.targetAcosPct != null ? String(editPop.row.targetAcosPct) : ''}
+          placeholder="unset"
+          anchor={editPop.anchor}
+          note="Leave blank and the optimiser uses its own 30% fallback — a fallback is not a setting, which is why this column reads a dash rather than 30%."
+          busy={popBusy}
+          error={popErr}
+          onClose={() => setEditPop(null)}
+          onApply={(v) => void applyPop('automation', editPop.row, { targetAcos: v.trim() === '' ? null : Number(v) / 100 })}
         />
       )}
     </div>
   )
 }
 
-function ArBoundsDialog({ row, onClose, onDone }: { row: CampaignRow; onClose: () => void; onDone: () => void }) {
-  const [minS, setMinS] = useState(row.minBidCents != null ? (row.minBidCents / 100).toFixed(2) : '')
-  const [maxS, setMaxS] = useState(row.maxBidCents != null ? (row.maxBidCents / 100).toFixed(2) : '')
-  const [busy, setBusy] = useState(false)
-  const [errS, setErrS] = useState<string | null>(null)
-  const toCents = (s: string) => (s.trim() === '' ? null : Math.round(Number(s) * 100))
-  const minC = toCents(minS)
-  const maxC = toCents(maxS)
-  const invalid = (minC != null && (!Number.isFinite(minC) || minC < 2))
-    || (maxC != null && (!Number.isFinite(maxC) || maxC < 2))
-    || (minC != null && maxC != null && minC > maxC)
-  const save = async () => {
-    if (busy || invalid) return
-    setBusy(true); setErrS(null)
-    try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}/guardrails`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minBidCents: minC, maxBidCents: maxC }),
-      })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok || j?.ok === false) throw new Error(j?.error ?? `Save failed (${r.status})`)
-      onDone()
-    } catch (e) { setErrS((e as Error).message) } finally { setBusy(false) }
-  }
-  return (
-    <div className="h10-bd4-back" role="dialog" aria-modal="true" aria-label="Bid band" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
-      <div className="h10-bd4-card">
-        <h3>Bid band — {row.name}</h3>
-        <p className="h10-bd4-sub">Enforced at the write gate on every bid write to this campaign — a write outside the band is DENIED and recorded, never clamped. An existing bid outside it stays where it is until something tries to move it. Blank clears an end.</p>
-        <div className="h10-bd6-goalrow">
-          <label className="h10-bd4-field">Floor (€)<input type="number" step="0.01" min="0.02" value={minS} onChange={(e) => setMinS(e.target.value)} /></label>
-          <label className="h10-bd4-field">Ceiling (€)<input type="number" step="0.01" min="0.02" value={maxS} onChange={(e) => setMaxS(e.target.value)} /></label>
-        </div>
-        {invalid && <p className="h10-bd4-err" role="alert"><AlertTriangle size={13} aria-hidden /> Each end must be ≥ €0.02 and the floor must not exceed the ceiling.</p>}
-        {errS != null && <p className="h10-bd4-err" role="alert"><AlertTriangle size={13} aria-hidden /> {errS}</p>}
-        <div className="h10-bd4-row">
-          <button type="button" className="h10-bd4-cancel" disabled={busy} onClick={onClose}>Cancel</button>
-          <button type="button" className="h10-bd4-primary" disabled={busy || invalid} onClick={() => void save()}>{busy ? 'Saving…' : 'Save band'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
+// U11c — `ArBoundsDialog` (a full-screen `h10-bd4-*` modal, "Bid band — <campaign>" · Floor /
+// Ceiling · Save band) was DELETED here. It edited the same field on the same endpoint as the Ad
+// Manager's anchored popover, in a different shape with a different verb. Both pages now mount
+// `_shared/RuleColumnEditors.tsx`; the write below is all that stayed page-side.
 
 /**
  * Four empty states, not three (substrate §5.6), and a refusal is never rendered as a failure and

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, Lightbulb, ExternalLink, ListChecks, Pencil, Shuffle, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, BidAutomationCell } from '../_shared/RuleColumnCells'
+import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -42,13 +43,12 @@ interface Camp {
   placements?: { tos: number | null; pdp: number | null; ros: number | null }
   // P3 — UI-only until Amazon fields exist (bid algorithm + min/max budget range)
   bidAlgorithm?: string | null
-  // ADX G2 — minMaxBid is NO LONGER a placeholder. It is now derived from the real
-  // Campaign.minBidCents / maxBidCents columns, which ads-write-gate.ts enforces on
-  // every write to Amazon. `minMaxBid` stays in EUR because the whole grid renders
-  // money that way; the cents are the wire format.
+  // ADX G2 — the real Campaign.minBidCents / maxBidCents columns, which ads-write-gate.ts
+  // enforces on every write to Amazon. U11c dropped the euro pair this used to be derived into
+  // (`minMaxBid`): the cell and the popover are shared with Apply Rules now and both speak cents,
+  // so one field in one unit is enough.
   minBidCents?: number | null
   maxBidCents?: number | null
-  minMaxBid?: { min: number | null; max: number | null } | null
   minMaxBudget?: { min: number | null; max: number | null } | null
 }
 type Mode = 'metrics' | 'edit'
@@ -697,46 +697,13 @@ function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: ()
   )
 }
 
-// P3 — H10 range popover (None / Set a Range). Used for Min/Max Bid + Min/Max
-// Budget. UI-only (local) for now — no Amazon field exists yet.
-function RangePopover({ title, rangeLabel, initial, x, y, onApply, onClose }: { title: string; rangeLabel: string; initial: { min: number | null; max: number | null } | null; x: number; y: number; onApply: (mm: { min: number | null; max: number | null } | null) => void; onClose: () => void }) {
-  const [range, setRange] = useState(!!(initial && (initial.min != null || initial.max != null)))
-  const [min, setMin] = useState(initial?.min != null ? String(initial.min) : '')
-  const [max, setMax] = useState(initial?.max != null ? String(initial.max) : '')
-  return (
-    <>
-      <button type="button" className="h10-menu-back" aria-label="Close" onClick={onClose} />
-      <div className="h10-mmbid" style={{ position: 'fixed', left: x, top: y }} role="dialog" aria-label={title}>
-        <div className="h">{title}</div>
-        <label className="r"><input type="radio" name="rangepop" checked={!range} onChange={() => setRange(false)} /> None</label>
-        <label className="r"><input type="radio" name="rangepop" checked={range} onChange={() => setRange(true)} /> {rangeLabel}</label>
-        {range && (
-          <div className="mmrow">
-            <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Min" value={min} onChange={(e) => setMin(e.target.value)} aria-label="Min" /></span>
-            <span className="h10-bulk-inp"><span className="pf">€</span><input inputMode="decimal" placeholder="Max" value={max} onChange={(e) => setMax(e.target.value)} aria-label="Max" /></span>
-          </div>
-        )}
-        <div className="f"><button type="button" className="h10-am-link" onClick={onClose}>Cancel</button><button type="button" className="h10-am-btn primary sm" onClick={() => onApply(range ? { min: min.trim() === '' ? null : Number(min), max: max.trim() === '' ? null : Number(max) } : null)}>Apply</button></div>
-      </div>
-    </>
-  )
-}
-
-// P3 — single-value edit popover (Target ACoS %, Daily Budget €), opened from the
-// hover pencil. Target ACoS writes to /automation; Daily Budget to the campaign PATCH.
-function ValuePopover({ title, prefix, suffix, initial, x, y, onApply, onClose }: { title: string; prefix?: string; suffix?: string; initial: string; x: number; y: number; onApply: (v: string) => void; onClose: () => void }) {
-  const [v, setV] = useState(initial)
-  return (
-    <>
-      <button type="button" className="h10-menu-back" aria-label="Close" onClick={onClose} />
-      <div className="h10-editpop" style={{ position: 'fixed', left: x, top: y }} role="dialog" aria-label={title}>
-        <div className="h">{title}</div>
-        <span className={`h10-bulk-inp ${suffix ? 'sf' : ''}`}>{prefix && <span className="pf">{prefix}</span>}<input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} aria-label={title} autoFocus />{suffix && <span className="sfx">{suffix}</span>}</span>
-        <div className="f"><button type="button" className="h10-am-link" onClick={onClose}>Cancel</button><button type="button" className="h10-am-btn primary sm" onClick={() => onApply(v)}>Apply</button></div>
-      </div>
-    </>
-  )
-}
+// U11c — `RangePopover` / `ValuePopover` MOVED to `../_shared/RuleColumnEditors.tsx` on operator
+// instruction 2026-08-19: *"the modal that appears when I click on the edit of the Min/Max/Bid
+// column ... should be the same as on the Ad Manager, and the same with others."* Apply Rules had
+// forked its own full-screen modal for the same field and the same endpoint. The components are
+// unchanged in shape; what changed is that they take CENTS (the unit the endpoint takes, dropping
+// the client-derived euro pair) and carry the ≥€0.02 / min≤max validation Apply Rules had and this
+// page did not.
 
 // Row icon cluster (H10): targeting letter (A=auto / M=manual, inferred from the
 // campaign name) + product badge (SP/SB/SD). Status renders as a coloured pill.
@@ -787,7 +754,7 @@ export function CampaignsGrid() {
   const [statusMenu, setStatusMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [rulesModal, setRulesModal] = useState<Camp | null>(null)
   const [bidRuleMenu, setBidRuleMenu] = useState<{ id: string; x: number; y: number } | null>(null)
-  const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; x: number; y: number } | null>(null)
+  const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; anchor: PopAnchor } | null>(null)
   const colHiRef = useRef<string | null>(null) // header hover → column highlight, toggled via direct DOM (no grid re-render)
   // pointer-based column reorder — smooth chip + live drop-indicator driven by
   // direct DOM (NO per-move grid re-renders); the reorder commits once on release.
@@ -846,16 +813,10 @@ export function CampaignsGrid() {
       const qs = opts?.range ? `&startDate=${ymd(opts.range.start)}&endDate=${ymd(opts.range.end)}` : ''
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500${qs}`, { cache: 'no-store' })
       const d = await r.json()
-      // ADX G2 — derive the display range from the persisted cents. Before this the
-      // column was UI-only: the editor updated local state, toasted "Amazon field
-      // pending", and threw the value away on refresh.
-      const centsToEur = (v: number | null | undefined) => (v == null ? null : v / 100)
-      setRows(((d.items ?? []) as Camp[]).map((c) => ({
-        ...c,
-        minMaxBid: (c.minBidCents != null || c.maxBidCents != null)
-          ? { min: centsToEur(c.minBidCents), max: centsToEur(c.maxBidCents) }
-          : null,
-      })))
+      // ADX G2 — Min/Max Bid is persisted, not UI-only: before it, the editor updated local
+      // state, toasted "Amazon field pending", and threw the value away on refresh. The cells
+      // read `minBidCents`/`maxBidCents` straight off the payload now, so nothing is derived here.
+      setRows((d.items ?? []) as Camp[])
     } catch { /* ignore */ } finally { setLoading(false); setSyncing(false) }
   }, [])
 
@@ -1133,25 +1094,27 @@ export function CampaignsGrid() {
    * makes a campaign unwritable by anything — every bid at once below the floor and
    * above the ceiling. Local state is only updated once the server has accepted.
    */
-  const setCampaignMinMaxBid = async (c: Camp, mm: { min: number | null; max: number | null } | null) => {
+  const setCampaignMinMaxBid = async (c: Camp, mm: { minCents: number | null; maxCents: number | null } | null) => {
     setEditPop(null)
-    const toCents = (v: number | null | undefined) => (v == null ? null : Math.round(v * 100))
-    const minBidCents = toCents(mm?.min)
-    const maxBidCents = toCents(mm?.max)
+    // Cents in, cents out — `RangePopover` speaks the endpoint's own unit, so nothing converts here.
+    const minBidCents = mm?.minCents ?? null
+    const maxBidCents = mm?.maxCents ?? null
     const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/guardrails`, { minBidCents, maxBidCents })
     if (r.outcome === 'applied' || r.outcome === 'queued') {
-      setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minBidCents, maxBidCents, minMaxBid: mm } : x)))
-      const label = mm && (mm.min != null || mm.max != null)
-        ? `${mm.min != null ? eur(mm.min) : '—'} – ${mm.max != null ? eur(mm.max) : '—'}`
+      setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minBidCents, maxBidCents } : x)))
+      const label = minBidCents != null || maxBidCents != null
+        ? `${minBidCents != null ? eur(minBidCents / 100) : '—'} – ${maxBidCents != null ? eur(maxBidCents / 100) : '—'}`
         : 'cleared'
       toast(`Bid bounds → ${label} · ${c.name}`)
     } else {
       toast(`Bid bounds refused · ${c.name}${r.error ? ` — ${r.error}` : ''}`)
     }
   }
-  const setCampaignMinMaxBudget = (c: Camp, mm: { min: number | null; max: number | null } | null) => {
+  const setCampaignMinMaxBudget = (c: Camp, mm: { minCents: number | null; maxCents: number | null } | null) => {
     setEditPop(null)
-    setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minMaxBudget: mm } : x)))
+    // Still local-only — no Amazon field exists — so it keeps holding euros in `Camp`.
+    const asEur = mm && { min: mm.minCents == null ? null : mm.minCents / 100, max: mm.maxCents == null ? null : mm.maxCents / 100 }
+    setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minMaxBudget: asEur } : x)))
     toast(`Min/Max budget updated · ${c.name} (local — Amazon field pending)`)
   }
   // Target ACoS → real /automation write (fraction); Daily Budget → gated PATCH.
@@ -1264,7 +1227,7 @@ export function CampaignsGrid() {
     // hover-revealed edit pencil (H10: pencil appears on row hover only); opens a
     // popover anchored under the cell.
     const ed = (display: ReactNode, kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget') => (
-      <span className="h10-edcell">{display}<button type="button" className="h10-editpen" aria-label="Edit" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setEditPop({ id: c.id, kind, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
+      <span className="h10-edcell">{display}<button type="button" className="h10-editpen" aria-label="Edit" onClick={(ev) => setEditPop({ id: c.id, kind, anchor: anchorFromEvent(ev) })}><Pencil size={11} /></button></span>
     )
     switch (key) {
       case 'bidRule': return <span className="h10-edcell"><span className="h10-bidrule"><Shuffle size={13} /> {bidAlgoLabel(c)}</span><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
@@ -1780,10 +1743,17 @@ export function CampaignsGrid() {
         const c = rows.find((x) => x.id === editPop.id)
         if (!c) return null
         const close = () => setEditPop(null)
-        if (editPop.kind === 'targetAcos') return <ValuePopover title="Target ACoS" suffix="%" initial={((c.targetAcos ?? 0.3) * 100).toFixed(2)} x={editPop.x} y={editPop.y} onApply={(v) => void setCampaignTargetAcos(c, v)} onClose={close} />
-        if (editPop.kind === 'dailyBudget') return <ValuePopover title="Daily Budget" prefix="€" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} x={editPop.x} y={editPop.y} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
-        if (editPop.kind === 'minMaxBid') return <RangePopover title="Min/Max Bid" rangeLabel="Set a Min/Max Bid Range" initial={c.minMaxBid ?? null} x={editPop.x} y={editPop.y} onApply={(mm) => setCampaignMinMaxBid(c, mm)} onClose={close} />
-        return <RangePopover title="Min/Max Budget" rangeLabel="Set a Min/Max Budget Range" initial={c.minMaxBudget ?? null} x={editPop.x} y={editPop.y} onApply={(mm) => setCampaignMinMaxBudget(c, mm)} onClose={close} />
+        // 🔴 `initial` is '' when the field is UNSET. It used to be `((c.targetAcos ?? 0.3) * 100)`,
+        // so opening the pencil on a campaign with no target pre-filled 30.00 and pressing Apply
+        // wrote a target nobody chose — the editor half of the fabricated 30% removed from the
+        // display cell on 2026-08-19. The fallback belongs in the placeholder, and now is.
+        if (editPop.kind === 'targetAcos') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} title="Target ACoS" suffix="%" initial={c.targetAcos != null ? (c.targetAcos * 100).toFixed(2) : ''} placeholder="unset" note="Leave blank and the optimiser uses its own 30% fallback — a fallback is not a setting." anchor={editPop.anchor} onApply={(v) => void setCampaignTargetAcos(c, v)} onClose={close} />
+        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} title="Daily Budget" prefix="€" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
+        // Was `initial={c.minMaxBid}`, a euro pair derived at fetch time purely to feed this
+        // popover and its cell — correct, but a second unit for one field. Both now read the
+        // cents the endpoint itself takes, and the derived field is gone.
+        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} title="Min/Max Bid" rangeLabel="Set a Min/Max Bid Range" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} note="Enforced at the write gate: a bid outside the band is DENIED and recorded, never clamped." anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
+        return <RangePopover key={`${editPop.id}:${editPop.kind}`} title="Min/Max Budget" rangeLabel="Set a Min/Max Budget Range" minCents={c.minMaxBudget?.min != null ? Math.round(c.minMaxBudget.min * 100) : null} maxCents={c.minMaxBudget?.max != null ? Math.round(c.minMaxBudget.max * 100) : null} floorCents={0} note="Read by Budget Manager. Local only — no Amazon field exists yet." anchor={editPop.anchor} onApply={(mm) => setCampaignMinMaxBudget(c, mm)} onClose={close} />
       })()}
 
       {/* AX-IE.10 — "export exactly what I'm looking at".

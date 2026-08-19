@@ -511,17 +511,20 @@ Two consequences of those measurements, both of which shaped the cells:
   class this whole programme removes — so the cell shows whether a rule has actually *moved* this
   budget, and carries the reach as context ("— 6 can").
 
-### 🔴 Two fabricated readings on the Ad Manager, fixed in passing
+### 🔴 One fabricated reading on the Ad Manager, fixed in passing
 
-Swapping the Ad Manager's display halves onto the shared cells removed two values that were not
-readings at all:
+`targetAcos` rendered as `(c.targetAcos ?? 0.3) * 100` → a confident **"30.00%" on every row**, a
+fallback wearing a setting's clothes. Now "—". *Verified: `30.00%` occurs **0** times in the
+deployed DOM.*
 
-- `targetAcos` rendered as `(c.targetAcos ?? 0.3) * 100` → a confident **"30.00%" on every row**, a
-  fallback wearing a setting's clothes. Now "—". *Verified: `30.00%` occurs **0** times in the
-  deployed DOM.*
-- `minMaxBid` read `c.minMaxBid`, **a key the payload does not contain**, so it printed "None" on all
-  220 while `minBidCents`/`maxBidCents` sat unread in the same response. Now **82 real bands, 18
-  None** in the first 100 rows.
+⚠ **Correction, same day.** The first version of this section also claimed the Ad Manager's
+`minMaxBid` "read a key the payload does not contain and printed None on all 220". **That was
+wrong, and it was mine.** The Ad Manager *derived* `minMaxBid` client-side from
+`minBidCents`/`maxBidCents` at fetch time (ADX G2), so its cell and its editor were both showing
+real bands. The dead-key defect was in **Apply Rules'** old grid — `apps/web/.../apply-rules/types.ts`
+documents it there, correctly. Swapping the Ad Manager's Min/Max cell onto the shared component was
+therefore like-for-like, not a bug fix. It still reads **82 real bands vs 18 None** in the first 100
+rows, as it did before.
 
 ### U11b — the two stragglers, and H10's order (`6c2409dd3`)
 
@@ -565,6 +568,64 @@ share H10's label, not a drifted copy of Apply Rules' column — which is why it
 than swapped. Resolving it means either renaming it "Bid Algorithm" (the key it already uses
 internally) and giving the Ad Manager a real Bid Rule column off the bid grid, or retiring the
 picker. Operator decision, not a refactor.
+
+---
+
+## U11c — the same EDITORS, not just the same readings (2026-08-19, commit pending)
+
+Operator, 2026-08-19: *"I said to make use of the same UI, like, for example, the modal that appears
+when I click on the edit of the Min/Max/Bid column. It should be the same as on the Ad Manager, and
+the same with others."*
+
+U11 shared the **reading**. The **editing** was still forked, on the same field and the same
+endpoint:
+
+| | Ad Manager | Apply Rules (before) |
+|---|---|---|
+| shape | anchored **popover** under the cell | full-screen **modal** |
+| title | "Min/Max Bid" | "Bid band — «campaign»" |
+| control | radio None / Set a Min/Max Bid Range + two € inputs | "Floor (€)" / "Ceiling (€)" number fields |
+| verb | **Apply** | **Save band** |
+| pencil | `.h10-editpen`, revealed on row hover | `.h10-ar-edit`, always visible, blue chip on hover |
+| endpoint | `PATCH /campaigns/:id/guardrails` | `PATCH /campaigns/:id/guardrails` — **already the same** |
+| Target ACoS editor | anchored popover → `PATCH /automation` | **none at all** |
+
+`RangePopover` and `ValuePopover` moved out of `CampaignsGrid.tsx` into
+`ads/_shared/RuleColumnEditors.tsx`; `ArBoundsDialog` was **deleted**, and its `.h10-ar-bounds` /
+`.h10-ar-edit` rules with it. Apply Rules gained the Target ACoS pencil it never had. **No CSS was
+written for the move** — every class the popovers use (`h10-mmbid`, `h10-editpop`, `h10-bulk-inp`,
+`h10-menu-back`, `h10-am-link`, `h10-am-btn`) was verified present in the *deployed* stylesheets
+from the Apply Rules page before a line changed, because `marketing/ads/layout.tsx` loads `ads.css`
+for the whole sub-tree. Both grids render `.h10-am-grid`, so the Ad Manager's hover-pencil selector
+already matched Apply Rules too.
+
+### What the move fixed
+
+- 🔴 **Target ACoS opened pre-filled at 30.00.** `initial={((c.targetAcos ?? 0.3) * 100)}` — on a
+  field set on **0 of 220**, that is every campaign. Open the pencil, press Apply without typing,
+  and you have written a 30% target nobody chose. This is the editor half of the fabricated 30%
+  removed from the display cell earlier the same day. `initial` is now `''` when unset and the
+  fallback lives in the placeholder, where a fallback belongs.
+- **Validation is now shared, which is a change for the Ad Manager.** Apply Rules' modal refused a
+  bound below **€0.02** (the suppression floor — a €0.00 floor is not a floor) and refused
+  floor > ceiling. The Ad Manager's popover validated nothing at all. The rule lives in the popover
+  now, so both pages enforce it.
+- **One unit for one field.** `RangePopover` takes CENTS, the unit `/guardrails` itself takes. The
+  Ad Manager's client-derived euro pair (`Camp.minMaxBid`) existed only to feed this popover and its
+  cell; both read the cents directly now, so the derived field is gone.
+- 🔴 **Every mount takes a `key`.** Both popovers seed `useState` from props, so React reusing one
+  instance across two rows would show the first row's values while writing to the second. Today the
+  full-screen backdrop makes that unreachable by hand — exactly the kind of accident that stops
+  being true later.
+
+### Scope: what is NOT a fork, checked rather than assumed
+
+- **Control Room › Guardrails** (`GuardrailGrid.tsx`) writes the same endpoint but through **inline
+  editable boxes in the grid**, a bulk governance interaction, not a pencil-and-popover. Left alone.
+- `bid/BidBounds.tsx`, `budget/BudGuardrails.tsx`, `bid/BidGoalDialog.tsx` are **PARKED** — not
+  mounted, nothing rendering, no inconsistency visible.
+- The Ad Manager's **Bid Rule** popover is its bid-*algorithm* picker (still local-only). Unchanged,
+  and still the open item recorded under U11.
 
 ---
 

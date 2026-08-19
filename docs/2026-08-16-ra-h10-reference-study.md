@@ -695,10 +695,12 @@ adopt the other's shape). Change a cell there and both pages change.
 - **Target ACoS** and **Bid Automation** are uniform today. Uniform ≠ fake: both are real, writable
   fields, and Apply Rules' bulk verbs (U9) write them. "—" and "off" are readings.
 
-**Two fabricated values removed from the Ad Manager in passing**: `targetAcos` was rendered as
-`(c.targetAcos ?? 0.3) * 100`, printing a confident **"30.00%" on every row**; `minMaxBid` read a
-key **the payload does not contain**, printing "None" on all 220 while the cents sat unread in the
-same response.
+**One fabricated value removed from the Ad Manager in passing**: `targetAcos` was rendered as
+`(c.targetAcos ?? 0.3) * 100`, printing a confident **"30.00%" on every row**.
+
+⚠ **Correction:** this paragraph first also blamed the Ad Manager's `minMaxBid` for reading a key
+the payload does not contain. It did not — it *derived* the pair client-side from the cents at
+fetch time (ADX G2) and was correct. That defect belonged to **Apply Rules'** old grid.
 
 **U11b** put Apply Rules' two *pre-existing* columns on the shared cells too — they had been saying
 "not set" where the Ad Manager said "None" for the same field — and reordered the five into H10's

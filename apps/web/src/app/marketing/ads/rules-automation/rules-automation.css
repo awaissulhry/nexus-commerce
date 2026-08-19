@@ -4762,11 +4762,10 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 /* AR.S1 — the connected columns: the gate verdict, the editable band, strategy, target ACoS. */
 .h10-ar-pill.mg-on { background: #e9f7ef; color: #116b3a; }
 .h10-ar-pill.mg-off { background: #fff6e8; color: #7a4512; }
-.h10-ar-bounds { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
-/* U11 — the value inside is now the shared `.h10-rc-num` / `.h10-rc-none`, so the local <b>
-   rule that used to style it is gone. This wrapper only lays the reading out beside the pencil. */
-.h10-ar-edit { appearance: none; display: inline-flex; align-items: center; padding: 2px; background: none; border: 0; border-radius: 4px; color: #8b95a1; cursor: pointer; }
-.h10-ar-edit:hover { color: #1f6fde; background: #eef4fd; }
+/* U11c — `.h10-ar-bounds` / `.h10-ar-edit` DELETED. The Min·Max bid and Target ACoS cells use the
+   Ad Manager's own `.h10-edcell` + `.h10-editpen` (ads.css:1137-1140), which reveal the pencil on
+   row hover; `AdsDataGrid` renders `.h10-am-grid` on both pages, so that hover selector already
+   matched here. Two pencils that behaved differently on one field is exactly what U11c removed. */
 
 /* HV.7 — the harvest slice of the one inbox. */
 .h10-hv7-groups { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #3f4754; }
