@@ -242,11 +242,24 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
               connectionId: already.id,
               username: identity.username,
             });
+            // ⚠ The SAME response shape as the normal path below. The callback
+            // page reads `result.connection.sellerName` unconditionally on any
+            // 2xx, so an early return with a different shape crashes it with
+            // "Cannot read properties of undefined" and reports Connection
+            // Failed for a reconnect that actually SUCCEEDED. Measured on prod
+            // 2026-08-19: the tokens were saved, the row was updated, and the
+            // operator was told it failed.
             return reply.send({
               success: true,
-              connectionId: already.id,
+              message: "eBay connection re-authorised",
               reconnected: true,
-              sellerName: identity.username,
+              connection: {
+                id: already.id,
+                channelType: "EBAY",
+                isActive: true,
+                sellerName: identity.username,
+                storeName: sellerInfo?.storeName,
+              },
             });
           }
         } else {
