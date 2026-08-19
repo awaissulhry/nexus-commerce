@@ -4763,7 +4763,8 @@ tr:hover .h10-ar-open, .h10-ar-open:focus-visible { opacity: 1; text-decoration:
 .h10-ar-pill.mg-on { background: #e9f7ef; color: #116b3a; }
 .h10-ar-pill.mg-off { background: #fff6e8; color: #7a4512; }
 .h10-ar-bounds { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
-.h10-ar-bounds b { font-weight: 600; color: #16202b; white-space: nowrap; }
+/* U11 — the value inside is now the shared `.h10-rc-num` / `.h10-rc-none`, so the local <b>
+   rule that used to style it is gone. This wrapper only lays the reading out beside the pencil. */
 .h10-ar-edit { appearance: none; display: inline-flex; align-items: center; padding: 2px; background: none; border: 0; border-radius: 4px; color: #8b95a1; cursor: pointer; }
 .h10-ar-edit:hover { color: #1f6fde; background: #eef4fd; }
 

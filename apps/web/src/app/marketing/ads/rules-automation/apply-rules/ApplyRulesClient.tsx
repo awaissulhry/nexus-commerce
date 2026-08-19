@@ -87,7 +87,7 @@ import {
 } from './slot-contract'
 import { ApplyRulesSections } from './ApplyRulesSections'
 import { ArBulkVerbs } from './ArBulkVerbs'
-import { BidRuleCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
+import { BidRuleCell, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
 import { useAdsSync } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
@@ -598,10 +598,16 @@ export function ApplyRulesClient() {
       },
     },
     /**
-     * U11 — the three H10 columns this page was missing, on operator instruction 2026-08-19.
-     * They render through `_shared/RuleColumnCells.tsx`, the SAME cells the Ad Manager grid uses,
-     * so the two pages cannot drift apart. Target ACoS and Min · Max bid already existed here (and
-     * were already truthful, unlike the Ad Manager's, which read keys the payload never returns).
+     * U11 — Helium 10's five rule columns, in H10's own left-to-right order:
+     * **Bid Rule · Target ACoS · Min/Max Bid · Bid Automation · Budget Rule**. Three of them
+     * (Bid Rule, Bid Automation, Budget Rule) were missing entirely before 2026-08-19; the other
+     * two already existed here and were already truthful, unlike the Ad Manager's, which read keys
+     * the payload never returns. All five now render through `_shared/RuleColumnCells.tsx`, the
+     * SAME cells the Ad Manager grid uses, so the two pages cannot drift apart.
+     *
+     * This page's own governance columns — Automations (the write gate) and Bidding strategy —
+     * follow the block rather than sitting inside it. They are not H10 columns and the gate is
+     * deliberately NOT adjacent to Bid Automation: the two look alike and mean different things.
      */
     {
       key: 'bidRule',
@@ -610,6 +616,37 @@ export function ApplyRulesClient() {
       tip: 'Who owns this campaign\'s bids — a rank plan or schedule, a rule, or nobody. Read from the bid grid\'s own `bidder`, which really varies (measured 2026-08-19: 32 held by a schedule, 6 manual, 45 owned by nothing). H10 shows its bid ALGORITHM here; we have no per-campaign algorithm field, and the bid owner is the same question answered with a field that exists.',
       sortValue: (r) => bidOwners.get(r.id)?.bidderName ?? '',
       render: (r) => { const o = bidOwners.get(r.id); return <BidRuleCell bidder={o?.bidder} bidderName={o?.bidderName} /> },
+    },
+    {
+      key: 'tacos',
+      label: 'Target ACoS',
+      metric: false,
+      tip: 'The campaign\'s DECLARED target ACoS, from the guardrail grid. A dash means unset — the optimiser falls back to a flat 30% when asked, but a fallback is not a setting and this column no longer asserts it on 220 rows.',
+      sortValue: (r) => r.targetAcosPct ?? -1,
+      // 🔴 The guardrail grid returns a PERCENTAGE (`targetAcosPct`); the shared cell takes the
+      // FRACTION the campaigns payload stores. Converted here, once, rather than leaning on the
+      // cell's `> 1 means already a percentage` guard — that guard exists for the one prod rule
+      // that stores 30 where the rest store 0.3, and a real 0.5% target would trip it into 50%.
+      render: (r) => <TargetAcosCell fraction={r.targetAcosPct == null ? null : r.targetAcosPct / 100} />,
+    },
+    {
+      key: 'bounds',
+      label: 'Min · Max bid',
+      metric: false,
+      tip: 'The band the write gate enforces on this campaign\'s bids — DENIED at the gate, never clamped. "None" is not a band of zero: nothing bounds this campaign\'s bids but the €0.02 suppression floor. The pencil edits both ends; measured 2026-08-12, minBidCents was set on 0 of 220 — this is its first UI.',
+      sortValue: (r) => r.maxBidCents ?? -1,
+      // The READING is the shared cell; the pencil beside it is this page's, because the Ad Manager
+      // opens its own editor. Sharing the reading is what stops the two pages disagreeing about
+      // what "no band" looks like — this column used to say "not set" where the Ad Manager said
+      // "None", for the same campaign, on the same field.
+      render: (r) => (
+        <span className="h10-ar-bounds">
+          <MinMaxBidCell minCents={r.minBidCents} maxCents={r.maxBidCents} />
+          <button type="button" className="h10-ar-edit" title={`Set the bid band for ${r.name}`} aria-label={`Set the bid band for ${r.name}`} onClick={() => setBoundsFor(r)}>
+            <Pencil size={11} aria-hidden />
+          </button>
+        </span>
+      ),
     },
     {
       key: 'bidAutomation',
@@ -627,7 +664,7 @@ export function ApplyRulesClient() {
       sortValue: (r) => (budgetOwners.get(r.id)?.lastMovedByKind === 'rule' ? 1 : 0),
       render: (r) => { const o = budgetOwners.get(r.id); return <BudgetRuleCell reachedBy={o?.reachedBy} lastMovedByKind={o?.lastMovedByKind} lastMovedBy={o?.lastMovedBy} /> },
     },
-    // ── AR.S1 — the four connected columns ───────────────────────────────────────────────────
+    // ── AR.S1 — this page's own governance columns ────────────────────────────────────────────
     {
       key: 'managed',
       label: 'Automations',
@@ -643,23 +680,6 @@ export function ApplyRulesClient() {
       },
     },
     {
-      key: 'bounds',
-      label: 'Min · Max bid',
-      metric: false,
-      tip: 'The band the write gate enforces on this campaign\'s bids — DENIED at the gate, never clamped. "not set" is not a band of zero: nothing bounds this campaign\'s bids but the €0.02 suppression floor. The pencil edits both ends; measured 2026-08-12, minBidCents was set on 0 of 220 — this is its first UI.',
-      sortValue: (r) => r.maxBidCents ?? -1,
-      render: (r) => (
-        <span className="h10-ar-bounds">
-          {r.minBidCents == null && r.maxBidCents == null
-            ? <span className="h10-ar-nd">not set</span>
-            : <b>{r.minBidCents != null ? `€${(r.minBidCents / 100).toFixed(2)}` : '—'} – {r.maxBidCents != null ? `€${(r.maxBidCents / 100).toFixed(2)}` : '—'}</b>}
-          <button type="button" className="h10-ar-edit" title={`Set the bid band for ${r.name}`} aria-label={`Set the bid band for ${r.name}`} onClick={() => setBoundsFor(r)}>
-            <Pencil size={11} aria-hidden />
-          </button>
-        </span>
-      ),
-    },
-    {
       key: 'strategy',
       label: 'Bidding strategy',
       metric: false,
@@ -668,16 +688,6 @@ export function ApplyRulesClient() {
       render: (r) => (r.biddingStrategy
         ? <span title={r.biddingStrategy}>{STRATEGY_LABEL[r.biddingStrategy] ?? r.biddingStrategy}</span>
         : <span className="h10-ar-nd">not reported</span>),
-    },
-    {
-      key: 'tacos',
-      label: 'Target ACoS',
-      metric: false,
-      tip: 'The campaign\'s DECLARED target ACoS, from the guardrail grid. A dash means unset — the optimiser falls back to a flat 30% when asked, but a fallback is not a setting and this column no longer asserts it on 220 rows.',
-      sortValue: (r) => r.targetAcosPct ?? -1,
-      render: (r) => (r.targetAcosPct == null
-        ? <span className="h10-ar-nd">—</span>
-        : <span>{r.targetAcosPct}%</span>),
     },
   // 🔴 `bidOwners` / `budgetOwners` MUST be here: the three U11 cells close over those maps, and
   // they arrive AFTER the first render (separate fetches). Without them the memo keeps the empty
