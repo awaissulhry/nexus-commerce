@@ -1,6 +1,7 @@
 # MAP — Multi-Account & Profiles
 
-**Status:** PROPOSAL — awaiting gate. No code changed.
+**Status:** MAP.0 + MAP.1 **SHIPPED and prod-verified 2026-08-19**. MAP.2 onward awaiting build.
+**Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
 **Date:** 2026-08-19
 **Supersedes / absorbs:** [`2026-07-30-ebay-multi-account-ema.md`](2026-07-30-ebay-multi-account-ema.md)
 (eBay-only, never shipped — verified: zero EMA commits, the blocking index is still in place).
@@ -17,8 +18,8 @@ that says which one you are in, and a two-click path to connect the next one.
 2. **MAP.2's non-additive migration — approved**, conditional on a row-count-exact backfill verified
    *before* the old keys drop, and a rollback shipping alongside.
 3. **Flat file — decided at MAP.6, not now.** Everything through MAP.4 leaves the flat-file files
-   untouched; the chip reaches both flat files via `TopBar` (§2.4). The MAP.6 edit list goes back to
-   the operator for approval when the phase comes up.
+   untouched; the chip reaches both flat files through the app chrome (§2.4) — shipped, verified on
+   prod. The MAP.6 edit list goes back to the operator for approval when the phase comes up.
 4. **Catalogue overlap — deliberately deferred, and made a data question.** See §6 Q4: the answer
    binds nothing before MAP.6, and the intent-label mechanism (§3.4) resolves it *per product*
    instead of forcing a global policy.
@@ -211,31 +212,39 @@ a standalone list: `/marketing/ads`, `/marketing/ads-console`, `/products/next`,
 auth pages.
 
 **`/products/amazon-flat-file` and `/products/ebay-flat-file` are not on that list.** They render
-inside `AppShell`, with `TopBar` above them.
+inside `AppShell`, so anything in the app chrome reaches them.
 
-> A chip added to `TopBar` appears on both flat files **without editing a single flat-file file** —
+> A chip added to the chrome appears on both flat files **without editing a single flat-file file** —
 > which is how the operator's first ask is delivered without going near
-> `feedback_flat_file_untouchable`.
+> `feedback_flat_file_untouchable`. Confirmed on prod, MAP.1.
 
-The three standalone shells (`marketing/ads/_shell`, `products/next/_shell`) need the same component
-placed once each. One component, three mount points.
-
-**And a defect to retire on the way.** `TopBar.tsx:51-63` currently renders two hard-coded chips:
+**⚠ Corrected while building MAP.1 — where the chrome actually is.** The obvious answer,
+`components/layout/TopBar.tsx`, is **dead code: nothing imports it.** It looks exactly like the app's
+top bar and even carries two hard-coded marketplace chips —
 
 ```tsx
 <span className="w-2 h-2 rounded-full bg-green-500" />
-<span …>Amazon IT</span>
-…
-<span className="w-2 h-2 rounded-full bg-green-500" />
-<span …>eBay</span>
+<span …>Amazon IT</span>          {/* static string, permanently green, reads from nothing */}
 ```
 
-Static strings, permanently green, read from nothing. This is textbook
-`reference_fleet_stale_constant_class` — a surface rendering what no executor reads. The account chip
-replaces them with the truth.
+— but those have never rendered, so they are not the `reference_fleet_stale_constant_class` defect
+this phase looked like it was retiring. The file was left untouched.
 
-`TopBar.tsx` is also entirely hand-rolled legacy Tailwind (`bg-white`, raw `<svg>`), so the new
-component is built in the design system and dropped in, per `feedback_design_system`.
+What actually renders on desktop:
+
+| Slot | Component | Reaches |
+|---|---|---|
+| `sidebar` | `AppNavRail` | left rail, every non-standalone route (**and** `/products/next`) |
+| `topBar` | `MobileTopBar` | `md:hidden` — phones only |
+| `overlays` | `NotificationsBell`, `fixed top-3 right-3 z-40` | **the desktop top-right corner** |
+
+So the chip is a sibling of the bell in `overlays`, offset left by its width. One mount point, not
+three — and it lands exactly where the operator asked for it.
+
+The other two shells were left alone on purpose: `AppNavRail` **already** fetches `/api/connections`
+and derives real per-channel connected state, so a second control there would duplicate a working
+one; and the ads console's `AdsPageHeader` is per-page furniture across 49 pages, where a global
+identity chip does not belong until it can actually switch (MAP.4).
 
 ### 2.5 Permissions already have the right bone
 
@@ -343,14 +352,18 @@ rather than inferred.
 Each phase is independently shippable and live-by-default (`feedback_ship_live_not_dark`).
 Phases marked **🔒** cannot start without an explicit operator decision — they are listed in §6.
 
-### MAP.0 — Truth (read-only)
+> **MAP.0 and MAP.1 are SHIPPED and prod-verified, 2026-08-19** — commits `0f9fc2fb9` + `ba235d71e`.
+> What the build found that this plan did not predict is recorded in §2.4 (the chrome) and §7 (the
+> defect, the DS gap, and two things MAP.4 inherits).
+
+### MAP.0 — Truth (read-only) ✅ SHIPPED
 Audit script enumerating every connection-resolution site for **all** channels, classified by whether
 the scope is derivable (listing / item / SKU / order in hand) or genuinely ambient (jobs, crons).
 Plus `GET /api/connections/diagnostics` reporting the live single-account state so the "before" is
 provable on prod.
 **Ships:** one script, one read-only endpoint. No schema, no UI, no behaviour.
 
-### MAP.1 — The chip tells the truth ⭐ *the operator's first ask*
+### MAP.1 — The chip tells the truth ⭐ ✅ SHIPPED
 DS `AccountSwitcher` + `AccountBadge` + an `AccountContext` provider. Reads the real
 `/api/connections`. Shows every connected account grouped by channel, with real health, real market
 reach, real labels. Mounted in `TopBar` (→ **both flat files inherit it, zero flat-file edits**), in
@@ -510,7 +523,70 @@ the question stops being hypothetical.
 
 ---
 
-## 7. Risks
+## 7. What MAP.0 found
+
+### 9.1 The measured state (prod, 2026-08-19)
+
+`GET /api/accounts/diagnostics`: **11 `ChannelConnection` rows, 2 active** — one Amazon (`env`), one
+eBay (`oauth`) — and **9 revoked eBay grants**, the residue of revoke-then-reconnect being the only
+multi-account move available today. The partial unique index is present and read straight from
+`pg_indexes`, not inferred from the migration file.
+
+### 9.2 The burn-down, counted structurally
+
+`scripts/map0-connection-resolution-audit.mts` parses the TypeScript AST rather than grepping source
+(`reference_verification_probe_false_positives`: ES6 shorthand beats a regex, a `vi.fn()` mock reads
+as a call site, a comment counts). **94 call sites; 60 AMBIENT across 38 files** — 59 eBay, 1 Amazon.
+That set is `docs/2026-08-19-map0-burndown.md`, and it is what MAP.3 converts.
+
+### 9.3 🔴 A live defect, three months old, found by the audit and NOT fixed
+
+Two sites filter `ChannelConnection` on a field that does not exist:
+
+```ts
+await (prisma as any).channelConnection.findFirst({
+  where: { channel: 'EBAY', isActive: true },   // the column is `channelType`
+})
+```
+
+- `apps/api/src/routes/orders.routes.ts:994` — eBay **order cancellation**
+- `apps/api/src/services/ebay-pushback/index.ts:226` — eBay **markAsShipped / tracking upload**
+
+Both introduced 2026-05-07 (`45830c7ef`, `2da934350`). Proven, not inferred:
+
+1. `Prisma.ChannelConnectionWhereInput` rejects `channel` at compile time — `error TS2353`. The
+   `(prisma as any)` cast is exactly what hides it, the `reference_as_never_hides_write_failures`
+   class again, third measured instance.
+2. Run against the production database: `{ channel }` throws
+   **`PrismaClientValidationError: Unknown argument 'channel'`**; `{ channelType }` returns a real
+   connection id. Prisma rejects the unknown argument — it does not ignore it.
+
+So both paths have thrown on every invocation since May. **Left unfixed pending approval** — it is a
+plain bug outside the MAP.0/MAP.1 grant, and the one-word fix belongs to whoever owns those paths.
+
+### 9.4 A design-system gap
+
+`.dark` (`design-system/styles/tokens.css:190`) redefines the text, surface and border tokens but
+**not** `--h10-warning-strong`, `--h10-danger-strong` or `--h10-text-link`. On a dark panel those
+light-mode values measure **2.94:1** and **3.18:1** — both below AA. Fixed scoped to the switcher's
+own classes rather than to the tokens, because the token-level fix touches every component and
+belongs to the DS-hardening session.
+
+Contrast was verified by compositing each element against **its own** background
+(`reference_contrast_probe_own_background`) with opacity folded in: **28 text nodes, 0 failures, in
+both themes.**
+
+### 9.5 Two things MAP.4 now has to carry
+
+- **eBay has no seller identity.** `ebay-auth.service.ts:451` writes the literal
+  `"eBay seller (verified)"` because the OAuth scope in use returns no name. MAP.4 must add the
+  identity scope, or it cannot reject a duplicate account by sign-in name.
+- **Amazon's label is its merchant id.** `displayName` holds `A1VRHKTGYO1JNU`. Both are surfaced as
+  `labelIsPlaceholder`, which is the concrete case for MAP.2's `accountLabel`.
+
+---
+
+## 8. Risks
 
 | Risk | Mitigation |
 |---|---|
@@ -524,7 +600,7 @@ the question stops being hypothetical.
 
 ---
 
-## 8. Explicitly out of scope
+## 9. Explicitly out of scope
 
 - WooCommerce and Etsy (`project_active_channels`).
 - Reopening shared-pool vs. split inventory (`project_inventory_split`).
