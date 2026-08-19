@@ -70,6 +70,7 @@ import { buildListingScopeWhere, type ListingScope } from '../services/flat-file
 // EFX P4 — required-aspect push preflight (pure helper; requiredness comes from schemaCache)
 import { findMissingRequiredAspects, type AspectRequirement } from '../services/ebay-aspect-preflight.js';
 import { fireOutboundJobs } from '../services/outbound-enqueue.js';
+import { tryResolveConnection } from '../services/connection-resolver.service.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -781,9 +782,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     let _relinkToken: string | null = null;
     const getRelinkToken = async (): Promise<string> => {
       if (_relinkToken) return _relinkToken;
-      const conn = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true }, select: { id: true },
-      });
+      // MAP.6 — DECLARED: no row in scope here names an account.
+      const conn = await tryResolveConnection({ channel: 'EBAY', primary: true });
       if (!conn) throw new Error('No active eBay connection');
       _relinkToken = await ebayAuthService.getValidToken(conn.id);
       return _relinkToken;
@@ -1295,9 +1295,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                       select: { product: { select: { sku: true } } },
                     })
                     if (!shellCl?.product?.sku) continue // only unambiguous shells auto-heal
-                    const connection = await prisma.channelConnection.findFirst({
-                      where: { channelType: 'EBAY', isActive: true }, select: { id: true },
-                    })
+                    // MAP.6 — DERIVED from the eBay ItemID being worked on, with the channel's
+                    // primary as a fallback. The fallback is load-bearing, not laziness: an item
+                    // with no SharedListingMembership row yet cannot be derived FROM, and these
+                    // routes exist partly to create those rows — deriving strictly would 503 on
+                    // exactly the adoption case they are for. With one account both paths return
+                    // the same row, so today's behaviour is unchanged.
+                    const connection =
+                      (await tryResolveConnection({ itemId })) ??
+                      (await tryResolveConnection({ channel: 'EBAY', primary: true }))
                     if (!connection) continue
                     const token = await ebayAuthService.getValidToken(connection.id)
                     const { reconcileMembershipsFromEbay: reconcileFn } = await import('../services/ebay-membership-reconcile.service.js')
@@ -1520,10 +1526,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     // Get eBay connection — connectionMetadata carries ebayPolicies (policy IDs +
     // merchantLocationKey) configured by the operator in account settings.
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true, connectionMetadata: true },
-    });
+    // MAP.6 — DECLARED: no row in scope here names an account.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true });
 
     if (!connection) {
       return reply.code(503).send({
@@ -2939,10 +2943,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const itemId = String(request.query.itemId ?? '').trim()
       const marketplace = String(request.query.marketplace ?? 'IT').toUpperCase()
       if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.6 — DERIVED from the eBay ItemID being worked on, with the channel's
+      // primary as a fallback. The fallback is load-bearing, not laziness: an item
+      // with no SharedListingMembership row yet cannot be derived FROM, and these
+      // routes exist partly to create those rows — deriving strictly would 503 on
+      // exactly the adoption case they are for. With one account both paths return
+      // the same row, so today's behaviour is unchanged.
+      const connection =
+        (await tryResolveConnection({ itemId, marketplace })) ??
+        (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {
@@ -3006,10 +3015,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const itemId = String(request.body?.itemId ?? '').trim()
       const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
       if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.6 — DERIVED from the eBay ItemID being worked on, with the channel's
+      // primary as a fallback. The fallback is load-bearing, not laziness: an item
+      // with no SharedListingMembership row yet cannot be derived FROM, and these
+      // routes exist partly to create those rows — deriving strictly would 503 on
+      // exactly the adoption case they are for. With one account both paths return
+      // the same row, so today's behaviour is unchanged.
+      const connection =
+        (await tryResolveConnection({ itemId, marketplace })) ??
+        (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {
@@ -3065,10 +3079,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const itemId = String(request.body?.itemId ?? '').trim()
       const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
       if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.6 — DERIVED from the eBay ItemID being worked on, with the channel's
+      // primary as a fallback. The fallback is load-bearing, not laziness: an item
+      // with no SharedListingMembership row yet cannot be derived FROM, and these
+      // routes exist partly to create those rows — deriving strictly would 503 on
+      // exactly the adoption case they are for. With one account both paths return
+      // the same row, so today's behaviour is unchanged.
+      const connection =
+        (await tryResolveConnection({ itemId, marketplace })) ??
+        (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {
@@ -3143,10 +3162,15 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const itemId = String(request.body?.itemId ?? '').trim()
       const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
       if (!/^\d+$/.test(itemId)) return reply.code(400).send({ error: 'numeric itemId required' })
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.6 — DERIVED from the eBay ItemID being worked on, with the channel's
+      // primary as a fallback. The fallback is load-bearing, not laziness: an item
+      // with no SharedListingMembership row yet cannot be derived FROM, and these
+      // routes exist partly to create those rows — deriving strictly would 503 on
+      // exactly the adoption case they are for. With one account both paths return
+      // the same row, so today's behaviour is unchanged.
+      const connection =
+        (await tryResolveConnection({ itemId, marketplace })) ??
+        (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {
@@ -3178,10 +3202,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
       const dryRun = request.body?.dryRun === true
       if (!parentProductId) return reply.code(400).send({ error: 'parentProductId required' })
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.6 — DECLARED: no row in scope here names an account.
+      const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {
@@ -3278,10 +3300,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(503).send({ error: 'eBay publish is currently disabled', mode: republishMode });
     }
 
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
-    });
+    // MAP.6 — DECLARED: no row in scope here names an account.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true });
 
     if (!connection) {
       return reply.code(503).send({ error: 'No active eBay connection' });
@@ -3428,10 +3448,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'markets must be non-empty' });
     }
 
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
-    });
+    // MAP.6 — DECLARED: no row in scope here names an account.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true });
     if (!connection) return reply.code(503).send({ error: 'No active eBay connection' });
 
     let token: string;
@@ -3548,10 +3566,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   }>('/ebay/flat-file/feed/:taskId', async (request, reply) => {
     const { taskId } = request.params;
 
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
-    });
+    // MAP.6 — DECLARED: no row in scope here names an account.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true });
 
     if (!connection) {
       return reply.code(503).send({ error: 'No active eBay connection' });
@@ -3591,10 +3607,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   }>('/ebay/flat-file/policies', async (request, reply) => {
     const marketplace = toMarketplaceId(request.query.marketplace ?? 'IT');
 
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
-    });
+    // MAP.6 — DECLARED: no row in scope here names an account.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true });
     if (!connection) {
       return reply.code(503).send({ error: 'No active eBay connection' });
     }

@@ -1,6 +1,6 @@
 # MAP.6 — the flat-file edit list, for the operator's decision
 
-**Status:** AWAITING THE GATE. No flat-file file has been touched.
+**Status:** ✅ **(1) APPROVED AND SHIPPED 2026-08-19.** (2) still not proposed.
 **Date:** 2026-08-19
 **Why this document exists:** decision 3 (2026-08-19) was that the flat file is decided *at* MAP.6,
 not up front, and that the edit list comes back before anything is opened. This is that list.
@@ -63,6 +63,35 @@ write paths, and it is **not** proposed here.
 2. **Account-scoping the flat file** — the real MAP.6. Large, and worth its own review.
 
 Approving (1) does not commit you to (2).
+
+---
+
+## Outcome of (1) — shipped 2026-08-19
+
+12 statements converted, 5 DERIVED and 7 DECLARED, exactly as tabled above. The diff is
+**60 insertions / 46 deletions** in a 3,871-line file, most of it the explanatory comments.
+Nothing else in the flat file was touched: not the grammar, not the columns, not import/export, not
+push semantics.
+
+**One thing the table above got wrong, found by reading the code rather than trusting the plan.**
+A strictly-derived scope would have *broken* `reconcile-item`, `verify-item`, `convert-axes-italian`
+and `relabel-item`. Those routes exist partly to CREATE the `SharedListingMembership` rows that
+attribution is derived from — so on an item that has none yet, deriving strictly returns nothing and
+the route would 503 on exactly the adoption case it is for. Each derived site therefore falls back to
+the channel's primary:
+
+```ts
+const connection =
+  (await tryResolveConnection({ itemId, marketplace })) ??
+  (await tryResolveConnection({ channel: 'EBAY', primary: true }))
+```
+
+**Verified invisible.** For every distinct `(itemId, marketplace)` pair on prod — all 31 — the derived
+path and today's behaviour resolve to the **same** connection; 0 differ, and 0 needed the fallback. An
+unknown ItemID derives to nothing and falls back correctly, which is the adoption case working.
+
+**The MAP.3 burn-down is closed: 60 → 0.** The ratchet baseline is now 0, so any new ambient lookup
+anywhere in the codebase is a regression that fails the push, not a backlog item.
 
 ## Why (1) is worth doing even if (2) never happens
 

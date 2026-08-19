@@ -34,18 +34,20 @@ import ts from 'typescript'
  * 60 when MAP.0 measured it (2026-08-19, 38 files).
  * 54 after MAP.3a converted all six job sites.
  * 12 after MAP.3b converted every remaining service and route.
+ *  0 after MAP.6 part 1 converted the flat-file route, with the operator's
+ *    explicit approval of the edit list (docs/2026-08-19-map6-flat-file-edit-list.md).
  *
- * 🔴 All 12 that remain are in `routes/ebay-flat-file.routes.ts`, which is a hard
- * no-touch zone (`feedback_flat_file_untouchable`) and sits behind the operator's
- * MAP.6 gate. They are NOT forgotten and NOT unreachable work — they are the one
- * file MAP.3 is not allowed to open. Lower this to 0 in the MAP.6 commit.
+ * **The burn-down is closed.** Zero sites in this codebase resolve a marketplace
+ * account without being told, or explicitly declaring, which one they mean. Any
+ * increase from here is a regression, not a backlog item — which is exactly what a
+ * baseline of 0 is for.
  *
  * Deliberately a structural count, not a grep: a regex over source counts comments
  * and misses ES6 shorthand, which is how the DS guard came to fail on a COMMENT
  * (reference_ds_guard_greps_comments) and how a probe invented three findings in
  * one check (reference_verification_probe_false_positives).
  */
-const AMBIENT_BASELINE = 12
+const AMBIENT_BASELINE = 0
 
 /**
  * The one file allowed to resolve a connection ambiently: the resolver itself.
