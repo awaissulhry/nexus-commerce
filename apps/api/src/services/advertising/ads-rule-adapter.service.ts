@@ -298,11 +298,24 @@ export interface BuilderView {
   groups: Array<{ conditions: Array<{ metric: string; op: string; value: string }> }>
   /** one line per stored action, for the read-only summary */
   actionSummary: string[]
-  /** true when the builder could faithfully re-save this rule; false ⇒ open read-only */
+  /**
+   * How much of this rule the builder may write back. NOT all-or-nothing — the PATCH route applies
+   * only the fields present in the body, so "cannot represent the action" is no reason to refuse
+   * an edit to the criteria.
+   *
+   *   'full'     — a builder-shaped rule: everything, as before.
+   *   'criteria' — engine-native, every condition maps: name · criteria · caps · scope.
+   *                `actions` is NEVER sent, so the rule keeps the action the engine is running.
+   *   'meta'     — engine-native with a condition the builder cannot draw: name · caps · scope
+   *                only. Criteria stay read-only because saving them would DROP the one not shown.
+   */
+  editLevel: 'full' | 'criteria' | 'meta'
+  /** kept for callers that only need the yes/no; true only for `editLevel === 'full'` */
   editable: boolean
   /**
-   * Why it is not editable — shown verbatim to the operator. Empty when `editable`.
-   * Each entry names a concrete thing the builder cannot carry, never a vague "unsupported".
+   * What the builder cannot carry, shown verbatim to the operator. Each entry names a concrete
+   * thing, never a vague "unsupported". Non-empty does NOT mean nothing can be edited — read
+   * `editLevel` for that.
    */
   blockers: string[]
   /** engine condition fields with no builder metric — these would be LOST on save */
@@ -354,14 +367,56 @@ export function engineRuleToBuilderView(rule: {
   if (!slug) blockers.push('no rule type claims this action')
   if (conds.some((c) => c && typeof c === 'object' && c.field == null)) blockers.push('its conditions are a nested tree, which the builder cannot draw')
 
+  // 🔴 The criteria are editable whenever every stored condition round-trips — an unrepresentable
+  // ACTION does not block that, because the save simply omits `actions`. Only an unmapped
+  // CONDITION forces meta-only: showing 1 of 2 conditions and then writing that back would delete
+  // the one the builder could not draw.
+  const treeShaped = conds.some((c) => c && typeof c === 'object' && c.field == null)
+  const editLevel: 'full' | 'criteria' | 'meta' =
+    unmappedFields.length > 0 || treeShaped || !slug ? 'meta' : 'criteria'
+
   return {
     slug,
     groups: leaves.length ? [{ conditions: leaves }] : [],
     actionSummary: actions.map(describeAction),
-    editable: blockers.length === 0,
+    editLevel,
+    editable: false, // an engine-native rule is never fully editable — see editLevel
     blockers,
     unmappedFields,
   }
+}
+
+/**
+ * What to STORE for a rule's conditions, given what the builder sent.
+ *
+ * 🔴 An engine-native rule must stay engine-native. The builder always sends its own nested groups;
+ * writing those onto a rule whose actions are engine types would leave a pair no adapter handles —
+ * `maybeTranslateAdsRule` only fires on builder-shaped ACTIONS, so the nested conditions would
+ * reach `evaluateFlatList`, whose leaves have no `field`, and throw mid-tick.
+ *
+ * So: translate back down to flat leaves, using the same maps the forward direction uses. The rule
+ * keeps the shape the engine already runs, and nothing about its actions is touched.
+ */
+export function conditionsForStorage(
+  existing: { actions?: unknown },
+  incomingConditions: unknown,
+): { conditions: object[]; unmapped: string[] } {
+  const groups = (Array.isArray(incomingConditions) ? incomingConditions : []) as BuilderGroup[]
+  const isNested = groups.some((g) => Array.isArray(g?.conditions))
+  // A builder-shaped rule stores the builder shape, exactly as before.
+  if (isBuilderShapedAdsRule(existing) || !isNested) return { conditions: groups as object[], unmapped: [] }
+
+  const a0 = (Array.isArray(existing.actions) ? existing.actions[0] : null) as { type?: string } | null
+  const slug = ENGINE_TYPE_SLUG[String(a0?.type ?? '')] ?? 'budget'
+  const map = slug === 'sov' ? SOV_METRIC
+    : slug === 'keyword-tracker' ? RANK_METRIC
+      : slug === 'bid' ? ADTARGET_METRIC
+        : slug === 'negative-targeting' || slug === 'keyword-harvesting' ? SEARCHTERM_METRIC
+          : CAMPAIGN_METRIC
+  // Cross-context, for the same reason the inverse reads that way: stored rules mix contexts.
+  const merged = { ...CAMPAIGN_METRIC, ...SEARCHTERM_METRIC, ...ADTARGET_METRIC, ...SOV_METRIC, ...RANK_METRIC, ...map }
+  const { leaves, unmapped } = translateConditions(groups, merged, 'patch')
+  return { conditions: leaves as unknown as object[], unmapped }
 }
 
 export function isBuilderShapedAdsRule(rule: { actions?: unknown }): boolean {

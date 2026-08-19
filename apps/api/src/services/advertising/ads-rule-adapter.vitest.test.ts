@@ -9,7 +9,7 @@
  *      behaviour dropped the condition, and a dropped AND-condition makes a rule LOOSER.
  */
 import { describe, it, expect } from 'vitest'
-import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView } from './ads-rule-adapter.service.js'
+import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage } from './ads-rule-adapter.service.js'
 
 const rule = (slug: string, metrics: string[], action: Record<string, unknown> = {}) => ({
   id: 'test-rule',
@@ -115,7 +115,7 @@ describe('EA4 — engine rule → builder view', () => {
       conditions: [{ op: 'gt', field: 'campaign.acos', value: 0.4 }],
       actions: [{ type: 'bid_to_target_acos', targetAcos: 0.25, profitMode: true }],
     })!
-    expect(v.editable).toBe(false)
+    expect(v.editLevel).toBe('criteria') // the ACTION is unrepresentable; the criteria still are
     expect(v.blockers.join(' ')).toContain('bid_to_target_acos')
     // it still explains what the rule DOES, so the page is never blank about that
     expect(v.actionSummary[0]).toContain('target ACoS')
@@ -126,7 +126,7 @@ describe('EA4 — engine rule → builder view', () => {
       id: 'r3', conditions: [],
       actions: [{ type: 'promote_to_exact', bidEur: 0.75 }, { type: 'notify', target: 'operator' }],
     })!
-    expect(v.editable).toBe(false)
+    expect(v.editLevel).toBe('criteria')
     expect(v.blockers.some((b) => b.includes('2 actions'))).toBe(true)
   })
 
@@ -153,7 +153,7 @@ describe('EA4 — engine rule → builder view', () => {
       actions: [{ type: 'adjust_ad_budget', percent: 15 }],
     })!
     expect(v.unmappedFields).toContain('fbaAge.daysToLtsThreshold')
-    expect(v.editable).toBe(false)
+    expect(v.editLevel).toBe('meta') // a condition we cannot draw ⇒ criteria must not be written back
   })
 })
 
@@ -197,5 +197,44 @@ describe('EA4 — the campaign picker actually binds', () => {
       conditions: [{ conditions: [{ metric: 'ACOS', op: 'gt', value: '80' }], action: { op: 'dec', value: '10' } }] as unknown as object[],
     })!
     expect(t.actions[0].campaignIds).toEqual(['c9'])
+  })
+})
+
+/**
+ * EA5 — an engine-native rule keeps its shape on save, and only the fields the builder owns move.
+ * This is what makes the builder FUNCTION on a stored rule instead of merely displaying it.
+ */
+describe('EA5 — conditionsForStorage', () => {
+  it('translates the builder\'s nested groups back to flat leaves for an engine-native rule', () => {
+    const r = conditionsForStorage(
+      { actions: [{ type: 'adjust_ad_budget', percent: 15 }] },
+      [{ match: 'all', conditions: [{ metric: 'ACOS', op: 'lte', value: '20' }] }],
+    )
+    expect(r.unmapped).toHaveLength(0)
+    expect(r.conditions).toEqual([{ field: 'campaign.acos', op: 'lte', value: 0.2 }])
+  })
+
+  it('leaves a builder-shaped rule\'s nested conditions exactly as they are', () => {
+    const nested = [{ match: 'all', conditions: [{ metric: 'ACOS', op: 'lte', value: '20' }] }]
+    const r = conditionsForStorage({ actions: [{ type: 'budget' }] }, nested)
+    expect(r.conditions).toBe(nested)
+  })
+
+  it('reports an unmapped metric rather than storing a rule that cannot evaluate', () => {
+    const r = conditionsForStorage(
+      { actions: [{ type: 'adjust_ad_budget' }] },
+      [{ match: 'all', conditions: [{ metric: 'Nonsense', op: 'gte', value: '1' }] }],
+    )
+    expect(r.unmapped).toContain('Nonsense')
+  })
+
+  it('round-trips: engine → builder view → storage gives back the original leaf', () => {
+    const original = [{ op: 'lte', field: 'campaign.acos', value: 0.2 }]
+    const v = engineRuleToBuilderView({ id: 'rt', conditions: original, actions: [{ type: 'adjust_ad_budget' }] })!
+    const back = conditionsForStorage(
+      { actions: [{ type: 'adjust_ad_budget' }] },
+      [{ match: 'all', conditions: v.groups[0].conditions }],
+    )
+    expect(back.conditions).toEqual(original)
   })
 })

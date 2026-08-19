@@ -6123,7 +6123,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.description !== undefined) data.description = body.description
     if (body.enabled !== undefined) data.enabled = body.enabled
     if (body.dryRun !== undefined) data.dryRun = body.dryRun
-    if (body.conditions !== undefined) data.conditions = body.conditions
+    if (body.conditions !== undefined) {
+      /**
+       * 🔴 EA5 — an ENGINE-NATIVE rule keeps its shape.
+       *
+       * The builder always sends nested groups. Storing those on a rule whose actions are engine
+       * types would leave a pair nothing handles: `maybeTranslateAdsRule` fires on builder-shaped
+       * ACTIONS only, so the nested conditions would reach `evaluateFlatList`, whose leaves have no
+       * `field`, and throw mid-tick — taking every remaining trigger down with it.
+       *
+       * `conditionsForStorage` translates them back to flat leaves with the same maps the forward
+       * direction uses. A builder-shaped rule is passed through untouched.
+       */
+      const { conditionsForStorage } = await import('../services/advertising/ads-rule-adapter.service.js')
+      const stored = conditionsForStorage({ actions: existing.actions }, body.conditions)
+      if (stored.unmapped.length) {
+        reply.code(400)
+        return { error: 'untranslatable_conditions', metrics: stored.unmapped, message: `No engine signal exists for: ${stored.unmapped.join(', ')}.` }
+      }
+      data.conditions = stored.conditions
+    }
     if (body.actions !== undefined) data.actions = body.actions
     if (body.maxExecutionsPerDay !== undefined) data.maxExecutionsPerDay = body.maxExecutionsPerDay
     if (body.maxValueCentsEur !== undefined) data.maxValueCentsEur = body.maxValueCentsEur

@@ -238,15 +238,24 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const ruleId = useSearchParams().get('ruleId')
   const isEdit = !!ruleId
   /**
-   * EA4 — set when the rule being edited is ENGINE-NATIVE and the builder cannot faithfully
-   * re-save it. Non-null ⇒ read-only: Save is disabled and the banner names every blocker.
+   * EA5 — set when the rule being edited is ENGINE-NATIVE, with HOW MUCH of it may be written
+   * back. Non-null does NOT mean read-only:
+   *
+   *   'criteria' — every stored condition round-trips, so name · criteria · caps · scope save
+   *                normally. `actions` is simply not sent, so the engine keeps the action it runs.
+   *   'meta'     — a condition the builder cannot draw, so criteria are read-only: saving them
+   *                would DELETE the one not shown. Name · caps · scope still save.
+   *
+   * The first version of this locked the whole rule whenever any part could not round-trip. That
+   * was over-correction: the PATCH route applies only the fields present in the body, so an
+   * unrepresentable ACTION is no reason to refuse an edit to the CRITERIA.
    *
    * 🔴 This is the guard that stops a live automation being destroyed. Before it, opening any of
    * the 51 stored rules showed a blank form (their keys are not the ones this builder reads) and
    * pressing Save would have written hard-coded default criteria over the real ones. It was
    * unreachable only by accident — `valid` happened to fail with 0 campaigns selected.
    */
-  const [locked, setLocked] = useState<{ blockers: string[]; actionSummary: string[] } | null>(null)
+  const [locked, setLocked] = useState<{ level: 'criteria' | 'meta'; blockers: string[]; actionSummary: string[] } | null>(null)
   const rt = ruleTypeBySlug(slug)
   const steps = STEPS_FOR(slug)
   const setup = setupFor(slug)
@@ -505,17 +514,52 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const adGroupCount = blocks.reduce((n, b) => n + b.groups.length, 0)
   const criteriaValid = groups.every((g) => g.conditions.length > 0 && g.conditions.every((c) => c.value.trim() !== '') && (!isCampaign || (g.budgetValue ?? '').trim() !== ''))
   const targetsValid = isCampaign ? selCampaigns.length > 0 : adGroupCount > 0
-  const valid = ruleName.trim().length > 0 && targetsValid && criteriaValid
+  /**
+   * EA5 — an ENGINE-NATIVE rule is valid on its name and criteria alone. `targetsValid` demands a
+   * campaign selection, which these rules do not carry in the action at all (their scope is the
+   * `scope*` columns), so requiring it would keep Save disabled forever — which is exactly what
+   * made the destructive path look "safe" before anyone noticed it.
+   */
+  const valid = locked
+    ? ruleName.trim().length > 0 && (locked.level === 'meta' || criteriaValid)
+    : ruleName.trim().length > 0 && targetsValid && criteriaValid
   const floorOverCeiling = isBudget && budgetCeiling.trim() !== '' && (Number(budgetFloor) || 0) > (Number(budgetCeiling) || 0)
   const bidFloorOverCeiling = isBidLike && bidCeiling.trim() !== '' && (Number(bidFloor) || 0) > (Number(bidCeiling) || 0)
 
   // ── create the rule (POST /advertising/automation-rules — starts disabled + dry-run) ──
   const submit = useCallback(async () => {
-    // Belt and braces: the buttons are disabled when locked, but a rule that cannot round-trip
-    // must not be writable by any path — this payload REPLACES conditions and actions wholesale.
-    if (!valid || creating || locked != null) return
+    if (!valid || creating) return
     setCreating(true)
     try {
+      /**
+       * 🔴 EA5 — an ENGINE-NATIVE rule gets a FIELD-SCOPED patch, never the full payload.
+       *
+       * The payload below replaces `conditions` AND `actions` wholesale. On a rule the builder
+       * cannot fully represent that would overwrite the action the engine is actually running —
+       * so for these we send only what this form genuinely owns and omit `actions` entirely. The
+       * PATCH route applies only the keys present, and translates the criteria back to the rule's
+       * own engine-native shape (`conditionsForStorage`), so nothing about the action is touched.
+       *
+       * 'meta' also omits `conditions`: one of them has no builder metric and is not on screen,
+       * so writing the visible ones back would silently delete it.
+       */
+      if (locked) {
+        const partial: Record<string, unknown> = { name: ruleName.trim() }
+        if (locked.level === 'criteria') {
+          partial.conditions = groups.map((g) => ({ match: 'all', lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, conditions: g.conditions }))
+        }
+        if (maxAdSpend.trim()) partial.maxDailyAdSpendCentsEur = Math.round(Number(maxAdSpend) * 100)
+        if (maxWrites.trim()) partial.maxWritesPerDay = Math.max(1, Math.round(Number(maxWrites)))
+        if (scopeMarket !== 'all') partial.scopeMarketplace = scopeMarket
+        const rp = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${ruleId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(partial),
+        })
+        const rj = await rp.json().catch(() => ({}))
+        if (rp.ok && rj?.error == null) router.push(`/marketing/ads/rules-automation/${ownTab}`)
+        emitAdsChange('ads.rule.changed')
+        setCreating(false)
+        return
+      }
       const payload = {
         name: ruleName.trim(),
         description: `${rt?.label ?? 'Rule'} — ${isEdit ? 'edited' : 'created'} in Rule Builder`,
@@ -568,7 +612,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
          * only: the builder writes one action from a fixed set, and most engine rules use types it
          * cannot produce, so those open read-only rather than pretending to be editable.
          */
-        const bv = j?.builderView as { slug: string | null; groups?: Array<{ conditions: Condition[] }>; actionSummary?: string[]; editable?: boolean; blockers?: string[] } | null | undefined
+        const bv = j?.builderView as { slug: string | null; groups?: Array<{ conditions: Condition[] }>; actionSummary?: string[]; editLevel?: 'full' | 'criteria' | 'meta'; blockers?: string[] } | null | undefined
         if (bv) {
           if (bv.groups?.length) {
             setGroups(bv.groups.map((g) => ({ id: ++_cid, conditions: g.conditions.length ? g.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: 'set', budgetValue: '' })))
@@ -576,7 +620,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
           if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
           if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
-          if (!bv.editable) setLocked({ blockers: bv.blockers ?? [], actionSummary: bv.actionSummary ?? [] })
+          setLocked({ level: bv.editLevel === 'criteria' ? 'criteria' : 'meta', blockers: bv.blockers ?? [], actionSummary: bv.actionSummary ?? [] })
           return
         }
 
@@ -633,7 +677,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
           <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
-          <button type="button" className="h10-rb-create" disabled={!valid || creating || locked != null} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+          <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
         </div>
       </header>
 
@@ -649,27 +693,34 @@ export function RuleBuilder({ slug }: { slug: string }) {
         <main className="h10-rb-main">
           <div className="h10-rb-wrap">
             {/*
-              EA4 — the read-only notice. It names what the builder cannot carry, in the operator's
-              terms, and shows the rule's real action as a summary so the page is never blank about
-              what the rule DOES. A form that looks editable and silently drops half a rule on save is
-              worse than one that says plainly it cannot save this.
+              EA5 — the notice for an ENGINE-NATIVE rule. It states what this form owns, shows the
+              rule's real action as a summary so the page is never blank about what it DOES, and
+              names every part the builder cannot carry. It is NOT a blanket read-only lock: the
+              PATCH route applies only the fields sent, so an unrepresentable action is no reason to
+              refuse an edit to the criteria.
             */}
             {locked && (
               <div className="h10-rb-locked" role="status">
-                <b><Lock size={14} aria-hidden /> This rule is shown read-only</b>
+                <b><Lock size={14} aria-hidden /> {locked.level === 'criteria' ? 'The action of this rule is not editable here' : 'The criteria of this rule are not editable here'}</b>
                 <p>
-                  Its criteria and scope below are the real stored values. Saving is disabled because
-                  this builder writes one action from a fixed set, and it cannot reproduce this rule
-                  exactly — a save would replace what the engine is running.
+                  Everything below is the rule&rsquo;s real stored value. This builder writes one
+                  action from a fixed set and this rule&rsquo;s action is not one of them, so a save
+                  from here sends only the fields this form owns and leaves the action exactly as
+                  the engine is running it.
                 </p>
                 {locked.actionSummary.length > 0 && (
                   <p className="act"><span className="k">What it does</span>{locked.actionSummary.map((a, i) => <em key={i}>{a}</em>)}</p>
                 )}
                 <ul>{locked.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul>
-                {/* The reason lives HERE, not on the Save button: a `title` on a disabled element is
-                never shown — the browser fires no mouse events on it — which is the exact defect
-                the repo's silent-disabled ratchet exists to catch. It caught this one. */}
-            <p className="foot"><b>Save Changes is disabled.</b> Edit this rule from the API, or create a new rule here and disable this one.</p>
+                {/* Any reason a control is unavailable lives HERE, never as a `title` on a disabled
+                    element — the browser fires no mouse events on those, so the tooltip never shows.
+                    The repo's silent-disabled ratchet exists to catch exactly that, and it caught an
+                    earlier version of this banner's Save button. */}
+                <p className="foot">
+                  {locked.level === 'criteria'
+                    ? <><b>You can edit</b> the name, the criteria, the caps and the market scope, and save normally.</>
+                    : <><b>You can edit</b> the name, the caps and the market scope. The criteria are read-only because one of this rule&rsquo;s conditions has no control here, and saving the visible ones would delete it.</>}
+                </p>
               </div>
             )}
             {/* ── Rule Name ── */}
@@ -718,7 +769,12 @@ export function RuleBuilder({ slug }: { slug: string }) {
             </section>
 
             {/* ── Criteria ── */}
-            <section id="rb-criteria" className="h10-rb-sec">
+            {/* EA5 — at 'meta' the criteria are INCOMPLETE (a condition has no builder metric and
+                is not drawn), so the section is held non-interactive rather than disabled control
+                by control: `inert` takes it out of tab order and out of the pointer, and the banner
+                above already carries the reason. Editing here would write back only what is
+                visible and delete the rest. */}
+            <section id="rb-criteria" className={`h10-rb-sec${locked?.level === 'meta' ? ' held' : ''}`} {...(locked?.level === 'meta' ? { inert: '' as unknown as boolean, 'aria-disabled': true } : {})}>
               <div className="h10-rb-crit-hd">
                 <div className="t"><h2>Criteria</h2><p className="h10-rb-desc">Set up the performance criteria and actions</p></div>
                 {isCampaign && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> Apply Template</button>}
@@ -961,7 +1017,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
               <span className="grow" />
               {isCampaign && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
-              <button type="button" className="h10-rb-create" disabled={!valid || creating || locked != null} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+              <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
             </div>
           </div>
         </main>
