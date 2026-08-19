@@ -15,11 +15,10 @@
  * from the server is presented as the policy it is rather than as a failure.
  *
  * 🔴 U13 (2026-08-19) — "keeps its reason" was not true, and had never been true. The notch
- * rendered with the `disabled` ATTRIBUTE and its reason in `title`, and **Chrome fires no pointer
- * events on a disabled form control** — so the tooltip could not appear and the click did nothing.
- * Measured on prod: **14 of the 51 rules' notches** on this page were refusing in total silence,
- * and a real hover plus a real click over one produced 0 mouseover / 0 mousemove / 0 click. The
- * reason was written onto the one element in the DOM that cannot deliver it.
+ * rendered with the `disabled` ATTRIBUTE and its reason in `title`, and a disabled control takes no
+ * focus, takes no click, and shows no tooltip in Chrome — so the reason was written onto the one
+ * element in the DOM that cannot deliver it. Measured on prod: **14 of the 51 rules' notches** on
+ * this page were refusing in total silence.
  *
  * It is now `aria-disabled` + an `above` class for the look, and clicking it calls `onRefused`
  * instead of `onSet`: no doomed request, and the ceiling's sentence lands in the page's banner

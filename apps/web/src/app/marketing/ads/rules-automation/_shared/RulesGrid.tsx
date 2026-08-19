@@ -54,11 +54,12 @@
  *
  * 🔴 ⑤ **A control that carries a REASON must never use the `disabled` attribute.** U13,
  *    2026-08-19, reported from Keyword Harvest — where all five rules are capped, so all five
- *    toggles were `disabled`. **Chrome fires no pointer events at all on a disabled form control**,
- *    which means the `title` holding the ceiling's reason could never be shown and the click did
- *    nothing: measured on prod with listeners attached and a REAL hover plus a REAL click over the
- *    toggle — **0 mouseover, 0 mouseenter, 0 mousemove, 0 click**. The reason was written onto the
- *    one element in the DOM that cannot deliver it, so U12 fixed "the toggle does nothing" into
+ *    toggles were `disabled`. A disabled control **cannot deliver an explanation**: it takes no
+ *    focus (so it is unreachable by keyboard), takes no click, and Chrome renders no `title`
+ *    tooltip on one. Measured, coordinate-free — `b.disabled = true; b.focus()` leaves
+ *    `document.activeElement` elsewhere, while the held form below focuses normally and a real
+ *    Enter produced the ceiling's sentence with zero writes. The reason was written onto the one
+ *    element in the DOM that cannot deliver it, so U12 fixed "the toggle does nothing" into
  *    "the toggle does nothing and won't say why" for 14 of 44 rows.
  *
  *    The shape to copy: `aria-disabled` + a `held` class for the look, the handler refusing and
@@ -507,11 +508,9 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
             aria-checked={r.automation}
             /**
              * 🔴 `aria-disabled`, NEVER the `disabled` attribute — see ⑤ at the top of this file.
-             * Chrome fires NO pointer events on a disabled control, so the `title` explaining the
-             * refusal could never be read and the click did nothing: measured on prod, a real hover
-             * and a real click over this toggle produced 0 mouseover, 0 mousemove and 0 click
-             * events. The operator's report was "the toggle button is still not working", and from
-             * where they sat that is exactly what it was.
+             * A disabled control takes no focus, no click and shows no tooltip, so the `title`
+             * explaining the refusal could never be read. The operator's report was "the toggle
+             * button is still not working", and from where they sat that is exactly what it was.
              */
             aria-disabled={held || busy}
             aria-label={`Automation for ${r.name}`}

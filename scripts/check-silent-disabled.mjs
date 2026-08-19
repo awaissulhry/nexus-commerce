@@ -2,14 +2,20 @@
 /**
  * U13 — a control that REFUSES must be able to say why.
  *
- * The defect this exists to stop, measured on prod 2026-08-19 and reported by the operator as
- * "the toggle button is still not working":
+ * The defect this exists to stop, reported by the operator on 2026-08-19 as "the toggle button is
+ * still not working":
  *
- *   Chrome fires NO pointer events on a form control carrying the `disabled` ATTRIBUTE. Not
- *   `click`, not `mouseover`, not even `mousemove` — verified with listeners attached, over a real
- *   hover and a real click on the Rules & Automation Automation toggle: 0 / 0 / 0 / 0. So a
- *   `title` on a disabled element is UNREACHABLE: the browser never shows the tooltip, and the
- *   click that would have asked for an explanation does nothing.
+ *   A control carrying the `disabled` ATTRIBUTE cannot deliver an explanation. It takes no focus,
+ *   so it is unreachable by keyboard; it takes no click; and Chrome does not render a `title`
+ *   tooltip on one. So a `title` holding the reason for the refusal is written where nobody can
+ *   read it.
+ *
+ *   Measured, coordinate-free, on the toggle this was found on:
+ *     `b.disabled = true;  b.focus(); document.activeElement === b`  → false
+ *     `b.disabled = false; b.focus(); document.activeElement === b`  → true   (held, aria-disabled)
+ *   With the element merely held, a real Enter keypress produced the explanation and zero writes.
+ *   (Do NOT try to measure this with mouse events from the Chrome harness — its coordinate clicks
+ *   do not land and its `hover` is synthesized, so both report a meaningless zero.)
  *
  *   Every rule held below Auto by the graduation ceiling therefore refused in total silence — 14
  *   toggles across Bid / Keyword Harvest / Negative Targeting, and 14 notches on the Automations
@@ -74,7 +80,7 @@ for (const f of files) {
 const n = hits.length
 if (n > BASELINE) {
   console.error(`\n❌ silent-disabled ratchet: ${BASELINE} → ${n} — a control was given a reason it cannot deliver.`)
-  console.error('   A `title` on a `disabled` element is never shown: Chrome fires no pointer events on it.')
+  console.error('   A `title` on a `disabled` element is never shown, and the element takes no focus and no click.')
   console.error('   Use `aria-disabled` + a held class and answer the click, or drop the title. Sites:\n')
   for (const h of hits) console.error(`   ${h}`)
   console.error('')
