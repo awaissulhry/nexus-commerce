@@ -29,6 +29,7 @@
 import prisma from '../../db.js'
 import { callTradingApi, siteIdForMarket } from '../ebay-trading-api.service.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 export interface RefreshEbayLiveImagesResult {
   productId: string
@@ -168,10 +169,8 @@ export async function refreshEbayLiveImages(
   // EBAY_TOKEN. The old legacy path here silently no-op'd on any OAuth
   // deployment (EBAY_TOKEN unset/stale) — the live image strip was always
   // empty. Mirror reconcileMembershipsFromEbay / the shared-image push.
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
+  // MAP.3 — DERIVED from the eBay ItemID whose live images we are reading.
+  const conn = await tryResolveConnection({ itemId: liveItemId })
   if (!conn) {
     return { ...base, itemId: liveItemId, skipped: 'NO_CREDS' }
   }

@@ -14,6 +14,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 const API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -40,9 +41,10 @@ export async function postEbayMarketing(
   path: string,
   payload: unknown,
 ): Promise<EbayMarketingPostResult> {
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-  })
+  // MAP.3 — DECLARED. A generic POST helper takes a path and a payload; there is
+  // no row here to derive an account from. 🔴 MAP.7: callers that DO know their
+  // account should pass it through rather than letting this pick.
+  const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!conn) {
     return { ok: false, status: 0, errorMessage: 'no active eBay connection' }
   }

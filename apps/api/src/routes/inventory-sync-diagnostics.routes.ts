@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { summarizeDiagnostics, type DiagnosticsInput } from '../services/sync-metrics.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 const CRON_NAMES = [
   'sync-drift-detection',
@@ -33,7 +34,10 @@ export default async function inventorySyncDiagnosticsRoutes(app: FastifyInstanc
         process.env.NEXUS_ENABLE_SHOPIFY_PUBLISH === 'true' && process.env.SHOPIFY_PUBLISH_MODE === 'live'
 
       const [activeEbay, oldestPending, outboundPending, dlqDepth, cronRows] = await Promise.all([
-        (prisma as any).channelConnection.count({ where: { channelType: 'EBAY', isActive: true } }),
+        // MAP.3 — diagnostics readiness, account-agnostic. (The `as any` cast is
+        // gone with it; that cast is what hid the `channel`-vs-`channelType` typo
+        // in two other files for three months.)
+        listActiveConnections('EBAY').then((cs) => cs.length),
         prisma.outboundSyncQueue.findFirst({
           where: { syncStatus: 'PENDING' },
           orderBy: { createdAt: 'asc' },

@@ -34,6 +34,7 @@ import {
   writeAttemptLog,
 } from '../channel-publish-audit.service.js'
 import { buildSafetyStatements, buildDangerousGoodsStatement } from '../compliance-resolver.service.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -288,12 +289,11 @@ export class EbayPublishAdapter {
       }
     }
 
-    // Pick the first active eBay connection. Multi-account support
-    // keys off marketplaceId once that lands.
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      orderBy: { updatedAt: 'desc' },
-    })
+    // MAP.3 — DECLARED. The old comment said multi-account "keys off
+    // marketplaceId once that lands"; it does not — marketplace and account are
+    // different axes, and a wizard publishing a NEW listing has no row to derive
+    // an account from. 🔴 MAP.4: the wizard should ask which account to publish to.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
     if (!connection) {
       return {
         ok: false,

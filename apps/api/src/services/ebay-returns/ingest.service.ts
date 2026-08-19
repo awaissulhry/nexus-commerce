@@ -32,6 +32,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
 import { recordApiCall } from '../outbound-api-call-log.service.js'
+import { listActiveConnections } from '../connection-resolver.service.js'
 
 // Subset of fields we read from eBay's Post Order Return payload.
 // Documented at developer.ebay.com/devzone/post-order/post-order_v2_return-search.html.
@@ -255,14 +256,11 @@ export async function pollEbayReturns(opts?: {
   const fetchImpl = opts?.fetchImpl ?? fetch
   const limit = Math.min(200, Math.max(1, opts?.pageSize ?? 100))
 
-  const connections = await prisma.channelConnection.findMany({
-    where: {
-      isActive: true,
-      channelType: 'EBAY',
-      managedBy: 'oauth',
-    },
-    select: { id: true, ebaySignInName: true },
-  })
+  // MAP.3 — this one already meant EVERY account, and was right to; it goes
+  // through the resolver so one definition of "active" serves every caller.
+  const connections = (await listActiveConnections('EBAY'))
+    .filter((c) => c.managedBy === 'oauth')
+    .map((c) => ({ id: c.id, ebaySignInName: c.ebaySignInName }))
 
   const counters = { connectionsScanned: 0, created: 0, duplicate: 0, failed: 0, noLines: 0 }
 

@@ -39,6 +39,7 @@ import {
   REVISE_INVENTORY_STATUS_MAX_ENTRIES,
 } from "./ebay-trading-api.service.js";
 import { toListingLanguage } from "./ebay-variation-push.service.js";
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -1216,10 +1217,10 @@ export class OutboundSyncService {
     }
 
     // 2. Connection lookup (post-gate so a gated attempt is side-effect-free)
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: "EBAY", isActive: true },
-      orderBy: { updatedAt: "desc" },
-    });
+    // MAP.3 — DECLARED. 🔴 MAP.6/7: an outbound push SHOULD derive its account
+    // from the listing it is pushing; that needs the product→account intent this
+    // programme calls labels.
+    const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
     if (!connection) {
       return fail(
         "failed",
@@ -1635,11 +1636,8 @@ export class OutboundSyncService {
       };
     }
 
-    // 2. Connection lookup
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: "EBAY", isActive: true },
-      orderBy: { updatedAt: "desc" },
-    });
+    // 2. Connection lookup — MAP.3, DECLARED (see the note on the sibling path).
+    const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
     if (!connection) {
       return {
         success: false, queueId, channel: "EBAY", status: "FAILED",

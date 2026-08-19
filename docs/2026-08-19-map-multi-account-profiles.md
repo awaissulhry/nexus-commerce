@@ -1,7 +1,8 @@
 # MAP — Multi-Account & Profiles
 
-**Status:** MAP.0, MAP.1, MAP.2a, MAP.3a **SHIPPED and prod-verified 2026-08-19**.
-**Burn-down:** 60 → **54** ambient resolution sites; all six jobs converted. MAP.2b folds into MAP.3b.
+**Status:** MAP.0, MAP.1, MAP.2a, MAP.3a, MAP.3b **SHIPPED and prod-verified 2026-08-19**.
+**Burn-down:** 60 → **12** ambient resolution sites. All 12 remaining are in the untouchable
+`ebay-flat-file.routes.ts`, behind the MAP.6 gate. MAP.2b still folds into the flat-file work.
 **Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
 **Date:** 2026-08-19
 **Supersedes / absorbs:** [`2026-07-30-ebay-multi-account-ema.md`](2026-07-30-ebay-multi-account-ema.md)
@@ -353,7 +354,7 @@ rather than inferred.
 Each phase is independently shippable and live-by-default (`feedback_ship_live_not_dark`).
 Phases marked **🔒** cannot start without an explicit operator decision — they are listed in §6.
 
-> **MAP.0, MAP.1, MAP.2a and MAP.3a are SHIPPED and prod-verified, 2026-08-19.**
+> **MAP.0, MAP.1, MAP.2a, MAP.3a and MAP.3b are SHIPPED and prod-verified, 2026-08-19.**
 > What the build found that this plan did not predict is recorded in §2.4 (the chrome) and §7 (the
 > defect, the DS gap, and two things MAP.4 inherits).
 
@@ -464,11 +465,43 @@ same treatment, and the differences are recorded rather than smoothed over:
   state, so a per-account loop needs a function extraction first. Both carry a 🔴 marker naming the
   follow-up. A named limitation beats a silent mis-poll.
 
-### MAP.3b — the remaining 54, and MAP.2b's keys 🔒 *(next)*
-29 route sites in 9 files (12 of them in `ebay-flat-file.routes.ts`), 24 service sites in 22 files,
-1 in `index.ts` (`seedEnvManagedConnections`, arguably legitimate). Landing in the same commit:
-MAP.2b's four unique-key widenings and the 24 compound-key callers, for the `ON CONFLICT` reason in
-MAP.2b above.
+### MAP.3b — every site outside the flat file ✅ SHIPPED
+
+**Burn-down 54 → 12.** Every remaining service and route resolves through
+`resolveConnection` / `tryResolveConnection` / `listActiveConnections`.
+
+`tryResolveConnection` was added for the many sites whose existing contract is to **degrade**, not
+throw — "no active eBay connection" already meant `return summary` / `return 'failed'` / `503`.
+Turning those into exceptions would be a behaviour change in a phase meant to be invisible. It only
+accepts scopes that cannot be ambiguous, so it can never swallow the refusal this phase exists to
+create.
+
+What the sweep found, beyond the mechanical conversion:
+
+- **Three sites already carried the account and were guessing anyway.** `refund-publisher` had
+  `ret.order.id` in hand while its own comment called deriving from the order "future work";
+  `ebay-live-images` had `liveItemId`; `ebay-flat-file-delete` had `itemId` + `marketplace`. All
+  three are now DERIVED, which is correct for N accounts.
+- **A second spelling of the same coin flip.** `ebay-feedback.adapter` ordered by
+  `lastSyncAt desc` rather than `updatedAt desc` — a different field, the same "whichever account
+  moved most recently" guess.
+- **Five sites were already multi-account correct** (`ebay-returns/ingest`,
+  `ebay-marketing-api`, the two eBay-notification sale handlers, `sync-logs` replay): they
+  enumerate every account and let the idempotent order service dedupe. They now enumerate through
+  `listActiveConnections` so "active" has one definition.
+- **Four `count()` readiness checks** (`listing-wizard` ×3, `dashboard`, `inventory-sync-diagnostics`)
+  are genuinely account-agnostic — "is any account live" — and say so.
+- **Four test files were pinning the old query shape.** They mocked
+  `channelConnection.findFirst`; the resolver reads the set with `findMany`, so the code correctly
+  took its no-connection branch and the tests failed for a reason unrelated to what they assert. The
+  mocks moved to the resolver seam, which is the boundary the code actually uses and will not break
+  again on the next internal change.
+
+### 🔴 The 12 that remain — and why they are not next
+All 12 are in **`routes/ebay-flat-file.routes.ts`**, a hard no-touch zone
+(`feedback_flat_file_untouchable`) sitting behind the operator's MAP.6 gate (decision 3). They are
+not forgotten and not blocked work — they are the one file MAP.3 is not permitted to open. The
+ratchet baseline is 12 and drops to 0 in the MAP.6 commit.
 
 ### MAP.4 — Connect the second account, in two clicks
 Settings → Channels becomes a list of accounts per channel rather than one card per channel.

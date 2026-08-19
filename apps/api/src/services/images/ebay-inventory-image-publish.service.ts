@@ -30,6 +30,7 @@ import { logger } from '../../utils/logger.js'
 import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
 import { galleryForCuratedRow } from './ebay-gallery-verbatim.pure.js'
 import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 /**
  * PURE — the per-variation gallery a publish sends for one curated row.
@@ -154,10 +155,9 @@ export async function publishEbayImagesViaInventory(
   }
 
   // eBay connection + token (mirrors the flat-file /push path).
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true, connectionMetadata: true },
-  })
+  // MAP.3 — DECLARED. The priced-market check above works on markets, not on an
+  // account-bearing row.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) {
     return { success: false, message: 'No active eBay connection found', pictureCount: 0, colorSetCount: 0, error: 'No connection' }
   }

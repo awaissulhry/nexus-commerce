@@ -25,6 +25,7 @@ import {
 } from './marketplaces/amazon.service.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
 export type ReconStatus = 'PENDING' | 'CONFIRMED' | 'CONFLICT' | 'CREATE_NEW' | 'IGNORE'
@@ -755,10 +756,9 @@ export async function runEbayReconciliation(marketplace: string = 'IT'): Promise
   const runId = `EBAY-${marketplace}-${Date.now()}`
 
   // Find the active eBay connection
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true, displayName: true },
-  })
+  // MAP.3 — DECLARED. The argument is a marketplace, not an account.
+  // 🔴 MAP.7: reconciliation is per account; sweep listActiveConnections.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) throw new Error('No active eBay ChannelConnection found')
 
   const accessToken = await ebayAuthService.getValidToken(connection.id)

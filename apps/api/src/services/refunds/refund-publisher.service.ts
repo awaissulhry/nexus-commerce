@@ -51,6 +51,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { recordApiCall } from '../outbound-api-call-log.service.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 export type RefundOutcome =
   | 'OK'
@@ -279,14 +280,13 @@ async function publishEbayRefund(
   ret: LoadedReturn,
   input: RefundPublishInput,
 ): Promise<RefundPublishResult> {
-  // Resolve the eBay channel connection that owns this order. eBay
-  // accounts can be multi-tenant, so we look up by channelType only;
-  // if a seller has multiple eBay connections active we'd need to
-  // disambiguate via the order's marketplace, which is future work.
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
+  // MAP.3 — DERIVED from the order, which is what the old comment called "future
+  // work". It is not future any more: MAP.2a attributed every Order row, so the
+  // connection that owns this refund is a lookup, not a guess. (And the guess it
+  // replaces was by channelType alone, which the comment itself flagged.)
+  const connection = ret.order?.id
+    ? await tryResolveConnection({ orderId: ret.order.id })
+    : await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) {
     return {
       outcome: 'FAILED',

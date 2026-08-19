@@ -26,6 +26,7 @@ import { logger } from '../../utils/logger.js'
 import { checkMarketingWriteGate } from './marketing-write-gate.js'
 import { normalizeCampaignStatus, canTransitionCampaignStatus, EBAY_CAMPAIGN_STATUS_MAP, type NormalizedCampaignStatus } from '../ads-core/campaign-status.js'
 import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
+import { resolveConnection } from '../connection-resolver.service.js'
 import {
   getActiveEbayAdsAuth,
   createCampaignApi, campaignLifecycleApi, cloneCampaignApi,
@@ -283,7 +284,8 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
   const { start, scheduled } = resolveStartDate(input.startDate)
 
   const decision = gate(input.marketplace, input.dailyBudgetCents ?? 0)
-  const conn = await prisma.channelConnection.findFirstOrThrow({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
+  // MAP.3 — DECLARED, and it still throws when there is none, as findFirstOrThrow did.
+  const conn = await resolveConnection({ channel: 'EBAY', primary: true })
 
   let externalCampaignId = `sandbox-${Date.now()}`
   if (decision.mode === 'live') {

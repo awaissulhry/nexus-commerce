@@ -35,6 +35,21 @@ vi.mock('@nexus/database', () => ({
     outboundSyncQueue: { update: vi.fn(), findUnique: vi.fn() },
   },
 }))
+// MAP.3 — the code under test now resolves its account through the resolver, so
+// the mock moves to that seam. Mocking `channelConnection.findFirst` pinned the
+// OLD query shape: the resolver reads the account set with findMany, so a
+// findFirst-only stub made the code correctly take its no-connection branch and
+// the test failed for a reason that had nothing to do with what it asserts.
+const mockResolveConnection = vi.fn(async () => ({ id: 'conn-1' }) as { id: string } | null)
+vi.mock('./connection-resolver.service.js', () => ({
+  resolveConnection: (...a: unknown[]) => mockResolveConnection(...(a as [])),
+  tryResolveConnection: (...a: unknown[]) => mockResolveConnection(...(a as [])),
+  listActiveConnections: async () => {
+    const one = await mockResolveConnection()
+    return one ? [one] : []
+  },
+}))
+
 
 // Mock eBay auth service — prevents real token-refresh HTTP calls
 const mockGetValidToken = vi.fn()
@@ -223,7 +238,8 @@ describe('delistEbay (via dispatchChannelDelist)', () => {
   })
 
   it('returns success:false when no active eBay connection is found', async () => {
-    mockFindFirst.mockResolvedValue(null)
+    // MAP.3 — the no-connection branch is now reached through the resolver.
+    mockResolveConnection.mockResolvedValueOnce(null)
 
     const result = await dispatchChannelDelist(makeEbayJob())
 

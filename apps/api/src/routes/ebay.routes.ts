@@ -10,6 +10,7 @@ import { ebayAuthService } from "../services/ebay-auth.service.js";
 import { ebayAccountService } from "../services/ebay-account.service.js";
 import { EbayCategoryService } from "../services/ebay-category.service.js";
 import { logger } from "../utils/logger.js";
+import { listActiveConnections, tryResolveConnection } from '../services/connection-resolver.service.js';
 
 const ebayCategoryService = new EbayCategoryService();
 
@@ -356,13 +357,9 @@ export async function ebayRoutes(app: FastifyInstance) {
       }
 
       try {
-        // Pick the first active eBay connection. v1 assumes one seller
-        // account per workspace; multi-account support keys off
-        // marketplace/connectionId once that lands.
-        const connection = await prisma.channelConnection.findFirst({
-          where: { channelType: "EBAY", isActive: true },
-          orderBy: { updatedAt: "desc" },
-        });
+        // MAP.3 — DECLARED. "v1 assumes one seller account per workspace" was the
+        // assumption; naming the primary makes it a claim rather than an accident.
+        const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
         if (!connection) {
           return reply.status(400).send({
             success: false,
@@ -629,10 +626,9 @@ export async function ebayRoutes(app: FastifyInstance) {
     let connectionId = request.query.connectionId?.trim();
     try {
       if (!connectionId) {
-        const connection = await prisma.channelConnection.findFirst({
-          where: { channelType: "EBAY", isActive: true },
-          orderBy: { updatedAt: "desc" },
-        });
+        // MAP.3 — DECLARED fallback. This route already accepts ?connectionId=,
+        // so a caller that knows its account can name it; this is the default.
+        const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
         if (!connection) {
           return reply.status(400).send({
             success: false,

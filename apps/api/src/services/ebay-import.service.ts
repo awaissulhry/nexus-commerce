@@ -15,6 +15,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { ebayAuthService } from './ebay-auth.service.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -79,10 +80,10 @@ export async function importEbayCatalog(): Promise<{
   products: any[]
 }> {
   // Get the active eBay connection
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true, displayName: true },
-  })
+  // MAP.3 — DECLARED. An import pulls the account's whole catalogue, so the
+  // account is the input, not something derivable from a row we do not have yet.
+  // 🔴 MAP.4 should let the operator pick which account to import from.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) {
     throw new Error('No active eBay ChannelConnection found. Complete eBay OAuth first.')
   }

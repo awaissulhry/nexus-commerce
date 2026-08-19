@@ -18,6 +18,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { EbayAuthService } from '../ebay-auth.service.js'
 import { fetchCampaigns } from './ebay-ads-api.service.js'
+import { listActiveConnections } from '../connection-resolver.service.js'
 
 interface EbayAdCampaignDTO {
   campaignId: string
@@ -46,7 +47,9 @@ export interface EbaySyncReport {
 export async function syncEbayCampaigns(): Promise<EbaySyncReport> {
   const auth = new EbayAuthService()
   const report: EbaySyncReport = { connections: 0, pulled: 0, upserted: 0, skipped: 0, errors: [] }
-  const conns = await prisma.channelConnection.findMany({ where: { channelType: 'EBAY', isActive: true } })
+  // MAP.3 — already meant EVERY account; through the resolver so "active" has one
+  // definition. This one was already multi-account correct.
+  const conns = await listActiveConnections('EBAY')
   report.connections = conns.length
 
   for (const conn of conns) {

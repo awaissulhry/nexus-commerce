@@ -19,6 +19,7 @@ import { isFbaListing } from './outbound-sync.service.js';
 import { MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
+import { tryResolveConnection } from './connection-resolver.service.js';
 // W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
 // functions, no `this.`, no Prisma. Adding a new attribute path
 // (variantAttributes, channelMetadata, …) is one diff to that file
@@ -2422,10 +2423,9 @@ export class BulkActionService {
       const { submitEbayParallelBatch } = await import(
         './channel-batch/ebay-parallel-batch.service.js'
       );
-      const connection = await this.prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        orderBy: { updatedAt: 'desc' },
-      });
+      // MAP.3 — DECLARED. A bulk batch spans many SKUs with no single owning row,
+      // so there is nothing to derive from at this point.
+      const connection = await tryResolveConnection({ channel: 'EBAY', primary: true });
       if (!connection) {
         throw new Error('CHANNEL_BATCH EBAY: no active eBay connection');
       }

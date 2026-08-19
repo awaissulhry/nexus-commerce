@@ -24,6 +24,7 @@ import type { FastifyInstance } from 'fastify'
 import crypto from 'crypto'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
 
 // ── Trading API helpers ────────────────────────────────────────────────
 
@@ -36,11 +37,9 @@ function tradingCredentialsMissing(): string | null {
 
 /** Resolve a fresh OAuth access token from the first active eBay ChannelConnection. */
 async function resolveEbayAccessToken(): Promise<string> {
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
-  if (!connection) throw new Error('No active eBay ChannelConnection found — complete OAuth first')
+  // MAP.3 — DECLARED. The doc comment above said "the first active eBay
+  // ChannelConnection", which is the assumption this phase removes.
+  const connection = await resolveConnection({ channel: 'EBAY', primary: true })
   const { EbayAuthService } = await import('../services/ebay-auth.service.js')
   const authService = new EbayAuthService()
   return authService.getValidToken(connection.id)
@@ -114,19 +113,17 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
   // ── GET /api/admin/ebay-token-status ──────────────────────────────
   // Shows the current access-token expiry for every active eBay connection.
   app.get('/admin/ebay-token-status', async (_req, reply) => {
-    const connections = await prisma.channelConnection.findMany({
-      where: { channelType: 'EBAY', isActive: true },
-      select: {
-        id: true,
-        ebaySignInName: true,
-        tokenExpiresAt: true,
-        ebayTokenExpiresAt: true,
-        refreshToken: true,
-        ebayRefreshToken: true,
-        lastSyncStatus: true,
-        lastSyncError: true,
-      },
-    })
+    // MAP.3 — a token-status page genuinely wants EVERY account.
+    const connections = (await listActiveConnections('EBAY')).map((c) => ({
+      id: c.id,
+      ebaySignInName: c.ebaySignInName,
+      tokenExpiresAt: c.tokenExpiresAt,
+      ebayTokenExpiresAt: c.ebayTokenExpiresAt,
+      refreshToken: c.refreshToken,
+      ebayRefreshToken: c.ebayRefreshToken,
+      lastSyncStatus: c.lastSyncStatus,
+      lastSyncError: c.lastSyncError,
+    }))
 
     const now = new Date()
     return reply.send({
@@ -163,17 +160,15 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     }
 
     // Return updated state immediately after refresh
-    const connections = await prisma.channelConnection.findMany({
-      where: { channelType: 'EBAY', isActive: true },
-      select: {
-        id: true,
-        ebaySignInName: true,
-        tokenExpiresAt: true,
-        ebayTokenExpiresAt: true,
-        lastSyncStatus: true,
-        lastSyncError: true,
-      },
-    })
+    // MAP.3 — a token-status page genuinely wants EVERY account.
+    const connections = (await listActiveConnections('EBAY')).map((c) => ({
+      id: c.id,
+      ebaySignInName: c.ebaySignInName,
+      tokenExpiresAt: c.tokenExpiresAt,
+      ebayTokenExpiresAt: c.ebayTokenExpiresAt,
+      lastSyncStatus: c.lastSyncStatus,
+      lastSyncError: c.lastSyncError,
+    }))
     const now = new Date()
     return reply.send({
       ok: true,
@@ -478,10 +473,10 @@ ${eventXml}
     if (LEGACY_SALE_TOPICS.has(topic)) {
       void (async () => {
         try {
-          const connections = await (prisma as any).channelConnection.findMany({
-            where: { channelType: 'EBAY', isActive: true },
-            select: { id: true },
-          })
+          // MAP.3 — a sale notification does not say which account it belongs to,
+          // so every account is polled and the idempotent order service dedupes.
+          // That is correct for N accounts, and it is what the loop below already did.
+          const connections = await listActiveConnections('EBAY')
           const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
           for (const conn of connections) {
             try {
@@ -521,10 +516,10 @@ ${eventXml}
       // it is safe even if the cron already picked up the same order.
       void (async () => {
         try {
-          const connections = await (prisma as any).channelConnection.findMany({
-            where: { channelType: 'EBAY', isActive: true },
-            select: { id: true },
-          })
+          // MAP.3 — a sale notification does not say which account it belongs to,
+          // so every account is polled and the idempotent order service dedupes.
+          // That is correct for N accounts, and it is what the loop below already did.
+          const connections = await listActiveConnections('EBAY')
           const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
           for (const conn of connections) {
             try {

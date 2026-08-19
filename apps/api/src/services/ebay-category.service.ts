@@ -399,11 +399,10 @@ export class EbayCategoryService {
     //    a circular-import / load-order issue with ebayAuthService.
     try {
       const { default: prisma } = await import('../db.js')
-      const conn = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        orderBy: { updatedAt: 'desc' },
-        select: { id: true, ebayAccessToken: true, ebayRefreshToken: true },
-      })
+      // MAP.3 — DECLARED. Category metadata is account-independent; any valid
+      // seller token reads the same taxonomy.
+      const { tryResolveConnection } = await import('./connection-resolver.service.js')
+      const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
       if (conn && conn.ebayAccessToken && conn.ebayRefreshToken) {
         const { ebayAuthService } = await import('./ebay-auth.service.js')
         return await ebayAuthService.getValidToken(conn.id)

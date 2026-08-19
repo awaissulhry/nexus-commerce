@@ -21,6 +21,7 @@
 
 import prisma from '../../db.js'
 import { recordApiCall } from '../outbound-api-call-log.service.js'
+import { resolveConnection } from '../connection-resolver.service.js'
 
 // ── Public types ──────────────────────────────────────────────────────
 export interface ShippingFulfillmentInput {
@@ -219,14 +220,24 @@ export async function buildFulfillmentInputForShipment(
     }))
     .filter((it): it is { lineItemId: string; quantity: number } => !!it.lineItemId)
 
-  // ChannelConnection lookup — the EBAY connection is global per
-  // marketplace today (no per-order connection mapping). Find the
-  // active one. If none, the retry job will mark the log entry FAILED
-  // with a clear reason.
-  const connection = await (prisma as any).channelConnection.findFirst({
-    where: { channel: 'EBAY', isActive: true },
-    select: { id: true },
-  })
+  // 🔴 This read was BROKEN from 2026-05-07 to 2026-08-19. It filtered on
+  // `channel`, which is not a column on ChannelConnection — the column is
+  // `channelType` — and `(prisma as any)` hid it from the type checker. Prisma
+  // rejects an unknown argument rather than ignoring it, so every tracking upload
+  // threw here and the retry job marked the entry FAILED. Proven against the
+  // production database, 2026-08-19.
+  //
+  // MAP.3 — resolved from the ORDER this shipment belongs to. There IS a per-order
+  // connection mapping now (MAP.2a attributed every Order row), which is what the
+  // old comment said did not exist.
+  let connection: { id: string } | null = null
+  try {
+    connection = await resolveConnection({ orderId: shipment.order.id })
+  } catch {
+    // Unresolvable — the retry job marks the log entry FAILED with the reason,
+    // exactly as it did when this returned null.
+    connection = null
+  }
 
   return {
     input: {

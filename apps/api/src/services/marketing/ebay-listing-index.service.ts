@@ -19,6 +19,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { EbayAuthService } from '../ebay-auth.service.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 const TRADING_URL = 'https://api.ebay.com/ws/api.dll'
 const SITE_TO_MARKET: Record<string, string> = {
@@ -153,10 +154,9 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
     fetchedActive: 0, upserted: 0, detailFetched: 0, matched: 0, ended: 0,
     membershipsEnded: 0, skippedEndFlip: false, truncated: false, errors: [],
   }
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true, managedBy: 'oauth' },
-    select: { id: true },
-  })
+  // MAP.3 — DECLARED. Discovery pulls a whole account's listings; the account is
+  // the input. 🔴 MAP.7: sweep listActiveConnections so a second store is indexed.
+  const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!conn) { report.errors.push('no active eBay connection'); return report }
   const token = await new EbayAuthService().getValidToken(conn.id)
 

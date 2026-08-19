@@ -235,6 +235,30 @@ async function resolveDeclared(channel: string, hint?: string): Promise<ChannelC
   return active.find((c) => c.id === chosen.id)!;
 }
 
+/**
+ * Resolve, or `null`.
+ *
+ * For the many call sites whose existing contract is to DEGRADE rather than throw
+ * — "no active eBay connection" already meant `return summary` / `return 'failed'`
+ * / skip the tick. Converting those to a throwing resolver would turn a graceful
+ * no-op into an exception, which is a behaviour change MAP.3 has no business
+ * making while it is meant to be invisible.
+ *
+ * ⚠ Use it only with a scope that CANNOT be ambiguous — a NAMED or DERIVED scope,
+ * or `{ channel, primary: true }` (the database allows exactly one primary per
+ * channel). Passing an ambiguity-capable scope here would swallow the very
+ * refusal this phase exists to create, so there is no such scope form.
+ */
+export async function tryResolveConnection(
+  scope: ConnectionScope,
+): Promise<ChannelConnection | null> {
+  try {
+    return await resolveConnection(scope);
+  } catch {
+    return null;
+  }
+}
+
 /** Convenience for the many callers that only need the id to pass downstream. */
 export async function resolveConnectionId(scope: ConnectionScope): Promise<string> {
   return (await resolveConnection(scope)).id;

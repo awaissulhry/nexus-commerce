@@ -25,6 +25,7 @@ import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
 import { policyFor, loadChannelPolicies } from './sync-control-policy.service.js'
 import { resolveMembershipIntended } from './sync-control-core.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 const DEFAULT_MAX_SKUS = 200
 const DEFAULT_MAX_TRADING_ITEMS = 50
@@ -322,10 +323,9 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   })
   if (memberships.length === 0) return result
 
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
+  // MAP.3 — DECLARED. 🔴 MAP.7: memberships carry channelConnectionId now, so
+  // this should group them by account and read back with each account's token.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) return result
   const token = await ebayAuthService.getValidToken(connection.id)
 

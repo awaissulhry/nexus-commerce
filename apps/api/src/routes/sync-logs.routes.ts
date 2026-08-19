@@ -42,6 +42,7 @@ import { dispatchShopifyWebhook } from './shopify-webhooks.js'
 import { dispatchWooWebhook } from './woocommerce-webhooks.js'
 import { dispatchEtsyWebhook } from './etsy-webhooks.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -1054,10 +1055,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         if (event.channel === 'EBAY') {
           try {
             const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
-            const connections = await prisma.channelConnection.findMany({
-              where: { channelType: 'EBAY', isActive: true },
-              select: { id: true },
-            })
+            // MAP.3 — a replay has no account on it, so every account is swept and
+            // the idempotent order service dedupes. Correct for N accounts.
+            const connections = await listActiveConnections('EBAY')
             for (const conn of connections) {
               await ebayOrdersService.syncEbayOrders(conn.id)
             }

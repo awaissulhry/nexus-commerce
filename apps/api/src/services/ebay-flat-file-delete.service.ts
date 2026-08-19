@@ -28,6 +28,7 @@ import { logger } from '../utils/logger.js'
 import prismaClient from '../db.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { callTradingApi, siteIdForMarket, escapeXml, reviseInventoryStatus } from './ebay-trading-api.service.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 import {
   dispatchChannelDelist,
   type ChannelDelistJob,
@@ -171,10 +172,9 @@ async function tryRemoveVariationFromListing(
   marketplace: string,
 ): Promise<'removed' | 'zeroed' | 'failed'> {
   try {
-    const conn = await prismaClient.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
-    })
+    // MAP.3 — DERIVED from the eBay ItemID being edited, so this is correct for
+    // two accounts as well as one.
+    const conn = await tryResolveConnection({ itemId, marketplace })
     if (!conn) return 'failed'
     const token = await ebayAuthService.getValidToken(conn.id)
     const xml = `<?xml version="1.0" encoding="utf-8"?>

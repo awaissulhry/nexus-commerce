@@ -19,6 +19,7 @@ import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { ebayAuthService } from '../../ebay-auth.service.js'
 import type { AdapterRawReview, AdapterResult } from './types.js'
+import { tryResolveConnection } from '../../connection-resolver.service.js'
 
 const TRADING_ENDPOINT =
   process.env.EBAY_SANDBOX === 'true'
@@ -46,10 +47,9 @@ export async function respondToEbayFeedback(
   if (process.env.NEXUS_EBAY_REAL_API !== 'true') {
     return { ok: false, code: 'OPT_IN_OFF', error: 'NEXUS_EBAY_REAL_API not enabled' }
   }
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    orderBy: { lastSyncAt: 'desc' },
-  })
+  // MAP.3 — DECLARED. Note the old ordering was `lastSyncAt desc`, a second way of
+  // spelling "whichever account synced most recently" — the same coin flip.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) return { ok: false, code: 'NO_CONNECTION', error: 'no active eBay connection' }
   let token: string
   try {
@@ -121,10 +121,8 @@ export async function fetchEbayFeedback(opts: EbayFeedbackOptions = {}): Promise
     return { reviews: [], note: 'NEXUS_EBAY_REAL_API not enabled' }
   }
   // Gate 2 — an active eBay connection must exist.
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    orderBy: { lastSyncAt: 'desc' },
-  })
+  // MAP.3 — DECLARED.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) {
     return { reviews: [], note: 'no active eBay connection' }
   }

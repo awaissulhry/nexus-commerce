@@ -33,6 +33,7 @@ import { parseVariationSpecificsSet } from '../ebay-variation-add.service.js'
 import { axisSynonymKey } from '../ebay-variation-push.service.js'
 import { logger } from '../../utils/logger.js'
 import type { EbayInventoryPublishResult } from './ebay-inventory-image-publish.service.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 const TRADING_PICTURE_CAP = 12
 const SHARED_SENTINEL = '__shared__'
@@ -268,10 +269,11 @@ export async function publishEbaySharedListingImages(
     return fail('No eBay images curated for this listing yet — assign images in the drawer, Save, then Publish.', 'No curated images')
   }
 
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
+  // MAP.3 — DERIVED from the first target listing. Every target here belongs to
+  // one product's eBay listings, so they share an account.
+  const connection = targets[0]
+    ? await tryResolveConnection({ itemId: targets[0].itemId, marketplace: targets[0].marketplace })
+    : await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) return fail('No active eBay connection found', 'No connection')
   let token: string
   try {

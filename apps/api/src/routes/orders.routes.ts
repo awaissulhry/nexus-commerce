@@ -15,6 +15,7 @@ import { sseResponseHeaders } from '../lib/sse.js'
 import { logger } from '../utils/logger.js'
 import { ingestMockOrders, shipOrder } from '../services/order-ingestion.service.js'
 import prisma from '../db.js'
+import { resolveConnection } from '../services/connection-resolver.service.js'
 import { csvDocument } from '../lib/csv.js'
 
 const ALL_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'MANUAL'] as const
@@ -991,10 +992,25 @@ export async function ordersRoutes(app: FastifyInstance) {
                 [mpId],
               )
             } else if (existing.channel === 'EBAY') {
-              const conn = await (prisma as any).channelConnection.findFirst({
-                where: { channel: 'EBAY', isActive: true },
-                select: { id: true },
-              })
+              // 🔴 This read was BROKEN from 2026-05-07 to 2026-08-19. It filtered
+              // on `channel`, which is not a column on ChannelConnection — the
+              // column is `channelType` — and the `(prisma as any)` cast hid it
+              // from the type checker. Prisma rejects an unknown argument rather
+              // than ignoring it, so every eBay cancellation threw
+              // PrismaClientValidationError here. Proven against the production
+              // database, 2026-08-19; see docs/2026-08-19-map-multi-account-profiles.md §7.3.
+              //
+              // MAP.3 — resolved from the ORDER, which is the account that actually
+              // owns it, so this is correct for two accounts as well as one.
+              let conn: { id: string } | null = null
+              try {
+                conn = await resolveConnection({ orderId: id })
+              } catch (err) {
+                request.log.warn(
+                  { err, orderId: id },
+                  'eBay cancel: could not resolve the order\'s account',
+                )
+              }
               if (conn?.id) {
                 channelAck = await channelCancel.cancelOnEbay(
                   existing.channelOrderId,

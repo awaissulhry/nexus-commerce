@@ -20,6 +20,7 @@ import { siteIdForMarket } from '../services/ebay-trading-api.service.js'
 import { pushDescriptions } from '../services/ebay-description-push.service.js'
 import { collectInventoryDrift } from '../services/ebay-inventory-drift.service.js'
 import { relinkEbayItemId } from '../services/ebay-itemid-relink.service.js'
+import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
 
 const MAX_PRODUCTS_PER_CALL = 50
 
@@ -40,10 +41,8 @@ export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance
     } catch {
       return reply.code(400).send({ error: `unknown marketplace: ${mp}` })
     }
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true },
-    })
+    // MAP.3 — DECLARED. A description push targets a marketplace, not an account.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
     if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
     let token: string
     try {
@@ -79,10 +78,8 @@ export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance
       } catch {
         return reply.code(400).send({ error: `unknown marketplace: ${marketplace}` })
       }
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.3 — DECLARED.
+      const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {
@@ -133,10 +130,8 @@ export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance
         if (!theme.active) return reply.code(400).send({ error: `theme "${theme.name}" is inactive` })
       }
 
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        select: { id: true },
-      })
+      // MAP.3 — DECLARED.
+      const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
       let token: string
       try {

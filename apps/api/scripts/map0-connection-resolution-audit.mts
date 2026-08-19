@@ -32,16 +32,20 @@ import ts from 'typescript'
  * The number of ambient resolution sites the tree is allowed to contain.
  *
  * 60 when MAP.0 measured it (2026-08-19, 38 files).
- * 54 after MAP.3a converted all six job sites — zero jobs remain in the burn-down.
- * Lower it as MAP.3 converts more; never raise it without saying why in the commit
- * that does.
+ * 54 after MAP.3a converted all six job sites.
+ * 12 after MAP.3b converted every remaining service and route.
+ *
+ * 🔴 All 12 that remain are in `routes/ebay-flat-file.routes.ts`, which is a hard
+ * no-touch zone (`feedback_flat_file_untouchable`) and sits behind the operator's
+ * MAP.6 gate. They are NOT forgotten and NOT unreachable work — they are the one
+ * file MAP.3 is not allowed to open. Lower this to 0 in the MAP.6 commit.
  *
  * Deliberately a structural count, not a grep: a regex over source counts comments
  * and misses ES6 shorthand, which is how the DS guard came to fail on a COMMENT
  * (reference_ds_guard_greps_comments) and how a probe invented three findings in
  * one check (reference_verification_probe_false_positives).
  */
-const AMBIENT_BASELINE = 54
+const AMBIENT_BASELINE = 12
 
 /**
  * The one file allowed to resolve a connection ambiently: the resolver itself.

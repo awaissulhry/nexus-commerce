@@ -18,6 +18,17 @@ vi.mock('../db.js', () => {
     },
   }
 })
+// MAP.3 — the code under test now resolves its account through the resolver, so
+// the mock moves to that seam. Mocking `channelConnection.findFirst` pinned the
+// OLD query shape: the resolver reads the account set with findMany, so a
+// findFirst-only stub made the code correctly take its no-connection branch and
+// the test failed for a reason that had nothing to do with what it asserts.
+vi.mock('./connection-resolver.service.js', () => ({
+  resolveConnection: vi.fn(async () => ({ id: 'conn1' })),
+  tryResolveConnection: vi.fn(async () => ({ id: 'conn1' })),
+  listActiveConnections: vi.fn(async () => [{ id: 'conn1' }]),
+}))
+
 // Force the eBay publish mode to "live" and stub auth + rate/circuit so we reach the call.
 vi.mock('./ebay-auth.service.js', () => ({
   ebayAuthService: { getValidToken: vi.fn(async () => 'TOKEN-XYZ') },

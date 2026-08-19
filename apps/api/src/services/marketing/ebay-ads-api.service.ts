@@ -22,6 +22,7 @@ import prisma from '../../db.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 import { defaultRateLimitBackoffMs } from '../channel-batch/rate-limit.js'
 import { EbayApiError, parseEbayErrors } from '../ads-core/ebay-error.js'
+import { tryResolveConnection } from '../connection-resolver.service.js'
 
 export { EbayApiError } from '../ads-core/ebay-error.js'
 
@@ -76,10 +77,9 @@ const quotaBypassed = () => process.env.NEXUS_EBAY_ADS_QUOTA_MODE === 'off'
 
 // ── Token per active connection ─────────────────────────────────────────────
 export async function getActiveEbayAdsAuth(): Promise<{ connectionId: string; token: string } | null> {
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true, managedBy: 'oauth' },
-    select: { id: true },
-  })
+  // MAP.3 — DECLARED. 🔴 MAP.7: eBay ads ARE per account (EbayCampaign already
+  // relates to ChannelConnection), so this should take the account as an argument.
+  const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!conn) return null
   const token = await new EbayAuthService().getValidToken(conn.id)
   return { connectionId: conn.id, token }

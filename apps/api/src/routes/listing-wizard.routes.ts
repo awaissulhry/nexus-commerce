@@ -57,6 +57,7 @@ import {
 } from '../services/listing-wizard/channels.js'
 import { idempotencyService } from '../services/idempotency.service.js'
 import { publishListingEvent } from '../services/listing-events.service.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -281,10 +282,9 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // does internally so this stays in sync.
       const amazonConnected = amazonService.isConfigured()
 
-      // eBay: any active ChannelConnection of channelType=EBAY counts.
-      const ebayActive = await prisma.channelConnection.count({
-        where: { channelType: 'EBAY', isActive: true },
-      })
+      // eBay: any active account counts. MAP.3 — a readiness check is genuinely
+      // account-agnostic; it goes through the resolver so "active" means one thing.
+      const ebayActive = (await listActiveConnections('EBAY')).length
       const ebayConnected = ebayActive > 0
 
       const platforms: PlatformStatus[] = [
@@ -2560,10 +2560,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // than a post-submit FAILED entry.
       const readiness: Record<string, boolean> = {
         AMAZON: amazonService.isConfigured(),
-        EBAY:
-          (await prisma.channelConnection.count({
-            where: { channelType: 'EBAY', isActive: true },
-          })) > 0,
+        // MAP.3 — readiness, account-agnostic.
+        EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
       const validation = submissionService.validateMultiChannel(w, readiness)
       const payloads = await submissionService.composeMultiChannelPayloads(w)
@@ -2659,10 +2657,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // than a post-submit FAILED entry.
       const readiness: Record<string, boolean> = {
         AMAZON: amazonService.isConfigured(),
-        EBAY:
-          (await prisma.channelConnection.count({
-            where: { channelType: 'EBAY', isActive: true },
-          })) > 0,
+        // MAP.3 — readiness, account-agnostic.
+        EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
       const validation = submissionService.validateMultiChannel(w, readiness)
       if (!validation.allReady) {

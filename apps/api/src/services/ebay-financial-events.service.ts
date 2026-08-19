@@ -20,6 +20,7 @@
 import prisma from '../db.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -149,10 +150,9 @@ export async function syncEbayFinancialEvents(
   const t0 = Date.now()
 
   // Get active eBay connection
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true, displayName: true },
-  })
+  // MAP.3 — DECLARED. 🔴 MAP.7: financial events are PER ACCOUNT; this should
+  // sweep listActiveConnections and attribute each summary to its account.
+  const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) throw new Error('No active eBay ChannelConnection')
 
   const accessToken = await ebayAuthService.getValidToken(connection.id)

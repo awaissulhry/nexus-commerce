@@ -20,6 +20,7 @@ import prisma from '../db.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
 import { logger } from '../utils/logger.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 export interface LabelGuardSummary {
   checked: number
@@ -75,10 +76,8 @@ export async function relinkNullPoolMemberships(): Promise<{ scanned: number; re
 export async function ensureListingLabels(scope?: Array<{ marketplace: string; itemId: string }>): Promise<LabelGuardSummary> {
   const summary: LabelGuardSummary = { checked: 0, set: 0, kept: 0, unsupported: 0, failed: 0, halfAdopted: 0, clLinked: 0 }
 
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
+  // MAP.3 — DECLARED. The optional `scope` argument names items, not an account.
+  const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!conn) return summary
   const token = await ebayAuthService.getValidToken(conn.id)
 

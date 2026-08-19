@@ -47,6 +47,7 @@ import { ShopifyService } from './marketplaces/shopify.service.js'
 import { prisma } from '@nexus/database'
 import { endFixedPriceItem, siteIdForMarket } from './ebay-trading-api.service.js'
 import { ebayAuthService } from './ebay-auth.service.js'
+import { tryResolveConnection } from './connection-resolver.service.js'
 
 export type ChannelAction = 'unpublish' | 'delete'
 
@@ -257,10 +258,8 @@ async function delistEbay(
   let oauthToken: string
   let siteId: string
   try {
-    const connection = await prisma.channelConnection.findFirst({
-      where: { channelType: 'EBAY', isActive: true },
-      orderBy: { updatedAt: 'desc' },
-    })
+    // MAP.3 — DECLARED.
+    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
     if (!connection) {
       return {
         success: false,

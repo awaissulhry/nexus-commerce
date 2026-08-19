@@ -27,6 +27,7 @@ import { getAllAmazonCircuitStates, resetAllAmazonCircuits } from '../services/a
 import { getAllEbayCircuitStates, resetAllEbayCircuits } from '../services/ebay-publish-gate.service.js'
 import { getAllShopifyCircuitStates, resetAllShopifyCircuits } from '../services/shopify-publish-gate.service.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 type Window = 'today' | '7d' | '30d' | '90d' | 'ytd' | 'custom'
 
@@ -1833,9 +1834,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
 
       // ── Channel connectivity (eBay) ──────────────────────────────
       const [ebayActive, channelConnections] = await Promise.all([
-        prisma.channelConnection.count({
-          where: { channelType: 'EBAY', isActive: true },
-        }),
+        // MAP.3 — connectivity tile, account-agnostic.
+        listActiveConnections('EBAY').then((cs) => cs.length),
         prisma.channelConnection.findMany({
           select: { channelType: true, isActive: true, lastSyncStatus: true },
         }),

@@ -18,6 +18,7 @@ import {
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
+import { tryResolveConnection } from '../services/connection-resolver.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -1689,12 +1690,9 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: 'startDate is required' })
       }
 
-      // Find an active eBay connection — any will do for v1; we can
-      // multi-account later via ?connectionId= when there's a need.
-      const connection = await prisma.channelConnection.findFirst({
-        where: { channelType: 'EBAY', isActive: true },
-        orderBy: { updatedAt: 'desc' },
-      })
+      // MAP.3 — DECLARED. "any will do for v1" is exactly the assumption being
+      // retired; the primary is now named rather than assumed.
+      const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
       if (!connection) {
         return reply.code(400).send({
           error: 'No active eBay connection — link an eBay account first.',
