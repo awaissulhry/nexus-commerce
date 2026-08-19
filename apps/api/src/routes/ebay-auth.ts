@@ -8,6 +8,10 @@ import { randomBytes } from "crypto";
 import prisma from "../db.js";
 import { ebayAuthService } from "../services/ebay-auth.service.js";
 import { logger } from "../utils/logger.js";
+import {
+  findAccountByExternalId,
+  countUnidentifiedAccounts,
+} from "../services/connection-resolver.service.js";
 
 /**
  * Request body for initiating eBay connection
@@ -197,11 +201,72 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
         const tokenData = await ebayAuthService.exchangeCodeForToken(code);
 
         // Get seller information
-        let sellerInfo = undefined;
+        let sellerInfo: {
+          signInName?: string;
+          storeName?: string;
+          storeFrontUrl?: string;
+          externalAccountId?: string | null;
+        } | undefined = undefined;
         try {
           sellerInfo = await ebayAuthService.getSellerInfo(tokenData.access_token);
         } catch (error) {
           logger.warn("Failed to fetch seller info, continuing without it", { error });
+        }
+
+        // ── MAP.4 — who consented, and is it someone we already hold? ──────
+        const identity = await ebayAuthService.getSellerIdentity(tokenData.access_token);
+        if (identity) {
+          sellerInfo = {
+            ...(sellerInfo ?? {}),
+            // A real username finally replaces the "eBay seller (verified)"
+            // placeholder this integration has shown since it shipped.
+            signInName: identity.username,
+            externalAccountId: identity.userId,
+          };
+
+          // Reconnecting an account we ALREADY have is the common case — a token
+          // expiring, or an operator re-consenting for the new scope. It must
+          // refresh that row, not mint a second one for the same seller.
+          const already = await findAccountByExternalId("EBAY", identity.userId, connectionId);
+          if (already) {
+            await ebayAuthService.saveTokens(
+              already.id,
+              tokenData.access_token,
+              tokenData.refresh_token || "",
+              tokenData.expires_in,
+              sellerInfo,
+            );
+            // The placeholder row this flow created up front is now surplus.
+            await prisma.channelConnection.delete({ where: { id: connectionId } }).catch(() => {});
+            logger.info("eBay re-consent folded into the existing account", {
+              connectionId: already.id,
+              username: identity.username,
+            });
+            return reply.send({
+              success: true,
+              connectionId: already.id,
+              reconnected: true,
+              sellerName: identity.username,
+            });
+          }
+        } else {
+          // No identity. Admitting a second unidentifiable account would make two
+          // accounts we cannot tell apart — which is exactly what
+          // ChannelConnection_active_account_key refuses at the database, and it
+          // is better to say so here than to surface a P2002 after the operator
+          // has already consented at eBay.
+          const anyActive = await countUnidentifiedAccounts("EBAY");
+          if (anyActive > 0) {
+            await prisma.channelConnection.delete({ where: { id: connectionId } }).catch(() => {});
+            return reply.status(409).send({
+              success: false,
+              error:
+                "eBay did not return this account's identity, and an existing eBay account also has none — " +
+                "the two cannot be told apart. Reconnect the existing account first so it picks up the " +
+                "identity permission, then add this one.",
+              code: "EBAY_IDENTITY_UNAVAILABLE",
+            });
+          }
         }
 
         // Save tokens to database

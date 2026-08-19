@@ -9,17 +9,16 @@
  * selection re-enters the page you were already on. See
  * `docs/2026-08-19-map-multi-account-profiles.md` §1.2.
  *
- * ── What this deliberately does NOT do yet ────────────────────────────────
+ * ── Switching (MAP.4) ─────────────────────────────────────────────────────
  *
- * It does not switch accounts. Every channel has at most one active connection
- * today — the partial unique index `ChannelConnection_channelType_marketplace_active_key`
- * guarantees it, and `/api/accounts/diagnostics` proves it live. So the rows are
- * informational, not selectable, and no caret implies a choice that does not
- * exist. MAP.4 flips `canSwitch` and turns the rows into links.
+ * A row becomes selectable only when `canSwitch` says a channel actually holds
+ * more than one account. A dropdown that cannot change anything is worse than no
+ * dropdown, so with one account per channel the rows stay informational.
  *
- * What it DOES do is tell the truth about what Nexus is connected to. The two
- * chips it replaces in `components/layout/TopBar.tsx` were hard-coded strings
- * ("Amazon IT", "eBay") with permanently-green dots, reading from nothing.
+ * Selecting one rewrites `?account=` **on the route you are already on** — the
+ * single most copyable detail in the Rithum recording, whose row hrefs carry
+ * `SelectAccount?apid=<id>&url=<the page you were on>`. A switcher that dumps you
+ * on a dashboard is a switcher people stop using.
  *
  * ── Why this file imports its own CSS ─────────────────────────────────────
  *
@@ -31,6 +30,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import '../styles/tokens.css'
 import '../styles/components.css'
 
@@ -110,6 +110,11 @@ export function AccountSwitcher({
   className,
   initialData,
 }: AccountSwitcherProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const activeAccountId = searchParams?.get('account') ?? null
+
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<AccountsPayload | null>(initialData ?? null)
   const [error, setError] = useState<string | null>(null)
@@ -210,6 +215,28 @@ export function AccountSwitcher({
 
   const toggle = useCallback(() => setOpen((o) => !o), [])
 
+  /**
+   * Switch account WITHOUT leaving the page. Every other query param is kept —
+   * a market filter, a search, a sort — because they describe what you were
+   * looking at, and only the account changed.
+   */
+  const switchTo = useCallback(
+    (id: string) => {
+      const next = new URLSearchParams(searchParams?.toString() ?? '')
+      next.set('account', id)
+      router.push(`${pathname}?${next.toString()}`)
+      setOpen(false)
+    },
+    [pathname, router, searchParams],
+  )
+
+  const canSwitch = data?.canSwitch ?? false
+  /** The account in view: the URL's, or each channel's primary when unset. */
+  const selectedId = useMemo(() => {
+    if (activeAccountId && accounts.some((a) => a.id === activeAccountId)) return activeAccountId
+    return null
+  }, [activeAccountId, accounts])
+
   if (loading) {
     return (
       <div className={`h10-ds-acct${className ? ` ${className}` : ''}`}>
@@ -263,8 +290,19 @@ export function AccountSwitcher({
           {grouped.map(([channel, rows]) => (
             <div key={channel} className="h10-ds-acct-group">
               <div className="h10-ds-acct-group-head">{channelName(channel)}</div>
-              {rows.map((a) => (
-                <div key={a.id} className="h10-ds-acct-row" data-primary={a.isPrimary || undefined}>
+              {rows.map((a) => {
+                const isSelected = selectedId ? a.id === selectedId : a.isPrimary
+                const RowTag = (canSwitch ? 'button' : 'div') as 'button' | 'div'
+                return (
+                <RowTag
+                  key={a.id}
+                  type={canSwitch ? 'button' : undefined}
+                  className={`h10-ds-acct-row${canSwitch ? ' is-link' : ''}`}
+                  data-primary={a.isPrimary || undefined}
+                  data-selected={isSelected || undefined}
+                  aria-current={canSwitch && isSelected ? 'true' : undefined}
+                  onClick={canSwitch ? () => switchTo(a.id) : undefined}
+                >
                   <span className="h10-ds-acct-dot" data-health={a.health} aria-hidden />
                   <span className="h10-ds-acct-row-main">
                     <span className="h10-ds-acct-row-label">{primaryLabel(a)}</span>
@@ -294,8 +332,14 @@ export function AccountSwitcher({
                       </span>
                     )}
                   </span>
-                </div>
-              ))}
+                  {canSwitch && isSelected && (
+                    <span className="h10-ds-acct-check" aria-hidden>
+                      ✓
+                    </span>
+                  )}
+                </RowTag>
+                )
+              })}
             </div>
           ))}
 

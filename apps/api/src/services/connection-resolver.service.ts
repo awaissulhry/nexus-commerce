@@ -293,6 +293,47 @@ export async function primaryConnectionIds(
   return out;
 }
 
+// ── Connect-flow lookups ─────────────────────────────────────────────────────
+// These do not resolve an account for WORK — they ask what the account set
+// already contains, during OAuth. They live here rather than in the auth route so
+// there is one place that knows how to look an account up, and so the MAP.3
+// ratchet stays honest: a direct `channelConnection.findFirst` in the callback is
+// indistinguishable, to the audit, from the singleton assumption being reintroduced.
+
+/**
+ * The active account for a channel with this marketplace identity, if any.
+ *
+ * The re-consent case: an operator reconnecting an account we already hold must
+ * refresh that row, not mint a second one for the same seller.
+ */
+export async function findAccountByExternalId(
+  channel: string,
+  externalAccountId: string,
+  excludeConnectionId?: string,
+): Promise<ChannelConnection | null> {
+  return prisma.channelConnection.findFirst({
+    where: {
+      channelType: channel,
+      isActive: true,
+      externalAccountId,
+      ...(excludeConnectionId ? { NOT: { id: excludeConnectionId } } : {}),
+    },
+  });
+}
+
+/**
+ * How many active accounts on this channel have NO marketplace identity.
+ *
+ * Admitting a second one would leave two accounts nobody can tell apart — which
+ * `ChannelConnection_active_account_key` refuses at the database anyway. Asking
+ * here lets the connect flow say so in words, before the operator has consented.
+ */
+export async function countUnidentifiedAccounts(channel: string): Promise<number> {
+  return prisma.channelConnection.count({
+    where: { channelType: channel, isActive: true, externalAccountId: null },
+  });
+}
+
 /** Convenience for the many callers that only need the id to pass downstream. */
 export async function resolveConnectionId(scope: ConnectionScope): Promise<string> {
   return (await resolveConnection(scope)).id;

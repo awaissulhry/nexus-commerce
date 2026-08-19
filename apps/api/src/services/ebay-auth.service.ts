@@ -80,6 +80,18 @@ export class EbayAuthService {
         // effect on the next operator re-authorization (existing tokens
         // keep their current scopes until re-consent).
         "https://api.ebay.com/oauth/api_scope/sell.marketing",
+        // MAP.4 — seller IDENTITY. Load-bearing for multi-account: without it
+        // eBay tells us nothing about WHO consented, `getSellerInfo` can only
+        // return the literal "eBay seller (verified)", and two accounts are
+        // indistinguishable. `ChannelConnection_active_account_key` keys on
+        // externalAccountId, so an account we cannot identify cannot be admitted
+        // alongside one we already hold.
+        //
+        // Additive, and takes effect on the NEXT authorization: existing tokens
+        // keep their current scopes until the operator re-consents. So the
+        // already-connected account keeps externalAccountId = NULL until it is
+        // reconnected, and the settings page says so.
+        "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
       ].join(" "),
       state,
     });
@@ -299,6 +311,8 @@ export class EbayAuthService {
       signInName?: string;
       storeName?: string;
       storeFrontUrl?: string;
+      /** MAP.4 — eBay's stable opaque user id, when the identity scope allowed it. */
+      externalAccountId?: string | null;
     }
   ): Promise<void> {
     try {
@@ -313,6 +327,12 @@ export class EbayAuthService {
           tokenExpiresAt: expiresAt,
           displayName: sellerInfo?.signInName,
           managedBy: "oauth",
+          // MAP.4 — only written when we actually got one. Never overwrite a real
+          // identity with null: a later token refresh without the scope must not
+          // erase what a consented connect established.
+          ...(sellerInfo?.externalAccountId
+            ? { externalAccountId: sellerInfo.externalAccountId }
+            : {}),
           ebayAccessToken: accessToken,
           ebayRefreshToken: refreshToken,
           ebayTokenExpiresAt: expiresAt,
@@ -455,6 +475,60 @@ export class EbayAuthService {
     } catch (error) {
       logger.error("Error fetching seller info", { error });
       throw error;
+    }
+  }
+
+  /**
+   * MAP.4 — who actually consented.
+   *
+   * `/sell/account/v1/privilege` (getSellerInfo above) carries no name, which is
+   * why this codebase has been writing the placeholder "eBay seller (verified)"
+   * since the eBay integration shipped. The Identity API does carry one, but it
+   * needs the `commerce.identity.readonly` scope and it lives on the **apiz**
+   * host, not `api.ebay.com` — a request to the wrong host 404s in a way that
+   * looks like a missing scope.
+   *
+   * Returns null rather than throwing: a connection whose identity we could not
+   * read is still a usable connection, it just cannot be told apart from another
+   * one. The caller decides what that means (see the duplicate check in the OAuth
+   * callback), and the settings page shows it as "identity unavailable —
+   * reconnect to enable multi-account".
+   */
+  async getSellerIdentity(
+    accessToken: string,
+  ): Promise<{ userId: string; username: string } | null> {
+    const base = process.env.EBAY_IDENTITY_BASE ?? "https://apiz.ebay.com";
+    try {
+      const response = await fetch(`${base}/commerce/identity/v1/user/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        logger.warn("eBay identity unavailable", {
+          status: response.status,
+          hint:
+            response.status === 403 || response.status === 404
+              ? "token predates the commerce.identity.readonly scope — reconnect the account"
+              : undefined,
+        });
+        return null;
+      }
+      const data = (await response.json()) as {
+        userId?: string;
+        username?: string;
+      };
+      if (!data?.userId && !data?.username) return null;
+      // userId is eBay's stable opaque id; username is what the seller sees.
+      // Prefer userId for identity because a username can be changed.
+      return {
+        userId: data.userId ?? data.username!,
+        username: data.username ?? data.userId!,
+      };
+    } catch (error) {
+      logger.warn("Error fetching eBay identity", { error });
+      return null;
     }
   }
 }

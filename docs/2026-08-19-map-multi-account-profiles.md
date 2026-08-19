@@ -1,6 +1,7 @@
 # MAP — Multi-Account & Profiles
 
-**Status:** MAP.0, MAP.1, MAP.2a, MAP.2b, MAP.3a, MAP.3b **SHIPPED and prod-verified 2026-08-19**.
+**Status:** MAP.0, MAP.1, MAP.2a, MAP.2b, MAP.2b-ii, MAP.3a, MAP.3b **SHIPPED and prod-verified
+2026-08-19**. MAP.4 part-shipped: identity + switching done, the Settings account list remains.
 **Burn-down:** 60 → **12** ambient resolution sites. All 12 remaining are in the untouchable
 `ebay-flat-file.routes.ts`, behind the MAP.6 gate. MAP.2b shipped; MAP.2b-ii (dropping the old keys) is the last step before MAP.4.
 **Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
@@ -520,16 +521,48 @@ All 12 are in **`routes/ebay-flat-file.routes.ts`**, a hard no-touch zone
 not forgotten and not blocked work — they are the one file MAP.3 is not permitted to open. The
 ratchet baseline is 12 and drops to 0 in the MAP.6 commit.
 
-### MAP.4 — Connect the second account, in two clicks
-Settings → Channels becomes a list of accounts per channel rather than one card per channel.
-`+ Connect another eBay account` → eBay consent → back. The OAuth callback mints a **new** connection
-per grant instead of reusing the active one, captures seller identity, and rejects a duplicate
-sign-in name. Label, colour, primary, health, token expiry, and disconnect with a blast-radius
-preview (how many listings and orders reference it). Disconnect never touches another account's
-tokens (`feedback_preserve_sensitive_config`).
+### MAP.2b-ii — drop the legacy keys ✅ SHIPPED
+`20260819c_map2b_ii_drop_legacy_keys`. Held back one release so a rolling deploy could not fail;
+that window closed when `20260819b` deployed at 18:16:13Z and the 18:20/18:25 crons ran on it.
 
-**The MAP.1 chip now actually switches** — `?account=` on the current route, page preserved.
-**This is the phase where the request becomes real.**
+**This is the statement that actually lets a second account exist.** Until it ran, the old
+three-column index was still enforcing *one listing per product per channel per marketplace, across
+all accounts* — the constraint the whole programme is about. Everything before it was preparation.
+
+Proven in a rolled-back transaction against prod: a second active eBay connection inserts; the same
+product then holds a listing on **both** accounts for the **same** marketplace; and a duplicate
+*within* one account is still refused with 23505. The constraint narrowed. It did not disappear.
+
+### MAP.4 — Connect the second account 🟡 PART SHIPPED
+
+**Shipped: identity, and the chip that switches.**
+
+- **eBay's identity scope.** `commerce.identity.readonly` added to the authorization request, plus
+  `getSellerIdentity()` against the **apiz** host (a request to `api.ebay.com` 404s in a way that
+  looks like a missing scope). This is what finally replaces `"eBay seller (verified)"` — the literal
+  placeholder this integration has shown since it shipped — with a real username, and populates
+  `externalAccountId`, which `ChannelConnection_active_account_key` keys on.
+  It returns `null` rather than throwing: a connection whose identity we could not read is still
+  usable, it just cannot be told apart from another one.
+  ⚠ Additive scope — it takes effect on the **next** authorization. The already-connected eBay
+  account keeps `externalAccountId = NULL` until the operator reconnects it.
+- **Re-consent folds into the existing account.** A grant whose identity matches an active
+  connection refreshes *that* row and deletes the placeholder row the flow created, instead of
+  minting a second account for the same seller.
+- **An unidentifiable second account is refused early**, with the reason, rather than surfacing a
+  P2002 after the operator has already consented at eBay.
+- **The chip switches.** Rows become selectable only when `canSwitch` says a channel really holds
+  more than one account. Selecting one rewrites `?account=` **on the route you are already on**,
+  keeping every other query param — the single most copyable detail in the Rithum recording, whose
+  row hrefs carry `SelectAccount?apid=<id>&url=<the page you were on>`.
+  Verified in the browser on `/orders?status=…&market=…`: stayed on `/orders`, `account` added,
+  `status` and `market` preserved, panel closed, and the tick moved to the newly selected account.
+
+**Not shipped: the Settings surface.** `settings/channels` still renders one card per channel and
+keys its connection map by `channelType`. Until it grows an account list with
+*"+ Connect another eBay account"*, label / colour / primary, and disconnect with a blast-radius
+preview, the operator cannot actually add the second account through the UI — the API and the data
+model both support it. That surface is the remainder of MAP.4.
 
 ### ~~MAP.5 — Amazon becomes two clicks too~~ — **DROPPED** (decision 1)
 One Amazon selling account is enough for now, so the SP-API seller authorization-code flow is not
