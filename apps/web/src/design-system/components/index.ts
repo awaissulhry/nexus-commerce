@@ -36,3 +36,6 @@ export {
   type AccountRow as AccountSwitcherRow,
   type AccountHealth,
 } from './AccountSwitcher'
+
+// MAP.4 — the accounts of each channel, and what you can do to them.
+export { AccountsPanel, type AccountsPanelProps } from './AccountsPanel'

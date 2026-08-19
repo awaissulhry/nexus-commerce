@@ -123,10 +123,13 @@ const ENTRIES: Entry[] = [
   // prefix must precede the broader /api/accounts one or it can never be hit.
   // Diagnostics exposes index definitions and row counts — integration detail.
   P(F.settingsIntegrationsManage, pfx('/api/accounts/diagnostics')),
-  // The list itself backs the top-right chip, which renders on every page, so
-  // gating it behind settings access would blank the chrome for most operators.
-  // Signed-in is the right bar: it names connected accounts, holds no secrets.
-  P(PG.dashboard, pfx('/api/accounts')),
+  // READ backs the top-right chip, which renders on every page, so gating it
+  // behind settings access would blank the chrome for most operators. Signed-in is
+  // the right bar: it names connected accounts and holds no secrets.
+  // WRITE is a different question — relabelling an account, moving the primary or
+  // disconnecting one is integration management, and MAP.8 will narrow it further
+  // to per-account scope.
+  RW(PG.dashboard, F.settingsIntegrationsManage, pfx('/api/accounts')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/connections')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),
 

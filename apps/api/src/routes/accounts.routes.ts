@@ -37,6 +37,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ChannelConnection } from "@prisma/client";
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
+import { listActiveConnections } from "../services/connection-resolver.service.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
@@ -167,6 +168,19 @@ function toAccountRow(r: ChannelConnection, isPrimary: boolean): AccountRow {
   };
 }
 
+/** Rows that reference an account — what disconnecting it would orphan. */
+async function blastRadius(connectionId: string) {
+  const [listings, variantListings, memberships, orders, policies, campaigns] = await Promise.all([
+    prisma.channelListing.count({ where: { channelConnectionId: connectionId } }),
+    prisma.variantChannelListing.count({ where: { channelConnectionId: connectionId } }),
+    prisma.sharedListingMembership.count({ where: { channelConnectionId: connectionId } }),
+    prisma.order.count({ where: { channelConnectionId: connectionId } }),
+    prisma.syncChannelPolicy.count({ where: { channelConnectionId: connectionId } }),
+    prisma.ebayCampaign.count({ where: { channelConnectionId: connectionId } }).catch(() => 0),
+  ]);
+  return { listings, variantListings, memberships, orders, policies, campaigns };
+}
+
 const accountsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── MAP.1 — the chip's source ────────────────────────────────────
   fastify.get("/accounts", async (_request, reply) => {
@@ -272,6 +286,108 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       logger.error("GET /api/accounts/diagnostics failed", { error: message });
       return reply.status(500).send({ success: false, error: message });
     }
+  });
+  // ── MAP.4 — what disconnecting this account would affect ─────────
+  fastify.get<{ Params: { id: string } }>("/accounts/:id/blast-radius", async (request, reply) => {
+    const row = await prisma.channelConnection.findUnique({ where: { id: request.params.id } });
+    if (!row) return reply.code(404).send({ success: false, error: "Account not found" });
+    const counts = await blastRadius(row.id);
+    return reply.send({
+      success: true,
+      accountId: row.id,
+      channel: row.channelType,
+      isPrimary: row.isPrimary,
+      counts,
+      total: Object.values(counts).reduce((a, b) => a + b, 0),
+    });
+  });
+
+  // ── MAP.4 — the operator's own name, colour and ordering ─────────
+  fastify.patch<{
+    Params: { id: string };
+    Body: { accountLabel?: string | null; accountColor?: string | null; sortOrder?: number };
+  }>("/accounts/:id", async (request, reply) => {
+    const { accountLabel, accountColor, sortOrder } = request.body ?? {};
+    const row = await prisma.channelConnection.findUnique({ where: { id: request.params.id } });
+    if (!row) return reply.code(404).send({ success: false, error: "Account not found" });
+
+    // A colour drives an identity chip, so it has to be a colour — an arbitrary
+    // string here would end up interpolated into a style attribute.
+    if (accountColor != null && accountColor !== "" && !/^#[0-9a-fA-F]{6}$/.test(accountColor)) {
+      return reply.code(400).send({ success: false, error: "accountColor must be #rrggbb" });
+    }
+
+    const updated = await prisma.channelConnection.update({
+      where: { id: row.id },
+      data: {
+        ...(accountLabel !== undefined ? { accountLabel: accountLabel?.trim() || null } : {}),
+        ...(accountColor !== undefined ? { accountColor: accountColor || null } : {}),
+        ...(sortOrder !== undefined ? { sortOrder } : {}),
+      },
+    });
+    return reply.send({ success: true, account: toAccountRow(updated, updated.isPrimary) });
+  });
+
+  // ── MAP.4 — which account a channel defaults to ──────────────────
+  fastify.post<{ Params: { id: string } }>("/accounts/:id/primary", async (request, reply) => {
+    const row = await prisma.channelConnection.findUnique({ where: { id: request.params.id } });
+    if (!row) return reply.code(404).send({ success: false, error: "Account not found" });
+    if (!row.isActive) {
+      return reply.code(409).send({ success: false, error: "A disconnected account cannot be primary" });
+    }
+
+    // Order matters. `ChannelConnection_channelType_primary_key` is a partial
+    // unique index on (channelType) WHERE isPrimary — so the outgoing primary
+    // must be cleared BEFORE the incoming one is set, or the second write
+    // collides with the first. Both in one transaction so a failure between them
+    // cannot leave the channel with no primary at all, which is a state the
+    // resolver's DECLARED scope would refuse to work with.
+    await prisma.$transaction([
+      prisma.channelConnection.updateMany({
+        where: { channelType: row.channelType, isPrimary: true },
+        data: { isPrimary: false },
+      }),
+      prisma.channelConnection.update({ where: { id: row.id }, data: { isPrimary: true } }),
+    ]);
+
+    logger.info("MAP.4 primary account changed", { channel: row.channelType, accountId: row.id });
+    return reply.send({ success: true });
+  });
+
+  // ── MAP.4 — disconnect, without destroying anything ──────────────
+  fastify.post<{ Params: { id: string } }>("/accounts/:id/disconnect", async (request, reply) => {
+    const row = await prisma.channelConnection.findUnique({ where: { id: request.params.id } });
+    if (!row) return reply.code(404).send({ success: false, error: "Account not found" });
+
+    // Through the resolver, like every other "what accounts exist" question — a
+    // direct findFirst/count here is indistinguishable, to the MAP.3 audit, from
+    // the singleton assumption coming back. (Also avoids Prisma's `NOT` dropping
+    // NULL rows, per reference_prisma_not_excludes_null.)
+    const siblings = (await listActiveConnections(row.channelType)).filter(
+      (c) => c.id !== row.id,
+    ).length;
+    if (row.isPrimary && siblings > 0) {
+      return reply.code(409).send({
+        success: false,
+        error:
+          "This is the primary account for its channel. Make another account primary first, " +
+          "so ambient work has somewhere to go.",
+        code: "PRIMARY_ACCOUNT",
+      });
+    }
+
+    // Deactivate; never delete. The rows that reference it (MAP.2a attributed
+    // them) keep their attribution, so history still says which account it came
+    // from — the FKs are ON DELETE SET NULL precisely so a delete could not
+    // quietly erase that, and this path does not delete at all.
+    // Tokens for OTHER accounts are untouched (feedback_preserve_sensitive_config).
+    await prisma.channelConnection.update({
+      where: { id: row.id },
+      data: { isActive: false, isPrimary: false, lastSyncStatus: "FAILED", lastSyncError: "Disconnected by operator" },
+    });
+
+    logger.info("MAP.4 account disconnected", { channel: row.channelType, accountId: row.id });
+    return reply.send({ success: true, blastRadius: await blastRadius(row.id) });
   });
 };
 

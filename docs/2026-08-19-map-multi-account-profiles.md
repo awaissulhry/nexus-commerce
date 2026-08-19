@@ -1,7 +1,7 @@
 # MAP — Multi-Account & Profiles
 
 **Status:** MAP.0, MAP.1, MAP.2a, MAP.2b, MAP.2b-ii, MAP.3a, MAP.3b **SHIPPED and prod-verified
-2026-08-19**. MAP.4 part-shipped: identity + switching done, the Settings account list remains.
+2026-08-19**. MAP.4 shipped: identity, switching, and the Settings account list.
 **Burn-down:** 60 → **12** ambient resolution sites. All 12 remaining are in the untouchable
 `ebay-flat-file.routes.ts`, behind the MAP.6 gate. MAP.2b shipped; MAP.2b-ii (dropping the old keys) is the last step before MAP.4.
 **Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
@@ -533,7 +533,7 @@ Proven in a rolled-back transaction against prod: a second active eBay connectio
 product then holds a listing on **both** accounts for the **same** marketplace; and a duplicate
 *within* one account is still refused with 23505. The constraint narrowed. It did not disappear.
 
-### MAP.4 — Connect the second account 🟡 PART SHIPPED
+### MAP.4 — Connect the second account ✅ SHIPPED
 
 **Shipped: identity, and the chip that switches.**
 
@@ -558,11 +558,41 @@ product then holds a listing on **both** accounts for the **same** marketplace; 
   Verified in the browser on `/orders?status=…&market=…`: stayed on `/orders`, `account` added,
   `status` and `market` preserved, panel closed, and the tick moved to the newly selected account.
 
-**Not shipped: the Settings surface.** `settings/channels` still renders one card per channel and
-keys its connection map by `channelType`. Until it grows an account list with
-*"+ Connect another eBay account"*, label / colour / primary, and disconnect with a blast-radius
-preview, the operator cannot actually add the second account through the UI — the API and the data
-model both support it. That surface is the remainder of MAP.4.
+**Shipped: the Settings surface** — `AccountsPanel`, a DS component mounted on `settings/channels`.
+
+The page rendered ONE card per channel keyed by `channelType`, a shape that cannot express two eBay
+accounts. Rather than rewrite those cards — they work, and they own the OAuth kickoff and the
+diagnostics — the accounts list is a separate DS component above them. Per channel it shows every
+account with its health, primary badge and identity state, and offers **Rename**, **Make primary**,
+**Disconnect**, and **"+ Connect another eBay account"** (the two-click path, reusing the existing
+OAuth kickoff the page already owned).
+
+Backing it: `PATCH /api/accounts/:id` (label / colour / order, colour validated as `#rrggbb` because
+it ends up in a style attribute), `POST /api/accounts/:id/primary`, `POST /api/accounts/:id/disconnect`,
+and `GET /api/accounts/:id/blast-radius`. Reads stay signed-in; **writes require
+`settingsIntegrationsManage`**.
+
+Three details worth keeping:
+
+- **Primary swap is one transaction, unset-then-set.** `ChannelConnection_channelType_primary_key` is
+  a partial unique index on `(channelType) WHERE isPrimary`, so setting the new primary before
+  clearing the old one collides with itself. Both in one transaction, so a failure between them
+  cannot leave a channel with no primary — a state the resolver's DECLARED scope would refuse.
+- **Disconnect deactivates, never deletes**, and refuses outright if the account is its channel's
+  primary while other accounts exist ("make another primary first, so ambient work has somewhere to
+  go"). The confirm quotes the real blast radius first — measured on prod, the eBay account carries
+  **981 rows** (252 listings, 712 memberships, 4 orders, 13 ads campaigns).
+- **The env-managed Amazon account has no Disconnect button at all** — it renders the reason in
+  words. A `title` on a *disabled* control is unreachable, because a disabled element fires no
+  pointer events; the explanation would have been written where nobody can read it. Verified: 0
+  disabled controls in the panel, and **0 contrast failures across 27 text nodes in both themes**
+  (the disabled button had measured 2.04:1 light / 2.78:1 dark before this change).
+
+🔴 **The MAP.3 ratchet caught this work twice** — the connect-flow lookups in `ebay-auth.ts` and the
+sibling count in the disconnect route. Both times the answer was to move the query behind the
+resolver (`findAccountByExternalId`, `countUnidentifiedAccounts`, `listActiveConnections`), not to
+raise the baseline. A direct `findFirst` in a route is indistinguishable, to the audit, from the
+singleton assumption returning.
 
 ### ~~MAP.5 — Amazon becomes two clicks too~~ — **DROPPED** (decision 1)
 One Amazon selling account is enough for now, so the SP-API seller authorization-code flow is not

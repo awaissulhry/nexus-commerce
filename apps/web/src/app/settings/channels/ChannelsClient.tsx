@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { AccountsPanel } from '@/design-system/components'
 
 interface ChannelConnection {
   id: string
@@ -327,6 +328,16 @@ export function ChannelsClient() {
           <span>{statusMsg.text}</span>
         </div>
       )}
+
+      {/* MAP.4 — the accounts each channel holds. The cards below stay as they
+          are: they own the OAuth kickoff and the diagnostics, and replacing them
+          was not what this phase is for. This panel is what can express a SECOND
+          account, which a grid keyed by channelType cannot. */}
+      <AccountsPanel
+        apiBase={getBackendUrl()}
+        onConnect={{ EBAY: handleConnectEbay }}
+        confirm={askConfirm}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {CHANNELS.map((channel) => {

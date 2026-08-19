@@ -1413,3 +1413,79 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 .h10-ds-acct-foot a { font-size: 12px; font-weight: 600; color: var(--h10-text-link); text-decoration: none; }
 .dark .h10-ds-acct-foot a { color: #8ab6f0; }
 .h10-ds-acct-foot a:hover { text-decoration: underline; }
+
+/* ── AccountsPanel (MAP.4) ─────────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched. Tokens
+   only, so `.dark` re-themes it with no rules here. Reuses .h10-ds-acct-dot and
+   .h10-ds-acct-tag from the AccountSwitcher so a health dot means the same thing
+   in the chip and on this page — one concept, one definition. */
+.h10-ds-acctp {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--h10-radius-xl);
+  padding: 14px 16px;
+}
+.h10-ds-acctp-head h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--h10-text); }
+.h10-ds-acctp-head p { margin: 4px 0 0; font-size: 12px; color: var(--h10-text-2); max-width: 62ch; }
+
+.h10-ds-acctp-notice { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; }
+.h10-ds-acctp-notice[data-tone='ok'] { color: var(--h10-success-strong); }
+.h10-ds-acctp-notice[data-tone='error'] { color: var(--h10-danger-strong); }
+.dark .h10-ds-acctp-notice[data-tone='ok'] { color: #6ee7a8; }
+.dark .h10-ds-acctp-notice[data-tone='error'] { color: #f79289; }
+
+.h10-ds-acctp-group { margin-top: 14px; }
+.h10-ds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
+.h10-ds-acctp-ch { font-size: 12px; font-weight: 700; color: var(--h10-text); }
+.h10-ds-acctp-count {
+  min-width: 18px; text-align: center; padding: 0 6px;
+  border-radius: var(--h10-radius-round); background: var(--h10-surface-sunken);
+  color: var(--h10-text-2); font-size: 11px; font-weight: 700;
+}
+.h10-ds-acctp-empty { margin: 8px 0; font-size: 12.5px; color: var(--h10-text-2); }
+
+.h10-ds-acctp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.h10-ds-acctp-row:last-of-type { border-bottom: none; }
+.h10-ds-acctp-row[data-busy] { opacity: 0.6; }
+.h10-ds-acctp-row .h10-ds-acct-dot { margin-top: 6px; }
+.h10-ds-acctp-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.h10-ds-acctp-name { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--h10-text); }
+.h10-ds-acctp-sub { font-size: 12px; color: var(--h10-text-2); }
+.h10-ds-acctp-warn { color: var(--h10-warning-strong); }
+.dark .h10-ds-acctp-warn { color: #f0b46a; }
+.h10-ds-acctp-badge {
+  padding: 1px 7px; border-radius: var(--h10-radius-round);
+  background: var(--h10-blue-600); color: var(--h10-white);
+  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+}
+.h10-ds-acctp-input {
+  font: inherit; font-size: 13.5px; font-weight: 600;
+  padding: 3px 7px; width: min(280px, 100%);
+  border: 1px solid var(--h10-blue-600); border-radius: var(--h10-radius-sm);
+  background: var(--surface-card); color: var(--h10-text);
+}
+
+.h10-ds-acctp-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.h10-ds-acctp-actions button {
+  font: inherit; font-size: 12px; font-weight: 600;
+  padding: 4px 9px; border-radius: var(--h10-radius-md);
+  border: 1px solid var(--border-default); background: var(--surface-card);
+  color: var(--h10-text); cursor: pointer;
+}
+.h10-ds-acctp-actions button:hover:not(:disabled) { background: var(--h10-surface-hover); }
+.h10-ds-acctp-actions button:disabled { color: var(--h10-text-disabled); cursor: not-allowed; }
+.h10-ds-acctp-actions button.is-danger { color: var(--h10-danger-strong); border-color: var(--h10-danger-soft); }
+.dark .h10-ds-acctp-actions button.is-danger { color: #f79289; border-color: var(--border-default); }
+.h10-ds-acctp-actions button.is-danger:disabled { color: var(--h10-text-disabled); border-color: var(--border-default); }
+/* Why an action is absent, in words a screen reader and an eye can both reach —
+   never a `title` on a disabled control, which fires no pointer events. */
+.h10-ds-acctp-note { font-size: 11.5px; color: var(--h10-text-2); max-width: 20ch; text-align: right; }
+
+.h10-ds-acctp-add {
+  margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 6px 11px; border-radius: var(--h10-radius-md);
+  border: 1px dashed var(--border-strong); background: none;
+  color: var(--h10-text-link); cursor: pointer;
+}
+.h10-ds-acctp-add:hover { background: var(--h10-surface-hover); }
+.dark .h10-ds-acctp-add { color: #8ab6f0; }
