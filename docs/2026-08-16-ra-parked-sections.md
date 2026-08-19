@@ -479,10 +479,100 @@ intact; **0 separators**; no page overflow. All eleven routes return 200.
 
 ---
 
+## U11 — H10's five rule columns on Apply Rules (2026-08-19, commits `f6d2c2e7b` · `6c2409dd3`) — additive, nothing parked
+
+Operator, 2026-08-19: *"On the Apply Rules page, I'm seeing on h10: Bid Rule · Target ACoS ·
+Min/Max Bid · Bid Automation · Budget Rule. A lot of it is actually missing here, and we must build
+them as well. And if I'm not wrong, we also built them on the Ads Manager page. To make sure it is
+exactly the same and there are no inconsistencies in the design and the UI, we can simply use
+shared components."*
+
+So: **one** definition — `ads/_shared/RuleColumnCells.tsx` — imported by both grids. Each cell takes
+PRIMITIVES rather than a row, because the two grids carry different row types (`Camp` vs
+`CampaignRow`); passing values means neither has to adopt the other's shape.
+
+### What each column may HONESTLY show — measured on prod 2026-08-19, BEFORE building
+
+| Column | Source | What prod actually holds |
+|---|---|---|
+| Bid Rule | `/advertising/bid-grid?view=campaigns` → `bidder` / `bidderName` | **schedule 32 · none 45 · manual 6**; names like "Rank plan — GALE EXACT DE" |
+| Target ACoS | guardrail grid `targetAcosPct` (AR) / campaigns `targetAcos` (AM) | set on **0 of 220** — "—" is the honest reading of *nobody has set one* |
+| Min/Max Bid | `minBidCents` / `maxBidCents` | set on **82 of 220** |
+| Bid Automation | `bidAutomation` | **false on all 220** — real field, uniform value |
+| Budget Rule | `/advertising/budget-grid` → `reachedByRuleIds`, `lastMovedByKind` | reach is **6 on every campaign** (all six budget rules are account-wide); `lastMovedByKind === 'rule'` on **1 of 86** |
+
+Two consequences of those measurements, both of which shaped the cells:
+
+- 🔴 **`/advertising/campaigns` returns no `bidAlgorithm`**, so the Ad Manager's own Bid Rule cell
+  falls through to its default and prints **"Target ACOS" on 100 of 100 rows** (verified in the
+  deployed DOM). Apply Rules' Bid Rule therefore reads the **bid owner** from the bid grid instead —
+  the same question answered with a field that exists. See the open item below.
+- **Budget Rule leads with what varies.** A column printing "6" on all 220 would be decorative — the
+  class this whole programme removes — so the cell shows whether a rule has actually *moved* this
+  budget, and carries the reach as context ("— 6 can").
+
+### 🔴 Two fabricated readings on the Ad Manager, fixed in passing
+
+Swapping the Ad Manager's display halves onto the shared cells removed two values that were not
+readings at all:
+
+- `targetAcos` rendered as `(c.targetAcos ?? 0.3) * 100` → a confident **"30.00%" on every row**, a
+  fallback wearing a setting's clothes. Now "—". *Verified: `30.00%` occurs **0** times in the
+  deployed DOM.*
+- `minMaxBid` read `c.minMaxBid`, **a key the payload does not contain**, so it printed "None" on all
+  220 while `minBidCents`/`maxBidCents` sat unread in the same response. Now **82 real bands, 18
+  None** in the first 100 rows.
+
+### U11b — the two stragglers, and H10's order (`6c2409dd3`)
+
+U11 shipped the three *missing* columns through the shared set but left Apply Rules' two
+*pre-existing* ones rendering locally. Measured: for the same campaign and the same field, Apply
+Rules said **"not set"** where the Ad Manager said **"None"** — precisely the drift the shared set
+exists to prevent. Both are now shared:
+
+- **Min · Max bid** → `<MinMaxBidCell>`. Only the READING is shared; the pencil stays this page's,
+  because the Ad Manager opens its own editor. The dead `.h10-ar-bounds b` rule went with it.
+- **Target ACoS** → `<TargetAcosCell>`. 🔴 The guardrail grid returns a **PERCENTAGE**
+  (`targetAcosPct`); the cell takes the **FRACTION** the campaigns payload stores. Converted at the
+  call site rather than leaning on the cell's *"> 1 means already a percentage"* guard — that guard
+  exists for the one prod rule storing `30` where the rest store `0.3`, and a real 0.5% target would
+  trip it into 50%.
+- **Reordered into H10's block**: Bid Rule · Target ACoS · Min/Max Bid · Bid Automation · Budget
+  Rule. This grid passes no `storageKey`, so column order is pure array order and nothing persisted
+  needed migrating. The page's own governance columns (Automations = the write gate, Bidding
+  strategy) now follow the block — and the gate is deliberately **not** adjacent to Bid Automation,
+  because the two look alike and mean different things.
+
+### The trap this unit nearly walked into
+
+The three new cells close over `bidOwners` / `budgetOwners`, which arrive from **separate fetches
+after the first render**. Omitting them from the `useMemo` deps would have kept the empty maps the
+memo was built with and printed "—" forever — the data layer loading and the render layer never
+noticing. Both are in the deps array, with a comment saying why.
+
+**Prod verification, 2026-08-19.** Apply Rules: Bid Rule varies (**76 None · 6 manual · named plans
+on the rest**, incl. "Rank plan — GALE EXACT DE" and "Campaign ACOS rebalance"), Bid Automation 0 of
+100 on, Budget Rule "— 6 can" on 85 rows. Ad Manager: Target ACoS "—" ×100, Min/Max 82 bands vs 18
+None, no horizontal page overflow. Nothing parked — every column is additive.
+
+### 🔴 Open, and NOT fixed here
+
+The Ad Manager's own **"Bid Rule"** column is the head of its Adtomic cluster and is a
+**bid-algorithm picker** (Target ACOS / Max Impressions / Max Orders), documented in the source as
+*UI-only until Amazon exposes a per-campaign bid-algorithm field*; its editor writes local state and
+toasts "(local — Amazon field pending)". It is therefore a **different control** that happens to
+share H10's label, not a drifted copy of Apply Rules' column — which is why it was left alone rather
+than swapped. Resolving it means either renaming it "Bid Algorithm" (the key it already uses
+internally) and giving the Ad Manager a real Bid Rule column off the bid grid, or retiring the
+picker. Operator decision, not a refactor.
+
+---
+
 ## The programme is complete
 
-Eleven units, U0–U10, every one prod-verified before the next began. **55 files parked, none
-deleted**, and Rank & Dayparting was never touched.
+Eleven units, U0–U10, every one prod-verified before the next began, plus **U11** — additive
+columns on Apply Rules rather than a reduction. **55 files parked, none deleted**, and Rank &
+Dayparting was never touched.
 
 **Still open, deliberately:**
 - **"+ Assign Rule"** (U9/D6) — waits for additive `scope*Ids` columns; single-valued scope would
@@ -499,5 +589,5 @@ deleted**, and Rank & Dayparting was never touched.
 Suggestions · Analytics › Coverage · Reporting · Budget Manager · Control Room › Guardrails ·
 Automations › Engines · Change Log. Each row above names its destination; re-mounting one is a
 single import.
-U8 Budget Schedules · U9 Apply Rules · U10 tab bar. Each unit appends its own
-table here.
+U8 Budget Schedules · U9 Apply Rules · U10 tab bar · U11 the five rule columns
+(additive — nothing parked). Each unit appends its own table here.

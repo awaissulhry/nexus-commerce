@@ -666,7 +666,52 @@ grid is proven on prod before the pages with new UI (KH ad-group grid, BSP hourl
 = one small new client (~60–150 lines), one page.tsx edit, PARKED comments + manifest lines, prod
 verification, commit+push. Rough net effect on the section: ~11,000 lines unmounted, ~900 written.
 
-## 8. Decisions — D1 · D2 · D7 · D8 answered 2026-08-16; D3–D6, D9 still open
+## 7.11 — U11: H10's five rule columns, as ONE shared set (2026-08-19)
+
+Not a reduction — the only **additive** unit in the programme. H10's Apply Rules grid carries **Bid
+Rule · Target ACoS · Min/Max Bid · Bid Automation · Budget Rule**; three were missing from ours.
+
+Operator instruction: *"we also built them on the Ads Manager page. To make sure it is exactly the
+same and there are no inconsistencies in the design and the UI, we can simply use shared
+components."* → `apps/web/src/app/marketing/ads/_shared/RuleColumnCells.tsx`, five cells taking
+**primitives** (the two grids carry different row types, so a cell taking a row would force one to
+adopt the other's shape). Change a cell there and both pages change.
+
+**Measured on prod first, and it decided the design of three of the five:**
+
+| Column | Field, and what prod holds 2026-08-19 |
+|---|---|
+| Bid Rule | `bidder`/`bidderName` from the **bid grid** — schedule 32 · none 45 · manual 6 |
+| Target ACoS | `targetAcos` — set on **0 of 220** |
+| Min/Max Bid | `minBidCents`/`maxBidCents` — set on **82 of 220** |
+| Bid Automation | `bidAutomation` — **false on all 220** |
+| Budget Rule | `reachedByRuleIds` **6 on every campaign**; `lastMovedByKind==='rule'` on **1 of 86** |
+
+- 🔴 `/advertising/campaigns` returns **no `bidAlgorithm`**, which is why H10's "bid algorithm"
+  question is answered here with the **bid owner** instead — and why the Ad Manager's own Bid Rule
+  cell prints "Target ACOS" on 100 of 100 rows (§7.11 open item).
+- **Budget Rule** leads with whether a rule has *moved* this budget, because reach alone is the same
+  number on every row and a constant column is decorative.
+- **Target ACoS** and **Bid Automation** are uniform today. Uniform ≠ fake: both are real, writable
+  fields, and Apply Rules' bulk verbs (U9) write them. "—" and "off" are readings.
+
+**Two fabricated values removed from the Ad Manager in passing**: `targetAcos` was rendered as
+`(c.targetAcos ?? 0.3) * 100`, printing a confident **"30.00%" on every row**; `minMaxBid` read a
+key **the payload does not contain**, printing "None" on all 220 while the cents sat unread in the
+same response.
+
+**U11b** put Apply Rules' two *pre-existing* columns on the shared cells too — they had been saying
+"not set" where the Ad Manager said "None" for the same field — and reordered the five into H10's
+own left-to-right block. The guardrail grid's `targetAcosPct` is a **percentage** and the shared
+cell takes a **fraction**; converted at the call site rather than relying on the cell's `> 1` guard,
+which exists for the one prod rule storing `30` where the rest store `0.3`.
+
+**Still open:** the Ad Manager's "Bid Rule" is its Adtomic-cluster **bid-algorithm picker**
+(UI-only, local state, "Amazon field pending") — a different control sharing H10's label, not a
+drifted copy. Renaming it to "Bid Algorithm" and giving that page a real Bid Rule column is an
+operator decision, not a refactor.
+
+## 8. Decisions — D1 · D2 · D7 · D8 answered 2026-08-16; D6 answered 2026-08-18/19; D3–D5, D9 still open
 (The four answered ones are the ones that gated U0/U1, so the build can start; D3–D6 gate later
 units and are asked when those units come up.)
 - **D1 — Tab bar — ✅ ANSWERED 2026-08-16:** H10's order; relabel `budget` → "Budget" and
@@ -684,8 +729,17 @@ units and are asked when those units come up.)
   dataset/market the rule reads (our equivalent), or (b) drop the column. Recommend (a).
 - **D5 — Budget Schedules "Budget Multiplier (daily)"** type: build it as a second schedule type
   now, or ship U8 with Campaign Budget (hourly) only?
-- **D6 — Apply Rules delta:** (a) H10 columns, (b) bulk verbs incl. "+ Assign Rule" (needs the
-  additive plural-scope schema), (c) keep or drop the four-grain segment — which of the three?
+- **D6 — Apply Rules delta — ✅ ANSWERED, in two parts.**
+  · *2026-08-18 (U9):* bulk verbs **yes** (Automation · Target ACoS · Min/Max Bid), four-grain
+    segment **kept** as a documented departure, "+ Assign Rule" **deferred** — `scopeCampaignId` is
+    single-valued, so assigning a rule to a second campaign would MOVE it off the first.
+  · *2026-08-19 (U11):* H10 columns **yes, all five**, reversing the "no Bid Rule / Budget Rule"
+    call made on 2026-08-18. That call rested on *0 of 51 rules are campaign-scoped, so a rule-name
+    column would print the same value on 220 rows* — true of the RULE, but the columns do not have
+    to read the rule. Re-measured: `bidder` from the **bid grid** varies (schedule 32 · none 45 ·
+    manual 6) and `lastMovedByKind` from the **budget grid** varies (rule on 1 of 86). Different
+    endpoint, same question, real answer. Built as ONE shared set (`_shared/RuleColumnCells.tsx`)
+    used by the Ad Manager too, on operator instruction. See §7.11.
 - **D7 — Parking mechanics — ✅ ANSWERED 2026-08-16:** park **in place** + `PARKED` header comment +
   the manifest doc. No file moves.
 - **D8 — Verification cadence — ✅ ANSWERED 2026-08-16:** one prod verification + one commit/push
