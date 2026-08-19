@@ -646,6 +646,67 @@ screenshot's pixel dimensions. Recorded in memory under *browser probes lie*.
 
 ---
 
+## U11d — campaign name, status and bidding strategy, shared (2026-08-19, commits `a70eddfcb` · `6ba2dab90`)
+
+Operator, 2026-08-19: *"I want it to be the same, exactly the same. I want you to use shared
+components, not make copies of it, and make some slight differences in it. I want to maintain
+proper consistencies across all the design systems and each and everything."*
+
+U11 shared the readings, U11c shared the two rule editors. What was left had drifted in
+**behaviour**, not just styling — the Ad Manager could change a campaign's status and bidding
+strategy from the grid and Apply Rules could only read them.
+
+`ads/_shared/CampaignRowCells.tsx` now owns all three, plus the label maps behind them:
+
+| | Apply Rules before | Now (both pages) |
+|---|---|---|
+| Campaign name | dark `.h10-ar-nm`, plain "Open" text link, same tab | pacing bulb · A/M + SP hover cards · name in link blue · market chip · **Open** pill revealed on row hover, **new tab** |
+| Status | read-only pill | pill + chevron → **Archive / Pause / Enable**, gated campaign PATCH |
+| Bidding strategy | read-only text | label + hover pencil → the same three-strategy modal |
+
+### 🔴 Why the editors still felt un-shared, and the rule that came out of it
+
+U11c gave `RangePopover` / `ValuePopover` a **`note` prop** — and the two pages promptly passed
+different sentences, which is exactly what the operator noticed. *A prop that lets one caller
+reword the dialog is a fork with extra steps.* Both popovers now take a `kind` that selects title,
+radio label, placeholder, floor **and** description together. There is no copy prop left to
+diverge, and no `variant` prop either.
+
+**Verified byte-for-byte on prod**, opening every dialog on both pages and diffing the rendered
+text: Min/Max Bid, Target ACoS, Campaign Bidding Strategy and the status menu are **identical
+strings** — same title, sub-title, radio labels, description and button verbs.
+
+### The old reasoning that was half-right
+
+Apply Rules' first column carried a source comment arguing that *"a blue name that does nothing
+when clicked is a promise the page cannot keep"*, and opted out of the shared blue. Right about the
+colour, wrong about the fix: the Ad Manager's name is **also** not a link — the promise is kept by
+the **Open** pill beside it, which is the control H10 puts there. Diverging one grid to solve it
+made the two pages behave differently on the row an operator looks at first.
+
+### Found while sharing
+
+`apply-rules/types.ts` said **"Up & down"** where the Ad Manager said **"Up and Down"** — the same
+Amazon value, spelled two ways, on two pages read side by side. One map now (`STRAT_LABEL`).
+
+### No CSS shipped
+
+`AdsDataGrid` renders `<td className="nm fz">` inside `.h10-am-grid` — the Ad Manager's own table
+markup — so `ads.css` already styled every one of these on both pages. Apply Rules had been
+*fighting* that with `.h10-ar-nm` / `.h10-ar-open`; adopting the markup makes the fight
+unnecessary rather than winning it. `.h10-ar-open` and the `.h10-ar-pill.st-*` variants are
+deleted. Only `.h10-modal-err` is new — Apply Rules has no toast host, and a dialog that closes on
+a refusal reads as a success.
+
+### U11d.1 — and the regression the refactor caused (`6ba2dab90`)
+
+Passing the Ad Manager's **Assign** link through the shared cell's `extra` slot rendered it BEFORE
+the **Open** pill; it had always been Open first. Caught by reading the deployed link order on the
+Ad Manager — *the page a component is extracted FROM must not change*, and that is worth checking
+explicitly every time, because nothing else will catch it.
+
+---
+
 ## The programme is complete
 
 Eleven units, U0–U10, every one prod-verified before the next began, plus **U11** — additive
