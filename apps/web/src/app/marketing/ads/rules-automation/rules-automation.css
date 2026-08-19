@@ -5071,26 +5071,43 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    Scoped to the toolbar so PLC.0's other uses of the class are untouched. */
 .h10-plc-tools .h10-plc-toggle { display: inline-flex; align-items: center; gap: 5px; }
 
-/* ── U2 — the rules grid's name column must not spill into Criteria ─────────────────────────────
-   Measured on prod 2026-08-17, Placement: four rank rules carry the ASIN title in their name
-   ("Hold top rank ≥ 60% — XAVIA MOSS Giacca Moto con Cappuccio Removibile – …"), which rendered
-   1,227px wide inside a 360px cell — an 881px overflow, printed straight through the Criteria
-   column's text. The Bid tab never showed it because its names are short.
+/* ── U12 — a name cell can never paint outside its own column ─────────────────────────
+   Measured on prod 2026-08-19, Bid: 11 of 18 rows painted their row-hover actions OUTSIDE the Bid
+   Rule column — up to 134px of "Open · History" printed over the Automation column. The markup is
+   the shared rules grid's, so it was all eleven rule tabs, not one.
 
-   Same defect and same remedy as the schedules grid's `rg-namew` block above: the table is
-   `table-layout: auto`, so the cell's own max-width is ignored and the cap has to live on the
-   CONTENT. Scoped to `h10-rg-namew` (set only by `_shared/RulesGrid.tsx`) so the class it shares
-   with Budget Pacing's schedules section is untouched. Appended at the END of the sheet because
-   source order beats specificity here (reference_css_source_order_beats_specificity). */
-.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew { min-width: 0; max-width: 480px; }
-.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The chip and the hover actions keep their size; only the name gives way. The cap is 480 rather
-   than the schedules grid's 340 because the row-hover actions (Open · History, 148px) sit in the
-   same flex line and hold their width whether or not they are visible — measured on prod at a
-   340 cap the name was left 137px of it. 480 leaves ~277px of name, and the column has the room:
-   the grid is 1,600 wide and Criteria's text is short. */
-.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-bd7-posture,
-.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew .h10-nt-acts { flex-shrink: 0; }
+   U2 (which this replaces) capped the CONTENT rather than the cell, because `td.nm`'s own
+   max-width is ignored under `table-layout: auto`. That half was right. The NUMBER was not:
+   `.h10-am-grid td.nm` is capped at 360px in ads.css, so a 480px cap on the content is a cap wider
+   than the box holding it — it can only ever license a 120px overflow. Measured: a 439px wrapper
+   in a 360px cell, 93px of it outside.
+
+   🔴 A px cap on the content is a guess about a width that lives in a different stylesheet, and
+   the guess has now been wrong three times (340 on the schedules grid, 340 then 480 here).
+   `max-width: 100%` is the cell's own content box, so it cannot drift out of step with ads.css.
+   That is the half of this fix that makes it not come back, and it is why no number appears below.
+
+   The other half is the Ad Manager's, which never had this bug: its `.nmw .h10-open` leaves the
+   flex line until the row is hovered (ads.css § Ad Manager grid), so the name gets the WHOLE column
+   while idle. Ours were hidden with `opacity`, which paints nothing and still holds 148px — that is
+   what pushed the wrapper past the cell, and what talked U2 into an oversized cap. Zero WIDTH here
+   rather than `display: none`, so the buttons stay focusable and `:focus-within` can still reveal
+   them for a keyboard; `display: none` would take them out of the tab order entirely.
+
+   Verified on prod, all 18 rows, idle and hovered: the wrapper's right edge sits 14px INSIDE the
+   cell's (that is the cell's padding) — worst spill −14px, was +134px — and the History button
+   hit-tests to itself via `elementFromPoint`, not to the Automation column behind it. */
+.h10-am-grid td.nm .h10-nt-namew,
+.h10-am-grid td.nm .h10-nt-namew.h10-rg-namew,
+.h10-am-grid td.nm .rg-namecell { min-width: 0; max-width: 100%; }
+.h10-am-grid td.nm .h10-nt-namew .h10-nt-name,
+.h10-am-grid td.nm .rg-namecell .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Only the name gives way. The "off" chip and the actions keep their size. */
+.h10-am-grid td.nm .h10-nt-namew .h10-bd7-posture,
+.h10-am-grid td.nm .h10-nt-namew .h10-nt-acts { flex-shrink: 0; }
+.h10-am-grid td.nm .h10-nt-acts { width: 0; overflow: hidden; }
+.h10-am-grid tbody tr:hover td.nm .h10-nt-acts,
+.h10-am-grid td.nm .h10-nt-acts:focus-within { width: auto; }
 
 /* ── U7 — the Ad Group View's match-type badges ────────────────────────────────────────────────
    The mapping table says what a harvest rule CREATES in a destination ad group (Phrase · Exact ·

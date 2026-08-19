@@ -29,10 +29,28 @@
  *    so a 500 looked exactly like "no rules yet" — the operator's standing law that "never ran"
  *    and "nothing to do" must never render the same. The error is now its own state, and the
  *    skeleton (`loading`) covers the fetch so the empty state is only ever the truth.
- * ③ **The Automation toggle WRITES.** A builder rule's mode is `actions[0].control`
- *    ('automate' | 'manual') and is PATCHed here, optimistically, reverted on failure. An engine
- *    rule has no such field — its mode is `autonomyLevel`, owned by Automations — so its toggle
- *    renders disabled with that reason rather than lying.
+ * ③ **The Automation toggle WRITES, for BOTH rule shapes.** A builder rule's mode is
+ *    `actions[0].control` ('automate' | 'manual'), PATCHed on `/automation-rules/:id`. An engine
+ *    rule has no such field — its mode is `autonomyLevel` — so it goes through
+ *    `PATCH /advertising/autonomy/rules/:id` instead, the same route the Automations page's mode
+ *    dial uses. Both are optimistic and revert on failure.
+ *
+ *    🔴 Until 2026-08-19 the engine branch did not exist: the toggle rendered `disabled` and
+ *    called that honesty. It was not — **zero builder rules exist in this account** (measured on
+ *    prod: 51 of 51 rules are engine rules), so the column was inert on every row of all eleven
+ *    tabs, and the operator's read was simply "the toggle is broken". A control that is dead for
+ *    100% of the data is not a careful refusal, it is a missing feature.
+ *
+ *    On = `AUTO` (acts on its own, inside its daily cap and the write gate). Off = `PROPOSE`
+ *    (queues suggestions; nothing reaches Amazon until accepted) — the same two words the builder
+ *    branch means by automate/manual, so one column means one thing.
+ *
+ *    ⚠ Two properties of that route, both deliberate and neither ours to override: it keeps
+ *    `enabled` and `dryRun` in step with the level (so `level !== 'OFF'` ENABLES a disabled rule —
+ *    the toggle says so before you click), and it refuses a level above the rule's graduation
+ *    ceiling with a 409. Structural actions — creating keywords, negatives, pausing — are capped
+ *    below AUTO by policy, so those toggles render disabled carrying the ceiling's own sentence
+ *    rather than failing on click. 14 of 51 rules are capped that way today.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
@@ -236,6 +254,24 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
   }
 }
 
+/**
+ * What Automation OFF means for an ENGINE rule.
+ *
+ * PROPOSE, not OFF. OFF would disable the rule outright — a different switch, the one the row's
+ * "off" chip reports — and would throw away the suggestions the operator still wants to see.
+ * PROPOSE is the exact counterpart of a builder rule's `manual`: the rule keeps running and
+ * queues its actions, and nothing reaches Amazon until someone accepts them.
+ *
+ * ⚠ Asymmetry worth knowing before you change this: because the route ties `enabled` to
+ * `level !== 'OFF'`, turning a DISABLED rule on and then off again leaves it enabled at PROPOSE
+ * rather than disabled. That is the route's contract, the toggle's tooltip says so before the
+ * first click, and re-disabling is one control away on Automations.
+ */
+const ENGINE_OFF_LEVEL = 'PROPOSE'
+
+/** The four levels, as the words an operator reads rather than the enum. */
+const LEVEL_WORD: Record<string, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
+
 type BulkKind = 'automation' | 'delete'
 
 export interface RulesGridProps {
@@ -257,6 +293,17 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [bulk, setBulk] = useState<{ kind: BulkKind; ids: string[] } | null>(null)
   const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
+  /**
+   * How far each rule is ALLOWED to be trusted, by rule id. Second, parallel, non-blocking read —
+   * the grid renders from `/automation-rules` and this only refines the Automation toggle when it
+   * lands. If it never lands the toggle still works: the same policy is enforced server-side and
+   * arrives as the 409 below, so a failed ceiling read costs a pre-emptive tooltip, not a control.
+   */
+  const [ceilings, setCeilings] = useState<Map<string, { ceiling: string; reason: string }>>(new Map())
+  /** Rows with a mode write in flight — a second click must not race the first. */
+  const [pending, setPending] = useState<Set<string>>(new Set())
+  /** The last refusal, in the server's own words. Cleared when the next write is attempted. */
+  const [notice, setNotice] = useState<string | null>(null)
   const nounLower = noun.toLowerCase()
 
   useEffect(() => {
@@ -274,26 +321,84 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       })
       .catch((e) => { if (alive) setErr((e as Error).message || 'failed') })
       .finally(() => { if (alive) setLoading(false) })
+
+    // The graduation ceiling, from the board the Automations page already reads. Deliberately NOT
+    // awaited with the read above: it groups a week of executions and measured 1.0-2.9s on prod,
+    // and the grid must not wait on it to paint.
+    fetch(`${getBackendUrl()}/api/advertising/autonomy/rules`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { items?: Array<Record<string, unknown>>; rules?: Array<Record<string, unknown>> } | null) => {
+        if (!alive || !j) return
+        const items = j.items ?? j.rules ?? []
+        setCeilings(new Map(items.map((r) => [String(r.id), {
+          ceiling: String(r.ceiling ?? 'AUTO'),
+          reason: String(r.ceilingReason ?? ''),
+        }])))
+      })
+      .catch(() => { /* the 409 carries the same sentence; see `setAutomation` */ })
     return () => { alive = false }
   }, [tabKey])
 
   /**
-   * PATCH `actions[0].control`; optimistic, reverted on failure. Builder rules only.
+   * Set a rule's Automation mode. ONE entry point, TWO write paths — which one is used is decided
+   * by the rule's own shape, never by the caller, so nothing upstream has to know the difference.
+   *
+   * · **Builder rule** — PATCH `actions[0].control` on `/automation-rules/:id`.
+   * · **Engine rule** — PATCH `{ level }` on `/advertising/autonomy/rules/:id`, the Automations
+   *   page's own route. AUTO for on, PROPOSE for off; that route keeps `enabled` and `dryRun` in
+   *   step with the level, and returns the stored row, so the grid re-derives from what LANDED
+   *   rather than from what it hoped for — the "off" chip beside the name moves with it.
+   *
+   * Optimistic, reverted on failure, and a failure is never silent: a 409 is the graduation
+   * ceiling refusing, which is policy rather than breakage, so it is shown in the policy's own
+   * words ([[reference_ads_delivery_model]] — a refusal is never a failure).
+   *
    * `silent` suppresses the bus emit so the bulk path can emit once after its loop instead of
    * once per row (adsBus rule 1 — 40 rows × 11 open tabs is 440 refetches for one click).
    */
   const setAutomation = useCallback(async (id: string, on: boolean, silent = false): Promise<boolean> => {
     const rule = raw.get(id)
-    if (!rule || !Array.isArray(rule.actions)) return false
-    const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) =>
-      (i === 0 ? { ...a, control: on ? 'automate' : 'manual' } : a))
+    if (!rule) return false
+    const builder = isBuilderRule(rule)
+    if (builder && !Array.isArray(rule.actions)) return false
+    setNotice(null)
+    setPending((s) => new Set(s).add(id))
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: on } : r)))
     try {
-      const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
-      })
-      if (!res.ok) throw new Error(String(res.status))
-      setRaw((m) => { const n = new Map(m); n.set(id, { ...rule, actions }); return n })
+      let next: Record<string, unknown>
+      if (builder) {
+        const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) =>
+          (i === 0 ? { ...a, control: on ? 'automate' : 'manual' } : a))
+        const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
+        })
+        if (!res.ok) throw new Error(`Could not change Automation (${res.status}).`)
+        next = { ...rule, actions }
+      } else {
+        const level = on ? 'AUTO' : ENGINE_OFF_LEVEL
+        const res = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }),
+        })
+        const j = (await res.json().catch(() => ({}))) as
+          { ok?: boolean; error?: string; message?: string; rule?: Record<string, unknown> }
+        if (!res.ok || j.ok === false) {
+          // 409 is the ceiling, and the route puts its reason on `message`. Reading `error` first
+          // would have printed the enum `above_ceiling` at an operator forever.
+          throw new Error(res.status === 409
+            ? (j.message ?? `“${rule.name ?? id}” cannot be set to Auto — it is above this rule’s ceiling.`)
+            : (j.error ?? `Could not change Automation (${res.status}).`))
+        }
+        next = {
+          ...rule,
+          autonomyLevel: j.rule?.autonomyLevel ?? level,
+          enabled: j.rule?.enabled ?? true,
+          dryRun: j.rule?.dryRun ?? level !== 'AUTO',
+        }
+      }
+      setRaw((m) => { const n = new Map(m); n.set(id, next); return n })
+      // Re-derive the whole row from what was stored, not just the switch: an engine rule that
+      // was disabled is enabled by this write, and the row carries that as its "off" chip.
+      setRows((rs) => rs.map((r) => (r.id === id ? ruleToRow(next, tabKey) : r)))
       /**
        * 🔴 Emit AFTER the write settles, so the tab badges (and any other open tab) refetch.
        * Measured on prod 2026-08-18: deleting the only SOV rule left the grid at 0 and the badge
@@ -305,11 +410,18 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
        */
       if (!silent) emitAdsChange('ads.rule.changed')
       return true
-    } catch {
+    } catch (e) {
       setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: !on } : r)))
+      setNotice((e as Error).message)
       return false
+    } finally {
+      setPending((s) => { const n = new Set(s); n.delete(id); return n })
     }
-  }, [raw])
+  }, [raw, tabKey])
+
+  /** Held below AUTO by the graduation ceiling — so Automation can be turned off, never on. */
+  const isCapped = useCallback((id: string): boolean =>
+    !isBuilderRule(raw.get(id)) && (ceilings.get(id)?.ceiling ?? 'AUTO') !== 'AUTO', [raw, ceilings])
 
   const applyBulk = async (kind: BulkKind, ids: string[], payload?: { on?: boolean }) => {
     setBulk(null)
@@ -328,9 +440,25 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       if (deleted.length) emitAdsChange('ads.rule.changed')
       return
     }
-    for (const id of ids) await setAutomation(id, !!payload?.on, true)
+    const on = !!payload?.on
+    // Turning ON a rule above its ceiling is a 409 per row. The modal said how many, and they are
+    // left exactly as they were rather than each producing its own failure. Turning OFF is never
+    // capped, so nothing is skipped on that side.
+    const targets = on ? ids.filter((id) => !isCapped(id)) : ids
+    let failed = 0
+    for (const id of targets) if (!(await setAutomation(id, on, true))) failed += 1
     setSel(new Set())
     emitAdsChange('ads.rule.changed')
+    const skipped = ids.length - targets.length
+    // \U0001f534 A bulk verb that silently does less than it was asked is the defect this whole page
+    // was rebuilt to stop. The count that did NOT move is stated, always.
+    if (skipped || failed) {
+      setNotice([
+        `${targets.length - failed} of ${ids.length} ${ids.length === 1 ? nounLower : `${nounLower}s`} set to Automation ${on ? 'On' : 'Off'}.`,
+        skipped ? `${skipped} left unchanged — above the graduation ceiling, which only Automations can raise.` : '',
+        failed ? `${failed} failed to write.` : '',
+      ].filter(Boolean).join(' '))
+    }
   }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [
@@ -338,6 +466,12 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       key: 'automation', label: 'Automation', metric: false, sortable: false,
       render: (r) => {
         const builder = isBuilderRule(raw.get(r.id))
+        const cap = ceilings.get(r.id)
+        // A rule whose actions CREATE or DESTROY something is held below AUTO by policy, and the
+        // server refuses it with a 409. Say so on the control instead of letting the click fail —
+        // a disabled notch that keeps its reason is the pattern the mode dial already uses.
+        const capped = !builder && !!cap && cap.ceiling !== 'AUTO'
+        const busy = pending.has(r.id)
         return (
           <button
             type="button"
@@ -345,13 +479,15 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
             role="switch"
             aria-checked={r.automation}
             aria-label={`Automation for ${r.name}`}
-            disabled={!builder}
+            // Capped rules can still be turned OFF — the refusal is about reaching AUTO, not about
+            // leaving it — but no rule above its ceiling should be at AUTO in the first place.
+            disabled={busy || (capped && !r.automation)}
             title={builder
               ? 'On = Automate (the rule applies its own actions). Off = Manual (it proposes them for approval).'
-              : !r.enabled
-                ? 'This is an engine rule and it is disabled — it is never evaluated. Its mode is set on the Automations page.'
-                : `This is an engine rule: its mode is ${r.level || 'unset'}, set on the Automations page. On here means AUTO — it writes on its own.`}
-            onClick={() => { if (builder) void setAutomation(r.id, !r.automation) }}
+              : capped
+                ? `${cap!.reason} Its ceiling is ${LEVEL_WORD[cap!.ceiling] ?? cap!.ceiling} — Automation cannot be turned on for this rule.`
+                : `On = Auto (it acts on its own, inside its daily cap and the write gate). Off = Propose (it queues suggestions; nothing reaches Amazon until you accept them). Currently ${LEVEL_WORD[r.level] ?? (r.level || 'unset')}.${r.enabled ? '' : ' This rule is disabled — turning Automation on will also enable it.'}`}
+            onClick={() => { if (!busy && !(capped && !r.automation)) void setAutomation(r.id, !r.automation) }}
           ><span /></button>
         )
       },
@@ -368,7 +504,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         ><b>{r.freqDay}</b><span>{r.freqTime}</span></span>
       ),
     },
-  ], [raw, setAutomation])
+  ], [raw, ceilings, pending, setAutomation])
 
   const renderFirst = (r: RuleRow): ReactNode => {
     const href = `${builderHref}?ruleId=${r.id}`
@@ -413,6 +549,17 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
 
   return (
     <>
+      {/* A refused or failed mode write, in the server's own words. Amber, not red: the common
+          case is the graduation ceiling declining to trust a rule that creates or destroys
+          things, which is policy working rather than anything breaking. Same lifecycle as the
+          Automations page's banner — it is replaced by the next write and never dismissed by
+          hand, so there is no state that can outlive what it describes. */}
+      {notice && (
+        <div className="h10-au-banner warn" role="alert">
+          <AlertTriangle size={15} aria-hidden />
+          <span>{notice}</span>
+        </div>
+      )}
       <AdsDataGrid<RuleRow>
         rows={rows}
         loading={loading}
@@ -446,7 +593,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
           kind={bulk.kind}
           count={bulk.ids.length}
           nounLower={nounLower}
-          engineCount={bulk.ids.filter((id) => !isBuilderRule(raw.get(id))).length}
+          cappedCount={bulk.ids.filter(isCapped).length}
           onApply={(p) => void applyBulk(bulk.kind, bulk.ids, p)}
           onClose={() => setBulk(null)}
         />
@@ -456,10 +603,10 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   )
 }
 
-function BulkModal({ kind, count, nounLower, engineCount, onApply, onClose }: {
+function BulkModal({ kind, count, nounLower, cappedCount, onApply, onClose }: {
   kind: BulkKind; count: number; nounLower: string
-  /** selected rows that are ENGINE rules — Automation cannot touch them (their mode lives on Automations) */
-  engineCount: number
+  /** selected rows held below AUTO by the graduation ceiling — they can be turned off, never on */
+  cappedCount: number
   onApply: (p?: { on?: boolean }) => void
   onClose: () => void
 }) {
@@ -476,7 +623,7 @@ function BulkModal({ kind, count, nounLower, engineCount, onApply, onClose }: {
             // so its history — the evidence of what it did — is destroyed with it.
             ? `Delete ${count} ${ruleNoun}? This deletes the rule AND its execution history, and cannot be undone.`
             : `Apply to ${count} selected ${ruleNoun}.`}
-          {kind === 'automation' && engineCount > 0 && ` ${engineCount} of them ${engineCount === 1 ? 'is an engine rule' : 'are engine rules'} whose mode is set on the Automations page — ${engineCount === 1 ? 'it' : 'they'} will be skipped.`}
+          {kind === 'automation' && on && cappedCount > 0 && ` ${cappedCount} of them ${cappedCount === 1 ? 'creates or destroys something and is held below Auto' : 'create or destroy something and are held below Auto'} by the graduation ceiling — ${cappedCount === 1 ? 'it' : 'they'} will be left unchanged.`}
         </div>
         <div className="h10-ntm-b">
           {kind === 'automation' && (
