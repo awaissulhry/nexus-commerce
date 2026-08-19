@@ -9,7 +9,22 @@
 import { X, Plus } from 'lucide-react'
 import { H10Select } from '../../campaigns/FilterDropdown'
 
-export interface Condition { metric: string; op: string; value: string; scope?: string }
+export interface Condition {
+  metric: string
+  op: string
+  value: string
+  scope?: string
+  /**
+   * 🔴 EA5.2 — the ENGINE field this condition was read from, when it came off a stored rule.
+   *
+   * A metric name is context-FREE: "ACOS" is `campaign.acos` on a budget rule and `adTarget.acos`
+   * on a bid rule, decided purely by which map the server consults. Carrying the original field
+   * through the edit and back is what stops a threshold change from also moving the rule onto a
+   * different entity — measured on prod, editing 40 → 45 rewrote `campaign.acos` to
+   * `adTarget.acos`. Absent on a freshly-built condition, which resolves by metric as before.
+   */
+  field?: string
+}
 export interface CriteriaGroup { conditions: Condition[]; lookback: string; exclude: string }
 
 export const PC_OPERATORS = [

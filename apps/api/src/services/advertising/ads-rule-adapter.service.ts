@@ -99,7 +99,16 @@ const RANK_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 'pla
 }
 const NEG_SCOPE: Record<string, string> = { adgroup: 'AD_GROUP', campaign: 'CAMPAIGN', both: 'CAMPAIGN' }
 
-interface BuilderCond { metric?: string; op?: string; value?: string | number }
+interface BuilderCond {
+  metric?: string
+  op?: string
+  value?: string | number
+  /**
+   * EA5.2 — the engine field this condition came FROM, when it was read off a stored rule.
+   * Present only on a round-trip; a freshly-built condition has none and resolves by metric.
+   */
+  field?: string
+}
 interface BuilderGroup { conditions?: BuilderCond[]; action?: { op?: string; value?: string | number; placeTarget?: string } }
 interface EngineLeaf { field: string; op: string; value: number }
 
@@ -294,8 +303,16 @@ function describeAction(a: Record<string, unknown>): string {
 export interface BuilderView {
   /** the slug whose builder should render this rule, or null when nothing claims it */
   slug: string | null
-  /** builder-shaped condition groups — one group, AND-joined, because that is all the engine stores */
-  groups: Array<{ conditions: Array<{ metric: string; op: string; value: string }> }>
+  /**
+   * Builder-shaped condition groups — one group, AND-joined, because that is all the engine stores.
+   *
+   * 🔴 Each leaf carries `field`, the ORIGINAL engine field it came from. A builder metric name is
+   * context-FREE — "ACOS" is `campaign.acos` in a budget rule and `adTarget.acos` in a bid rule —
+   * so re-deriving the field on save from the rule's slug silently rewrites it. Measured on prod:
+   * editing `campaign.acos >= 0.4` on a `bid_down` rule stored it back as `adTarget.acos >= 0.45`,
+   * changing which entity the rule reads. The field round-trips verbatim instead.
+   */
+  groups: Array<{ conditions: Array<{ metric: string; op: string; value: string; field: string }> }>
   /** one line per stored action, for the read-only summary */
   actionSummary: string[]
   /**
@@ -341,7 +358,7 @@ export function engineRuleToBuilderView(rule: {
   const slug = types.map((t) => ENGINE_TYPE_SLUG[t]).find(Boolean) ?? null
   const inv = slug ? INV_BY_SLUG[slug] ?? INV_CAMPAIGN : INV_CAMPAIGN
 
-  const leaves: Array<{ metric: string; op: string; value: string }> = []
+  const leaves: Array<{ metric: string; op: string; value: string; field: string }> = []
   const unmappedFields: string[] = []
   for (const c of conds) {
     // A tree-shaped payload ({kind:'and',…}) is not a leaf list; the builder has no UI for nesting.
@@ -354,7 +371,7 @@ export function engineRuleToBuilderView(rule: {
     // `adTarget.acos`), so a cross-map lookup cannot mis-resolve one for another.
     const m = inv[f] ?? INV_ANY[f]
     if (!m) { unmappedFields.push(f); continue }
-    leaves.push({ metric: m.metric, op: String(c.op ?? 'gte'), value: String(unconvert(c.value, m.conv)) })
+    leaves.push({ metric: m.metric, op: String(c.op ?? 'gte'), value: String(unconvert(c.value, m.conv)), field: f })
   }
 
   const blockers: string[] = []
@@ -416,7 +433,22 @@ export function conditionsForStorage(
   // Cross-context, for the same reason the inverse reads that way: stored rules mix contexts.
   const merged = { ...CAMPAIGN_METRIC, ...SEARCHTERM_METRIC, ...ADTARGET_METRIC, ...SOV_METRIC, ...RANK_METRIC, ...map }
   const { leaves, unmapped } = translateConditions(groups, merged, 'patch')
-  return { conditions: leaves as unknown as object[], unmapped }
+
+  /**
+   * 🔴 Restore the ORIGINAL field wherever the condition carried one.
+   *
+   * A builder metric name is context-free: "ACOS" resolves to `campaign.acos` or `adTarget.acos`
+   * depending only on which map is consulted, and the map is chosen from the rule's slug. So a
+   * `campaign.acos` condition on a `bid_down` rule came back as `adTarget.acos` — measured on
+   * prod, editing 40 → 45 also moved the rule from reading the CAMPAIGN's ACoS to the TARGET's.
+   *
+   * The conversion (percent → fraction) still comes from the metric, because that is a property of
+   * the metric and not of the field. Only the field name is pinned.
+   */
+  const orig: string[] = []
+  for (const g of groups) for (const c of g.conditions ?? []) if (c.metric) orig.push(c.field ?? '')
+  const pinned = leaves.map((l, i) => (orig[i] ? { ...l, field: orig[i] } : l))
+  return { conditions: pinned as unknown as object[], unmapped }
 }
 
 export function isBuilderShapedAdsRule(rule: { actions?: unknown }): boolean {

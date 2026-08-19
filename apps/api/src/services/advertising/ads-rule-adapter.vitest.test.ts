@@ -237,4 +237,29 @@ describe('EA5 — conditionsForStorage', () => {
     )
     expect(back.conditions).toEqual(original)
   })
+
+  /**
+   * 🔴 EA5.2 — the round-trip above passed while the bug below shipped, because a budget rule and
+   * CAMPAIGN_METRIC happen to agree. A builder metric name is CONTEXT-FREE: "ACOS" is
+   * `campaign.acos` or `adTarget.acos` purely by which map is consulted. Measured on prod: editing
+   * this rule's threshold also moved it from the campaign's ACoS to the target's.
+   */
+  it('keeps campaign.acos on a bid rule instead of rewriting it to adTarget.acos', () => {
+    const original = [{ op: 'gte', field: 'campaign.acos', value: 0.4 }]
+    const acts = [{ type: 'bid_down', percent: 20 }]
+    const v = engineRuleToBuilderView({ id: 'rt2', conditions: original, actions: acts })!
+    expect(v.groups[0].conditions[0].field).toBe('campaign.acos') // the view carries it
+    // the operator edits 40 → 45; everything else is handed straight back
+    const edited = v.groups[0].conditions.map((c) => ({ ...c, value: '45' }))
+    const back = conditionsForStorage({ actions: acts }, [{ match: 'all', conditions: edited }])
+    expect(back.conditions).toEqual([{ op: 'gte', field: 'campaign.acos', value: 0.45 }])
+  })
+
+  it('still resolves by metric for a condition built fresh, with no field to pin', () => {
+    const back = conditionsForStorage(
+      { actions: [{ type: 'bid_down' }] },
+      [{ match: 'all', conditions: [{ metric: 'ACOS', op: 'gte', value: '45' }] }],
+    )
+    expect(back.conditions).toEqual([{ field: 'adTarget.acos', op: 'gte', value: 0.45 }])
+  })
 })
