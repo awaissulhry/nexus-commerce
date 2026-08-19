@@ -1639,8 +1639,13 @@ model ChannelListing {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // MAP.2a — which connected account this row belongs to.
+  channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+  channelConnectionId String?
+
   @@unique([productId, channelMarket])
   @@unique([productId, channel, marketplace], name: "productId_channel_marketplace")
+  @@index([channelConnectionId])
   @@index([productId])
   @@index([channel])
   @@index([region])
@@ -4808,7 +4813,12 @@ model Order {
   // deletedAt is purely a UI hide. They coexist independently.
   deletedAt DateTime?
 
+  // MAP.2a — which connected account this row belongs to.
+  channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+  channelConnectionId String?
+
   @@unique([channel, channelOrderId])
+  @@index([channelConnectionId])
   @@index([channel])
   @@index([marketplace])
   @@index([status])
@@ -5853,15 +5863,38 @@ model ChannelConnection {
   lastSyncStatus String? // "SUCCESS", "FAILED", "PARTIAL"
   lastSyncError  String?
 
+  // ── MAP.2a — account identity ───────────────────────────────────
+  // accountLabel/accountColor are the operator's own name and colour for this
+  // account; they exist because neither channel gives us a usable one. eBay's
+  // OAuth scope returns no identity (ebay-auth.service.ts:451 writes the literal
+  // "eBay seller (verified)") and Amazon's displayName is the raw merchant id.
+  accountLabel      String?
+  accountColor      String?
+  // Exactly one primary per channelType, enforced by a partial unique index.
+  isPrimary         Boolean @default(false)
+  sortOrder         Int     @default(0)
+  // The account's identity AT the marketplace — Amazon merchant id, eBay sign-in
+  // name, Shopify shop domain. Load-bearing: the partial unique index
+  // `ChannelConnection_active_account_key` keys on it, so two accounts we cannot
+  // tell apart cannot both be active. NULL until MAP.4 adds eBay's identity scope.
+  externalAccountId String?
+
   connectionMetadata Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  variantListings VariantChannelListing[]
+  variantListings          VariantChannelListing[]
+  // MAP.2a — attribution. ON DELETE SET NULL on every one of these: deleting a
+  // connection must never delete listings or orders (contrast variantListings
+  // above, which cascades). Disconnecting loses attribution, not history.
+  channelListings          ChannelListing[]
+  sharedListingMemberships SharedListingMembership[]
+  orders                   Order[]
+  syncChannelPolicies      SyncChannelPolicy[]
   // C.14 — eBay Promoted Listings campaigns scoped to this OAuth
   // connection. Cascade so revoking a connection sweeps its
   // campaigns (operationally, eBay also disables them server-side).
-  ebayCampaigns   EbayCampaign[]
+  ebayCampaigns            EbayCampaign[]
 
   // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
   // (CREATE UNIQUE INDEX ... WHERE "isActive" = true) is enforced at
@@ -15233,7 +15266,12 @@ model SharedListingMembership {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
+  // MAP.2a — which connected account this row belongs to.
+  channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+  channelConnectionId String?
+
   @@unique([marketplace, itemId, sku])
+  @@index([channelConnectionId])
   @@index([sku, marketplace])
   @@index([productId])
 }
@@ -15255,7 +15293,12 @@ model SyncChannelPolicy {
   updatedAt             DateTime  @updatedAt
   createdAt             DateTime  @default(now())
 
+  // MAP.2a — which connected account this row belongs to.
+  channelConnection   ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+  channelConnectionId String?
+
   @@unique([channel, marketplace])
+  @@index([channelConnectionId])
 }
 
 // Every Sync Control mutation (routing, mode, buffer, policy) lands here —
@@ -16307,11 +16350,11 @@ model AdSpendCeiling {
   id String @id @default(cuid())
 
   /// CAMPAIGN | PORTFOLIO | LINE | MARKET — narrowest first; the most specific one with a value wins.
-  grain String
+  grain   String
   /// 'IT' for MARKET · Product.id for LINE · Campaign.portfolioId for PORTFOLIO · Campaign.id for CAMPAIGN
   scopeId String
   /// What to call it in a refusal: "the IT market", "the GALE portfolio".
-  label String
+  label   String
 
   /// null = no ceiling set. NOT unlimited. See the note above.
   dailyCapCents Int?
@@ -16336,11 +16379,11 @@ model AdBidPolicy {
   id String @id @default(cuid())
 
   /// LINE | PORTFOLIO | MARKET (campaign grain = the Campaign columns).
-  grain String
+  grain   String
   /// Product.id (a parent) for LINE · Campaign.portfolioId for PORTFOLIO · 'IT' for MARKET.
   scopeId String
   /// What to call it in a refusal: "the GALE line's €0.80 ceiling".
-  label String
+  label   String
 
   minBidCents Int?
   maxBidCents Int?
@@ -16486,16 +16529,16 @@ model KeywordBidProposal {
   committedCents  Int     @default(0)
 
   /// Age in days of the SQP week the row's share came from. Measured 18 today.
-  shareAgeDays Int?
+  shareAgeDays     Int?
   /// The exact sentence the operator was shown. Stored, not regenerated.
   confirmationText String
 
   /// PROPOSED | APPLIED | REFUSED | DISMISSED | EXPIRED
-  status     String    @default("PROPOSED")
-  proposedBy String?
-  proposedAt DateTime  @default(now())
-  decidedAt  DateTime?
-  decidedBy  String?
+  status      String    @default("PROPOSED")
+  proposedBy  String?
+  proposedAt  DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedBy   String?
   /// Set when applied, so `rollbackByExecutionId` can reverse the whole thing.
   executionId String?
 

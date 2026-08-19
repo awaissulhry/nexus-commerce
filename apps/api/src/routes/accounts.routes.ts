@@ -59,14 +59,15 @@ export interface AccountRow {
   /** Best human name available. See `labelIsPlaceholder`. */
   label: string;
   /** Where `label` came from — so the UI never implies more identity than we hold. */
-  labelSource: "storeName" | "displayName" | "signInName" | "sellerId" | "channel";
+  labelSource: "accountLabel" | "storeName" | "displayName" | "signInName" | "sellerId" | "channel";
   /**
    * True when the label is not a real account name. Two known cases, both measured:
    *   • eBay  — `ebay-auth.service.ts:451` writes the literal "eBay seller (verified)"
    *             because the OAuth scope in use carries no identity claim.
    *   • Amazon — `displayName` is the raw merchant id (e.g. "A1VRHKTGYO1JNU").
-   * MAP.2's `accountLabel` column is what fixes this; until then the UI shows the
-   * truth and marks it, rather than inventing a friendlier name.
+   * MAP.2a shipped `accountLabel` for exactly this: set it and the label becomes
+   * the operator's own name. Until someone does, the UI shows what we actually
+   * hold and marks it, rather than inventing a friendlier name.
    */
   labelIsPlaceholder: boolean;
   /** Empty until something populates connectionMetadata.activeMarketplaces. */
@@ -74,6 +75,10 @@ export interface AccountRow {
   health: Health;
   healthReason: string | null;
   isPrimary: boolean;
+  sortOrder: number;
+  /** The account's identity at the marketplace. NULL until MAP.4 captures eBay's. */
+  externalAccountId: string | null;
+  accountColor: string | null;
   tokenExpiresAt: string | null;
   lastSyncAt: string | null;
   lastSyncStatus: string | null;
@@ -86,6 +91,11 @@ const AMAZON_MERCHANT_ID = /^A[A-Z0-9]{9,19}$/;
 
 function deriveLabel(r: ChannelConnection): Pick<AccountRow, "label" | "labelSource" | "labelIsPlaceholder"> {
   const channel = r.channelType as Channel;
+  // MAP.2a — the operator's own name for the account wins over anything the
+  // channel gave us, because neither channel gives us a usable one.
+  const own = r.accountLabel?.trim();
+  if (own) return { label: own, labelSource: "accountLabel", labelIsPlaceholder: false };
+
   const storeName = r.ebayStoreName?.trim();
   if (storeName) return { label: storeName, labelSource: "storeName", labelIsPlaceholder: false };
 
@@ -147,6 +157,9 @@ function toAccountRow(r: ChannelConnection, isPrimary: boolean): AccountRow {
     markets: readMarkets(r),
     ...deriveHealth(r),
     isPrimary,
+    sortOrder: r.sortOrder,
+    externalAccountId: r.externalAccountId,
+    accountColor: r.accountColor,
     tokenExpiresAt: (r.tokenExpiresAt ?? r.ebayTokenExpiresAt)?.toISOString() ?? null,
     lastSyncAt: r.lastSyncAt?.toISOString() ?? null,
     lastSyncStatus: r.lastSyncStatus,
@@ -164,23 +177,19 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       // /accounts/diagnostics reports the full population.
       const rows = await prisma.channelConnection.findMany({
         where: { isActive: true, OR: [{ managedBy: "oauth" }, { managedBy: "env" }] },
-        orderBy: [{ channelType: "asc" }, { updatedAt: "desc" }],
+        orderBy: [{ channelType: "asc" }, { isPrimary: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
       });
 
-      // Until MAP.2 adds an explicit `isPrimary` column, primary = the first
-      // active row for its channel under this ordering. With one active row per
-      // channel (today's state, enforced by the partial unique index) that is
-      // exactly the single row, so nothing is being guessed.
-      const seen = new Set<string>();
+      // MAP.2a made isPrimary a real column, backfilled and constrained to one
+      // true row per channelType by a partial unique index — so it is read, not
+      // derived. Ordering honours the operator's sortOrder, primary first.
       const accounts = rows
-        .map((r) => {
-          const first = !seen.has(r.channelType);
-          seen.add(r.channelType);
-          return toAccountRow(r, first);
-        })
+        .map((r) => toAccountRow(r, r.isPrimary))
         .sort(
           (a, b) =>
             (CHANNEL_ORDER[a.channel] ?? 99) - (CHANNEL_ORDER[b.channel] ?? 99) ||
+            Number(b.isPrimary) - Number(a.isPrimary) ||
+            a.sortOrder - b.sortOrder ||
             a.label.localeCompare(b.label),
         );
 

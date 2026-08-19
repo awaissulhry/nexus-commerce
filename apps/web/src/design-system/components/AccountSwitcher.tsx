@@ -41,12 +41,16 @@ export interface AccountRow {
   channel: string
   managedBy: string
   label: string
-  labelSource: 'storeName' | 'displayName' | 'signInName' | 'sellerId' | 'channel'
+  labelSource: 'accountLabel' | 'storeName' | 'displayName' | 'signInName' | 'sellerId' | 'channel'
   labelIsPlaceholder: boolean
   markets: string[]
   health: AccountHealth
   healthReason: string | null
   isPrimary: boolean
+  /** MAP.2a additions. Optional so an older API response still types. */
+  sortOrder?: number
+  externalAccountId?: string | null
+  accountColor?: string | null
   tokenExpiresAt: string | null
   lastSyncAt: string | null
   lastSyncStatus: string | null

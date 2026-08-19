@@ -1,6 +1,6 @@
 # MAP — Multi-Account & Profiles
 
-**Status:** MAP.0 + MAP.1 **SHIPPED and prod-verified 2026-08-19**. MAP.2 onward awaiting build.
+**Status:** MAP.0, MAP.1, MAP.2a **SHIPPED and prod-verified 2026-08-19**. MAP.2b folds into MAP.3.
 **Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
 **Date:** 2026-08-19
 **Supersedes / absorbs:** [`2026-07-30-ebay-multi-account-ema.md`](2026-07-30-ebay-multi-account-ema.md)
@@ -352,7 +352,7 @@ rather than inferred.
 Each phase is independently shippable and live-by-default (`feedback_ship_live_not_dark`).
 Phases marked **🔒** cannot start without an explicit operator decision — they are listed in §6.
 
-> **MAP.0 and MAP.1 are SHIPPED and prod-verified, 2026-08-19** — commits `0f9fc2fb9` + `ba235d71e`.
+> **MAP.0, MAP.1 and MAP.2a are SHIPPED and prod-verified, 2026-08-19.**
 > What the build found that this plan did not predict is recorded in §2.4 (the chrome) and §7 (the
 > defect, the DS gap, and two things MAP.4 inherits).
 
@@ -374,16 +374,50 @@ to**, which today nothing does honestly. Fully useful on day one, and it is the 
 phase plugs into.
 **Risk: none.** No schema, no writes, no resolver change.
 
-### MAP.2 — Data model ✅ *(migration approved, decision 2)*
-- Drop the partial unique index; allow many active rows per channel (still one active per Amazon
-  region).
-- `ChannelConnection` gains `accountLabel`, `accountColor`, `isPrimary`, `sortOrder`.
-- `channelConnectionId` (nullable + indexed) added to `ChannelListing`, `VariantChannelListing`,
-  `SharedListingMembership`, `Order`, `SyncChannelPolicy`.
-- Unique keys extended: `ChannelListing` → `[productId, channel, marketplace, channelConnectionId]`;
-  `VariantChannelListing` likewise.
-- Backfill every existing row to the one existing connection, **row-count-exact verified before the
-  old keys drop**.
+### MAP.2a — Data model, the part that is safe today ✅ SHIPPED
+`20260819a_map2_account_dimension` (+ `rollback.sql`), applied to prod 2026-08-19.
+
+- `ChannelConnection` gains `accountLabel`, `accountColor`, `isPrimary`, `sortOrder`, and
+  **`externalAccountId`** — the account's identity at the marketplace.
+- `channelConnectionId` (nullable, indexed, **`ON DELETE SET NULL`**) on `ChannelListing`,
+  `SharedListingMembership`, `Order`, `SyncChannelPolicy`. SET NULL, not CASCADE: deleting a
+  connection must never delete 977 listings or 4,394 orders. Disconnecting loses attribution, not
+  history.
+- **The singleton index is gone.** Its replacement keys on account *identity*, not on channel —
+  `("channelType", COALESCE(marketplace,'~'), COALESCE("externalAccountId",'~')) WHERE isActive`.
+  That is the channel-agnostic form decision 1 requires (no channel name appears in it) and a
+  stronger invariant than "many rows, full stop": **the same seller account cannot be connected
+  twice.** While `externalAccountId` is NULL it collapses to exactly today's constraint, so MAP.2a
+  loosens nothing on its own — MAP.4 unlocks the second account by capturing identity, and cannot
+  admit one it is unable to tell apart from the first.
+- Plus one primary per channel, enforced by a partial unique index.
+
+**The backfill gate.** Decision 2's condition is not a checklist item, it is §4 of the migration: a
+`DO` block that counts every row which *could* have been attributed and was not, and `RAISE`s if the
+count is non-zero — aborting the transaction before any index is dropped. Both directions were
+proven against prod inside rolled-back transactions: the real run attributes **977/977 listings,
+712/712 memberships, 4394/4394 orders** with zero channel mismatches; a deliberately sabotaged run
+refused with *"MAP.2 backfill incomplete: 977 attributable row(s) … Old unique keys NOT dropped"*
+and left the original index in place. A gate that has never refused is an unproven gate.
+
+### MAP.2b — The unique-key widening 🔒 *(deferred, and why)*
+The plan put the `ChannelListing` / `VariantChannelListing` / `SyncChannelPolicy` key changes in
+MAP.2. **Measuring stopped that.** Prisma compiles a compound-unique `upsert` to
+`INSERT … ON CONFLICT (<those exact columns>)` — verified on prod inside a rolled-back transaction —
+and `ON CONFLICT` needs an index matching the named columns *exactly*. The replacement is an
+expression index (`COALESCE`), which cannot match. So dropping those keys would not fail at compile
+time; it would fail at **runtime with 42P10** across all 24 call sites that use them (17 ×
+`productId_channel_marketplace`, 2 × `productId_channelMarket`, 1 ×
+`variantId_channel_marketplace`, 4 × `channel_marketplace`).
+
+They therefore widen **in the same commit as MAP.3's caller conversion**, so the Prisma schema and
+the database never disagree about what is unique. Nothing is lost by waiting: a second account cannot
+exist until MAP.4, and the attribution columns those keys need are already in place and backfilled,
+so MAP.2b is a pure index swap with no data movement.
+
+⚠ Note for MAP.2b: every replacement must wrap the connection id in `COALESCE`. In Postgres NULL is
+never equal to NULL, so a plain four-column unique index would let unlimited duplicates through the
+moment `channelConnectionId` is NULL — the opposite of a constraint.
 
 ### MAP.3 — The resolver (invisible, and the reason nothing can go wrong later)
 `resolveConnection(scope)`, fail-closed. All 63 eBay sites converted, Amazon's env row routed the
