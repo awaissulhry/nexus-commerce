@@ -251,6 +251,10 @@ const ENGINE_TYPE_SLUG: Record<string, string> = {
   dayparting_apply: 'dayparting-schedule', refresh_dayparting: 'dayparting-schedule',
 }
 
+/** Every inverse map merged — the fallback when a rule's condition names another context's field.
+ *  Built from the same forward maps, so it gains a field the moment the forward direction does. */
+const INV_ANY: ReturnType<typeof invert> = { ...INV_CAMPAIGN, ...INV_SEARCHTERM, ...INV_ADTARGET, ...INV_SOV, ...INV_RANK }
+
 const INV_BY_SLUG: Record<string, ReturnType<typeof invert>> = {
   budget: INV_CAMPAIGN, placement: INV_CAMPAIGN,
   bid: INV_ADTARGET, sov: INV_SOV, 'keyword-tracker': INV_RANK,
@@ -330,7 +334,12 @@ export function engineRuleToBuilderView(rule: {
     // A tree-shaped payload ({kind:'and',…}) is not a leaf list; the builder has no UI for nesting.
     if (!c || typeof c !== 'object' || c.field == null) continue
     const f = String(c.field)
-    const m = inv[f]
+    // 🔴 Fall back ACROSS contexts. Stored rules mix them freely — measured 2026-08-19, six
+    // `adjust_ad_budget` rules gate on `adTarget.spendCents` and five bid rules on `campaign.acos`
+    // — and the slug's own map holds only its own prefix, so those read as unmapped even though
+    // the metric exists. Engine field names carry their context (`campaign.acos` is not
+    // `adTarget.acos`), so a cross-map lookup cannot mis-resolve one for another.
+    const m = inv[f] ?? INV_ANY[f]
     if (!m) { unmappedFields.push(f); continue }
     leaves.push({ metric: m.metric, op: String(c.op ?? 'gte'), value: String(unconvert(c.value, m.conv)) })
   }

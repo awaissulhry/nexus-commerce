@@ -134,6 +134,18 @@ describe('EA4 — engine rule → builder view', () => {
     expect(engineRuleToBuilderView({ id: 'r4', actions: [{ type: 'budget' }], conditions: [] })).toBeNull()
   })
 
+  it('reads a condition from ANOTHER context than the rule\'s own slug', () => {
+    // Six live `adjust_ad_budget` rules gate on adTarget.spendCents; the budget slug's own map
+    // holds campaign.* only. Field names carry their context, so the cross-map fallback is safe.
+    const v = engineRuleToBuilderView({
+      id: 'r11',
+      conditions: [{ op: 'gte', field: 'adTarget.spendCents', value: 5000 }],
+      actions: [{ type: 'adjust_ad_budget', percent: 15 }],
+    })!
+    expect(v.unmappedFields).toHaveLength(0)
+    expect(v.groups[0].conditions[0]).toMatchObject({ metric: 'Spend', op: 'gte', value: '50' })
+  })
+
   it('names an engine field that has no builder metric instead of dropping it', () => {
     const v = engineRuleToBuilderView({
       id: 'r5',
