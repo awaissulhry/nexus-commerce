@@ -118,6 +118,15 @@ const ENTRIES: Entry[] = [
   RW(F.settingsView, F.settingsWorkspaceEdit, pfx('/api/settings/profile')),
   RW(F.settingsView, F.settingsWorkspaceEdit, pfx('/api/settings')),
   RW(F.settingsView, F.settingsWorkspaceEdit, pfx('/api/brand-settings')),
+  // ── MAP.0/MAP.1 — accounts ──────────────────────────────────────
+  // Order matters: permissionForRoute is FIRST-MATCH-WINS, so the diagnostics
+  // prefix must precede the broader /api/accounts one or it can never be hit.
+  // Diagnostics exposes index definitions and row counts — integration detail.
+  P(F.settingsIntegrationsManage, pfx('/api/accounts/diagnostics')),
+  // The list itself backs the top-right chip, which renders on every page, so
+  // gating it behind settings access would blank the chrome for most operators.
+  // Signed-in is the right bar: it names connected accounts, holds no secrets.
+  P(PG.dashboard, pfx('/api/accounts')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/connections')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),
 
