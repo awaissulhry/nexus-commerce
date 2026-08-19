@@ -87,9 +87,53 @@ Still unmapped, and each named to the operator rather than dropped: `profit.netC
 `budget.monthlySpendCents` (2), `adTarget.ordersCount` (1), `fbaAge.daysToLtsThreshold` (1) — fields
 with no builder metric at all.
 
-**Every rule is read-only today.** That is the honest outcome, not a shortfall: the builder writes
-one action from a fixed set, and no stored rule uses only those. It is now a truthful *viewer* for
-them, and still a working *creator* of new ones.
+## EA5 — the read-only lock was over-correction, and is gone
+
+Operator: *"Why is every rule read-only? I intended and built it to function."* Correct, and EA4
+traded the feature away rather than solving the harder problem.
+
+**Why it locked everything:** the builder's save sends its ENTIRE payload, replacing `conditions`
+**and** `actions` in one write — so "cannot represent the action" really did mean "cannot save
+safely". But that is the *builder's* constraint, not the rule's:
+`PATCH /automation-rules/:id` already applies only the keys present in the body
+(`if (body.X !== undefined)`).
+
+One boolean became three levels:
+
+| level | what saves | count on prod |
+|---|---|---|
+| `full` | everything — a builder-shaped rule, unchanged | 0 |
+| `criteria` | name · criteria · caps · scope. **`actions` is never sent** | **35 of 51** |
+| `meta` | name · caps · scope; criteria held `inert` because one condition is not drawn, and writing back only the visible ones would delete it | 16 of 51 |
+
+`conditionsForStorage()` keeps an engine-native rule engine-native: the builder sends nested groups,
+and storing those on a rule with engine action types would leave a pair nothing handles —
+`maybeTranslateAdsRule` fires on builder *actions* only, so the nested conditions would reach
+`evaluateFlatList`, whose leaves have no `field`, and throw mid-tick.
+
+Two validation checks also had to go, both guarding fields this save never writes: `targetsValid`
+(a campaign selection these rules do not carry) and the THEN value in `criteriaValid` (part of the
+action). Worth stating plainly — **a permanently-disabled Save is what made the original destructive
+path look safe for as long as it did.** "The button was greyed out" is not a guarantee.
+
+### 🔴 EA5.2 — the bug only a real save could find
+
+Editing *"Cut bids on high ACOS"* from 40 → 45 on prod stored the threshold correctly and left both
+actions byte-identical — **and silently rewrote the field from `campaign.acos` to `adTarget.acos`**,
+moving the rule from reading the campaign's ACoS to the target's.
+
+A builder metric name is **context-free**: "ACOS" resolves to either field purely by which map is
+consulted, and `conditionsForStorage` chose the map from the action type (`bid_down` →
+`ADTARGET_METRIC`). The view now carries the original `field` on every condition, the builder passes
+it through, and storage pins it back. The metric still supplies the *conversion*, which is a
+property of the metric rather than the field.
+
+**The existing round-trip test passed while this shipped** — a budget rule and `CAMPAIGN_METRIC`
+happen to agree. One fixture, one context, false confidence. The new test uses a bid rule holding a
+campaign field, which is the combination that actually breaks.
+
+Verified end to end on prod afterwards: value 0.4 → 0.45, `field` still `campaign.acos`, both
+actions byte-identical, `enabled` unchanged. The rule (disabled, 0 executions) was restored.
 
 ## Not touched
 
