@@ -121,6 +121,18 @@ function ctxCampaignId(action: Record<string, unknown>, context: unknown): strin
     null
   )
 }
+/**
+ * EA4 — does this action's campaign allowlist admit `campaignId`?
+ *
+ * `campaignIds` is what the builder's campaign picker becomes (`ads-rule-adapter.service.ts`).
+ * **Empty or absent means no restriction** — an account-wide rule stores no list, and treating
+ * that as "match nothing" would silently disarm every existing rule.
+ */
+function campaignAllowed(action: Record<string, unknown>, campaignId: string): boolean {
+  const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
+  return allow.length === 0 || allow.includes(campaignId)
+}
+
 function ctxAdGroupId(action: Record<string, unknown>, context: unknown): string | null {
   return (
     (action.adGroupId as string | undefined) ??
@@ -1310,6 +1322,15 @@ const clampRange = (x: number, min: number, max: number | null) => Math.min(max 
 ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResult> => {
   const id = ctxCampaignId(action, context)
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
+  // 🔴 EA4 — honour the campaigns the operator picked in the builder.
+  // Before this, the Budget builder's campaign picker had NO runtime effect: the adapter never
+  // passed `campaigns` through, and this handler takes the campaign from the evaluation context,
+  // so a rule showing "12 campaigns selected" applied ACCOUNT-WIDE. `bid_apply` has always had
+  // this check; budget and placement did not. An empty list still means "everywhere", which is
+  // what an account-wide rule stores.
+  if (!campaignAllowed(action, id)) {
+    return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', campaignId: id } }
+  }
   const c = await prisma.campaign.findUnique({ where: { id }, select: { dailyBudget: true, budgetBaselineCents: true } })
   if (!c) return { type: action.type, ok: false, error: 'Campaign not found' }
   const current = Number(c.dailyBudget)
@@ -1336,6 +1357,10 @@ ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResu
 ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id in context' }
+  // EA4 — same as budget_apply: the Placement builder's picker had no runtime effect either.
+  if (!campaignAllowed(action, id)) {
+    return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', campaignId: id } }
+  }
   const placement = (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
   const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }

@@ -5189,3 +5189,16 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bktoggle.busy { cursor: progress; }
 .h10-au-notch.above { cursor: help; background: #f4f6f9; color: #5f6875; }
 .h10-au-notch.above svg { opacity: .55; }
+
+/* ── EA4 — the read-only notice at the head of the builder's content column ─────────────────────
+   Appended at EOF (source order beats specificity), `h10-rb-locked` only. Amber, not red: a rule
+   the builder cannot save is not an error — it is a working automation this form cannot express. */
+.h10-rb-locked { margin: 0 0 22px; padding: 14px 16px; border: 1px solid #e6c98d; border-left: 3px solid #c68a2e; border-radius: 10px; background: #fffaf0; }
+.h10-rb-locked > b { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; color: #7a4d10; }
+.h10-rb-locked p { margin: 7px 0 0; font-size: 12.5px; line-height: 1.5; color: #6b5228; }
+.h10-rb-locked p.act { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.h10-rb-locked p.act .k { font-size: 10.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #8a6a2e; }
+.h10-rb-locked p.act em { font-style: normal; font-weight: 700; font-size: 12px; color: #5b4418; background: #f6e7c6; border-radius: 6px; padding: 2px 8px; }
+.h10-rb-locked ul { margin: 9px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.h10-rb-locked li { font-size: 12.5px; line-height: 1.45; color: #6b5228; }
+.h10-rb-locked p.foot { margin-top: 9px; font-size: 12px; color: #8a6a2e; }

@@ -5976,6 +5976,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { items, count: items.length }
   })
 
+  /**
+   * EA4 — the rule, plus how the BUILDER can show it.
+   *
+   * 🔴 `builderView` is non-null only for ENGINE-NATIVE rules (measured 2026-08-19: all 51 of them).
+   * The builder's edit mode reads keys those rules do not have, so before this it opened blank with
+   * only the name filled in — and its per-group fallback meant a Save would write hard-coded default
+   * criteria over a live rule. The translation lives in `ads-rule-adapter.service.ts` beside the
+   * forward one so the pair cannot drift; the route does not re-derive any of it.
+   *
+   * A builder-shaped rule returns `builderView: null` and hydrates from its own stored JSON.
+   */
   fastify.get('/advertising/automation-rules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const rule = await prisma.automationRule.findUnique({ where: { id } })
@@ -5983,7 +5994,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(404)
       return { error: 'not_found' }
     }
-    return { rule }
+    const { engineRuleToBuilderView } = await import('../services/advertising/ads-rule-adapter.service.js')
+    const builderView = engineRuleToBuilderView({
+      id: rule.id, conditions: rule.conditions, actions: rule.actions,
+    })
+    return { rule, builderView }
   })
 
   fastify.post('/advertising/automation-rules', async (request, reply) => {

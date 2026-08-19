@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate } from 'lucide-react'
+import { X, Video, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock} from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -237,6 +237,16 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const router = useRouter()
   const ruleId = useSearchParams().get('ruleId')
   const isEdit = !!ruleId
+  /**
+   * EA4 — set when the rule being edited is ENGINE-NATIVE and the builder cannot faithfully
+   * re-save it. Non-null ⇒ read-only: Save is disabled and the banner names every blocker.
+   *
+   * 🔴 This is the guard that stops a live automation being destroyed. Before it, opening any of
+   * the 51 stored rules showed a blank form (their keys are not the ones this builder reads) and
+   * pressing Save would have written hard-coded default criteria over the real ones. It was
+   * unreachable only by accident — `valid` happened to fail with 0 campaigns selected.
+   */
+  const [locked, setLocked] = useState<{ blockers: string[]; actionSummary: string[] } | null>(null)
   const rt = ruleTypeBySlug(slug)
   const steps = STEPS_FOR(slug)
   const setup = setupFor(slug)
@@ -501,7 +511,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
 
   // ── create the rule (POST /advertising/automation-rules — starts disabled + dry-run) ──
   const submit = useCallback(async () => {
-    if (!valid || creating) return
+    // Belt and braces: the buttons are disabled when locked, but a rule that cannot round-trip
+    // must not be writable by any path — this payload REPLACES conditions and actions wholesale.
+    if (!valid || creating || locked != null) return
     setCreating(true)
     try {
       const payload = {
@@ -535,7 +547,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       // RT.1 — a saved rule moves every tab badge and every page's rule section.
       emitAdsChange('ads.rule.changed')
     } finally { setCreating(false) }
-  }, [valid, creating, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, locked, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -547,6 +559,27 @@ export function RuleBuilder({ slug }: { slug: string }) {
         const rule = j?.rule
         if (!alive || !rule) return
         setRuleName(rule.name ?? '')
+
+        /**
+         * EA4 — an ENGINE-NATIVE rule arrives with `builderView`, translated server-side by the
+         * inverse of the adapter that already runs builder rules (`ads-rule-adapter.service.ts`).
+         * Its conditions are REAL — read from `{field, op, value}` through the same metric map, so
+         * "campaign.acos lte 0.2" comes back as "ACOS / lte / 20". The action is a summary line
+         * only: the builder writes one action from a fixed set, and most engine rules use types it
+         * cannot produce, so those open read-only rather than pretending to be editable.
+         */
+        const bv = j?.builderView as { slug: string | null; groups?: Array<{ conditions: Condition[] }>; actionSummary?: string[]; editable?: boolean; blockers?: string[] } | null | undefined
+        if (bv) {
+          if (bv.groups?.length) {
+            setGroups(bv.groups.map((g) => ({ id: ++_cid, conditions: g.conditions.length ? g.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: 'set', budgetValue: '' })))
+          }
+          if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
+          if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
+          if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
+          if (!bv.editable) setLocked({ blockers: bv.blockers ?? [], actionSummary: bv.actionSummary ?? [] })
+          return
+        }
+
         const conds = Array.isArray(rule.conditions) ? rule.conditions : []
         if (conds.length) setGroups(conds.map((c: { conditions?: Condition[]; lookback?: string; exclude?: string; action?: { op?: string; value?: string; placeTarget?: string } }) => ({ id: ++_cid, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '', placeTarget: c.action?.placeTarget ?? 'tos' })))
         const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) ?? {}
@@ -600,7 +633,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         <div className="r">
           <button type="button" className="learn"><Video size={15} /> Learn</button>
           <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
-          <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+          <button type="button" className="h10-rb-create" disabled={!valid || creating || locked != null} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
         </div>
       </header>
 
@@ -615,6 +648,30 @@ export function RuleBuilder({ slug }: { slug: string }) {
         {/* scrolling content */}
         <main className="h10-rb-main">
           <div className="h10-rb-wrap">
+            {/*
+              EA4 — the read-only notice. It names what the builder cannot carry, in the operator's
+              terms, and shows the rule's real action as a summary so the page is never blank about
+              what the rule DOES. A form that looks editable and silently drops half a rule on save is
+              worse than one that says plainly it cannot save this.
+            */}
+            {locked && (
+              <div className="h10-rb-locked" role="status">
+                <b><Lock size={14} aria-hidden /> This rule is shown read-only</b>
+                <p>
+                  Its criteria and scope below are the real stored values. Saving is disabled because
+                  this builder writes one action from a fixed set, and it cannot reproduce this rule
+                  exactly — a save would replace what the engine is running.
+                </p>
+                {locked.actionSummary.length > 0 && (
+                  <p className="act"><span className="k">What it does</span>{locked.actionSummary.map((a, i) => <em key={i}>{a}</em>)}</p>
+                )}
+                <ul>{locked.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul>
+                {/* The reason lives HERE, not on the Save button: a `title` on a disabled element is
+                never shown — the browser fires no mouse events on it — which is the exact defect
+                the repo's silent-disabled ratchet exists to catch. It caught this one. */}
+            <p className="foot"><b>Save Changes is disabled.</b> Edit this rule from the API, or create a new rule here and disable this one.</p>
+              </div>
+            )}
             {/* ── Rule Name ── */}
             <section id="rb-rule-name" className="h10-rb-sec">
               <h2>Rule Name</h2>
@@ -904,7 +961,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
               <span className="grow" />
               {isCampaign && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
-              <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+              <button type="button" className="h10-rb-create" disabled={!valid || creating || locked != null} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
             </div>
           </div>
         </main>
