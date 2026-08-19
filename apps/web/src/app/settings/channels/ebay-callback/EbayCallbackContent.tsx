@@ -62,6 +62,11 @@ export default function EbayCallbackContent() {
             code,
             state,
             connectionId,
+            // MAP.4 — set by Reconnect in the Accounts panel. It says "this grant
+            // is for THAT account", which is the only thing that lets the server
+            // adopt a grant onto a connection that predates the identity scope
+            // instead of refusing it as an unmatched identity.
+            adoptConnectionId: sessionStorage.getItem("ebayAdoptConnectionId") ?? undefined,
             redirectUri: window.location.origin + "/settings/channels/ebay-callback",
           }),
         });
@@ -75,6 +80,7 @@ export default function EbayCallbackContent() {
 
         // Clear stored state
         sessionStorage.removeItem("ebayAuthState");
+        sessionStorage.removeItem("ebayAdoptConnectionId");
 
         setStatus("success");
         setMessage(

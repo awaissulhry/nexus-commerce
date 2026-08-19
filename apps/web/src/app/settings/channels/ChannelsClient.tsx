@@ -336,6 +336,12 @@ export function ChannelsClient() {
       <AccountsPanel
         apiBase={getBackendUrl()}
         onConnect={{ EBAY: handleConnectEbay }}
+        onReconnect={(a) => {
+          // Name the account the grant is for, so the server adopts onto it
+          // rather than refusing an identity it cannot match.
+          sessionStorage.setItem('ebayAdoptConnectionId', a.id)
+          void handleConnectEbay()
+        }}
         confirm={askConfirm}
       />
 

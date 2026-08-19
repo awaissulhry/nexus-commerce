@@ -27,6 +27,13 @@ export interface AccountsPanelProps {
   apiBase: string
   /** Channels the page can start an OAuth flow for. Absent = no connect button. */
   onConnect?: Partial<Record<string, () => void | Promise<void>>>
+  /**
+   * Re-authorise ONE named account. Distinct from `onConnect`: it tells the
+   * server which connection the incoming grant belongs to, which is what lets a
+   * connection that predates the identity permission adopt one instead of being
+   * refused as an unmatched identity.
+   */
+  onReconnect?: (account: AccountRow) => void | Promise<void>
   /** The host app's confirm dialog. Falls back to a plain one when absent. */
   confirm?: (opts: {
     title: string
@@ -80,7 +87,7 @@ function describeBlastRadius(b: BlastRadius): string {
   return `${parts.join(', ')} are attributed to it. They are kept — the account is deactivated, never deleted, so history still says which account each row came from.`
 }
 
-export function AccountsPanel({ apiBase, onConnect, confirm, className }: AccountsPanelProps) {
+export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, className }: AccountsPanelProps) {
   const [data, setData] = useState<AccountsPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -313,6 +320,15 @@ export function AccountsPanel({ apiBase, onConnect, confirm, className }: Accoun
                 {!a.isPrimary && (
                   <button type="button" disabled={busyId === a.id} onClick={() => void makePrimary(a)}>
                     Make primary
+                  </button>
+                )}
+                {onReconnect && a.managedBy !== 'env' && (
+                  <button
+                    type="button"
+                    disabled={busyId === a.id}
+                    onClick={() => void onReconnect(a)}
+                  >
+                    Reconnect
                   </button>
                 )}
                 {/* An env-managed account has no OAuth grant to revoke, so there is

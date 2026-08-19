@@ -134,11 +134,25 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
    * Handles the OAuth2 callback from eBay
    * Exchanges authorization code for access token and saves to database
    */
-  app.post<{ Body: CallbackQueryParams & { state: string; connectionId: string } }>(
+  app.post<{
+    Body: CallbackQueryParams & {
+      state: string;
+      connectionId: string;
+      /**
+       * MAP.4 — "this grant is for THAT account, adopt it".
+       *
+       * The operator states which existing connection they are re-authorising.
+       * Without it, a grant whose identity matches nothing cannot be told apart
+       * from a genuinely new account, and guessing is how one account's tokens
+       * end up on another account's row.
+       */
+      adoptConnectionId?: string;
+    };
+  }>(
     "/api/ebay/auth/callback",
     async (request, reply) => {
       try {
-        const { code, state, error, error_description, connectionId } = request.body;
+        const { code, state, error, error_description, connectionId, adoptConnectionId } = request.body;
 
         // Check for OAuth errors from eBay
         if (error) {
@@ -262,9 +276,58 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
               },
             });
           }
+          // No row carries this identity. Before minting a new account, check for
+          // the migration case: a connection that predates the identity scope and
+          // so has nothing to match on. Measured on prod 2026-08-19 — this is
+          // exactly how the operator ended up with two ACTIVE rows for ONE eBay
+          // account, and every eBay job then ran connections=2, doing its work
+          // twice against the same seller until it was cleaned up.
+          if (!already) {
+            const unidentified = await countUnidentifiedAccounts("EBAY");
+            if (unidentified > 0 && !adoptConnectionId) {
+              await prisma.channelConnection.delete({ where: { id: connectionId } }).catch(() => {});
+              return reply.status(409).send({
+                success: false,
+                error:
+                  `This grant is for "${identity.username}", and no connected account carries that identity yet. ` +
+                  `An existing eBay connection predates the identity permission, so the two cannot be told apart — ` +
+                  `connecting now would create a duplicate of the same account. ` +
+                  `If this IS that account, use Reconnect on it in Settings → Channels. ` +
+                  `If it is a genuinely different account, reconnect the existing one first so it records its identity.`,
+                code: "EBAY_IDENTITY_UNMATCHED",
+                identity: identity.username,
+              });
+            }
+          }
+
+          // The operator named the account this grant belongs to. Adopt onto it:
+          // that row owns the listings and orders, so moving the identity to the
+          // data is zero movement, where moving the data to the identity is not.
+          if (!already && adoptConnectionId) {
+            const target = await prisma.channelConnection.findUnique({ where: { id: adoptConnectionId } });
+            if (!target || target.channelType !== "EBAY") {
+              return reply.status(400).send({ success: false, error: "adoptConnectionId is not an eBay connection" });
+            }
+            await ebayAuthService.saveTokens(
+              target.id, tokenData.access_token, tokenData.refresh_token || "", tokenData.expires_in, sellerInfo,
+            );
+            await prisma.channelConnection.delete({ where: { id: connectionId } }).catch(() => {});
+            logger.info("eBay grant adopted onto an existing connection", {
+              connectionId: target.id, username: identity.username,
+            });
+            return reply.send({
+              success: true,
+              message: "eBay connection re-authorised",
+              adopted: true,
+              connection: {
+                id: target.id, channelType: "EBAY", isActive: true,
+                sellerName: identity.username, storeName: sellerInfo?.storeName,
+              },
+            });
+          }
         } else {
-          // No identity. Admitting a second unidentifiable account would make two
-          // accounts we cannot tell apart — which is exactly what
+          // No identity at all. Admitting a second unidentifiable account would
+          // make two accounts we cannot tell apart — which is exactly what
           // ChannelConnection_active_account_key refuses at the database, and it
           // is better to say so here than to surface a P2002 after the operator
           // has already consented at eBay.
