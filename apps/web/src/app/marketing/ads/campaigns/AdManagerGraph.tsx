@@ -1,30 +1,31 @@
 'use client'
 
 /**
- * CBN.2e — Ad Manager "Campaign Performance" graph, pixel-matched to Helium 10.
+ * CBN.2e — Ad Manager "Campaign Performance" graph.
  *
- * A dual-axis time-series combo chart: a LEFT metric (navy, drives the left
- * axis) and a RIGHT metric (blue, drives the right axis), each drawn as a solid
- * line plus a dashed 7-day trailing-average line — four series total. Two metric
- * pickers sit in the top corners (the metric chosen on one side is greyed out on
- * the other, so it can't be plotted twice); a centred legend sits below them; a
- * hover tooltip surfaces the date + all four series; and a drag grip resizes the
- * chart height. Account-wide data comes from GET /api/advertising/trends, scoped
- * to the header's market + date range (no campaignId = whole account).
+ * R4 — this file is now only the DATA half. The chart itself is `_shared/MetricChart`, the one
+ * time-series chart in this console, which Reporting renders too: the same frame, axes, legend,
+ * tooltip, resize grip and colours, from one file.
+ *
+ * What changed for the operator: the two metric dropdowns — one per axis, two metrics maximum —
+ * became a single multi-select. Tick as many as you want (up to six) and every ticked metric is
+ * plotted, each against its own scale. That is the Amazon Advertising console's model, and it
+ * answers the question the two-slot picker could not: *show me spend, sales and ACoS together.*
+ *
+ * What did NOT change: the 7-day trailing average beside each metric, the change annotations on
+ * the timeline and inside the hover card, the drag-to-resize grip, the persisted chart height,
+ * and the `/advertising/trends` request behind it. Those are the reasons this graph is worth
+ * keeping, and each is now a capability of the shared chart rather than something only this
+ * page has.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from 'recharts'
-import { ChevronDown, Equal } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { rangeBounds } from '../_shell/AdsPageHeader'
-import { useChangeAnnotations, AnnotationToggle, AnnotationTooltipRows, type DayAnnotation } from './ChangeAnnotations'
+import { useChangeAnnotations, AnnotationToggle } from './ChangeAnnotations'
+import { MetricChart, MAX_PLOTTED, type ChartMetric } from '../_shared/MetricChart'
 
 // ── metric catalog (order + units match the H10 dropdown) ───────────────────
-type Unit = 'eur' | 'pct' | 'count'
-interface Metric { key: string; label: string; unit: Unit }
-const METRICS: Metric[] = [
+const METRICS: ChartMetric[] = [
   { key: 'spend', label: 'Spend', unit: 'eur' },
   { key: 'sales', label: 'Sales', unit: 'eur' },
   { key: 'cpc', label: 'CPC', unit: 'eur' },
@@ -37,168 +38,70 @@ const METRICS: Metric[] = [
   { key: 'totalSales', label: 'Total sales', unit: 'eur' },
   { key: 'tacos', label: 'TACoS', unit: 'pct' },
 ]
-const META: Record<string, Metric> = Object.fromEntries(METRICS.map((m) => [m.key, m]))
-
-// Colours sampled from the H10 recording: left axis = deep navy, right = blue;
-// each side's 7-day average is a lighter dashed variant of its colour.
-const LEFT_COLOR = '#002f66', LEFT_AVG = '#94a3b8'
-const RIGHT_COLOR = '#0a5ed3', RIGHT_AVG = '#7fb0f5'
 
 interface TrendRow {
   date: string; impressions: number; clicks: number; orders: number
   adSpendCents: number; adSalesCents: number; totalRevenueCents: number
   acos: number | null; tacos: number | null; ctr: number | null
 }
-interface ChartPoint { date: string; leftVal: number; rightVal: number; leftAvg: number; rightAvg: number }
 
-const metricValue = (r: TrendRow, key: string): number => {
+/**
+ * 🔴 Percentages are FRACTIONS here, not 0–100.
+ *
+ * This endpoint returns ACoS as `43.47` while a report returns `0.4347`, and the shared chart
+ * has to be handed one convention or the same metric formats differently depending on which
+ * page you are on. The chart's own `pct` formatter multiplies by 100, so everything is
+ * normalised to a fraction at the source — the one place that knows what the API meant.
+ */
+const metricValue = (r: TrendRow, key: string): number | null => {
   const spend = r.adSpendCents / 100, sales = r.adSalesCents / 100
   switch (key) {
     case 'spend': return spend
     case 'sales': return sales
-    case 'cpc': return r.clicks > 0 ? spend / r.clicks : 0
-    case 'cvr': return r.clicks > 0 ? (r.orders / r.clicks) * 100 : 0
-    case 'acos': return r.acos ?? (sales > 0 ? (spend / sales) * 100 : 0)
-    case 'ctr': return r.ctr ?? (r.impressions > 0 ? (r.clicks / r.impressions) * 100 : 0)
+    case 'cpc': return r.clicks > 0 ? spend / r.clicks : null
+    case 'cvr': return r.clicks > 0 ? r.orders / r.clicks : null
+    case 'acos': return r.acos != null ? r.acos / 100 : (sales > 0 ? spend / sales : null)
+    case 'ctr': return r.ctr != null ? r.ctr / 100 : (r.impressions > 0 ? r.clicks / r.impressions : null)
     case 'clicks': return r.clicks
     case 'impressions': return r.impressions
     case 'ppcOrders': return r.orders
     case 'totalSales': return r.totalRevenueCents / 100
-    case 'tacos': return r.tacos ?? 0
-    default: return 0
+    case 'tacos': return r.tacos != null ? r.tacos / 100 : null
+    default: return null
   }
 }
 
-// ── formatters ──────────────────────────────────────────────────────────────
-const eurFull = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const fmtFull = (v: number, u: Unit): string =>
-  u === 'eur' ? eurFull(v) : u === 'pct' ? `${v.toFixed(2)}%` : v.toLocaleString('en-IE')
-const fmtAxis = (v: number, u: Unit): string => {
-  if (u === 'pct') return `${+v.toFixed(2)}%`
-  if (u === 'eur') return v >= 1000 ? `€${(v / 1000).toFixed(1)}k` : Number.isInteger(v) ? `€${v}` : `€${v.toFixed(2)}`
-  return v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`
-}
-const dayShort = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-const dayLong = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const dayLong = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-// Build the four-series chart frame from raw daily rows: each metric value plus
-// its trailing 7-day mean (inclusive of the current day).
-function buildPoints(rows: TrendRow[], leftKey: string, rightKey: string): ChartPoint[] {
-  const lv = rows.map((r) => metricValue(r, leftKey))
-  const rv = rows.map((r) => metricValue(r, rightKey))
-  const trailing = (arr: number[], i: number) => {
-    let sum = 0, n = 0
-    for (let j = Math.max(0, i - 6); j <= i; j++) { sum += arr[j] ?? 0; n++ }
-    return n ? sum / n : 0
-  }
-  return rows.map((r, i) => ({
-    date: r.date, leftVal: lv[i] ?? 0, rightVal: rv[i] ?? 0,
-    leftAvg: trailing(lv, i), rightAvg: trailing(rv, i),
-  }))
-}
+const STORE = 'h10-am-graph-metrics'
 
-// ── metric picker (single-select, colour dot, other-side metric disabled) ────
-function MetricSelect({ value, otherValue, onChange, color, align }: {
-  value: string; otherValue: string; onChange: (k: string) => void; color: string; align: 'left' | 'right'
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-  const cur = META[value]
-  return (
-    <div className={`h10-gsel ${align} ${open ? 'open' : ''}`} ref={ref}>
-      <button type="button" className="h10-gsel-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label="Select metric">
-        <span className="dot" style={{ background: color }} />
-        <span className="lb">{cur?.label ?? value}</span>
-        <ChevronDown size={15} />
-      </button>
-      {open && (
-        <div className="h10-gsel-pop" role="listbox">
-          {METRICS.map((m) => {
-            const disabled = m.key === otherValue
-            return (
-              <button
-                type="button" key={m.key} role="option" aria-selected={m.key === value}
-                className={`${m.key === value ? 'sel' : ''} ${disabled ? 'dis' : ''}`}
-                disabled={disabled}
-                onClick={() => { if (!disabled) { onChange(m.key); setOpen(false) } }}
-              >{m.label}</button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── legend swatch (solid for the metric, dashed for its 7-day average) ───────
-function Swatch({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
-  return (
-    <span className="h10-gsw">
-      <span className="ln" style={{ borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${color}` }} />
-      <span>{label}</span>
-    </span>
-  )
-}
-
-// ── hover tooltip (date header + four series, values right-aligned) ──────────
-function GraphTooltip({ active, payload, leftKey, rightKey, annotations }: {
-  active?: boolean; payload?: Array<{ payload: ChartPoint }>; leftKey?: string; rightKey?: string
-  annotations?: Map<string, DayAnnotation>
-}) {
-  if (!active || !payload?.length || !leftKey || !rightKey) return null
-  const p = payload[0]?.payload
-  if (!p) return null
-  const L = META[leftKey], R = META[rightKey]
-  const rows = [
-    { c: LEFT_COLOR, name: L?.label ?? leftKey, v: fmtFull(p.leftVal, L?.unit ?? 'count') },
-    { c: LEFT_AVG, name: `${L?.label ?? leftKey} 7-Day Average`, v: fmtFull(p.leftAvg, L?.unit ?? 'count') },
-    { c: RIGHT_COLOR, name: R?.label ?? rightKey, v: fmtFull(p.rightVal, R?.unit ?? 'count') },
-    { c: RIGHT_AVG, name: `${R?.label ?? rightKey} 7-Day Average`, v: fmtFull(p.rightAvg, R?.unit ?? 'count') },
-  ]
-  return (
-    <div className="h10-gtt">
-      <div className="h10-gtt-d">{dayLong(p.date)}</div>
-      {rows.map((it) => (
-        <div className="h10-gtt-r" key={it.name}>
-          <span className="dot" style={{ background: it.c }} />
-          <span className="nm">{it.name}</span>
-          <span className="v">{it.v}</span>
-        </div>
-      ))}
-      {/* HX.9 — what changed that day, in the same hover card as what happened. Reading them
-          together is the entire point; two separate surfaces make it a memory exercise. */}
-      {annotations?.get(p.date) && <AnnotationTooltipRows day={annotations.get(p.date)!} />}
-    </div>
-  )
-}
-
-// ── main panel ───────────────────────────────────────────────────────────────
 export function AdManagerGraph({ market, rangePreset }: { market: string; rangePreset: string }) {
-  const [leftKey, setLeftKey] = useState('spend')
-  const [rightKey, setRightKey] = useState('acos')
+  // The two persisted single choices become one persisted list. The defaults are the two the
+  // dropdowns used to open on, so an operator who never touches the picker sees what they saw.
+  const [selected, setSelected] = useState<string[]>(['spend', 'acos'])
   const [rows, setRows] = useState<TrendRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [height, setHeight] = useState(300)
 
-  // restore persisted metric choices + chart height
   useEffect(() => {
     try {
-      const l = localStorage.getItem('h10-am-graph-left'); if (l && META[l]) setLeftKey(l)
-      const r = localStorage.getItem('h10-am-graph-right'); if (r && META[r]) setRightKey(r)
-      const h = Number(localStorage.getItem('h10-am-graph-h')); if (h >= 220 && h <= 640) setHeight(h)
+      const raw = localStorage.getItem(STORE)
+      if (raw) {
+        const keys = (JSON.parse(raw) as string[]).filter((k) => METRICS.some((m) => m.key === k))
+        if (keys.length) { setSelected(keys.slice(0, MAX_PLOTTED)); return }
+      }
+      // Carry over whatever the two old dropdowns were left on, so the upgrade is not a reset.
+      const l = localStorage.getItem('h10-am-graph-left')
+      const r = localStorage.getItem('h10-am-graph-right')
+      const carried = [l, r].filter((k): k is string => !!k && METRICS.some((m) => m.key === k))
+      if (carried.length) setSelected([...new Set(carried)])
     } catch { /* ignore */ }
   }, [])
-  useEffect(() => { try { localStorage.setItem('h10-am-graph-h', String(height)) } catch { /* ignore */ } }, [height])
 
-  const pickLeft = (k: string) => { if (k === rightKey) return; setLeftKey(k); try { localStorage.setItem('h10-am-graph-left', k) } catch { /* ignore */ } }
-  const pickRight = (k: string) => { if (k === leftKey) return; setRightKey(k); try { localStorage.setItem('h10-am-graph-right', k) } catch { /* ignore */ } }
+  const pick = (keys: string[]) => {
+    setSelected(keys)
+    try { localStorage.setItem(STORE, JSON.stringify(keys)) } catch { /* ignore */ }
+  }
 
   const { start, end } = useMemo(() => rangeBounds(rangePreset), [rangePreset])
   const startStr = ymd(start), endStr = ymd(end)
@@ -216,8 +119,16 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
     return () => { abort = true }
   }, [market, startStr, endStr])
 
-  const data = useMemo(() => buildPoints(rows, leftKey, rightKey), [rows, leftKey, rightKey])
-  const L = META[leftKey], R = META[rightKey]
+  // Every metric on every row: the chart picks the ticked ones out, so switching metrics is
+  // free rather than a rebuild, and the trailing average is computed over the same values.
+  const data = useMemo(
+    () => rows.map((r) => {
+      const out: Record<string, string | number | null> = { date: r.date }
+      for (const m of METRICS) out[m.key] = metricValue(r, m.key)
+      return out
+    }),
+    [rows],
+  )
 
   // HX.9 — change markers over the same window the chart is already showing.
   const [annOn, setAnnOn] = useState(true)
@@ -226,93 +137,35 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
     if (!data.length) return { start: null as Date | null, end: null as Date | null }
     // Bound the fetch by the data actually plotted, not the requested range: an empty tail would
     // otherwise pull changes for days the chart does not draw.
-    const s0 = new Date(`${data[0].date}T00:00:00`)
-    const e0 = new Date(`${data[data.length - 1].date}T23:59:59`)
-    return { start: s0, end: e0 }
+    return {
+      start: new Date(`${data[0].date as string}T00:00:00`),
+      end: new Date(`${data[data.length - 1].date as string}T23:59:59`),
+    }
   }, [data])
-  const { byDate: annotations, total: annTotal } = useChangeAnnotations(annRange.start, annRange.end, { enabled: annOn, includeRoutine: annRoutine })
-  const subtitle = `${dayLong(startStr)} - ${dayLong(endStr)}`
-
-  // drag-to-resize grip (top-centre, matching H10's card grip position)
-  const heightRef = useRef(height); heightRef.current = height
-  const startResize = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    const y0 = e.clientY, h0 = heightRef.current
-    const move = (ev: PointerEvent) => setHeight(clamp(h0 + (ev.clientY - y0), 220, 640))
-    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up) }
-    document.addEventListener('pointermove', move)
-    document.addEventListener('pointerup', up)
-  }, [])
+  const { byDate: annotations, total: annTotal } = useChangeAnnotations(
+    annRange.start, annRange.end, { enabled: annOn, includeRoutine: annRoutine },
+  )
 
   return (
-    <div className="h10-am-graph">
-      <button type="button" className="h10-gresize" aria-label="Drag to resize graph" onPointerDown={startResize}>
-        <Equal size={16} />
-      </button>
-
-      <div className="h10-ghead">
-        <h3>Campaign Performance</h3>
-        <p>{subtitle}</p>
-      </div>
-
-      <div className="h10-gctrl">
-        <MetricSelect value={leftKey} otherValue={rightKey} onChange={pickLeft} color={LEFT_COLOR} align="left" />
-        <MetricSelect value={rightKey} otherValue={leftKey} onChange={pickRight} color={RIGHT_COLOR} align="right" />
-      </div>
-
-      <div className="h10-glegend">
-        <Swatch color={LEFT_COLOR} label={L?.label ?? leftKey} />
-        <Swatch color={LEFT_AVG} label={`${L?.label ?? leftKey} 7-Day Average`} dashed />
-        <Swatch color={RIGHT_COLOR} label={R?.label ?? rightKey} />
-        <Swatch color={RIGHT_AVG} label={`${R?.label ?? rightKey} 7-Day Average`} dashed />
-        <AnnotationToggle on={annOn} onToggle={setAnnOn} includeRoutine={annRoutine} onToggleRoutine={setAnnRoutine} total={annTotal} />
-      </div>
-
-      <div className="h10-gchart" style={{ height }}>
-        {loading ? (
-          <div className="h10-gmsg">Loading…</div>
-        ) : data.length === 0 ? (
-          <div className="h10-gmsg">No advertising data in this date range.</div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 6, right: 6, bottom: 2, left: 6 }}>
-              <CartesianGrid vertical={false} stroke="#eef1f5" />
-              <XAxis
-                dataKey="date" tickFormatter={dayShort} tickLine={false}
-                axisLine={{ stroke: '#e6e9ee' }} tick={{ fontSize: 11.5, fill: '#8a93a1' }}
-                interval="preserveStartEnd" minTickGap={24} padding={{ left: 8, right: 8 }}
-              />
-              <YAxis
-                yAxisId="left" domain={[0, 'auto']} tickFormatter={(v: number) => fmtAxis(v, L?.unit ?? 'count')}
-                tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: '#6b7480' }} width={58}
-              />
-              <YAxis
-                yAxisId="right" orientation="right" domain={[0, 'auto']} tickFormatter={(v: number) => fmtAxis(v, R?.unit ?? 'count')}
-                tickLine={false} axisLine={false} tick={{ fontSize: 11.5, fill: '#6b7480' }} width={58}
-              />
-              {/* Drawn before the lines so a marker never sits on top of the data it annotates.
-                  Amber when a change that day failed to reach Amazon — the one case worth the eye. */}
-              {annOn && [...annotations.values()].map((d) => (
-                <ReferenceLine
-                  key={d.date} yAxisId="left" x={d.date}
-                  stroke={d.failed > 0 ? '#e0a52e' : '#c2cbd8'}
-                  strokeDasharray="3 3" strokeWidth={1}
-                  label={{ value: '', position: 'top' }}
-                />
-              ))}
-              <Tooltip
-                content={<GraphTooltip leftKey={leftKey} rightKey={rightKey} annotations={annotations} />}
-                cursor={{ stroke: '#c2cbd8', strokeWidth: 1 }}
-                wrapperStyle={{ outline: 'none' }}
-              />
-              <Line yAxisId="left" dataKey="leftVal" stroke={LEFT_COLOR} strokeWidth={2} dot={false} activeDot={{ r: 3.5 }} isAnimationActive={false} />
-              <Line yAxisId="left" dataKey="leftAvg" stroke={LEFT_AVG} strokeWidth={1.6} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
-              <Line yAxisId="right" dataKey="rightVal" stroke={RIGHT_COLOR} strokeWidth={2} dot={false} activeDot={{ r: 3.5 }} isAnimationActive={false} />
-              <Line yAxisId="right" dataKey="rightAvg" stroke={RIGHT_AVG} strokeWidth={1.6} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
+    <MetricChart
+      title="Campaign Performance"
+      subtitle={`${dayLong(startStr)} - ${dayLong(endStr)}`}
+      data={data}
+      metrics={METRICS}
+      selected={selected}
+      onSelectedChange={pick}
+      loading={loading}
+      emptyLabel="No advertising data in this date range."
+      storageKey="h10-am-graph"
+      trailingAverage={7}
+      annotations={annOn ? annotations : undefined}
+      annotationSlot={
+        <AnnotationToggle
+          on={annOn} onToggle={setAnnOn}
+          includeRoutine={annRoutine} onToggleRoutine={setAnnRoutine}
+          total={annTotal}
+        />
+      }
+    />
   )
 }

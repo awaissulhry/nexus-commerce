@@ -155,9 +155,15 @@ export interface AdsDataGridProps<T> {
    *  Additive: consumers that omit it render exactly as before. */
   rowClassName?: (row: T) => string | undefined
   /** optional row grouping: returns the group key + label for a row. When set, the grid
-   *  clusters same-group rows (groups ordered by label) and renders a header row before
-   *  each group. Additive — consumers that omit it are unaffected. */
-  groupBy?: (row: T) => { key: string; label: string }
+   *  clusters same-group rows and renders a header row before each group. Additive —
+   *  consumers that omit it are unaffected.
+   *
+   *  R1 — `order` is optional and decides the SEQUENCE of the groups; without it they fall
+   *  back to alphabetical, as they always have. Alphabetical is wrong wherever the groups
+   *  have a meaning-carrying order: Reporting's five headings would render Economics before
+   *  Performance, burying the reports that are actually opened. Both existing consumers
+   *  (ebay rollup, suggestions) return key+label only, so they are unchanged by construction. */
+  groupBy?: (row: T) => { key: string; label: string; order?: number }
   /** optional row click (e.g. open a detail drawer). Clicks landing on an interactive
    *  child (checkbox / link / button / select) are ignored so they keep their own behavior. */
   onRowClick?: (row: T) => void
@@ -223,6 +229,32 @@ export interface AdsDataGridProps<T> {
   filterState?: FilterState
   onFilterStateChange?: (next: FilterState) => void
   hideFilterPanel?: boolean
+  /**
+   * R3 (additive; default off) — SERVER-DRIVEN mode, for a consumer that filters, sorts and
+   * pages in SQL rather than in the browser.
+   *
+   * Everything above assumes the grid holds the whole result: it filters, searches, sorts and
+   * slices `rows` itself. That is right for a 220-campaign account and wrong for a report — the
+   * search-terms report is 12,276 rows and grows daily. Sorting a 50-row page and presenting it
+   * as the top 50 is the failure mode here, and it is invisible: the numbers look plausible and
+   * are simply not the answer to the question asked.
+   *
+   * Passed: the grid renders `rows` VERBATIM — no filtering, no search, no sort, no slicing —
+   * and takes the result size from `total`. Clicking a header still cycles the sort and still
+   * calls `onSortChange`; typing still calls `onSearchChange`; paging still calls `onPageChange`.
+   * The consumer re-queries and hands back the next page. Every visual affordance is unchanged
+   * because none of them moved: only who computes the rows did.
+   *
+   * Omitted: every branch below is gated on `server != null`, so the fifty-odd existing consumers
+   * take exactly the code path they take today.
+   */
+  server?: {
+    /** Rows across the WHOLE result, not the page in `rows`. Drives the count and the pager. */
+    total: number
+    /** Page size the query used. Owned by the consumer, since it is a query parameter. */
+    rowsPerPage: number
+    onRowsPerPageChange: (n: number) => void
+  }
 }
 
 function useClickAway<T extends HTMLElement>(onAway: () => void) {
@@ -250,7 +282,7 @@ export function AdsDataGrid<T>({
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
   onSortChange, onFilterChange,
   initialPage, onPageChange, initialSearch, onSearchChange,
-  filterState, onFilterStateChange, hideFilterPanel,
+  filterState, onFilterStateChange, hideFilterPanel, server,
 }: AdsDataGridProps<T>) {
   const [searchOpen, setSearchOpen] = useState(() => !!initialSearch)
   const [search, setSearch] = useState(initialSearch ?? '')
@@ -320,7 +352,12 @@ export function AdsDataGrid<T>({
     return byKey
   }, [columns])
 
+  // R3 — in server mode the rows ARE the answer: filtering, searching and sorting all
+  // happened in SQL over the whole result, and redoing any of them here would narrow a page
+  // that is already the correct page.
+  const serverMode = server != null
   const filtered = useMemo(() => {
+    if (serverMode) return rows
     if (!filters?.length) return rows
     return rows.filter((row) => {
       for (const f of filters) {
@@ -349,19 +386,21 @@ export function AdsDataGrid<T>({
       }
       return true
     })
-  }, [rows, filters, fstate, filterAccessor])
+  }, [rows, filters, fstate, filterAccessor, serverMode])
 
   // ── search (H10 inline 🔍) — narrows on the first-column text by default ──
   const searched = useMemo(() => {
+    if (serverMode) return filtered
     const q = search.trim().toLowerCase()
     if (!searchable || !q) return filtered
     const acc = searchValue ?? firstSortValue
     if (!acc) return filtered
     return filtered.filter((r) => String(acc(r) ?? '').toLowerCase().includes(q))
-  }, [filtered, search, searchable, searchValue, firstSortValue])
+  }, [filtered, search, searchable, searchValue, firstSortValue, serverMode])
 
   // ── sorting ──
   const sorted = useMemo(() => {
+    if (serverMode) return searched
     // SF.1 — enabled-first governs the DEFAULT view only. Once a header is clicked that column
     // owns the order outright (sorting by Spend must really mean Spend, even if the top spender is
     // paused); clearing the sort restores this banding.
@@ -377,7 +416,11 @@ export function AdsDataGrid<T>({
       // sort then orders rows *within* each group.
       if (groupBy) {
         const ga = groupBy(a), gb = groupBy(b)
-        if (ga.key !== gb.key) return ga.label.localeCompare(gb.label)
+        if (ga.key !== gb.key) {
+          // R1 — an explicit `order` wins; otherwise alphabetical, exactly as before.
+          if (ga.order != null && gb.order != null && ga.order !== gb.order) return ga.order - gb.order
+          return ga.label.localeCompare(gb.label)
+        }
       }
       if (bandBy) {
         const ra = enabledRank(bandBy(a)), rb = enabledRank(bandBy(b))
@@ -397,7 +440,7 @@ export function AdsDataGrid<T>({
       return sort.dir === 'asc' ? cmp : -cmp
     })
     return arr
-  }, [searched, sort, columns, firstSortValue, groupBy, enabledFirst, userSorted])
+  }, [searched, sort, columns, firstSortValue, groupBy, enabledFirst, userSorted, serverMode])
 
   // group row counts (for the group-header labels), computed over the full sorted set
   const groupCounts = useMemo(() => {
@@ -407,11 +450,15 @@ export function AdsDataGrid<T>({
     return m
   }, [sorted, groupBy])
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / rowsPerPage))
+  // The page size is a QUERY PARAMETER in server mode, so the consumer owns it; the grid still
+  // renders the same picker. `totalCount` is the whole result, never the page in `rows`.
+  const perPage = server ? server.rowsPerPage : rowsPerPage
+  const totalCount = server ? server.total : sorted.length
+  const pageCount = Math.max(1, Math.ceil(totalCount / perPage))
   const safePage = Math.min(page, pageCount)
-  const paged = sorted.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
-  const viewStart = sorted.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
-  const viewEnd = Math.min(safePage * rowsPerPage, sorted.length)
+  const paged = server ? sorted : sorted.slice((safePage - 1) * perPage, safePage * perPage)
+  const viewStart = totalCount === 0 ? 0 : (safePage - 1) * perPage + 1
+  const viewEnd = Math.min(safePage * perPage, totalCount)
 
   // ── keyboard navigation (opt-in via keyboardNav) ──
   const [focusIdx, setFocusIdx] = useState(-1)
@@ -656,7 +703,7 @@ export function AdsDataGrid<T>({
       <div className="h10-am-toolbar">
         <span className="cnt">{selectable && sel.size > 0
           ? <b>{`Selected ${sel.size} ${pluralize(noun, sel.size)}`}</b>
-          : sorted.length === 0 ? `Showing 0 ${pluralize(noun, 0)}` : `Viewing ${viewStart}-${viewEnd} of ${sorted.length} ${pluralize(noun, sorted.length)}`}</span>
+          : totalCount === 0 ? `Showing 0 ${pluralize(noun, 0)}` : `Viewing ${viewStart}-${viewEnd} of ${server ? totalCount.toLocaleString('en-GB') : totalCount} ${pluralize(noun, totalCount)}`}</span>
         {editMode && editMode.bulk !== false ? (editing ? (
           <span className="h10-edit-actions">
             <button type="button" className="h10-discard" onClick={discardEdits}>Discard Changes</button>
@@ -776,7 +823,7 @@ export function AdsDataGrid<T>({
         </div>
         {pagerCentered && <span className="grow" />}
         <div className="rpp">Rows per page:
-          <H10Select width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
+          <H10Select width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(perPage)} onChange={(v) => { if (server) server.onRowsPerPageChange(Number(v)); else setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
       </div>

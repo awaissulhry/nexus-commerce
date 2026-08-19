@@ -1,25 +1,41 @@
 'use client'
 
 /**
- * RPT.1/RPT.2 — the Reporting landing page.
+ * RPT.1/RPT.2 · R1 — the Reporting landing page: one grid of every report.
  *
- * Reporting owns the DATA layer of the ads console: which reports exist, what
- * each is made of, how to get it out, and whether the pipeline feeding it is
- * healthy. Interpretation — coverage, funnel, n-grams, momentum — belongs to
- * Analytics next door. (Operator decision, 2026-08-04.)
+ * This was thirteen documentation cards in a four-column grid. Measured on prod it stood
+ * 2,736px tall — three viewports to choose one report — with 104–124px of blank inside the
+ * top-row cards and 1,840px of empty grid cells below, because a group of one or two cards
+ * still claims a row of four. Every card also carried Source and Grain: the Amazon job name
+ * and the SQL row grain, which describe how a report is BUILT and answer nothing an operator
+ * asks when picking one.
  *
- * RPT.2 made the library live. Every card now shows measured rows, the window it
- * spans, and freshness PER MARKET — because RPT.0 found Italy, the primary market
- * and 52% of all rows, running six to seven days behind Germany and France while
- * the single overall "as of" read two days and hid it completely.
+ * So the library is now a list, rendered through `AdsDataGrid` — the same grid the other
+ * fifty-four grids in this console use, grouped by the same five headings the catalogue
+ * already had. Change that grid once and this page follows.
  *
- * The state badge is derived (catalogue.ts → deriveState), never hard-coded, so
- * this page cannot drift from the database.
+ * Nothing measured was dropped, only moved out of the way:
+ *   • the state badge and its reason are still derived live (catalogue.ts → deriveState), so
+ *     the page still cannot drift from the database, and "idle" still reads differently from
+ *     "broken" — that distinction is the whole reason `state` exists;
+ *   • per-market freshness is still per-market, because a single overall "as of" is exactly
+ *     what hid Italy running a week behind Germany;
+ *   • Source, Grain, cadence and the standing caveats moved into the row's ⓘ hover, which is
+ *     the console's own HoverCard, so they cost no vertical space until asked for.
+ *
+ * What did NOT move into that hover is the one line saying what each report answers. A
+ * chooser whose every entry has to be hovered before you know what it is has not been
+ * simplified, only emptied — so that line kept a column of its own.
+ *
+ * Business context and incrementality left this page for the campaign report: they are
+ * analysis, and they were pushing the list they sat above off the first screen.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Info, RefreshCw, AlertTriangle, ArrowRight } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Info } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
+import { HoverCard } from '../campaigns/FilterDropdown'
 import { Pill } from '@/design-system/primitives/Pill'
 import {
   REPORT_CATALOGUE,
@@ -27,15 +43,15 @@ import {
   STATE_META,
   deriveState,
   type ReportEntry,
+  type ReportState,
 } from './catalogue'
 import { RUNNABLE_REPORT_IDS } from './runnable'
-import { SchedulesPanel } from './SchedulesPanel'
-import { BusinessContextPanel } from './BusinessContextPanel'
-import { IncrementalityPanel } from './IncrementalityPanel'
+import { TodayBand } from './TodayBand'
+import { DeliveriesModal } from './DeliveriesModal'
+import { listSchedules, type Schedule } from './schedules-api'
 import {
   fetchReportingCoverage,
   fmtInt,
-  fmtLag,
   fmtWindow,
   type ReportingCoverage,
 } from './coverage'
@@ -45,127 +61,32 @@ import '@/design-system/styles/components.css'
 import './reporting.css'
 
 /** States meaning "you cannot rely on this report today". */
-const UNAVAILABLE = new Set(['not-ingested', 'blocked'])
+const UNAVAILABLE = new Set<ReportState>(['not-ingested', 'blocked'])
 
-function ReportCard({
-  entry,
-  coverage,
-}: {
-  entry: ReportEntry
-  coverage: ReportingCoverage | null
-}) {
-  const derived = deriveState(entry, coverage)
-  const meta = STATE_META[derived.state]
-  // A report opens only when the engine has a spec for it AND there is something
-  // to show: "Not ingested" and "Blocked" cards would open an empty grid.
-  const runnable = RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(derived.state)
-  const cov = entry.coverageKey && coverage ? coverage.reports[entry.coverageKey] : undefined
-  const window = cov ? fmtWindow(cov.firstDay, cov.lastDay) : null
-
-  return (
-    <article className={`rpt-card${UNAVAILABLE.has(derived.state) ? ' is-unavailable' : ''}`}>
-      <div className="rpt-card-hd">
-        {/* Only reports the runner can actually execute are links. A dead link on
-            a "Not ingested" card would promise data that does not exist. */}
-        {runnable ? (
-          <h3>
-            <Link href={`/marketing/ads/reporting/${entry.id}`} className="rpt-open">
-              {entry.title}
-              <ArrowRight size={13} aria-hidden />
-            </Link>
-          </h3>
-        ) : (
-          <h3>{entry.title}</h3>
-        )}
-        <Pill tone={meta.tone}>{meta.label}</Pill>
-      </div>
-      <p className="rpt-answers">{entry.answers}</p>
-
-      {/* Measured facts. Absent entirely rather than shown as zeros while loading. */}
-      {cov && cov.rows > 0 && (
-        <div className="rpt-stats">
-          <span className="rpt-stat">
-            <b>{fmtInt(cov.rows)}</b> rows
-          </span>
-          {window && (
-            <span className="rpt-stat">
-              <b>{cov.days}</b> {entry.cadence === 'weekly' ? 'weeks' : 'days'} · {window}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Per-market freshness — the whole point of RPT.2. Ordered by row count so
-          the market that matters most is read first. */}
-      {cov && cov.byMarket.length > 0 && (
-        <div className="rpt-markets">
-          {cov.byMarket.map((m) => (
-            <span
-              key={m.marketplace}
-              className={`rpt-mkt${
-                // Amber means "this market is genuinely behind for its cadence",
-                // not "this market is the worst of the four". Placement is sparse
-                // on density while every market is 2 days old — painting Italy
-                // amber there would invent a freshness problem that isn't real.
-                derived.state === 'sparse' &&
-                m.lagDays != null &&
-                m.lagDays > derived.staleAfterDays
-                  ? ' is-lagging'
-                  : ''
-              }`}
-              title={`${m.marketplace}: ${fmtInt(m.rows)} rows, newest ${fmtLag(m.lagDays)}`}
-            >
-              <span className="code">{m.marketplace}</span>
-              <span className="lag">{fmtLag(m.lagDays)}</span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <dl className="rpt-meta">
-        <div>
-          <dt>Source</dt>
-          <dd>{entry.source}</dd>
-        </div>
-        <div>
-          <dt>Grain</dt>
-          <dd>{entry.grain}</dd>
-        </div>
-      </dl>
-
-      {(derived.reason || entry.note) && (
-        <p className="rpt-note">
-          {derived.reason && <span className="rpt-reason">{derived.reason}</span>}
-          {derived.reason && entry.note ? ' ' : null}
-          {entry.note}
-        </p>
-      )}
-    </article>
-  )
+/** Sort order for the Status column: worst first, so a click surfaces what needs attention. */
+const STATE_RANK: Record<ReportState, number> = {
+  blocked: 0, 'not-ingested': 1, sparse: 2, idle: 3, ready: 4, unknown: 5,
 }
 
-/** The Pipeline card is about jobs, not rows, so it reads different numbers. */
-function PipelineExtras({ coverage }: { coverage: ReportingCoverage | null }) {
-  if (!coverage) return null
-  const { pipeline } = coverage
-  const totalJobs = pipeline.reportJobs.reduce((s, j) => s + j.jobs, 0)
-  const failed = pipeline.reportJobs
-    .filter((j) => j.status !== 'COMPLETED')
-    .reduce((s, j) => s + j.jobs, 0)
-  const zeroRowTypes = pipeline.reportTypes.filter((t) => t.rowsIngested === 0)
+/** "1d" · "today" · "—". The long form ("8 days old") does not fit four markets in one cell. */
+function lagShort(lagDays: number | null): string {
+  if (lagDays == null) return '—'
+  return lagDays <= 0 ? 'today' : `${lagDays}d`
+}
 
-  return (
-    <div className="rpt-stats">
-      <span className="rpt-stat"><b>{fmtInt(totalJobs)}</b> report jobs</span>
-      <span className="rpt-stat"><b>{fmtInt(failed)}</b> not completed</span>
-      <span className="rpt-stat"><b>{fmtInt(pipeline.exportJobFailures)}</b> export download failures</span>
-      {zeroRowTypes.length > 0 && (
-        <span className="rpt-stat">
-          <b>{zeroRowTypes.length}</b> report {zeroRowTypes.length === 1 ? 'type' : 'types'} returning nothing
-        </span>
-      )}
-    </div>
-  )
+/** One row of the library: the catalogue entry plus everything derived from live coverage. */
+interface Row {
+  entry: ReportEntry
+  state: ReportState
+  reason: string | null
+  staleAfterDays: number
+  runnable: boolean
+  href: string | null
+  rows: number | null
+  unit: string
+  periods: number | null
+  window: string | null
+  markets: Array<{ marketplace: string; lagDays: number | null; rows: number; lagging: boolean }>
 }
 
 export function ReportingClient() {
@@ -173,6 +94,14 @@ export function ReportingClient() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [nonce, setNonce] = useState(0)
+  /**
+   * R6 — the schedules panel left this page, and with it the only place a FAILING schedule
+   * showed. A scheduled report that has quietly stopped is worse than no report, because it is
+   * believed — so the signal stays, inverted: nothing at all while every delivery is healthy,
+   * one line the moment one is not. Deliveries are otherwise managed from the report itself.
+   */
+  const [ailing, setAiling] = useState<Schedule[]>([])
+  const [deliveriesOpen, setDeliveriesOpen] = useState(false)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -180,25 +109,151 @@ export function ReportingClient() {
     const ac = new AbortController()
     setLoading(true)
     fetchReportingCoverage(ac.signal)
-      .then((c) => {
-        setCoverage(c)
-        setError(null)
-      })
+      .then((c) => { setCoverage(c); setError(null) })
       .catch((e: unknown) => {
         if ((e as Error).name === 'AbortError') return
-        // Never blank the catalogue on a failed fetch — the structural half of
-        // the page is still true and useful without live numbers.
+        // Never blank the catalogue on a failed fetch — the structural half of the
+        // page is still true and useful without live numbers.
         setError((e as Error).message)
       })
       .finally(() => setLoading(false))
     return () => ac.abort()
   }, [nonce])
 
+  useEffect(() => {
+    let dead = false
+    listSchedules()
+      .then((all) => {
+        if (dead) return
+        setAiling(all.filter((s) => s.isActive && s.lastDelivery
+          && (s.lastDelivery.status === 'FAILED' || !!s.lastDelivery.staleNote)))
+      })
+      .catch(() => { /* a health hint must never break the page it sits on */ })
+    return () => { dead = true }
+  }, [nonce])
+
+  const rows: Row[] = useMemo(() => REPORT_CATALOGUE.map((entry) => {
+    const d = deriveState(entry, coverage)
+    const cov = entry.coverageKey && coverage ? coverage.reports[entry.coverageKey] : undefined
+
+    // The Pipeline row counts jobs, not report rows — so the cell names its own unit
+    // rather than letting a job count read as a row count.
+    const isPipeline = entry.id === 'pipeline'
+    const jobs = coverage?.pipeline.reportJobs.reduce((s, j) => s + j.jobs, 0) ?? null
+
+    return {
+      entry,
+      state: d.state,
+      reason: d.reason,
+      staleAfterDays: d.staleAfterDays,
+      // A report opens only when the engine has a spec for it AND there is something to
+      // show: "Not ingested" and "Blocked" would open an empty grid.
+      runnable: isPipeline || (RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(d.state)),
+      href: isPipeline
+        ? '/marketing/ads/reporting/pipeline'
+        : RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(d.state)
+          ? `/marketing/ads/reporting/${entry.id}`
+          : null,
+      // A report we never request from Amazon has no measurement — not a measurement of
+      // zero. The coverage row exists and reads `rows: 0`, but rendering that as "0 rows"
+      // says we looked and found nothing, when nobody ever looked. Same rule the engine
+      // holds to everywhere else: null is never 0. The "Not ingested" pill carries it.
+      rows: isPipeline ? jobs : (entry.ingested === false ? null : (cov?.rows ?? null)),
+      unit: isPipeline ? 'jobs' : 'rows',
+      periods: isPipeline || entry.ingested === false ? null : (cov?.days ?? null),
+      window: cov && entry.ingested !== false ? fmtWindow(cov.firstDay, cov.lastDay) : null,
+      markets: (entry.ingested === false ? [] : cov?.byMarket ?? []).map((m) => ({
+        marketplace: m.marketplace,
+        lagDays: m.lagDays,
+        rows: m.rows,
+        // Amber means "this market is genuinely behind for its cadence", not "this market
+        // is the worst of the four" — otherwise a healthy 2-day-old Italy is painted amber
+        // on a report that is sparse for an entirely different reason.
+        lagging: d.state === 'sparse' && m.lagDays != null && m.lagDays > d.staleAfterDays,
+      })),
+    }
+  }), [coverage])
+
+  const columns: GridColumn<Row>[] = useMemo(() => [
+    {
+      key: 'answers',
+      label: 'Answers',
+      metric: false,
+      // The one line worth keeping from the old card. Source and Grain describe how a
+      // report is built; THIS is the question it settles, and without it a list of
+      // thirteen titles is a list you have to hover to read.
+      sortValue: (r) => r.entry.answers,
+      render: (r) => <span className="rpt-ans">{r.entry.answers}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      metric: false,
+      tip: 'A report with no rows is not automatically a broken one. Where nothing of that type is running, it reads Idle rather than failed — and where it is genuinely unavailable, the row says why.',
+      sortValue: (r) => STATE_RANK[r.state],
+      render: (r) => {
+        const meta = STATE_META[r.state]
+        return <Pill tone={meta.tone}>{meta.label}</Pill>
+      },
+    },
+    {
+      key: 'volume',
+      label: 'Volume',
+      tip: 'How much data this report holds today. The pipeline row counts jobs; every other row counts data rows.',
+      sortValue: (r) => r.rows,
+      render: (r) => (r.rows == null
+        ? <span className="rpt-dash">—</span>
+        : <span className="rpt-vol"><b>{fmtInt(r.rows)}</b> <span className="u">{r.unit}</span></span>),
+    },
+    {
+      key: 'period',
+      label: 'Period covered',
+      metric: false,
+      sortValue: (r) => r.periods,
+      render: (r) => (r.window == null
+        ? <span className="rpt-dash">—</span>
+        : (
+          <span className="rpt-period">
+            {r.periods != null && (
+              <b>{r.periods} {r.entry.cadence === 'weekly' ? (r.periods === 1 ? 'week' : 'weeks') : (r.periods === 1 ? 'day' : 'days')}</b>
+            )}
+            <span className="w">{r.window}</span>
+          </span>
+        )),
+    },
+    {
+      key: 'freshness',
+      label: 'Freshness by market',
+      metric: false,
+      tip: 'How old the newest row is, per market. Judged against this report’s own cadence — a 16-day-old weekly feed is healthy, a 3-day-old daily one is not.',
+      // The WORST market, not the overall figure: the single overall "as of" is what hid
+      // Italy — 52% of all rows — running six days behind Germany.
+      sortValue: (r) => r.markets.reduce<number | null>(
+        (w, m) => (m.lagDays != null && (w == null || m.lagDays > w) ? m.lagDays : w), null),
+      render: (r) => (r.markets.length === 0
+        ? <span className="rpt-dash">—</span>
+        : (
+          <span className="rpt-markets">
+            {r.markets.map((m) => (
+              <span
+                key={m.marketplace}
+                className={`rpt-mkt${m.lagging ? ' is-lagging' : ''}`}
+                title={`${m.marketplace}: ${fmtInt(m.rows)} rows`}
+              >
+                <span className="code">{m.marketplace}</span>
+                <span className="lag">{lagShort(m.lagDays)}</span>
+              </span>
+            ))}
+          </span>
+        )),
+    },
+  ], [])
+
   return (
     <div className="rpt">
       <AdsPageHeader
         title="Reporting"
-        subtitle="Every ads number this console can produce — where it comes from, how fresh it is, and how to get it out."
+        subtitle="Every ads number this console can produce."
         markets={[]}
         market="all"
         onMarketChange={() => {}}
@@ -209,27 +264,34 @@ export function ReportingClient() {
         showDateRange={false}
       />
 
-      <div className="rpt-lede">
-        <Info size={16} aria-hidden />
-        <span>
-          <b>An empty report is not automatically a broken one.</b> Where a report has no
-          rows because nothing of that type is running, it is marked idle rather than
-          failed — and where it is genuinely unavailable, the card says why.
-        </span>
-      </div>
-
       {error && (
         <div className="rpt-lede is-error" role="alert">
           <AlertTriangle size={16} aria-hidden />
           <span>
-            <b>Live coverage unavailable.</b> {error}. The catalogue below is still
-            accurate, but the row counts and freshness are missing.{' '}
+            <b>Live coverage unavailable.</b> {error}. Every report is still listed, but the
+            volumes and freshness are missing.{' '}
             <button type="button" className="rpt-retry" onClick={reload}>
               <RefreshCw size={12} aria-hidden /> Retry
             </button>
           </span>
         </div>
       )}
+
+      {ailing.length > 0 && (
+        <div className="rpt-lede is-warn" role="status">
+          <AlertTriangle size={16} aria-hidden />
+          <span>
+            <b>{ailing.length === 1 ? 'A scheduled report needs attention.' : `${ailing.length} scheduled reports need attention.`}</b>{' '}
+            {ailing.map((s) => s.savedReportName).join(', ')} —{' '}
+            {ailing[0].lastDelivery?.error ?? ailing[0].lastDelivery?.staleNote}{' '}
+            <button type="button" className="rpt-retry" onClick={() => setDeliveriesOpen(true)}>
+              Manage deliveries
+            </button>
+          </span>
+        </div>
+      )}
+
+      <DeliveriesModal open={deliveriesOpen} onClose={() => setDeliveriesOpen(false)} />
 
       {coverage?.warnings.length ? (
         <div className="rpt-lede is-warn" role="status">
@@ -240,77 +302,54 @@ export function ReportingClient() {
         </div>
       ) : null}
 
-      <BusinessContextPanel />
+      {/* R5 — every report below runs a day behind; this one band does not. It reads the
+          hourly stream, which is current to today in all four markets. */}
+      <TodayBand />
 
-      {/* ACR.6 (R7) — collapsed by default: it is an assumption-driven estimate sitting among
-          measured reports, so it should be opened deliberately rather than read in passing. */}
-      <IncrementalityPanel />
-
-      {REPORT_GROUPS.map((group) => {
-        const entries = REPORT_CATALOGUE.filter((r) => r.group === group)
-        if (!entries.length) return null
-        return (
-          <section key={group} className="rpt-group">
-            <h2 className="rpt-group-hd">
-              {group} <span className="count">{entries.length}</span>
-            </h2>
-            <div className="rpt-grid">
-              {entries.map((entry) =>
-                entry.id === 'pipeline' ? (
-                  <article key={entry.id} className="rpt-card">
-                    <div className="rpt-card-hd">
-                      <h3>
-                        <Link href="/marketing/ads/reporting/pipeline" className="rpt-open">
-                          {entry.title}
-                          <ArrowRight size={13} aria-hidden />
-                        </Link>
-                      </h3>
-                      <Pill tone={STATE_META.ready.tone}>{STATE_META.ready.label}</Pill>
-                    </div>
-                    <p className="rpt-answers">{entry.answers}</p>
-                    <PipelineExtras coverage={coverage} />
-                    <dl className="rpt-meta">
-                      <div>
-                        <dt>Source</dt>
-                        <dd>{entry.source}</dd>
-                      </div>
-                      <div>
-                        <dt>Grain</dt>
-                        <dd>{entry.grain}</dd>
-                      </div>
-                    </dl>
-                    <p className="rpt-note">
-                      Two known defects to fix at the source: report runs never record a
-                      row count, and signed-URL downloads keep failing.
-                    </p>
-                  </article>
-                ) : (
-                  <ReportCard key={entry.id} entry={entry} coverage={coverage} />
-                ),
-              )}
-            </div>
-          </section>
-        )
-      })}
-
-      <SchedulesPanel />
-
-      <div className="rpt-next">
-        <h3>What lands here next</h3>
-        <ol>
-          <li>
-            <b>A live Google Sheet</b> — bound to a saved report and refreshed on a schedule.
-          </li>
-          <li>
-            <b>Custom metrics and a dashboard canvas</b> — define your own formulas and
-            arrange saved reports as tiles.
-          </li>
-          <li>
-            <b>Bring data in</b> — import the Amazon console reports the API will not give,
-            with a row-by-row preview before anything is written.
-          </li>
-        </ol>
-      </div>
+      <AdsDataGrid<Row>
+        rows={rows}
+        loading={loading && !coverage}
+        rowId={(r) => r.entry.id}
+        noun="Report"
+        firstColLabel="Report"
+        firstSortValue={(r) => r.entry.title}
+        renderFirst={(r) => (
+          <span className="rpt-name">
+            <span className="t">
+              {r.href
+                ? <Link href={r.href} className="rpt-open">{r.entry.title}</Link>
+                : <span className="rpt-open is-off">{r.entry.title}</span>}
+              {/* Source, grain, cadence and the standing caveat live here rather than on the
+                  row: true, occasionally needed, and not worth the vertical space until asked. */}
+              <HoverCard
+                placement="below"
+                delay={200}
+                rows={[
+                  ['Source', r.entry.source],
+                  ['Grain', r.entry.grain],
+                  ['Cadence', r.entry.cadence],
+                  ...(r.entry.note ? [['Caveat', r.entry.note] as [string, string]] : []),
+                ]}
+              >
+                <span className="rpt-i" aria-label={`About ${r.entry.title}`}><Info size={12} aria-hidden /></span>
+              </HoverCard>
+            </span>
+            {/* Only where the state needs explaining — nine of thirteen rows stay one line. */}
+            {r.reason && <span className="why">{r.reason}</span>}
+          </span>
+        )}
+        columns={columns}
+        groupBy={(r) => ({
+          key: r.entry.group,
+          label: r.entry.group,
+          order: REPORT_GROUPS.indexOf(r.entry.group),
+        })}
+        selectable={false}
+        showTotal={false}
+        storageKey="rpt-library-cols"
+        onRowClick={(r) => { if (r.href) window.location.assign(r.href) }}
+        emptyLabel="No reports."
+      />
     </div>
   )
 }

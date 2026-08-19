@@ -1,35 +1,39 @@
 'use client'
 
 /**
- * RPT.10 — KPI tiles, period comparison and the trend chart.
+ * RPT.10 · R4 — KPI tiles, period comparison, and the chart they drive.
  *
- * Built to the dataviz rules, and two of them shaped the design:
+ * The tiles ARE the chart's control, which is the Amazon Advertising console's model and the
+ * one operators already know: tick Impressions, Clicks, Sales and ACOS and all four are
+ * plotted together. Clicking a tile toggles its metric on and off the chart; the chart's own
+ * picker does the same thing to the same state, so the two can never disagree.
  *
- * 1. **No dual-axis chart, ever.** Both chart components already in this repo
- *    (design-system PerformanceGraph, insights TrendChart) put a second measure
- *    on a right-hand axis, which makes two unrelated scales look like they cross.
- *    So this uses SMALL MULTIPLES instead: every tile owns a single-series
- *    sparkline, and the focused chart below plots exactly one metric. One scale,
- *    one line, nothing to misread.
+ * This replaced a single-metric chart. The old note here argued for one line on the grounds
+ * that a second axis makes unrelated scales look like they cross — a real hazard, and the
+ * reason `MetricChart` gives every plotted metric its OWN domain and says so under the legend,
+ * rather than the reason to refuse the question. "Show me spend against sales" is the question,
+ * and a chart that cannot answer it sends you to Amazon's console to ask it there.
  *
- * 2. **A single series needs no categorical palette.** Every chart here has one
- *    line, so identity is never encoded by hue — the title names it. One
- *    validated accent is used throughout (#2a78d6 light / #3987e5 dark, both
- *    passing all six checks against this console's real surfaces).
- *
- * Delta direction uses status colour PLUS an arrow PLUS a signed number, never
- * colour alone — and metrics with no preferred direction (spend) are shown
- * uncoloured rather than editorialised into good or bad.
+ * Delta direction still uses status colour PLUS an arrow PLUS a signed number, never colour
+ * alone — and metrics with no preferred direction (spend) stay uncoloured rather than being
+ * editorialised into good or bad.
  */
 import { useMemo } from 'react'
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
-import {
-  Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts'
-import { formatCell } from './report-api'
+import { Area, AreaChart, ResponsiveContainer } from 'recharts'
+import { MetricChart, type ChartMetric, type MetricUnit } from '../_shared/MetricChart'
+import { formatCell, type ColumnFormat } from './report-api'
 import { deltaIsGood, type CompareMode, type KpiMetric, type SummaryResult } from './summary-api'
 
 const BUCKET_LABEL: Record<string, string> = { day: 'day', week: 'week', month: 'month' }
+
+/** The report vocabulary (a column format) in the chart's (a unit). */
+function unitOf(format: ColumnFormat): MetricUnit {
+  if (format === 'money') return 'eur'
+  if (format === 'pct') return 'pct'
+  if (format === 'ratio') return 'ratio'
+  return 'count'
+}
 
 function fmtDelta(d: number | null): string {
   if (d == null) return '—'
@@ -40,28 +44,17 @@ function fmtDelta(d: number | null): string {
   return `${pct > 0 ? '+' : '−'}${abs.toLocaleString('en-GB', { maximumFractionDigits: 1 })}%`
 }
 
-function shortDay(iso: string, bucket: string): string {
-  const d = new Date(`${iso}T00:00:00Z`)
-  if (bucket === 'month') return d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' })
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
-}
-
-function Sparkline({ data, metricId }: { data: Array<Record<string, number | string | null>>; metricId: string }) {
+function Sparkline({ data, metricId, color }: {
+  data: Array<Record<string, number | string | null>>; metricId: string; color: string
+}) {
   if (data.length < 2) return <div className="rpt-spark-empty" aria-hidden />
   return (
     <div className="rpt-spark" aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
           <Area
-            type="monotone"
-            dataKey={metricId}
-            stroke="var(--rpt-series-1)"
-            strokeWidth={2}
-            fill="var(--rpt-series-1)"
-            fillOpacity={0.12}
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
+            type="monotone" dataKey={metricId} stroke={color} strokeWidth={2}
+            fill={color} fillOpacity={0.12} dot={false} isAnimationActive={false} connectNulls
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -70,13 +63,14 @@ function Sparkline({ data, metricId }: { data: Array<Record<string, number | str
 }
 
 function KpiTile({
-  m, currency, series, focused, onFocus,
+  m, currency, series, plotted, color, onToggle,
 }: {
   m: KpiMetric
   currency: string
   series: SummaryResult['series']
-  focused: boolean
-  onFocus: () => void
+  plotted: boolean
+  color: string
+  onToggle: () => void
 }) {
   const good = deltaIsGood(m)
   const Icon = m.deltaPct == null || Math.abs(m.deltaPct) < 0.001 ? Minus : m.deltaPct > 0 ? ArrowUpRight : ArrowDownRight
@@ -84,12 +78,17 @@ function KpiTile({
   return (
     <button
       type="button"
-      className={`rpt-kpi${focused ? ' on' : ''}`}
-      onClick={onFocus}
-      aria-pressed={focused}
-      title={`Show ${m.label} over time`}
+      className={`rpt-kpi${plotted ? ' on' : ''}`}
+      onClick={onToggle}
+      aria-pressed={plotted}
+      title={plotted ? `Remove ${m.label} from the chart` : `Add ${m.label} to the chart`}
     >
-      <span className="lbl">{m.label}</span>
+      <span className="lbl">
+        {/* The tile carries the line's own colour, so tile and chart identify each other
+            without the eye having to match a label to a legend. */}
+        <span className="sw" style={{ background: plotted ? color : 'transparent' }} aria-hidden />
+        {m.label}
+      </span>
       <span className="val">{formatCell(m.current, m.format, currency)}</span>
       <span className={`dlt t-${tone}`}>
         <Icon size={12} aria-hidden />
@@ -98,27 +97,48 @@ function KpiTile({
           <span className="prev">from {formatCell(m.previous, m.format, currency)}</span>
         )}
       </span>
-      <Sparkline data={series} metricId={m.id} />
+      <Sparkline data={series} metricId={m.id} color={plotted ? color : '#9aa5b4'} />
     </button>
   )
 }
 
+/** Kept in step with MetricChart's palette so a tile and its line are never different colours. */
+const SERIES_COLORS = ['#1f6fde', '#c2410c', '#15803d', '#7c3aed', '#0e7490', '#c0392b']
+
 export function ReportSummary({
-  summary, loading, focus, onFocus, compare, onCompare,
+  summary, loading, selected, onSelectedChange, compare, onCompare,
 }: {
   summary: SummaryResult | null
   loading: boolean
-  focus: string | null
-  onFocus: (id: string) => void
+  selected: string[]
+  onSelectedChange: (keys: string[]) => void
   compare: CompareMode
   onCompare: (c: CompareMode) => void
 }) {
-  const focused = useMemo(
-    () => summary?.metrics.find((m) => m.id === focus) ?? summary?.metrics[0] ?? null,
-    [summary, focus],
+  const metrics: ChartMetric[] = useMemo(
+    () => (summary?.metrics ?? []).map((m) => ({ key: m.id, label: m.label, unit: unitOf(m.format) })),
+    [summary],
   )
 
+  // Whatever the page asks for, only metrics this report actually has can be plotted — a report
+  // switch must not leave a stale key selected and the chart empty.
+  const live = useMemo(
+    () => selected.filter((k) => metrics.some((m) => m.key === k)),
+    [selected, metrics],
+  )
+  const effective = live.length > 0 ? live : metrics.slice(0, 1).map((m) => m.key)
+  const colorOf = (key: string) => SERIES_COLORS[effective.indexOf(key) % SERIES_COLORS.length]
+
   if (!summary && !loading) return null
+
+  const toggle = (id: string) => {
+    if (effective.includes(id)) {
+      if (effective.length === 1) return
+      onSelectedChange(effective.filter((k) => k !== id))
+    } else if (effective.length < SERIES_COLORS.length) {
+      onSelectedChange([...effective, id])
+    }
+  }
 
   return (
     <div className={`rpt-summary${loading ? ' is-loading' : ''}`}>
@@ -131,14 +151,9 @@ export function ReportSummary({
         <span className="rpt-seg" role="group" aria-label="Comparison period">
           {([['previous', 'Previous period'], ['yoy', 'Last year'], ['none', 'None']] as const).map(([v, l]) => (
             <button
-              key={v}
-              type="button"
-              className={compare === v ? 'on' : ''}
-              aria-pressed={compare === v}
-              onClick={() => onCompare(v)}
-            >
-              {l}
-            </button>
+              key={v} type="button" className={compare === v ? 'on' : ''}
+              aria-pressed={compare === v} onClick={() => onCompare(v)}
+            >{l}</button>
           ))}
         </span>
       </div>
@@ -150,8 +165,9 @@ export function ReportSummary({
             m={m}
             currency={summary!.currency}
             series={summary!.series}
-            focused={focused?.id === m.id}
-            onFocus={() => onFocus(m.id)}
+            plotted={effective.includes(m.id)}
+            color={colorOf(m.id)}
+            onToggle={() => toggle(m.id)}
           />
         ))}
       </div>
@@ -160,58 +176,18 @@ export function ReportSummary({
         <p className="rpt-noseries">{summary.noSeriesReason}</p>
       )}
 
-      {summary && summary.timeSeries && summary.series.length > 1 && focused && (
-        <figure className="rpt-chart">
-          <figcaption>
-            {focused.label} by {BUCKET_LABEL[summary.bucket]}
-          </figcaption>
-          <div className="plot">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={summary.series} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-                {/* Recessive grid: horizontal only, so it guides the eye without
-                    competing with the single line it exists to support. */}
-                <CartesianGrid stroke="var(--rpt-grid)" strokeDasharray="2 4" vertical={false} />
-                <XAxis
-                  dataKey="bucket"
-                  tickFormatter={(v: string) => shortDay(String(v ?? ''), summary.bucket)}
-                  tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: 'var(--rpt-grid)' }}
-                  minTickGap={28}
-                />
-                <YAxis
-                  tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={62}
-                  tickFormatter={(v: number) => formatCell(v, focused.format, summary.currency)}
-                />
-                <Tooltip
-                  cursor={{ stroke: 'var(--rpt-grid)', strokeWidth: 1 }}
-                  contentStyle={{
-                    background: 'var(--surface-card)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    color: 'var(--text-primary)',
-                  }}
-                  labelFormatter={(v) => shortDay(String(v ?? ''), summary.bucket)}
-                  formatter={(v) => [formatCell(v, focused.format, summary.currency), focused.label] as [string, string]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey={focused.id}
-                  stroke="var(--rpt-series-1)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface-card)' }}
-                  isAnimationActive={false}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </figure>
+      {summary && summary.timeSeries && summary.series.length > 1 && (
+        <MetricChart
+          title="Performance over time"
+          subtitle={`By ${BUCKET_LABEL[summary.bucket]} · ${summary.window.from} → ${summary.window.to}`}
+          // The chart keys on `date`; the summary calls the same field `bucket`.
+          data={summary.series.map((r) => ({ ...r, date: r.bucket as string }))}
+          metrics={metrics}
+          selected={effective}
+          onSelectedChange={onSelectedChange}
+          storageKey="rpt-chart"
+          emptyLabel="No rows in this window."
+        />
       )}
     </div>
   )

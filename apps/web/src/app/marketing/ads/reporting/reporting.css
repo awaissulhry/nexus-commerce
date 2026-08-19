@@ -3,6 +3,26 @@
  *
  * Tokens only; no raw hex, so a palette change follows — the same rule trust.css states.
  *
+ * 🔴 R0 — every surface/border/text token MUST be written `rgb(var(--x))`, never `var(--x)`.
+ * `.h10-shell` (ads.css) pins those tokens to space-separated RGB CHANNELS — `--surface-card`
+ * is `255 255 255`, not `#fff` — because Tailwind composes them as `rgb(var(--x) / <alpha>)`.
+ * Used raw they are invalid values, and CSS silently discards the ENTIRE declaration: the
+ * background computes to `rgba(0,0,0,0)` and `border: 1px solid var(--border-subtle)` computes
+ * to `border-width: 0px`. This file shipped with all 155 of them raw, so every panel on the
+ * page rendered with no surface, no border, and primary/secondary/tertiary text collapsed to
+ * one inherited ink. Measured on prod 2026-08-19; do not reintroduce the bare form.
+ *
+ * The status tokens are the exception and are NOT channels — `--color-primary` and
+ * `--status-*-strong` are real hex, so they are used bare and must stay that way. That mismatch
+ * is what made the bug so hard to see: pills and accents rendered while every surface did not.
+ *
+ * 🔴 And do NOT copy `rgb(var(--x))` to a stylesheet outside this console. It is correct here
+ * only because `app/marketing/ads/layout.tsx` wraps every ads page in `.h10-shell`. At plain
+ * `:root` the DS wins and `--surface-card` is `#fff`, where `rgb(var(--surface-card))` would be
+ * `rgb(#fff)` — invalid, and the same silent failure in the other direction. Measured both ways
+ * on prod 2026-08-19; `app/shared/report/[token]/shared-report.css` sits outside the shell and
+ * its bare `var(--x)` form is right for where it lives.
+ *
  * ACR.1.6 — this file used to carry two `.dark` overrides. It no longer does: the ads console
  * is deliberately light and `.h10-shell` pins the DS tokens to prove it (ads.css). Do not add
  * `.dark` rules or `prefers-color-scheme` here; both would fire on an operator whose OS is dark
@@ -25,17 +45,30 @@
   gap: 12px;
   align-items: flex-start;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgb(var(--border-subtle));
   border-left-width: 3px;
   border-left-color: var(--status-info-strong);
   border-radius: 8px;
-  background: var(--surface-card);
+  background: rgb(var(--surface-card));
   font-size: 13px;
   line-height: 1.55;
-  color: var(--text-secondary);
+  color: rgb(var(--text-secondary));
 }
 .rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: var(--status-info-strong); }
-.rpt-lede b { color: var(--text-primary); font-weight: 650; }
+.rpt-lede b { color: rgb(var(--text-primary)); font-weight: 650; }
+
+.rpt-lede.is-error { border-left-color: var(--status-danger-strong); }
+.rpt-lede.is-error > svg { color: var(--status-danger-strong); }
+.rpt-lede.is-warn { border-left-color: var(--status-warning-strong); }
+.rpt-lede.is-warn > svg { color: var(--status-warning-strong); }
+.rpt-retry {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
+  background: transparent; cursor: pointer;
+  padding: 2px 8px; margin-left: 2px;
+  font: inherit; font-size: 12px; color: rgb(var(--text-primary));
+}
+.rpt-retry:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .rpt-group { display: flex; flex-direction: column; gap: 10px; }
 .rpt-group-hd {
@@ -47,76 +80,122 @@
   font-weight: 700;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
+  color: rgb(var(--text-tertiary));
 }
 .rpt-group-hd .count {
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--text-tertiary);
+  color: rgb(var(--text-tertiary));
   opacity: .75;
 }
 
-.rpt-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 10px;
-}
-
-.rpt-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 15px;
-  border: 1px solid var(--border-subtle);
+/* ── R5 · today so far ──────────────────────────────────────────────────────
+   One band, three lines: the figures, how complete they are, and which market they are
+   actually made of. Deliberately not a card wall — it sits above a list whose job is to be
+   scanned, and anything taller pushes that list off the first screen again. */
+.rpt-today {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgb(var(--border-subtle));
+  border-left: 3px solid var(--status-success-strong);
   border-radius: 8px;
-  background: var(--surface-card);
+  background: rgb(var(--surface-card));
 }
-/* A report we cannot serve should not read as an equal peer of one we can. */
-.rpt-card.is-unavailable { background: var(--surface-sunken); border-style: dashed; }
-
-.rpt-card-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.rpt-card-hd h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.35;
-  color: var(--text-primary);
+.rpt-today.is-loading { opacity: .6; transition: opacity .12s; }
+.rpt-today .hd { display: flex; align-items: center; gap: 10px; }
+.rpt-today .lbl {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--status-success-strong);
+}
+/* The stream lags about an hour. A total labelled "today" that hides that reads as a slump. */
+.rpt-today .thru { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+.rpt-today .rf {
+  display: inline-flex; align-items: center; border: 0; background: transparent;
+  cursor: pointer; padding: 2px; color: rgb(var(--text-tertiary)); border-radius: 4px;
+}
+.rpt-today .rf:hover { color: var(--color-primary); background: rgb(var(--surface-sunken)); }
+.rpt-today .open {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
+  font-size: 12px; font-weight: 600; text-decoration: none; color: var(--color-primary);
 }
 
-.rpt-lede.is-error { border-left-color: var(--status-danger-strong); }
-.rpt-lede.is-error > svg { color: var(--status-danger-strong); }
-.rpt-lede.is-warn { border-left-color: var(--status-warning-strong); }
-.rpt-lede.is-warn > svg { color: var(--status-warning-strong); }
-.rpt-retry {
-  display: inline-flex; align-items: center; gap: 4px;
-  border: 1px solid var(--border-subtle); border-radius: 6px;
-  background: transparent; cursor: pointer;
-  padding: 2px 8px; margin-left: 2px;
-  font: inherit; font-size: 12px; color: var(--text-primary);
+.rpt-today .figs { display: flex; flex-wrap: wrap; gap: 6px 26px; }
+.rpt-today .fig { display: flex; flex-direction: column; gap: 1px; }
+.rpt-today .fig .k {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
-.rpt-retry:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.rpt-today .fig b {
+  font-size: 17px; font-weight: 700; line-height: 1.2;
+  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
+}
 
-.rpt-answers { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.rpt-today .mkts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; }
+.rpt-today .mkt {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 1px 7px; border-radius: 5px;
+  border: 1px solid rgb(var(--border-subtle));
+  font-size: 11px; line-height: 1.5; color: rgb(var(--text-tertiary));
+}
+.rpt-today .mkt .code { font-weight: 700; color: rgb(var(--text-secondary)); }
+.rpt-today .mkt .sh { font-variant-numeric: tabular-nums; }
+.rpt-today .of { font-size: 11px; color: rgb(var(--text-tertiary)); }
 
-/* Measured figures — the RPT.2 half of the card. */
-.rpt-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 1px; }
-.rpt-stat { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
-.rpt-stat b {
-  font-size: 13px; font-weight: 700; color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
+/* ── R1 · the library grid ──────────────────────────────────────────────────
+   Cells for the one `AdsDataGrid` that replaced thirteen cards. Everything here
+   lives inside the Ad Manager's own `td.nm` / `td.ed` / `td.num`, so it only ever
+   adds — no rule fights ads.css, and none of it sets a width. `td.nm` is 360px
+   there, and a px cap on the CONTENT is a guess about another stylesheet that
+   spills the moment that number changes. */
+
+.rpt-name { display: flex; flex-direction: column; gap: 2px; max-width: 100%; min-width: 0; }
+.rpt-name .t { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The reason a report is not simply "Ready". Present on four rows of thirteen;
+   the other nine stay a single line. */
+.rpt-name .why {
+  font-size: 11.5px; line-height: 1.45; color: rgb(var(--text-tertiary));
+  white-space: normal;
+}
+
+.rpt-i {
+  display: inline-flex; flex: 0 0 auto; align-items: center;
+  color: rgb(var(--text-tertiary)); cursor: help;
+}
+.rpt-i:hover { color: var(--color-primary); }
+
+/* A report we cannot open should not read as an equal peer of one we can. */
+.rpt-open.is-off { color: rgb(var(--text-tertiary)); }
+
+.rpt-vol { font-variant-numeric: tabular-nums; }
+.rpt-vol b { font-weight: 700; color: rgb(var(--text-primary)); }
+.rpt-vol .u { font-size: 11px; color: rgb(var(--text-tertiary)); }
+
+.rpt-period { display: flex; flex-direction: column; gap: 1px; line-height: 1.4; }
+.rpt-period b { font-weight: 650; color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums; }
+.rpt-period .w { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
+
+.rpt-dash { color: rgb(var(--text-tertiary)); }
+
+/* What the report settles, in one line. Wraps rather than truncating: a clipped
+   question is a question you have to hover to finish reading, which is the cost
+   the card layout was paying in full height. */
+.rpt-ans {
+  display: block; max-width: 46ch;
+  font-size: 12.5px; line-height: 1.45;
+  color: rgb(var(--text-secondary)); white-space: normal;
 }
 
 /* Per-market freshness. The lagging market is called out rather than averaged
    away — a single overall "as of" is exactly what hid Italy running a week behind. */
-.rpt-markets { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 1px; }
+.rpt-markets { display: flex; flex-wrap: wrap; gap: 4px; }
 .rpt-mkt {
   display: inline-flex; align-items: baseline; gap: 5px;
   padding: 2px 7px; border-radius: 5px;
-  border: 1px solid var(--border-subtle);
-  font-size: 11px; line-height: 1.5; color: var(--text-tertiary);
+  border: 1px solid rgb(var(--border-subtle));
+  font-size: 11px; line-height: 1.5; color: rgb(var(--text-tertiary));
 }
-.rpt-mkt .code { font-weight: 700; color: var(--text-secondary); letter-spacing: .02em; }
+.rpt-mkt .code { font-weight: 700; color: rgb(var(--text-secondary)); letter-spacing: .02em; }
 .rpt-mkt .lag { font-variant-numeric: tabular-nums; }
 .rpt-mkt.is-lagging {
   border-color: var(--status-warning-strong);
@@ -124,33 +203,7 @@
 }
 .rpt-mkt.is-lagging .code { color: var(--status-warning-strong); }
 
-.rpt-reason { color: var(--text-secondary); }
 
-.rpt-meta { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 0; }
-.rpt-meta > div { display: flex; gap: 8px; font-size: 11.5px; line-height: 1.45; }
-.rpt-meta dt { flex: 0 0 44px; font-weight: 650; color: var(--text-tertiary); }
-.rpt-meta dd { margin: 0; min-width: 0; color: var(--text-secondary); }
-
-.rpt-note {
-  margin: 2px 0 0;
-  padding-top: 8px;
-  border-top: 1px dashed var(--border-subtle);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-tertiary);
-}
-
-/* What this page becomes — stated plainly rather than implied by empty space. */
-.rpt-next {
-  padding: 14px 15px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-card);
-}
-.rpt-next h3 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--text-primary); }
-.rpt-next ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
-.rpt-next li { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
-.rpt-next li b { color: var(--text-primary); font-weight: 650; }
 
 /* ── RPT.3 · report runner ──────────────────────────────────────────────── */
 
@@ -158,9 +211,6 @@
   display: inline-flex; align-items: center; gap: 5px;
   color: inherit; text-decoration: none;
 }
-.rpt-open svg { opacity: 0; transform: translateX(-3px); transition: opacity .12s, transform .12s; }
-.rpt-card:hover .rpt-open { color: var(--color-primary); }
-.rpt-card:hover .rpt-open svg { opacity: 1; transform: translateX(0); }
 
 /* Filter bar. Wraps rather than scrolls — a hidden filter is a filter you forget
    is applied, and a wrong number you cannot explain. */
@@ -169,30 +219,14 @@
   display: inline-flex; align-items: center; gap: 5px;
   align-self: center; margin-right: 4px;
   font-size: 12.5px; font-weight: 600; text-decoration: none;
-  color: var(--text-secondary);
+  color: rgb(var(--text-secondary));
 }
 .rpt-back:hover { color: var(--color-primary); }
 
 .rpt-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .rpt-field > span {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--text-tertiary);
-}
-.rpt-field input[type='date'] {
-  height: 30px; padding: 0 8px;
-  border: 1px solid var(--border-subtle); border-radius: 6px;
-  background: transparent; color: var(--text-primary);
-  font: inherit; font-size: 12.5px;
-}
-.rpt-search {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 30px; padding: 0 9px;
-  border: 1px solid var(--border-subtle); border-radius: 6px;
-  color: var(--text-tertiary);
-}
-.rpt-search input {
-  border: 0; outline: none; background: transparent;
-  font: inherit; font-size: 12.5px; color: var(--text-primary); width: 100%;
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -200,14 +234,6 @@
 }
 
 
-/* Sortable header: our own control, because sorting is server-side. */
-.rpt-th {
-  display: inline-flex; align-items: center; gap: 4px;
-  border: 0; background: transparent; padding: 0; cursor: pointer;
-  font: inherit; color: inherit;
-}
-.rpt-th.on { color: var(--color-primary); }
-.rpt-num { font-variant-numeric: tabular-nums; }
 
 
 /* Keep the previous result readable while the next one loads rather than
@@ -218,35 +244,35 @@
 .rpt-saved {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
   padding: 8px 12px;
-  border: 1px solid var(--border-subtle); border-radius: 8px;
-  background: var(--surface-card);
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 8px;
+  background: rgb(var(--surface-card));
 }
 .rpt-saved-lbl {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--text-tertiary);
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
-.rpt-saved-empty { font-size: 12px; color: var(--text-tertiary); }
+.rpt-saved-empty { font-size: 12px; color: rgb(var(--text-tertiary)); }
 .rpt-saved-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 
 .rpt-chip {
   display: inline-flex; align-items: stretch;
-  border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden;
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; overflow: hidden;
 }
 .rpt-chip.on { border-color: var(--color-primary); }
 .rpt-chip-main {
   display: inline-flex; align-items: center; gap: 6px;
   border: 0; background: transparent; cursor: pointer;
-  padding: 4px 9px; font: inherit; font-size: 12.5px; color: var(--text-primary);
+  padding: 4px 9px; font: inherit; font-size: 12.5px; color: rgb(var(--text-primary));
 }
 .rpt-chip.on .rpt-chip-main { color: var(--color-primary); font-weight: 600; }
-.rpt-chip-main .v { font-size: 10.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.rpt-chip-main .v { font-size: 10.5px; color: rgb(var(--text-tertiary)); font-variant-numeric: tabular-nums; }
 .rpt-chip-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-left: 1px solid var(--border-subtle);
-  background: transparent; cursor: pointer; padding: 0 7px; color: var(--text-tertiary);
+  border: 0; border-left: 1px solid rgb(var(--border-subtle));
+  background: transparent; cursor: pointer; padding: 0 7px; color: rgb(var(--text-tertiary));
 }
-.rpt-chip-icon:hover, .rpt-chip-main:hover { background: var(--surface-sunken); }
+.rpt-chip-icon:hover, .rpt-chip-main:hover { background: rgb(var(--surface-sunken)); }
 
 .rpt-saved-err {
   display: inline-flex; align-items: center; gap: 6px;
@@ -254,56 +280,74 @@
 }
 .rpt-saved-err button { border: 0; background: transparent; cursor: pointer; color: inherit; padding: 0; }
 
-.rpt-modal-p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); }
+.rpt-modal-p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: rgb(var(--text-secondary)); }
 .rpt-input {
   width: 100%; height: 32px; padding: 0 9px;
-  border: 1px solid var(--border-subtle); border-radius: 6px;
-  background: transparent; color: var(--text-primary); font: inherit; font-size: 13px;
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
+  background: transparent; color: rgb(var(--text-primary)); font: inherit; font-size: 13px;
 }
 
 .rpt-versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rpt-versions li {
   padding: 9px 11px;
-  border: 1px solid var(--border-subtle); border-radius: 6px;
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
 }
 .rpt-versions li.is-current { border-color: var(--status-success-strong); }
-.rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-primary); }
-.rpt-versions .when { color: var(--text-tertiary); font-size: 11.5px; }
-.rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(var(--text-primary)); }
+.rpt-versions .when { color: rgb(var(--text-tertiary)); font-size: 11.5px; }
+.rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: rgb(var(--text-secondary)); }
 .rpt-restore {
   display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
-  border: 1px solid var(--border-subtle); border-radius: 5px; background: transparent;
-  cursor: pointer; padding: 2px 7px; font: inherit; font-size: 11.5px; color: var(--text-secondary);
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 5px; background: transparent;
+  cursor: pointer; padding: 2px 7px; font: inherit; font-size: 11.5px; color: rgb(var(--text-secondary));
 }
 .rpt-restore:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* ── RPT.6 · R6 · deliveries ─────────────────────────────────────────────────
+   One modal holds scheduled email and share links, so the rows below are shared by both:
+   a schedule and a live link are the same kind of thing — something standing that sends
+   this data somewhere, and that you must be able to see and stop. */
+.rpt-dl-h {
+  display: flex; align-items: center; gap: 7px;
+  margin: 16px 0 8px; padding-top: 12px;
+  border-top: 1px solid rgb(var(--border-subtle));
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
+}
+.rpt-dl-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.rpt-dl-h .n {
+  margin-left: 2px; padding: 0 6px; border-radius: 999px;
+  background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
+  font-size: 11px; letter-spacing: 0; font-variant-numeric: tabular-nums;
+}
 
 /* ── RPT.6 · scheduled deliveries ───────────────────────────────────────── */
 
 .rpt-sched {
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle); border-radius: 8px;
-  background: var(--surface-card);
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 8px;
+  background: rgb(var(--surface-card));
 }
-.rpt-sched-empty { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
-.rpt-sched-msg { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); }
+.rpt-sched-empty { margin: 0; font-size: 12.5px; color: rgb(var(--text-tertiary)); }
+.rpt-sched-msg { margin: 2px 0 0; font-size: 12.5px; color: rgb(var(--text-secondary)); }
 .rpt-sched-foot { display: flex; align-items: center; gap: 10px; }
 
 .rpt-sched-row {
   display: flex; align-items: flex-start; gap: 12px;
   padding: 9px 11px;
-  border: 1px solid var(--border-subtle); border-radius: 6px;
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
 }
 .rpt-sched-row.is-off { opacity: .6; }
 .rpt-sched-row .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .rpt-sched-row .nm {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: var(--text-primary);
+  font-size: 13px; color: rgb(var(--text-primary));
 }
-.rpt-sched-row .sub { font-size: 12px; color: var(--text-secondary); }
+.rpt-sched-row .sub { font-size: 12px; color: rgb(var(--text-secondary)); }
 .rpt-sched-row .last {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-top: 2px; font-size: 11.5px; color: var(--text-tertiary);
+  margin-top: 2px; font-size: 11.5px; color: rgb(var(--text-tertiary));
 }
 .rpt-sched-row .stale {
   display: inline-flex; align-items: center; gap: 4px;
@@ -333,19 +377,19 @@ select.rpt-input { height: 32px; }
 .rpt-summary {
   display: flex; flex-direction: column; gap: 10px;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle); border-radius: 8px;
-  background: var(--surface-card);
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 8px;
+  background: rgb(var(--surface-card));
 }
 .rpt-summary.is-loading { opacity: .6; transition: opacity .12s; }
 .rpt-summary-hd { display: flex; align-items: center; gap: 12px; }
-.rpt-summary-hd .ttl { font-size: 12px; color: var(--text-tertiary); }
+.rpt-summary-hd .ttl { font-size: 12px; color: rgb(var(--text-tertiary)); }
 
-.rpt-seg { display: inline-flex; margin-left: auto; border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+.rpt-seg { display: inline-flex; margin-left: auto; border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; overflow: hidden; }
 .rpt-seg button {
   border: 0; background: transparent; cursor: pointer;
-  padding: 4px 10px; font: inherit; font-size: 11.5px; color: var(--text-secondary);
+  padding: 4px 10px; font: inherit; font-size: 11.5px; color: rgb(var(--text-secondary));
 }
-.rpt-seg button + button { border-left: 1px solid var(--border-subtle); }
+.rpt-seg button + button { border-left: 1px solid rgb(var(--border-subtle)); }
 .rpt-seg button.on { background: var(--color-primary); color: #fff; }
 
 .rpt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 8px; }
@@ -353,43 +397,52 @@ select.rpt-input { height: 32px; }
 .rpt-kpi {
   display: flex; flex-direction: column; gap: 2px;
   padding: 9px 11px 6px; text-align: left; cursor: pointer;
-  border: 1px solid var(--border-subtle); border-radius: 7px;
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 7px;
   background: transparent; font: inherit;
 }
 .rpt-kpi:hover { border-color: var(--color-primary); }
 .rpt-kpi.on { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); }
 .rpt-kpi .lbl {
+  display: flex; align-items: center; gap: 6px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--text-tertiary);
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
+/* R4 — the tile carries its line's colour, so a tile and its series identify each other
+   without the eye having to match a label against a legend. Reserved even when the metric is
+   not plotted, so ticking one does not shunt the label sideways. */
+.rpt-kpi .lbl .sw {
+  width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0;
+  border: 1px solid rgb(var(--border-default));
+}
+.rpt-kpi.on .lbl .sw { border-color: transparent; }
 .rpt-kpi .val {
   font-size: 19px; font-weight: 700; line-height: 1.25;
-  color: var(--text-primary); font-variant-numeric: tabular-nums;
+  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
 }
 /* Status colour is ALWAYS paired with an arrow and a signed number — the dataviz
    rule that a status hue never carries meaning on its own. Metrics with no
    preferred direction (spend) stay in ink. */
 .rpt-kpi .dlt {
   display: inline-flex; align-items: center; gap: 3px;
-  font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-secondary);
+  font-size: 11.5px; font-variant-numeric: tabular-nums; color: rgb(var(--text-secondary));
 }
 .rpt-kpi .dlt.t-good { color: #0ca30c; }
 .rpt-kpi .dlt.t-bad { color: #d03b3b; }
-.rpt-kpi .dlt .prev { margin-left: 4px; color: var(--text-tertiary); }
+.rpt-kpi .dlt .prev { margin-left: 4px; color: rgb(var(--text-tertiary)); }
 
 .rpt-spark { height: 30px; margin-top: 4px; }
 .rpt-spark-empty { height: 30px; margin-top: 4px; }
 
 .rpt-noseries {
   margin: 0; padding: 10px 12px;
-  border-left: 3px solid var(--border-subtle); border-radius: 4px;
-  background: var(--surface-sunken);
-  font-size: 12.5px; line-height: 1.5; color: var(--text-secondary);
+  border-left: 3px solid rgb(var(--border-subtle)); border-radius: 4px;
+  background: rgb(var(--surface-sunken));
+  font-size: 12.5px; line-height: 1.5; color: rgb(var(--text-secondary));
 }
 
 .rpt-chart { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .rpt-chart figcaption {
-  font-size: 12px; font-weight: 650; color: var(--text-secondary);
+  font-size: 12px; font-weight: 650; color: rgb(var(--text-secondary));
 }
 .rpt-chart .plot { height: 240px; width: 100%; }
 
@@ -398,70 +451,70 @@ select.rpt-input { height: 32px; }
 .rpt-biz {
   display: flex; flex-direction: column; gap: 12px;
   padding: 14px 15px;
-  border: 1px solid var(--border-subtle); border-radius: 8px;
-  background: var(--surface-card);
+  border: 1px solid rgb(var(--border-subtle)); border-radius: 8px;
+  background: rgb(var(--surface-card));
 }
 .rpt-biz-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .rpt-biz-kpi { display: flex; flex-direction: column; gap: 2px; }
 .rpt-biz-kpi.wide { grid-column: span 2; min-width: 0; }
 .rpt-biz-kpi .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--text-tertiary);
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
 .rpt-biz-kpi .val {
   font-size: 22px; font-weight: 700; line-height: 1.2;
-  color: var(--text-primary); font-variant-numeric: tabular-nums;
+  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
 }
-.rpt-biz-kpi .sub { font-size: 11.5px; color: var(--text-secondary); }
+.rpt-biz-kpi .sub { font-size: 11.5px; color: rgb(var(--text-secondary)); }
 
 /* Two fills with a 2px surface gap between them; both are also labelled in
    text below, so the split never depends on colour alone. ACR.1.6 — light-only, as above. */
 .rpt-split { display: flex; gap: 2px; height: 10px; margin: 5px 0 3px; }
 .rpt-split .ad { background: #2a78d6; border-radius: 3px 0 0 3px; }
-.rpt-split .org { background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 0 3px 3px 0; }
+.rpt-split .org { background: rgb(var(--surface-sunken)); border: 1px solid rgb(var(--border-subtle)); border-radius: 0 3px 3px 0; }
 
 .rpt-biz-markets { overflow-x: auto; }
 .rpt-biz-markets table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .rpt-biz-markets th {
   text-align: right; padding: 4px 10px 4px 0; font-size: 10.5px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase; color: var(--text-tertiary);
-  border-bottom: 1px solid var(--border-subtle); white-space: nowrap;
+  letter-spacing: .04em; text-transform: uppercase; color: rgb(var(--text-tertiary));
+  border-bottom: 1px solid rgb(var(--border-subtle)); white-space: nowrap;
 }
 .rpt-biz-markets th:first-child, .rpt-biz-markets td:first-child { text-align: left; }
 .rpt-biz-markets td {
-  text-align: right; padding: 5px 10px 5px 0; color: var(--text-secondary);
-  font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border-subtle);
+  text-align: right; padding: 5px 10px 5px 0; color: rgb(var(--text-secondary));
+  font-variant-numeric: tabular-nums; border-bottom: 1px solid rgb(var(--border-subtle));
 }
-.rpt-biz-markets td b { color: var(--text-primary); }
+.rpt-biz-markets td b { color: rgb(var(--text-primary)); }
 
 .rpt-biz-waste {
   padding: 10px 12px; border-radius: 6px;
-  border: 1px solid var(--border-subtle); background: var(--surface-sunken);
+  border: 1px solid rgb(var(--border-subtle)); background: rgb(var(--surface-sunken));
 }
 .rpt-biz-waste .hd {
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px;
-  font-size: 12.5px; color: var(--text-secondary);
+  font-size: 12.5px; color: rgb(var(--text-secondary));
 }
 .rpt-biz-waste .hd > svg { align-self: center; color: var(--status-warning-strong); }
 .rpt-biz-waste .amt {
-  font-size: 18px; font-weight: 700; color: var(--text-primary);
+  font-size: 18px; font-weight: 700; color: rgb(var(--text-primary));
   font-variant-numeric: tabular-nums;
 }
-.rpt-biz-waste .rule { margin: 4px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
+.rpt-biz-waste .rule { margin: 4px 0 0; font-size: 11.5px; color: rgb(var(--text-tertiary)); }
 .rpt-biz-waste .top { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .rpt-biz-waste .top li {
-  display: flex; gap: 10px; font-size: 11.5px; color: var(--text-secondary);
+  display: flex; gap: 10px; font-size: 11.5px; color: rgb(var(--text-secondary));
   font-variant-numeric: tabular-nums;
 }
-.rpt-biz-waste .top .s { min-width: 62px; text-align: right; font-weight: 650; color: var(--text-primary); }
+.rpt-biz-waste .top .s { min-width: 62px; text-align: right; font-weight: 650; color: rgb(var(--text-primary)); }
 .rpt-biz-waste .top .c { min-width: 66px; }
-.rpt-biz-waste .top .m { min-width: 26px; color: var(--text-tertiary); }
+.rpt-biz-waste .top .m { min-width: 26px; color: rgb(var(--text-tertiary)); }
 .rpt-biz-waste .top .q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .rpt-biz-caveats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .rpt-biz-caveats li {
   display: flex; gap: 6px; align-items: flex-start;
-  font-size: 11.5px; line-height: 1.5; color: var(--text-tertiary);
+  font-size: 11.5px; line-height: 1.5; color: rgb(var(--text-tertiary));
 }
 .rpt-biz-caveats li > svg { flex: 0 0 auto; margin-top: 3px; }
 
@@ -471,25 +524,11 @@ select.rpt-input { height: 32px; }
 
 .rpt-back {
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
-  font-size: 12.5px; font-weight: 600; text-decoration: none; color: var(--text-secondary);
+  font-size: 12.5px; font-weight: 600; text-decoration: none; color: rgb(var(--text-secondary));
 }
 .rpt-back:hover { color: var(--color-primary); }
 
 /* Fields inside the console filter panel: same label treatment as .ffield. */
-.h10-am-fpanel .rpt-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.h10-am-fpanel .rpt-field > span {
-  font-size: 12.5px; font-weight: 600; color: #2b3440;
-  letter-spacing: 0; text-transform: none;
-}
-/* Six fields, six columns — search sits on the same row rather than
-   orphaning onto a second one beside four empty cells. */
-.h10-am-fpanel .rpt-field.grow { grid-column: span 1; }
-.h10-am-fpanel .rpt-field input[type='date'],
-.h10-am-fpanel .rpt-search {
-  height: 34px; border: 1px solid #d8dde4; border-radius: 8px;
-  background: #fff; color: #1c2530;
-}
-.h10-am-fpanel .rpt-search input { color: #1c2530; }
 
 /* Secondary info in the toolbar — recessive beside the row count. */
 .h10-am-toolbar .rpt-meta-note { font-size: 11.5px; color: #8a93a1; }
@@ -502,55 +541,43 @@ select.rpt-input { height: 32px; }
 /* Keep the previous result readable while the next one loads. */
 .h10-am-grid.is-loading { opacity: .55; transition: opacity .12s; }
 
-/* Pager: the shared Pagination component, right-aligned BELOW the grid card on
-   the page background — exactly where the Ad Manager puts its own. */
-.rpt-pager {
-  display: flex; align-items: center; justify-content: flex-end; gap: 14px;
-  padding: 2px 2px 0;
-}
-.rpt-pager .rpp {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 12.5px; color: #5b6573;
-}
 
 /* ── The totals row ─────────────────────────────────────────────────────
-   Scoped to the report card so no other DataGrid changes. The row was the same
-   height and weight as a data row with only a hairline above it, so it read as
-   "one more row" rather than a summary — and it stated a figure covering the
-   whole result while the grid beneath it showed one page, with nothing saying
-   which. It now carries more vertical presence, a firm rule above it, and the
-   row count it actually totals. */
-.h10-am-card .h10-ds-grid tr.totals td {
-  padding-top: 13px;
-  padding-bottom: 13px;
-  border-top: 2px solid var(--border-default);
-  background: var(--surface-sunken);
-  font-weight: 700;
-  font-size: 13px;
-}
+   R3 — the weight, the rule above it and the sunken fill all come from the shared grid now
+   (`ads.css` → `.h10-am-grid tr.h10-am-total td`), so the private block that used to do it
+   here is gone. It was scoped to `.h10-ds-grid tr.totals`, the design-system grid's markup,
+   which this page no longer renders — a rule that would simply have stopped applying with
+   nothing to say so. All that is left is the label, which is this report's own wording:
+   the total covers the whole result while the rows below show one page, and it says so. */
 .rpt-total-label {
   display: inline-flex; align-items: baseline; gap: 8px;
-  font-weight: 700; color: var(--text-primary);
+  font-weight: 700; color: rgb(var(--text-primary));
 }
 .rpt-total-label .scope {
-  font-weight: 500; font-size: 11px; color: var(--text-tertiary);
+  font-weight: 500; font-size: 11px; color: rgb(var(--text-tertiary));
   white-space: nowrap;
 }
 
 /* RPT.9 — pipeline health */
 .rpt-alerts { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .rpt-alerts li { font-size: 12.5px; line-height: 1.5; }
-.rpt-feed { white-space: normal; }
-.rpt-feed .t { display: block; font-weight: 650; color: var(--text-primary); }
-.rpt-feed .s { display: block; margin-top: 1px; font-size: 11px; color: var(--text-tertiary); }
+/* R7 — inside the shared grid's `td.nm`, which is a FLEX row: without a column wrapper the
+   two lines sit side by side and the source runs into the Status pill. */
+.rpt-feed { display: flex; flex-direction: column; min-width: 0; max-width: 100%; white-space: normal; }
+/* 🔴 NOT `.t` / `.s`. `ads.css` styles `td.nm .t` as a clickable entity name — blue, 600,
+   `cursor: pointer` — and at 0,3,2 it outranks anything scoped to `.rpt-feed`. A feed name
+   is not a link and has nowhere to go, so text that looks and behaves like one is a promise
+   the row cannot keep. The fix is to stop opting into that rule, not to out-specify it. */
+.rpt-feed .fl { display: block; font-weight: 650; color: rgb(var(--text-primary)); }
+.rpt-feed .fs { display: block; margin-top: 1px; font-size: 11px; color: rgb(var(--text-tertiary)); }
 
 /* RPT.12 — custom metrics */
 .rpt-cm-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.rpt-cm-list li { padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 6px; }
+.rpt-cm-list li { padding: 8px 10px; border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; }
 .rpt-cm-list .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
 .rpt-cm-list code {
   font-size: 11.5px; padding: 1px 5px; border-radius: 4px;
-  background: var(--surface-sunken); color: var(--text-secondary);
+  background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
 }
 .rpt-cm-list .hd > button { margin-left: auto; }
 .rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--status-danger-strong); }
@@ -560,17 +587,17 @@ select.rpt-input { height: 32px; }
 }
 .rpt-cm-check.ok { color: var(--status-success-strong); }
 .rpt-cm-check.bad { color: var(--status-danger-strong); }
-.rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--text-tertiary); }
+.rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: rgb(var(--text-tertiary)); }
 .rpt-cm-avail code {
   font-size: 11px; padding: 1px 5px; margin-right: 4px; border-radius: 4px;
-  background: var(--surface-sunken); color: var(--text-secondary);
+  background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
 }
 
 /* ── RPT.15 share links ─────────────────────────────────────────────────
    Tokens only, so the dialog follows the console's light/dark theme. */
 .rpt-share { display: flex; flex-direction: column; gap: 16px; }
-.rpt-share-lede { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-secondary); }
-.rpt-share-lede b { color: var(--text-primary); font-weight: 620; }
+.rpt-share-lede { margin: 0; font-size: 13px; line-height: 1.55; color: rgb(var(--text-secondary)); }
+.rpt-share-lede b { color: rgb(var(--text-primary)); font-weight: 620; }
 
 .rpt-share-err {
   display: flex; align-items: center; gap: 6px;
@@ -579,13 +606,13 @@ select.rpt-input { height: 32px; }
 
 .rpt-share-form { display: flex; flex-direction: column; gap: 10px; }
 .rpt-share-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
-.rpt-share-form label > span { color: var(--text-secondary); font-weight: 550; }
-.rpt-share-form label em { font-style: normal; color: var(--text-muted); font-weight: 400; }
+.rpt-share-form label > span { color: rgb(var(--text-secondary)); font-weight: 550; }
+.rpt-share-form label em { font-style: normal; color: rgb(var(--text-tertiary)); font-weight: 400; }
 .rpt-share-form input,
 .rpt-share-form select {
   padding: 7px 10px; font-size: 13px; border-radius: 6px;
-  border: 1px solid var(--border-default);
-  background: var(--surface-raised); color: var(--text-primary);
+  border: 1px solid rgb(var(--border-default));
+  background: rgb(var(--surface-raised)); color: rgb(var(--text-primary));
 }
 
 /* Shown once and unrecoverable — it has to read as a warning, not a receipt. */
@@ -597,21 +624,21 @@ select.rpt-input { height: 32px; }
 .rpt-share-copyrow { display: flex; gap: 8px; align-items: center; }
 .rpt-share-copyrow input {
   flex: 1; padding: 7px 10px; font-size: 12.5px; font-family: var(--font-mono, monospace);
-  border-radius: 6px; border: 1px solid var(--border-default);
-  background: var(--surface-sunken); color: var(--text-primary);
+  border-radius: 6px; border: 1px solid rgb(var(--border-default));
+  background: rgb(var(--surface-sunken)); color: rgb(var(--text-primary));
 }
 
 .rpt-share-list { display: flex; flex-direction: column; gap: 6px; }
-.rpt-share-list h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--text-secondary); }
-.rpt-share-empty { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.rpt-share-list h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; color: rgb(var(--text-secondary)); }
+.rpt-share-empty { margin: 0; font-size: 12.5px; color: rgb(var(--text-tertiary)); }
 .rpt-share-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 6px;
-  background: var(--surface-raised);
+  padding: 8px 10px; border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
+  background: rgb(var(--surface-raised));
 }
 .rpt-share-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rpt-share-meta b { font-size: 13px; font-weight: 600; }
-.rpt-share-meta span { font-size: 11.5px; color: var(--text-muted); }
+.rpt-share-meta span { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
 
 /* ── ACR.6 (R7) — incremental return (iROAS), modeled ───────────────────────────
    Light-only, same as the rest of this file: the ads console does not ship a dark
@@ -621,7 +648,7 @@ select.rpt-input { height: 32px; }
   border: 0; background: none; padding: 0; cursor: pointer;
   font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
 }
-.rpt-iro-t svg { transition: transform .15s; color: var(--text-tertiary); }
+.rpt-iro-t svg { transition: transform .15s; color: rgb(var(--text-tertiary)); }
 .rpt-iro-t svg.open { transform: rotate(180deg); }
 .rpt-iro-tag {
   display: inline-flex; align-items: center; gap: 4px;
@@ -629,36 +656,36 @@ select.rpt-input { height: 32px; }
 }
 
 .rpt-iro {
-  padding: 14px 15px; border: 1px solid var(--border-subtle);
-  border-radius: 8px; background: var(--surface-card);
+  padding: 14px 15px; border: 1px solid rgb(var(--border-subtle));
+  border-radius: 8px; background: rgb(var(--surface-card));
 }
 .rpt-iro-lede {
-  margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+  margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: rgb(var(--text-secondary));
 }
-.rpt-iro-lede b { color: var(--text-primary); }
+.rpt-iro-lede b { color: rgb(var(--text-primary)); }
 
 .rpt-iro-ctl { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 14px; }
-.rpt-iro-seg { display: inline-flex; border: 1px solid var(--border-default); border-radius: 7px; overflow: hidden; }
+.rpt-iro-seg { display: inline-flex; border: 1px solid rgb(var(--border-default)); border-radius: 7px; overflow: hidden; }
 .rpt-iro-seg button {
-  border: 0; border-right: 1px solid var(--border-subtle); background: var(--surface-card);
-  padding: 5px 10px; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); cursor: pointer;
+  border: 0; border-right: 1px solid rgb(var(--border-subtle)); background: rgb(var(--surface-card));
+  padding: 5px 10px; font-size: 11.5px; font-weight: 700; color: rgb(var(--text-secondary)); cursor: pointer;
 }
 .rpt-iro-seg button:last-child { border-right: 0; }
 .rpt-iro-seg button.on { background: var(--color-primary); color: #fff; }
 .rpt-iro-f { display: flex; flex-direction: column; gap: 3px; }
 .rpt-iro-f > span {
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--text-tertiary);
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
 .rpt-iro-f input[type='text'], .rpt-iro-f input:not([type]) {
-  border: 1px solid var(--border-default); border-radius: 7px;
-  padding: 5px 9px; font-size: 12.5px; color: var(--text-primary); background: var(--surface-card); width: 180px;
+  border: 1px solid rgb(var(--border-default)); border-radius: 7px;
+  padding: 5px 9px; font-size: 12.5px; color: rgb(var(--text-primary)); background: rgb(var(--surface-card)); width: 180px;
 }
 .rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--color-primary); }
 .rpt-iro-csv {
   display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
-  border: 1px solid var(--border-default); border-radius: 7px; background: var(--surface-card);
-  padding: 5px 10px; font-size: 12px; font-weight: 700; color: var(--text-secondary); cursor: pointer;
+  border: 1px solid rgb(var(--border-default)); border-radius: 7px; background: rgb(var(--surface-card));
+  padding: 5px 10px; font-size: 12px; font-weight: 700; color: rgb(var(--text-secondary)); cursor: pointer;
 }
 .rpt-iro-csv:disabled { opacity: .45; cursor: default; }
 
@@ -666,37 +693,37 @@ select.rpt-input { height: 32px; }
 .rpt-iro-k { display: flex; flex-direction: column; gap: 2px; }
 .rpt-iro-k .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--text-tertiary);
+  text-transform: uppercase; color: rgb(var(--text-tertiary));
 }
 /* "est." rides in the label itself — a modelled figure that only says so in a
    tooltip is a modelled figure nobody knows is modelled. */
 .rpt-iro-k .lbl i { font-style: normal; color: var(--status-warning-strong); }
 .rpt-iro-k .val {
   font-size: 22px; font-weight: 700; line-height: 1.2;
-  color: var(--text-primary); font-variant-numeric: tabular-nums;
+  color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
 }
 .rpt-iro-k .val.em { color: var(--status-info-strong); }
-.rpt-iro-k .sub { font-size: 11.5px; color: var(--text-secondary); }
+.rpt-iro-k .sub { font-size: 11.5px; color: rgb(var(--text-secondary)); }
 
-.rpt-iro-scroll { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.rpt-iro-scroll { overflow-x: auto; border: 1px solid rgb(var(--border-subtle)); border-radius: 8px; }
 .rpt-iro-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .rpt-iro-tbl th {
-  background: var(--surface-sunken); text-align: left; padding: 7px 10px;
+  background: rgb(var(--surface-sunken)); text-align: left; padding: 7px 10px;
   font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700;
-  color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); white-space: nowrap;
+  color: rgb(var(--text-tertiary)); border-bottom: 1px solid rgb(var(--border-subtle)); white-space: nowrap;
 }
 .rpt-iro-tbl th.r, .rpt-iro-tbl td.r { text-align: right; }
 .rpt-iro-tbl td {
-  padding: 6px 10px; border-top: 1px solid var(--border-subtle);
-  color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
+  padding: 6px 10px; border-top: 1px solid rgb(var(--border-subtle));
+  color: rgb(var(--text-secondary)); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .rpt-iro-tbl tbody tr:first-child td { border-top: 0; }
-.rpt-iro-tbl .nm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
-.rpt-iro-tbl .dim { color: var(--text-muted); }
+.rpt-iro-tbl .nm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: rgb(var(--text-primary)); }
+.rpt-iro-tbl .dim { color: rgb(var(--text-tertiary)); }
 .rpt-iro-tbl .em { color: var(--status-info-strong); }
 .rpt-iro-tbl .em.b { font-weight: 700; }
-.rpt-iro-tbl .empty { text-align: center; padding: 26px 10px; color: var(--text-tertiary); }
+.rpt-iro-tbl .empty { text-align: center; padding: 26px 10px; color: rgb(var(--text-tertiary)); }
 .rpt-iro-b { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
 .rpt-iro-b.br { background: #ede9fe; color: #6d28d9; }
 .rpt-iro-b.nb { background: #e0f2fe; color: #0369a1; }
-.rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: var(--text-tertiary); line-height: 1.55; }
+.rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: rgb(var(--text-tertiary)); line-height: 1.55; }

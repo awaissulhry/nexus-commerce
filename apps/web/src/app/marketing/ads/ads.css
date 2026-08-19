@@ -630,6 +630,17 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-gsel-pop button.dis { color: #c0c7d2; cursor: not-allowed; }
 .h10-gsel-pop button.dis:hover { background: none; }
 /* chart + states */
+/* R4 — MetricChart. The picker is multi-select now, so the button carries one dot per plotted
+   metric instead of a single one, and each option shows its tick and its colour. Everything else
+   reuses .h10-gsel* above unchanged — this is the same control, doing more. */
+.h10-gmdots { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.h10-gmdots .dot { width: 9px; height: 9px; border-radius: 999px; }
+.h10-gsel-pop button { display: flex; align-items: center; gap: 8px; }
+.h10-gsel-pop button .tick { width: 10px; flex-shrink: 0; color: #1f6fde; font-weight: 700; }
+.h10-gsel-pop button .dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+/* Why two lines of different heights can both look "big". Stated once, under the legend. */
+.h10-gscale { margin: 2px 0 0; text-align: center; font-size: 11.5px; color: #8a93a1; }
+
 .h10-gchart { width: 100%; margin-top: 6px; }
 .h10-gmsg { display: flex; align-items: center; justify-content: center; height: 100%; color: #8a93a1; font-size: 13px; }
 /* hover tooltip */

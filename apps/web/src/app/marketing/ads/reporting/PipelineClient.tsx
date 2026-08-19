@@ -15,22 +15,25 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Pill } from '@/design-system/primitives/Pill'
 import type { Tone } from '@/design-system/primitives/tone'
-import { fetchPipelineHealth, type FeedStatus, type PipelineHealth } from './pipeline-api'
+import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
+import { fetchPipelineHealth, type FeedHealth, type FeedStatus, type PipelineHealth } from './pipeline-api'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import './reporting.css'
 
-const STATUS: Record<FeedStatus, { label: string; tone: Tone; Icon: typeof CheckCircle2 }> = {
-  ok: { label: 'OK', tone: 'success', Icon: CheckCircle2 },
-  late: { label: 'Late', tone: 'warning', Icon: Clock },
-  failing: { label: 'Failing', tone: 'danger', Icon: XCircle },
-  idle: { label: 'Idle', tone: 'neutral', Icon: Clock },
-  never: { label: 'No data ever', tone: 'danger', Icon: XCircle },
+// The `Icon` on each of these was never rendered — the table always drew a Pill. Dropped
+// rather than carried, along with the two lucide imports that existed only to feed it.
+const STATUS: Record<FeedStatus, { label: string; tone: Tone }> = {
+  ok: { label: 'OK', tone: 'success' },
+  late: { label: 'Late', tone: 'warning' },
+  failing: { label: 'Failing', tone: 'danger' },
+  idle: { label: 'Idle', tone: 'neutral' },
+  never: { label: 'No data ever', tone: 'danger' },
 }
 
 const ago = (iso: string | null) => {
@@ -40,6 +43,55 @@ const ago = (iso: string | null) => {
   const h = Math.round(mins / 60)
   return h < 48 ? `${h}h ago` : `${Math.round(h / 24)}d ago`
 }
+
+/**
+ * R7 — the feed table's columns, for the shared grid.
+ *
+ * "Last data" and "Last run" look redundant and are not: the first is the newest day held,
+ * the second is the last time the job fired. A job can succeed and bring back nothing, and
+ * only the gap between the two shows it — which is how the AMS hourly ingest sat rejected at
+ * the door for a month while every table reading from it looked healthy.
+ */
+const feedColumns: GridColumn<FeedHealth>[] = [
+  {
+    key: 'status', label: 'Status', metric: false,
+    sortValue: (f) => ['failing', 'never', 'late', 'idle', 'ok'].indexOf(f.status),
+    render: (f) => <Pill tone={STATUS[f.status].tone}>{STATUS[f.status].label}</Pill>,
+  },
+  {
+    key: 'lastData', label: 'Last data', metric: false,
+    sortValue: (f) => f.lastDataDay,
+    render: (f) => f.lastDataDay ?? '—',
+  },
+  {
+    key: 'lag', label: 'Lag',
+    tip: 'Days between the newest row held and today. Judged against this feed’s own cadence, not one global threshold.',
+    sortValue: (f) => f.lagDays,
+    render: (f) => (f.lagDays == null ? '—' : `${f.lagDays}d`),
+  },
+  {
+    key: 'rows', label: 'Rows',
+    sortValue: (f) => f.rows,
+    render: (f) => f.rows.toLocaleString('en-GB'),
+  },
+  {
+    key: 'cadence', label: 'Cadence', metric: false,
+    sortValue: (f) => f.cadence,
+    render: (f) => f.cadence,
+  },
+  {
+    key: 'lastRun', label: 'Last run', metric: false,
+    sortValue: (f) => f.lastRunAt,
+    render: (f) => (
+      <>{ago(f.lastRunAt)}{f.recentFailures > 0 && <> · <b>{f.recentFailures} failed</b></>}</>
+    ),
+  },
+  {
+    key: 'cron', label: 'Cron', metric: false,
+    sortValue: (f) => f.cronJob,
+    render: (f) => f.cronJob ?? '—',
+  },
+]
 
 export function PipelineClient() {
   const [h, setH] = useState<PipelineHealth | null>(null)
@@ -112,47 +164,30 @@ export function PipelineClient() {
         </div>
       )}
 
-      <div className="h10-am-card">
-        <div className="h10-am-toolbar">
-          <span className="cnt">{h ? <><b>{h.feeds.length}</b> feeds</> : 'Loading…'}</span>
-          {h && <span className="rpt-meta-note">checked {ago(h.asOf)} · {h.elapsedMs} ms</span>}
-        </div>
-        <div className="h10-am-grid">
-          <table>
-            <thead>
-              <tr>
-                <th>Feed</th><th>Status</th><th>Last data</th><th className="num">Lag</th>
-                <th className="num">Rows</th><th>Cadence</th><th>Last run</th><th>Cron</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(h?.feeds ?? []).map((f) => {
-                const s = STATUS[f.status]
-                return (
-                  <tr key={f.id}>
-                    {/* Deliberately NOT td.nm — that is the campaigns grid's flex
-                        name-cell, whose inline badge does not shrink and was
-                        overflowing across the Status pill. Two stacked lines
-                        instead, which also reads better at this density. */}
-                    <td className="rpt-feed">
-                      <span className="t">{f.label}</span>
-                      <span className="s">{f.source}</span>
-                    </td>
-                    <td><Pill tone={s.tone}>{s.label}</Pill></td>
-                    <td>{f.lastDataDay ?? '—'}</td>
-                    <td className="num">{f.lagDays == null ? '—' : `${f.lagDays}d`}</td>
-                    <td className="num">{f.rows.toLocaleString('en-GB')}</td>
-                    <td>{f.cadence}</td>
-                    <td>{ago(f.lastRunAt)}{f.recentFailures > 0 && <> · <b>{f.recentFailures} failed</b></>}</td>
-                    <td>{f.cronJob ?? '—'}</td>
-                  </tr>
-                )
-              })}
-              {h?.feeds.some((f) => f.note) && null}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <AdsDataGrid<FeedHealth>
+        rows={h?.feeds ?? []}
+        loading={loading && !h}
+        rowId={(f) => f.id}
+        noun="Feed"
+        firstColLabel="Feed"
+        firstSortValue={(f) => f.label}
+        /* 🔴 `td.nm` is the campaigns grid's FLEX name cell, so two sibling spans would sit
+           side by side and the source line would run into the Status pill — which is exactly
+           what happened when this page first tried it. A flex-column wrapper capped at 100%
+           stacks them; no width is guessed, because `td.nm`'s 360px belongs to ads.css. */
+        renderFirst={(f) => (
+          <span className="rpt-feed">
+            <span className="fl">{f.label}</span>
+            <span className="fs">{f.source}</span>
+          </span>
+        )}
+        columns={feedColumns}
+        selectable={false}
+        showTotal={false}
+        storageKey="rpt-pipeline-cols"
+        emptyLabel="No feeds configured."
+        toolbarLeft={h ? <span className="rpt-meta-note">checked {ago(h.asOf)} · {h.elapsedMs} ms</span> : undefined}
+      />
 
       {h && (
         <div className="rpt-biz">

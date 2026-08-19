@@ -120,14 +120,29 @@ export function formatCell(v: unknown, format: ColumnFormat, currency: string): 
   }
 }
 
-/** YYYY-MM-DD for a Date, in UTC so it matches the server's date columns. */
-export const isoDay = (d: Date): string => d.toISOString().slice(0, 10)
+/**
+ * YYYY-MM-DD for a Date, read in LOCAL parts.
+ *
+ * 🔴 R2 — this was `toISOString().slice(0,10)`, i.e. UTC. That is not interchangeable with the
+ * local form: measured in the operator's own timezone (Europe/Rome, UTC+2), a Date at local
+ * midnight — which is exactly what `DateRangePicker` produces for every day you click —
+ * serialises one day EARLY under UTC. Picking 19 Aug asked the server for 18 Aug.
+ *
+ * The runner now writes the picked range in local days, so the default window has to speak the
+ * same vocabulary or the two disagree for the two hours after local midnight: the header would
+ * open on a range ending yesterday while the picker's own "Today" meant today. One control,
+ * one meaning. The calendar is rendered in local time, so local is the side to standardise on.
+ */
+export const isoDay = (d: Date): string => {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
 
 /** Default window: the trailing 30 days, ending today. */
 export function defaultRange(): { from: string; to: string } {
   const to = new Date()
   const from = new Date(to)
-  from.setUTCDate(from.getUTCDate() - 29)
+  from.setDate(from.getDate() - 29)
   return { from: isoDay(from), to: isoDay(to) }
 }
 
