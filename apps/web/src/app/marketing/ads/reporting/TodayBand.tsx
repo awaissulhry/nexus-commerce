@@ -30,7 +30,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, RefreshCw } from 'lucide-react'
-import { formatCell, isoDay, runReport, type ColumnMeta, type ReportParams } from './report-api'
+import { formatCell, runReport, type ColumnMeta, type ReportParams } from './report-api'
+
+/**
+ * 🔴 The UTC day, NOT the local one — and this is the opposite of what the date picker wants.
+ *
+ * The Marketing Stream buckets by hour IN UTC (`ads-report-specs.ts`: "Hour of day in UTC, as
+ * Amazon Marketing Stream delivers it"). Asking for the LOCAL day therefore asks for the wrong
+ * day for as long as the two disagree: measured on prod at 00:24 Europe/Rome, the local date was
+ * already 2026-08-20 while UTC was still 22:00 on the 19th, so the query returned **0 rows** and
+ * the band vanished — while 22 hours of real data sat under the previous UTC date.
+ *
+ * `report-api`'s `isoDay` is local on purpose (R2): the picker draws a local calendar over
+ * per-marketplace daily feeds. Both are right; they are answering different questions, which is
+ * exactly why this one is spelled out here rather than shared.
+ */
+function utcDay(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+/** "19 Aug" from a YYYY-MM-DD, read back in UTC so it cannot shift the day it just chose. */
+function shortUtc(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`)
+    .toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
 
 /** The stream is hourly, so anything finer is polling for its own sake. */
 const REFRESH_MS = 5 * 60 * 1000
@@ -39,6 +62,8 @@ const REFRESH_MS = 5 * 60 * 1000
 const SHOWN = ['impressions', 'clicks', 'cost', 'sales', 'orders', 'acos']
 
 interface Today {
+  /** The UTC day these figures cover — stated, never assumed to be the reader's today. */
+  day: string
   columns: ColumnMeta[]
   totals: Record<string, unknown> | null
   markets: Array<{ marketplace: string; impressions: number }>
@@ -74,7 +99,7 @@ function wholePercentShares(values: number[]): number[] {
 }
 
 function params(groupBy: string[], pageSize: number): ReportParams {
-  const day = isoDay(new Date())
+  const day = utcDay(new Date())
   return {
     reportId: 'hourly',
     from: day, to: day,
@@ -103,6 +128,7 @@ export function TodayBand() {
           .map((r) => Number(r.hour))
           .filter((h) => Number.isFinite(h))
         setData({
+          day: utcDay(new Date()),
           columns: byMarket.columns,
           totals: byMarket.totals,
           markets: byMarket.rows
@@ -142,17 +168,21 @@ export function TodayBand() {
     [data],
   )
 
-  if (error) return null // the report list below is the page; a live extra must never break it
-  if (!loading && (!data || data.newestHour == null)) return null
+  // A failed fetch stays silent: the report list below is the page, and a live extra must never
+  // break it. An EMPTY day does not — it renders and says it is waiting. Returning null there
+  // (which this did) made the whole band disappear for the first hours of every UTC day, which
+  // reads as a removed feature rather than as a feed that has not reported yet.
+  if (error || (!loading && !data)) return null
 
   return (
     <section className={`rpt-today${loading ? ' is-loading' : ''}`} aria-label="Today so far">
       <div className="hd">
         <span className="lbl">Today so far</span>
         <span className="thru">
+          {data ? `${shortUtc(data.day)} UTC · ` : ''}
           {data?.newestHour != null
-            ? `through ${String(data.newestHour).padStart(2, '0')}:59 UTC`
-            : 'waiting for the first hour'}
+            ? `through ${String(data.newestHour).padStart(2, '0')}:59`
+            : 'no hours reported yet'}
         </span>
         <button type="button" className="rf" onClick={refresh} aria-label="Refresh today's figures">
           <RefreshCw size={12} aria-hidden />
@@ -163,7 +193,11 @@ export function TodayBand() {
       </div>
 
       <div className="figs">
-        {metrics.map((c) => (
+        {data?.newestHour == null ? (
+          <span className="rpt-today-wait">
+            The stream has not delivered an hour for this UTC day yet. It usually lands within the hour.
+          </span>
+        ) : metrics.map((c) => (
           <span className="fig" key={c.id}>
             <span className="k">{c.label}</span>
             <b>{formatCell(data?.totals?.[c.id], c.format, data?.currency ?? 'EUR')}</b>
@@ -173,7 +207,7 @@ export function TodayBand() {
 
       {/* Which market this is really made of. Share is of impressions, the one metric every
           market always has — a share of sales would be undefined on a market with none. */}
-      {(data?.markets.length ?? 0) > 0 && (
+      {data?.newestHour != null && (data?.markets.length ?? 0) > 0 && (
         <div className="mkts">
           {data!.markets.map((m, i) => (
             <span className="mkt" key={m.marketplace}>

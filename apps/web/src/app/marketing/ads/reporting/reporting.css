@@ -131,6 +131,8 @@
   color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
 }
 
+.rpt-today-wait { font-size: 12.5px; line-height: 1.5; color: rgb(var(--text-secondary)); }
+
 .rpt-today .mkts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; }
 .rpt-today .mkt {
   display: inline-flex; align-items: baseline; gap: 5px;
