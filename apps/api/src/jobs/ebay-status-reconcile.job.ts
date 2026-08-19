@@ -33,6 +33,7 @@ import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { resolveConnection } from '../services/connection-resolver.service.js'
 
 const JOB_NAME = 'ebay-status-reconcile'
 const BATCH_SIZE = 20
@@ -74,16 +75,25 @@ export async function runEbayStatusReconcile(): Promise<void> {
     return
   }
 
-  // Resolve the active eBay connection once per run. We use the first
-  // active connection — sites with multiple eBay accounts can extend
-  // this later with a per-connection sweep.
-  const connection = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-    select: { id: true },
-  })
-
-  if (!connection) {
-    logger.warn(`${JOB_NAME}: no active eBay ChannelConnection found — skipping`)
+  // MAP.3 — DECLARED scope. This job's body is ~150 lines with four early returns,
+  // module-level lastRunAt/lastSummary state and a recordCronRun wrapper, so
+  // wrapping it in a per-account loop means extracting the body into a function
+  // first. That refactor is real work on a live cron and is NOT worth doing blind
+  // for a second account that cannot exist until MAP.4.
+  //
+  // 🔴 MAP.3b: extract the body, then sweep `listActiveConnections('EBAY')` and
+  // scope the ChannelListing query by `channelConnectionId` — the attribution is
+  // already there (MAP.2a backfilled all 252 eBay listings).
+  //
+  // What this conversion DOES buy today: the account is named on purpose instead
+  // of being whatever `findFirst … orderBy updatedAt desc` happened to return.
+  let connection: Awaited<ReturnType<typeof resolveConnection>>
+  try {
+    connection = await resolveConnection({ channel: 'EBAY', primary: true })
+  } catch (err) {
+    logger.warn(`${JOB_NAME}: no usable eBay account — skipping`, {
+      error: err instanceof Error ? err.message : String(err),
+    })
     return
   }
 

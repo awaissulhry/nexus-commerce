@@ -86,6 +86,18 @@ node scripts/check-silent-disabled.mjs || {
   exit 1
 }
 
+# MAP.3 (2026-08-19) — connection-resolver ratchet. A site that resolves a
+# ChannelConnection without being told which account it means is how a push lands
+# in the wrong store once a second account exists. The count may only go DOWN;
+# raising AMBIENT_BASELINE is a visible diff someone has to justify. Structural
+# (TypeScript AST), not a grep — a regex here counts comments and misses shorthand.
+echo "→ Checking connection-resolver ratchet (MAP.3)..."
+( cd apps/api && npx tsx scripts/map0-connection-resolution-audit.mts --ratchet >/dev/null ) || {
+  ( cd apps/api && npx tsx scripts/map0-connection-resolution-audit.mts --ratchet | tail -8 )
+  echo "❌ connection-resolver ratchet FAILED — see message above"
+  exit 1
+}
+
 echo "→ Checking tokens.css is in sync with css-vars.ts..."
 npm run tokens:check --silent || {
   echo "❌ tokens.css drift — edit tokens/css-vars.ts and run 'npm run tokens:gen'; never hand-edit tokens.css"

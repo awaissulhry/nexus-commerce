@@ -9,6 +9,10 @@
  * Run from apps/api:  npx tsx scripts/map0-connection-resolution-audit.mts
  *   --json <path>   also write the machine-readable result
  *   --md   <path>   also write the burn-down checklist as markdown
+ *   --ratchet       exit 1 if the ambient count EXCEEDS AMBIENT_BASELINE below.
+ *                   This is the MAP.3 guard: the singleton assumption cannot grow
+ *                   back. Converting sites lowers the baseline; adding one raises
+ *                   it, and raising it is a visible diff someone has to justify.
  *
  * READ-ONLY. Touches no database and no network — it parses source files.
  *
@@ -23,6 +27,29 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
 import ts from 'typescript'
+
+/**
+ * The number of ambient resolution sites the tree is allowed to contain.
+ *
+ * 60 when MAP.0 measured it (2026-08-19, 38 files).
+ * 54 after MAP.3a converted all six job sites — zero jobs remain in the burn-down.
+ * Lower it as MAP.3 converts more; never raise it without saying why in the commit
+ * that does.
+ *
+ * Deliberately a structural count, not a grep: a regex over source counts comments
+ * and misses ES6 shorthand, which is how the DS guard came to fail on a COMMENT
+ * (reference_ds_guard_greps_comments) and how a probe invented three findings in
+ * one check (reference_verification_probe_false_positives).
+ */
+const AMBIENT_BASELINE = 54
+
+/**
+ * The one file allowed to resolve a connection ambiently: the resolver itself.
+ * `listActiveConnections` genuinely means "every active account for this channel",
+ * which is the correct query — it is what the fail-closed decision is made FROM.
+ * Everything else must go through it.
+ */
+const RESOLVER_EXEMPT = new Set(['services/connection-resolver.service.ts'])
 
 const HERE = path.dirname(url.fileURLToPath(import.meta.url))
 const SRC = path.resolve(HERE, '../src')
@@ -192,7 +219,7 @@ for (const file of walkFiles(SRC)) {
 }
 
 // ── Report ─────────────────────────────────────────────────────────
-const prod = sites.filter((s) => !s.isTest)
+const prod = sites.filter((s) => !s.isTest && !RESOLVER_EXEMPT.has(s.file.split(path.sep).join('/')))
 const tests = sites.filter((s) => s.isTest)
 const byVerdict = (v: Verdict, set = prod) => set.filter((s) => s.verdict === v)
 const ambient = byVerdict('AMBIENT')
@@ -301,6 +328,25 @@ if (mdOut) {
   }
   fs.writeFileSync(mdOut, lines.join('\n'))
   console.log(`Markdown written: ${mdOut}`)
+}
+
+// ── Ratchet ────────────────────────────────────────────────────────
+if (argv.includes('--ratchet')) {
+  if (ambient.length > AMBIENT_BASELINE) {
+    console.error(
+      `\n✗ MAP.3 ratchet: ${ambient.length} ambient connection lookups, baseline is ${AMBIENT_BASELINE}.\n` +
+        `  A new site resolves a ChannelConnection without being told which account it means.\n` +
+        `  Use resolveConnection(scope) from src/services/connection-resolver.service.ts.\n` +
+        `  If the increase is genuinely intended, raise AMBIENT_BASELINE in this file and say why.\n`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `✓ MAP.3 ratchet: ${ambient.length} ambient lookups (baseline ${AMBIENT_BASELINE})` +
+      (ambient.length < AMBIENT_BASELINE
+        ? ` — ${AMBIENT_BASELINE - ambient.length} below; lower AMBIENT_BASELINE to lock the gain in.`
+        : ''),
+  )
 }
 
 console.log('')

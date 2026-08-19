@@ -29,16 +29,22 @@ import prisma from '../db.js'
 import { ebayOrdersService } from '../services/ebay-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runOrdersPoll(): Promise<void> {
   let connections: Array<{ id: string; displayName: string | null }> = []
   try {
-    connections = await (prisma as any).channelConnection.findMany({
-      where: { channelType: 'EBAY', isActive: true },
-      select: { id: true, displayName: true },
-    })
+    // MAP.3 — enumerating EVERY active account is the correct query for this job;
+    // it goes through the resolver so there is one definition of "the accounts",
+    // ordered primary-first. (The `as any` cast that used to be here hid the same
+    // class of typo that left two eBay paths throwing since May — see
+    // docs/2026-08-19-map-multi-account-profiles.md §7.3.)
+    connections = (await listActiveConnections('EBAY')).map((c) => ({
+      id: c.id,
+      displayName: c.displayName,
+    }))
   } catch (err) {
     logger.error('ebay-orders cron: failed to enumerate connections', {
       error: err instanceof Error ? err.message : String(err),

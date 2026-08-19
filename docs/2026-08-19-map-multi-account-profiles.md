@@ -1,6 +1,7 @@
 # MAP — Multi-Account & Profiles
 
-**Status:** MAP.0, MAP.1, MAP.2a **SHIPPED and prod-verified 2026-08-19**. MAP.2b folds into MAP.3.
+**Status:** MAP.0, MAP.1, MAP.2a, MAP.3a **SHIPPED and prod-verified 2026-08-19**.
+**Burn-down:** 60 → **54** ambient resolution sites; all six jobs converted. MAP.2b folds into MAP.3b.
 **Commits:** `0f9fc2fb9` (MAP.0/MAP.1) · `ba235d71e` (RBAC mapping)
 **Date:** 2026-08-19
 **Supersedes / absorbs:** [`2026-07-30-ebay-multi-account-ema.md`](2026-07-30-ebay-multi-account-ema.md)
@@ -352,7 +353,7 @@ rather than inferred.
 Each phase is independently shippable and live-by-default (`feedback_ship_live_not_dark`).
 Phases marked **🔒** cannot start without an explicit operator decision — they are listed in §6.
 
-> **MAP.0, MAP.1 and MAP.2a are SHIPPED and prod-verified, 2026-08-19.**
+> **MAP.0, MAP.1, MAP.2a and MAP.3a are SHIPPED and prod-verified, 2026-08-19.**
 > What the build found that this plan did not predict is recorded in §2.4 (the chrome) and §7 (the
 > defect, the DS gap, and two things MAP.4 inherits).
 
@@ -419,14 +420,55 @@ so MAP.2b is a pure index swap with no data movement.
 never equal to NULL, so a plain four-column unique index would let unlimited duplicates through the
 moment `channelConnectionId` is NULL — the opposite of a constraint.
 
-### MAP.3 — The resolver (invisible, and the reason nothing can go wrong later)
-`resolveConnection(scope)`, fail-closed. All 63 eBay sites converted, Amazon's env row routed the
-same way. Jobs move from "resolve one connection" to "iterate accounts with a per-account budget and
-stagger" — a naive `for` loop multiplies eBay API cost linearly and OAuth minting is separately
-capped. One account failing never aborts the others.
-**Verification:** with one account, prod behaviour is byte-identical. A pre-push ratchet (same
-mechanism as the DS guard) blocks any *new* `channelType:'EBAY'` + `isActive:true` lookup, so the
-singleton assumption cannot grow back.
+### MAP.3a — The resolver, the ratchet, and the jobs ✅ SHIPPED
+
+`services/connection-resolver.service.ts`. One function, **fail-closed**: when more than one account
+is active for a channel and the caller has not said which one it means, it throws. It never picks.
+
+The scope forms fall into three groups, and the naming is the point:
+
+| Group | Forms | Why |
+|---|---|---|
+| **NAMED** | `{ accountId }` | the caller already holds the id |
+| **DERIVED** | `{ listingId }` · `{ variantListingId }` · `{ itemId }` · `{ orderId }` · `{ channel, channelOrderId }` | reads the attribution MAP.2a backfilled, so it cannot drift |
+| **DECLARED** | `{ channel, primary: true }` | for ambient work with no row to derive from. Verbose and greppable on purpose: "the primary account for this channel" is a claim someone can audit; "whatever `findFirst` returned" is not |
+
+What it replaces did `orderBy: { updatedAt: 'desc' }` — **the most recently touched account**. With
+one account that is correct by accident; with two it is a coin flip, and the coin is not even
+weighted the way the author imagined, because sync heartbeats bump `updatedAt` constantly
+(`reference_updatedat_is_a_sync_heartbeat`).
+
+The decision itself is a **pure function**, `chooseConnection`, so the rule is testable without a
+database — 13 tests, including one that asserts nothing is returned when the input is ambiguous.
+Every scope form was also exercised against prod: all six derived forms resolve Amazon rows to the
+Amazon account and eBay to eBay, and all three refusal cases throw rather than guess.
+
+**The ratchet.** `map0-connection-resolution-audit.mts --ratchet` fails the push when the ambient
+count exceeds `AMBIENT_BASELINE`, wired into `.githooks/pre-push`. Structural, not a grep — a regex
+here counts comments and misses shorthand, which is exactly how the DS guard came to fail on a
+comment. The resolver file itself is the one exemption: `listActiveConnections` genuinely means
+"every active account for this channel", which is what the decision is made *from*.
+
+**The jobs — all six converted, zero remain in the burn-down (60 → 54).** Not all six could take the
+same treatment, and the differences are recorded rather than smoothed over:
+
+- **Per-account sweeps** — `ebay-item-status-reconcile` iterates accounts and selects each account's
+  memberships by `channelConnectionId`, with the cap applied *per account* so a second store cannot
+  starve the first, and one account's token failure skipping only that account.
+- **Enumerate-all** — `ebay-orders-sync`, `ebay-token-refresh`, `latency-watchdog` legitimately mean
+  "every active account" (or "is any account live"), now through `listActiveConnections` so one
+  definition of "active" serves them all.
+- **Declared primary, with the gap named** — `ebay-feed-poll` because **`EbayPushJob` carries no
+  `channelConnectionId`**, so iterating accounts would poll each account for tasks belonging to
+  another; and `ebay-status-reconcile` because its ~150-line body has four early returns and module
+  state, so a per-account loop needs a function extraction first. Both carry a 🔴 marker naming the
+  follow-up. A named limitation beats a silent mis-poll.
+
+### MAP.3b — the remaining 54, and MAP.2b's keys 🔒 *(next)*
+29 route sites in 9 files (12 of them in `ebay-flat-file.routes.ts`), 24 service sites in 22 files,
+1 in `index.ts` (`seedEnvManagedConnections`, arguably legitimate). Landing in the same commit:
+MAP.2b's four unique-key widenings and the 24 compound-key callers, for the `ON CONFLICT` reason in
+MAP.2b above.
 
 ### MAP.4 — Connect the second account, in two clicks
 Settings → Channels becomes a list of accounts per channel rather than one card per channel.

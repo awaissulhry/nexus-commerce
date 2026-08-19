@@ -26,6 +26,7 @@ import {
   downloadResultFile,
 } from '../services/ebay-feed.service.js'
 import { publishOrderEvent } from '../services/order-events.service.js'
+import { resolveConnection } from '../services/connection-resolver.service.js'
 
 const TICK_INTERVAL_MS = 120_000
 const MAX_JOBS_PER_TICK = 10
@@ -133,13 +134,21 @@ export async function runEbayFeedPollTickOnce(): Promise<void> {
 
   logger.debug(`[ebay-feed-poll] tick: ${jobs.length} SUBMITTED job(s) to poll`)
 
-  // Resolve the eBay connection once per tick (shared across all jobs)
-  const conn = await prisma.channelConnection.findFirst({
-    where: { channelType: 'EBAY', isActive: true },
-  })
-
-  if (!conn) {
-    logger.warn('[ebay-feed-poll] no active eBay connection — skipping tick')
+  // MAP.3 — DECLARED scope, not a derived one, and the reason is a gap worth
+  // naming: `EbayPushJob` carries no `channelConnectionId`, so a feed task cannot
+  // say which account submitted it. Iterating accounts here would poll every
+  // account for tasks that belong to another one.
+  //
+  // 🔴 MAP.7 must attribute EbayPushJob. Until it does, a second eBay account's
+  // feed jobs will not be polled by this tick — a named limitation rather than a
+  // silent mis-poll, which is what `findFirst` gave us.
+  let conn: Awaited<ReturnType<typeof resolveConnection>>
+  try {
+    conn = await resolveConnection({ channel: 'EBAY', primary: true })
+  } catch (err) {
+    logger.warn('[ebay-feed-poll] could not resolve an eBay account — skipping tick', {
+      error: err instanceof Error ? err.message : String(err),
+    })
     return
   }
 

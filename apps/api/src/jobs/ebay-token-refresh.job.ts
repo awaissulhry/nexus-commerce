@@ -24,6 +24,7 @@ import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -39,18 +40,13 @@ async function runRefreshSweep(): Promise<void> {
   // either side being populated.
   let connections: Array<{ id: string; ebaySignInName: string | null }>
   try {
-    connections = await prisma.channelConnection.findMany({
-      where: {
-        isActive: true,
-        channelType: 'EBAY',
-        managedBy: 'oauth',
-        OR: [
-          { refreshToken: { not: null } },
-          { ebayRefreshToken: { not: null } },
-        ],
-      },
-      select: { id: true, ebaySignInName: true },
-    })
+    // MAP.3 — the account set comes from the resolver; the oauth/refresh-token
+    // filters stay, applied in JS. Note `NOT` semantics were never the issue here
+    // (these are positive `not: null` checks), but keeping the filter out of the
+    // query means one place decides what "an active account" is.
+    connections = (await listActiveConnections('EBAY'))
+      .filter((c) => c.managedBy === 'oauth' && (c.refreshToken !== null || c.ebayRefreshToken !== null))
+      .map((c) => ({ id: c.id, ebaySignInName: c.ebaySignInName }))
   } catch (err) {
     logger.error('ebay-token-refresh cron: query failed', {
       error: err instanceof Error ? err.message : String(err),

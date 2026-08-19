@@ -34,6 +34,7 @@ import {
   evaluateLatencyBreach,
   type OutboundLatencyRow,
 } from '../services/sync-metrics.js'
+import { listActiveConnections } from '../services/connection-resolver.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -229,9 +230,10 @@ export async function runLatencyWatchdog(): Promise<void> {
 
       // eBay notification readiness — mirrors diagnostics route exactly.
       try {
-        const activeEbay: number = await (prisma as any).channelConnection.count({
-          where: { channelType: 'EBAY', isActive: true },
-        })
+        // MAP.3 — a readiness check genuinely asks "is ANY eBay account live",
+        // which is account-agnostic. Through the resolver so it cannot drift from
+        // what every other caller counts as active.
+        const activeEbay: number = (await listActiveConnections('EBAY')).length
         const ebayNotificationsActive: boolean | null =
           activeEbay > 0 ? Boolean(process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN) : null
 
