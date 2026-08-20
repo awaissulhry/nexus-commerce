@@ -3279,5 +3279,5 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rc-toggle.busy { opacity: .55; cursor: progress; }
 /* U14 — an absent answer, in the shared cells' own stylesheet so it resolves on every grid that
    mounts them (`.h10-ar-nd` lives in rules-automation.css and the Ad Manager never loads it).
-   #667080 on the #fff row ground is 5.52:1. */
+   #667080 on the #fff row ground is 5.01:1 — measured in the deployed DOM, not estimated. */
 .h10-rc-unknown { font-size: 11px; font-style: italic; color: #667080; }
