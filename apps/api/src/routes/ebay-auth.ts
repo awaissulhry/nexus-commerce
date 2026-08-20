@@ -183,6 +183,33 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
           });
         }
 
+        // Real CSRF validation, server-side. This replaced a length check whose
+        // own comment said "In production, validate state token against stored
+        // value" — it never did, so any 32-character string passed. The browser's
+        // sessionStorage comparison that stood in for it could not survive the
+        // flow opening eBay in a separate window (window.open clones
+        // sessionStorage at CREATION, before the state exists), which is what
+        // produced "State token mismatch - possible CSRF attack" on entirely
+        // legitimate connects.
+        const verdict = verifyOAuthState(state, "EBAY");
+        if (!verdict.ok) {
+          logger.warn("eBay OAuth state rejected", { reason: verdict.reason });
+          return reply.status(400).send({
+            success: false,
+            error:
+              verdict.reason === "expired"
+                ? "This sign-in took too long and the request expired. Start the connection again."
+                : "The sign-in could not be verified as coming from Nexus. Start the connection again.",
+            code: `OAUTH_STATE_${(verdict.reason ?? "invalid").toUpperCase()}`,
+          });
+        }
+        // The adopt intent comes from the SIGNED state, never from the request
+        // body — a caller must not be able to redirect a grant onto an account of
+        // their choosing.
+        // Checked BEFORE any database work: an unverified caller must not be able
+        // to probe whether a connection id exists, and garbage must not cost a query.
+        const adoptConnectionId = verdict.payload?.adoptConnectionId;
+
         if (!connectionId) {
           return reply.status(400).send({
             success: false,
@@ -202,31 +229,6 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
           });
         }
 
-        // Real CSRF validation, server-side. This replaced a length check whose
-        // own comment said "In production, validate state token against stored
-        // value" — it never did, so any 32-character string passed. The browser's
-        // sessionStorage comparison that stood in for it could not survive the
-        // flow opening eBay in a separate window (window.open clones
-        // sessionStorage at CREATION, before the state exists), which is what
-        // produced "State token mismatch - possible CSRF attack" on entirely
-        // legitimate connects.
-        const verdict = verifyOAuthState(state, "EBAY");
-        if (!verdict.ok) {
-          logger.warn("eBay OAuth state rejected", { reason: verdict.reason });
-          await prisma.channelConnection.delete({ where: { id: connectionId } }).catch(() => {});
-          return reply.status(400).send({
-            success: false,
-            error:
-              verdict.reason === "expired"
-                ? "This sign-in took too long and the request expired. Start the connection again."
-                : "The sign-in could not be verified as coming from Nexus. Start the connection again.",
-            code: `OAUTH_STATE_${(verdict.reason ?? "invalid").toUpperCase()}`,
-          });
-        }
-        // The adopt intent comes from the SIGNED state, never from the request
-        // body — a caller must not be able to redirect a grant onto an account of
-        // their choosing.
-        const adoptConnectionId = verdict.payload?.adoptConnectionId;
 
         // Exchange code for tokens
         // @ts-ignore - request.body may contain redirectUri from callback
