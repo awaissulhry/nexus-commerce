@@ -3268,3 +3268,16 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rc-toggle > span { width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .12s; }
 .h10-rc-toggle.on { background: #1f6fde; }
 .h10-rc-toggle.on > span { transform: translateX(16px); }
+/* U13 — the cell became a <button>, so it must shed the UA button box (border, font, min-width)
+   and gain the affordance it has always looked like it had. Source order: these sit at the END of
+   the .h10-rc-toggle block they modify, which is where an override belongs. */
+.h10-rc-toggle { border: 0; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.h10-rc-toggle:hover:not(.busy) { background: #c6ccd6; }
+.h10-rc-toggle.on:hover:not(.busy) { background: #1a5fc0; }
+.h10-rc-toggle:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; }
+/* Transient only: the PATCH is in flight. Not a refusal, so it never has to explain itself. */
+.h10-rc-toggle.busy { opacity: .55; cursor: progress; }
+/* U14 — an absent answer, in the shared cells' own stylesheet so it resolves on every grid that
+   mounts them (`.h10-ar-nd` lives in rules-automation.css and the Ad Manager never loads it).
+   #667080 on the #fff row ground is 5.52:1. */
+.h10-rc-unknown { font-size: 11px; font-style: italic; color: #667080; }

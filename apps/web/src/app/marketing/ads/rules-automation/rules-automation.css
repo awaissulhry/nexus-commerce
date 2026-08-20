@@ -2630,6 +2630,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
 .h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-ar-stale:hover { background: #fdeed5; }
+/* U13 — a refused bid-automation flip, in the toolbar slot the staleness chip uses. Danger, not
+   warning: the stale chip means "there is more to see", this means "your write did not happen".
+   #8c2f22 on #fdece9 is 6.42:1. */
+.h10-ar-writefail { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #d38b80; border-radius: 7px; background: #fdece9; color: #8c2f22; font-size: 11px; font-weight: 800; }
 
 /* ── the sticky first column ──────────────────────────────────────────────────────────────────── */
 .h10-ar-first { display: flex; align-items: center; gap: 7px; min-width: 0; }

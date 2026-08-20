@@ -730,6 +730,8 @@ export function CampaignsGrid() {
   const [rulesModal, setRulesModal] = useState<Camp | null>(null)
   const [bidRuleMenu, setBidRuleMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; anchor: PopAnchor } | null>(null)
+  /** U13 — campaigns whose bid-automation PATCH is in flight. Transient, so the switch may go `disabled`. */
+  const [busyAuto, setBusyAuto] = useState<Set<string>>(new Set())
   const colHiRef = useRef<string | null>(null) // header hover → column highlight, toggled via direct DOM (no grid re-render)
   // pointer-based column reorder — smooth chip + live drop-indicator driven by
   // direct DOM (NO per-move grid re-renders); the reorder commits once on release.
@@ -1045,6 +1047,27 @@ export function CampaignsGrid() {
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, biddingStrategy } : x)))
     toast(ok ? `Bidding strategy → ${STRAT_LABEL[biddingStrategy] ?? biddingStrategy} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
   }
+  /**
+   * U13 — the Bid Automation column's switch, which until 2026-08-20 was a painted pill on every
+   * row of this grid too (the cell is shared with Apply Rules). Same field this grid's own Bulk
+   * Actions modal already writes — `dynamicBidding.bidAutomation`, via `PATCH /campaigns/:id
+   * /automation` — so the row control and the bulk modal can no longer disagree.
+   *
+   * 🔴 Optimistic, and it has to be: `GET /advertising/campaigns` sits behind a 300-second L1+L2
+   * cache whose invalidating hook runs AFTER the response is sent, so a refetch can return the old
+   * value for minutes. A switch that flipped back would read as a broken control rather than a
+   * stale read. On failure the row is put back exactly as it was and the toast says so.
+   */
+  const setCampaignBidAutomation = async (c: Camp, bidAutomation: boolean) => {
+    setBusyAuto((b) => new Set(b).add(c.id))
+    setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAutomation } : x)))
+    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAutomation })
+    if (!ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAutomation: !bidAutomation } : x)))
+    setBusyAuto((b) => { const n = new Set(b); n.delete(c.id); return n })
+    toast(ok
+      ? `Bid automation ${bidAutomation ? 'on' : 'off'} · ${c.name}`
+      : `Failed · ${c.name} — bid automation unchanged`)
+  }
   const setCampaignPlacements = async (c: Camp, pl: { tos: number | null; pdp: number | null; ros: number | null }) => {
     setMultiplierModal(null)
     const adjustments: Array<{ placement: string; percentage: number }> = []
@@ -1213,7 +1236,7 @@ export function CampaignsGrid() {
       // The shared cell renders "—" for null, because "nobody set one" is the fact.
       case 'targetAcos': return ed(<TargetAcosCell fraction={c.targetAcos} />, 'targetAcos')
       case 'minMaxBid': return ed(<MinMaxBidCell minCents={c.minBidCents} maxCents={c.maxBidCents} />, 'minMaxBid')
-      case 'bidAutomation': return <BidAutomationCell on={c.bidAutomation} />
+      case 'bidAutomation': return <BidAutomationCell on={c.bidAutomation} busy={busyAuto.has(c.id)} onToggle={(next) => void setCampaignBidAutomation(c, next)} />
       case 'delivery': {
         const d = delivery?.campaigns?.[c.id]
         const st = d?.state ?? 'unknown'

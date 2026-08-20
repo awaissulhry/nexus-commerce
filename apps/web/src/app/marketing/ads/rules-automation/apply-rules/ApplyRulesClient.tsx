@@ -170,11 +170,29 @@ export function ApplyRulesClient() {
    * U11 — the two extra reads behind H10's Bid Rule and Budget Rule columns. Both are per-campaign
    * facts this page's own three endpoints do not carry: `bidder`/`bidderName` (who owns the bids)
    * comes from the bid grid, `reachedByRuleIds`/`lastMovedBy` (which budget rule moved it) from the
-   * budget grid. Both are OPTIONAL — a failure leaves those two columns reading "—" and never takes
-   * the page down, because the grid's subject is the write gate, not these two columns.
+   * budget grid. Both are OPTIONAL — a failure leaves those two columns reading "unknown" and never
+   * takes the page down, because the grid's subject is the write gate, not these two columns.
+   *
+   * 🔴 U14 — `null` until the fetch lands, and that distinction is the whole unit. Both grids cover
+   * ENABLED campaigns only (83 and 86 rows against 220 on 2026-08-20), so `map.has(id)` is FALSE
+   * for 137 and 134 campaigns respectively. Started as an empty `Map`, "absent from the map" and
+   * "the fetch has not returned" were the same state, and the only way to render either was the
+   * cell's own "None" — which asserts that no rule owns those bids. Nullable, the page can say
+   * `unknown` while it does not know, and keep saying it for the rows the source never covers.
    */
-  const [bidOwners, setBidOwners] = useState<Map<string, { bidder: string | null; bidderName: string | null }>>(new Map())
-  const [budgetOwners, setBudgetOwners] = useState<Map<string, { reachedBy: number; lastMovedByKind: string | null; lastMovedBy: string | null }>>(new Map())
+  const [bidOwners, setBidOwners] = useState<Map<string, { bidder: string | null; bidderName: string | null }> | null>(null)
+  const [budgetOwners, setBudgetOwners] = useState<Map<string, { reachedBy: number; lastMovedByKind: string | null; lastMovedBy: string | null }> | null>(null)
+  /**
+   * U13 — bid-automation flips that have been written but may not be readable back yet.
+   * `GET /advertising/campaigns` is cached for 300s behind L1+L2 and the invalidating hook runs
+   * after the response is sent, so a refetch can hand back the pre-write value for minutes. Without
+   * this the switch would visibly flip back and read as broken. Cleared when a reload agrees.
+   */
+  const [autoOverride, setAutoOverride] = useState<Map<string, boolean>>(new Map())
+  /** In-flight bid-automation PATCHes. Transient only. */
+  const [autoBusy, setAutoBusy] = useState<Set<string>>(new Set())
+  /** A refused bid-automation write, named. Cleared after six seconds. */
+  const [autoErr, setAutoErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -224,6 +242,44 @@ export function ApplyRulesClient() {
       setPopErr((e as Error).message)
     } finally { setPopBusy(false) }
   }
+
+  /**
+   * U13 — the Bid Automation column's switch, one row at a time.
+   *
+   * Same endpoint and same field as the bulk verb beside it and as the Ad Manager's Bulk Actions
+   * modal: `PATCH /campaigns/:id/automation { bidAutomation }` → `dynamicBidding.bidAutomation`.
+   * A per-row edit and a bulk edit of the same field must not disagree about either — the rule
+   * `applyPop` states, applied to a third writer.
+   *
+   * 🔴 Optimistic through `autoOverride`, NOT through a refetch. The campaigns payload is cached
+   * for 300 seconds and its invalidation runs after the response is sent, so re-reading can return
+   * the pre-write value and the switch would flip back under the operator's finger. The refetch
+   * still runs — it is how every other column stays current — but this field's truth comes from
+   * the override until the payload agrees with it.
+   */
+  const setBidAutomation = useCallback(async (row: CampaignRow, next: boolean) => {
+    setAutoBusy((b) => new Set(b).add(row.id))
+    setAutoOverride((m) => new Map(m).set(row.id, next))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}/automation`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bidAutomation: next }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(String(j?.error ?? `HTTP ${r.status}`))
+      // The route echoes what it stored; trust that over what we sent.
+      setAutoOverride((m) => new Map(m).set(row.id, !!(j?.bidAutomation ?? next)))
+      emitAdsChange('ads.guardrail.changed')
+    } catch (e) {
+      // Put it back exactly as it was, and say so where the operator is looking. A silent revert
+      // is the same defect as a switch that does nothing.
+      setAutoOverride((m) => { const n = new Map(m); n.delete(row.id); return n })
+      setAutoErr(`${row.name}: ${(e as Error).message}`)
+      window.setTimeout(() => setAutoErr(null), 6000)
+    } finally {
+      setAutoBusy((b) => { const n = new Set(b); n.delete(row.id); return n })
+    }
+  }, [])
 
   /**
    * U11d — status and bidding strategy, on the campaign PATCH the Ad Manager already uses.
@@ -296,7 +352,17 @@ export function ApplyRulesClient() {
     ])
       .then(([c, g, o]) => {
         if (!alive) return
-        setCampaigns(c.items ?? [])
+        const items = c.items ?? []
+        setCampaigns(items)
+        // U13 — an override exists only to outlive the 300s read cache. The moment the payload
+        // agrees with one it has done its job, so it is dropped; anything still disagreeing is
+        // still a write the cache has not caught up with and is held.
+        setAutoOverride((m) => {
+          if (m.size === 0) return m
+          const n = new Map(m)
+          for (const it of items) if (n.has(it.id) && !!it.bidAutomation === n.get(it.id)) n.delete(it.id)
+          return n.size === m.size ? m : n
+        })
         setGuardrails(g)
         setOptions(o)
         setError(null)
@@ -317,7 +383,7 @@ export function ApplyRulesClient() {
         setBidOwners(new Map((j.rows ?? []).map((r: { id: string; bidder?: string; bidderName?: string }) =>
           [String(r.id), { bidder: r.bidder ?? null, bidderName: r.bidderName ?? null }])))
       })
-      .catch(() => { /* the two columns read "—"; the page is unaffected */ })
+      .catch(() => { /* U14: the map stays null, so the column reads "unknown"; the page is unaffected */ })
 
     void fetch(`${backend}/api/advertising/budget-grid?view=campaigns&market=all`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -365,7 +431,8 @@ export function ApplyRulesClient() {
         // 🔴 EUROS → cents, exactly once and only here. See `types.ts`.
         dailyBudgetCents: Math.round((Number(c.dailyBudget) || 0) * 100),
         biddingStrategy: c.biddingStrategy ?? null,
-        bidAutomation: c.bidAutomation ?? null,
+        // U13 — an unread-back write wins over the cached payload; see `autoOverride`.
+        bidAutomation: autoOverride.has(c.id) ? !!autoOverride.get(c.id) : (c.bidAutomation ?? null),
         portfolioId: c.portfolioId ?? null,
         portfolioName: g?.portfolioName ?? null,
         lineIds: linesOf.get(c.id) ?? [],
@@ -381,7 +448,7 @@ export function ApplyRulesClient() {
         boundRules: Array.isArray(g?.boundRules) ? g.boundRules.length : 0,
       }
     })
-  }, [campaigns, guardrails, options])
+  }, [campaigns, guardrails, options, autoOverride])
 
   const portfolioNames = useMemo(() => {
     const m = new Map<string, string>()
@@ -678,8 +745,10 @@ export function ApplyRulesClient() {
       label: 'Bid Rule',
       metric: false,
       tip: 'Who owns this campaign\'s bids — a rank plan or schedule, a rule, or nobody. Read from the bid grid\'s own `bidder`, which really varies (measured 2026-08-19: 32 held by a schedule, 6 manual, 45 owned by nothing). H10 shows its bid ALGORITHM here; we have no per-campaign algorithm field, and the bid owner is the same question answered with a field that exists.',
-      sortValue: (r) => bidOwners.get(r.id)?.bidderName ?? '',
-      render: (r) => { const o = bidOwners.get(r.id); return <BidRuleCell bidder={o?.bidder} bidderName={o?.bidderName} /> },
+      sortValue: (r) => bidOwners?.get(r.id)?.bidderName ?? '',
+      // 🔴 U14 — `known` is false for the 137 campaigns the bid grid does not cover, and while the
+      // fetch is still out. Both are "we have not been told", which is not "nobody owns them".
+      render: (r) => { const o = bidOwners?.get(r.id); return <BidRuleCell bidder={o?.bidder} bidderName={o?.bidderName} known={!!bidOwners?.has(r.id)} /> },
     },
     {
       key: 'tacos',
@@ -723,17 +792,17 @@ export function ApplyRulesClient() {
       key: 'bidAutomation',
       label: 'Bid Automation',
       metric: false,
-      tip: 'H10\'s bid-algorithm switch (`bidAutomation`). ⚠ NOT the write gate — that is the Automations column beside it. Measured 2026-08-19: OFF on all 220 campaigns, which is a real reading, not a placeholder.',
+      tip: 'H10\'s bid-automation switch (`bidAutomation`), writable per row and in bulk. ⚠ NOT the write gate — that is the Automations column beside it, and the bulk [Automation] button writes THAT one. Measured 2026-08-20: OFF on all 220. It records the decision on the campaign; no bid optimizer reads the field yet, so it does not by itself apply a suggestion.',
       sortValue: (r) => (r.bidAutomation ? 1 : 0),
-      render: (r) => <BidAutomationCell on={r.bidAutomation} />,
+      render: (r) => <BidAutomationCell on={r.bidAutomation} busy={autoBusy.has(r.id)} onToggle={(next) => void setBidAutomation(r, next)} />,
     },
     {
       key: 'budgetRule',
       label: 'Budget Rule',
       metric: false,
       tip: 'Whether a budget rule has actually moved this campaign\'s budget, and how many can reach it. All six budget rules are account-wide, so reach alone is the same number everywhere — the cell leads with what varies.',
-      sortValue: (r) => (budgetOwners.get(r.id)?.lastMovedByKind === 'rule' ? 1 : 0),
-      render: (r) => { const o = budgetOwners.get(r.id); return <BudgetRuleCell reachedBy={o?.reachedBy} lastMovedByKind={o?.lastMovedByKind} lastMovedBy={o?.lastMovedBy} /> },
+      sortValue: (r) => (budgetOwners?.get(r.id)?.lastMovedByKind === 'rule' ? 1 : 0),
+      render: (r) => { const o = budgetOwners?.get(r.id); return <BudgetRuleCell reachedBy={o?.reachedBy} lastMovedByKind={o?.lastMovedByKind} lastMovedBy={o?.lastMovedBy} known={!!budgetOwners?.has(r.id)} /> },
     },
     // ── AR.S1 — this page's own governance columns ────────────────────────────────────────────
     {
@@ -762,7 +831,7 @@ export function ApplyRulesClient() {
   // they arrive AFTER the first render (separate fetches). Without them the memo keeps the empty
   // maps it was built with and the columns read "—" forever — the data layer loads and the render
   // layer never notices.
-  ], [portfolioNames, lineNames, push, totals?.accountWideRules, bidOwners, budgetOwners])
+  ], [portfolioNames, lineNames, push, totals?.accountWideRules, bidOwners, budgetOwners, autoBusy, setBidAutomation])
 
   // ── aggregate-grain columns ───────────────────────────────────────────────────────────────────
   //
@@ -923,7 +992,13 @@ export function ApplyRulesClient() {
     </span>
   )
 
-  const toolbarRight = refresh.stale ? (
+  // U13's refusal shares the slot with the staleness prompt: both are "something you need to know
+  // about this view", and a failed write outranks a stale read, so it wins the slot while it lasts.
+  const toolbarRight = autoErr ? (
+    <span className="h10-ar-writefail" role="status">
+      <AlertTriangle size={12} aria-hidden /> Bid automation unchanged — {autoErr}
+    </span>
+  ) : refresh.stale ? (
     <button type="button" className="h10-ar-stale" onClick={() => setReloadTick((n) => n + 1)}
       title="Something changed since this view was loaded. Nothing has been reordered underneath you — click to pick it up.">
       <RefreshCw size={12} /> Changed since you loaded

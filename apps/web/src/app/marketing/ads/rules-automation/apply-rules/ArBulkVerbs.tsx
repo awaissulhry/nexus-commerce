@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * U9 — the selection toolbar Helium 10 puts on Apply Rules: **[Automation] [Target ACoS]
- * [Min/Max Bid]**, applied to the checked campaigns.
+ * U9 — the selection toolbar Helium 10 puts on Apply Rules: **[Automation] [Bid Automation]
+ * [Target ACoS] [Min/Max Bid]**, applied to the checked campaigns.
+ * (U13, 2026-08-20, added the second one; U9 shipped the other three.)
  *
  * Study `docs/2026-08-16-ra-h10-reference-study.md` §3.1 and §7.10. H10 shows a fourth verb,
  * **[+ Assign Rule]**, and it is deliberately NOT built here — see the operator decision below.
@@ -10,7 +11,7 @@
  * ── D6, answered by the operator 2026-08-18 with these measurements ─────────────────────────────
  * · **Grains stay** (all four). H10 has campaigns only; this page keeps Portfolios / Product lines /
  *   Markets as a documented departure, so the selection toolbar renders on the CAMPAIGN grain only —
- *   the three verbs write campaign fields, and an aggregate row is not a campaign.
+ *   every verb writes a campaign field, and an aggregate row is not a campaign.
  * · **No Bid Rule / Budget Rule columns.** Measured on prod: **0 of 51 rules are campaign- or
  *   portfolio-scoped** (43 account-wide, 8 market), so a column naming the rule that applies would
  *   print the same value on all 220 rows — the decorative-column class this programme removes. The
@@ -39,9 +40,23 @@ import { useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange } from '../_shared/adsBus'
 
-type Verb = 'automation' | 'acos' | 'bounds'
+type Verb = 'automation' | 'bidauto' | 'acos' | 'bounds'
 
-const LABEL: Record<Verb, string> = { automation: 'Automation', acos: 'Target ACoS', bounds: 'Min/Max Bid' }
+/**
+ * 🔴 Two of these four say "automation" and they write DIFFERENT fields. That is not a naming
+ * slip, it is the account's actual shape, so the labels keep them apart rather than blurring them:
+ *
+ *   **Automation**      → `liveBidWritesEnabled`, the write GATE. 82 of 220 open. This is the one
+ *                         the Automations column shows, and the only per-campaign field every
+ *                         executor honours.
+ *   **Bid Automation**  → `dynamicBidding.bidAutomation`, H10's own switch and the one the Bid
+ *                         Automation column shows. Off on 220 of 220. U13 (2026-08-20) added it so
+ *                         the bulk menu and the new per-row switch write the same field — the
+ *                         operator's study asks for this control in both places.
+ *
+ * Each popover names its field in a full sentence, because a four-word button cannot.
+ */
+const LABEL: Record<Verb, string> = { automation: 'Automation', bidauto: 'Bid Automation', acos: 'Target ACoS', bounds: 'Min/Max Bid' }
 
 export interface BulkResult { ok: number; failed: Array<{ id: string; why: string }> }
 
@@ -66,8 +81,11 @@ export function ArBulkVerbs({ ids, names, onDone }: {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<BulkResult | null>(null)
 
-  // Automation
+  // Automation (the write gate)
   const [autoOn, setAutoOn] = useState(true)
+  // Bid Automation (H10's field) — starts OFF, because 220 of 220 are off and a bulk verb should
+  // not pre-select the change nobody has made.
+  const [bidAutoOn, setBidAutoOn] = useState(false)
   // Target ACoS
   const [acos, setAcos] = useState('')
   // Bounds
@@ -84,6 +102,10 @@ export function ArBulkVerbs({ ids, names, onDone }: {
       let why: string | null = null
       if (verb === 'automation') {
         why = await patch(`/api/advertising/campaigns/${id}/live-writes`, { enabled: autoOn })
+      } else if (verb === 'bidauto') {
+        // U13 — the same route and field as the per-row switch and as the Ad Manager's own bulk
+        // modal. Three writers, one field, one unit.
+        why = await patch(`/api/advertising/campaigns/${id}/automation`, { bidAutomation: bidAutoOn })
       } else if (verb === 'acos') {
         // 🔴 fraction, not percent.
         why = await patch(`/api/advertising/campaigns/${id}/automation`, { targetAcos: Number(acos) / 100 })
@@ -116,7 +138,7 @@ export function ArBulkVerbs({ ids, names, onDone }: {
 
   return (
     <span className="h10-bulkrow h10-ar-bulk">
-      {(['automation', 'acos', 'bounds'] as const).map((v) => (
+      {(['automation', 'bidauto', 'acos', 'bounds'] as const).map((v) => (
         <span key={v} className="h10-ar-bulkwrap">
           <button type="button" className="h10-am-btn bulk" aria-expanded={open === v} onClick={() => { setResult(null); setOpen(open === v ? null : v) }}>
             {LABEL[v]}
@@ -132,6 +154,17 @@ export function ArBulkVerbs({ ids, names, onDone }: {
                       write gate, not the Ad Manager's bid-algorithm toggle. */}
                   <label><input type="radio" name="arauto" checked={autoOn} onChange={() => setAutoOn(true)} /> Managed — armed automation may write here</label>
                   <label><input type="radio" name="arauto" checked={!autoOn} onChange={() => setAutoOn(false)} /> Off-limits — every write is refused at the gate</label>
+                </div>
+              )}
+
+              {v === 'bidauto' && (
+                <div className="rads">
+                  <label><input type="radio" name="arbidauto" checked={bidAutoOn} onChange={() => setBidAutoOn(true)} /> On — bid suggestions apply themselves here</label>
+                  <label><input type="radio" name="arbidauto" checked={!bidAutoOn} onChange={() => setBidAutoOn(false)} /> Off — bid suggestions stay proposals</label>
+                  {/* Said plainly, where the decision is made. The field stores durably; nothing
+                      reads it yet, and an operator setting it deserves to know that now rather
+                      than discover it from an absence of writes. */}
+                  <p className="sub">Recorded on each campaign. No bid optimizer reads this field yet, so on its own it applies nothing — the write gate above is what decides whether automation may write at all.</p>
                 </div>
               )}
 
