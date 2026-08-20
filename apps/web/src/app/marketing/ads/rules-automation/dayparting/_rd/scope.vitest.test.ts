@@ -98,7 +98,12 @@ describe('campaignMatchesScope — scalars, because a campaign has one of each',
 describe('the URL contract', () => {
   it('reads defaults out of an empty query', () => {
     const s = parseUrlState(new URLSearchParams(''))
-    expect(s).toEqual({ market: 'all', portfolio: '', product: '', campaign: '', grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '' })
+    // FB.3c widened the contract: the schedules grid's four filters, the campaigns grain's four
+    // additions, and the hourly card's weeks window all live in the URL now.
+    expect(s).toEqual({
+      market: 'all', portfolio: '', product: '', campaign: '', grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '',
+      status: '', health: '', baseline: '', windows: '', fresh: '', ceiling: '', cstatus: '', schedule: '', weeks: '',
+    })
   })
 
   it('falls back rather than throwing on an unknown grain', () => {
@@ -127,7 +132,11 @@ describe('the URL contract', () => {
   })
 
   it('round-trips every field', () => {
-    const state = { market: 'DE', portfolio: 'p1', product: 'pr1', campaign: 'c1', grain: 'campaigns' as const, row: 'r1', drawer: 'next24', tile: 'capped', mode: 'holding,chasing', signal: 'no-signal', converge: 'no' }
+    const state = {
+      market: 'DE', portfolio: 'p1', product: 'pr1', campaign: 'c1', grain: 'campaigns' as const, row: 'r1', drawer: 'next24', tile: 'capped', mode: 'holding,chasing', signal: 'no-signal', converge: 'no',
+      // FB.3c — the widened contract round-trips too, comma-joined multiselects included.
+      status: 'active', health: 'bad,warn', baseline: 'own-top,comp-top', windows: 'none', fresh: 'stale,never', ceiling: 'base-alone', cstatus: 'PAUSED', schedule: 'g1', weeks: '13',
+    }
     expect(parseUrlState(new URLSearchParams(urlStateToQuery(state)))).toEqual(state)
   })
 })

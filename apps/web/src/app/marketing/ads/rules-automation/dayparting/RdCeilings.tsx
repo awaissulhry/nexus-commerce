@@ -1,6 +1,13 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-20 (FB.3c) — UNMOUNTED, on operator instruction: "I think it could be done
+ * better, or there is no need for it." The section wrote nothing, duplicated the grid's Ceiling
+ * column and the `capped` tile, and ignored the page scope while claiming to be "in scope". Its
+ * one unique reading — base-bid-at-cap — moved into the campaigns grain's Ceiling filter
+ * ("Base at cap"), where it is scoped and one click from the rows. File kept per the section's
+ * parking convention; register: docs/2026-08-20-ra-w-series.md (FB.3c).
+ *
  * RD.P5 — guardrails & scope ceilings: the refusal made visible.
  *
  * The CPC ceiling has been refusing writes for weeks and its entire response was `logger.warn`

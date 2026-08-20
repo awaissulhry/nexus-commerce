@@ -100,9 +100,27 @@ export interface RdUrlState extends RdScope {
   mode: string
   signal: string
   converge: string
+  /**
+   * FB.3c (2026-08-20) — the SCHEDULES grid's filters, lifted into the URL exactly as the campaigns
+   * trio above was. They had stayed `AdsDataGrid` private state in a second "Filters" panel below
+   * the fleet band — the duplicate bar the operator reported — because `tabs/RankGoalsList.tsx`
+   * sits outside `dayparting/` and the FB.3 conversion never reached it. Comma-joined multiselects;
+   * `status`/`windows` are single-valued.
+   */
+  status: string
+  health: string
+  baseline: string
+  windows: string
+  /** FB.3c — campaigns-grain additions: every one filters a fact the grid already renders. */
+  fresh: string
+  ceiling: string
+  cstatus: string
+  schedule: string
+  /** The hourly card's whole-weeks window. In the URL so "the range I picked" survives a reload. */
+  weeks: string
 }
 
-export const EMPTY_URL_STATE: RdUrlState = { ...EMPTY_SCOPE, grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '' }
+export const EMPTY_URL_STATE: RdUrlState = { ...EMPTY_SCOPE, grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '', status: '', health: '', baseline: '', windows: '', fresh: '', ceiling: '', cstatus: '', schedule: '', weeks: '' }
 
 const GRAINS = new Set(['schedules', 'campaigns'])
 
@@ -134,6 +152,15 @@ export function parseUrlState(sp: URLSearchParams | null): RdUrlState {
     mode: get('mode'),
     signal: get('signal'),
     converge: get('converge'),
+    status: get('status'),
+    health: get('health'),
+    baseline: get('baseline'),
+    windows: get('windows'),
+    fresh: get('fresh'),
+    ceiling: get('ceiling'),
+    cstatus: get('cstatus'),
+    schedule: get('schedule'),
+    weeks: get('weeks'),
   }
 }
 

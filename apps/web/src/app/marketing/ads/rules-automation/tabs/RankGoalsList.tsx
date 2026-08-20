@@ -12,7 +12,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, ExternalLink, History } from 'lucide-react'
-import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
+import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
+import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from '../dayparting/_rd/rdFilters'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from '../dayparting/ScheduleActivityDrawer'
 import { ScheduleRowActions } from '../dayparting/ScheduleRowActions'
@@ -60,7 +61,7 @@ export function RankGoalsList() {
   // RD.P0 — the three fetches this component used to own (groups · rank-targets · portfolios) come
   // from the page's one data layer now, so `/rank-schedule-groups` is no longer requested twice per
   // page load and every later section reads the same rows this grid does.
-  const { groups, targets: tmetaState, loading, refresh, groupRuntime, campaigns, clock } = useRdData()
+  const { groups, targets: tmetaState, loading, refresh, groupRuntime, campaigns, clock, scopeOptions } = useRdData()
   // RD.P0 — scope AND the open drawer come from the URL, so a schedule someone is looking at is a
   // link rather than a description of where to click.
   const { state: url, set: setUrl } = useRdUrlState()
@@ -305,17 +306,30 @@ export function RankGoalsList() {
   const narrowedBy = boundBy(url)
   const narrowedWhere = narrowedBy === 'market' ? market : `this ${GRAIN_LABEL[narrowedBy ?? 'market']}`
 
-  const filters: GridFilter[] = useMemo(() => {
-    const baselines = Array.from(new Set(rows.map((r) => r.baselineKey).filter(Boolean)))
-    const nameOf = (k: string) => rows.find((r) => r.baselineKey === k)?.baseline ?? k
-    return [
-      { key: 'status', label: 'Status', kind: 'select', placeholder: 'Any status', options: [{ value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }], value: (r) => ((r as RankRow).enabled ? 'active' : 'paused') },
-      // RDX/A3 — "show me only the schedules that are actually broken" is the first question this
-      // page should be able to answer, so health is filterable, not just visible.
-      { key: 'health', label: 'Health', kind: 'multiselect', placeholder: 'Any health', options: [{ value: 'bad', label: 'Writes failing' }, { value: 'warn', label: 'Needs attention' }, { value: 'ok', label: 'OK' }, { value: 'muted', label: 'Idle' }], value: (r) => (r as RankRow).health.tone },
-      { key: 'baseline', label: 'Baseline', kind: 'multiselect', placeholder: 'Any baseline', options: baselines.map((k) => ({ value: k, label: nameOf(k) })), value: (r) => (r as RankRow).baselineKey },
-    ]
-  }, [rows])
+  /**
+   * FB.3c (2026-08-20) — the duplicate "Filters" bar, closed.
+   *
+   * This grid used to hold its own Status / Health / Baseline definitions in `AdsDataGrid`'s
+   * built-in panel — private state, not linkable, with a second Clear blind to the page bar's.
+   * The operator saw two "Filters" cards on one page and reported it. The campaigns grain was
+   * converted by FB.3; this file sits outside `dayparting/` and was missed.
+   *
+   * Same shape as `RankCampaignsGrid` now: definitions from the ONE module (`rdFilters`), value
+   * from the URL, changes back to the URL, and the grid's own panel hidden. `RankRow` satisfies
+   * `RdGoalsFilterRow` structurally — TypeScript checks the fit right here.
+   */
+  const filters: GridFilter[] = useMemo(
+    () => rdFilters({
+      options: scopeOptions, url, campaigns, tileCounts: {},
+      baselineOptions: rdBaselineOptions(groups, (k) => tmetaState[k]?.name ?? k),
+    }),
+    [scopeOptions, url, campaigns, groups, tmetaState],
+  )
+  const filterState = useMemo(() => rdFilterState(url), [url])
+  const setFilterState = useCallback(
+    (next: FilterState) => setUrl(rdUrlPatch(rdFlattenBarChange(next))),
+    [setUrl],
+  )
 
   // Mirrors Ads Manager's first-column: a max-width name wrapper so a long name truncates with an
   // ellipsis and the hover Manage button stays inside the column (not spilling into the next one).
@@ -346,7 +360,9 @@ export function RankGoalsList() {
       firstSortValue={(r) => r.name}
       columns={columns}
       filters={filters}
-      filtersDefaultOpen={false}
+      filterState={filterState}
+      onFilterStateChange={setFilterState}
+      hideFilterPanel
       selectable
       selected={sel}
       onSelectedChange={setSel}

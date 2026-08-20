@@ -38,7 +38,8 @@ import { execSync } from 'node:child_process'
 
 const ROOT = process.argv[2] ?? 'apps/web/src/app/marketing/ads'
 /** EXCESS idioms (Σ per file of idioms−1) across the tree, measured 2026-08-20 after D2c. */
-const BASELINE = Number(process.env.BUTTON_VOCAB_BASELINE ?? 288)
+// FB.3c (2026-08-20) lowered 288 → 286: the RD grids' filter conversion removed two idioms.
+const BASELINE = Number(process.env.BUTTON_VOCAB_BASELINE ?? 286)
 
 /** Never counted as an idiom of its own: a text action beside a button is a real distinction. */
 const NEUTRAL = new Set(['h10-am-link'])

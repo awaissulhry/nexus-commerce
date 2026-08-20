@@ -166,3 +166,37 @@ shape, no engine-native/builder split in live data.
 Consequence worth deciding: the W1 provenance chip + filter can now never light up (nothing
 predates the cutover, and nothing ever will again). By the section's own law — a control earns
 its place only if some pixel changes — they are candidates for removal; awaiting the operator.
+
+## FB.3c — Rank & Dayparting: one bar, richer filters, evidence on top (operator asks, same day)
+
+Four instructions, verbatim: the duplicate Filters cards; "it doesn't really give me a lot of
+options"; the CPC Ceiling section "could be done better, or there is no need for it"; and the
+hourly performance "has to be on the top of the page, above filters… properly wired" to the
+market and range selected.
+
+- **The duplicate bar is closed.** The schedules grain (the default) still ran `AdsDataGrid`'s
+  built-in panel — `tabs/RankGoalsList.tsx` sits outside `dayparting/` and the FB.3 conversion
+  never reached it. Its Status/Health/Baseline moved into the ONE module (`_rd/rdFilters.ts`),
+  their state into the URL (`?status/?health/?baseline`), and the grid now takes the controlled
+  trio + `hideFilterPanel`, exactly like the campaigns grain.
+- **Filters that earned their place** (every one filters a fact the grid renders):
+  schedules grain adds **Windows** (a schedule with no windows can never act);
+  campaigns grain adds **Signal freshness** (rendered, previously unfilterable), **Ceiling**
+  (Base at cap / Cap binding / Under cap / None), **Campaign status** (fetched and never used
+  by anything), and **Schedule** (filter by parent group, searchable). All URL-backed; the
+  round-trip is pinned in `scope.vitest.test.ts` (51 pass).
+- **RdCeilings is PARKED** (unmounted, header comment). It wrote nothing, duplicated the
+  Ceiling column + the `capped` tile, ignored the page scope while claiming "in scope", and
+  told the operator to sort the grid. Its unique reading — base-bid-at-cap — is the campaigns
+  grain's "Base at cap" filter now, scoped and one click from the rows.
+- **Hourly performance leads the page again** (operator override of P0's below-the-grid
+  placement), in its own `RdSection` above the filter bar. It already obeyed the header's
+  market switch (`marketplace=` on `/dayparting/heatmap`); its whole-weeks window now lives in
+  the URL (`?weeks=`, default 8 absent) and gains the endpoint's 26-week maximum. Honest-window
+  semantics (complete weeks, today excluded, coverage stated) unchanged.
+- Also: the campaigns grain's dead checkboxes removed (`selectable` with no `selectionActions`
+  — a control that could do nothing); button-vocabulary baseline lowered 288 → 286 to hold the
+  two idioms the conversion removed.
+
+DS note: nothing new was hand-rolled — the added filters render through the existing shared
+AdsFilterBar/H10Select kit; no new component, so nothing new to promote.

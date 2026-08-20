@@ -24,6 +24,7 @@ import { metricVal, type RawCell } from '../_schedule/heatMetrics'
 import { selectionToWindows, selectionHourCount } from './selectionToWindows'
 import { AddToScheduleModal, type ScheduleChoice } from './AddToScheduleModal'
 import { useRdData } from './_rd/RdData'
+import { useRdUrlState } from './_rd/useRdUrlState'
 import { getBackendUrl } from '@/lib/backend-url'
 
 /**
@@ -39,7 +40,11 @@ const WINDOWS = [
   { value: '4', label: 'Last 4 weeks' },
   { value: '8', label: 'Last 8 weeks' },
   { value: '13', label: 'Last 13 weeks' },
+  // FB.3c — the endpoint's own maximum. Marketing Stream reaches back to when it was switched on,
+  // so the coverage line beneath the grid says how much of a long window is actually filled.
+  { value: '26', label: 'Last 26 weeks' },
 ]
+const WEEK_VALUES = new Set(WINDOWS.map((w) => w.value))
 
 export interface ScopeOption { value: string; label: string }
 
@@ -53,7 +58,15 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
 }) {
   const [scope, setScope] = useState('all')
   const [metric, setMetric] = useState('Spend')
-  const [weeks, setWeeks] = useState('8')
+  /**
+   * FB.3c — the window lives in the URL (`?weeks=`), like every other reading on this page: the
+   * operator asked for the card to follow "the date range I select", and a range that resets to
+   * 8 weeks on every reload was following nothing. Scope and metric stay local — they choose how
+   * to LOOK at the same window, not which window.
+   */
+  const { state: url, set: setUrl } = useRdUrlState()
+  const weeks = WEEK_VALUES.has(url.weeks) ? url.weeks : '8'
+  const setWeeks = (w: string) => setUrl({ weeks: w === '8' ? '' : w })
   const [raw, setRaw] = useState<RawCell[]>([])
   const [hasData, setHasData] = useState(true)
   const [loading, setLoading] = useState(true)

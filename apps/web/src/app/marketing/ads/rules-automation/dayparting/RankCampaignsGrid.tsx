@@ -12,7 +12,7 @@
  * own and there is no campaign-level builder route — inventing one would be a link to nothing. A
  * campaign whose parent cannot be resolved renders no Manage link at all rather than a dead one.
  */
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
@@ -22,7 +22,7 @@ import { useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { campaignMatchesScope } from './_rd/scope'
 import { RD_TILE_KEYS, isTileKey, tileMatch } from './_rd/tiles'
-import { rdFilters, rdFilterState, rdUrlPatch } from './_rd/rdFilters'
+import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange } from './_rd/rdFilters'
 import { GrainSwitch } from './_rd/GrainSwitch'
 import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
@@ -32,7 +32,6 @@ const builderHref = (groupId: string) => `/marketing/ads/rules-automation/builde
 export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) => string | null; name: (k: string) => string } }) {
   const { campaigns, groups, loading, clock, portfolioNames, productLines, scopeOptions } = useRdData()
   const { state: url, set: setUrl } = useRdUrlState()
-  const [sel, setSel] = useState<Set<string>>(new Set())
 
   // P1 — the fleet band's tile filter composes with scope, through the SAME predicate the band
   // counted with, so a tile's number and its result cannot disagree. An unknown ?tile= value
@@ -156,12 +155,9 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     [scopeOptions, url, campaigns, tileCounts],
   )
   const filterState = useMemo(() => rdFilterState(url), [url])
+  // FB.3c — the flatten moved into rdFilters (rdFlattenBarChange): three call sites, one copy.
   const setFilterState = useCallback(
-    (next: FilterState) => {
-      const flat: Record<string, string> = {}
-      for (const [k, v] of Object.entries(next)) flat[k] = Array.isArray(v) ? v.join(',') : typeof v === 'string' ? v : ''
-      setUrl(rdUrlPatch(flat))
-    },
+    (next: FilterState) => setUrl(rdUrlPatch(rdFlattenBarChange(next))),
     [setUrl],
   )
 
@@ -200,9 +196,10 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
         filterState={filterState}
         onFilterStateChange={setFilterState}
         hideFilterPanel
-        selectable
-        selected={sel}
-        onSelectedChange={setSel}
+        // FB.3c — the checkboxes are GONE, not wired: this grain passed `selectable` with no
+        // `selectionActions`, so every row carried a checkbox and an "N selected" count that could
+        // do nothing — a dead affordance of exactly the class the silent-disabled work removes.
+        // Bulk verbs for campaigns are a real later unit; the affordance returns WITH its actions.
         customizable
         // 🔴 Its OWN key. Sharing `rank-goals-grid` would apply a saved Schedules layout to a
         // fourteen-column grain and silently hide columns that do not exist in the other.

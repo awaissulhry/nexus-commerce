@@ -25,11 +25,10 @@ import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { RdSection } from './_rd/RdSection'
-import { RdCeilings } from './RdCeilings'
 import { RdFleetBand } from './RdFleetBand'
 import { useAdsSync } from '../_shared/adsBus'
 import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
-import { rdFilters, rdFilterState, rdUrlPatch } from './_rd/rdFilters'
+import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from './_rd/rdFilters'
 import { campaignMatchesScope } from './_rd/scope'
 import { RD_TILE_KEYS, tileMatch } from './_rd/tiles'
 import '@/design-system/styles/tokens.css'
@@ -53,7 +52,7 @@ function DaypartingSchedulesBody() {
   // RD.P0 — markets, schedule pickers and the reload signal all come from the one layer. The two
   // fetches this component used to own are gone: `/advertising/campaigns?limit=500` (markets) is
   // covered by `/scope-options`, and `/rank-schedule-groups` was being fetched here AND in the grid.
-  const { groups, campaigns, markets, scopeOptions, refresh } = useRdData()
+  const { groups, campaigns, markets, scopeOptions, refresh, targets } = useRdData()
 
   // RT.1 — your own writes, from any tab, applied silently. Schedules and placement multipliers are
   // the two subjects this page renders; a plan edited on Placement moves rows here. An ENGINE's
@@ -109,8 +108,12 @@ function DaypartingSchedulesBody() {
     return out
   }, [inScope])
   const filters = useMemo(
-    () => rdFilters({ options: scopeOptions, url, campaigns, tileCounts }),
-    [scopeOptions, url, campaigns, tileCounts],
+    () => rdFilters({
+      options: scopeOptions, url, campaigns, tileCounts,
+      // FB.3c — the schedules grain's Baseline options, from the same builder the grid uses.
+      baselineOptions: rdBaselineOptions(groups, (k) => targets[k]?.name ?? k),
+    }),
+    [scopeOptions, url, campaigns, tileCounts, groups, targets],
   )
 
   return (
@@ -135,19 +138,26 @@ function DaypartingSchedulesBody() {
       <RulesTabs active="dayparting" />
       <StaleBanner stale={dpRefresh.stale} subject="A schedule, a rank target or the engine's applied state" onRefresh={refresh} />
 
-      {/* FB.3 — ONE bar, at the top: controls, then the numbers they produce, then the rows. It
-          holds the three scope grains always, and the campaigns grid's own Fleet state / Mode /
-          Signal / Convergence filters when that grain is showing. The fleet tiles below write the
-          same `?tile=` this bar's Fleet state select does — one store, two affordances, so a tile
-          and the select can no longer disagree about what is filtered. */}
+      {/* FB.3c (2026-08-20) — the hourly evidence LEADS the page again, on the operator's explicit
+          instruction: "the hourly performance has to be on the top of the page, above filters."
+          This overrules P0's below-the-grid placement (which had answered a different complaint —
+          the schedules starting below the fold). The card obeys the header's market switch and
+          keeps its whole-weeks window in the URL, so what it shows is always what the address says. */}
+      <RdSection id="hourly">
+        <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} />
+      </RdSection>
+
+      {/* FB.3 — ONE bar: controls, then the numbers they produce, then the rows. It holds the three
+          scope grains always, plus the showing grain's own filters — Status / Health / Baseline /
+          Windows at schedules grain (FB.3c: they lived in a SECOND "Filters" panel inside the grid,
+          the duplicate the operator reported), and Fleet state / Mode / Signal / Convergence /
+          Signal freshness / Ceiling / Campaign status / Schedule at campaigns grain. The fleet
+          tiles below write the same `?tile=` this bar's Fleet state select does — one store, two
+          affordances, so a tile and the select can no longer disagree about what is filtered. */}
       <AdsFilterBar
         filters={filters}
         value={rdFilterState(url)}
-        onChange={(next) => {
-          const flat: Record<string, string> = {}
-          for (const [k, v] of Object.entries(next)) flat[k] = Array.isArray(v) ? v.join(',') : typeof v === 'string' ? v : ''
-          setUrl(rdUrlPatch(flat))
-        }}
+        onChange={(next) => setUrl(rdUrlPatch(rdFlattenBarChange(next)))}
         defaultOpen
       />
 
@@ -166,18 +176,17 @@ function DaypartingSchedulesBody() {
         <RankGrid />
       </RdSection>
 
-      {/* P5 · Guardrails & scope ceilings — the CPC ceiling's refusals made visible; spend
-          ceilings live on Automations → Limits (one owner) and the section says so. */}
-      <RdCeilings />
+      {/* P5 · Guardrails — RETIRED as a section (FB.3c, operator: "there is no need for it").
+          `RdCeilings` wrote nothing and duplicated facts the grid already carries; its unique
+          reading — the base-bid-at-cap campaigns — is now the campaigns grain's Ceiling filter
+          ("Base at cap"), where it is scoped, sortable and one click from the rows themselves.
+          Spend ceilings keep their one owner: Automations → Limits. */}
 
-      {/* P6 · Evidence — the hourly grid and what no schedule covers.
-          It sits BELOW the grid now, which is the one visible change P0 makes: the page's own
-          subject used to start at y=739 on a 793px viewport, i.e. entirely below the fold, while
-          the evidence for it occupied the top 411px.
-          RDX/D2 — `allSchedules` (not `scopes`): hours can be added to a plan holding no campaigns.
-          RDX/C1 — the coverage gap, stated next to the evidence rather than above the schedules. */}
+      {/* P6 · Evidence — what no schedule covers. The hourly grid moved to the TOP of the page
+          (operator instruction, FB.3c); the coverage gap stays down here beside the rows it
+          describes. RDX/D2 — `allSchedules` (not `scopes`): hours can be added to a plan holding
+          no campaigns. */}
       <RdSection id="p6">
-        <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} />
         <CoveragePanel market={market} schedules={allSchedules} onChanged={refresh} />
       </RdSection>
 
