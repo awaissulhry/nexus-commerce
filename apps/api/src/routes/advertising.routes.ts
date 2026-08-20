@@ -6448,9 +6448,35 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.adsRuleSuggestion.findMany({ where: { status }, orderBy: { createdAt: 'desc' }, take }),
       prisma.adsRuleSuggestion.count({ where: { status } }),
     ])
+    /**
+     * 🔴 B4 — `ruleName` is a SNAPSHOT, and stale snapshots had quietly split this page's Rule
+     * filter in two.
+     *
+     * It is denormalised onto the suggestion when the suggestion is created, so renaming a rule
+     * leaves every earlier row carrying the old name. The rules were renamed to drop their emoji
+     * prefixes at some point, and measured on prod 2026-08-20 **7 of the 11 rules with pending
+     * suggestions are split across two stored names**:
+     *
+     *   "Low CTR bid reduction"        74 + "📉 Low CTR bid reduction"        51 = 125
+     *   "Wasted keyword instant negate" 38 + "🗑️ Wasted keyword instant negate" 44 = 82
+     *   "Daily automation digest"        1 + "📣 Daily automation digest"        9 = 10
+     *   …and four more.
+     *
+     * The page's Rule filter matches on this field, so choosing "Auto harvest & negate" showed 1
+     * of that rule's 10 pending suggestions with nothing saying the other 9 existed. Overwriting
+     * with the live name collapses each rule back to one option AND stops the row displaying a
+     * name the rule no longer has. The stored value survives as the fallback for a rule that has
+     * since been deleted — there the snapshot is the only record of what proposed the change.
+     */
+    const ruleIds = [...new Set(rows.map((r) => r.ruleId).filter(Boolean))]
+    const live = new Map(
+      (await prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true } }))
+        .map((r) => [r.id, r.name]),
+    )
+    const fresh = rows.map((r) => ({ ...r, ruleName: live.get(r.ruleId) ?? r.ruleName }))
     // S.1 — attach a resolved deep-link (`source`) per row so the page can navigate
     // straight to the campaign / ad-group / search-term the suggestion came from.
-    const items = await attachSourceLinks(rows)
+    const items = await attachSourceLinks(fresh)
     return { items, count: items.length, total }
   })
 
