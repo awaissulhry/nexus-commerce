@@ -3292,9 +3292,12 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
    uses the tokens and never the literals. Only the toggle animates (the DS Toggle owns that);
    nothing else here transitions, which is the handoff's rule.
    ⚠️ The width is the ONE deviation from "prefer the primitive": the handoff specifies 720px and
-   the DS offers 440/560/660/920, so `size="lg"` is overridden by a single declaration. Two classes
-   (0,2,0) so it beats `.h10-ds-modal.lg` on specificity rather than on source order. */
-.h10-ds-modal.h10-ram { width: 720px; max-height: 88vh; }
+   the DS offers 440/560/660/920, so `size="lg"` is overridden here.
+   🔴 THREE classes, not two. The first cut wrote `.h10-ds-modal.h10-ram` claiming it beat the
+   size on specificity — it does not: `.h10-ds-modal.lg` is ALSO (0,2,0), so they tie and
+   `components.css` wins on source order. Measured on prod: the modal rendered at 660px, the `lg`
+   width, not 720. Naming `.lg` in the selector makes it (0,3,0) and settles it by specificity. */
+.h10-ds-modal.lg.h10-ram { width: 720px; max-height: 88vh; }
 
 .h10-ram-title { display: inline-flex; align-items: baseline; gap: 9px; }
 /* The campaign is DATA — mono, so it reads as an identifier rather than prose. */
@@ -3315,12 +3318,15 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
 .h10-ram-row { display: flex; align-items: center; gap: 12px; padding: 10px 20px 10px 17px; border-left: 3px solid var(--h10-grey-100); border-bottom: 1px solid var(--h10-grey-100); }
 .h10-ram-row:hover { background: var(--h10-grey-25); }
 .h10-ram-row .b { min-width: 0; flex: 1 1 auto; }
-.h10-ram-row .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+/* 🔴 `line-height: normal` on both lines, matching the reference. Inheriting the app's 1.45 body
+   line-height pushed the row to 62px against the prototype's measured 56.5px — and note the
+   README's "~44px" is wrong about its own prototype, so the reference is what this matches. */
+.h10-ram-row .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; line-height: normal; }
 .h10-ram-row .nm { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--h10-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 🔴 A BARE WORD — no chip, no pill, no fill. The handoff's deliberate replacement for the old
    Automation column of chips, and a deliberate reversal of the filled badges D2d added. */
 .h10-ram-row .md { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--h10-grey-400); }
-.h10-ram-row .l2 { display: flex; align-items: baseline; gap: 7px; min-width: 0; margin-top: 2px; font-family: var(--font-mono), ui-monospace, monospace; font-size: 12.5px; }
+.h10-ram-row .l2 { display: flex; align-items: baseline; gap: 7px; min-width: 0; margin-top: 2px; line-height: normal; font-family: var(--font-mono), ui-monospace, monospace; font-size: 12.5px; }
 .h10-ram-row .cond { color: var(--h10-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ram-row .arw { flex-shrink: 0; color: var(--h10-grey-400); }
 .h10-ram-row .dl { flex-shrink: 0; font-weight: 600; }

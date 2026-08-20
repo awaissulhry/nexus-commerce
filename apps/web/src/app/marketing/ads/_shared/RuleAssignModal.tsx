@@ -106,8 +106,16 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
   const [value, setValue] = useState('')
   const [percent, setPercent] = useState('')
 
+  /**
+   * 🔴 Mode order, matching the reference. The prototype lists AUTO · AUTO · PROPOSE · PROPOSE ·
+   * OFF · OFF — armed first — while our catalogue arrives alphabetical, which put PROPOSE above
+   * AUTO on prod. The README does not mention sorting; the reference is the artefact the handoff
+   * calls final, so this follows it. Stable within a band, so alphabetical still shows through.
+   */
+  const RANK: Record<string, number> = { AUTO: 0, PROPOSE: 1, OBSERVE: 2, OFF: 3 }
+
   const shown = useMemo(() => {
-    const shaped = all.map((r) => ({
+    const shaped = [...all].sort((a, b) => (RANK[a.level] ?? 9) - (RANK[b.level] ?? 9)).map((r) => ({
       ...r,
       condition: r.conditionsText || 'No conditions — matches every context',
       delta: deltaOf(r.percent),
