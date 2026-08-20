@@ -79,16 +79,34 @@
  *    the Automations mode dial had been silently refusing 14 notches the whole time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import dynamic from 'next/dynamic'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { ruleLookback, ACTION_WINDOW, HARVEST_DEFAULTS, type RuleLookback } from '@nexus/shared/ads-rule-window'
+import {
+  RULE_TAB_THRESHOLDS, THRESHOLD_SPEC, readThreshold, readThresholds, thresholdClauses, defaultClauses, eur,
+  type ThresholdKey, type ThresholdRead,
+} from './ruleThresholds'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
 import { RuleTypeModal } from './RuleTypeModal'
 import { NoDataIllus } from './NoDataIllus'
 import { HistoryDrawer } from '../tabs/RuleListTab'
-import { emitAdsChange } from './adsBus'
+import { emitAdsChange, useAdsSync } from './adsBus'
+
+/**
+ * B5 — the rule builder, mounted OVER this grid rather than navigated to.
+ *
+ * Lazy on purpose. `RuleBuilder.tsx` is ~94 KB of source and was previously only in the
+ * `/builder/<slug>` route's chunk; importing it eagerly here would put it in the first-load bundle
+ * of all seven rule-type tabs to serve a panel most visits never open.
+ *
+ * `ssr: false` because it reads `useSearchParams` and paints a fixed overlay — there is nothing
+ * useful to render on the server for a panel that is closed on arrival.
+ */
+const RuleBuilder = dynamic(() => import('./RuleBuilder').then((m) => m.RuleBuilder), { ssr: false })
 
 const BUILDER_SLUGS = new Set(RULE_TYPES.map((r) => r.slug))
 
@@ -108,6 +126,8 @@ interface RuleRow {
   criteria: string
   /** P1 — the Criteria cell's tooltip. The cell used to be its own title, so "Always" was unexplainable. */
   criteriaWhy: string
+  /** P2 — every IF-side threshold on the action this tab describes, with where each number came from. */
+  thresholds: Record<ThresholdKey, ThresholdRead>
   freqDay: string
   freqTime: string
   /** B2 — the window this rule actually reads, derived; see `@nexus/shared/ads-rule-window`. */
@@ -170,7 +190,15 @@ const TRIGGER_LABEL: Record<string, string> = {
 /** An unmapped trigger still reads like its neighbours rather than shouting its enum. */
 const humanTrigger = (t: string) => TRIGGER_LABEL[t] ?? (t ? `On ${t.toLowerCase().replace(/_/g, ' ')}` : 'No trigger')
 
-const money = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { maximumFractionDigits: 2 })}`
+/**
+ * P2 — one money formatter for this grid, in `./ruleThresholds`.
+ *
+ * 🔴 It had `maximumFractionDigits: 2` and no minimum, so €15.50 rendered as **"€15.5"**. Latent
+ * only because no rule in the account stores a non-round cent amount today; a Criteria clause and a
+ * threshold column formatting the same €15.50 two different ways in one row is what the shared
+ * reader exists to prevent.
+ */
+const money = eur
 
 /**
  * 🔴 A ratio field is stored BOTH ways and the grid must not pick one.
@@ -226,29 +254,15 @@ interface BuilderGroup { conditions?: Array<{ metric?: string; op?: string; valu
  * of it, and it is the fabricated-cell class this section has now shipped three times
  * ([[reference_fleet_stale_constant_class]]).
  *
- * This is a strict ALLOWLIST of IF-side keys, and it has to stay one. The parameter census that
- * produced it (`apps/api/scripts/_hvr-params.mts`, every action type in the account) is mostly
- * THEN-side — `reason`, `message`, `percent`, `target`, `campaignIds`, `floorCents` — and rendering
- * any of those as a condition would invent a criterion the same way "Always" invented an absence.
- * `maxAcosPct` is here with **zero rows carrying it today**: the builder can produce it and H10's
- * grid has a column for it, so the reader exists before the data rather than after.
+ * The allowlist, its formatting and its handler fallbacks all live in `./ruleThresholds` — P2
+ * moved them there so the Criteria clauses and the threshold COLUMNS read one table. Two readers
+ * of one field is how the Ad Manager came to print a fabricated 30.00% beside the truth
+ * ([[reference_shared_rule_column_cells]]).
+ *
+ * 🔴 `thresholdClauses` omits whatever has a column on the current tab, so a threshold is a column
+ * **or** a clause and never both. On Keyword Harvest the order threshold is a column and drops out
+ * of this sentence; on Negative Targeting, where it has no column, it stays in it.
  */
-const PARAM_CLAUSE: Record<string, (v: number) => string> = {
-  minOrders: (v) => `≥ ${v} order${v === 1 ? '' : 's'}`,
-  minClicks: (v) => `≥ ${v} click${v === 1 ? '' : 's'}`,
-  minSpendCents: (v) => `spend ≥ ${money(v)}`,
-  maxAcosPct: (v) => `ACoS ≤ ${asPercent(v)}`,
-}
-/** The IF-side clauses an action carries in its own parameters, in a stable reading order. */
-function paramClauses(action: Record<string, unknown> | null): string[] {
-  if (!action) return []
-  const out: string[] = []
-  for (const [key, fmt] of Object.entries(PARAM_CLAUSE)) {
-    const raw = action[key]
-    if (typeof raw === 'number' && Number.isFinite(raw)) out.push(fmt(raw))
-  }
-  return out
-}
 
 /**
  * What an engine rule with NO criteria of its own is actually bound by — never "Always".
@@ -261,11 +275,14 @@ function paramClauses(action: Record<string, unknown> | null): string[] {
  *   keyword. That rule really does act without reading anything, and it is the only case where
  *   the honest word is close to "always".
  */
-function noCriteria(actionType: string, trigger: string): { text: string; why: string } {
+function noCriteria(action: Record<string, unknown> | null, trigger: string, tabKey?: string): { text: string; why: string } {
+  const actionType = String(action?.type ?? '')
   if (actionType === 'harvest_and_negate') {
     const d = HARVEST_DEFAULTS
+    // Only the defaults with no column of their own — the columned ones say "default" themselves.
+    const shown = defaultClauses(action, tabKey)
     return {
-      text: `Defaults: ≥ ${d.minOrders} orders · spend ≥ ${money(d.minSpendCents)}`,
+      text: shown.length ? `Defaults: ${shown.join(' · ')}` : 'Defaults — nothing set on this rule',
       why: `This rule sets no thresholds of its own, so the harvest handler's defaults decide: at least ${d.minOrders} orders to graduate a term, and at least ${money(d.minSpendCents)} of spend with no orders to negate one, over ${d.windowDays} days. Those are fallbacks in automation-action-handlers.ts, not values anyone chose here — open the rule to set your own.`,
     }
   }
@@ -290,11 +307,23 @@ function noCriteria(actionType: string, trigger: string): { text: string; why: s
  */
 interface RuleCriteria { text: string; why: string }
 
-function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCriteria {
-  const conds = Array.isArray(rule.conditions) ? rule.conditions : []
+/**
+ * The action a given tab is describing — the one whose type put the rule on that tab, falling back
+ * to `actions[0]`.
+ *
+ * Extracted in P2 because a second cell now needs it. It was inline in `summariseRule`, and the
+ * Criteria cell and the threshold columns reading the action by two different rules is exactly how
+ * one rule comes to describe two different halves of itself in one row.
+ */
+function tabActionOf(rule: Record<string, unknown>, tabKey?: string): Record<string, unknown> | null {
   const actions = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
   const want = tabKey ? RULE_TAB_ACTION_TYPES[tabKey] : undefined
-  const a0 = (want ? actions.find((a) => want.includes(String(a?.type ?? ''))) ?? actions[0] : actions[0]) ?? null
+  return (want ? actions.find((a) => want.includes(String(a?.type ?? ''))) ?? actions[0] : actions[0]) ?? null
+}
+
+function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCriteria {
+  const conds = Array.isArray(rule.conditions) ? rule.conditions : []
+  const a0 = tabActionOf(rule, tabKey)
   const nested = conds.length > 0 && !!conds[0] && typeof conds[0] === 'object' && 'conditions' in (conds[0] as object)
 
   if (nested) {
@@ -338,22 +367,38 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
 
   // No `conditions` — but that is not the same as no criteria. Read the action's own parameters
   // first, and only when THOSE are empty say what really binds the rule.
-  const params = paramClauses(a0)
+  const params = thresholdClauses(a0, tabKey)
+  /**
+   * The thresholds this tab shows as COLUMNS, named in the tooltip so the sentence stays complete
+   * even though the cell no longer carries them. Without this, "spend ≥ €10 → harvest and negate"
+   * reads as the rule's whole criterion when there are two more conditions one column to the left.
+   */
+  const columned = (tabKey ? RULE_TAB_THRESHOLDS[tabKey] ?? [] : [])
+    .map((k) => { const r = readThreshold(a0, k); return r.value == null ? null : THRESHOLD_SPEC[k].clause(r.value) })
+    .filter(Boolean) as string[]
+  const alsoText = columned.length ? ` It also requires ${columned.join(' and ')}, shown in its own column${columned.length === 1 ? '' : 's'}.` : ''
   if (params.length) {
     const ps = params.join(' · ')
     return {
       text: then ? `${ps} → ${then}` : ps,
-      why: `This rule fires when ${ps}${then ? `, and then: ${then}` : ''}. Those thresholds are stored on the action rather than in the rule's conditions, which is how an engine rule carries them — it is the same criterion either way.`,
+      why: `This rule fires when ${ps}${then ? `, and then: ${then}` : ''}. Those thresholds are stored on the action rather than in the rule's conditions, which is how an engine rule carries them — it is the same criterion either way.${alsoText}`,
     }
   }
-  const bare = noCriteria(type, String(rule.trigger ?? ''))
-  return { text: then ? `${bare.text} → ${then}` : bare.text, why: bare.why }
+  const bare = noCriteria(a0, String(rule.trigger ?? ''), tabKey)
+  return { text: then ? `${bare.text} → ${then}` : bare.text, why: bare.why + alsoText }
 }
 
 function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
   const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) as
     { type?: string; control?: string; schedule?: { frequency?: string; time?: string } } | null
   const crit = summariseRule(rule, tabKey)
+  /**
+   * 🔴 P2 reads the thresholds off the action THIS TAB describes, not `actions[0]`, for the same
+   * measured reason the Criteria cell does (U5): "Daily automation digest" lists on three tabs and
+   * `actions[0]` is `bid_to_target_acos`, which carries no thresholds at all — reading position 0
+   * would have printed an empty Order Threshold on a rule that harvests at ≥2 orders.
+   */
+  const tabAction = tabActionOf(rule, tabKey)
   const builder = isBuilderRule(rule)
   const s = a?.schedule
   let freqDay = ''
@@ -382,6 +427,7 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
     enabled: rule.enabled !== false,
     criteria: crit.text,
     criteriaWhy: crit.why,
+    thresholds: readThresholds(tabAction),
     freqDay,
     freqTime,
     /**
@@ -512,6 +558,39 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   /** B1 — "+ Rule" opens H10's "Select a Rule Type" modal rather than jumping to the builder. */
   const [picker, setPicker] = useState(false)
   /**
+   * B5 — WHICH rule the builder overlay is open on, held in the URL rather than in state.
+   *
+   * The operator study: hovering a rule name reveals "Open", and clicking it "triggers a modal
+   * overlay containing the exact configuration of that rule… without navigating away from the
+   * page". Until now Open was an `<a href>` to `/builder/<slug>?ruleId=…`, which loses the grid,
+   * the scroll position, the search box and the selection.
+   *
+   * 🔴 The overlay needs NO changes to `RuleBuilder` at all, and that is the point — it is the
+   * same component the `/builder/<slug>` route mounts, with the same props and the same
+   * interactions, not a second copy behaving slightly differently. Three facts make it fit:
+   *   · `.h10-rb` is already `position: fixed; inset: 0; z-index: 130` — the builder has always
+   *     BEEN a full-screen overlay; only the route ever mounted it.
+   *   · it reads its target from `useSearchParams().get('ruleId')`, so putting `?ruleId=` on THIS
+   *     route is all it takes to aim it.
+   *   · its Cancel and both save paths `router.push('/rules-automation/<ownTab>')` — from a tab
+   *     route that is the same page minus the query, so the overlay closes itself and the grid is
+   *     still underneath, already scrolled where it was.
+   *
+   * The `/builder/<slug>?ruleId=` route stays exactly as it was: deep links, bookmarks and the
+   * empty state's "Create Rule" all still work, and that page is unchanged by this.
+   */
+  const router = useRouter()
+  const params = useSearchParams()
+  const openRuleId = params.get('ruleId')
+  /**
+   * B5 — bumped to re-run the reads below. The builder emits `ads.rule.changed` on both of its
+   * save paths, and before this the grid only ever fetched on mount: saving in the overlay closed
+   * it onto a row still showing the OLD criteria, which reads as "the save did not work". The
+   * badge counts already refreshed on this signal; the grid under them did not.
+   */
+  const [reloadNonce, setReloadNonce] = useState(0)
+  useAdsSync(['ads.rule.changed'], useCallback(() => setReloadNonce((n) => n + 1), []))
+  /**
    * How far each rule is ALLOWED to be trusted, by rule id. Second, parallel, non-blocking read —
    * the grid renders from `/automation-rules` and this only refines the Automation toggle when it
    * lands. If it never lands the toggle still works: the same policy is enforced server-side and
@@ -587,7 +666,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       })
       .catch(() => { if (alive) setActivityFailed(true) })
     return () => { alive = false }
-  }, [tabKey])
+  }, [tabKey, reloadNonce])
 
   useEffect(() => { noticeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [notice])
 
@@ -727,6 +806,47 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [
+    /**
+     * 🔴 P2 — H10's threshold columns, for the tabs that declare them in `RULE_TAB_THRESHOLDS`.
+     *
+     * H10's KB describes the Keyword Harvest view as showing *"the Order and Max ACoS Thresholds
+     * configured for each rule and whether the rule is automated"*, and the operator's study quotes
+     * the cells as "Min 3 Orders" / "Max 30% ACoS". They sit immediately after the rule name,
+     * before Lookback, which is where both studies put them.
+     *
+     * Three states per cell, and rendering any two of them the same is the whole failure mode:
+     * · the RULE stores the number            → plain
+     * · the rule stores nothing and the HANDLER has a documented default → muted, labelled "default"
+     * · nothing stores it and no default exists → an em dash whose tooltip says what that MEANS
+     *
+     * That third state is not a blank. Measured on prod 2026-08-20, **no rule in this account
+     * carries `maxAcosPct`**, so the Max ACoS column is an em dash on every row — and its tooltip
+     * says a harvest rule with no ACoS ceiling will promote a converting term however expensive
+     * the conversion was. A column that is empty for all of the data is only decoration if it
+     * declines to say why it is empty.
+     */
+    ...(RULE_TAB_THRESHOLDS[tabKey] ?? []).map((key): GridColumn<RuleRow> => {
+      const spec = THRESHOLD_SPEC[key]
+      return {
+        key: `threshold-${key}`, label: spec.column, tip: spec.columnTip, metric: false, sortable: true,
+        // Rows with no threshold sink in both sort directions, so ascending surfaces the LOWEST
+        // real bar rather than a row that has none — the same rule the Lookback column follows.
+        sortValue: (r) => r.thresholds[key].value,
+        render: (r) => {
+          const t = r.thresholds[key]
+          if (t.value == null) return <span className="h10-rg-thr none" title={spec.absent}>—</span>
+          if (t.source === 'default') {
+            return (
+              <span
+                className="h10-rg-thr default"
+                title={`${spec.cell(t.value)} — but this rule sets no threshold of its own, so that is the handler's fallback rather than a value anyone chose. Open the rule to set your own.`}
+              >{spec.cell(t.value)} <i>default</i></span>
+            )
+          }
+          return <span className="h10-rg-thr" title={`Set on this rule: ${spec.cell(t.value)}.`}>{spec.cell(t.value)}</span>
+        },
+      }
+    }),
     /**
      * B2 — Lookback Period. The operator study's column, and the one that had no field behind it.
      *
@@ -932,10 +1052,37 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         ><Trash2 size={14} aria-hidden /></button>
       ),
     },
-  ], [raw, ceilings, pending, setAutomation, activity, activityFailed])
+  ], [raw, ceilings, pending, setAutomation, activity, activityFailed, tabKey])
+
+  /**
+   * B5 — open the builder OVER the grid: same page, `?ruleId=` added.
+   *
+   * `router.push` rather than `replace`, so Back closes the overlay — which is what a modal's
+   * Escape-equivalent should do and what a browser user will try first. `scroll: false` keeps the
+   * grid exactly where it was for when the overlay closes again.
+   */
+  const openRule = useCallback((id: string) => {
+    const next = new URLSearchParams(params.toString())
+    next.set('ruleId', id)
+    router.push(`?${next.toString()}`, { scroll: false })
+  }, [params, router])
 
   const renderFirst = (r: RuleRow): ReactNode => {
+    /**
+     * Still a real `href`, and still the BUILDER route's URL, even though the click is
+     * intercepted. Middle-click, cmd-click and "Copy link address" therefore keep working and
+     * land somewhere that renders the same rule — a button would have thrown all three away, and
+     * an `href` pointing at the current page would make "open in new tab" produce a grid instead
+     * of the rule the operator asked for.
+     */
     const href = `${builderHref}?ruleId=${r.id}`
+    // A plain left-click, with no modifier, is the one case that becomes the overlay.
+    const overlay = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+      e.preventDefault()
+      openRule(r.id)
+    }
     // `h10-rg-namew` scopes the truncation cap added at the end of rules-automation.css to THIS
     // grid: the class it sits beside, `h10-nt-namew`, is also used by the Budget Pacing page's
     // schedules section, and capping a neighbour's column is not this unit's business.
@@ -943,7 +1090,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       <span className="h10-nt-namew h10-rg-namew">
         {/* title: the cap above truncates long names (rank rules carry the whole ASIN title), so
             the full name has to stay readable without opening the rule. */}
-        <a className="h10-nt-name" href={href} title={r.name}>{r.name}</a>
+        <a className="h10-nt-name" href={href} title={r.name} onClick={overlay}>{r.name}</a>
         {/* 🔴 `enabled` and the Automation mode are two different switches, and a row that shows
             "Automate" while the rule is disabled reads as armed when it can do nothing. Measured on
             prod 2026-08-16: a rule created in the builder is stored `enabled: false`, so it never
@@ -952,7 +1099,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
           <span className="h10-bd7-posture off" title="This rule is disabled — it is never evaluated, whatever its Automation mode says. Enable it on the Automations page.">off</span>
         )}
         <span className="h10-nt-acts">
-          <a className="h10-nt-open" href={href} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
+          <a className="h10-nt-open" href={href} onClick={overlay}><ExternalLink size={11} /> Open</a>
           <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
             <Clock size={11} /> History
           </button>
@@ -1040,6 +1187,13 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       )}
       {historyRule && <HistoryDrawer rule={historyRule} onClose={() => setHistoryRule(null)} />}
       {picker && <RuleTypeModal initial={builderSlug} onClose={() => setPicker(false)} />}
+      {/**
+        * B5 — the builder, over the grid. `?ruleId=` is both the trigger and the argument: this
+        * mounts on it, and RuleBuilder reads the same param to know which rule to load. No
+        * `onClose` is passed because it does not take one — Cancel and both save paths already
+        * push back to this tab's route, which drops the query and unmounts this.
+        */}
+      {openRuleId && <RuleBuilder slug={builderSlug} />}
     </>
   )
 }

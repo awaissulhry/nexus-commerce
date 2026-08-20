@@ -5296,3 +5296,17 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-act.unknown { font-weight: 500; font-style: italic; color: #6b7280; }
 .h10-rg-act.pendingread { color: #c3cad3; }
 .h10-rg-act:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; border-radius: 4px; }
+
+/* ── P2: H10's threshold columns (Order Threshold · Max ACoS) ────────────────────────────────────
+   Three states, and rendering any two of them alike is the failure mode this column exists to
+   avoid: a number the RULE sets, a number the HANDLER falls back to, and no number at all.
+   The `default` marker copies `.h10-rg-act.wrote em` deliberately — B4 measured that ink one
+   commit earlier on this same grid, and a second grey for the same idea is how a table starts
+   looking like two tables. Appended at the END of this file: source order decides against
+   equal-specificity neighbours ([[reference_css_source_order_beats_specificity]]). */
+.h10-rg-thr { display: inline-flex; align-items: baseline; gap: 5px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #16202b; }
+.h10-rg-thr i { font-style: normal; font-weight: 500; font-size: 11.5px; color: #6b7280; }
+.h10-rg-thr.default { font-weight: 500; }
+/* The em dash is a STATEMENT, not a blank — it carries the only sentence saying this rule has no
+   such ceiling, so it must be legible and hoverable rather than faded to the edge of visible. */
+.h10-rg-thr.none { font-weight: 500; color: #6b7280; cursor: help; }
