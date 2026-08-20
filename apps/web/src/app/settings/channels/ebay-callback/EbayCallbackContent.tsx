@@ -65,10 +65,6 @@ export default function EbayCallbackContent() {
             code,
             state,
             connectionId,
-            // MAP.4 — set by Reconnect in the Accounts panel. It says "this grant
-            // is for THAT account", which is the only thing that lets the server
-            // adopt a grant onto a connection that predates the identity scope
-            // instead of refusing it as an unmatched identity.
             redirectUri: window.location.origin + "/settings/channels/ebay-callback",
           }),
         });
@@ -80,15 +76,43 @@ export default function EbayCallbackContent() {
 
         const result = await callbackResponse.json();
 
+        const sellerName = result.connection?.sellerName || "Unknown";
         setStatus("success");
-        setMessage(
-          `✓ eBay connection successful!\n\nSeller: ${result.connection.sellerName || "Unknown"}`
-        );
+        setMessage(`✓ eBay connection successful!\n\nSeller: ${sellerName}`);
 
-        // Redirect after 2 seconds
+        // This page usually runs inside the POPUP the connect flow opened, and a
+        // popup must not navigate itself to the settings page: that leaves Nexus
+        // rendered inside a 1000x800 window that never closes, while the tab the
+        // operator actually works in still shows the stale account list.
+        //
+        // So: tell the opener, then close. `postMessage` is targeted at our own
+        // origin, never "*", so the message cannot be read by another site if the
+        // window is ever reused.
+        const opener = window.opener as Window | null;
+        let notified = false;
+        try {
+          if (opener && !opener.closed) {
+            opener.postMessage(
+              { type: "nexus:channel-connected", channel: "EBAY", sellerName },
+              window.location.origin,
+            );
+            notified = true;
+          }
+        } catch {
+          // Cross-origin or already gone — fall through to navigating instead.
+        }
+
         setTimeout(() => {
-          router.push("/settings/channels");
-        }, 2000);
+          if (notified) {
+            window.close();
+            // If the browser refuses to close a window it did not script-open,
+            // do not strand the operator on a dead confirmation screen.
+            setTimeout(() => router.push("/settings/channels"), 400);
+          } else {
+            // No opener: the popup was blocked and the flow ran in this tab.
+            router.push("/settings/channels");
+          }
+        }, 1200);
       } catch (err) {
         setStatus("error");
         setMessage(

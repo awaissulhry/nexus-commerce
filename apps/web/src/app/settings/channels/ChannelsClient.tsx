@@ -105,6 +105,8 @@ export function ChannelsClient() {
   const [loading, setLoading] = useState(true)
   const [statusMsg, setStatusMsg] = useState<{ kind: 'error' | 'success' | 'info'; text: string } | null>(null)
   const [connectingChannel, setConnectingChannel] = useState<string | null>(null)
+  // Bumped when the OAuth popup reports success, so the panel refetches.
+  const [accountsReload, setAccountsReload] = useState(0)
   const [testingId, setTestingId] = useState<string | null>(null)
   // HH — diagnostics state for the eBay card. We keep it local rather
   // than threading through to status banner so the result sits next
@@ -116,6 +118,31 @@ export function ChannelsClient() {
     recommendation: string
     details: string
   } | null>(null)
+
+  // The connect flow runs in a POPUP, so success happens in a window this one
+  // cannot see. The popup posts back to our origin; we verify the origin, then
+  // refresh instead of leaving the operator on a stale list.
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return
+      const data = e.data as { type?: string; channel?: string; sellerName?: string } | null
+      if (data?.type !== 'nexus:channel-connected') return
+      setConnectingChannel(null)
+      setAccountsReload((n) => n + 1)
+      // Confirm LAST. loadConnections sets its own error banner on failure, and a
+      // refresh that stumbles must not erase the news that the connection worked
+      // — the connection is the fact, the refresh is just the view catching up.
+      void loadConnections().finally(() => {
+        setStatusMsg({
+          kind: 'success',
+          text: `${data.channel === 'EBAY' ? 'eBay' : data.channel} account connected${data.sellerName ? `: ${data.sellerName}` : ''}.`,
+        })
+      })
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     loadConnections()
@@ -359,6 +386,7 @@ export function ChannelsClient() {
         // state, not sessionStorage — a popup does not inherit storage written
         // after it was opened.
         onReconnect={(a) => void handleConnectEbay(a.id)}
+        reloadSignal={accountsReload}
         confirm={askConfirm}
       />
 

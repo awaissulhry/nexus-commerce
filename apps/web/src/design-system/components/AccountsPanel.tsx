@@ -34,6 +34,13 @@ export interface AccountsPanelProps {
    * refused as an unmatched identity.
    */
   onReconnect?: (account: AccountRow) => void | Promise<void>
+  /**
+   * Change this to force a refetch. The host owns the events that mean "an
+   * account changed outside this panel" — an OAuth popup reporting back, say —
+   * and a DS component should not be listening for app-specific window messages
+   * to find that out.
+   */
+  reloadSignal?: unknown
   /** The host app's confirm dialog. Falls back to a plain one when absent. */
   confirm?: (opts: {
     title: string
@@ -87,7 +94,7 @@ function describeBlastRadius(b: BlastRadius): string {
   return `${parts.join(', ')} are attributed to it. They are kept — the account is deactivated, never deleted, so history still says which account each row came from.`
 }
 
-export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, className }: AccountsPanelProps) {
+export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, className, reloadSignal }: AccountsPanelProps) {
   const [data, setData] = useState<AccountsPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -113,7 +120,7 @@ export function AccountsPanel({ apiBase, onConnect, onReconnect, confirm, classN
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, reloadSignal])
 
   /** Every mutation refetches rather than patching local state: the server owns
    *  which account is primary, and guessing it here is how two surfaces come to
