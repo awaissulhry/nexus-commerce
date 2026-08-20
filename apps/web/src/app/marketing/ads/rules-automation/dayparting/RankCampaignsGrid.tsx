@@ -200,6 +200,9 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
         // `selectionActions`, so every row carried a checkbox and an "N selected" count that could
         // do nothing — a dead affordance of exactly the class the silent-disabled work removes.
         // Bulk verbs for campaigns are a real later unit; the affordance returns WITH its actions.
+        // 🔴 Explicit `false`: AdsDataGrid DEFAULTS selectable to true, so merely dropping the
+        // prop ships the same dead checkboxes — measured on prod before this line existed.
+        selectable={false}
         customizable
         // 🔴 Its OWN key. Sharing `rank-goals-grid` would apply a saved Schedules layout to a
         // fourteen-column grain and silently hide columns that do not exist in the other.
