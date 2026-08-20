@@ -5227,3 +5227,20 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    the operator to ignore the column. */
 .h10-au-prio { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12.5px; font-weight: 700; color: #16202b; font-variant-numeric: tabular-nums; }
 .h10-au-prio.default { font-weight: 500; color: #9aa3ae; }
+
+/* ── B1 (2026-08-20) — the rules grid's Actions cell ───────────────────────────────────────────
+   One verb, the operator study's trash can. Always painted, never hover-revealed: Open/History on
+   the name cell are shortcuts to things reachable another way, but delete is not, and a control
+   revealed only on hover is one a keyboard user never finds.
+
+   The resting ink is #5b6674 on the row's white ground (7.0:1) rather than a light grey, because
+   this is the only destructive control on the row and it must not read as decoration. Red arrives
+   on hover/focus (#a3211a, 7.4:1) — the same danger ink `.h10-rowmenu button.danger` already uses,
+   so the section has one red rather than a second one invented here.
+
+   Defined in this stylesheet on purpose: an undefined class is silent
+   (reference_undefined_css_class_is_silent), and this is the file every other h10-* rules-grid
+   class lives in. */
+.h10-rg-del { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 7px; background: none; color: #5b6674; cursor: pointer; transition: color .1s, background .1s, border-color .1s; }
+.h10-rg-del:hover { background: #fbdedb; border-color: #f3c4bf; color: #a3211a; }
+.h10-rg-del:focus-visible { outline: 2px solid #1f6fde; outline-offset: 1px; color: #a3211a; }

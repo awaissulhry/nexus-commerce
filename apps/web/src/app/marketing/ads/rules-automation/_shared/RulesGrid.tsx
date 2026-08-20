@@ -8,9 +8,19 @@
  * tab in H10 is ONE card and nothing else:
  *
  *   "Showing 0 Bid Rules" 🔍                                                        [+ Rule]
- *   ☐ · Bid Rule ⇅ · Automation · Criteria · Frequency
+ *   ☐ · Bid Rule ⇅ · Criteria · Frequency · Automation · Actions
  *   (empty) illustration · "Create a Bid Rule to generate suggestions for a campaign!" · Create Rule
  *   ‹ 1 ›                                                                Rows per page: 100
+ *
+ * 🔴 **B1 (2026-08-20) — the column set is the UNION of two studies that disagree, deliberately.**
+ * The operator's 2026-08-20 study of H10's Bid tab reads the grid as *Rule Name · Lookback Period ·
+ * Frequency · Automate · Actions(🗑)*. The frame-by-frame study of the operator's own recording
+ * (`docs/2026-08-16-ra-h10-reference-study.md` §3.2 · §5.2, 12,285 frames) reads it as *☐ · ⋮ ·
+ * Rule ⇅ · Automation · Criteria · Frequency*, with Lookback living inside the builder's criteria
+ * card. Rather than pick a winner, the grid carries both: Criteria stays (it is the most useful
+ * cell here), and the study's Actions column lands in B1 with Lookback following in B2 — where it
+ * has to be DERIVED, because no rule stores a lookback (see the Frequency cell's note below for
+ * the same class of problem, already solved this way once).
  *
  * This is a PROMOTION, not a rewrite: the body is `tabs/RuleListTab.tsx` — the grid this section
  * already had and mounted nowhere — with its seed/placeholder half removed (every row is live now),
@@ -74,6 +84,7 @@ import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
+import { RuleTypeModal } from './RuleTypeModal'
 import { NoDataIllus } from './NoDataIllus'
 import { HistoryDrawer } from '../tabs/RuleListTab'
 import { emitAdsChange } from './adsBus'
@@ -309,6 +320,8 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [bulk, setBulk] = useState<{ kind: BulkKind; ids: string[] } | null>(null)
   const [historyRule, setHistoryRule] = useState<{ id: string; name: string } | null>(null)
+  /** B1 — "+ Rule" opens H10's "Select a Rule Type" modal rather than jumping to the builder. */
+  const [picker, setPicker] = useState(false)
   /**
    * How far each rule is ALLOWED to be trusted, by rule id. Second, parallel, non-blocking read —
    * the grid renders from `/automation-rules` and this only refines the Automation toggle when it
@@ -326,6 +339,14 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
    */
   const noticeRef = useRef<HTMLDivElement | null>(null)
   const nounLower = noun.toLowerCase()
+  /**
+   * B1 — the builder slug for this tab, taken from the href the caller already passes rather than
+   * from a new prop. The last segment of `builderHref` IS the slug on all seven call sites
+   * (`/builder/keyword-harvesting`, `/builder/sov`, …), so the two can never disagree; a href that
+   * ever stops matching a `RULE_TYPES.slug` falls the modal back to its first option, which is
+   * exactly what it did before this existed.
+   */
+  const builderSlug = builderHref.split('?')[0].split('/').filter(Boolean).pop() ?? ''
 
   useEffect(() => {
     let alive = true
@@ -449,6 +470,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   const applyBulk = async (kind: BulkKind, ids: string[], payload?: { on?: boolean }) => {
     setBulk(null)
     if (kind === 'delete') {
+      setNotice(null)
       const deleted: string[] = []
       for (const id of ids) {
         try {
@@ -461,6 +483,18 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       setSel(new Set())
       // Once per logical operation, after the loop settled — never once per row (adsBus rule 1).
       if (deleted.length) emitAdsChange('ads.rule.changed')
+      /**
+       * 🔴 B1 — a delete that did not happen has to SAY so. The row staying put was the whole of
+       * the old feedback, and on a one-row delete from the trash icon that is indistinguishable
+       * from "nothing was clicked". Same law as the Automation toggle above: a refusal is never
+       * a failure, but neither is ever silent.
+       */
+      const lost = ids.length - deleted.length
+      if (lost) {
+        setNotice(lost === ids.length
+          ? `Nothing was deleted — the ${ids.length === 1 ? nounLower : `${lost} ${nounLower}s`} could not be removed. ${ids.length === 1 ? 'It is' : 'They are'} still listed below.`
+          : `${deleted.length} of ${ids.length} ${nounLower}s deleted. ${lost} could not be removed and ${lost === 1 ? 'is' : 'are'} still listed below.`)
+      }
       return
     }
     const on = !!payload?.on
@@ -485,6 +519,18 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [
+    { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit" title={r.criteria}>{r.criteria}</span> },
+    {
+      key: 'frequency', label: 'Frequency', metric: false, sortable: false,
+      render: (r) => (
+        <span
+          className="h10-nt-freq"
+          title={r.freqTime === 'engine cadence'
+            ? 'This rule stores no schedule — it is an engine rule and runs when its trigger fires, on the engine’s own cron.'
+            : undefined}
+        ><b>{r.freqDay}</b><span>{r.freqTime}</span></span>
+      ),
+    },
     {
       key: 'automation', label: 'Automation', metric: false, sortable: false,
       render: (r) => {
@@ -526,16 +572,26 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         )
       },
     },
-    { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit" title={r.criteria}>{r.criteria}</span> },
+    /**
+     * B1 — Actions. One verb: delete, the operator study's trash can ("the kill switch").
+     *
+     * Deliberately NOT hover-revealed, unlike Open/History on the name cell. Those two are
+     * shortcuts to things reachable another way (the rule's own page, the History drawer);
+     * delete is not reachable another way except by selecting the row first, and a control you
+     * have to discover by hovering is one a keyboard never finds. It is always painted, always
+     * tabbable, and it opens the SAME confirmation the bulk verb opens — one delete path, one
+     * sentence about what it costs, whether one row or forty.
+     */
     {
-      key: 'frequency', label: 'Frequency', metric: false, sortable: false,
+      key: 'actions', label: 'Actions', metric: false, sortable: false,
       render: (r) => (
-        <span
-          className="h10-nt-freq"
-          title={r.freqTime === 'engine cadence'
-            ? 'This rule stores no schedule — it is an engine rule and runs when its trigger fires, on the engine’s own cron.'
-            : undefined}
-        ><b>{r.freqDay}</b><span>{r.freqTime}</span></span>
+        <button
+          type="button"
+          className="h10-rg-del"
+          aria-label={`Delete ${r.name}`}
+          title={`Delete “${r.name}” — this deletes the rule, its execution history and any campaign assignments, and cannot be undone.`}
+          onClick={(e) => { e.stopPropagation(); setBulk({ kind: 'delete', ids: [r.id] }) }}
+        ><Trash2 size={14} aria-hidden /></button>
       ),
     },
   ], [raw, ceilings, pending, setAutomation])
@@ -614,7 +670,19 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         pagerCentered
         defaultSort={{ key: '__first', dir: 'asc' }}
         emptyNode={emptyNode}
-        toolbarRight={<a className="h10-am-btn primary" href={builderHref}><Plus size={13} aria-hidden /> Rule</a>}
+        /**
+         * B1 — H10's "+ Rule" opens the Rule Creation Modal and you pick the type there; it does
+         * not jump straight into a builder. `_shared/RuleTypeModal` has been that modal since the
+         * section was built and was mounted on exactly one route (`/builder` with no slug), so
+         * every tab's "+ Rule" bypassed it. It now opens here, seeded to this tab's own type — so
+         * the common path is one click longer by design, and creating a rule of a DIFFERENT type
+         * without leaving the tab stops being impossible.
+         *
+         * A button, not a link: it opens a dialog rather than navigating, and a `<a href>` that
+         * calls preventDefault is a middle-click that silently does the wrong thing. The empty
+         * state's "Create Rule" keeps its plain href — there is no grid to stay on there.
+         */
+        toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</button>}
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
             <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</button>
@@ -633,6 +701,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         />
       )}
       {historyRule && <HistoryDrawer rule={historyRule} onClose={() => setHistoryRule(null)} />}
+      {picker && <RuleTypeModal initial={builderSlug} onClose={() => setPicker(false)} />}
     </>
   )
 }
@@ -653,9 +722,15 @@ function BulkModal({ kind, count, nounLower, cappedCount, onApply, onClose }: {
         <div className="h10-ntm-h"><b>{TITLE[kind]}</b></div>
         <div className="h10-ntm-sub">
           {kind === 'delete'
-            // The warning says the whole cost: AutomationRuleExecution rows cascade with the rule,
-            // so its history — the evidence of what it did — is destroyed with it.
-            ? `Delete ${count} ${ruleNoun}? This deletes the rule AND its execution history, and cannot be undone.`
+            /**
+             * The warning says the whole cost. Two tables cascade with an `AutomationRule`:
+             * `AutomationRuleExecution` — its history, the evidence of what it did — and, since
+             * D1 landed on 2026-08-20, `CampaignRuleAssignment`, which is the tether the operator
+             * study describes ("it completely untethers the rule from any campaigns it was
+             * attached to"). Both are named, because a warning that lists one of two costs is
+             * read as the complete list.
+             */
+            ? `Delete ${count} ${ruleNoun}? This deletes the rule, its execution history and any campaign assignments it holds, and cannot be undone.`
             : `Apply to ${count} selected ${ruleNoun}.`}
           {kind === 'automation' && on && cappedCount > 0 && ` ${cappedCount} of them ${cappedCount === 1 ? 'creates or destroys something and is held below Auto' : 'create or destroy something and are held below Auto'} by the graduation ceiling — ${cappedCount === 1 ? 'it' : 'they'} will be left unchanged.`}
         </div>
