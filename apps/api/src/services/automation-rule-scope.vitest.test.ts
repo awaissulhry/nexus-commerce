@@ -164,3 +164,45 @@ describe('contextIdentity — product resolution', () => {
     expect(id.portfolioId).toBe('ext-gale')
   })
 })
+
+/**
+ * D1 (2026-08-20) — assignment. The three states are the feature, and the difference between
+ * "absent" and "[]" is what makes "a budget rule does nothing until it is assigned" true.
+ */
+describe('ruleMatchesScope — assignment (D1)', () => {
+  const ctx = { marketplace: 'IT', campaignId: 'c1', portfolioId: 'ext-gale' }
+  const bare = { scopeMarketplace: null, scopePortfolioId: null, scopeCampaignId: null }
+
+  it('ABSENT leaves every pre-D1 rule exactly as it was', () => {
+    expect(ruleMatchesScope({ ...bare }, ctx)).toBe(true)
+  })
+
+  it('EMPTY matches nothing — assigned to no campaign means it acts on none', () => {
+    expect(ruleMatchesScope({ ...bare, assignedCampaignIds: [] }, ctx)).toBe(false)
+  })
+
+  it('matches a campaign it is assigned to, and only that one', () => {
+    expect(ruleMatchesScope({ ...bare, assignedCampaignIds: ['c1'] }, ctx)).toBe(true)
+    expect(ruleMatchesScope({ ...bare, assignedCampaignIds: ['c2'] }, ctx)).toBe(false)
+    expect(ruleMatchesScope({ ...bare, assignedCampaignIds: ['c2', 'c1'] }, ctx)).toBe(true)
+  })
+
+  it('does not match a context with no campaign identity', () => {
+    // Same law the campaign/portfolio branches follow: "only my assigned campaigns' events"
+    // cannot honestly match an event that belongs to no campaign.
+    const acct = { marketplace: 'IT', campaignId: null, portfolioId: null }
+    expect(ruleMatchesScope({ ...bare, assignedCampaignIds: ['c1'] }, acct)).toBe(false)
+    expect(ruleMatchesScope({ ...bare, assignedCampaignIds: [] }, acct)).toBe(false)
+  })
+
+  it('is an AND with the scope columns, not a replacement for them', () => {
+    // Assignment points campaign -> rule; scopeMarketplace still points rule -> market. A rule
+    // assigned to c1 but scoped to DE must not fire on c1's IT context.
+    expect(ruleMatchesScope({ ...bare, scopeMarketplace: 'DE', assignedCampaignIds: ['c1'] }, ctx)).toBe(false)
+    expect(ruleMatchesScope({ ...bare, scopeMarketplace: 'IT', assignedCampaignIds: ['c1'] }, ctx)).toBe(true)
+  })
+
+  it('still honours a single-valued scopeCampaignId alongside an assignment', () => {
+    expect(ruleMatchesScope({ ...bare, scopeCampaignId: 'c2', assignedCampaignIds: ['c1'] }, ctx)).toBe(false)
+  })
+})

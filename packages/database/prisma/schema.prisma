@@ -2819,8 +2819,10 @@ model Campaign {
   pinnedBy     String?
   pinNote      String?
 
-  adGroups   AdGroup[]
-  bidHistory CampaignBidHistory[]
+  adGroups        AdGroup[]
+  bidHistory      CampaignBidHistory[]
+  /// D1 (2026-08-20) — the rules assigned to this campaign. See `CampaignRuleAssignment`.
+  ruleAssignments CampaignRuleAssignment[]
 
   @@unique([externalCampaignId, marketplace])
   @@index([marketplace, status])
@@ -12926,7 +12928,7 @@ model AutomationRule {
   /// The convention this encodes, from every platform in the nine-platform study: cost control
   /// before growth. A rule that yields is NOT silent — it records `yielded`, which is a different
   /// fact from "did not match" and from "refused at the gate".
-  priority                Int     @default(100)
+  priority Int @default(100)
 
   maxExecutionsPerDay     Int?    @default(100)
   /// CAP (2026-08-14) — the SECOND cap, in the unit damage is actually measured in.
@@ -12998,8 +13000,52 @@ model AutomationRule {
 
   executions AutomationRuleExecution[]
 
+  /// D1 (2026-08-20) — campaigns this rule is ASSIGNED to. See `CampaignRuleAssignment`.
+  assignments CampaignRuleAssignment[]
+
   @@index([domain, enabled])
   @@index([trigger])
+}
+
+/// ── D1 (2026-08-20) — per-campaign rule assignment ────────────────────────────────────────────
+///
+/// Operator study of Helium 10's Budget Rule column: a campaign carries an assigned rule, chosen
+/// from a dropdown, and a rule does nothing until it is assigned.
+///
+/// 🔴 **This is the INVERSE of the scope columns, which is why it needs its own table.**
+/// `AutomationRule.scopeCampaignId` is a single nullable string pointing rule → campaign, so
+/// assigning a rule to a second campaign MOVES it off the first. That is why "+ Assign Rule" was
+/// withheld on 2026-08-18 rather than shipped on top of it. Assignment points campaign → rule and
+/// is many-to-many; the two mechanisms coexist and `scopeCampaignId` is untouched.
+///
+/// ── The unique key is (campaignId, ruleId), NOT (campaignId, kind) — operator decision ─────────
+/// H10's dropdown holds one rule per campaign, and a strict `(campaignId, kind)` would express
+/// that. It is deliberately NOT used, because measured on prod 2026-08-20 **four enabled budget
+/// rules act on every campaign** (two AUTO cuts at −15% and −20%, two PROPOSE raises), so a strict
+/// key admits no faithful backfill: today's behaviour could not be reproduced and two live rules
+/// would stop cutting. The permissive key preserves reach exactly; thinning to one rule per
+/// campaign becomes an operator choice made through the column rather than a migration.
+/// ⚠️ Do not "tidy" this into `(campaignId, kind)` later: Prisma emits `ON CONFLICT` from the
+/// unique key, so narrowing it breaks every upsert caller at RUNTIME, not compile time.
+///
+/// `kind` groups assignments by what the rule governs ('budget' today) so the same table serves
+/// Bid and Placement assignment later without a second migration.
+model CampaignRuleAssignment {
+  id         String @id @default(cuid())
+  campaignId String
+  ruleId     String
+  /// 'budget' today. 'bid' | 'placement' | 'dayparting' follow the same H10 Assign Rule dialog.
+  kind       String @default("budget")
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  campaign Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  rule     AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, ruleId])
+  @@index([ruleId, kind])
+  @@index([campaignId, kind])
 }
 
 // B3 (Budget rule builder): reusable rule templates — saved criteria + THEN action,

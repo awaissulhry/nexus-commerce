@@ -37,6 +37,23 @@ export interface RuleScope {
    * instead of being re-derived at every comparison.
    */
   scopeProductIds?: string[] | null
+  /**
+   * D1 (2026-08-20) — the campaigns this rule is ASSIGNED to, from `CampaignRuleAssignment`.
+   *
+   * 🔴 Three states, and the difference between the last two is the whole feature:
+   *   · **absent / `undefined`** — this rule is not assignment-governed. Every caller that
+   *     predates D1 passes nothing and behaves exactly as before.
+   *   · **`[]`** — assignment-governed and assigned to nothing, so it matches NO campaign.
+   *     "A budget rule does nothing until it is assigned" is this line.
+   *   · **`[ids]`** — matches only those campaigns.
+   *
+   * A set, like `scopeProductIds`, and for the same reason: the caller resolves it once per tick
+   * and the matcher stays a pure intersection.
+   *
+   * ⚠️ This is NOT a narrowing of `scopeCampaignId` — it is a different mechanism pointing the
+   * other way (campaign → rule, many-to-many). Both apply, and both must pass.
+   */
+  assignedCampaignIds?: string[] | null
 }
 
 export interface ContextIdentity {
@@ -67,6 +84,14 @@ export function ruleMatchesScope(rule: RuleScope, ctx: ContextIdentity): boolean
     const have = ctx.productIds
     if (!have || have.length === 0) return false
     if (!have.some((p) => want.includes(p))) return false
+  }
+  // D1 — assignment. Present (even empty) means this rule reaches ONLY campaigns assigned to it,
+  // so an empty list matches nothing and a context with no campaign identity cannot match either:
+  // "only my assigned campaigns' events" cannot honestly match an event belonging to no campaign,
+  // which is the rule the campaign/portfolio branches above already follow.
+  if (rule.assignedCampaignIds != null) {
+    if (ctx.campaignId == null) return false
+    if (!rule.assignedCampaignIds.includes(ctx.campaignId)) return false
   }
   return true
 }

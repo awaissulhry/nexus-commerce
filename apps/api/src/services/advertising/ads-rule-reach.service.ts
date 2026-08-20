@@ -105,11 +105,33 @@ async function expandProducts(ids: string[]): Promise<Map<string, string[]>> {
  * endpoint, so a per-rule query would be 51 round trips.
  */
 export async function reachForRules(
-  rules: Array<{ id: string } & RuleScope & { scopeProductId?: string | null }>,
+  rules: Array<{ id: string } & RuleScope & { scopeProductId?: string | null; actions?: unknown }>,
 ): Promise<Map<string, RuleReach>> {
   const campaigns = await loadCampaigns()
   const productScoped = [...new Set(rules.map((r) => r.scopeProductId).filter((x): x is string => !!x))]
   const expanded = await expandProducts(productScoped)
+
+  /**
+   * D1 (2026-08-20) — assignment, read the same way the evaluator reads it.
+   *
+   * 🔴 This file's own header states the law: *"a reach number that disagrees with what actually
+   * runs is worse than none"*. The evaluator now refuses a budget rule on any campaign it is not
+   * assigned to, so a reach number computed from the scope columns alone would over-report — it
+   * would still say 220 for a rule assigned to three. Callers that do not select `actions` pass
+   * `undefined` and keep the old answer, which is correct for every non-budget rule.
+   */
+  const isBudgetRule = (actions: unknown): boolean =>
+    Array.isArray(actions) && actions.some((a) => String((a as { type?: unknown })?.type ?? '') === 'adjust_ad_budget')
+  const assignedByRule = new Map<string, string[]>()
+  const budgetRuleIds = rules.filter((r) => isBudgetRule(r.actions)).map((r) => r.id)
+  if (budgetRuleIds.length > 0) {
+    for (const id of budgetRuleIds) assignedByRule.set(id, [])
+    const links = await prisma.campaignRuleAssignment.findMany({
+      where: { ruleId: { in: budgetRuleIds }, kind: 'budget' },
+      select: { ruleId: true, campaignId: true },
+    })
+    for (const l of links) assignedByRule.get(l.ruleId)?.push(l.campaignId)
+  }
 
   const out = new Map<string, RuleReach>()
   for (const r of rules) {
@@ -118,6 +140,7 @@ export async function reachForRules(
       scopePortfolioId: r.scopePortfolioId,
       scopeCampaignId: r.scopeCampaignId,
       scopeProductIds: r.scopeProductId ? expanded.get(r.scopeProductId) ?? [r.scopeProductId] : null,
+      assignedCampaignIds: assignedByRule.get(r.id) ?? null,
     }
     let n = 0
     let live = 0

@@ -364,16 +364,39 @@ async function loadBudgetRules() {
  */
 async function ruleReach(rules: Awaited<ReturnType<typeof loadBudgetRules>>): Promise<Map<string, string[] | null>> {
   const out = new Map<string, string[] | null>()
+
+  /**
+   * 🔴 D1 (2026-08-20) — ASSIGNMENT decides reach for budget rules, so it is read FIRST and it
+   * wins. Every rule this function is given is a budget rule by construction (`loadBudgetRules`
+   * selects on an `adjust_ad_budget` action), which is exactly the set the evaluator now governs
+   * by assignment. Returning `null` ("every campaign") for one of them would make this grid claim
+   * a reach the engine refuses — the drift `ads-rule-reach.service.ts` warns about, on the page
+   * whose whole subject is what automation may do.
+   *
+   * An empty array is a real answer here: assigned to nothing, reaches nothing.
+   */
+  const links = await prisma.campaignRuleAssignment.findMany({
+    where: { ruleId: { in: rules.map((r) => r.id) }, kind: 'budget' },
+    select: { ruleId: true, campaignId: true },
+  })
+  const assigned = new Map<string, string[]>()
+  for (const r of rules) assigned.set(r.id, [])
+  for (const l of links) assigned.get(l.ruleId)?.push(l.campaignId)
+
   for (const r of rules) {
+    const byAssignment = assigned.get(r.id) ?? []
+    // The scope columns still bind — assignment is an AND with them, not a replacement, which is
+    // how `ruleMatchesScope` evaluates it.
     const unscoped = !r.scopeMarketplace && !r.scopePortfolioId && !r.scopeCampaignId && !r.scopeProductId
-    if (unscoped) { out.set(r.id, null); continue }
+    if (unscoped) { out.set(r.id, byAssignment); continue }
     const reach = await resolveScopeReach({
       marketplace: r.scopeMarketplace,
       portfolioId: r.scopePortfolioId,
       campaignId: r.scopeCampaignId,
       productId: r.scopeProductId,
     })
-    out.set(r.id, reach.campaignIds)
+    const scoped = reach.campaignIds
+    out.set(r.id, scoped == null ? byAssignment : byAssignment.filter((id) => scoped.includes(id)))
   }
   return out
 }

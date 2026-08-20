@@ -413,9 +413,43 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
    */
   const rules = await prisma.automationRule.findMany({
     where: { domain: 'advertising', trigger, enabled: true },
-    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true },
+    // D1 — `actions` joins the select so a BUDGET rule can be told apart from the rest. It is the
+    // same test `loadBudgetRules` uses (an `adjust_ad_budget` action), kept as one definition.
+    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true, actions: true },
   })
   if (rules.length === 0) return { evaluations, matches, capped, failed }
+
+  /**
+   * ── D1 (2026-08-20) — ASSIGNMENT, for budget rules ───────────────────────────────────────────
+   *
+   * Operator study of H10's Budget Rule column: a budget rule governs the campaigns it is
+   * ASSIGNED to, and does nothing until it is assigned. `CampaignRuleAssignment` points
+   * campaign → rule and is many-to-many — the inverse of `scopeCampaignId`, which is
+   * single-valued and therefore cannot express it.
+   *
+   * 🔴 The empty array is deliberate and load-bearing. Every budget rule gets an entry here, so a
+   * rule assigned to nothing arrives at the matcher as `[]` and matches NO campaign — which is the
+   * whole semantic. `null`/absent means "not assignment-governed" and leaves every other rule
+   * exactly as it was. Collapsing the two would make an unassigned budget rule account-wide again.
+   *
+   * Today's rows come from the backfill in migration `20260820b_d1_campaign_rule_assignment`,
+   * which made the six account-wide budget rules' existing reach explicit — so this changes no
+   * behaviour on the day it ships.
+   */
+  const isBudgetRule = (actions: unknown): boolean =>
+    Array.isArray(actions) && actions.some((a) => String((a as { type?: unknown })?.type ?? '') === 'adjust_ad_budget')
+  const assignedByRule = new Map<string, string[]>()
+  const budgetRuleIds = rules.filter((r) => isBudgetRule(r.actions)).map((r) => r.id)
+  if (budgetRuleIds.length > 0) {
+    // Seed every budget rule with [] FIRST: absent from the assignment table must read as
+    // "assigned to nothing", not as "not assignment-governed".
+    for (const id of budgetRuleIds) assignedByRule.set(id, [])
+    const links = await prisma.campaignRuleAssignment.findMany({
+      where: { ruleId: { in: budgetRuleIds }, kind: 'budget' },
+      select: { ruleId: true, campaignId: true },
+    })
+    for (const l of links) assignedByRule.get(l.ruleId)?.push(l.campaignId)
+  }
 
   /**
    * RA.GRAIN — product scope, resolved once per trigger and only when some rule asks for it.
@@ -458,7 +492,9 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   }
 
   // Identity maps, only if any rule actually scopes below marketplace level.
-  const needsCampaignIdentity = rules.some((r) => r.scopePortfolioId != null || r.scopeCampaignId != null)
+  // D1 — an assignment-governed rule needs the campaign identity too, or every context would
+  // arrive with `campaignId: null` and the matcher would refuse all of them.
+  const needsCampaignIdentity = rules.some((r) => r.scopePortfolioId != null || r.scopeCampaignId != null) || budgetRuleIds.length > 0
   const extToLocal = new Map<string, string>()
   const localToPortfolio = new Map<string, string | null>()
   if (needsCampaignIdentity) {
@@ -486,7 +522,12 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
     const identity = contextIdentity(ctx, extToLocal, localToPortfolio, productsByAdGroup, productsByCampaign)
     // Each rule is matched with its OWN expanded product set — a per-rule value, so it cannot be
     // hoisted out of this filter the way the shared identity maps can.
-    const applicable = rules.filter((r) => ruleMatchesScope({ ...r, scopeProductIds: expandedByRule.get(r.id) ?? null }, identity))
+    const applicable = rules.filter((r) => ruleMatchesScope({
+      ...r,
+      scopeProductIds: expandedByRule.get(r.id) ?? null,
+      // `?? null` is the "not assignment-governed" signal for every non-budget rule.
+      assignedCampaignIds: assignedByRule.get(r.id) ?? null,
+    }, identity))
     if (applicable.length === 0) continue
     const results = await evaluateAllRulesForTrigger({
       domain: 'advertising',
