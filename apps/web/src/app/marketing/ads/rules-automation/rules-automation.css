@@ -4685,7 +4685,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd7-name { color: #1f6fde; text-decoration: none; }
 .h10-bd7-name:hover { text-decoration: underline; }
 .h10-bd7-posture { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-.h10-bd7-posture.off { background: #f1f3f6; color: #6b7585; }
+/* 🔴 P3a: #6b7585 measured 4.19:1 on this chip's OWN #f1f3f6 ground — below AA for 11px text, and
+   it had been failing wherever this chip appears (the rules grid's "off", the Bid page's postures).
+   Latent while it sat on 2 rows; P3a puts it on 100+ as "paused" / "local only", which is what made
+   it worth measuring. #626c7c is the smallest change that clears 4.5:1 on every ground the chip is
+   used against — 4.78 here, 5.31 on white, 4.81 on the page ground, 4.90 on the row hover. Darkened
+   globally rather than forked: a contrast fix is an improvement to every caller, not a variant. */
+.h10-bd7-posture.off { background: #f1f3f6; color: #626c7c; }
 .h10-bd7-posture.inert { background: #fdf1f0; color: #b42318; }
 .h10-bd7-posture.observe { background: #f1f3f6; color: #3f4754; }
 .h10-bd7-posture.propose { background: #eef4fd; color: #17436f; }

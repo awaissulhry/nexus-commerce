@@ -530,6 +530,85 @@ waiting" / "13 waiting" / "0 waiting" per rule. That is a large part of what P7 
 starting it:** what remains is the link out to `/marketing/ads/suggestions` filtered to the harvest
 types, and the Change Log filter — not the count, which now exists.
 
+🔴 **And when P7 builds that link, key it on `ruleId`, never on the rule NAME** —
+`/marketing/ads/suggestions?rule=<ruleId>`. Reported by the B-series session, measured on prod:
+`AdsRuleSuggestion.ruleName` is a **snapshot frozen at creation**, and **7 of the 11 rules with
+pending suggestions carry two spellings** after the emoji rename ("Low CTR bid reduction" is 74 + 51
+= 125 rows under two names). A name-keyed link would show a fraction of the queue and look like a
+working filter. The Suggestions page's Rule filter is now id-keyed to match, and
+`GET /advertising/suggestions` resolves the live name onto every row.
+
+---
+
+## P2 — built + prod-verified (commits `2239448a3` · `6aef6cf8f`, 2026-08-20)
+
+H10's **Order Threshold** and **Max ACoS** columns, as a per-tab column set (`RULE_TAB_THRESHOLDS`
+in `_shared/ruleThresholds.ts`), never a prop. Three states per cell — a value the rule sets, a
+handler fallback (muted, labelled `default`), and an em dash whose tooltip says what the absence
+*means*. P1's inline reader moved into the same module so the Criteria clauses and the columns read
+one table, and a threshold is a column **or** a clause, never both.
+
+🔴 **Max ACoS is an em dash on every row, and that is the finding.** No rule in this account carries
+`maxAcosPct`. The tooltip says it: *a harvest rule with no ACoS ceiling will promote a converting
+search term however expensive that conversion was — order count is the only bar it has to clear.*
+
+### 🔴 Caught by loading prod one minute after it shipped
+
+`Order Threshold` read **"—"** with the tooltip *"This rule names no order threshold"* directly
+beside a Criteria cell reading **"search-term orders ≥ 2"**. "Auto match-type migration" keeps its
+bar as a flat CONDITION rather than an action parameter, and the reader looked only at parameters.
+Two cells on one row contradicting each other is worse than the "Always" this series began by
+removing, because the truth was one column away.
+
+`readThreshold` now falls through to the flat conditions and `columnedConditionIndexes` removes
+whichever of them a tab has promoted — the column-or-clause law extended from parameters to
+conditions. **`gte`/`lte` only**: `orders > 2` is a minimum of THREE, so matching `gt` would ship an
+off-by-one dressed as a fact. Fixed in `6aef6cf8f`, verified: 0 contradictions on all 5 rows.
+
+Also caught by the tests: the money formatter had `maximumFractionDigits: 2` and no minimum, so
+€15.50 rendered **"€15.5"**. Latent — no rule stores a non-round cent amount — but there were two
+formatters, and one amount formatted two ways in one row is what the shared module exists to stop.
+
+**Verified on prod:** `Min 2 orders` · `Min 2 orders default` · `Min 3 orders` · `—`, Criteria
+correctly stripped to `spend ≥ €10 → harvest and negate @ €0.50`, table 1600px in a 1600px card,
+no page overflow.
+
+---
+
+## P3a — built (commit `10d48bb09`, 2026-08-20)
+
+The Ad Group View now lists **every ad group that can source a harvest**, from a new read-only
+`GET /advertising/harvest-pathways`.
+
+🔴 **"Not assigned" would have been a lie on every row.** A rule with neither `mappings` nor
+`sources` is **account-wide**, not unscoped-and-inert: `harvest_and_negate` harvests by threshold
+across everything, so it reaches every ad group here. A row reports its REACH — mapped to it
+specifically, or the N account-wide rules that cover it (named, with how many are enabled), or
+genuinely nothing.
+
+### 🔴 Classify by the TARGETS present, never by the ad group's name
+
+| | by name | by targets |
+|---|---|---|
+| sources | 122 | **166** |
+| destinations | 53 | **77** |
+| neither | 114 | **46** |
+
+Name vs targets: **agree 136 · disagree 1 · blank-but-knowable 110.** 58 of the 166 sources have
+names that say nothing at all ("Ad group - 06/07/2023 06:09:36.860", holding nothing but BROAD
+targets). A name-based view would have hidden 38% of the account.
+
+⚠ **`AdGroup.targetingType` is not the signal** however much it looks like one — it reads `MANUAL`
+on all 289 rows, including the 39 inside AUTO campaigns. Another column rendering a constant
+([[reference_fleet_stale_constant_class]]).
+
+The auto-expression fallback went **into** the shared `roleOf`, not beside it: it fires only where
+that returned `null`, so no existing answer moves, and `expressionType` is normalised there because
+two ingests rewrite it between `EXACT` and `_EXACT` at ~65 rows/minute.
+
+Roster line, stated because the grid cannot: **166 of 289 can source · 56 in an enabled campaign ·
+77 can receive.** Two thirds of the sources are not running.
+
 ---
 
 ## Appendix — scripts
