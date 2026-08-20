@@ -131,3 +131,38 @@ the four bulk verbs (write → report → restore), assignment staging → Apply
 legacy on Automations, a real BudgetSchedule end-to-end (create → window applies → blackout
 holds → delete restores), and the harvest arming decision presented with numbers
 (engine disarmed; 209 of 218 harvested keywords never reached Amazon).
+
+## W7 — the legacy rules are GONE (operator correction, same day)
+
+"Make them legacy" meant **remove them**: *"remove all the legacy rules that we created with
+Claude Code and that were not manually created by me… simpler and easier for me to work in the
+beginning, since we will keep the format the same across."*
+
+Executed 2026-08-20 ~20:40 UTC via `apps/api/scripts/_w7-wipe-legacy-rules.mts` (dry-run, then
+`--apply`), scoped to advertising rules with `createdAt` before the legacy cutover — the exact
+set W1 had labelled. Deleted in one transaction:
+
+- **51 rules** (31 template-seeder · 20 generic user actors; 9 were enabled-AUTO — their caps and
+  the write gate live on the CAMPAIGN and are untouched),
+- **1,320 `CampaignRuleAssignment` rows** (cascade) — the Budget Rule column now reads "None"
+  everywhere, honestly: nothing governs a campaign until the operator assigns something,
+- **968,750 `AutomationRuleExecution` rows** (cascade; overwhelmingly cap-refusal counters),
+- **305 pending `AdsRuleSuggestion` rows** (no FK — they would have orphaned into un-actionable
+  Approve buttons). The propose→approve backlog is now empty by construction.
+
+**Kept:** `AdvertisingActionLog` — the audit of every write these rules ever made to Amazon
+(actor-string keyed, no FK) — plus the replenishment (8) and reviews (3) domains, and anything
+created on/after the cutover (0 existed at wipe time). **Full backup first:**
+`docs/backups/2026-08-20-legacy-automation-rules.json` — complete rule rows (conditions, actions,
+caps, scope, counters), assignments, and execution aggregates; any rule can be recreated verbatim.
+**No auto-reseed exists**: `seedAdvertisingTemplates` runs only on the explicit
+`POST /advertising/automation-rules/seed-templates`.
+
+Prod verified after: every rule tab "Showing 0 … Rules" with badge 0 and the H10 empty state;
+Automations lists only the 15 engine/observed actors; Apply Rules' Budget Rule column reads None
+on all rows. From here, every rule in the account is operator-authored in the builder — ONE
+shape, no engine-native/builder split in live data.
+
+Consequence worth deciding: the W1 provenance chip + filter can now never light up (nothing
+predates the cutover, and nothing ever will again). By the section's own law — a control earns
+its place only if some pixel changes — they are candidates for removal; awaiting the operator.
