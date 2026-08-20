@@ -891,7 +891,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         {u !== 'none' && (
                         <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
                           {u === 'eur' && <span className="pf">€</span>}
-                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : g.budgetOp === 'targetAcos' ? 'Target ACoS' : 'Budget amount'} />
+                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} /* 🔴 `targetAcos` FIRST: it is the one bid action whose input is not a bid. Ordered after
+                              `isBidLike` — as it was on the first cut — the branch is unreachable and a screen
+                              reader announces "Bid amount" over a field that takes a target ACoS percentage.
+                              Measured on prod: the visible % suffix made it look right to a sighted operator. */
+                          aria-label={g.budgetOp === 'targetAcos' ? 'Target ACoS percentage' : isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : 'Budget amount'} />
                           {u === 'pct' && <span className="sf">%</span>}
                         </span>
                         )}
