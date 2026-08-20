@@ -5323,3 +5323,51 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    that two thirds of them are not running. */
 .h10-hv-roster { font-size: 12.5px; color: #55606d; }
 .h10-hv-roster b { font-weight: 700; color: #16202b; }
+
+/* ── The name column must not change width on hover ─────────────────────────────────────────────
+   Operator report, 2026-08-20: "whenever I hover over a row, the column width increases. Just the
+   first column. It should function exactly as the Ad Manager grid does."
+
+   Measured on prod, Keyword Harvest Rules View: the first column went **315px → 328px** on hover
+   and every other column shrank 1–4px to pay for it, because U12 hid the Open/History actions with
+   `width: 0` and restored `width: auto` on `tr:hover`. Zero width fixed U2's 148px overflow, but a
+   width that changes is still a width: `table-layout: auto` re-fits the whole table, so the row
+   the operator is pointing at moves under the cursor. The Ad Manager's delta is 0 — measured — and
+   it earns that the easy way, by having no hover affordance in its name cell at all.
+
+   The fix is to take the actions OUT OF FLOW. Absolutely positioned, they contribute no intrinsic
+   width in either state, so the column cannot respond to them — and U2's overflow cannot return
+   either, because an out-of-flow box can no longer push the wrapper past the cell.
+
+   🔴 `td.nm` is `position: sticky` (the frozen column, left: 40px, z-index 3). Do NOT add
+   `position: relative` to make this work — that would unfreeze the column. Sticky is already a
+   positioned value, so it is the containing block these absolutes resolve against
+   ([[reference_ads_frozen_column_overlap]], [[reference_sticky_cell_stacking_trap]]).
+
+   Visibility moves from `width` to `opacity` + `pointer-events`, which is safe now that the box is
+   out of flow. The buttons stay in the tab order (`display: none` would remove them), and the
+   gradient keeps them readable where they overlay the end of a long rule name — matched to the
+   ground they actually sit on: the row-hover blue when hovered, white when reached by keyboard. */
+.h10-am-grid td.nm .h10-nt-acts {
+  position: absolute;
+  right: 14px; /* the cell's own padding-right — measured, not guessed */
+  top: 50%;
+  transform: translateY(-50%);
+  width: auto;
+  overflow: visible;
+  padding-left: 26px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .1s;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0) 0, #fff 26px);
+}
+/* The container decides visibility now, so the children stop hiding themselves — otherwise a
+   keyboard focus reveals the box and only the focused button inside it. */
+.h10-am-grid td.nm .h10-nt-acts .h10-nt-open { opacity: 1; }
+.h10-am-grid td.nm .h10-nt-acts:focus-within { opacity: 1; pointer-events: auto; }
+/* Hover last: when a row is both hovered and focused, the ground is the hover blue. */
+.h10-am-grid tbody tr:hover td.nm .h10-nt-acts {
+  opacity: 1;
+  pointer-events: auto;
+  background: linear-gradient(to right, rgba(247, 250, 255, 0) 0, #f7faff 26px);
+}
