@@ -13,11 +13,20 @@ import { Drawer } from '@/design-system/components/Drawer'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Toggle } from '@/design-system/primitives/Toggle'
 import { Spinner } from '@/design-system/primitives/Spinner'
+import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
 import { getBackendUrl } from '@/lib/backend-url'
+
+const DRAWER_METRICS: ChartMetric[] = [
+  { key: 'spend', label: 'Spend', unit: 'eur' },
+  { key: 'sales', label: 'Sales', unit: 'eur' },
+  { key: 'acos', label: 'ACoS', unit: 'pct' },
+  { key: 'orders', label: 'Orders', unit: 'count' },
+]
 
 interface DrawerCampaign {
   id: string; role: string; name: string; status: string
   dailyBudgetCents: number; marketplace: string | null; live: boolean; onAmazon: boolean
+  perf: { spendCents: number; salesCents: number; orders: number; clicks: number; acosPct: number | null } | null
 }
 interface DrawerPlan { id: string; goal: string; autonomy: string; enabled: boolean; stage: string; lastEvaluatedAt: string | null; lastDecisionAt: string | null }
 interface DrawerGoal {
@@ -27,12 +36,15 @@ interface DrawerGoal {
   seedKeywords: string[]; excludeKeywords: string[]
   materializedAt: string | null; createdAt: string
 }
-interface Detail { goal: DrawerGoal; campaigns: DrawerCampaign[]; plan: DrawerPlan | null; pendingProposals: number }
+interface Detail {
+  goal: DrawerGoal; campaigns: DrawerCampaign[]; plan: DrawerPlan | null; pendingProposals: number
+  series: Array<{ date: string; spendCents: number; salesCents: number; orders: number; acosPct: number | null }>
+}
 interface Decision { id: string; at: string; cycle: string; module: string; action: string; reason: string; status: string; source: string }
 
 const ROLE_TONE: Record<string, TagTone> = { AUTO: 'info', RESEARCH: 'neutral', PERF: 'positive', PAT: 'warning' }
 const ROLE_LABEL: Record<string, string> = { AUTO: 'Auto', RESEARCH: 'Research', PERF: 'Performance', PAT: 'Products' }
-const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS' }
+const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS', LIQUIDATE: 'Liquidate', RANK: 'Defend Rank' }
 const MODE_LABEL: Record<string, string> = { STRICT: 'Strict Control', SHARED: 'Shared Budget' }
 const STATUS_TONE: Record<string, TagTone> = { PROPOSED: 'info', APPLIED: 'positive', DENIED: 'danger', SKIPPED: 'neutral', ROLLED_BACK: 'warning' }
 
@@ -55,6 +67,7 @@ export function GoalDrawer({ goalId, onClose, onMutated, onLaunch, launching }: 
   const [live, setLive] = useState(false)
   const [note, setNote] = useState<{ text: string; err: boolean } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [chartSel, setChartSel] = useState<string[]>(['spend', 'sales'])
 
   useEffect(() => {
     setDetail(null); setDecisions([]); setNote(null)
@@ -158,6 +171,19 @@ export function GoalDrawer({ goalId, onClose, onMutated, onLaunch, launching }: 
             </section>
           )}
 
+          {g.materializedAt && (detail?.series?.length ?? 0) > 0 && (
+            <section>
+              <MetricChart
+                title="Last 30 days"
+                data={(detail?.series ?? []).map((s) => ({ date: s.date, spend: s.spendCents / 100, sales: s.salesCents / 100, acos: s.acosPct != null ? s.acosPct / 100 : null, orders: s.orders }))}
+                metrics={DRAWER_METRICS}
+                selected={chartSel}
+                onSelectedChange={setChartSel}
+                emptyLabel="No performance data yet."
+              />
+            </section>
+          )}
+
           {g.materializedAt && (
             <section>
               <h4>Campaigns the AI built</h4>
@@ -165,7 +191,14 @@ export function GoalDrawer({ goalId, onClose, onMutated, onLaunch, launching }: 
               {(detail?.campaigns ?? []).map((c) => (
                 <div className="aiad-dw-camp" key={c.id}>
                   <Tag tone={ROLE_TONE[c.role] ?? 'neutral'}>{ROLE_LABEL[c.role] ?? c.role}</Tag>
-                  <Link className="nm" href={`/marketing/ads/campaigns/${c.id}`} title={c.name}>{c.name}</Link>
+                  <span className="mid">
+                    <Link className="nm" href={`/marketing/ads/campaigns/${c.id}`} title={c.name}>{c.name}</Link>
+                    <span className="perf">
+                      {c.perf
+                        ? <>{eur(c.perf.spendCents)} spend · {eur(c.perf.salesCents)} sales · {c.perf.acosPct == null ? '— ACoS' : `${c.perf.acosPct.toFixed(1)}% ACoS`}</>
+                        : 'no data yet'}
+                    </span>
+                  </span>
                   <span className="bud">{eur(c.dailyBudgetCents)}/day</span>
                   <span className={`sync${c.onAmazon ? ' on' : ''}`}>{c.onAmazon ? 'on Amazon' : 'local'}</span>
                 </div>

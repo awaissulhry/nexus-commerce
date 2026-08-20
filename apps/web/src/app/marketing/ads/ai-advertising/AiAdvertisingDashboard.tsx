@@ -47,7 +47,7 @@ type Summary = {
   totals: Totals; prevTotals: Totals
 }
 
-const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS' }
+const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS', LIQUIDATE: 'Liquidate', RANK: 'Defend Rank' }
 const MODE_LABEL: Record<string, string> = { STRICT: 'Strict Control', SHARED: 'Shared Budget' }
 const CONTROL_LABEL: Record<string, { label: string; cls: string }> = {
   SUGGEST: { label: 'Propose', cls: 'propose' }, AUTO: { label: 'Auto', cls: 'auto' }, OFF: { label: 'Off', cls: 'off' },

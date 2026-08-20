@@ -15078,6 +15078,11 @@ model AdProductGoal {
   campaignIds        Json     @default("[]")
   planId             String?
   materializedAt     DateTime?
+  // AIAD.4 — per-goal strategy dials (builder): the AutopilotPlan guardrails read these at
+  // materialization; null = conductor defaults (30% ACoS / 5¢ floor / €3 ceiling).
+  targetAcosPct      Int?
+  bidMinCents        Int?
+  bidMaxCents        Int?
   createdBy          String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

@@ -1,9 +1,14 @@
 /**
- * AIAD.1 — AI Advertising goal materialization. Turns an AdProductGoal (the operator-facing
+ * AIAD.1/.4 — AI Advertising goal materialization. Turns an AdProductGoal (the operator-facing
  * goal from the AI Goal builder) into the campaign scaffold the AI actually drives:
  *
  *   AUTO (discovery) → RESEARCH (broad seeds) → PERF (exact seeds, harvest destination)
  *   [+ PAT (product targeting) when the goal carries product targets]
+ *
+ * AIAD.4 split this into a PURE PLANNER + an executor. `planGoalScaffold` computes every
+ * campaign, keyword, negative, rule and guardrail the launch would create — the builder's
+ * "what will be built" preview renders exactly this plan, and `materializeProductGoal`
+ * executes exactly this plan, so the preview cannot drift from reality.
  *
  * Strict Control mode builds one scaffold per product (independent budgets); Shared Budget
  * builds one scaffold for the whole product set. Rides the same gated local-first create path
@@ -19,7 +24,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { GOAL_PRESETS, type Goal } from './autopilot/presets.js'
+import { GOAL_PRESETS, DEFAULT_GUARDRAILS, type Goal } from './autopilot/presets.js'
 import type { GoalProduct } from './ai-product-goal.service.js'
 
 export class MaterializeError extends Error {
@@ -29,8 +34,11 @@ export class MaterializeError extends Error {
 export type ScaffoldRole = 'AUTO' | 'RESEARCH' | 'PERF' | 'PAT'
 export interface GoalCampaignRef { id: string; role: ScaffoldRole; label: string }
 
-// aiTarget (builder vocabulary) → Conductor goal preset.
-const AI_TARGET_GOAL: Record<string, Goal> = { IMPRESSION: 'LAUNCH', SALES: 'BALANCED', ROAS: 'PROFIT' }
+// aiTarget (builder vocabulary) → Conductor goal preset. The five-strategy superset:
+// IMPRESSION (launch traffic) · SALES (balanced) · ROAS (profit) · LIQUIDATE · RANK (defend).
+const AI_TARGET_GOAL: Record<string, Goal> = {
+  IMPRESSION: 'LAUNCH', SALES: 'BALANCED', ROAS: 'PROFIT', LIQUIDATE: 'LIQUIDATE', RANK: 'DEFEND_RANK',
+}
 const ROLE_LABEL: Record<ScaffoldRole, string> = { AUTO: 'Auto', RESEARCH: 'Research', PERF: 'Performance', PAT: 'Products' }
 const BASE_BID_EUR = 0.75
 // AT.2 smart defaults (mirrors the SPW auto-group multipliers).
@@ -55,22 +63,52 @@ function harvestThresholds(goal: Goal) {
   return { minOrders, minNegSpendEur }
 }
 
-interface ScaffoldSet {
-  label: string
+// ── The pure planner ──────────────────────────────────────────────────────────
+
+export interface GoalLike {
+  name: string; aiTarget: string; budgetMode: string
+  totalBudgetCents?: number | null
   products: GoalProduct[]
-  budgetCents: number
-  ags: Partial<Record<ScaffoldRole, { campaignId: string; adGroupId: string }>>
+  seedKeywords?: string[]; excludeKeywords?: string[]
+  productTargets?: string[]; excludeAsins?: string[]
+  marketplace?: string | null; portfolioId?: string | null
+  targetAcosPct?: number | null; bidMinCents?: number | null; bidMaxCents?: number | null
 }
 
-export async function materializeProductGoal(goalId: string, userId?: string) {
-  const goal = await prisma.adProductGoal.findUnique({ where: { id: goalId } })
-  if (!goal) throw new MaterializeError('goal not found', 404)
-  if (goal.status === 'ARCHIVED') throw new MaterializeError('goal is archived', 400)
-  if (goal.materializedAt) throw new MaterializeError('goal is already materialized', 409)
-  const products = (Array.isArray(goal.products) ? goal.products : []) as GoalProduct[]
-  if (!products.length) throw new MaterializeError('goal has no products', 400)
+export interface PlannedCampaign {
+  setLabel: string; role: ScaffoldRole; name: string
+  targetingType: 'AUTO' | 'MANUAL'
+  budgetCents: number
+  products: GoalProduct[]
+  seeds: Array<{ text: string; matchType: 'BROAD' | 'EXACT'; bidCents: number }>
+  autoGroups: Array<{ key: string; bidEur: number }>
+  productTargets: string[]
+  negativeKeywords: Array<{ text: string; matchType: 'EXACT' | 'PHRASE' }>
+  negativeAsins: string[]
+}
+/** Bid evidence (ai-goal-suggest resolveGoalBids) — passed at BOTH preview and launch. */
+export interface ScaffoldBidOpts { bidCentsByKeyword?: Record<string, number>; autoBaseCents?: number }
+export interface PlannedRule { kind: 'harvest' | 'negative'; name: string; setLabel: string; minOrders: number; minNegSpendEur: number }
+export interface GoalScaffold {
+  marketplace: string
+  planGoal: Goal
+  autonomy: 'SUGGEST'
+  campaigns: PlannedCampaign[]
+  rules: PlannedRule[]
+  guardrails: { targetAcosPct: number; bidMinCents: number; bidMaxCents: number; maxDailySpendCents: number; budgetMaxCents: number; rampPct: number; neverPause: true }
+  totalDailyBudgetCents: number
+  warnings: string[]
+}
 
-  const marketplace = goal.marketplace || 'IT'
+/** Compute the exact scaffold a launch would create. Pure — no I/O, no writes. */
+export function planGoalScaffold(goal: GoalLike, bidOpts?: ScaffoldBidOpts): GoalScaffold {
+  const bidOf = (text: string) => bidOpts?.bidCentsByKeyword?.[text.toLowerCase()] ?? Math.round(BASE_BID_EUR * 100)
+  const autoBase = (bidOpts?.autoBaseCents ?? Math.round(BASE_BID_EUR * 100)) / 100
+  const products = Array.isArray(goal.products) ? goal.products : []
+  if (!products.length) throw new MaterializeError('goal has no products', 400)
+  const warnings: string[] = []
+  const marketplace = (goal.marketplace ?? '').trim() || 'IT'
+  if (!(goal.marketplace ?? '').trim()) warnings.push('No marketplace on the goal — defaulting to IT.')
   const seeds = (goal.seedKeywords ?? []).filter(Boolean)
   const excludeKw = (goal.excludeKeywords ?? []).filter(Boolean)
   const productTargets = (goal.productTargets ?? []).filter(Boolean)
@@ -78,126 +116,179 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
   const planGoal = AI_TARGET_GOAL[goal.aiTarget] ?? 'BALANCED'
   const preset = GOAL_PRESETS[planGoal]
 
+  const sets = goal.budgetMode === 'STRICT'
+    ? products.map((p) => ({ label: p.asin || p.sku || p.name || 'Product', products: [p], budgetCents: Math.round(Number(p.budgetCents) || 0) }))
+    : [{ label: 'Shared', products, budgetCents: Math.round(Number(goal.totalBudgetCents) || 0) }]
+  const multiSet = sets.length > 1
+  const shares = roleShares(seeds.length > 0, productTargets.length > 0)
+
+  if (!seeds.length) warnings.push('No seed keywords — the Research campaign is skipped and Performance starts empty until the harvest promotes its first winners from Auto.')
+
+  const negativeKeywords = excludeKw.flatMap((text) => (['EXACT', 'PHRASE'] as const).map((matchType) => ({ text, matchType })))
+  const campaigns: PlannedCampaign[] = []
+  let maxCampaignBudgetCents = 0
+  let clamped = 0
+  for (const set of sets) {
+    for (const [role, share] of shares) {
+      const raw = Math.round(set.budgetCents * share)
+      const budgetCents = Math.max(100, raw)
+      if (raw < 100) clamped += 1
+      maxCampaignBudgetCents = Math.max(maxCampaignBudgetCents, budgetCents)
+      campaigns.push({
+        setLabel: set.label, role,
+        name: `[AI] ${goal.name}${multiSet ? ` · ${set.label}` : ''} · ${ROLE_LABEL[role]}`.slice(0, 128),
+        targetingType: role === 'AUTO' ? 'AUTO' : 'MANUAL',
+        budgetCents,
+        products: set.products,
+        seeds: role === 'RESEARCH' ? seeds.map((text) => ({ text, matchType: 'BROAD' as const, bidCents: bidOf(text) }))
+          : role === 'PERF' ? seeds.map((text) => ({ text, matchType: 'EXACT' as const, bidCents: bidOf(text) })) : [],
+        autoGroups: role === 'AUTO' ? AUTO_GROUPS.map((g) => ({ key: g.key, bidEur: Math.round(autoBase * g.mult * 100) / 100 })) : [],
+        productTargets: role === 'PAT' ? productTargets : [],
+        negativeKeywords: role === 'AUTO' || role === 'RESEARCH' ? negativeKeywords : [],
+        negativeAsins: role === 'AUTO' ? excludeAsins : [],
+      })
+    }
+  }
+  if (clamped > 0) warnings.push(`${clamped} campaign budget${clamped === 1 ? '' : 's'} fell below Amazon's €1/day floor and clamp${clamped === 1 ? 's' : ''} up to €1.00 — the total will slightly exceed the goal budget.`)
+
+  const { minOrders, minNegSpendEur } = harvestThresholds(planGoal)
+  const rules: PlannedRule[] = sets.flatMap((set) => {
+    const tag = multiSet ? ` (${set.label})` : ''
+    return [
+      { kind: 'harvest' as const, name: `[AI] ${goal.name}${tag} — Harvest & Negate`.slice(0, 120), setLabel: set.label, minOrders, minNegSpendEur },
+      { kind: 'negative' as const, name: `[AI] ${goal.name}${tag} — Negative Targeting`.slice(0, 120), setLabel: set.label, minOrders, minNegSpendEur },
+    ]
+  })
+
+  const totalDailyBudgetCents = campaigns.reduce((n, c) => n + c.budgetCents, 0)
+  const targetAcosPct = goal.targetAcosPct != null && goal.targetAcosPct >= 5 && goal.targetAcosPct <= 300
+    ? Math.round(goal.targetAcosPct) : DEFAULT_GUARDRAILS.targetAcosPct
+  const bidMinCents = goal.bidMinCents != null && goal.bidMinCents >= 5 ? Math.round(goal.bidMinCents) : DEFAULT_GUARDRAILS.bidMinCents
+  const bidMaxCents = goal.bidMaxCents != null && goal.bidMaxCents > bidMinCents ? Math.round(goal.bidMaxCents) : DEFAULT_GUARDRAILS.bidMaxCents
+
+  return {
+    marketplace, planGoal, autonomy: 'SUGGEST', campaigns, rules,
+    guardrails: {
+      targetAcosPct, bidMinCents, bidMaxCents,
+      maxDailySpendCents: totalDailyBudgetCents,
+      budgetMaxCents: Math.max(maxCampaignBudgetCents * 2, 1000),
+      rampPct: preset.rampPct, neverPause: true,
+    },
+    totalDailyBudgetCents, warnings,
+  }
+}
+
+// ── The executor ──────────────────────────────────────────────────────────────
+
+export async function materializeProductGoal(goalId: string, userId?: string) {
+  const goal = await prisma.adProductGoal.findUnique({ where: { id: goalId } })
+  if (!goal) throw new MaterializeError('goal not found', 404)
+  if (goal.status === 'ARCHIVED') throw new MaterializeError('goal is archived', 400)
+  if (goal.materializedAt) throw new MaterializeError('goal is already materialized', 409)
+
+  // Same bid evidence the preview showed — resolveGoalBids at both ends, so they cannot differ.
+  const { resolveGoalBids } = await import('./ai-goal-suggest.service.js')
+  const bidOpts = await resolveGoalBids(goal.seedKeywords ?? [], goal.marketplace)
+  const scaffold = planGoalScaffold({
+    name: goal.name, aiTarget: goal.aiTarget, budgetMode: goal.budgetMode,
+    totalBudgetCents: goal.totalBudgetCents,
+    products: (Array.isArray(goal.products) ? goal.products : []) as GoalProduct[],
+    seedKeywords: goal.seedKeywords, excludeKeywords: goal.excludeKeywords,
+    productTargets: goal.productTargets, excludeAsins: goal.excludeAsins,
+    marketplace: goal.marketplace, portfolioId: goal.portfolioId,
+    targetAcosPct: goal.targetAcosPct, bidMinCents: goal.bidMinCents, bidMaxCents: goal.bidMaxCents,
+  }, bidOpts)
+
   const {
     createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal,
     createTargetLocal, createNegativeKeywordLocal, createNegativeProductTargetLocal,
     settleLaunchPortfolios,
   } = await import('./ads-create.service.js')
 
-  // Strict Control → one scaffold per product; Shared Budget → one scaffold for the set.
-  const sets: ScaffoldSet[] = goal.budgetMode === 'STRICT'
-    ? products.map((p) => ({ label: p.asin || p.sku || p.name || 'Product', products: [p], budgetCents: Math.round(Number(p.budgetCents) || 0), ags: {} }))
-    : [{ label: 'Shared', products, budgetCents: Math.round(Number(goal.totalBudgetCents) || 0), ags: {} }]
-  const multiSet = sets.length > 1
-  const shares = roleShares(seeds.length > 0, productTargets.length > 0)
-
   const refs: GoalCampaignRef[] = []
-  const errors: string[] = []
-  let maxCampaignBudgetCents = 0
+  const errors: string[] = [...scaffold.warnings]
+  // setLabel → role → created ids (for the harvest rules' sources/destinations).
+  const agBySet = new Map<string, Partial<Record<ScaffoldRole, { campaignId: string; adGroupId: string }>>>()
 
-  for (const set of sets) {
-    for (const [role, share] of shares) {
-      // Amazon's €1/day floor per campaign; tiny budgets clamp up rather than dropping a role.
-      const budgetCents = Math.max(100, Math.round(set.budgetCents * share))
-      maxCampaignBudgetCents = Math.max(maxCampaignBudgetCents, budgetCents)
-      const name = `[AI] ${goal.name}${multiSet ? ` · ${set.label}` : ''} · ${ROLE_LABEL[role]}`.slice(0, 128)
-      try {
-        const camp = await createCampaignLocal({
-          name, type: 'SP', marketplace,
-          targetingType: role === 'AUTO' ? 'AUTO' : 'MANUAL',
-          dailyBudgetEur: budgetCents / 100, biddingStrategy: 'legacyForSales',
-          portfolioId: goal.portfolioId ?? undefined, userId,
-        })
-        // Same launch repair as SPW: allowlist BEFORE sub-entities, or the per-campaign gate
-        // skips every keyword/product-ad and the campaign lands empty on Amazon.
-        try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[AIAD] allowlist failed', { error: (e as Error).message }) }
-        const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${ROLE_LABEL[role]} Ad Group`, defaultBidEur: BASE_BID_EUR, userId })
-        set.ags[role] = { campaignId: camp.id, adGroupId: ag.id }
+  for (const pc of scaffold.campaigns) {
+    try {
+      const camp = await createCampaignLocal({
+        name: pc.name, type: 'SP', marketplace: scaffold.marketplace,
+        targetingType: pc.targetingType,
+        dailyBudgetEur: pc.budgetCents / 100, biddingStrategy: 'legacyForSales',
+        portfolioId: goal.portfolioId ?? undefined, userId,
+      })
+      // Same launch repair as SPW: allowlist BEFORE sub-entities, or the per-campaign gate
+      // skips every keyword/product-ad and the campaign lands empty on Amazon.
+      try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[AIAD] allowlist failed', { error: (e as Error).message }) }
+      const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${ROLE_LABEL[pc.role]} Ad Group`, defaultBidEur: BASE_BID_EUR, userId })
+      const set = agBySet.get(pc.setLabel) ?? {}
+      set[pc.role] = { campaignId: camp.id, adGroupId: ag.id }
+      agBySet.set(pc.setLabel, set)
 
-        for (const p of set.products) {
-          try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) }
-          catch (e) { errors.push(`product ad ${p.asin ?? p.sku}: ${(e as Error).message}`) }
-        }
-
-        if (role === 'AUTO') {
-          for (const g of AUTO_GROUPS) {
-            try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: Math.round(BASE_BID_EUR * g.mult * 100) / 100, userId }) }
-            catch (e) { errors.push(`auto group ${g.key}: ${(e as Error).message}`) }
-          }
-        } else if (role === 'RESEARCH') {
-          for (const kw of seeds) {
-            try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: 'BROAD', bidEur: BASE_BID_EUR, userId }) }
-            catch (e) { errors.push(`broad "${kw}": ${(e as Error).message}`) }
-          }
-        } else if (role === 'PERF') {
-          for (const kw of seeds) {
-            try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: 'EXACT', bidEur: BASE_BID_EUR, userId }) }
-            catch (e) { errors.push(`exact "${kw}": ${(e as Error).message}`) }
-          }
-        } else if (role === 'PAT') {
-          for (const asin of productTargets) {
-            try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId }) }
-            catch (e) { errors.push(`product target ${asin}: ${(e as Error).message}`) }
-          }
-        }
-
-        // Excluded keywords bind where discovery happens (AUTO + RESEARCH), both negative match types.
-        if (role === 'AUTO' || role === 'RESEARCH') {
-          for (const kw of excludeKw) {
-            for (const mt of ['EXACT', 'PHRASE'] as const) {
-              try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: kw, matchType: mt, userId }) }
-              catch (e) { errors.push(`neg "${kw}": ${(e as Error).message}`) }
-            }
-          }
-        }
-        // Excluded ASINs bind on the auto campaign (where product-page placements originate).
-        if (role === 'AUTO') {
-          for (const asin of excludeAsins) {
-            try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) }
-            catch (e) { errors.push(`neg ASIN ${asin}: ${(e as Error).message}`) }
-          }
-        }
-        refs.push({ id: camp.id, role, label: name })
-      } catch (e) {
-        errors.push(`campaign ${name}: ${(e as Error).message}`)
-        logger.error('[AIAD] campaign create failed', { goalId, name, error: (e as Error).message })
+      for (const p of pc.products) {
+        try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId }) }
+        catch (e) { errors.push(`product ad ${p.asin ?? p.sku}: ${(e as Error).message}`) }
       }
+      for (const g of pc.autoGroups) {
+        try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: g.bidEur, userId }) }
+        catch (e) { errors.push(`auto group ${g.key}: ${(e as Error).message}`) }
+      }
+      for (const kw of pc.seeds) {
+        try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidCents / 100, userId }) }
+        catch (e) { errors.push(`${kw.matchType.toLowerCase()} "${kw.text}": ${(e as Error).message}`) }
+      }
+      for (const asin of pc.productTargets) {
+        try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId }) }
+        catch (e) { errors.push(`product target ${asin}: ${(e as Error).message}`) }
+      }
+      for (const nk of pc.negativeKeywords) {
+        try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: nk.text, matchType: nk.matchType, userId }) }
+        catch (e) { errors.push(`neg "${nk.text}": ${(e as Error).message}`) }
+      }
+      for (const asin of pc.negativeAsins) {
+        try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) }
+        catch (e) { errors.push(`neg ASIN ${asin}: ${(e as Error).message}`) }
+      }
+      refs.push({ id: camp.id, role: pc.role, label: pc.name })
+    } catch (e) {
+      errors.push(`campaign ${pc.name}: ${(e as Error).message}`)
+      logger.error('[AIAD] campaign create failed', { goalId, name: pc.name, error: (e as Error).message })
     }
   }
   if (!refs.length) throw new MaterializeError(`no campaigns could be created: ${errors[0] ?? 'unknown error'}`, 500)
 
   // ── Harvest & Negate + Negative Targeting rules per scaffold (SPW-proven shape, propose-first) ──
-  const { minOrders, minNegSpendEur } = harvestThresholds(planGoal)
   const linkedRuleIds: Array<{ module: 'harvest' | 'negate'; ruleId: string }> = []
-  for (const set of sets) {
-    const sources = (['AUTO', 'RESEARCH'] as const)
-      .map((r) => set.ags[r])
+  for (const pr of scaffold.rules) {
+    const set = agBySet.get(pr.setLabel) ?? {}
+    const srcRoles: ScaffoldRole[] = ['AUTO', 'RESEARCH']
+    const sources = srcRoles
+      .map((r) => set[r])
       .filter((x): x is { campaignId: string; adGroupId: string } => !!x)
-      .map((x) => ({ adGroupId: x.adGroupId, campaignId: x.campaignId, harvestFrom: true, graduate: ['EXACT'], negate: [] as string[], graduateProduct: false, negateProduct: !!set.ags.PAT }))
+      .map((x) => ({
+        adGroupId: x.adGroupId, campaignId: x.campaignId, harvestFrom: true,
+        graduate: pr.kind === 'harvest' ? ['EXACT'] : [], negate: pr.kind === 'negative' ? ['EXACT'] : [],
+        graduateProduct: false, negateProduct: pr.kind === 'negative' ? !!set.PAT : false,
+      }))
     const destinations: Record<string, string> = {}
-    if (set.ags.PERF) destinations.EXACT = set.ags.PERF.adGroupId
-    if (set.ags.PAT) destinations.PRODUCT = set.ags.PAT.adGroupId
-    if (!sources.length || !set.ags.PERF) continue
-    const tag = multiSet ? ` (${set.label})` : ''
+    if (set.PERF) destinations.EXACT = set.PERF.adGroupId
+    if (set.PAT) destinations.PRODUCT = set.PAT.adGroupId
+    if (!sources.length || !set.PERF) continue
     try {
-      const harvestRule = await prisma.automationRule.create({ data: {
-        name: `[AI] ${goal.name}${tag} — Harvest & Negate`.slice(0, 120),
-        description: 'Created by AI Advertising goal', domain: 'advertising', trigger: 'SCHEDULE',
+      const rule = await prisma.automationRule.create({ data: {
+        name: pr.name, description: 'Created by AI Advertising goal', domain: 'advertising', trigger: 'SCHEDULE',
         conditions: [] as never,
-        actions: [{ type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents: 1000, minOrders, graduationBidEur: 0.5, sources, destinations, mode: 'harvest' }] as never,
+        actions: [{
+          type: 'harvest_and_negate', control: 'manual', windowDays: 60,
+          minSpendCents: pr.kind === 'harvest' ? 1000 : pr.minNegSpendEur * 100,
+          minOrders: pr.minOrders, graduationBidEur: 0.5, sources, destinations,
+          mode: pr.kind === 'harvest' ? 'harvest' : 'negative',
+        }] as never,
         enabled: true, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? 'ai-goal',
       } })
-      linkedRuleIds.push({ module: 'harvest', ruleId: harvestRule.id })
-      const negSources = sources.map((s) => ({ ...s, graduate: [] as string[], negate: ['EXACT'] }))
-      const negRule = await prisma.automationRule.create({ data: {
-        name: `[AI] ${goal.name}${tag} — Negative Targeting`.slice(0, 120),
-        description: 'Created by AI Advertising goal', domain: 'advertising', trigger: 'SCHEDULE',
-        conditions: [] as never,
-        actions: [{ type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents: minNegSpendEur * 100, minOrders, graduationBidEur: 0.5, sources: negSources, destinations, mode: 'negative' }] as never,
-        enabled: true, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? 'ai-goal',
-      } })
-      linkedRuleIds.push({ module: 'negate', ruleId: negRule.id })
-    } catch (e) { errors.push(`rules${tag}: ${(e as Error).message}`) }
+      linkedRuleIds.push({ module: pr.kind === 'harvest' ? 'harvest' : 'negate', ruleId: rule.id })
+    } catch (e) { errors.push(`rule ${pr.name}: ${(e as Error).message}`) }
   }
 
   // ── Portfolio settle + launch receipt (same post-launch checks as SPW) ──
@@ -211,17 +302,11 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
   } catch { /* non-fatal */ }
 
   // ── The AutopilotPlan the ad-autopilot cron drives (SUGGEST: propose-only until graduated) ──
-  const totalBudgetCents = sets.reduce((n, s) => n + Math.max(100 * shares.length, s.budgetCents), 0)
   const plan = await prisma.autopilotPlan.create({ data: {
-    name: goal.name, marketplace, productGroupName: goal.name,
+    name: goal.name, marketplace: scaffold.marketplace, productGroupName: goal.name,
     campaignIds: createdIds as never,
-    goal: planGoal, autonomy: 'SUGGEST',
-    guardrails: {
-      targetAcosPct: 30,
-      maxDailySpendCents: totalBudgetCents,
-      budgetMaxCents: Math.max(maxCampaignBudgetCents * 2, 1000),
-      rampPct: preset.rampPct,
-    } as never,
+    goal: scaffold.planGoal, autonomy: scaffold.autonomy,
+    guardrails: scaffold.guardrails as never,
     modules: {
       bid: { on: true }, budget: { on: true }, placement: { on: true },
       rank: { on: false }, dayparting: { on: false },

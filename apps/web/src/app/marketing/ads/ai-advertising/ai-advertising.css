@@ -50,8 +50,10 @@
 
 .aiad-dw-camp { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--h10-border); }
 .aiad-dw-camp:last-child { border-bottom: 0; }
-.aiad-dw-camp .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--h10-primary); text-decoration: none; }
+.aiad-dw-camp .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.aiad-dw-camp .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--h10-primary); text-decoration: none; }
 .aiad-dw-camp .nm:hover { text-decoration: underline; }
+.aiad-dw-camp .perf { font-size: 11px; color: var(--h10-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .aiad-dw-camp .bud { font-size: 12px; color: var(--h10-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .aiad-dw-camp .sync { font-size: 11px; color: var(--h10-text-3); white-space: nowrap; }
 .aiad-dw-camp .sync.on { color: #15803d; }

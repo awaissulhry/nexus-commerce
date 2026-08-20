@@ -6,7 +6,9 @@
  */
 import prisma from '../../db.js'
 
-export type AiTarget = 'IMPRESSION' | 'SALES' | 'ROAS'
+// AIAD.4 — the five-strategy superset (Perpetua has 4, H10 has 3): each maps to a
+// Conductor goal preset in ai-goal-materialize.service.ts.
+export type AiTarget = 'IMPRESSION' | 'SALES' | 'ROAS' | 'LIQUIDATE' | 'RANK'
 export type BudgetMode = 'STRICT' | 'SHARED'
 
 export interface GoalProduct {
@@ -31,6 +33,10 @@ export interface ProductGoalInput {
   excludeAsins?: string[]
   marketplace?: string | null
   portfolioId?: string | null
+  // AIAD.4 — strategy dials; null = conductor defaults (30% / 5¢ / €3).
+  targetAcosPct?: number | null
+  bidMinCents?: number | null
+  bidMaxCents?: number | null
 }
 
 // Amazon's minimum daily budget is ~1 unit of the account currency.
@@ -46,8 +52,12 @@ export async function createProductGoal(input: ProductGoalInput) {
   const products = Array.isArray(input?.products) ? input.products : []
   if (products.length === 0) throw new ValidationError('Add at least one product')
 
-  const aiTarget: AiTarget = (['IMPRESSION', 'SALES', 'ROAS'] as const).includes(input?.aiTarget) ? input.aiTarget : 'SALES'
+  const aiTarget: AiTarget = (['IMPRESSION', 'SALES', 'ROAS', 'LIQUIDATE', 'RANK'] as const).includes(input?.aiTarget) ? input.aiTarget : 'SALES'
   const budgetMode: BudgetMode = input?.budgetMode === 'SHARED' ? 'SHARED' : 'STRICT'
+  const intOrNull = (v: unknown, lo: number, hi: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null }
+  const targetAcosPct = intOrNull(input?.targetAcosPct, 5, 300)
+  const bidMinCents = intOrNull(input?.bidMinCents, 5, 10_000)
+  const bidMaxCents = intOrNull(input?.bidMaxCents, 10, 20_000)
 
   let totalBudgetCents: number | null = null
   if (budgetMode === 'SHARED') {
@@ -79,6 +89,9 @@ export async function createProductGoal(input: ProductGoalInput) {
       status: 'ACTIVE',
       marketplace: input.marketplace ?? null,
       portfolioId: (input.portfolioId ?? '').trim() || null,
+      targetAcosPct,
+      bidMinCents,
+      bidMaxCents: bidMaxCents != null && bidMinCents != null && bidMaxCents <= bidMinCents ? null : bidMaxCents,
     },
   })
 }
@@ -242,12 +255,43 @@ export async function getProductGoalDetail(id: string) {
     }]
   })
   const plan = g.planId
-    ? await prisma.autopilotPlan.findUnique({ where: { id: g.planId }, select: { id: true, goal: true, autonomy: true, enabled: true, stage: true, lastEvaluatedAt: true, lastDecisionAt: true } })
+    ? await prisma.autopilotPlan.findUnique({ where: { id: g.planId }, select: { id: true, goal: true, autonomy: true, enabled: true, stage: true, lastEvaluatedAt: true, lastDecisionAt: true, guardrails: true } })
     : null
   const pendingProposals = g.planId
     ? await prisma.autopilotDecision.count({ where: { planId: g.planId, status: 'PROPOSED' } })
     : 0
-  return { goal: g, campaigns: campaignsOut, plan, pendingProposals }
+
+  // AIAD.4 — drawer depth: a 30-day daily series for the goal + per-campaign totals, so the
+  // drawer can show the goal's own chart and the discovery-vs-performance split per role.
+  const end = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')
+  const start = new Date(end.getTime() - 29 * 86_400_000)
+  const rows = ids.length
+    ? await prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['localEntityId', 'date'],
+        where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: { gte: start, lte: end } },
+        _sum: { costMicros: true, sales7dCents: true, clicks: true, orders7d: true },
+      })
+    : []
+  const acos = (spend: number, sales: number) => (sales > 0 ? Math.round((spend / sales) * 10_000) / 100 : null)
+  const byDay = new Map<string, { spendCents: number; salesCents: number; orders: number }>()
+  const byCampaign = new Map<string, { spendCents: number; salesCents: number; orders: number; clicks: number }>()
+  for (const r of rows) {
+    if (!r.localEntityId) continue
+    const spendCents = Math.round(Number(r._sum.costMicros ?? 0n) / 10_000)
+    const day = r.date.toISOString().slice(0, 10)
+    const d = byDay.get(day) ?? byDay.set(day, { spendCents: 0, salesCents: 0, orders: 0 }).get(day)!
+    d.spendCents += spendCents; d.salesCents += r._sum.sales7dCents ?? 0; d.orders += r._sum.orders7d ?? 0
+    const c = byCampaign.get(r.localEntityId) ?? byCampaign.set(r.localEntityId, { spendCents: 0, salesCents: 0, orders: 0, clicks: 0 }).get(r.localEntityId)!
+    c.spendCents += spendCents; c.salesCents += r._sum.sales7dCents ?? 0; c.orders += r._sum.orders7d ?? 0; c.clicks += r._sum.clicks ?? 0
+  }
+  const series = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, d]) => ({
+    date, spendCents: d.spendCents, salesCents: d.salesCents, orders: d.orders, acosPct: acos(d.spendCents, d.salesCents),
+  }))
+  const campaignsWithPerf = campaignsOut.map((c) => {
+    const p = byCampaign.get(c.id)
+    return { ...c, perf: p ? { ...p, acosPct: acos(p.spendCents, p.salesCents) } : null }
+  })
+  return { goal: g, campaigns: campaignsWithPerf, plan, pendingProposals, series }
 }
 
 export async function archiveProductGoal(id: string) {
