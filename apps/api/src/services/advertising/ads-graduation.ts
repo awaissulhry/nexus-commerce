@@ -59,9 +59,24 @@ const REVERSIBLE_ACTIONS = new Set([
  * `promote_to_exact` creates a keyword. `add_negative_exact` and
  * `sync_negatives_across_campaigns` create negatives, which are the hardest thing in an
  * ads account to notice later and the easiest to regret. `archive_keyword` destroys
- * history. Pausing is here because this account's house rule is to suppress with a 2c
- * bid rather than pause at all — a rule that pauses is doing something the operator has
- * said not to do.
+ * history.
+ *
+ * 🔴 C2 (2026-08-20) — WHY PAUSING IS STILL HERE, now that it is allowed.
+ *
+ * Until today the reason was "the operator has said not to do it": the house rule is to suppress
+ * with a 2¢ bid so Amazon keeps its learning state. That is no longer accurate for TARGETS. The
+ * operator's H10 study lists Pause/Unpause Target as rule actions and they chose the literal verbs
+ * over the suppression equivalent, so `pause_target` / `enable_target` exist and are theirs to use.
+ *
+ * They stay capped anyway, and for a better reason than policy: **a paused target re-enters
+ * Amazon's learning phase when it is unpaused.** That is a real, delayed cost that no condition in
+ * the builder can see and no execution log will attribute back — exactly the shape of consequence
+ * this ceiling exists for. So a pausing rule PROPOSES and a human accepts it, which is one click
+ * and a decision rather than a silent status change.
+ *
+ * `enable_target` is capped for symmetry, not for danger: unpausing is the recovery from a pause,
+ * and a recovery that can act on its own while the action it recovers from cannot is a trap.
+ * Campaign- and ad-group-level pausing is unchanged and remains house-rule forbidden.
  */
 const STRUCTURAL_ACTIONS = new Set([
   'promote_to_exact',
@@ -73,6 +88,8 @@ const STRUCTURAL_ACTIONS = new Set([
   'pause_campaign',
   'pause_ad_group',
   'pause_all_campaigns',
+  'pause_target',
+  'enable_target',
   'create_amazon_promotion',
 ])
 

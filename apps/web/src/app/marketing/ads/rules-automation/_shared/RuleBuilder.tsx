@@ -66,6 +66,17 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
    */
   { value: 'targetAcos', label: 'Set Bid to CPC × (Target ACoS / Actual ACoS)', unit: 'pct' },
   { value: 'setCpc', label: 'Set Bid to CPC', unit: 'none' },
+  /**
+   * C2 (2026-08-20) — the status verbs. These do NOT move a bid: the adapter emits
+   * `pause_target` / `enable_target` instead of `bid_apply`, so one handler keeps one job.
+   *
+   * 🔴 A deliberate exception to the account's no-pause policy, granted by the operator after the
+   * trade-off was put to them: pausing makes Amazon re-learn the target when it is unpaused.
+   * `Decrease Bid by(%)` and the bid floor remain the gentler tools, and the graduation ceiling
+   * holds a pausing rule below Auto so it proposes rather than acts.
+   */
+  { value: 'pauseTarget', label: 'Pause Target', unit: 'none' },
+  { value: 'enableTarget', label: 'Unpause Target', unit: 'none' },
 ]
 // Placement rule THEN — set/raise/lower a placement bid modifier (% only). H10 labels are bare
 // ("Set to", not "Set to(%)") — the % is shown as the value-field suffix (frame 02:58–03:17).
@@ -863,7 +874,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
                             ? 'The bid becomes the target’s own measured cost-per-click, scaled by how far its ACoS is from the figure you type here. A keyword at 50% ACoS against a 25% target has its bid halved; one already at 12.5% has it doubled — bounded by the rule’s min/max bid.'
                             : g.budgetOp === 'setCpc'
                               ? 'The bid becomes the target’s own measured cost-per-click over the rule’s window — what it has actually been paying per click, with no adjustment. No value to set.'
-                              : 'The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met.'
+                              : g.budgetOp === 'pauseTarget'
+                                ? 'Stops this target in Amazon outright — no bid change. ⚠ Amazon re-enters its learning phase for the target when it is unpaused, so a bid decrease is the gentler tool where it will do. Rules that pause are held below Auto: this one will propose the pause for you to accept.'
+                                : g.budgetOp === 'enableTarget'
+                                  ? 'Turns a paused target back on. It keeps whatever bid it had; Amazon treats it as new and re-learns it. Held below Auto like its counterpart.'
+                                  : 'The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met.'
                         } placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                         {isPlacement && <HoverCard text="The placement bid modifier this rule sets (or raises/lowers) for the chosen placement when the criteria are met. Amazon allows 0–900%." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                       </div>

@@ -183,7 +183,8 @@ export interface TranslatedRule {
 export const BUILDER_SLUG_ACTIONS: Record<string, string[]> = {
   budget: ['budget_apply'],
   placement: ['placement_apply'],
-  bid: ['bid_apply'],
+  // C2 — a Bid rule produces a bid write OR a target status write, decided by its THEN op.
+  bid: ['bid_apply', 'pause_target', 'enable_target'],
   sov: ['bid_apply'],
   'keyword-tracker': ['bid_apply'],
   'negative-targeting': ['add_negative_exact'],
@@ -254,6 +255,7 @@ const ENGINE_TYPE_SLUG: Record<string, string> = {
   bid_apply: 'bid', bid_to_target_acos: 'bid', bid_up: 'bid', bid_down: 'bid',
   lower_bid_to_floor: 'bid', raise_bids_for_rank_defense: 'bid', scale_bids_for_price_change: 'bid',
   set_campaign_target_acos: 'bid',
+  pause_target: 'bid', enable_target: 'bid',
   add_negative_exact: 'negative-targeting', add_negative_phrase: 'negative-targeting',
   sync_negatives_across_campaigns: 'negative-targeting',
   promote_to_exact: 'keyword-harvesting', harvest_and_negate: 'keyword-harvesting',
@@ -279,6 +281,8 @@ function describeAction(a: Record<string, unknown>): string {
     case 'adjust_ad_budget': return `Adjust daily budget${pct ? ` by ${pct}` : ''}`
     case 'budget_apply': return `Set daily budget ${String(a.op ?? 'set')} ${num(a.value)}`
     case 'bid_to_target_acos': return `Bid to target ACoS${a.targetAcos != null ? ` ${unconvert(a.targetAcos, 'frac').toFixed(1)}%` : ''}${a.profitMode ? ' (profit mode)' : ''}`
+    case 'pause_target': return 'Pause the target'
+    case 'enable_target': return 'Unpause the target'
     case 'bid_apply': {
       // C1 — the two computed ops describe themselves; the five arithmetic ones read as before.
       const op = String(a.op ?? 'set')
@@ -519,6 +523,29 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
     const map = slug === 'sov' ? SOV_METRIC : slug === 'keyword-tracker' ? RANK_METRIC : ADTARGET_METRIC
     const label = slug === 'sov' ? 'SOV bid rule' : slug === 'keyword-tracker' ? 'Keyword Tracker bid rule' : 'Bid rule'
     const { leaves, unmapped } = translateConditions(groups, map, rule.id)
+
+    /**
+     * C2 — a THEN of Pause/Unpause is a STATUS write, not a bid write, so it emits its own action
+     * type rather than becoming a `bid_apply` op.
+     *
+     * Keeping one handler to one job is the point: `bid_apply` computes and clamps a bid, and
+     * teaching it to sometimes write a status instead would make its floor, ceiling and
+     * `applyBuilderOp` all dead code on half its calls — the kind of handler whose behaviour you
+     * can only predict by reading it. The campaign allowlist is carried across because a pause
+     * must respect the builder's picker exactly as a bid does.
+     */
+    if (act.op === 'pauseTarget' || act.op === 'enableTarget') {
+      return {
+        conditions: leaves,
+        ...(unmapped.length ? { untranslatable: unmapped } : {}),
+        actions: [{
+          type: act.op === 'pauseTarget' ? 'pause_target' : 'enable_target',
+          campaignIds: builderCampaignIds(a0),
+          reason: `${label} ${rule.id}`,
+        }],
+      }
+    }
+
     return {
       conditions: leaves,
       ...(unmapped.length ? { untranslatable: unmapped } : {}),

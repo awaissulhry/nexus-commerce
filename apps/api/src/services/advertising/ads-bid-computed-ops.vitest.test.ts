@@ -8,6 +8,7 @@
  * survives a green test suite.
  */
 import { describe, it, expect } from 'vitest'
+import { graduationCeiling } from './ads-graduation.js'
 
 /** bid = CPC × (target ACoS ÷ actual ACoS) — the handler's expression, verbatim. */
 const targetAcosBid = (cpcEur: number, targetPct: number, actualAcos: number) =>
@@ -91,5 +92,37 @@ describe('setCpc', () => {
 
   it('is still clamped, so a costly keyword cannot exceed the rule ceiling', () => {
     expect(round2(clampRange(980 / 4 / 100, 0.05, 1.75))).toBe(1.75)
+  })
+})
+
+/**
+ * C2 — the graduation ceiling must hold a pausing rule below AUTO.
+ *
+ * Not a formality: the operator asked for real Pause/Unpause, and the safety that makes that
+ * reasonable is that such a rule PROPOSES. If a future change drops these from the structural set
+ * the rules would start pausing targets unattended, and nothing else in the system would object.
+ */
+
+describe('C2 — pause_target / enable_target are held below AUTO', () => {
+  const input = (actionTypes: string[]) => ({ actionTypes, hasKeywordProtections: false })
+
+  it('caps a rule that pauses a target', () => {
+    const v = graduationCeiling(input(['pause_target', 'notify']))
+    expect(v.maxLevel).not.toBe('AUTO')
+    expect(v.blockedBy).toContain('pause_target')
+  })
+
+  it('caps its counterpart too, so recovery is not more autonomous than the action', () => {
+    expect(graduationCeiling(input(['enable_target'])).maxLevel).not.toBe('AUTO')
+  })
+
+  it('leaves an ordinary bid rule uncapped — the ceiling is about structure, not about bids', () => {
+    expect(graduationCeiling(input(['bid_apply', 'notify'])).maxLevel).toBe('AUTO')
+  })
+
+  it('names a reason an operator can act on, not an enum', () => {
+    const v = graduationCeiling(input(['pause_target']))
+    expect(v.reason.length).toBeGreaterThan(20)
+    expect(v.reason).not.toMatch(/^[A-Z_]+$/)
   })
 })

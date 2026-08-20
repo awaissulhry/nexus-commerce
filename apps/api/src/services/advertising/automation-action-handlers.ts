@@ -1494,6 +1494,74 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId } }
 }
 
+/**
+ * ── pause_target / enable_target (C2, 2026-08-20) ─────────────────────────────────────────────
+ *
+ * A REAL status write on one ad target (keyword or product target), not a bid suppression.
+ *
+ * 🔴 This is a deliberate exception to the account's standing no-pause policy, granted by the
+ * operator on 2026-08-20 after the trade-off was put to them explicitly. The policy
+ * ([[feedback_no_pause_use_low_bids]]) is that the ENGINE never pauses — it drops bids to ~2¢ so
+ * Amazon's algorithm keeps its learning state — with manual operator clicks as the carved-out
+ * exception. The operator's H10 study lists "Pause Target" / "Unpause Target" as rule actions and
+ * they chose the literal verbs over the suppression equivalent. So: pausing a TARGET from a rule
+ * is allowed; `lower_bid_to_floor` remains available for anyone who wants the old behaviour, and
+ * nothing here changes campaign- or ad-group-level policy.
+ *
+ * ⚠ The cost is real and is not hidden by this comment: a paused target re-enters Amazon's
+ * learning phase when it is unpaused, which is why the graduation ceiling still caps these below
+ * AUTO. A rule carrying one PROPOSES; a human accepts it on the Suggestions page.
+ *
+ * `campaignIds` is honoured exactly as `bid_apply` honours it — the builder's campaign picker must
+ * scope a pause the same way it scopes a bid, or a rule showing "12 campaigns selected" pauses the
+ * whole account. That was a live defect in `bid_apply` once (see its own note above).
+ *
+ * No `as never` on the write call: [[reference_as_never_hides_write_failures]] — twice measured,
+ * a gate argument silently dropped for two months and an Apply button that always applied nothing.
+ */
+async function setTargetStatus(
+  action: Record<string, unknown>,
+  context: unknown,
+  meta: { dryRun: boolean; ruleId: string },
+  status: 'PAUSED' | 'ENABLED',
+): Promise<ActionResult> {
+  const type = String(action.type)
+  const id = (action.adTargetId as string | undefined) ?? ctxAdTargetId(action, context)
+  if (!id) return { type, ok: false, error: 'No adTarget.id in context' }
+  const t = await prisma.adTarget.findUnique({
+    where: { id },
+    select: { status: true, adGroup: { select: { campaignId: true } } },
+  })
+  if (!t) return { type, ok: false, error: 'AdTarget not found' }
+  const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
+  if (allow.length && t.adGroup?.campaignId && !allow.includes(t.adGroup.campaignId)) {
+    return { type, ok: true, output: { skipped: 'campaign-not-selected', adTargetId: id } }
+  }
+  // Already there. Reported as a no-change rather than a success, so the action log does not fill
+  // with writes that moved nothing — the same contract `bid_apply` uses.
+  if (t.status === status) return { type, ok: true, output: { adTargetId: id, noChange: true, status } }
+  if (meta.dryRun) return { type, ok: true, output: { dryRun: true, adTargetId: id, wouldSet: status, from: t.status } }
+  const res = await updateAdTargetWithSync({
+    adTargetId: id,
+    patch: { status },
+    actor: RULE_ACTOR(meta.ruleId),
+    reason: (action.reason as string | undefined) ?? `${type} via rule ${meta.ruleId}`,
+    evidence: ctxEvidence(context),
+  })
+  return {
+    type,
+    ok: res.ok,
+    error: res.error ?? undefined,
+    output: { adTargetId: id, status, from: t.status, outboundQueueId: res.outboundQueueId },
+  }
+}
+
+ACTION_HANDLERS.pause_target = async (action, context, meta): Promise<ActionResult> =>
+  setTargetStatus(action, context, meta, 'PAUSED')
+
+ACTION_HANDLERS.enable_target = async (action, context, meta): Promise<ActionResult> =>
+  setTargetStatus(action, context, meta, 'ENABLED')
+
 // dayparting_apply (EA2) — SCHEDULE trigger. At each tick, find the weekly window(s) covering the
 // current hour (in the rule's timezone) and enable/pause the rule's campaigns for THIS marketplace.
 const DOW_NAME: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }

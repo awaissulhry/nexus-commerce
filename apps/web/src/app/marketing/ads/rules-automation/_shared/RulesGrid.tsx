@@ -171,6 +171,8 @@ const ACTION_LABEL: Record<string, string> = {
   harvest_and_negate: 'harvest and negate', add_negative_exact: 'add negative exact',
   add_negative_phrase: 'add negative phrase', sync_negatives_across_campaigns: 'sync negatives',
   archive_keyword: 'archive keyword', pause_campaign: 'pause campaign', pause_ad_group: 'pause ad group',
+  // C2 — the Bid tab's status verbs.
+  pause_target: 'pause the target', enable_target: 'unpause the target', bid_apply: 'adjust bid',
   pause_all_campaigns: 'pause every campaign', refresh_dayparting: 'refresh dayparting',
   create_amazon_promotion: 'create promotion', retail_guard: 'retail guard',
   notify: 'notify', alert_operator: 'alert the operator',
@@ -342,7 +344,9 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
      * at all, so falling through to the generic branch would have printed a bare "setCpc" beside
      * an empty string — the raw-enum cell this file has fixed twice before.
      */
-    const then = a.op === 'setCpc' ? 'Set bid to measured CPC'
+    const then = a.op === 'pauseTarget' ? 'Pause the target'
+      : a.op === 'enableTarget' ? 'Unpause the target'
+      : a.op === 'setCpc' ? 'Set bid to measured CPC'
       : a.op === 'targetAcos' ? `Set bid to CPC × (${v}% ÷ actual ACoS)`
       : a.op === 'set'
       ? (pctType ? `Set ${v}%` : `Set €${v}`)

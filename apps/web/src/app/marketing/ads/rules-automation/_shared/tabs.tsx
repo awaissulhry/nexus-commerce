@@ -200,7 +200,9 @@ export const rulesTabByKey = (key: string): RulesTab | undefined => RULES_TABS.f
  * on Apply Rules, which lists every rule regardless of type.
  */
 const RULE_TAB_ACTION_TYPES_BASE: Record<string, string[]> = {
-  bid: ['bid_to_target_acos', 'bid_up', 'bid_down', 'lower_bid_to_floor', 'raise_bids_for_rank_defense'],
+  // C2 — pause_target/enable_target are Bid-tab actions: they are what the Bid builder's THEN
+  // writes when the operator chooses Pause/Unpause Target, so the rule must list where it was made.
+  bid: ['bid_to_target_acos', 'bid_up', 'bid_down', 'lower_bid_to_floor', 'raise_bids_for_rank_defense', 'bid_apply', 'pause_target', 'enable_target'],
   budget: ['adjust_ad_budget'],
   placement: ['set_placement_multiplier', 'defend_top_of_search'],
   'keyword-harvest': ['promote_to_exact', 'harvest_and_negate'],
