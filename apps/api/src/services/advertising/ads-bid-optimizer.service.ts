@@ -18,14 +18,31 @@ import { bulkUpdateAdTargetBids, type AdsActor } from './ads-mutation.service.js
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
+import { ACTION_WINDOW } from '@nexus/shared/ads-rule-window'
 
 const FLOOR_CENTS = 5
 const MAX_DOWN = 0.5 // never cut a bid by more than 50% in one pass
 const MAX_UP = 0.25 // never raise by more than 25% in one pass
 const MIN_CLICKS = 5 // need signal before acting
 
-/** Trailing window when reading the daily table. Matches the 30d the console reports on. */
-const DAILY_WINDOW_DAYS = 30
+/**
+ * Trailing window when reading the daily table. Matches the 30d the console reports on.
+ *
+ * B2 (2026-08-20) — read from `@nexus/shared/ads-rule-window`, the same table the Rules &
+ * Automation grid's Lookback column renders, so the number an operator is shown for a
+ * `bid_to_target_acos` rule is this number and cannot drift from it. Four of the eighteen bid
+ * rules compute their bids here, three of them at AUTO.
+ *
+ * 🔴 **This window is NOT settled, and that is a real difference from every trigger window.**
+ * The `since` below is a bare `Date.now() - Nd`, so it includes D-0 and D-1 — the two days Amazon
+ * is still attributing conversions to — while all thirteen trigger windows go through
+ * `ruleWindowBounds`, which drops them. The effect is one-directional: today's spend is already
+ * recorded but today's sales are not, so every target looks less profitable than it is at the
+ * moment its bid is decided. The grid now SAYS so on each affected row rather than printing a
+ * bare "30 days" that reads the same as a settled one. Left as-is on purpose — changing it moves
+ * live bids on three AUTO rules, which is an operator decision, not a tidy-up.
+ */
+const DAILY_WINDOW_DAYS = ACTION_WINDOW.bid_to_target_acos.days as number
 
 export type BidMetricSource = 'legacy' | 'daily'
 

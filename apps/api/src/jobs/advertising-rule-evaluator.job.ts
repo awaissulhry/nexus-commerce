@@ -39,7 +39,34 @@ import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-s
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
+import { TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
+
+/**
+ * B2 (2026-08-20) — each trigger's window now comes from `@nexus/shared/ads-rule-window`, which
+ * is the SAME table the Rules & Automation grid's Lookback column reads.
+ *
+ * 🔴 The point is the direction. A window map that only the UI consults is a surface rendering
+ * what no executor obeys — the failure class this section has shipped repeatedly. Here the engine
+ * is the reader: change `TRIGGER_WINDOW.KEYWORD_LOW_CTR.days` and this job's query moves with it,
+ * so the number an operator is shown and the number the rule ran on cannot disagree.
+ *
+ * Every value was transcribed from the literal that used to sit at each call site, then diffed —
+ * the day this shipped, all twelve queries covered exactly the same dates as before.
+ *
+ * Throws rather than defaulting: a silent fallback would let a typo'd trigger key quietly run on
+ * some other window, which is the same silent-wrong-number problem one level down.
+ */
+const WINDOW = (trigger: string): number => {
+  const spec = TRIGGER_WINDOW[trigger]
+  if (!spec || spec.days == null) {
+    throw new Error(
+      `[ads-rule-evaluator] no window for trigger "${trigger}" in @nexus/shared/ads-rule-window. ` +
+      'Add it there — do not inline a number here, or the grid and the engine will disagree.',
+    )
+  }
+  return spec.days
+}
 
 // Trigger thresholds — env-tunable for testing.
 const FBA_AGE_DAYS_LTE = Number(process.env.NEXUS_AD_FBA_AGE_DAYS_LTE ?? 30)
@@ -334,7 +361,7 @@ async function buildUnderperformContexts(): Promise<UnderperformContext[]> {
   // Sourced from AmazonAdsDailyPerformance instead, exactly like its four siblings.
   // The emitted context shape is unchanged, because rule conditions reference
   // adTarget.spendCents and adTarget.salesCents by path and must keep resolving.
-  const { since, until } = ruleWindowBounds(14) // excludes the provisional D-0/D-1 tail
+  const { since, until } = ruleWindowBounds(WINDOW('AD_TARGET_UNDERPERFORMING')) // excludes the provisional D-0/D-1 tail
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
     where: { entityType: 'AD_TARGET', date: { gte: since, lte: until }, localEntityId: { not: null } },
@@ -562,7 +589,13 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
 // columns) + budget utilisation, so a rule can raise the daily budget on
 // winners that are budget-capped and trim losers. The adjust_ad_budget action +
 // per-rule guardrails (maxValueCentsEur, dryRun) do the rest.
-const BUDGET_RULE_WINDOW_DAYS = 7
+/**
+ * B2 — read from the shared map, not re-declared. This constant is used TWICE: for the perf query
+ * below and to divide spend into `avgDailySpendCents`. Leaving it at a literal 7 while the query
+ * moved to `WINDOW(...)` would let the divisor drift away from the window it is dividing, and a
+ * daily average computed over the wrong number of days is wrong in a way nothing on screen shows.
+ */
+const BUDGET_RULE_WINDOW_DAYS = WINDOW('CAMPAIGN_PERFORMANCE_BUDGET')
 
 interface CampaignBudgetContext {
   trigger: 'CAMPAIGN_PERFORMANCE_BUDGET'
@@ -629,7 +662,7 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
 // ENABLED keywords that spent money but got ZERO impressions in the last 7
 // days — signals delivery failure (suppressed listing, bad targeting, etc.)
 async function buildZeroImpressionContexts() {
-  const { since, until } = ruleWindowBounds(7) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+  const { since, until } = ruleWindowBounds(WINDOW('KEYWORD_ZERO_IMPRESSIONS')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
     where: { entityType: 'AD_TARGET', date: { gte: since, lte: until }, costMicros: { gt: 0n } },
@@ -649,7 +682,7 @@ async function buildZeroImpressionContexts() {
 const LOW_CTR_THRESHOLD = Number(process.env.NEXUS_LOW_CTR_THRESHOLD ?? 0.002)
 const LOW_CTR_MIN_IMPRESSIONS = Number(process.env.NEXUS_LOW_CTR_MIN_IMPR ?? 500)
 async function buildLowCtrContexts() {
-  const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+  const { since, until } = ruleWindowBounds(WINDOW('KEYWORD_LOW_CTR')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
     where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
@@ -706,7 +739,7 @@ async function buildCvrDropContexts() {
 // orders in the window — more granular and faster than the daily harvest cron.
 const WASTE_MIN_SPEND = Number(process.env.NEXUS_WASTE_MIN_SPEND_CENTS ?? 500) // €5 default
 async function buildWastedKeywordContexts() {
-  const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+  const { since, until } = ruleWindowBounds(WINDOW('KEYWORD_WASTED_SPEND')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const perf = await prisma.amazonAdsDailyPerformance.groupBy({
     by: ['localEntityId', 'marketplace'],
     where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
@@ -727,7 +760,7 @@ async function buildWastedKeywordContexts() {
 // for exact-match promotion. Powers the match-type migration automation.
 const CONVERTING_MIN_ORDERS = Number(process.env.NEXUS_CONVERTING_MIN_ORDERS ?? 2)
 async function buildSearchTermConvertingContexts() {
-  const { since, until } = ruleWindowBounds(30) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+  const { since, until } = ruleWindowBounds(WINDOW('SEARCH_TERM_CONVERTING')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const terms = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
     // Prisma's `in` cannot contain null — match the null (auto-targeting, no
@@ -797,7 +830,7 @@ function searchTermContext(
 // profitable-but-leaky converters a rule can bid down toward target.
 async function buildHighAcosKeywordContexts() {
   try {
-    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(WINDOW('KEYWORD_HIGH_ACOS')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
       where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
@@ -834,7 +867,7 @@ async function buildHighAcosKeywordContexts() {
 // with bid_up to win more of a profitable term.
 async function buildScaleOpportunityContexts() {
   try {
-    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(WINDOW('KEYWORD_SCALE_OPPORTUNITY')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
       where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
@@ -859,7 +892,7 @@ async function buildScaleOpportunityContexts() {
 // or bid_down (target: ad_group).
 async function buildAdGroupUnderperformContexts() {
   try {
-    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(WINDOW('AD_GROUP_UNDERPERFORMING')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
       where: { entityType: 'AD_GROUP', date: { gte: since, lte: until } },
@@ -883,7 +916,7 @@ async function buildAdGroupUnderperformContexts() {
 // for brand growth, a signal nothing else triggers on. Pairs with adjust_ad_budget.
 async function buildNewToBrandWinnerContexts() {
   try {
-    const { since, until } = ruleWindowBounds(14) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(WINDOW('NEW_TO_BRAND_WINNER')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
     if (campaigns.length === 0) return []
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
@@ -909,7 +942,7 @@ async function buildNewToBrandWinnerContexts() {
 // at the campaign level (coarser than per-target underperformance).
 async function buildCampaignNoSalesContexts() {
   try {
-    const { since, until } = ruleWindowBounds(30) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(WINDOW('CAMPAIGN_NO_SALES')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const campaigns = await prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, name: true, externalCampaignId: true, marketplace: true } })
     if (campaigns.length === 0) return []
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
@@ -936,7 +969,7 @@ async function buildCampaignNoSalesContexts() {
 // KEYWORD_WASTED_SPEND (keyword entity) and the batch harvest cron.
 async function buildSearchTermWastingContexts() {
   try {
-    const { since, until } = ruleWindowBounds(30) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(WINDOW('SEARCH_TERM_WASTING')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const terms = await prisma.amazonAdsSearchTerm.groupBy({
       by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
       where: { date: { gte: since, lte: until } },

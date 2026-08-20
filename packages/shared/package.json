@@ -26,6 +26,10 @@
       "types": "./dist/data-vintage.d.ts",
       "default": "./dist/data-vintage.js"
     },
+    "./ads-rule-window": {
+      "types": "./dist/ads-rule-window.d.ts",
+      "default": "./dist/ads-rule-window.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

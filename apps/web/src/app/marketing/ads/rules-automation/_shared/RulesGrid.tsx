@@ -81,6 +81,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { ruleLookback, type RuleLookback } from '@nexus/shared/ads-rule-window'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
@@ -107,6 +108,8 @@ interface RuleRow {
   criteria: string
   freqDay: string
   freqTime: string
+  /** B2 — the window this rule actually reads, derived; see `@nexus/shared/ads-rule-window`. */
+  look: RuleLookback
 }
 
 /**
@@ -278,7 +281,43 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
     criteria: summariseRule(rule, tabKey),
     freqDay,
     freqTime,
+    /**
+     * B2 — the Lookback, derived from the same two facts the engine decides on: the rule's
+     * TRIGGER and its actions. Deliberately scoped to THIS tab's action, exactly as the Criteria
+     * cell is: "Daily automation digest" carries `bid_to_target_acos` (a 30-day window) and
+     * `harvest_and_negate` (none of its own), so on Bid it must describe the bid half. Passing
+     * every action in tab order lets `ruleLookback` pick the first that carries a window.
+     */
+    look: ruleLookback(String(rule.trigger ?? ''), orderedActionTypes(rule, tabKey), tosWindowDays(rule)),
   }
+}
+
+/**
+ * `defend_top_of_search` is the one action whose window an operator can already set
+ * (`action.windowDays`, clamped 7–90 by the handler). Read off THAT action rather than
+ * `actions[0]`: on "Top-of-Search rank defender" it is the first of three, but on "Rank control"
+ * it is one of a hundred, and reading position 0 would silently report the default.
+ */
+function tosWindowDays(rule: Record<string, unknown>): number | null {
+  const acts = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
+  const tos = acts.find((x) => String(x?.type) === 'defend_top_of_search')
+  return typeof tos?.windowDays === 'number' ? (tos.windowDays as number) : null
+}
+
+/**
+ * The rule's action types, with THIS tab's actions first.
+ *
+ * `ruleLookback` takes the first action that carries its own window, so the order decides which
+ * half of a multi-action rule the Lookback cell describes. Same principle as `summariseRule`'s
+ * `tabKey` argument, and for the same measured reason: a rule that both bids and negates reads
+ * differently on the two tabs it lists on, which is correct — it does both.
+ */
+function orderedActionTypes(rule: Record<string, unknown>, tabKey: string): string[] {
+  const types = (Array.isArray(rule.actions) ? rule.actions : [])
+    .map((x) => String((x as { type?: unknown })?.type ?? ''))
+    .filter(Boolean)
+  const want = RULE_TAB_ACTION_TYPES[tabKey] ?? []
+  return [...types.filter((t) => want.includes(t)), ...types.filter((t) => !want.includes(t))]
 }
 
 /**
@@ -519,6 +558,45 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
   }
 
   const columns: GridColumn<RuleRow>[] = useMemo(() => [
+    /**
+     * B2 — Lookback Period. The operator study's column, and the one that had no field behind it.
+     *
+     * 🔴 What makes this cell honest is that it can decline to be a number. Measured on prod
+     * 2026-08-20, the eighteen bid rules split four ways and only one of those is "N days":
+     *   · a settled window   — 14 · 7 · 30 days, dropping Amazon's 2 still-settling days
+     *   · an UNSETTLED one   — `bid_to_target_acos`'s 30, which counts today's half-written day
+     *   · "Unlabelled"       — CAC_SPIKE reads `Campaign.spend/.acos`, columns whose window the
+     *                          sync never records, so how far back the rule looks is not a number
+     *                          this system knows
+     *   · "None"             — a SCHEDULE rule whose action re-reads nothing: `raise_bids_for_
+     *                          rank_defense` raises every enabled target 20% on no evidence at all
+     *
+     * Printing "30 days" on all eighteen would have been the easy column and a fabricated one
+     * ([[reference_fleet_stale_constant_class]]). Sortable by days, with the non-numeric rows
+     * sinking in both directions (`sortValue` → null), so ascending surfaces the SHORTEST real
+     * window rather than a row that has none.
+     */
+    {
+      key: 'lookback', label: 'Lookback', metric: false, sortable: true,
+      sortValue: (r) => r.look.days,
+      render: (r) => (
+        <span className={`h10-rg-look${r.look.days == null ? ' none' : ''}${r.look.settled ? '' : ' unsettled'}`} title={r.look.why}>
+          {r.look.label}
+          {/* The warning is the difference between a window and a window you should not trust.
+              It carries its own accessible text — an icon that only means something on hover is
+              a fact delivered to nobody.
+
+              🔴 Only on a cell that STATES a window. `AD_SPEND_PROFITABILITY_BREACH` carries an
+              unsettled 30-day profit aggregate behind a label of "Unlabelled", and rendering
+              "Unlabelled ⚠" put a caveat about a number on a cell whose whole point is that
+              there is no number — the two halves contradicted each other. Measured on prod:
+              1 of 18 bid rows read that way. The caveat still reaches the tooltip. */}
+          {!r.look.settled && (r.look.kind === 'window' || r.look.kind === 'compare') && (
+            <AlertTriangle size={11} aria-label="includes days Amazon is still attributing" />
+          )}
+        </span>
+      ),
+    },
     { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit" title={r.criteria}>{r.criteria}</span> },
     {
       key: 'frequency', label: 'Frequency', metric: false, sortable: false,

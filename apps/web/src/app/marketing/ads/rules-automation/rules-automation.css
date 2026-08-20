@@ -5250,3 +5250,21 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-del { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 7px; background: none; color: #5b6674; cursor: pointer; transition: color .1s, background .1s, border-color .1s; }
 .h10-rg-del:hover { background: #fbdedb; border-color: #f3c4bf; color: #a3211a; }
 .h10-rg-del:focus-visible { outline: 2px solid #1f6fde; outline-offset: 1px; color: #a3211a; }
+
+/* ── B2 (2026-08-20) — the rules grid's Lookback cell ──────────────────────────────────────────
+   Three states, and the whole value of the column is that they do not look alike:
+
+   · a settled window ("14 days")      — plain ink, tabular figures so the column scans
+   · an UNSETTLED one ("30 days" + ⚠) — amber, because the number is real but counts the two days
+                                         Amazon is still attributing conversions to
+   · no window ("None" / "Unlabelled") — quieted and italic: not a measurement, and it must not
+                                         read as one. NOT hidden — a rule that acts on no evidence
+                                         is the most interesting row on the page.
+
+   Amber not red: an unsettled window is a caveat, not a fault, the same way the Automation
+   banner is amber for a ceiling refusal. Contrast measured on prod against each cell's own
+   ground (reference_contrast_probe_own_background) — figures recorded in the B2 commit. */
+.h10-rg-look { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #16202b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-rg-look.unsettled { color: #8a5316; }
+.h10-rg-look.unsettled svg { flex-shrink: 0; }
+.h10-rg-look.none { font-weight: 500; font-style: italic; color: #6b7280; }
