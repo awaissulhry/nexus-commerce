@@ -1102,7 +1102,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       prisma.campaignRuleAssignment.findMany({ where: { kind }, select: { campaignId: true, ruleId: true } }),
       prisma.automationRule.findMany({
         where: { domain: 'advertising' },
-        select: { id: true, name: true, enabled: true, autonomyLevel: true, dryRun: true, actions: true },
+          select: { id: true, name: true, description: true, enabled: true, autonomyLevel: true, dryRun: true, actions: true, conditions: true, trigger: true },
         orderBy: { name: 'asc' },
       }),
     ])
@@ -1124,7 +1124,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const v = (a as { percent?: unknown } | undefined)?.percent
           return typeof v === 'number' ? v : null
         })(),
+        trigger: r.trigger,
+        description: r.description,
+        conditionsText: conditionsTextOf(r.conditions),
       }))
+    // D2b — the conditions in the Budget tab's own words. Same formatter, so the modal and that
+    // tab cannot describe one rule two ways.
+    const { conditionsTextOf } = await import('../services/advertising/budget-grid.service.js')
     const byCampaign = new Map<string, string[]>()
     for (const l of links) {
       const arr = byCampaign.get(l.campaignId) ?? []

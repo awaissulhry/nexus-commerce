@@ -412,7 +412,11 @@ const scopeTextOf = (r: { scopeMarketplace: string | null; scopePortfolioId: str
 }
 
 /** A readable one-liner for the conditions column. The full DSL is BUD.3's drawer. */
-const conditionsTextOf = (conditions: unknown): string => {
+/**
+ * D2b — exported so the assignment modal can preview a rule's conditions with the SAME words the
+ * Budget tab uses. A second formatter would drift the first time an operator compared them.
+ */
+export const conditionsTextOf = (conditions: unknown): string => {
   const list = (Array.isArray(conditions) ? conditions : []) as Array<Record<string, unknown>>
   if (!list.length) return 'No conditions — matches every context'
   return list.map((c) => {

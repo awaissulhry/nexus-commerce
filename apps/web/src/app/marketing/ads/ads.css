@@ -3285,21 +3285,62 @@ a.h10-rc-bud.one:hover .t { text-decoration: underline; }
 a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; border-radius: 3px; }
 /* An uncommitted staged change. Amber like the staleness chip, because both mean "this is not
    settled yet". #8a5316 on #fff6e8 is 5.89:1 — computed, not guessed. */
-/* D3 — the assignment dropdown. Reuses `h10-algomenu`'s box (the bid-algorithm picker's) so the
-   two editors on this grid are the same object with different contents, then adds the rows. */
-.h10-assignmenu { min-width: 300px; max-width: 380px; padding: 6px; }
-.h10-assignmenu .hd { margin: 4px 8px 6px; font-size: 11.5px; font-weight: 800; color: #3a4452; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-assignmenu .sub { margin: 4px 8px 8px; font-size: 11.5px; color: #6b7383; white-space: normal; }
-.h10-assignmenu label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: #2b3440; }
-.h10-assignmenu label:hover { background: #f2f5f9; }
-.h10-assignmenu label.on { background: #eef4fd; }
-.h10-assignmenu label .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The rule's state travels with its name: assigning a disabled rule governs nothing, and the
-   operator should see that at the moment of choosing. #6b7383 is 4.77:1. */
-.h10-assignmenu label .lv { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; color: #10457f; }
-.h10-assignmenu label .lv.off { color: #6b7383; }
-.h10-assignmenu .ft { display: flex; align-items: center; gap: 8px; padding: 6px 4px 2px; border-top: 1px solid #e6eaf0; margin-top: 4px; }
-.h10-assignmenu .ft .grow { flex: 1 1 auto; }
+/* ── D2b — the "Budget rules for <campaign>" modal ───────────────────────────────────────────────
+   Chassis is `h10-rtm` (the "Select a Rule Type" modal), reused verbatim from rules-automation.css.
+   🔴 The widening is written `.h10-rtm.h10-ram` — two classes, 0,2,0 — so it beats `.h10-rtm`'s
+   width on SPECIFICITY and does not depend on source order. It has to: `ads.css` loads in the
+   PARENT layout and therefore comes BEFORE rules-automation.css, so an equal-specificity override
+   here would lose. 640px against the chassis's 560 is the operator's "slightly bigger".
+   Every colour below measured on its own ground, not estimated. */
+.h10-rtm.h10-ram { width: 640px; }
+.h10-ram-lede { margin: 2px 0 12px; font-size: 12.5px; color: #6b7480; line-height: 1.45; }
+.h10-ram-empty { margin: 8px 0 12px; font-size: 13px; color: #3a4452; }
+/* A rule row: checkbox + name/state/percent on one line, its CONDITIONS underneath. The second
+   line is the whole point of the rebuild — the popover it replaces ellipsised the name and never
+   showed the conditions at all. */
+.h10-ram-opt { display: flex; align-items: flex-start; gap: 13px; padding: 10px 10px; margin: 0 -10px; border-radius: 8px; cursor: pointer; }
+.h10-ram-opt:hover { background: #f7f9fc; }
+.h10-ram-opt.on { background: #eef4fd; }
+.h10-ram-opt > input { margin-top: 3px; accent-color: #1f6fde; width: 17px; height: 17px; flex-shrink: 0; }
+.h10-ram-opt .b { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.h10-ram-opt .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.h10-ram-opt .t { font-size: 14px; font-weight: 700; color: #1f2c3d; }
+/* #10457f is 9.63:1 on white, #6b7383 4.77:1 — the OFF state is muted but still readable, because
+   "this rule is switched off" is the fact that decides whether assigning it does anything. */
+.h10-ram-opt .lv { font-size: 10.5px; font-weight: 800; color: #10457f; letter-spacing: .02em; }
+.h10-ram-opt .lv.off { color: #6b7383; }
+.h10-ram-opt .pc { font-size: 12px; font-weight: 700; color: #3a4452; font-variant-numeric: tabular-nums; }
+/* `white-space: normal` on purpose: this sits inside a modal, not a grid cell, and the conditions
+   are a sentence that must wrap rather than a value that must not. #6b7480 is 4.74:1. */
+.h10-ram-opt .d { font-size: 12.5px; color: #6b7480; line-height: 1.45; white-space: normal; }
+
+.h10-ram-newbtn { display: inline-flex; align-items: center; gap: 6px; margin: 12px 0 2px; padding: 7px 12px; border: 1px dashed #c3ccd8; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; font-weight: 700; color: #1f6fde; cursor: pointer; }
+.h10-ram-newbtn:hover { background: #f2f7fe; border-color: #1f6fde; }
+.h10-ram-new { margin: 12px 0 4px; padding: 14px; border: 1px solid #e6e9ee; border-radius: 10px; background: #fafbfd; }
+.h10-ram-new .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; align-items: flex-end; }
+.h10-ram-new .f { display: flex; flex-direction: column; gap: 5px; flex: 1 1 auto; min-width: 0; }
+.h10-ram-new .f.narrow { flex: 0 0 auto; }
+.h10-ram-new .f > span:first-child { font-size: 11.5px; font-weight: 700; color: #6b7480; }
+.h10-ram-new .f input { width: 100%; padding: 7px 9px; border: 1px solid #d6dbe3; border-radius: 7px; font: inherit; font-size: 13px; color: #1f2c3d; background: #fff; }
+.h10-ram-new .f.narrow input { width: 84px; }
+.h10-ram-new .f input:focus-visible { outline: 2px solid #1f6fde; outline-offset: 1px; border-color: #1f6fde; }
+.h10-ram-new .pct { display: inline-flex; align-items: center; gap: 4px; }
+.h10-ram-new .pct i { font-style: normal; font-size: 12.5px; color: #6b7480; }
+.h10-ram-new .hint { margin: 10px 0 0; font-size: 11.5px; color: #6b7480; }
+/* #8c2f22 on the #fafbfd panel is 7.97:1. */
+.h10-ram-new .err { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #8c2f22; }
+.h10-ram-new .acts { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.h10-ram-new .acts .grow { flex: 1 1 auto; }
+
+.h10-rtm-f.h10-ram-f { gap: 12px; }
+.h10-rtm-f.h10-ram-f .grow { flex: 1 1 auto; }
+/* The one thing an operator cannot infer: the create route stores every new advertising rule
+   disabled + dry-run, so a rule made here is assigned but inert until armed. #6b7480 is 4.74:1. */
+.h10-rtm-f.h10-ram-f .note { font-size: 11.5px; color: #6b7480; text-align: right; max-width: 320px; line-height: 1.35; }
+
+/* D3's anchored assignment dropdown (`h10-assignmenu`) was REMOVED here, not orphaned: D2b
+   replaced it with `RuleAssignModal` and nothing references those classes any more. Verified by
+   grep across the ads tree before deleting. */
 
 /* D3 — the global Apply bar. Sticks to the bottom of the viewport so a staged change is never
    scrolled out of sight and forgotten, which is the failure mode of a footer that scrolls away. */

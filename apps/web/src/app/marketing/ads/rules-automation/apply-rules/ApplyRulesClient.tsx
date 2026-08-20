@@ -89,6 +89,7 @@ import { ArBulkVerbs } from './ArBulkVerbs'
 import { BidRuleCell, BidAlgoMenu, bidAlgoLabel, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../../_shared/RuleColumnEditors'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell } from '../../_shared/CampaignRowCells'
+import { RuleAssignModal } from '../../_shared/RuleAssignModal'
 import { useAdsSync, emitAdsChange } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
@@ -210,7 +211,7 @@ export function ApplyRulesClient() {
    * campaigns only — 86 of 220 — so a paused campaign could never be assigned and 134 rows would
    * read "unknown" on a fact that is perfectly knowable.
    */
-  const [assignRules, setAssignRules] = useState<Array<{ id: string; name: string; enabled: boolean; level: string; percent: number | null }> | null>(null)
+  const [assignRules, setAssignRules] = useState<Array<{ id: string; name: string; enabled: boolean; level: string; percent: number | null; conditionsText?: string | null }> | null>(null)
   const [assignSaved, setAssignSaved] = useState<Map<string, string[]> | null>(null)
   const [assignStaged, setAssignStaged] = useState<Map<string, string[]>>(new Map())
   const [assignMenu, setAssignMenu] = useState<{ row: CampaignRow; x: number; y: number } | null>(null)
@@ -1330,36 +1331,33 @@ export function ApplyRulesClient() {
           governance — it never touches Amazon); Target ACoS writes PATCH /automation, the same
           fraction the bulk verb sends. Both emit on the bus once the write settles, so every other
           open tab re-reads. */}
-      {/* ── D3 — the assignment dropdown, anchored under its cell like every other editor here ──
-          Multi-select, because a campaign may carry several budget rules (see `BudgetRuleCell`).
-          Choosing STAGES; nothing is written until the Apply bar is used. */}
-      {assignMenu && (() => {
-        const row = assignMenu.row
-        const current = assignedIdsFor(row.id)
-        const toggle = (id: string) => stageAssignment(row.id, current.includes(id) ? current.filter((x) => x !== id) : [...current, id])
-        return (
-          <>
-            <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setAssignMenu(null)} />
-            <div className="h10-algomenu h10-assignmenu" style={{ position: 'fixed', left: assignMenu.x, top: assignMenu.y }} role="dialog" aria-label={`Budget rules for ${row.name}`}>
-              <p className="hd">Budget rules — {row.name}</p>
-              {(assignRules ?? []).length === 0 && <p className="sub">No budget rule exists yet. Create one on the Budget tab and it appears here.</p>}
-              {(assignRules ?? []).map((r) => (
-                <label key={r.id} className={current.includes(r.id) ? 'on' : ''}>
-                  <input type="checkbox" checked={current.includes(r.id)} onChange={() => toggle(r.id)} />
-                  <span className="t">{r.name}</span>
-                  {/* The state is part of the choice: assigning a disabled rule governs nothing. */}
-                  <span className={`lv ${r.enabled ? '' : 'off'}`}>{r.level}{r.percent != null ? ` · ${r.percent > 0 ? '+' : ''}${r.percent}%` : ''}</span>
-                </label>
-              ))}
-              <div className="ft">
-                <button type="button" className="h10-am-link" onClick={() => stageAssignment(row.id, [])}>None</button>
-                <span className="grow" />
-                <button type="button" className="h10-am-btn" onClick={() => setAssignMenu(null)}>Done</button>
-              </div>
-            </div>
-          </>
-        )
-      })()}
+      {/* ── D2b — the assignment MODAL. Replaces the anchored popover this shipped with a few
+          hours earlier: 300–380px, names ellipsised, conditions invisible, and an empty state that
+          told the operator to go to another tab. Operator: *"slightly bigger so that all the
+          information is easily readable … I should be able to create new rules directly from the
+          modal"*. Same staging contract as before — choosing stages, the Apply bar commits. ── */}
+      {assignMenu && (
+        <RuleAssignModal
+          campaignName={assignMenu.row.name}
+          rules={assignRules ?? []}
+          selected={assignedIdsFor(assignMenu.row.id)}
+          onToggle={(ruleId) => {
+            const cur = assignedIdsFor(assignMenu.row.id)
+            stageAssignment(assignMenu.row.id, cur.includes(ruleId) ? cur.filter((x) => x !== ruleId) : [...cur, ruleId])
+          }}
+          onSetAll={(ids) => stageAssignment(assignMenu.row.id, ids)}
+          onCreated={(rule) => {
+            // A real rule now exists. Put it in the catalogue immediately so the list shows it
+            // without a refetch, and stage it onto this campaign — "create AND assign".
+            setAssignRules((rs) => [...(rs ?? []), { id: rule.id, name: rule.name, enabled: false, level: 'OFF', percent: null, conditionsText: null }]
+              .sort((a, b) => a.name.localeCompare(b.name)))
+            stageAssignment(assignMenu.row.id, [...assignedIdsFor(assignMenu.row.id), rule.id])
+            emitAdsChange('ads.rule.changed')
+          }}
+          onClose={() => setAssignMenu(null)}
+          builderHref="/marketing/ads/rules-automation/builder/budget"
+        />
+      )}
       {stratFor && (
         <StrategyModal
           strategy={stratFor.biddingStrategy}
