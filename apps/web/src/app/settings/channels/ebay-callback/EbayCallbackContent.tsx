@@ -32,12 +32,15 @@ export default function EbayCallbackContent() {
         }
 
         // Verify state token
-        const storedState = sessionStorage.getItem("ebayAuthState");
-        if (storedState !== state) {
-          setStatus("error");
-          setMessage("State token mismatch - possible CSRF attack");
-          return;
-        }
+        // The `state` is now signed by the server and verified by the server
+        // (lib/auth/oauth-state.ts), so there is nothing to compare here.
+        //
+        // What used to live here compared it against `sessionStorage` — and that
+        // BROKE the moment eBay opened in its own window, because `window.open`
+        // clones sessionStorage at creation, before the state exists. It reported
+        // "State token mismatch - possible CSRF attack" on completely legitimate
+        // connects. Do not reintroduce a browser-side check: it cannot survive a
+        // popup, and it was never the real protection anyway.
 
         // Create ChannelConnection in database first
         const createResponse = await fetch(`${getBackendUrl()}/api/ebay/auth/create-connection`, {
@@ -66,7 +69,6 @@ export default function EbayCallbackContent() {
             // is for THAT account", which is the only thing that lets the server
             // adopt a grant onto a connection that predates the identity scope
             // instead of refusing it as an unmatched identity.
-            adoptConnectionId: sessionStorage.getItem("ebayAdoptConnectionId") ?? undefined,
             redirectUri: window.location.origin + "/settings/channels/ebay-callback",
           }),
         });
@@ -77,10 +79,6 @@ export default function EbayCallbackContent() {
         }
 
         const result = await callbackResponse.json();
-
-        // Clear stored state
-        sessionStorage.removeItem("ebayAuthState");
-        sessionStorage.removeItem("ebayAdoptConnectionId");
 
         setStatus("success");
         setMessage(

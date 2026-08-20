@@ -155,7 +155,7 @@ export function ChannelsClient() {
     }
   }
 
-  async function handleConnectEbay() {
+  async function handleConnectEbay(adoptConnectionId?: string) {
     // Opened SYNCHRONOUSLY, inside the click, before any await. A popup opened
     // after an await has lost the user gesture that authorises it and is blocked.
     const authWindow = window.open('', '_blank', 'width=1000,height=800')
@@ -168,6 +168,9 @@ export function ChannelsClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           redirectUri: `${window.location.origin}/settings/channels/ebay-callback`,
+          // Goes into the SIGNED state, so it survives the eBay round-trip without
+          // browser storage and cannot be rewritten by the caller on the way back.
+          adoptConnectionId,
         }),
       })
 
@@ -180,8 +183,6 @@ export function ChannelsClient() {
       if (!data.success || !data.authUrl) {
         throw new Error(data.error || 'Failed to generate authorization URL')
       }
-
-      sessionStorage.setItem('ebayAuthState', data.state)
 
       // Open eBay in a SEPARATE window, not this tab. Two reasons, and the
       // second is why the window is opened before the await above rather than
@@ -353,12 +354,11 @@ export function ChannelsClient() {
       <AccountsPanel
         apiBase={getBackendUrl()}
         onConnect={{ EBAY: handleConnectEbay }}
-        onReconnect={(a) => {
-          // Name the account the grant is for, so the server adopts onto it
-          // rather than refusing an identity it cannot match.
-          sessionStorage.setItem('ebayAdoptConnectionId', a.id)
-          void handleConnectEbay()
-        }}
+        // Name the account the grant is for, so the server adopts onto it rather
+        // than refusing an identity it cannot match. It travels inside the signed
+        // state, not sessionStorage — a popup does not inherit storage written
+        // after it was opened.
+        onReconnect={(a) => void handleConnectEbay(a.id)}
         confirm={askConfirm}
       />
 

@@ -5,6 +5,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { randomBytes } from "crypto";
+import { signOAuthState, verifyOAuthState } from "../lib/auth/oauth-state.js";
 import prisma from "../db.js";
 import { ebayAuthService } from "../services/ebay-auth.service.js";
 import { logger } from "../utils/logger.js";
@@ -105,7 +106,13 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
         // query value (eBay requires the RuName, not the literal URL).
         // Body is accepted for backwards compat with the old frontend
         // but ignored.
-        const state = randomBytes(32).toString("hex");
+        // Signed, self-validating, and it carries the adopt intent through the
+        // eBay round-trip so nothing depends on browser storage surviving a
+        // popup. See lib/auth/oauth-state.ts for why that matters.
+        const state = signOAuthState({
+          channel: "EBAY",
+          adoptConnectionId: (request.body as { adoptConnectionId?: string } | undefined)?.adoptConnectionId,
+        });
         // Default ON. Every connect from the Accounts panel wants a real sign-in
         // page: either it is a NEW account (so the current eBay session is the
         // wrong one), or it is a Reconnect (where confirming which account you
@@ -143,21 +150,12 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
     Body: CallbackQueryParams & {
       state: string;
       connectionId: string;
-      /**
-       * MAP.4 — "this grant is for THAT account, adopt it".
-       *
-       * The operator states which existing connection they are re-authorising.
-       * Without it, a grant whose identity matches nothing cannot be told apart
-       * from a genuinely new account, and guessing is how one account's tokens
-       * end up on another account's row.
-       */
-      adoptConnectionId?: string;
     };
   }>(
     "/api/ebay/auth/callback",
     async (request, reply) => {
       try {
-        const { code, state, error, error_description, connectionId, adoptConnectionId } = request.body;
+        const { code, state, error, error_description, connectionId } = request.body;
 
         // Check for OAuth errors from eBay
         if (error) {
@@ -204,14 +202,31 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
           });
         }
 
-        // In production, validate state token against stored value
-        // For now, we just check it's not empty
-        if (!state || state.length < 32) {
+        // Real CSRF validation, server-side. This replaced a length check whose
+        // own comment said "In production, validate state token against stored
+        // value" — it never did, so any 32-character string passed. The browser's
+        // sessionStorage comparison that stood in for it could not survive the
+        // flow opening eBay in a separate window (window.open clones
+        // sessionStorage at CREATION, before the state exists), which is what
+        // produced "State token mismatch - possible CSRF attack" on entirely
+        // legitimate connects.
+        const verdict = verifyOAuthState(state, "EBAY");
+        if (!verdict.ok) {
+          logger.warn("eBay OAuth state rejected", { reason: verdict.reason });
+          await prisma.channelConnection.delete({ where: { id: connectionId } }).catch(() => {});
           return reply.status(400).send({
             success: false,
-            error: "Invalid state parameter",
+            error:
+              verdict.reason === "expired"
+                ? "This sign-in took too long and the request expired. Start the connection again."
+                : "The sign-in could not be verified as coming from Nexus. Start the connection again.",
+            code: `OAUTH_STATE_${(verdict.reason ?? "invalid").toUpperCase()}`,
           });
         }
+        // The adopt intent comes from the SIGNED state, never from the request
+        // body — a caller must not be able to redirect a grant onto an account of
+        // their choosing.
+        const adoptConnectionId = verdict.payload?.adoptConnectionId;
 
         // Exchange code for tokens
         // @ts-ignore - request.body may contain redirectUri from callback
