@@ -4736,7 +4736,7 @@ export default function AmazonFlatFileClient({
             <span className="text-emerald-600/70 dark:text-emerald-300/60"> · {new Date(importReport.at).toLocaleString()}</span>
           </span>
           <span title={importReport.skus.slice(0, 40).join(', ') + (importReport.skus.length > 40 ? '…' : '')}
-            className="underline decoration-dotted underline-offset-2 cursor-help">{importReport.skus.length} SKUs</span>
+            className="underline decoration-dotted underline-offset-2">{importReport.skus.length} SKUs</span>
           <button type="button" onClick={dismissImportReport}
             className="ml-auto px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40">Dismiss</button>
         </div>

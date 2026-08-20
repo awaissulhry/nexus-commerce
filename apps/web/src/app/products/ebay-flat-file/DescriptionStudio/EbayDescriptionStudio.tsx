@@ -937,7 +937,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
             </div>
             {usageError ? (
               <div className="mt-1 pt-1.5 border-t border-slate-200 dark:border-slate-700 px-1">
-                <Pill tone="neutral" className="cursor-help" >
+                <Pill tone="neutral" >
                   <span title={`Usage counts failed to load: ${usageError}`}>usage unavailable</span>
                 </Pill>
               </div>

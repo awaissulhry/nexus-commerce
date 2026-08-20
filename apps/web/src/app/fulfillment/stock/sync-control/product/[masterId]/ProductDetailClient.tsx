@@ -308,12 +308,12 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     { key: 'channel', label: <TipText help={COLUMN_HELP.channel} cursor="inherit">Channel</TipText>, width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
     { key: 'market', label: <TipText help={COLUMN_HELP.market} cursor="inherit">Market</TipText>, width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
     { key: 'lane', label: <TipText help={COLUMN_HELP.lane}>Lane</TipText>, width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
-    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span style={{ cursor: 'help' }}>Mode</span></Tooltip>, width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex" style={{ cursor: 'help' }}><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip> },
-    { key: 'intended', label: <Tooltip content={COLUMN_HELP.intended}><span style={{ cursor: 'help' }}>Intended</span></Tooltip>, align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
+    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span>Mode</span></Tooltip>, width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex"><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip> },
+    { key: 'intended', label: <Tooltip content={COLUMN_HELP.intended}><span>Intended</span></Tooltip>, align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span> },
-    { key: 'live', label: <Tooltip content={COLUMN_HELP.live}><span style={{ cursor: 'help' }}>Live</span></Tooltip>, align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
+    { key: 'live', label: <Tooltip content={COLUMN_HELP.live}><span>Live</span></Tooltip>, align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.liveQty ?? '—'}</span> },
-    { key: 'buffer', label: <Tooltip content={COLUMN_HELP.buffer}><span style={{ cursor: 'help' }}>Buffer</span></Tooltip>, align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
+    { key: 'buffer', label: <Tooltip content={COLUMN_HELP.buffer}><span>Buffer</span></Tooltip>, align: 'right', width: 70, render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.buffer}</span> },
     { key: 'drift', label: <TipText help={COLUMN_HELP.drift}>Drift</TipText>, width: 70, render: (r) => (r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty)
       ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" title="live ≠ intended" /> : null },
   ], [])
@@ -447,7 +447,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           </Tip>
         </label>
         <Tooltip content={CONTROL_HELP.driftOnly}>
-          <label className="mb-1 flex items-center gap-1.5 text-sm" style={{ cursor: 'help' }}>
+          <label className="mb-1 flex items-center gap-1.5 text-sm">
             <input type="checkbox" checked={fDrift} onChange={(e) => setParam('drift', e.target.checked ? '1' : '')} />
             Drift only
           </label>

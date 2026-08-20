@@ -351,7 +351,7 @@ function SkuCell({
           ))}
           {hiddenVariations.length > 0 && (
             <span
-              className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-medium cursor-help whitespace-nowrap"
+              className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-medium whitespace-nowrap"
               title={hiddenVariations
                 .map(([k, v]) => `${k}: ${v}`)
                 .join(', ')}

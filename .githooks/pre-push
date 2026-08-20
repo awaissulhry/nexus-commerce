@@ -97,6 +97,16 @@ node scripts/check-button-vocabulary.mjs || {
   exit 1
 }
 
+# 2026-08-20 — help-cursor ratchet, baseline ZERO. The operator ruled the
+# question-mark cursor out everywhere: hovering an info/eye icon must keep the
+# default cursor, and the tooltip alone carries the explanation. 55 occurrences
+# were swept the day this shipped; a literal reintroduction fails the push.
+echo "→ Checking help-cursor ratchet..."
+node scripts/check-help-cursor.mjs || {
+  echo "❌ help-cursor check FAILED - see message above"
+  exit 1
+}
+
 # MAP.3 (2026-08-19) — connection-resolver ratchet. A site that resolves a
 # ChannelConnection without being told which account it means is how a push lands
 # in the wrong store once a second account exists. The count may only go DOWN;

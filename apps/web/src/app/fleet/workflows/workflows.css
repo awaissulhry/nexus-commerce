@@ -197,7 +197,7 @@
   border-radius: 5px;
   padding: 2px 7px;
   white-space: nowrap;
-  cursor: help;
+
 }
 /* Code steps are math, not judgment — the S2 canvas already draws them
    neutral, and the two surfaces should not disagree about that. */
@@ -330,7 +330,7 @@
   align-items: flex-end;
   gap: 3px;
   height: 24px;
-  cursor: help;
+
 }
 .wf-bar {
   width: 6px;
@@ -837,7 +837,7 @@
   border-radius: 6px;
   padding: 1px 8px 1px 6px;
   white-space: nowrap;
-  cursor: help;
+
 }
 .wf-stepmark {
   width: 7px;

@@ -383,7 +383,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
               </Tip>
             ))}
             <span className="inline-flex items-center gap-1 text-sm">
-              <Tip help={ACTION_HELP.BUFFER}><span style={{ cursor: 'help' }}>Buffer</span></Tip>
+              <Tip help={ACTION_HELP.BUFFER}><span>Buffer</span></Tip>
               <Tip help={CONTROL_HELP.bufferInput}>
                 <Input inputMode="numeric" value={bufferVal} onChange={(e) => setBufferVal(e.target.value.replace(/[^0-9]/g, ''))} placeholder="0" style={{ width: 56 }} />
               </Tip>
@@ -516,7 +516,7 @@ function ChildCell({ c }: { c: Row }) {
 
 // SCD.4 — tooltipped column header + mode pill.
 function Hdr({ k, label }: { k: string; label: string }) {
-  return <Tooltip content={COLUMN_HELP[k] ?? ''}><span style={{ cursor: 'help' }}>{label}</span></Tooltip>
+  return <Tooltip content={COLUMN_HELP[k] ?? ''}><span>{label}</span></Tooltip>
 }
 function ModePill({ mode }: { mode: Mode }) {
   // The Tooltip clones its child with a ref + mouse handlers; <Pill> is a
@@ -524,7 +524,7 @@ function ModePill({ mode }: { mode: Mode }) {
   // tooltip never fires.
   return (
     <Tooltip content={MODE_HELP[mode] ?? ''}>
-      <span className="inline-flex" style={{ cursor: 'help' }}><Pill tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Pill></span>
+      <span className="inline-flex"><Pill tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Pill></span>
     </Tooltip>
   )
 }

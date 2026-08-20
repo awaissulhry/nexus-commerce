@@ -41,12 +41,13 @@ export function Tip({
   )
 }
 
-/** Help cursor variant, for labels/headers/chips rather than clickable controls.
- *  `cursor="inherit"` keeps a SORTABLE column header's pointer cue. */
+/** Tooltip wrapper for labels/headers/chips rather than clickable controls. The cursor is
+ *  NEVER changed by default — the operator ruled the question-mark cursor out everywhere
+ *  (2026-08-20); the tooltip alone carries the explanation. */
 export function TipText({
   help,
   children,
-  cursor = 'help',
+  cursor = 'inherit',
 }: {
   help: ReactNode
   children: ReactNode

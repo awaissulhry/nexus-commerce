@@ -616,7 +616,7 @@
   color: #5b6878;
   text-decoration: underline dotted;
   text-underline-offset: 2px;
-  cursor: help;
+
   font-style: italic;
 }
 
@@ -690,7 +690,7 @@
 .sba-badge.diag {
   background: #eef1f5;
   color: #6b7a8d;
-  cursor: help;
+
 }
 .sba-badge.test {
   background: #f3eefc;

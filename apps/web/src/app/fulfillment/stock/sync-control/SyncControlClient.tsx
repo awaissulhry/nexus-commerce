@@ -498,7 +498,7 @@ export default function SyncControlClient() {
           ['Policies', s?.policies, 'Active channel/market rules (push kill-switches and new-listing defaults).'],
         ] as Array<[string, number | undefined, string]>).map(([label, value, help]) => (
           <Tooltip key={label} content={help}>
-            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900" style={{ cursor: 'help' }}>
+            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</div>
               <div className="text-lg font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{value ?? '…'}</div>
             </div>

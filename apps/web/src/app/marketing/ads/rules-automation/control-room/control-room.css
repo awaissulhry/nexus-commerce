@@ -109,7 +109,7 @@
 
 .acr-tag {
   font-size: 10.5px; color: #6b7789; background: #f2f4f7;
-  border: 1px solid #e0e5ec; border-radius: 4px; padding: 2px 6px; cursor: help;
+  border: 1px solid #e0e5ec; border-radius: 4px; padding: 2px 6px;
 }
 
 .acr-what { font-size: 12.5px; color: #56637a; margin: 5px 0 0; }
@@ -370,19 +370,19 @@ a.acr-refresh { text-decoration: none; }
 .acr-fs-flags { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 .acr-fs-flag {
   font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em;
-  border-radius: 4px; padding: 2px 6px; white-space: nowrap; cursor: help;
+  border-radius: 4px; padding: 2px 6px; white-space: nowrap;
 }
 .acr-fs-flag.nocap { background: #fff8ec; color: #8a6320; }
 .acr-fs-flag.unb { background: #fdf2f2; color: #9c2f2a; }
 .acr-fs-flag.sup { background: #f2f4f7; color: #6b7789; }
-.acr-fs-ticks { font-size: 11px; color: #97a1af; white-space: nowrap; cursor: help; font-variant-numeric: tabular-nums; }
+.acr-fs-ticks { font-size: 11px; color: #97a1af; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .acr-fs-engines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .acr-fs-engine { border: 1px solid #dfe5ec; border-radius: 9px; background: #fff; padding: 12px 15px; }
 .acr-fs-engine.blocked { background: #fbfcfd; }
 .acr-fs-engine-main { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .acr-fs-engine-main strong { font-size: 13.5px; color: #1c2530; font-weight: 600; }
-.acr-fs-cadence { font-size: 11.5px; color: #667485; background: #f2f4f7; border-radius: 4px; padding: 2px 7px; cursor: help; }
+.acr-fs-cadence { font-size: 11.5px; color: #667485; background: #f2f4f7; border-radius: 4px; padding: 2px 7px; }
 .acr-fs-can {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
@@ -418,7 +418,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-grad-chip {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 10.5px; font-weight: 650; letter-spacing: .01em;
-  border: 1px solid; border-radius: 4px; padding: 2px 6px; cursor: help;
+  border: 1px solid; border-radius: 4px; padding: 2px 6px;
 }
 .acr-grad-chip.ready { background: #e8f6ef; color: #14724d; border-color: #bfe3d2; }
 .acr-grad-chip.unreviewed { background: #eef3fd; color: #2a5399; border-color: #c8d8f5; }
@@ -1079,7 +1079,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-flw-limits { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: #34404f; line-height: 1.7; }
 
 /* ── FX.4 — the teaching layer ───────────────────────────────────────── */
-.acr-term { position: relative; border-bottom: 1px dotted #9aa6b5; cursor: help; outline: none; }
+.acr-term { position: relative; border-bottom: 1px dotted #9aa6b5; outline: none; }
 .acr-term:focus-visible { border-radius: 2px; box-shadow: 0 0 0 2px rgb(31 111 222 / 0.25); }
 .acr-term-tip {
   position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 40;
@@ -1207,7 +1207,7 @@ a.acr-refresh { text-decoration: none; }
 .acr-eg-link { border: 0; background: none; padding: 0; cursor: pointer; font-size: 12.5px; color: #1f6fde; }
 .acr-eg-link:hover { text-decoration: underline; }
 .acr-eg-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; }
-.acr-eg-legenditem { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #5a6675; cursor: help; }
+.acr-eg-legenditem { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #5a6675; }
 .acr-eg-swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
 
 .acr-eg-node {

@@ -990,12 +990,12 @@ export function ImportWizardModal({
                   )}
                   {needsRequired > 0 && <> · <span className="text-rose-600 dark:text-rose-400">{needsRequired} missing required</span></>}
                   {plan.duplicateSkus > 0 && (
-                    <> · <span title={duplicateSkuList.join(', ')} className="underline decoration-dotted underline-offset-2 cursor-help">{plan.duplicateSkus} duplicate{plan.duplicateSkus !== 1 ? 's' : ''} merged</span></>
+                    <> · <span title={duplicateSkuList.join(', ')} className="underline decoration-dotted underline-offset-2">{plan.duplicateSkus} duplicate{plan.duplicateSkus !== 1 ? 's' : ''} merged</span></>
                   )}
                   {plan.skippedNoSku > 0 && <> · {plan.skippedNoSku} skipped (no SKU)</>}
                   {fbaQtyStripped.length > 0 && (
                     <> · <span title={`FBA quantity is Amazon-managed — file qty ignored for: ${fbaQtyStripped.slice(0, 20).join(', ')}${fbaQtyStripped.length > 20 ? '…' : ''}`}
-                      className="text-slate-500 underline decoration-dotted underline-offset-2 cursor-help">{fbaQtyStripped.length} FBA qty ignored</span></>
+                      className="text-slate-500 underline decoration-dotted underline-offset-2">{fbaQtyStripped.length} FBA qty ignored</span></>
                   )}
                 </div>
                 {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
