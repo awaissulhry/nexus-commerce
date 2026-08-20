@@ -67,7 +67,38 @@ export interface RuleWindowSpec {
    * default metric source, reads none of them.
    */
   caveat?: string
+  /**
+   * P1 — set when the rule's own `action.windowDays` OVERRIDES `days`.
+   *
+   * `clamp` records the bounds **the handler applies**, and is omitted where the handler applies
+   * none. That asymmetry is deliberate: `defend_top_of_search` clamps 7–90 in
+   * `automation-action-handlers.ts`, `harvest_and_negate` clamps nothing, and writing a clamp here
+   * that the handler does not enforce would make this cell describe a rule the engine does not run.
+   */
+  tunable?: { clamp?: readonly [number, number] }
 }
+
+/**
+ * `defend_top_of_search` clamps whatever it is given; stated here so a caller can label it, and
+ * declared above `ACTION_WINDOW` because the entry itself now reads them.
+ */
+export const TOS_WINDOW_MIN = 7
+export const TOS_WINDOW_MAX = 90
+
+/**
+ * P1 — the thresholds `harvest_and_negate` falls back to when a rule sets none of its own.
+ *
+ * 🔴 These are the **handler's** defaults (`automation-action-handlers.ts`), which imports them
+ * from here, and they are NOT the harvest service's. `previewHarvest` defaults `minSpendCents` to
+ * **1500**, and the nightly `ads-auto-harvest` cron calls `previewHarvest({})` with no arguments —
+ * so the cron negates at €15 while every rule negates at €10. Recorded rather than reconciled:
+ * changing either number moves live writes, which is a decision, not a tidy-up (HV-R plan P6).
+ *
+ * Exported so the Rules grid can say what binds a rule that states nothing, instead of printing
+ * "Always" — the fabricated-cell class this section has shipped three times
+ * ([[reference_fleet_stale_constant_class]]).
+ */
+export const HARVEST_DEFAULTS = { windowDays: 60, minSpendCents: 1000, minOrders: 2 } as const
 
 /** Amazon's still-settling tail, re-exported so a caller needs one import to explain a window. */
 export { PROVISIONAL_DAYS }
@@ -126,9 +157,16 @@ export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
 /**
  * Actions that re-query on a window of their own, overriding whatever the trigger selected on.
  *
- * Only two exist. Every other handler acts on the entity the context handed it and does no
- * reading — `bid_up`, `bid_down`, `lower_bid_to_floor` and `raise_bids_for_rank_defense` all
- * take the entity id and write, so their lookback is the trigger's, or nothing.
+ * Three exist (P1 added the third — `harvest_and_negate`, which had been re-querying inside
+ * `previewHarvest` since long before this table did). Every other handler acts on the entity the
+ * context handed it and does no reading — `bid_up`, `bid_down`, `lower_bid_to_floor` and
+ * `raise_bids_for_rank_defense` all take the entity id and write, so their lookback is the
+ * trigger's, or nothing.
+ *
+ * ⚠ Adding an entry here CHANGES WHAT THE GRID SAYS about every rule carrying that action, on
+ * every tab, because `ruleLookback` prefers the first action that has a window over the trigger.
+ * Before adding one, confirm the handler really re-queries; an action that merely accepts a
+ * `windowDays` it never uses belongs in neither table.
  */
 export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
   /**
@@ -153,12 +191,37 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     caveat: 'This window is only read when the bid optimiser’s metric source is the daily performance table. Its default source (`legacy`) reads per-target columns that no job has written since H.2e, so unless NEXUS_BID_OPTIMIZER_SOURCE=daily is set on the API, this rule computes from no data at all — and still reports success.',
   },
   /** The only window an operator can already set: `action.windowDays`, clamped 7–90, default 30. */
-  defend_top_of_search: { kind: 'window', days: 30, settled: false, source: 'ads-top-of-search.service.ts analyzeTopOfSearch' },
+  defend_top_of_search: {
+    kind: 'window', days: 30, settled: false, source: 'ads-top-of-search.service.ts analyzeTopOfSearch',
+    tunable: { clamp: [TOS_WINDOW_MIN, TOS_WINDOW_MAX] },
+  },
+  /**
+   * 🔴 P1 — the entry whose ABSENCE made the Keyword Harvest tab lie twice over.
+   *
+   * `harvest_and_negate` re-queries `AmazonAdsSearchTerm` inside `previewHarvest` over
+   * `action.windowDays`, so it belongs here beside the other two re-queriers. Without it, a
+   * SCHEDULE harvest rule fell through to `TRIGGER_WINDOW.SCHEDULE` and the grid printed **"None"**
+   * under a tooltip insisting the rule "is handed no performance data at all" — on three rules
+   * reading 60, 60 and 30 days (measured on prod 2026-08-20).
+   *
+   * And because `ruleLookback` takes *the first action that HAS a window*, a rule carrying both
+   * `bid_to_target_acos` and `harvest_and_negate` skipped the harvest half and reported **the bid
+   * optimiser's 30-day unsettled window on the Keyword Harvest tab** — the exact cross-tab leak
+   * the `tabKey` ordering exists to prevent, defeated by a missing map entry rather than by the
+   * ordering. One entry closes both.
+   *
+   * `settled: false` is not an oversight: `previewHarvest` builds `Date.now() - windowDays * 86400e3`
+   * directly and never calls `ruleWindowBounds`, so unlike `SEARCH_TERM_CONVERTING` — the OTHER
+   * harvest path — it counts the days Amazon is still attributing. The two harvest engines disagree
+   * about this, and the cell now says so instead of averaging them (HV-R plan P6).
+   */
+  harvest_and_negate: {
+    kind: 'window', days: HARVEST_DEFAULTS.windowDays, settled: false,
+    source: 'automation-action-handlers.ts harvest_and_negate → ads-harvest.service.ts previewHarvest',
+    tunable: {},
+    caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through ruleWindowBounds. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans.',
+  },
 }
-
-/** `defend_top_of_search` clamps whatever it is given; stated here so a caller can label it. */
-export const TOS_WINDOW_MIN = 7
-export const TOS_WINDOW_MAX = 90
 
 export interface RuleLookback extends RuleWindowSpec {
   /** the Lookback cell, ~12 characters: "14 days" · "30 days" · "None" · "Unlabelled" */
@@ -188,9 +251,21 @@ export function ruleLookback(trigger: string, actionTypes: string[] = [], action
   const a = actType ? ACTION_WINDOW[actType] : undefined
 
   if (a) {
-    // `defend_top_of_search` can carry its own `windowDays`; honour it, clamped as the handler does.
-    const days = actType === 'defend_top_of_search' && typeof actionWindowDays === 'number'
-      ? Math.max(TOS_WINDOW_MIN, Math.min(TOS_WINDOW_MAX, actionWindowDays))
+    /**
+     * A tunable action carries its own `windowDays`; honour it, clamped exactly as ITS handler
+     * clamps and not otherwise.
+     *
+     * 🔴 P1 generalised this off the literal `actType === 'defend_top_of_search'`. That test was
+     * correct for one action and silently wrong for the second: `harvest_and_negate` stores
+     * `windowDays` 60 or 30 per rule, and under the old test every harvest rule would have
+     * rendered the table's default rather than the number the engine actually reads. The rule that
+     * decides is now the entry's own `tunable`, so adding a third re-querying action needs no edit
+     * here — which is the point, because the previous shape needed one and did not get it.
+     */
+    const days = a.tunable && typeof actionWindowDays === 'number'
+      ? (a.tunable.clamp
+        ? Math.max(a.tunable.clamp[0], Math.min(a.tunable.clamp[1], actionWindowDays))
+        : actionWindowDays)
       : a.days
     const spec: RuleWindowSpec = { ...a, days }
     return {
@@ -203,7 +278,22 @@ export function ruleLookback(trigger: string, actionTypes: string[] = [], action
           ? `The most recent ${PROVISIONAL_DAYS} days are excluded because Amazon is still attributing conversions to them.`
           : `⚠ This window INCLUDES the last ${PROVISIONAL_DAYS} days, which Amazon is still attributing conversions to — unlike most triggers, which drop them. Today's partial spend is measured against sales that have not landed yet.`,
         spec.caveat ?? '',
-        t ? describeTrigger(trigger, t) : '',
+        /**
+         * 🔴 P1 — `true` because the ACTION supplied this window, and the trigger's own sentence
+         * has to be phrased as a contribution rather than as a verdict.
+         *
+         * `describeTrigger('SCHEDULE', …)` reads "🔴 It runs on the clock and is handed no
+         * performance data at all… Nothing in this rule reads campaign or keyword history before
+         * it acts." That is true of a SCHEDULE rule whose action reads nothing, and flatly FALSE
+         * of one whose action re-queries — which is most of them. Appended verbatim, it produced a
+         * tooltip that said "computes from the last 60 days of Amazon performance data" and "is
+         * handed no performance data at all" in the same paragraph.
+         *
+         * Not a harvest bug: 23 of 51 rules are SCHEDULE-triggered and every one of them carrying
+         * `bid_to_target_acos` or `defend_top_of_search` has been contradicting itself since B2.
+         * Caught by the harvest test, fixed for all three.
+         */
+        t ? describeTrigger(trigger, t, true) : '',
         `Source: ${spec.source}.`,
       ].filter(Boolean).join(' '),
     }
@@ -232,8 +322,20 @@ export function ruleLookback(trigger: string, actionTypes: string[] = [], action
   }
 }
 
-/** One sentence about what the trigger's own query looks at. */
-function describeTrigger(trigger: string, t: RuleWindowSpec): string {
+/**
+ * One sentence about what the trigger's own query looks at.
+ *
+ * `actionSuppliesWindow` is set when an ACTION has already supplied the window, and it changes
+ * only the `none` case — where the difference is between "this rule reads nothing" (a verdict on
+ * the whole rule) and "the trigger contributes nothing" (a fact about one half of it). Getting
+ * that wrong put two contradictory sentences in one tooltip; see the call site.
+ */
+function describeTrigger(trigger: string, t: RuleWindowSpec, actionSuppliesWindow = false): string {
+  if (t.kind === 'none' && actionSuppliesWindow) {
+    return trigger === 'SCHEDULE'
+      ? 'Its trigger adds nothing to that: a SCHEDULE context carries only the marketplace and its month-to-date spend, so the window above is entirely the action\'s doing and no campaign or keyword was pre-selected before it ran.'
+      : 'Its trigger selects on no performance data, so the window above is entirely the action\'s doing.'
+  }
   switch (t.kind) {
     case 'window':
       return `It is offered rows selected over the last ${t.days} days${t.settled ? `, excluding the ${PROVISIONAL_DAYS} most recent days while Amazon is still attributing conversions to them` : ` — a window that INCLUDES the ${PROVISIONAL_DAYS} still-settling days`}.`

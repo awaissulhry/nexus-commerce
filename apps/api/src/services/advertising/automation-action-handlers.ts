@@ -35,6 +35,8 @@ import { ACTION_HANDLERS, type ActionResult, getFieldPath } from '../automation-
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
+// P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
+import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
 // NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
 // safety promise was written into every negation rule's action JSON and consulted by nothing.
 import { checkProtectConverting, protectConvertingConfig, normaliseNegTerm } from './ads-protect-converting.js'
@@ -870,10 +872,21 @@ async function resolveRuleSweepScope(ruleId: string): Promise<{
 // to exact-match campaigns (graduation) and negates wasters. Designed for
 // the SCHEDULE trigger so it runs on a daily cadence without user input.
 // Parameters mirror previewHarvest opts so a rule can tune thresholds.
+//
+// 🔴 P1 (2026-08-20) — the three fallbacks are imported from `@nexus/shared/ads-rule-window`, not
+// inlined. Same numbers as before (60 · 1000 · 2, diffed on the day); what changed is that the
+// Rules & Automation grid can now state what binds a rule that sets none of them, instead of
+// printing "Always" over a rule that harvests at ≥2 orders and €10. Two copies of a threshold is
+// how a grid starts describing a rule the engine does not run.
+//
+// ⚠ These are NOT `previewHarvest`'s own defaults — it falls back to minSpendCents **1500**, and
+// the nightly `ads-auto-harvest` cron calls `previewHarvest({})` with no arguments, so the cron
+// negates at €15 while every rule negates at €10. Recorded in the shared file, deliberately not
+// reconciled here: either number moves live writes (HV-R plan P6).
 ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<ActionResult> => {
-  const windowDays = typeof action.windowDays === 'number' ? action.windowDays : 60
-  const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : 1000 // €10 default
-  const minOrders = typeof action.minOrders === 'number' ? action.minOrders : 2
+  const windowDays = typeof action.windowDays === 'number' ? action.windowDays : HARVEST_DEFAULTS.windowDays
+  const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : HARVEST_DEFAULTS.minSpendCents
+  const minOrders = typeof action.minOrders === 'number' ? action.minOrders : HARVEST_DEFAULTS.minOrders
   const { previewHarvest, applyHarvest } = await import('./ads-harvest.service.js')
 
   // AT.4b — if the rule carries wizard `sources` (per-ad-group harvest scope +

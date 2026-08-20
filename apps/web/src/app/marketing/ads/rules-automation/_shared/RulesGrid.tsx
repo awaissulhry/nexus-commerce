@@ -81,7 +81,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
-import { ruleLookback, type RuleLookback } from '@nexus/shared/ads-rule-window'
+import { ruleLookback, ACTION_WINDOW, HARVEST_DEFAULTS, type RuleLookback } from '@nexus/shared/ads-rule-window'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
@@ -106,6 +106,8 @@ interface RuleRow {
   level: string
   enabled: boolean
   criteria: string
+  /** P1 — the Criteria cell's tooltip. The cell used to be its own title, so "Always" was unexplainable. */
+  criteriaWhy: string
   freqDay: string
   freqTime: string
   /** B2 — the window this rule actually reads, derived; see `@nexus/shared/ads-rule-window`. */
@@ -213,7 +215,82 @@ interface BuilderGroup { conditions?: Array<{ metric?: string; op?: string; valu
  * the same rule therefore reads differently on Bid and on Negative Targeting, which is correct —
  * it does both.
  */
-function summariseRule(rule: Record<string, unknown>, tabKey?: string): string {
+/**
+ * 🔴 P1 — an engine rule's thresholds do not have to be in `conditions`.
+ *
+ * Measured on prod 2026-08-20: **24 of 51 advertising rules store `conditions: []`**, and on the
+ * Keyword Harvest tab four of five do — while keeping `minOrders`, `minSpendCents` and
+ * `windowDays` on the ACTION. `summariseRule` read only `conditions`, fell through to its
+ * `if (!ifs)` branch, and printed **"Always → harvest and negate"** on a rule that fires at ≥2
+ * orders and ≥€10 over 60 days. "Always" is not a vaguer way of saying that; it is the opposite
+ * of it, and it is the fabricated-cell class this section has now shipped three times
+ * ([[reference_fleet_stale_constant_class]]).
+ *
+ * This is a strict ALLOWLIST of IF-side keys, and it has to stay one. The parameter census that
+ * produced it (`apps/api/scripts/_hvr-params.mts`, every action type in the account) is mostly
+ * THEN-side — `reason`, `message`, `percent`, `target`, `campaignIds`, `floorCents` — and rendering
+ * any of those as a condition would invent a criterion the same way "Always" invented an absence.
+ * `maxAcosPct` is here with **zero rows carrying it today**: the builder can produce it and H10's
+ * grid has a column for it, so the reader exists before the data rather than after.
+ */
+const PARAM_CLAUSE: Record<string, (v: number) => string> = {
+  minOrders: (v) => `≥ ${v} order${v === 1 ? '' : 's'}`,
+  minClicks: (v) => `≥ ${v} click${v === 1 ? '' : 's'}`,
+  minSpendCents: (v) => `spend ≥ ${money(v)}`,
+  maxAcosPct: (v) => `ACoS ≤ ${asPercent(v)}`,
+}
+/** The IF-side clauses an action carries in its own parameters, in a stable reading order. */
+function paramClauses(action: Record<string, unknown> | null): string[] {
+  if (!action) return []
+  const out: string[] = []
+  for (const [key, fmt] of Object.entries(PARAM_CLAUSE)) {
+    const raw = action[key]
+    if (typeof raw === 'number' && Number.isFinite(raw)) out.push(fmt(raw))
+  }
+  return out
+}
+
+/**
+ * What an engine rule with NO criteria of its own is actually bound by — never "Always".
+ *
+ * Three genuinely different answers, and collapsing them was what made the old cell wrong:
+ * · the action has documented defaults (`harvest_and_negate`) — name them, and say nobody chose them;
+ * · the trigger selects the rows (`KEYWORD_WASTED_SPEND`, `CAC_SPIKE`, …) — so the criterion is the
+ *   trigger's own query, which the Frequency and Lookback cells already describe;
+ * · `SCHEDULE` selects nothing at all — marketplace and month-to-date spend, no campaign, no
+ *   keyword. That rule really does act without reading anything, and it is the only case where
+ *   the honest word is close to "always".
+ */
+function noCriteria(actionType: string, trigger: string): { text: string; why: string } {
+  if (actionType === 'harvest_and_negate') {
+    const d = HARVEST_DEFAULTS
+    return {
+      text: `Defaults: ≥ ${d.minOrders} orders · spend ≥ ${money(d.minSpendCents)}`,
+      why: `This rule sets no thresholds of its own, so the harvest handler's defaults decide: at least ${d.minOrders} orders to graduate a term, and at least ${money(d.minSpendCents)} of spend with no orders to negate one, over ${d.windowDays} days. Those are fallbacks in automation-action-handlers.ts, not values anyone chose here — open the rule to set your own.`,
+    }
+  }
+  if (trigger === 'SCHEDULE') {
+    return {
+      text: 'No criteria — runs on the clock',
+      why: 'This rule states no conditions and its trigger selects nothing: a SCHEDULE context carries the marketplace and month-to-date spend, with no campaign, keyword or window. It acts every time it fires, on whatever its action decides for itself.',
+    }
+  }
+  return {
+    text: 'Any row its trigger selects',
+    why: `This rule states no conditions of its own, so every row its trigger offers is acted on. What the trigger selects — and over what window — is in the Frequency and Lookback cells beside this one. That is a rule with one filter, not a rule with none.`,
+  }
+}
+
+/**
+ * The Criteria cell, and the sentence behind it.
+ *
+ * P1 split these apart. The cell used to be its own `title`, so a row reading "Always" could not
+ * explain itself at all — and the rows that most needed explaining were exactly the ones whose
+ * criterion was not in `conditions`.
+ */
+interface RuleCriteria { text: string; why: string }
+
+function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCriteria {
   const conds = Array.isArray(rule.conditions) ? rule.conditions : []
   const actions = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
   const want = tabKey ? RULE_TAB_ACTION_TYPES[tabKey] : undefined
@@ -224,7 +301,7 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): string {
     const g = conds[0] as BuilderGroup
     const ifs = (g.conditions ?? []).map((c) => clause(c)).filter(Boolean).join(', ')
     const a = g.action
-    if (!a?.op) return ifs || 'No conditions'
+    if (!a?.op) return { text: ifs || 'No conditions', why: ifs ? `This rule fires when ${ifs}. It carries no action value to describe.` : 'This rule was saved from the builder with no conditions and no action value.' }
     // The THEN value's unit comes from the rule TYPE, not the operator: a placement rule sets a
     // percentage where every other builder type sets money. "Set 0.30" (no unit) is the kind of
     // number an operator has to guess at, so the unit is always printed.
@@ -235,7 +312,10 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): string {
       ? (pctType ? `Set ${v}%` : `Set €${v}`)
       : pctOp ? `${ACTION_VERB[a.op]}${v}%`
       : `${ACTION_VERB[a.op] ?? a.op}${v}`
-    return ifs ? `${ifs} → ${then}` : then
+    return {
+      text: ifs ? `${ifs} → ${then}` : then,
+      why: ifs ? `This rule fires when ${ifs}, and then: ${then}.` : `This rule states no conditions, so it applies "${then}" to everything in its scope every time it runs.`,
+    }
   }
 
   // engine shape: flat conditions + a real action type with its own parameters
@@ -245,13 +325,35 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): string {
   if (type === 'bid_to_target_acos' && typeof a0?.targetAcos === 'number') then += ` ${asPercent(a0.targetAcos as number)}`
   if (type === 'bid_up' && a0?.bidUpPct != null) then += ` +${a0.bidUpPct}%`
   if (type === 'bid_down' && a0?.bidDownPct != null) then += ` −${a0.bidDownPct}%`
-  if (!ifs) return then ? `Always → ${then}` : 'No conditions'
-  return then ? `${ifs} → ${then}` : ifs
+  /**
+   * 🔴 The bid a harvest rule graduates at is part of what it DOES, and it was rendered nowhere.
+   * `graduationBidEur` is 0.50 on two rules and 0.65 on a third — three constants for one decision,
+   * on a page whose whole subject is what a harvested keyword costs.
+   */
+  const bidEur = a0?.graduationBidEur ?? a0?.bidEur
+  // `0.5` must print as €0.50 — a bid is money, and money with one decimal reads as a typo.
+  if ((type === 'harvest_and_negate' || type === 'promote_to_exact') && typeof bidEur === 'number') then += ` @ €${bidEur.toFixed(2)}`
+
+  if (ifs) return { text: then ? `${ifs} → ${then}` : ifs, why: `This rule fires when ${ifs}${then ? `, and then: ${then}` : ''}.` }
+
+  // No `conditions` — but that is not the same as no criteria. Read the action's own parameters
+  // first, and only when THOSE are empty say what really binds the rule.
+  const params = paramClauses(a0)
+  if (params.length) {
+    const ps = params.join(' · ')
+    return {
+      text: then ? `${ps} → ${then}` : ps,
+      why: `This rule fires when ${ps}${then ? `, and then: ${then}` : ''}. Those thresholds are stored on the action rather than in the rule's conditions, which is how an engine rule carries them — it is the same criterion either way.`,
+    }
+  }
+  const bare = noCriteria(type, String(rule.trigger ?? ''))
+  return { text: then ? `${bare.text} → ${then}` : bare.text, why: bare.why }
 }
 
 function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
   const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) as
     { type?: string; control?: string; schedule?: { frequency?: string; time?: string } } | null
+  const crit = summariseRule(rule, tabKey)
   const builder = isBuilderRule(rule)
   const s = a?.schedule
   let freqDay = ''
@@ -278,30 +380,56 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
     automation: builder ? a?.control === 'automate' : rule.enabled !== false && rule.autonomyLevel === 'AUTO',
     level: String(rule.autonomyLevel ?? ''),
     enabled: rule.enabled !== false,
-    criteria: summariseRule(rule, tabKey),
+    criteria: crit.text,
+    criteriaWhy: crit.why,
     freqDay,
     freqTime,
     /**
      * B2 — the Lookback, derived from the same two facts the engine decides on: the rule's
      * TRIGGER and its actions. Deliberately scoped to THIS tab's action, exactly as the Criteria
-     * cell is: "Daily automation digest" carries `bid_to_target_acos` (a 30-day window) and
-     * `harvest_and_negate` (none of its own), so on Bid it must describe the bid half. Passing
-     * every action in tab order lets `ruleLookback` pick the first that carries a window.
+     * cell is: "Daily automation digest" carries `bid_to_target_acos` AND `harvest_and_negate`, so
+     * on Bid it must describe the bid half and on Keyword Harvest the harvest half. Passing every
+     * action in tab order lets `ruleLookback` pick the first that carries a window.
+     *
+     * 🔴 P1: that only works if every re-querying action HAS an entry. `harvest_and_negate` had
+     * none, so tab order was honoured and then discarded — the digest rule skipped its harvest
+     * action and reported the bid optimiser's 30 unsettled days **on the Keyword Harvest tab**.
+     * Measured on prod 2026-08-20, 1 of 5 rows. The fix is the map entry, not this call site.
      */
-    look: ruleLookback(String(rule.trigger ?? ''), orderedActionTypes(rule, tabKey), tosWindowDays(rule)),
+    look: ruleLookback(String(rule.trigger ?? ''), orderedActionTypes(rule, tabKey), tunableWindowDays(rule, tabKey)),
   }
 }
 
 /**
- * `defend_top_of_search` is the one action whose window an operator can already set
- * (`action.windowDays`, clamped 7–90 by the handler). Read off THAT action rather than
- * `actions[0]`: on "Top-of-Search rank defender" it is the first of three, but on "Rank control"
- * it is one of a hundred, and reading position 0 would silently report the default.
+ * The `windowDays` of whichever action `ruleLookback` is about to describe — or null.
+ *
+ * Two actions let a rule set its own window: `defend_top_of_search` (clamped 7–90 by its handler)
+ * and, since P1, `harvest_and_negate` (unclamped, 60 or 30 on this account). Both are marked
+ * `tunable` in `ACTION_WINDOW`, and this walks the actions in the SAME tab order `ruleLookback`
+ * walks, stopping at the first one that has a window at all.
+ *
+ * 🔴 Why it stops rather than searching on. The predecessor (`tosWindowDays`) searched the whole
+ * action list for `defend_top_of_search` while `ruleLookback` independently picked the first
+ * windowed action in tab order. On a rule carrying both, the two could disagree about which action
+ * they were describing — one action's days rendered under another action's label. Nothing in the
+ * account triggered it, which is exactly why it was worth removing rather than leaving armed:
+ * "Rank control" carries a hundred actions and only needs one more to line up wrong.
  */
-function tosWindowDays(rule: Record<string, unknown>): number | null {
+function tunableWindowDays(rule: Record<string, unknown>, tabKey: string): number | null {
   const acts = (Array.isArray(rule.actions) ? rule.actions : []) as Array<Record<string, unknown>>
-  const tos = acts.find((x) => String(x?.type) === 'defend_top_of_search')
-  return typeof tos?.windowDays === 'number' ? (tos.windowDays as number) : null
+  const want = RULE_TAB_ACTION_TYPES[tabKey] ?? []
+  const ordered = [
+    ...acts.filter((x) => want.includes(String(x?.type ?? ''))),
+    ...acts.filter((x) => !want.includes(String(x?.type ?? ''))),
+  ]
+  for (const x of ordered) {
+    const spec = ACTION_WINDOW[String(x?.type ?? '')]
+    if (!spec) continue
+    // The first action WITH a window is the one being described; if it is not tunable, or carries
+    // no number, the table's own default stands.
+    return spec.tunable && typeof x?.windowDays === 'number' ? (x.windowDays as number) : null
+  }
+  return null
 }
 
 /**
@@ -651,7 +779,13 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         )
       },
     },
-    { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit" title={r.criteria}>{r.criteria}</span> },
+    /**
+     * P1 — the tooltip is `criteriaWhy`, not the cell's own text. A cell whose title repeats itself
+     * can explain nothing, and the rows that needed explaining most were the ones that used to read
+     * "Always": a rule whose thresholds sit on the action, and a rule that genuinely has none and
+     * is bound by its trigger instead. Those are different facts and now read differently.
+     */
+    { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit" title={r.criteriaWhy}>{r.criteria}</span> },
     {
       key: 'frequency', label: 'Frequency', metric: false, sortable: false,
       render: (r) => (
@@ -767,7 +901,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         return (
           <a
             className="h10-rg-act waiting"
-            href={`/marketing/ads/suggestions?rule=${encodeURIComponent(r.name)}`}
+            href={`/marketing/ads/suggestions?rule=${encodeURIComponent(r.id)}`}
             onClick={(e) => e.stopPropagation()}
             title={`${a.pending} suggestion${a.pending === 1 ? '' : 's'} from this rule are waiting for a decision. Automation is off, so nothing reaches Amazon until someone accepts them. Opens the Suggestions page filtered to this rule.`}
           >

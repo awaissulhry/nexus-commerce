@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   TRIGGER_WINDOW, ACTION_WINDOW, ruleLookback, PROVISIONAL_DAYS,
-  TOS_WINDOW_MIN, TOS_WINDOW_MAX,
+  TOS_WINDOW_MIN, TOS_WINDOW_MAX, HARVEST_DEFAULTS,
 } from './ads-rule-window.js'
 
 describe('TRIGGER_WINDOW — the values the engine runs on', () => {
@@ -114,6 +114,83 @@ describe('ruleLookback', () => {
     expect(ruleLookback('SCHEDULE', ['defend_top_of_search'], 400).days).toBe(TOS_WINDOW_MAX)
     // absent → the handler's own default, not the trigger's
     expect(ruleLookback('SCHEDULE', ['defend_top_of_search']).days).toBe(ACTION_WINDOW.defend_top_of_search.days)
+  })
+
+  /**
+   * 🔴 P1 — the three properties that had failed on production, each pinned by the row that failed.
+   * Measured 2026-08-20 on the five Keyword Harvest rules.
+   */
+  describe('harvest_and_negate — the entry whose absence made the tab lie', () => {
+    it('a SCHEDULE harvest rule reports its own window, not "None"', () => {
+      // "Auto harvest & negate" — SCHEDULE + harvest_and_negate, windowDays 60. Read "None" before.
+      const r = ruleLookback('SCHEDULE', ['harvest_and_negate', 'notify'], 60)
+      expect(r.label).toBe('60 days')
+      expect(r.fromAction).toBe(true)
+      expect(r.why).not.toContain('no performance data at all')
+    })
+
+    it('honours a per-rule windowDays and does NOT clamp it, because the handler does not', () => {
+      // "Exact match discovery engine" stores 30. A clamp invented here would describe a rule the
+      // engine does not run — the whole reason `tunable.clamp` is optional.
+      expect(ruleLookback('SCHEDULE', ['harvest_and_negate'], 30).days).toBe(30)
+      expect(ruleLookback('SCHEDULE', ['harvest_and_negate'], 400).days).toBe(400)
+      expect(ACTION_WINDOW.harvest_and_negate.tunable).toBeDefined()
+      expect(ACTION_WINDOW.harvest_and_negate.tunable?.clamp).toBeUndefined()
+    })
+
+    it('falls back to the handler default a rule that sets nothing actually runs on', () => {
+      expect(ruleLookback('SCHEDULE', ['harvest_and_negate']).days).toBe(HARVEST_DEFAULTS.windowDays)
+      expect(ACTION_WINDOW.harvest_and_negate.days).toBe(HARVEST_DEFAULTS.windowDays)
+    })
+
+    it('is unsettled — previewHarvest never calls ruleWindowBounds', () => {
+      expect(ACTION_WINDOW.harvest_and_negate.settled).toBe(false)
+      expect(ruleLookback('SCHEDULE', ['harvest_and_negate'], 60).why)
+        .toContain(`INCLUDES the last ${PROVISIONAL_DAYS} days`)
+    })
+
+    it('the OTHER harvest path stays settled at the trigger window — two engines, two answers', () => {
+      // `promote_to_exact` re-queries nothing; SEARCH_TERM_CONVERTING selected its rows over 30
+      // settled days. If this ever equals the harvest_and_negate answer, one of them moved.
+      const b = ruleLookback('SEARCH_TERM_CONVERTING', ['promote_to_exact', 'add_negative_exact'])
+      expect(b.days).toBe(30)
+      expect(b.settled).toBe(true)
+      expect(b.fromAction).toBe(false)
+    })
+
+    /**
+     * 🔴 The cross-tab leak, pinned. "Daily automation digest" carries bid_to_target_acos AND
+     * harvest_and_negate; `orderedActionTypes` puts the tab's own action first, and before P1 the
+     * harvest half had no window so the Keyword Harvest tab silently reported the BID window.
+     */
+    it('describes the half of a multi-action rule that belongs to the tab it is on', () => {
+      const onHarvest = ruleLookback('SCHEDULE', ['harvest_and_negate', 'bid_to_target_acos', 'alert_operator'])
+      const onBid = ruleLookback('SCHEDULE', ['bid_to_target_acos', 'harvest_and_negate', 'alert_operator'])
+      expect(onHarvest.days).toBe(HARVEST_DEFAULTS.windowDays)
+      expect(onBid.days).toBe(30)
+      expect(onHarvest.days).not.toBe(onBid.days)
+    })
+  })
+
+  /**
+   * 🔴 P1 — a tooltip must not hold two sentences that contradict each other.
+   *
+   * When an ACTION supplies the window, the trigger's own sentence is appended for context. For
+   * SCHEDULE that sentence was an absolute — "handed no performance data at all" — so every
+   * SCHEDULE rule with a re-querying action described itself both ways at once. Found by the
+   * harvest case; it had been true of `bid_to_target_acos` and `defend_top_of_search` since B2,
+   * and 23 of 51 rules are SCHEDULE-triggered.
+   */
+  it('never says a rule reads nothing in the same breath as naming its window', () => {
+    for (const act of ['harvest_and_negate', 'bid_to_target_acos', 'defend_top_of_search']) {
+      const r = ruleLookback('SCHEDULE', [act])
+      expect(r.days, act).toBeTypeOf('number')
+      expect(r.why, act).not.toContain('no performance data at all')
+      expect(r.why, act).not.toContain('Nothing in this rule reads')
+    }
+    // and the absolute survives where it is still true — a SCHEDULE rule whose action reads nothing
+    const bare = ruleLookback('SCHEDULE', ['raise_bids_for_rank_defense'])
+    expect(bare.why).toContain('no performance data at all')
   })
 
   it('an unmapped trigger reads as a gap in the map, never as a rule that reads nothing', () => {
