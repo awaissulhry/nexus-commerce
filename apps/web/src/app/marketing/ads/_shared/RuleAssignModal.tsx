@@ -1,47 +1,47 @@
 'use client'
 
 /**
- * ── D2b (2026-08-20) — "Budget rules for <campaign>", a real modal ─────────────────────────────
+ * ── "Budget rules for <campaign>" ───────────────────────────────────────────────────────────────
  *
- * 🔴 **Operator instruction:** *"rebuild the modal that appears when I click on the Add button. It
- * must be slightly bigger so that all the information is easily readable. I should be able to
- * create new rules directly from the modal, and it should be properly wired."*
+ * Assign the budget rules that may move a campaign's daily budget, and create one without leaving.
  *
- * What it replaces: a 300–380px popover anchored under the cell's pencil, listing rule names
- * ellipsised to nothing, with an empty state that told the operator to leave — *"Create one on the
- * Budget tab and it appears here."* Both complaints were fair. This is H10's centred modal
- * chassis at 640px, every rule showing its own **conditions** as well as its name, and a create
- * form that makes a real rule and assigns it without leaving the page.
+ * ── D2c (2026-08-20) — one button vocabulary, and far less prose ────────────────────────────────
+ * 🔴 **Operator:** *"The buttons are inconsistent. There is a lot of text, unnecessary text."*
+ * Both were true. D2b's version carried **four** button idioms in one dialog — a bespoke dashed
+ * `h10-ram-newbtn` invented here, `h10-am-btn primary`, `h10-am-link`, and the chassis footer's
+ * classless `.cancel`/`.next` — plus five blocks of prose that were on screen whether or not they
+ * were relevant.
  *
- * ── The chassis is H10's own, not a copy of it ──────────────────────────────────────────────────
- * `h10-rtm*` — the "Select a Rule Type" modal's box, header, body and footer — is reused verbatim,
- * so this is the same object H10's rule-type dialog is. Only the ROWS and the create form are new
- * (`h10-ram-*`, in `ads.css`).
+ * **Every labelled button here is now `h10-am-btn`**, with `primary` on the one main action in
+ * each context. That is the tree's own vocabulary, not a new one: measured across `marketing/ads`,
+ * `h10-am-btn` and its modifiers account for **257** uses against a long tail of one-offs. The
+ * header's `×` stays as the chassis's close affordance — an icon, not a labelled button.
+ * ⚠️ `RuleTypeModal` still uses the chassis's `.cancel`/`.next`. Converging it is a small change
+ * and was NOT made here: that file is another session's active work.
  *
- * ⚠️ **Before mounting this outside `/rules-automation` (D6, the Ad Manager), the `h10-rtm*` block
- * must move from `rules-automation.css` to `ads.css`.** Only the rules-automation layout loads that
- * stylesheet, so the chassis would render unstyled anywhere else. It was NOT moved today because
- * `rules-automation.css` is another session's work in progress and restructuring it would collide;
- * the widening is safe on its own (`ads.css` is a parent layout, so no page loses anything).
+ * **Text appears when it is needed, not permanently.** The standing lede, the "full builder"
+ * escape hatch and the always-on footer note are gone; the one fact an operator cannot infer —
+ * that a rule created here is assigned but not armed — now shows only after they create one.
+ * `scripts/check-button-vocabulary.mjs` ratchets the button half so a fifth idiom cannot arrive
+ * quietly.
  *
- * ── Creating a rule here is a real create, and deliberately a NARROW one ────────────────────────
- * `POST /advertising/automation-rules` with the `CAMPAIGN_PERFORMANCE_BUDGET` shape the six
- * existing budget rules use: flat engine-native `conditions`, an `adjust_ad_budget` action. The
- * route stores every new advertising rule **disabled + dry-run** — an operator opts into live
- * writes deliberately, and that is not overridden here. So a rule created in this modal is
- * assigned immediately and acts on nothing until it is armed on the Automations tab; the footer
- * says so rather than letting the operator infer it.
+ * ── Chassis ─────────────────────────────────────────────────────────────────────────────────────
+ * `h10-rtm*` — the "Select a Rule Type" modal's box, header, body and footer — reused verbatim.
+ * ⚠️ Before mounting outside `/rules-automation` (D6, the Ad Manager) that block must move from
+ * `rules-automation.css` to `ads.css`; only the rules-automation layout loads it. A strict
+ * widening, not done yet because that file is another session's work in progress.
  *
- * Anything richer than "one metric, one threshold, one percentage" belongs in the full builder,
- * which is one link away. A modal that tried to be the builder would be a second builder to keep
- * in step with the first.
+ * ── Creating a rule ─────────────────────────────────────────────────────────────────────────────
+ * `POST /advertising/automation-rules` with the `CAMPAIGN_PERFORMANCE_BUDGET` shape the existing
+ * budget rules use. Deliberately narrow — one metric, one threshold, one percentage; anything
+ * richer belongs in the builder rather than in a second builder kept in step with the first.
+ * The route stores every new advertising rule **disabled + dry-run** and that is not overridden.
  */
 import { useState } from 'react'
-import { X, Plus, ExternalLink } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-// The DS select for this tree. A native <select> is the idiom the conformance ratchet exists to
-// remove; `marketing/ads` is allowlisted from that ratchet as the H10 pixel-match world, which is
-// a reason not to be FAILED by it, not a reason to hand-roll one.
+// The DS select for this tree. `marketing/ads` being allowlisted from the DS ratchet is a reason
+// not to be FAILED by it, not a licence to hand-roll a native <select>.
 import { H10Select } from '../campaigns/FilterDropdown'
 
 export interface AssignableRule {
@@ -51,37 +51,34 @@ export interface AssignableRule {
   level: string
   percent: number | null
   conditionsText?: string | null
-  description?: string | null
 }
 
 /** The metrics the engine really has for a campaign-budget rule. */
-const METRICS: Array<{ field: string; label: string; hint: string }> = [
-  { field: 'campaign.acos', label: 'ACoS', hint: 'a fraction — 0.4 is 40%' },
-  { field: 'campaign.roas', label: 'ROAS', hint: 'a multiple — 4 is 4×' },
-  { field: 'campaign.budgetUtilization', label: 'Budget used', hint: 'a fraction — 0.85 is 85%' },
-  { field: 'campaign.spendCents', label: 'Spend (cents)', hint: '5000 is €50' },
+const METRICS: Array<{ field: string; label: string; unit: string }> = [
+  { field: 'campaign.acos', label: 'ACoS', unit: '0.4 = 40%' },
+  { field: 'campaign.roas', label: 'ROAS', unit: '4 = 4×' },
+  { field: 'campaign.budgetUtilization', label: 'Budget used', unit: '0.85 = 85%' },
+  { field: 'campaign.spendCents', label: 'Spend', unit: 'cents, 5000 = €50' },
 ]
 
-export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, onToggle, onSetAll, onCreated, onClose, builderHref }: {
+export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, onToggle, onSetAll, onCreated, onClose }: {
   campaignName: string
   /**
    * 🔴 `null` means the catalogue did not load; `[]` means it loaded and there are none. Collapsing
    * the two is what made this modal announce "No budget rule exists yet" while six existed, on the
-   * day its endpoint 500'd — the same broke-vs-empty distinction the grid's four empty states keep.
+   * day its endpoint 500'd.
    */
   rules: AssignableRule[] | null
-  /** The ids currently selected — staged, not necessarily saved. */
   selected: string[]
   onToggle: (ruleId: string) => void
   onSetAll: (ruleIds: string[]) => void
-  /** A rule was created; the caller refreshes its catalogue and selects it. */
   onCreated: (rule: { id: string; name: string }) => void
   onClose: () => void
-  builderHref: string
 }) {
   const rules = rulesOrNull ?? []
   const failed = rulesOrNull === null
   const [creating, setCreating] = useState(false)
+  const [madeOne, setMadeOne] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -112,10 +109,10 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
         }),
       })
       const j = await r.json().catch(() => ({}))
-      // The route names an untranslatable metric explicitly; surfacing its message beats "failed".
+      // The route names an untranslatable metric explicitly; its message beats "failed".
       if (!r.ok || !j?.rule?.id) throw new Error(String(j?.message ?? j?.error ?? `HTTP ${r.status}`))
       onCreated({ id: String(j.rule.id), name: String(j.rule.name ?? name.trim()) })
-      setCreating(false); setName(''); setValue(''); setPercent('')
+      setCreating(false); setMadeOne(true); setName(''); setValue(''); setPercent('')
     } catch (e) {
       setErr((e as Error).message)
     } finally { setBusy(false) }
@@ -130,19 +127,11 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
         </div>
 
         <div className="h10-rtm-b">
-          <p className="h10-ram-lede">
-            A budget rule may only move this campaign’s daily budget once it is assigned here.
-            Unassign everything and nothing may move it.
-          </p>
-
           {failed && (
-            <p className="h10-ram-broke" role="status">
-              The budget rules could not be loaded, so this list is incomplete. Nothing here says
-              there are none — close and reopen to try again.
-            </p>
+            <p className="h10-ram-broke" role="status">Could not load the rules — this list is incomplete.</p>
           )}
           {!failed && rules.length === 0 && (
-            <p className="h10-ram-empty">No budget rule exists yet. Create the first one below.</p>
+            <p className="h10-ram-empty">No budget rule exists yet.</p>
           )}
 
           {rules.map((r) => {
@@ -164,49 +153,47 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
             )
           })}
 
-          {/* ── create ─────────────────────────────────────────────────────────────────────── */}
           {!creating ? (
-            <button type="button" className="h10-ram-newbtn" onClick={() => { setCreating(true); setErr(null) }}>
-              <Plus size={14} aria-hidden /> New budget rule
-            </button>
+            <div className="h10-ram-acts">
+              <button type="button" className="h10-am-btn sm" onClick={() => { setCreating(true); setErr(null) }}>
+                <Plus size={13} aria-hidden /> New rule
+              </button>
+              {selected.length > 0 && (
+                <button type="button" className="h10-am-btn sm" onClick={() => onSetAll([])}>Unassign all</button>
+              )}
+            </div>
           ) : (
             <div className="h10-ram-new">
-              <label className="f">
-                <span>Name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Trim budget on weak ACoS" aria-label="Rule name" />
-              </label>
+              <div className="row">
+                <label className="f">
+                  <span>Name</span>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Trim on weak ACoS" aria-label="Rule name" />
+                </label>
+              </div>
               <div className="row">
                 <span className="f">
                   <span>When</span>
-                  <H10Select
-                    options={METRICS.map((m) => ({ value: m.field, label: m.label }))}
-                    value={field} onChange={setField} ariaLabel="Metric" width={168}
-                  />
+                  <H10Select options={METRICS.map((m) => ({ value: m.field, label: m.label }))} value={field} onChange={setField} ariaLabel="Metric" width={160} />
                 </span>
                 <span className="f narrow">
                   <span>is</span>
-                  <H10Select
-                    options={[{ value: 'gte', label: '≥' }, { value: 'lte', label: '≤' }]}
-                    value={op} onChange={(v) => setOp(v as 'gte' | 'lte')} ariaLabel="Comparison" width={72}
-                  />
+                  <H10Select options={[{ value: 'gte', label: '≥' }, { value: 'lte', label: '≤' }]} value={op} onChange={(v) => setOp(v as 'gte' | 'lte')} ariaLabel="Comparison" width={70} />
                 </span>
                 <label className="f narrow">
-                  <span>value</span>
+                  <span>{metric.unit}</span>
                   <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Threshold" />
                 </label>
                 <label className="f narrow">
-                  <span>budget</span>
-                  <span className="pct"><input inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} aria-label="Budget change percent" /><i>%</i></span>
+                  <span>budget %</span>
+                  <input inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} aria-label="Budget change percent" placeholder="-15" />
                 </label>
               </div>
-              <p className="hint">{metric.hint}. A negative percentage cuts the budget, a positive one raises it.</p>
               {err && <p className="err" role="status">{err}</p>}
               <div className="acts">
-                <button type="button" className="h10-am-link" onClick={() => { setCreating(false); setErr(null) }}>Cancel</button>
                 <span className="grow" />
-                <a className="h10-am-link" href={builderHref}><ExternalLink size={12} aria-hidden /> Full builder</a>
+                <button type="button" className="h10-am-btn" onClick={() => { setCreating(false); setErr(null) }}>Cancel</button>
                 <button type="button" className="h10-am-btn primary" disabled={!valid || busy} aria-disabled={!valid || busy} onClick={() => void create()}>
-                  {busy ? 'Creating…' : 'Create and assign'}
+                  {busy ? 'Creating…' : 'Create'}
                 </button>
               </div>
             </div>
@@ -214,12 +201,11 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
         </div>
 
         <div className="h10-rtm-f h10-ram-f">
-          <button type="button" className="cancel" onClick={() => onSetAll([])}>Unassign all</button>
+          {/* Shown only once they have made one — the single fact that cannot be inferred, at the
+              moment it becomes true, rather than permanently. */}
+          {madeOne && <span className="note">Created rules are assigned but not armed.</span>}
           <span className="grow" />
-          {/* Said once, here, because it is true of anything created above: the create route stores
-              every new advertising rule disabled + dry-run. */}
-          <span className="note">A newly created rule is assigned but not armed — arm it on Automations.</span>
-          <button type="button" className="next" onClick={onClose}>Done</button>
+          <button type="button" className="h10-am-btn primary" onClick={onClose}>Done</button>
         </div>
       </div>
     </div>

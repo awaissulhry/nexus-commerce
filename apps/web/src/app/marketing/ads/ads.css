@@ -3293,7 +3293,9 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
    here would lose. 640px against the chassis's 560 is the operator's "slightly bigger".
    Every colour below measured on its own ground, not estimated. */
 .h10-rtm.h10-ram { width: 640px; }
-.h10-ram-lede { margin: 2px 0 12px; font-size: 12.5px; color: #6b7480; line-height: 1.45; }
+/* D2c — `h10-ram-lede` DELETED. Two sentences explaining what the checkboxes already show, on
+   screen permanently. The one fact that could not be inferred moved to the footer note, which now
+   appears only after a rule is created. */
 .h10-ram-empty { margin: 8px 0 12px; font-size: 13px; color: #3a4452; }
 /* A FAILED load, which is not an empty one. Danger-toned and bordered so it cannot be mistaken for
    the neutral "there are none" above it. #8c2f22 on #fdece9 is 7.21:1. */
@@ -3317,8 +3319,10 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
    are a sentence that must wrap rather than a value that must not. #6b7480 is 4.74:1. */
 .h10-ram-opt .d { font-size: 12.5px; color: #6b7480; line-height: 1.45; white-space: normal; }
 
-.h10-ram-newbtn { display: inline-flex; align-items: center; gap: 6px; margin: 12px 0 2px; padding: 7px 12px; border: 1px dashed #c3ccd8; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; font-weight: 700; color: #1f6fde; cursor: pointer; }
-.h10-ram-newbtn:hover { background: #f2f7fe; border-color: #1f6fde; }
+/* D2c — `h10-ram-newbtn`, a bespoke dashed button invented for this modal, was DELETED. It was a
+   fourth button idiom in one dialog; the action is a plain `h10-am-btn sm` now, like everything
+   else in the tree. This row just lays them out. */
+.h10-ram-acts { display: flex; gap: 8px; margin: 14px 0 2px; }
 .h10-ram-new { margin: 12px 0 4px; padding: 14px; border: 1px solid #e6e9ee; border-radius: 10px; background: #fafbfd; }
 .h10-ram-new .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; align-items: flex-end; }
 .h10-ram-new .f { display: flex; flex-direction: column; gap: 5px; flex: 1 1 auto; min-width: 0; }
@@ -3329,10 +3333,11 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
 .h10-ram-new .f input:focus-visible { outline: 2px solid #1f6fde; outline-offset: 1px; border-color: #1f6fde; }
 .h10-ram-new .pct { display: inline-flex; align-items: center; gap: 4px; }
 .h10-ram-new .pct i { font-style: normal; font-size: 12.5px; color: #6b7480; }
-.h10-ram-new .hint { margin: 10px 0 0; font-size: 11.5px; color: #6b7480; }
+/* D2c — the standing hint paragraph DELETED; the unit now labels its own field ("0.4 = 40%"),
+   which is where it is actually needed. */
 /* #8c2f22 on the #fafbfd panel is 7.97:1. */
 .h10-ram-new .err { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #8c2f22; }
-.h10-ram-new .acts { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.h10-ram-new .acts { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .h10-ram-new .acts .grow { flex: 1 1 auto; }
 
 .h10-rtm-f.h10-ram-f { gap: 12px; }

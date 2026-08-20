@@ -1358,7 +1358,6 @@ export function ApplyRulesClient() {
             emitAdsChange('ads.rule.changed')
           }}
           onClose={() => setAssignMenu(null)}
-          builderHref="/marketing/ads/rules-automation/builder/budget"
         />
       )}
       {stratFor && (

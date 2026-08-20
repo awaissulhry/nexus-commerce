@@ -86,6 +86,17 @@ node scripts/check-silent-disabled.mjs || {
   exit 1
 }
 
+# D2c (2026-08-20) — button-vocabulary ratchet. Reported as "the buttons are
+# inconsistent": one dialog shipped with FOUR button idioms and every gate was
+# green, because none of them can see that two buttons an inch apart are
+# different objects. Counts EXCESS idioms per component (Σ idioms−1) so a file
+# that already mixes two cannot quietly grow to five. AST, not grep.
+echo "→ Checking button-vocabulary ratchet (D2c)..."
+node scripts/check-button-vocabulary.mjs || {
+  echo "❌ button-vocabulary check FAILED - see message above"
+  exit 1
+}
+
 # MAP.3 (2026-08-19) — connection-resolver ratchet. A site that resolves a
 # ChannelConnection without being told which account it means is how a push lands
 # in the wrong store once a second account exists. The count may only go DOWN;
