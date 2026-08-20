@@ -337,7 +337,14 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
     const pctOp = a.op === 'incPct' || a.op === 'decPct'
     const pctType = String(a0?.type ?? '') === 'placement'
     const v = String(a.value ?? '')
-    const then = a.op === 'set'
+    /**
+     * C1 — the two COMPUTED ops read as sentences, not as arithmetic. `setCpc` carries no value
+     * at all, so falling through to the generic branch would have printed a bare "setCpc" beside
+     * an empty string — the raw-enum cell this file has fixed twice before.
+     */
+    const then = a.op === 'setCpc' ? 'Set bid to measured CPC'
+      : a.op === 'targetAcos' ? `Set bid to CPC × (${v}% ÷ actual ACoS)`
+      : a.op === 'set'
       ? (pctType ? `Set ${v}%` : `Set €${v}`)
       : pctOp ? `${ACTION_VERB[a.op]}${v}%`
       : `${ACTION_VERB[a.op] ?? a.op}${v}`

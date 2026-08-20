@@ -279,7 +279,13 @@ function describeAction(a: Record<string, unknown>): string {
     case 'adjust_ad_budget': return `Adjust daily budget${pct ? ` by ${pct}` : ''}`
     case 'budget_apply': return `Set daily budget ${String(a.op ?? 'set')} ${num(a.value)}`
     case 'bid_to_target_acos': return `Bid to target ACoS${a.targetAcos != null ? ` ${unconvert(a.targetAcos, 'frac').toFixed(1)}%` : ''}${a.profitMode ? ' (profit mode)' : ''}`
-    case 'bid_apply': return `Adjust bid ${String(a.op ?? 'set')} ${num(a.value)}`
+    case 'bid_apply': {
+      // C1 — the two computed ops describe themselves; the five arithmetic ones read as before.
+      const op = String(a.op ?? 'set')
+      if (op === 'setCpc') return 'Set bid to the target’s measured CPC'
+      if (op === 'targetAcos') return `Set bid to CPC × (${num(a.value)}% target ÷ actual ACoS)`
+      return `Adjust bid ${op} ${num(a.value)}`
+    }
     case 'bid_up': return `Raise bids${pct ? ` by ${pct}` : ''}`
     case 'bid_down': return `Lower bids${pct ? ` by ${pct}` : ''}`
     case 'lower_bid_to_floor': return 'Lower bid to the floor'

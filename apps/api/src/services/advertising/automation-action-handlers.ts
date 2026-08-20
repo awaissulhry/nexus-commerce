@@ -36,7 +36,9 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
 // P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
-import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
+import { HARVEST_DEFAULTS, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
+import { ruleWindowBounds } from '@nexus/shared/data-vintage'
+import { microsToCents } from '../ads-core/metrics-math.js'
 // NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
 // safety promise was written into every negation rule's action JSON and consulted by nothing.
 import { checkProtectConverting, protectConvertingConfig, normaliseNegTerm } from './ads-protect-converting.js'
@@ -1319,6 +1321,46 @@ ACTION_HANDLERS.alert_operator = async (action, context, meta): Promise<ActionRe
 // the SAME gated path as adjust_ad_budget. Kept separate from adjust_ad_budget so the seeded
 // AME/AD rules stay byte-identical.
 type BuilderOp = 'set' | 'incPct' | 'decPct' | 'incAbs' | 'decAbs'
+/**
+ * C1 (2026-08-20) — the two COMPUTED bid ops. They are not arithmetic on the current bid, so they
+ * cannot go through `applyBuilderOp`: each needs the target's own measured performance first.
+ */
+const COMPUTED_BID_OPS = new Set(['targetAcos', 'setCpc'])
+
+/**
+ * One ad target's measured CPC and ACoS, over the window the rule is described by.
+ *
+ * 🔴 The window comes from `TRIGGER_WINDOW`, the same table `ruleLookback` renders in the grid's
+ * Lookback column — so the figure this computes on is the figure the operator was shown. A second
+ * hard-coded window here is exactly the drift B2 existed to remove.
+ *
+ * `ruleWindowBounds` drops the two still-settling days, so a bid is never computed against a day
+ * whose sales have not finished arriving. Returns null where there is no signal: a CPC needs a
+ * click, and an ACoS needs a sale. Acting on a keyword with no clicks is guessing.
+ */
+async function targetPerformance(adTargetId: string, trigger: string): Promise<{ cpcEur: number; acos: number | null; clicks: number } | null> {
+  const spec = TRIGGER_WINDOW[trigger]
+  // A trigger with no window of its own (SCHEDULE, CAC_SPIKE) still needs one to measure a
+  // keyword over; 30 days is the longest any trigger uses and the most forgiving for sparse rows.
+  const days = spec?.days ?? 30
+  const { since, until } = ruleWindowBounds(days)
+  const perf = await prisma.amazonAdsDailyPerformance.aggregate({
+    where: { entityType: 'AD_TARGET', localEntityId: adTargetId, date: { gte: since, lte: until } },
+    _sum: { costMicros: true, clicks: true, sales7dCents: true },
+  })
+  const clicks = perf._sum.clicks ?? 0
+  if (clicks <= 0) return null
+  const spendCents = microsToCents(perf._sum.costMicros)
+  if (spendCents <= 0) return null
+  const salesCents = perf._sum.sales7dCents ?? 0
+  return {
+    cpcEur: spendCents / clicks / 100,
+    // No sales is not a 0% ACoS — it is an ACoS that does not exist. A ratio with a zero
+    // denominator must not become "infinitely efficient" and double the bid.
+    acos: salesCents > 0 ? spendCents / salesCents : null,
+    clicks,
+  }
+}
 function applyBuilderOp(op: BuilderOp | string, current: number, value: number): number {
   switch (op) {
     case 'set': return value
@@ -1406,7 +1448,45 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   const currentEur = (t.bidCents ?? 0) / 100
   const floorEur = Math.max(0.05, action.minEur != null ? Number(action.minEur) : 0.05)
   const ceilEur = action.maxEur != null ? Number(action.maxEur) : null
-  const nextEur = Math.round(clampRange(applyBuilderOp(action.op as string, currentEur, Number(action.value) || 0), floorEur, ceilEur) * 100) / 100
+
+  /**
+   * C1 — the two COMPUTED ops. Both need the target's own measured performance, so they resolve
+   * to a raw euro figure here and then take the SAME clamp and write path as the five arithmetic
+   * ops below. One bid-writing code path, five ways of choosing the number.
+   *
+   * A refusal is never silent: with no clicks in the window there is no CPC to set a bid from,
+   * and with no sales there is no ACoS to scale it by. Both return `ok: false` naming which
+   * signal was missing, so the execution history says why nothing moved instead of recording a
+   * success that changed nothing ([[reference_four_inert_ads_rules]]).
+   */
+  let computedEur: number | null = null
+  if (COMPUTED_BID_OPS.has(String(action.op))) {
+    // The trigger comes from the CONTEXT, not `meta` — the handler signature carries only
+    // { dryRun, ruleId }, and widening it would touch all 35 handlers for one field that the
+    // context already states on every build.
+    const perf = await targetPerformance(id, String(getFieldPath(context, 'trigger') ?? ''))
+    if (!perf) {
+      return { type: action.type, ok: false, error: `no measured clicks or spend for this target in the rule's window — there is no CPC to compute a bid from`, output: { adTargetId: id } }
+    }
+    if (action.op === 'setCpc') {
+      computedEur = perf.cpcEur
+    } else {
+      // targetAcos: bid = CPC × (target / actual). Above target the factor is < 1 and the bid
+      // comes down; below it, up. The clamp below is what stops a 5% actual ACoS from
+      // multiplying a bid by twenty.
+      const targetPct = Number(action.value)
+      if (!Number.isFinite(targetPct) || targetPct <= 0) {
+        return { type: action.type, ok: false, error: `targetAcos needs a positive target ACoS percentage; this rule stores ${JSON.stringify(action.value)}`, output: { adTargetId: id } }
+      }
+      if (perf.acos == null) {
+        return { type: action.type, ok: false, error: `this target has spend but no attributed sales in the rule's window, so its actual ACoS is undefined — a bid cannot be scaled by it`, output: { adTargetId: id, clicks: perf.clicks } }
+      }
+      computedEur = perf.cpcEur * ((targetPct / 100) / perf.acos)
+    }
+  }
+
+  const rawEur = computedEur ?? applyBuilderOp(action.op as string, currentEur, Number(action.value) || 0)
+  const nextEur = Math.round(clampRange(rawEur, floorEur, ceilEur) * 100) / 100
   const nextCents = Math.round(nextEur * 100)
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢` } }
   if (nextCents === t.bidCents) return { type: action.type, ok: true, output: { adTargetId: id, noChange: true } }

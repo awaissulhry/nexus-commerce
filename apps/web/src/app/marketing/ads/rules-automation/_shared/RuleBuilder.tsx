@@ -40,23 +40,36 @@ const METRIC_UNIT = PC_METRIC_UNIT
 // keyword/target bid. `unit` drives the value input (€ vs %). H10's recording shows "Set Bid
 // to($)" with the marketplace currency in the input; we keep our app's € convention (matching
 // the Budget builder) in both the label and the input prefix.
-const BUDGET_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> = [
+const BUDGET_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
   { value: 'set', label: 'Set Daily Budget to(€)', unit: 'eur' },
   { value: 'incPct', label: 'Increase Daily Budget by(%)', unit: 'pct' },
   { value: 'decPct', label: 'Decrease Daily Budget by(%)', unit: 'pct' },
   { value: 'incAbs', label: 'Increase Daily Budget by(€)', unit: 'eur' },
   { value: 'decAbs', label: 'Decrease Daily Budget by(€)', unit: 'eur' },
 ]
-const BID_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> = [
+const BID_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
   { value: 'set', label: 'Set Bid to(€)', unit: 'eur' },
   { value: 'incPct', label: 'Increase Bid by(%)', unit: 'pct' },
   { value: 'decPct', label: 'Decrease Bid by(%)', unit: 'pct' },
   { value: 'incAbs', label: 'Increase Bid by(€)', unit: 'eur' },
   { value: 'decAbs', label: 'Decrease Bid by(€)', unit: 'eur' },
+  /**
+   * C1 (2026-08-20) — the two COMPUTED bid actions from the operator's study. Unlike the five
+   * above, these do not take the bid as arithmetic on its current value: the engine reads the
+   * target's own measured CPC (and ACoS) over the rule's window and derives the number.
+   *
+   * 🔴 `targetAcos` is NOT the `bid_to_target_acos` handler despite the name. That one is
+   * campaign-grain, runs over the whole account from `ads-bid-optimizer`, and on the default
+   * metric source reads columns nothing has written since H.2e — B2/B4 measured it applying
+   * zero bids across every rule that carries it. This op is per-target, computed inside
+   * `bid_apply` from the same daily table the Lookback column describes.
+   */
+  { value: 'targetAcos', label: 'Set Bid to CPC × (Target ACoS / Actual ACoS)', unit: 'pct' },
+  { value: 'setCpc', label: 'Set Bid to CPC', unit: 'none' },
 ]
 // Placement rule THEN — set/raise/lower a placement bid modifier (% only). H10 labels are bare
 // ("Set to", not "Set to(%)") — the % is shown as the value-field suffix (frame 02:58–03:17).
-const PLACEMENT_ACTIONS: Array<{ value: string; label: string; unit: 'eur' | 'pct' }> = [
+const PLACEMENT_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
   { value: 'set', label: 'Set to', unit: 'pct' },
   { value: 'incPct', label: 'Increase by', unit: 'pct' },
   { value: 'decPct', label: 'Decrease by', unit: 'pct' },
@@ -70,7 +83,15 @@ const PLACEMENTS = [
 // IF placement-scope (which placement's metric to evaluate) — Campaign-wide or a single placement.
 const PLACEMENT_SCOPES = [{ value: 'campaign', label: 'Campaign' }, ...PLACEMENTS]
 const METRICS_PLACEMENT = PC_METRICS_PLACEMENT
-const actionUnit = (actions: Array<{ value: string; unit: 'eur' | 'pct' }>, op?: string): 'eur' | 'pct' => actions.find((a) => a.value === op)?.unit ?? 'eur'
+/**
+ * C1 — `'none'` joins the unit vocabulary for an action that takes NO value.
+ *
+ * "Set Bid to CPC" computes its own number, so a value box beside it would be a control with
+ * nothing to control — and `criteriaValid` would then refuse to save a rule that is complete.
+ * Both the input and the validation key off this.
+ */
+type ActionUnit = 'eur' | 'pct' | 'none'
+const actionUnit = (actions: Array<{ value: string; unit: ActionUnit }>, op?: string): ActionUnit => actions.find((a) => a.value === op)?.unit ?? 'eur'
 // builder slug → backend automation-rule trigger (the create payload)
 const TRIGGER_BY_SLUG: Record<string, string> = {
   'negative-targeting': 'SEARCH_TERM_WASTING',
@@ -514,7 +535,13 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const adGroupCount = blocks.reduce((n, b) => n + b.groups.length, 0)
   /** every IF row has a value — the only thing a criteria-only save actually writes */
   const conditionsFilled = groups.every((g) => g.conditions.length > 0 && g.conditions.every((c) => c.value.trim() !== ''))
-  const criteriaValid = conditionsFilled && groups.every((g) => !isCampaign || (g.budgetValue ?? '').trim() !== '')
+  /**
+   * C1 — an action whose unit is `'none'` computes its own number, so requiring a THEN value
+   * would make a finished rule unsaveable. Every other action still demands one.
+   */
+  const thenActions = isPlacement ? PLACEMENT_ACTIONS : isBidLike ? BID_ACTIONS : BUDGET_ACTIONS
+  const criteriaValid = conditionsFilled && groups.every((g) =>
+    !isCampaign || actionUnit(thenActions, g.budgetOp) === 'none' || (g.budgetValue ?? '').trim() !== '')
   const targetsValid = isCampaign ? selCampaigns.length > 0 : adGroupCount > 0
   /**
    * 🔴 EA5 — an ENGINE-NATIVE rule is valid on its name and its IF rows alone.
@@ -821,12 +848,23 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         <span className="pill then">THEN</span>
                         {isPlacement && <H10Select width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
                         <H10Select width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
+                        {/* C1 — a computed action ('none') has no number to take, so the box is
+                            not rendered rather than rendered empty or disabled. A disabled input
+                            beside a chosen action reads as "you forgot something". */}
+                        {u !== 'none' && (
                         <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
                           {u === 'eur' && <span className="pf">€</span>}
-                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : 'Budget amount'} />
+                          <input inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })} aria-label={isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : g.budgetOp === 'targetAcos' ? 'Target ACoS' : 'Budget amount'} />
                           {u === 'pct' && <span className="sf">%</span>}
                         </span>
-                        {isBidLike && <HoverCard text="The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
+                        )}
+                        {isBidLike && <HoverCard text={
+                          g.budgetOp === 'targetAcos'
+                            ? 'The bid becomes the target’s own measured cost-per-click, scaled by how far its ACoS is from the figure you type here. A keyword at 50% ACoS against a 25% target has its bid halved; one already at 12.5% has it doubled — bounded by the rule’s min/max bid.'
+                            : g.budgetOp === 'setCpc'
+                              ? 'The bid becomes the target’s own measured cost-per-click over the rule’s window — what it has actually been paying per click, with no adjustment. No value to set.'
+                              : 'The bid this rule sets — or the amount it raises/lowers the current keyword bid by — when the criteria are met.'
+                        } placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                         {isPlacement && <HoverCard text="The placement bid modifier this rule sets (or raises/lowers) for the chosen placement when the criteria are met. Amazon allows 0–900%." placement="above"><span className="h10-rb-theninfo" aria-hidden="true"><Info size={15} /></span></HoverCard>}
                       </div>
                     ) })()}
