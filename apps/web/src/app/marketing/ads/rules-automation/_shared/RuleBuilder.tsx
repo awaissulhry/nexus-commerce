@@ -77,6 +77,32 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
    */
   { value: 'pauseTarget', label: 'Pause Target', unit: 'none' },
   { value: 'enableTarget', label: 'Unpause Target', unit: 'none' },
+  /**
+   * 🔴 C3 (2026-08-20) — "Increase to Top of Search / First Page" is ABSENT ON PURPOSE.
+   *
+   * It is in the operator's H10 study and it was considered and declined, so this is a decision
+   * and not a gap. Do not add it here without new data.
+   *
+   * There is no per-keyword top-of-search signal to compute it from. `topOfSearchIS` is
+   * CAMPAIGN-DAY grain (`AmazonAdsPlacementReport`), which can say a campaign wins 12% of
+   * top-of-search impressions but cannot say what THIS target would have to bid; and Amazon's
+   * theme-based bid recommendation — the only per-keyword suggestion endpoint we call
+   * (`ads-api-client.ts`, POST /sp/targets/bid/recommendations) — returns
+   * CONVERSION_OPPORTUNITIES and SPECIAL_DAYS, with no top-of-search theme. A keyword-level
+   * version would therefore pick a multiplier out of the air and label it with a placement
+   * guarantee it cannot make, in the one cell on the page that moves money.
+   *
+   * The capability is real and already lives where Amazon actually exposes it: the PLACEMENT tab's
+   * Top of Search multiplier (`set_placement_multiplier`, plus `defend_top_of_search`). The intent
+   * — push a keyword hard enough to win premium placement — is served on this tab by
+   * `targetAcos` with an aggressive target, or by `incPct`.
+   *
+   * The honest version, if it is ever wanted, is "Set Bid to Amazon's suggested bid (high end of
+   * range)" from `ads-bid-suggest.service.ts` — a published number, labelled as what it is. It
+   * needs batching/caching (one Amazon call per keyword per tick otherwise) and a coverage check
+   * first: that service falls back to an account-wide median when it cannot match a keyword, and a
+   * rule silently bidding the median on half its targets would be its own quiet defect.
+   */
 ]
 // Placement rule THEN — set/raise/lower a placement bid modifier (% only). H10 labels are bare
 // ("Set to", not "Set to(%)") — the % is shown as the value-field suffix (frame 02:58–03:17).
