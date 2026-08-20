@@ -579,8 +579,20 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     {
       key: 'lookback', label: 'Lookback', metric: false, sortable: true,
       sortValue: (r) => r.look.days,
-      render: (r) => (
-        <span className={`h10-rg-look${r.look.days == null ? ' none' : ''}${r.look.settled ? '' : ' unsettled'}`} title={r.look.why}>
+      render: (r) => {
+        /**
+         * 🔴 The styling keys on whether the cell STATES A WINDOW, never on `days`.
+         *
+         * `days` is populated on some non-window rows — `AD_SPEND_PROFITABILITY_BREACH` carries a
+         * 30-day profit aggregate behind a label of "Unlabelled" — so keying on `days == null`
+         * painted that row amber while the two `CAC_SPIKE` rows, labelled identically, were grey.
+         * Measured on prod: the word "Unlabelled" appeared in two different colours on one screen,
+         * decided by a property with no representation in the cell. Same mistake as the ⚠ icon a
+         * commit earlier, one level down: gate on the KIND, which is what the label is derived from.
+         */
+        const statesAWindow = r.look.kind === 'window' || r.look.kind === 'compare'
+        return (
+        <span className={`h10-rg-look${statesAWindow ? '' : ' none'}${r.look.settled ? '' : ' unsettled'}`} title={r.look.why}>
           {r.look.label}
           {/* The warning is the difference between a window and a window you should not trust.
               It carries its own accessible text — an icon that only means something on hover is
@@ -591,11 +603,12 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
               "Unlabelled ⚠" put a caveat about a number on a cell whose whole point is that
               there is no number — the two halves contradicted each other. Measured on prod:
               1 of 18 bid rows read that way. The caveat still reaches the tooltip. */}
-          {!r.look.settled && (r.look.kind === 'window' || r.look.kind === 'compare') && (
+          {!r.look.settled && statesAWindow && (
             <AlertTriangle size={11} aria-label="includes days Amazon is still attributing" />
           )}
         </span>
-      ),
+        )
+      },
     },
     { key: 'criteria', label: 'Criteria', metric: false, sortable: false, render: (r) => <span className="h10-nt-crit" title={r.criteria}>{r.criteria}</span> },
     {
