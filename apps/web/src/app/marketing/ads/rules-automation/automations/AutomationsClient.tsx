@@ -611,6 +611,11 @@ export function AutomationsClient() {
         {r.level === 'AUTO' && r.writes && (
           <span className="h10-au-badge writes" title="On Auto and able to change your account">writes</span>
         )}
+        {/* W1 — provenance, not behaviour. `=== true` on purpose: an older API payload omits the
+            field, and absence must not render as either state. */}
+        {r.legacy === true && (
+          <span className="h10-au-badge legacy" title="Legacy — predates 2026-08-20 and was not created by you (seeded or machine-created). It runs exactly as configured; the label is for triage only.">legacy</span>
+        )}
         {g?.canGraduate && (
           <span className="h10-au-badge ready" title={g.summary}><GraduationCap size={10} aria-hidden /> ready</span>
         )}
@@ -728,6 +733,25 @@ export function AutomationsClient() {
         { value: 'campaign', label: 'One campaign' },
       ],
       value: (a: unknown) => ((a as ActorRow).k === 'rule' ? (a as { r: Rule }).r.scope.kind : ''),
+    },
+    /**
+     * W1 — provenance. "Legacy" = created before the 2026-08-20 cutover: seeded or
+     * machine-created, none authored by the operator. The accessor returns '' for engine and
+     * observed rows AND for rules whose payload predates W1 (no `legacy` field), so an active
+     * selection never silently carries rows it cannot describe — the rule-property convention
+     * stated above.
+     */
+    {
+      key: 'provenance', label: 'Provenance', kind: 'select', placeholder: 'All rules', wide: true,
+      options: [
+        { value: 'legacy', label: 'Legacy', title: 'Created before 2026-08-20 — seeded or machine-created, not by you' },
+        { value: 'current', label: 'Created by you', title: 'Created on or after 2026-08-20' },
+      ],
+      value: (a: unknown) => {
+        if ((a as ActorRow).k !== 'rule') return ''
+        const lg = (a as { r: Rule }).r.legacy
+        return lg === true ? 'legacy' : lg === false ? 'current' : ''
+      },
     },
   ], [categoryOpts, counts])
 

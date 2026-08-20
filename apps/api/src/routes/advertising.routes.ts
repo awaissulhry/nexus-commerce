@@ -79,6 +79,9 @@ import {
   parseMoney, parseBid, parseVocabulary, VOCABULARIES, BULKSHEET_SCHEMA_VERSION,
   buildRowKey, ROW_KEY_HEADER,
 } from '@nexus/shared/ads-bulksheet'
+// W1 — LEGACY designation: rules predating 2026-08-20 were machine-created, none by the
+// operator. Shared with apps/web so the grid chip and this payload cannot drift apart.
+import { isLegacyRule } from '@nexus/shared/ads-rule-legacy'
 import {
   validateBulksheetStreaming, looksLikeXlsx, assertNotZipBomb, MAX_ISSUES,
 } from '../services/advertising/bulksheet/import-validate.js'
@@ -7187,6 +7190,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         lastMatchedAt: r.lastMatchedAt,
         lastExecutedAt: r.lastExecutedAt,
         ageDays: Math.floor((Date.now() - r.createdAt.getTime()) / 86_400_000),
+        /** W1 — provenance. Predates the 2026-08-20 cutover ⇒ machine-created, not by the
+         *  operator. A label only: nothing in evaluation, caps or autonomy reads it. */
+        createdAt: r.createdAt,
+        legacy: isLegacyRule(r),
       }
     })
     return { items, protectedTerms: protectionCount }
@@ -8505,6 +8512,45 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { schedule }
   })
 
+  /**
+   * W4 (2026-08-20) — a schedule being DELETED or DISABLED mid-window must give the budgets back.
+   *
+   * The executor's revert is convergent ("outside every window → base"), so it only reverts
+   * schedules it can still SEE: `findMany({ enabled: true })`. Deleting an active schedule — or
+   * flipping `enabled` off — removed it from that set with its boost still applied, and nothing
+   * would ever restore the base. Dayparting's own delete route has resumed campaigns since RC2.T3;
+   * budget never did.
+   *
+   * The restore honours the same two laws as the executor:
+   *   · base precedence — captured baseline ▸ creation snapshot ▸ live (`ad-budget-schedule.job.ts`);
+   *   · a manual override wins — if the live budget is no longer the value THIS schedule last
+   *     applied, someone else moved it since, and re-fighting them is the §3 precedence decision
+   *     this route must not take on its own.
+   * Best-effort per campaign, same as dayparting's resume.
+   */
+  const bsRestoreBase = async (s: { id: string; campaigns: unknown; lastApplied: unknown }): Promise<void> => {
+    const camps = Array.isArray(s.campaigns) ? s.campaigns as Array<{ id: string; dailyBudget?: number | null }> : []
+    const last = (s.lastApplied as Record<string, { budget?: number }> | null) ?? {}
+    if (camps.length === 0) return
+    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    for (const c of camps) {
+      const applied = last[c.id]?.budget
+      if (applied == null) continue // this schedule never touched it
+      const campaign = await prisma.campaign.findUnique({ where: { id: c.id }, select: { dailyBudget: true, status: true, budgetBaselineCents: true } })
+      if (!campaign || campaign.status === 'ARCHIVED') continue
+      const live = Number(campaign.dailyBudget ?? 0)
+      if (live !== applied) continue // moved by someone else since — their write wins
+      const base = campaign.budgetBaselineCents != null
+        ? campaign.budgetBaselineCents / 100
+        : c.dailyBudget != null ? Number(c.dailyBudget) : live
+      const target = Math.max(1, Math.round(base * 100) / 100)
+      if (live === target) continue
+      try {
+        await updateCampaignWithSync({ campaignId: c.id, patch: { dailyBudget: target }, actor: `automation:budget-schedule-${s.id}` as never, reason: 'budget schedule removed or disabled — restore base budget', applyImmediately: true } as never)
+      } catch { /* best-effort, mirrors dayparting's resume */ }
+    }
+  }
+
   fastify.patch('/advertising/budget-schedules/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const b = (request.body ?? {}) as Record<string, unknown>
@@ -8515,7 +8561,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null
     if (b.endDate !== undefined) data.endDate = b.endDate ? new Date(String(b.endDate)) : null
     try {
+      // W4 — read before write, so a disable can give back what THIS schedule applied.
+      const before = data.enabled === false
+        ? await prisma.budgetSchedule.findUnique({ where: { id }, select: { id: true, enabled: true, campaigns: true, lastApplied: true } })
+        : null
       const schedule = await prisma.budgetSchedule.update({ where: { id }, data })
+      // Disable AFTER the update: the executor only reads enabled schedules, so once the row says
+      // enabled:false the cron cannot race this restore by re-applying the window.
+      if (before?.enabled === true) await bsRestoreBase(before)
       await prisma.advertisingActionLog.create({
         data: {
           userId: actorFromHeaders(request.headers as Record<string, unknown>),
@@ -8532,6 +8585,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     try {
       const gone = await prisma.budgetSchedule.delete({ where: { id } })
+      // W4 — restore base AFTER the delete (the executor can no longer see the row, so it cannot
+      // re-apply mid-restore). Before this, deleting a schedule mid-window left the boosted
+      // budget in place forever — the one writer that knew the base was gone.
+      if (gone.enabled) await bsRestoreBase(gone)
       await prisma.advertisingActionLog.create({
         data: {
           userId: actorFromHeaders(request.headers as Record<string, unknown>),

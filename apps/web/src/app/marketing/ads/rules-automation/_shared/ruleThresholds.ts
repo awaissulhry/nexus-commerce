@@ -21,6 +21,11 @@
 import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
 
 export type ThresholdKey = 'minOrders' | 'minClicks' | 'minSpendCents' | 'maxAcosPct'
+  /** W5 — the Budget tab's two H10 columns. Measured 2026-08-20 before declaring (the module's own
+   *  law): 2 of 7 budget-family rules carry `campaign.budgetUtilization ≥` and 2 carry
+   *  `campaign.acos ≤`, so both columns show real values AND their absent-sentences state real
+   *  operational facts — a trim rule with no depletion gate acts at any hour of the day. */
+  | 'minBudgetUtilPct' | 'maxBudgetAcosPct'
 
 /** Where a threshold's number came from — the three states must never render the same. */
 export type ThresholdSource =
@@ -108,10 +113,33 @@ export const THRESHOLD_SPEC: Record<ThresholdKey, ThresholdSpec> = {
     fallback: () => null,
     absent: 'This rule names no click threshold, and its action has no documented default.',
   },
+  minBudgetUtilPct: {
+    column: 'Spend Threshold',
+    columnTip: 'How much of the campaign’s daily budget must already be spent before this rule wakes up — H10’s "Spend > 85% of Daily Budget" gate.',
+    // 🔴 stored as a FRACTION (0.85) by the engine; the >1 guard covers a whole-number write,
+    // the same 0.3-vs-30 trap targetAcos already fell into (AIREON).
+    cell: (v) => `≥ ${v > 1 ? v : Math.round(v * 100)}% of budget`,
+    clause: (v) => `budget used ≥ ${v > 1 ? v : Math.round(v * 100)}%`,
+    fallback: () => null,
+    /** The fact, not a blank: without a depletion gate the rule acts on performance alone, at any
+     *  hour — which is exactly how a trim compounds intraday. */
+    absent: 'No spend-depletion gate. This rule acts on performance alone, at any point in the day — it does not wait for the budget to be nearly spent.',
+  },
+  maxBudgetAcosPct: {
+    column: 'ACoS Threshold',
+    columnTip: 'The profitability bar a campaign must be UNDER before this rule will raise its budget — H10’s "AND ACoS < 25%" check.',
+    cell: (v) => `Max ${v > 1 ? v : Math.round(v * 100)}%`,
+    clause: (v) => `ACoS ≤ ${v > 1 ? v : Math.round(v * 100)}%`,
+    fallback: () => null,
+    /** ⚠ Deliberately a ceiling (`lte`) only, per this module's gte/lte law: a trim rule's
+     *  `ACoS ≥ X` is the opposite direction and stays in Criteria, where its operator prints
+     *  literally. This sentence must not imply such a rule tests nothing. */
+    absent: 'No ACoS ceiling of the raise-gate kind. Any ACoS test this rule does carry appears under Criteria with its own direction.',
+  },
 }
 
 /** Stable reading order wherever thresholds are listed together. */
-export const THRESHOLD_ORDER: ThresholdKey[] = ['minOrders', 'minClicks', 'minSpendCents', 'maxAcosPct']
+export const THRESHOLD_ORDER: ThresholdKey[] = ['minOrders', 'minClicks', 'minSpendCents', 'maxAcosPct', 'minBudgetUtilPct', 'maxBudgetAcosPct']
 
 /**
  * 🔴 The SAME threshold, stored in the other place.
@@ -133,6 +161,12 @@ const CONDITION_FIELD: Record<ThresholdKey, { fields: string[]; ops: string[] }>
   minClicks: { fields: ['adTarget.clicks', 'searchTerm.clicks'], ops: ['gte'] },
   minSpendCents: { fields: ['adTarget.spendCents', 'campaign.spendCents', 'searchTerm.costCents'], ops: ['gte'] },
   maxAcosPct: { fields: ['campaign.acos', 'adTarget.acos', 'searchTerm.acos'], ops: ['lte'] },
+  // W5 — the Budget tab's pair. `campaign.acos` appears in maxAcosPct too; that is safe because
+  // a tab activates only its OWN keys (columnedConditionIndexes) and the clause layer reads
+  // action parameters, never conditions — one flat condition can only be claimed by the tab
+  // whose column set names it.
+  minBudgetUtilPct: { fields: ['campaign.budgetUtilization'], ops: ['gte'] },
+  maxBudgetAcosPct: { fields: ['campaign.acos'], ops: ['lte'] },
 }
 
 export interface RuleCondition { field?: string; metric?: string; op?: string; value?: unknown }
@@ -170,6 +204,10 @@ export function columnedConditionIndexes(conds: RuleCondition[], tabKey?: string
  */
 export const RULE_TAB_THRESHOLDS: Record<string, ThresholdKey[]> = {
   'keyword-harvest': ['minOrders', 'maxAcosPct'],
+  /** W5 (2026-08-20) — H10's Budget grid shows exactly these two ("Spend Threshold" ·
+   *  "ACoS Threshold"), and the account's own rules were measured to fill them before they were
+   *  declared: 2 of 7 carry the depletion gate, 2 carry the raise ceiling. */
+  budget: ['minBudgetUtilPct', 'maxBudgetAcosPct'],
 }
 
 /**

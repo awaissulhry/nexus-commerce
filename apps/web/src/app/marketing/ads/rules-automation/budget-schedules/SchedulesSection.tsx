@@ -17,20 +17,24 @@
  *         on failure the row STAYS and says why.
  *   :120  the create button was labelled "Rule" on a page whose noun is "Schedule".
  *
- * ── What is deliberately NOT fixed here ────────────────────────────────────────────────────────
+ * ── State of the section as of W4 (2026-08-20) — the old caveats here were STALE ───────────────
  *
- * 🔴 The "Hourly data is not available for this marketplace." card, its two `MetricSelect`s and the
- * `h10-sb-listchart` markup are byte-identical to the file this replaces — wrong string and all.
- * BSP.3 owns that card. It is wrong (the sentence is hard-coded and unconditional, and the endpoint
- * it describes destructures `marketplace` without ever using it), we know it is wrong, and fixing
- * it here would collide with the session that is rebuilding it.
+ * Two claims this header used to make were contradicted by the code below it and cost a later
+ * study real time: the hourly card is REAL (`HourlyPerformanceCard` reads the endpoint; the
+ * "not available" sentence renders only on `hasData: false`), and the Exclude columns read real
+ * stored ranges (the route stopped hard-coding nulls in BSP.2). W4 then closed the remaining
+ * authoring gap — the builder used to send `excludeDates` as a BOOLEAN the route discarded, so
+ * the executor's blackout branch was unreachable and these columns were "—" in practice.
  *
- * Three of the seven columns can also never say anything — `Exclude Start/End Date` are hard-coded
- * `null` at the route (`advertising.routes.ts:7899`) and `autoRefill` has no writer anywhere in the
- * codebase. Left in place: BSP.0's remit is the three defects above, and dropping columns is a
- * change to what this section SHOWS, which belongs to the session that rebuilds it.
+ * W4 also added the Status column (toggle + Scheduled/Active/Completed/Off pill — the API's
+ * `enabled` used to be dropped on the floor here, leaving a live schedule indistinguishable from
+ * a disabled one and no way to stop one short of deleting it), and the DELETE/disable routes now
+ * restore base budgets (before that, deleting a schedule mid-window left the boost in place
+ * forever). Still absent, deliberately, pending operator decisions: Amazon-event presets (BSP.5),
+ * auto-refill (a write-only column with no executor semantics), and precedence between the five
+ * dailyBudget writers (BSP.6).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
@@ -40,7 +44,18 @@ import { HourlyPerformanceCard } from './HourlyPerformanceCard'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SectionEmpty } from './SectionShell'
 
-interface ScheduleRow { id: string; name: string; type: string; days: string; autoRefill: boolean; startDate: string; endDate: string; excludeStart: string; excludeEnd: string }
+/** W4 — `autoRefill` dropped (dead client state since BSP.2 removed its column); `enabled` added
+ *  (the API always returned it; nothing read it). */
+interface ScheduleRow { id: string; name: string; type: string; days: string; enabled: boolean; startDate: string; endDate: string; excludeStart: string; excludeEnd: string }
+
+/** Scheduled / Active / Completed / Off — derived, because no status field exists to drift from.
+ *  ISO date strings compare correctly as strings; '—' means "no bound on this side". */
+function scheduleStatus(r: ScheduleRow, todayIso: string): { word: string; cls: string; why: string } {
+  if (!r.enabled) return { word: 'Off', cls: 'off', why: 'Paused — the executor skips this schedule and campaigns hold their base budgets.' }
+  if (r.startDate !== '—' && r.startDate > todayIso) return { word: 'Scheduled', cls: 'bs-sched', why: `Starts ${r.startDate}. Until then, nothing is changed.` }
+  if (r.endDate !== '—' && r.endDate < todayIso) return { word: 'Completed', cls: 'bs-done', why: `Ended ${r.endDate}. Budgets have been restored to base.` }
+  return { word: 'Active', cls: 'bs-active', why: 'In its date range — the weekly windows decide each campaign’s budget right now.' }
+}
 
 const TYPE_LABEL: Record<string, string> = { 'campaign-budget': 'Campaign Budget', 'budget-multiplier': 'Budget Multiplier' }
 
@@ -56,6 +71,7 @@ export function SchedulesSection() {
   const [metric2, setMetric2] = useState('ACoS')
   const [chartOpen, setChartOpen] = useState(true)
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
+  const [toggleErr, setToggleErr] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -69,7 +85,7 @@ export function SchedulesSection() {
           setErr(null)
           setRows(items.map((s) => ({
             id: String(s.id), name: String(s.name ?? ''), type: TYPE_LABEL[String(s.type ?? '')] ?? String(s.type ?? '—'),
-            days: String(s.days ?? '—'), autoRefill: !!s.autoRefill,
+            days: String(s.days ?? '—'), enabled: s.enabled !== false,
             startDate: s.startDate ? String(s.startDate) : '—', endDate: s.endDate ? String(s.endDate) : '—',
             excludeStart: s.excludeStart ? String(s.excludeStart) : '—', excludeEnd: s.excludeEnd ? String(s.excludeEnd) : '—',
           })))
@@ -81,7 +97,54 @@ export function SchedulesSection() {
     return () => { alive = false }
   }, [])
 
+  /**
+   * W4 — pause/resume, on the PATCH that existed with no caller. Optimistic with revert-on-failure
+   * (the list is cached 15s server-side, so a refetch would flip the switch back under the
+   * operator's finger — the U13 lesson). Turning a schedule OFF also restores base budgets
+   * server-side; the tooltip says so, because that is a spend-affecting side effect.
+   */
+  const toggleEnabled = useCallback(async (id: string, on: boolean) => {
+    setToggleErr(null)
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: on } : r)))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/budget-schedules/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: on }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.error != null) throw new Error(String(j?.error ?? `the server answered ${r.status}`))
+    } catch (e) {
+      setRows((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: !on } : r)))
+      setToggleErr(`The schedule could not be ${on ? 'resumed' : 'paused'} (${(e as Error).message}) — the switch shows its real state.`)
+    }
+  }, [])
+
+  const todayIso = new Date().toISOString().slice(0, 10)
   const columns: GridColumn<ScheduleRow>[] = useMemo(() => [
+    /**
+     * W4 — H10's color-coded Status pill (Scheduled / Active / Completed), plus the pause switch.
+     * Both read/write facts the API already carried: `enabled` came back on every row and was
+     * dropped; `PATCH {enabled}` was a reachable endpoint with no caller. A schedule that is live
+     * and one that is off used to be the same row on this screen.
+     */
+    {
+      key: 'status', label: 'Status', metric: false, sortable: true,
+      sortValue: (r) => scheduleStatus(r, todayIso).word,
+      render: (r) => {
+        const s = scheduleStatus(r, todayIso)
+        return (
+          <span className="h10-bs-statecell">
+            <button
+              type="button" role="switch" aria-checked={r.enabled}
+              className={`h10-bktoggle ${r.enabled ? 'on' : ''}`}
+              aria-label={`${r.enabled ? 'Pause' : 'Resume'} ${r.name}`}
+              title={r.enabled ? 'Pause this schedule — its campaigns are restored to their base budgets.' : 'Resume this schedule.'}
+              onClick={() => void toggleEnabled(r.id, !r.enabled)}
+            ><span /></button>
+            <span className={`h10-bd7-posture ${s.cls}`} title={s.why}>{s.word}</span>
+          </span>
+        )
+      },
+    },
     { key: 'type', label: 'Type', metric: false, sortable: true, render: (r) => r.type },
     { key: 'days', label: 'Days', metric: false, sortable: false, render: (r) => r.days },
     // BSP.2 (§2.3) — the Auto Refill column is GONE, not relabelled: `autoRefill` has zero
@@ -93,7 +156,7 @@ export function SchedulesSection() {
     // the first stored blackout range (rows that stored the old boolean fall through to none).
     { key: 'excludeStart', label: 'Exclude Start Date', metric: false, sortable: false, render: (r) => r.excludeStart },
     { key: 'excludeEnd', label: 'Exclude End Date', metric: false, sortable: false, render: (r) => r.excludeEnd },
-  ], [])
+  ], [todayIso, toggleEnabled])
 
   const renderFirst = (r: ScheduleRow): ReactNode => (
     <span className="h10-nt-namew">
@@ -171,6 +234,7 @@ export function SchedulesSection() {
       </div>
 
       {deleteErr && <p className="h10-bsp-note bad"><span>{deleteErr}</span></p>}
+      {toggleErr && <p className="h10-bsp-note bad"><span>{toggleErr}</span></p>}
 
       <AdsDataGrid<ScheduleRow>
         rows={rows}

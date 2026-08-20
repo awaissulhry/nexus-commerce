@@ -215,6 +215,13 @@ export function ApplyRulesClient() {
   const [assignSaved, setAssignSaved] = useState<Map<string, string[]> | null>(null)
   const [assignStaged, setAssignStaged] = useState<Map<string, string[]>>(new Map())
   const [assignMenu, setAssignMenu] = useState<{ row: CampaignRow; x: number; y: number } | null>(null)
+  /**
+   * W2 — "+ Assign Rule" over the whole selection: the campaign ids captured when the verb was
+   * clicked. The SAME modal and the SAME staging contract as the per-row pencil — checked means
+   * "assigned on EVERY selected campaign"; toggling on adds to all (idempotent where already
+   * present), toggling off removes from all. Everything stages; the Apply bar commits.
+   */
+  const [bulkAssign, setBulkAssign] = useState<string[] | null>(null)
   const [assignBusy, setAssignBusy] = useState(false)
   const [assignErr, setAssignErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
@@ -1267,6 +1274,7 @@ export function ApplyRulesClient() {
               ids={picked}
               names={new Map(campaignRows.map((r) => [r.id, r.name]))}
               onDone={() => { setSel(new Set()); setReloadTick((n) => n + 1) }}
+              onAssignRule={() => setBulkAssign(picked)}
             />
           )}
           onRowClick={NO_WRITE_ACTIONS.onRowAction ?? undefined}
@@ -1358,6 +1366,32 @@ export function ApplyRulesClient() {
             emitAdsChange('ads.rule.changed')
           }}
           onClose={() => setAssignMenu(null)}
+        />
+      )}
+      {/* ── W2 — the same modal, over the whole selection. `selected` is the INTERSECTION: a rule
+          shows checked only when every selected campaign carries it, so a mixed state reads as
+          unchecked and toggling it on completes the set rather than lying about it. ── */}
+      {bulkAssign && (
+        <RuleAssignModal
+          campaignName={`${bulkAssign.length} campaign${bulkAssign.length === 1 ? '' : 's'}`}
+          rules={assignRules}
+          selected={(assignRules ?? []).map((r) => r.id).filter((rid) => bulkAssign.every((cid) => assignedIdsFor(cid).includes(rid)))}
+          onToggle={(ruleId) => {
+            const onAll = bulkAssign.every((cid) => assignedIdsFor(cid).includes(ruleId))
+            for (const cid of bulkAssign) {
+              const cur = assignedIdsFor(cid)
+              if (onAll) stageAssignment(cid, cur.filter((x) => x !== ruleId))
+              else if (!cur.includes(ruleId)) stageAssignment(cid, [...cur, ruleId])
+            }
+          }}
+          onSetAll={(ids) => { for (const cid of bulkAssign) stageAssignment(cid, ids) }}
+          onCreated={(rule) => {
+            setAssignRules((rs) => [...(rs ?? []), { id: rule.id, name: rule.name, enabled: false, level: 'OFF', percent: null, conditionsText: null }]
+              .sort((a, b) => a.name.localeCompare(b.name)))
+            for (const cid of bulkAssign) stageAssignment(cid, [...assignedIdsFor(cid), rule.id])
+            emitAdsChange('ads.rule.changed')
+          }}
+          onClose={() => setBulkAssign(null)}
         />
       )}
       {stratFor && (

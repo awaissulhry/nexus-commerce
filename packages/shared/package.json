@@ -30,6 +30,10 @@
       "types": "./dist/ads-rule-window.d.ts",
       "default": "./dist/ads-rule-window.js"
     },
+    "./ads-rule-legacy": {
+      "types": "./dist/ads-rule-legacy.d.ts",
+      "default": "./dist/ads-rule-legacy.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

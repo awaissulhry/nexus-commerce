@@ -5,8 +5,8 @@
  * [Target ACoS] [Min/Max Bid]**, applied to the checked campaigns.
  * (U13, 2026-08-20, added the second one; U9 shipped the other three.)
  *
- * Study `docs/2026-08-16-ra-h10-reference-study.md` §3.1 and §7.10. H10 shows a fourth verb,
- * **[+ Assign Rule]**, and it is deliberately NOT built here — see the operator decision below.
+ * Study `docs/2026-08-16-ra-h10-reference-study.md` §3.1 and §7.10. H10's fifth verb,
+ * **[+ Assign Rule]**, arrived with W2 (2026-08-20) — see below.
  *
  * ── D6, answered by the operator 2026-08-18 with these measurements ─────────────────────────────
  * · **Grains stay** (all four). H10 has campaigns only; this page keeps Portfolios / Product lines /
@@ -16,10 +16,13 @@
  *   portfolio-scoped** (43 account-wide, 8 market), so a column naming the rule that applies would
  *   print the same value on all 220 rows — the decorative-column class this programme removes. The
  *   existing "Automations" column already carries the truthful version.
- * · **No "+ Assign Rule".** `scopeCampaignId` is SINGLE-VALUED, so assigning a rule to a second
- *   campaign MOVES it off the first. With 0 rules currently campaign-bound, the first use of that
- *   button would silently unbind whatever it touched next. It waits for additive `scope*Ids`
- *   columns; a control that quietly destroys a binding is worse than a missing one.
+ * · **"+ Assign Rule" was withheld on 2026-08-18** because `scopeCampaignId` is single-valued and
+ *   assigning would MOVE a rule. D1 (2026-08-20, `CampaignRuleAssignment`) removed that blocker:
+ *   assignment is campaign → rule, many-to-many, staged through the same Apply bar as the Budget
+ *   Rule cell. **W2 ships the verb for budget rules** — the one kind whose end-to-end machinery
+ *   (backfill → resolver → reach → staged Apply) is proven. Bid/placement kinds wait on the D4+
+ *   decision, because the FIRST assignment on an account-wide rule narrows it from 220 campaigns
+ *   to the assigned set, and that cutover belongs to the operator.
  *
  * ── The three endpoints, each already proven by another surface ─────────────────────────────────
  * · Automation → `PATCH /campaigns/:id/live-writes { enabled }` — the WRITE GATE, which is what
@@ -71,15 +74,29 @@ async function patch(path: string, body: unknown): Promise<string | null> {
   } catch (e) { return (e as Error).message || 'network' }
 }
 
-export function ArBulkVerbs({ ids, names, onDone }: {
+export function ArBulkVerbs({ ids, names, onDone, onAssignRule }: {
   ids: string[]
   /** id → campaign name, so a refusal names the campaign rather than an opaque id. */
   names: Map<string, string>
   onDone: () => void
+  /** W2 — "+ Assign Rule": opens the shared budget-rule modal over the whole selection.
+   *  Assignment STAGES (the page's Apply bar commits), so unlike the four writing verbs this
+   *  button reports no result here — the STAGED chips and the bar are the report. */
+  onAssignRule: () => void
 }) {
   const [open, setOpen] = useState<Verb | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<BulkResult | null>(null)
+  /**
+   * W2 (fixes the U9 defect all four verbs shared) — whether THIS popover session wrote anything.
+   * `onDone` clears the page's selection, and the grid renders `selectionActions` only while the
+   * selection is non-empty — so calling it from `run()` unmounted the popover together with the
+   * "{ok} written · {n} refused" line it had just rendered. Measured on prod 2026-08-20: `.res`
+   * was null after a successful apply, and a PARTIAL success destroyed the refusal list naming
+   * the campaigns — the one thing that report exists for. The selection now clears when the
+   * popover CLOSES, not when the write lands.
+   */
+  const [wrote, setWrote] = useState(false)
 
   // Automation (the write gate)
   const [autoOn, setAutoOn] = useState(true)
@@ -92,7 +109,11 @@ export function ArBulkVerbs({ ids, names, onDone }: {
   const [minB, setMinB] = useState('')
   const [maxB, setMaxB] = useState('')
 
-  const close = () => { setOpen(null); setResult(null) }
+  const close = () => {
+    // Order matters: onDone unmounts this component, so it goes last and nothing follows it.
+    setOpen(null); setResult(null); setWrote(false)
+    if (wrote) onDone()
+  }
 
   const run = async (verb: Verb) => {
     setBusy(true)
@@ -120,9 +141,11 @@ export function ArBulkVerbs({ ids, names, onDone }: {
     setBusy(false)
     setResult({ ok, failed })
     if (ok > 0) {
-      // After the writes settle, once — the grid and every other open tab re-read.
+      // After the writes settle, once — the grid and every other open tab re-read. The
+      // selection is deliberately NOT cleared here (see `wrote` above): the popover must
+      // survive to show the result, refusals included.
       emitAdsChange('ads.guardrail.changed')
-      onDone()
+      setWrote(true)
     }
   }
 
@@ -138,9 +161,17 @@ export function ArBulkVerbs({ ids, names, onDone }: {
 
   return (
     <span className="h10-bulkrow h10-ar-bulk">
-      {(['automation', 'bidauto', 'acos', 'bounds'] as const).map((v) => (
+      {/* H10's slot for it: right after [Automation]. Rendering it first of the five would put a
+          staging verb ahead of the gate, which is not the order the study shows. */}
+      {(['automation', 'assign', 'bidauto', 'acos', 'bounds'] as const).map((v) => v === 'assign' ? (
+        /* Collapses any open popover WITHOUT the close() path — close() may clear the selection
+           (after a write), and this button is about to open a modal over that very selection. */
+        <button key="assign" type="button" className="h10-am-btn bulk" onClick={() => { setOpen(null); setResult(null); onAssignRule() }}>
+          + Assign Rule
+        </button>
+      ) : (
         <span key={v} className="h10-ar-bulkwrap">
-          <button type="button" className="h10-am-btn bulk" aria-expanded={open === v} onClick={() => { setResult(null); setOpen(open === v ? null : v) }}>
+          <button type="button" className="h10-am-btn bulk" aria-expanded={open === v} onClick={() => { if (open === v) close(); else { setResult(null); setOpen(v) } }}>
             {LABEL[v]}
           </button>
           {open === v && (

@@ -120,8 +120,29 @@ describe('a threshold stored as a flat condition', () => {
   })
 
   it('does not mistake an unrelated field for a threshold', () => {
-    const other = [{ field: 'campaign.budgetUtilization', op: 'gte', value: 90 }]
+    // W5: `campaign.budgetUtilization` graduated from this test's "unrelated" example to a real
+    // threshold field (minBudgetUtilPct), so the example moved to a field no key claims.
+    const other = [{ field: 'campaign.impressions', op: 'gte', value: 1000 }]
     for (const k of THRESHOLD_ORDER) expect(conditionIndexFor(other, k), k).toBe(-1)
+  })
+
+  it('W5 — the Budget tab pair reads its two conditions, fraction-stored', () => {
+    // Verbatim shapes from prod 2026-08-20 ("Scale budget-capped winners" / "New-to-brand optimizer").
+    const scale = [
+      { field: 'campaign.roas', op: 'gte', value: 4 },
+      { field: 'campaign.budgetUtilization', op: 'gte', value: 0.85 },
+    ]
+    expect(readThreshold(null, 'minBudgetUtilPct', scale).value).toBe(0.85)
+    expect(THRESHOLD_SPEC.minBudgetUtilPct.cell(0.85)).toBe('≥ 85% of budget')
+    const raise = [{ field: 'campaign.acos', op: 'lte', value: 0.35 }]
+    expect(readThreshold(null, 'maxBudgetAcosPct', raise).value).toBe(0.35)
+    expect(THRESHOLD_SPEC.maxBudgetAcosPct.cell(0.35)).toBe('Max 35%')
+    // A trim rule's `acos ≥` is the WRONG DIRECTION for the raise ceiling — it must stay in Criteria.
+    const trim = [{ field: 'campaign.acos', op: 'gte', value: 0.4 }]
+    expect(readThreshold(null, 'maxBudgetAcosPct', trim).value).toBeNull()
+    // Only the budget tab's OWN keys pull conditions out of the sentence.
+    expect([...columnedConditionIndexes(scale, 'budget')]).toEqual([1])
+    expect([...columnedConditionIndexes(scale, 'bid')]).toEqual([])
   })
 })
 

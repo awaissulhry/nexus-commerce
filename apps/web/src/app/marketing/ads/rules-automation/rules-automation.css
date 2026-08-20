@@ -252,10 +252,10 @@
 .h10-rb-lookback .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .h10-rb-lookback .exc { font-size: 13px; color: #5b6573; }
 /* Bid: ⓘ affordances on the THEN bid action + the Lookback label (matches the recording) */
-.h10-rb-lbl-i { display: inline-flex; color: #9aa3af; cursor: help; margin-left: 2px; }
+.h10-rb-lbl-i { display: inline-flex; color: #9aa3af; margin-left: 2px; }
 .h10-rb-lbl-i:hover { color: #6b7480; }
 .h10-rb-lookback label .h10-hc-anchor { vertical-align: middle; }
-.h10-rb-theninfo { display: inline-flex; align-items: center; color: #9aa3af; cursor: help; }
+.h10-rb-theninfo { display: inline-flex; align-items: center; color: #9aa3af; }
 .h10-rb-theninfo:hover { color: #6b7480; }
 /* Budget: Lookback relocated into the Advanced card (reuse the lbrow row) + B0 setup placeholder */
 .h10-rb-card.adv .advblock .lbrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -471,7 +471,7 @@
 .h10-sb-metric { position: relative; display: inline-flex; align-items: center; }
 .h10-sb-metric .dot { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; z-index: 2; pointer-events: none; }
 .h10-sb-metric .h10-dd-btn { padding-left: 28px; }
-.h10-sb-i { color: #9aa3af; font-size: 12px; cursor: help; }
+.h10-sb-i { color: #9aa3af; font-size: 12px; }
 .h10-sb-date { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 11px; height: 38px; background: #fff; color: #8a93a1; }
 .h10-sb-date input { border: 0; outline: 0; font: inherit; font-size: 13.5px; color: #1c2530; width: 156px; background: none; }
 .h10-sb-date.wide input { width: 188px; }
@@ -518,7 +518,7 @@
 .h10-sb-listchart { border: 1px solid #e6e9ee; border-radius: 12px; background: #fff; margin-bottom: 16px; overflow: hidden; }
 .h10-sb-listchart .hd { display: flex; align-items: center; gap: 7px; padding: 16px 18px 4px; }
 .h10-sb-listchart .hd b { font-size: 15px; font-weight: 700; color: #1c2530; }
-.h10-sb-listchart .hd .i { color: #9aa3af; display: inline-flex; cursor: help; }
+.h10-sb-listchart .hd .i { color: #9aa3af; display: inline-flex; }
 .h10-sb-listchart .bd { padding: 8px 18px 18px; }
 .h10-sb-listchart .controls { display: flex; align-items: center; margin-bottom: 14px; }
 .h10-sb-listchart .controls .grow { flex: 1; }
@@ -1240,6 +1240,8 @@
 .h10-au-nm em { font-style: normal; font-size: 10.5px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-au-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-au-badge.writes { background: #fdf0e3; color: #a34909; }
+/* W1 — provenance: predates the 2026-08-20 cutover, machine-created. Same tone as the grid chip. */
+.h10-au-badge.legacy { background: #faf3e3; color: #7a5a12; }
 .h10-au-badge.ready { background: #e7f5ed; color: #14724d; }
 .h10-au-badge.conf { background: #fdeaea; color: #a02c2c; }
 /* Appears on row hover; always focusable so the drawer is reachable from the keyboard. */
@@ -1887,7 +1889,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-fresh b { font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 /* The engine clause. Dotted underline because it carries a title that explains why the counts
    above are a reading of this hour — an affordance, not decoration. */
-.h10-plc-eng { border-bottom: 1px dotted #aab3bf; cursor: help; }
+.h10-plc-eng { border-bottom: 1px dotted #aab3bf; }
 /* 🔴 #1a61c6, not the section's #1f6fde, and only for links that sit on the PAGE ground.
    Measured on prod with composite opacity: the ground behind these bands is `.h10-shell`'s
    #f4f6f9, NOT white — `.h10-rules-page`, `.h10-main` and this <p> are all transparent. #1f6fde
@@ -1952,14 +1954,14 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* 🔴 Four different absences, four different words. A shared glyph across them is exactly the
    defect this page exists to remove — "0" and "we never looked" are not the same sentence. */
-.h10-plc-notset { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; cursor: help; }
-.h10-plc-nodel { padding: 1px 7px; border-radius: 5px; background: #fff6e8; color: #7a4512; font-size: 10.5px; font-weight: 700; cursor: help; }
-.h10-plc-nolane { padding: 1px 7px; border-radius: 5px; background: #f4f1f8; color: #4b3b78; font-size: 10.5px; font-weight: 700; cursor: help; }
-.h10-plc-nm { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; cursor: help; }
-.h10-plc-nd { color: #667080; cursor: help; }
+.h10-plc-notset { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; }
+.h10-plc-nodel { padding: 1px 7px; border-radius: 5px; background: #fff6e8; color: #7a4512; font-size: 10.5px; font-weight: 700; }
+.h10-plc-nolane { padding: 1px 7px; border-radius: 5px; background: #f4f1f8; color: #4b3b78; font-size: 10.5px; font-weight: 700; }
+.h10-plc-nm { padding: 1px 7px; border-radius: 5px; background: #f1f4f8; color: #55606d; font-size: 10.5px; font-weight: 700; }
+.h10-plc-nd { color: #667080; }
 
 .h10-plc-own { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-.h10-plc-own.none { background: #fff6e8; color: #7a4512; cursor: help; }
+.h10-plc-own.none { background: #fff6e8; color: #7a4512; }
 .h10-plc-own.schedule, .h10-plc-own.plan { background: #eaf1fd; color: #14509c; text-decoration: none; }
 .h10-plc-own.schedule:hover, .h10-plc-own.plan:hover { text-decoration: underline; }
 
@@ -2598,7 +2600,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-said { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #55606d; }
 .h10-ar-said b { font-weight: 800; color: #1c2530; }
 /* The 300-second cache floor is furniture, not a warning — it is always true, so it never shouts. */
-.h10-ar-floor { color: #667080; text-decoration: underline dotted 1px; text-underline-offset: 3px; cursor: help; }
+.h10-ar-floor { color: #667080; text-decoration: underline dotted 1px; text-underline-offset: 3px; }
 
 /* One link treatment for every button-as-link on this page, on the ground and inside the card. */
 .h10-ar-lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #1a61c6; text-decoration: underline; cursor: pointer; }
@@ -2646,7 +2648,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    external-link icon, revealed on row hover, opening in a new tab. */
 /* Why this aggregate row cannot reach everything. Always rendered where there is one — a reach
    note that is dropped is the double-counting the operator then does in their head. */
-.h10-ar-reach { flex: none; padding: 1px 6px; border-radius: 5px; background: #eef2ff; color: #414a7a; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; cursor: help; }
+.h10-ar-reach { flex: none; padding: 1px 6px; border-radius: 5px; background: #eef2ff; color: #414a7a; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 
 /* ── row state ────────────────────────────────────────────────────────────────────────────────── */
 .h10-ar-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; }
@@ -3955,10 +3957,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hva-found b { font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
 .h10-hva-found i { font-style: normal; font-size: 10px; color: #667080; }
 .h10-hva-n { font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
-.h10-hva-dash { font-size: 12.5px; color: #667080; cursor: help; }
+.h10-hva-dash { font-size: 12.5px; color: #667080; }
 .h10-hva-landed { font-size: 12.5px; font-weight: 800; color: #1c2530; font-variant-numeric: tabular-nums; }
-.h10-hva-landed.short { color: #8a5316; cursor: help; }
-.h10-hva-ref { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; cursor: help; font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 800; color: #55606d; }
+.h10-hva-landed.short { color: #8a5316; }
+.h10-hva-ref { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 800; color: #55606d; }
 .h10-hva-ref i { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
 
 .h10-hva-open { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid #e3e7ec; border-radius: 6px; background: #fff; font-size: 11px; font-weight: 700; color: #55606d; cursor: pointer; white-space: nowrap; }
@@ -4692,6 +4694,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    used against — 4.78 here, 5.31 on white, 4.81 on the page ground, 4.90 on the row hover. Darkened
    globally rather than forked: a contrast fix is an improvement to every caller, not a variant. */
 .h10-bd7-posture.off { background: #f1f3f6; color: #626c7c; }
+/* W1 — provenance chip: predates the 2026-08-20 cutover, machine-created. 5.76:1 on its ground. */
+.h10-bd7-posture.legacy { background: #faf3e3; color: #7a5a12; }
 .h10-bd7-posture.inert { background: #fdf1f0; color: #b42318; }
 .h10-bd7-posture.observe { background: #f1f3f6; color: #3f4754; }
 .h10-bd7-posture.propose { background: #eef4fd; color: #17436f; }
@@ -5021,7 +5025,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-method b { font-weight: 800; color: #1c2530; }
 
 /* The approximate marker. Amber, not red: an approximation is not an error. */
-.h10-bsp-approx { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 800; color: #8a5316; cursor: help; }
+.h10-bsp-approx { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 800; color: #8a5316; }
 
 /* ── grid cells ───────────────────────────────────────────────────────────────────────────── */
 .h10-bsp-mkt { font-size: 11.5px; font-weight: 700; color: #55606d; }
@@ -5191,13 +5195,13 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    reason onto exactly that unreachable element.
 
    These two classes carry the disabled LOOK while the element stays live, so hover shows the
-   reason, click states it in the page's banner, and focus still reaches it. `cursor: help` rather
-   than `not-allowed`: the control does respond — with an explanation rather than an action, and
-   `not-allowed` would promise the same silence the defect was made of. */
+   reason, click states it in the page's banner, and focus still reaches it. No cursor override:
+   the operator ruled the question-mark cursor out everywhere (2026-08-20) — the default cursor
+   stays, and the tooltip + click answer carry the explanation. `not-allowed` stays out too: it
+   would promise the same silence the defect was made of. */
 .h10-bktoggle.held, .h10-bktoggle.busy { opacity: .55; }
-.h10-bktoggle.held { cursor: help; }
 .h10-bktoggle.busy { cursor: progress; }
-.h10-au-notch.above { cursor: help; background: #f4f6f9; color: #5f6875; }
+.h10-au-notch.above { background: #f4f6f9; color: #5f6875; }
 .h10-au-notch.above svg { opacity: .55; }
 
 /* ── EA4 — the read-only notice at the head of the builder's content column ─────────────────────
@@ -5315,7 +5319,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-thr.default { font-weight: 500; }
 /* The em dash is a STATEMENT, not a blank — it carries the only sentence saying this rule has no
    such ceiling, so it must be legible and hoverable rather than faded to the edge of visible. */
-.h10-rg-thr.none { font-weight: 500; color: #6b7280; cursor: help; }
+.h10-rg-thr.none { font-weight: 500; color: #6b7280; }
 
 /* ── HV-R P3a: the Ad Group View's roster line ───────────────────────────────────────────────────
    States the denominator the grid cannot: 122 of 289 ad groups can source a harvest and only 51 of
@@ -5371,3 +5375,33 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
   pointer-events: auto;
   background: linear-gradient(to right, rgba(247, 250, 255, 0) 0, #f7faff 26px);
 }
+
+/* ── W4 (2026-08-20) — Budget Schedules ─────────────────────────────────────────────────────────
+   Appended at EOF on purpose (source order beats specificity — the section's own convention). */
+
+/* The blackout-ranges editor in the budget Schedule Builder's Advanced card. It reuses the
+   `.h10-sb-dates` field chrome; only the container, the sub-header and the remove button are new. */
+.h10-sb-exd { margin-top: 18px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.h10-sb-exd .hd2 { display: flex; flex-direction: column; gap: 2px; }
+.h10-sb-exd .hd2 b { font-size: 13.5px; color: #17233a; }
+.h10-sb-exd .hd2 span { font-size: 12px; color: #5f6875; }
+.h10-sb-exd .h10-sb-dates.exrow { align-items: flex-end; gap: 16px; }
+.h10-sb-exdel { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 34px; border: 0; background: none; color: #73839a; border-radius: 6px; cursor: pointer; }
+.h10-sb-exdel:hover { background: #f1f3f6; color: #a02c2c; }
+
+/* Status pill on the schedules grid — Scheduled / Active / Completed / Off. Own names rather than
+   borrowing the autonomy-mode classes: same palette, different vocabulary, and a class named after
+   a mode it does not describe is a grep trap. Contrast pairs are the audited posture pairs. */
+.h10-bd7-posture.bs-active { background: #e9f7ef; color: #116b3a; }
+.h10-bd7-posture.bs-sched { background: #eef4fd; color: #17436f; }
+.h10-bd7-posture.bs-done { background: #f1f3f6; color: #3f4754; }
+/* The schedule row's Status cell: toggle + pill side by side. */
+.h10-bs-statecell { display: inline-flex; align-items: center; gap: 8px; }
+
+/* W5 — the noise-guard quick-add row in the rule builder's criteria card. Ghost buttons on
+   purpose: they ADD conditions, they are not conditions, and must not read as chips already
+   applied. */
+.h10-rb-noise { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.h10-rb-noise .lbl { font-size: 12px; font-weight: 700; color: #5f6875; }
+.h10-rb-noise button { display: inline-flex; align-items: center; gap: 4px; border: 1px dashed #c6cedb; background: none; color: #2b5aa7; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.h10-rb-noise button:hover { background: #f2f7ff; border-color: #9db8e0; }

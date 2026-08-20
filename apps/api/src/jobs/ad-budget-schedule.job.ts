@@ -53,13 +53,25 @@ function activeWindow(windows: BSWindow[], tz: string): BSWindow | null {
   }) ?? null
 }
 
-/** Is "today" within the schedule's start/end window and outside every exclude range? */
-function dateActive(s: { startDate: Date | null; endDate: Date | null; neverExpire: boolean; excludeDates: unknown }): boolean {
-  const today = new Date(); today.setUTCHours(12, 0, 0, 0)
+/** Is "today" within the schedule's start/end window and outside every exclude range?
+ *  `now` is injectable for tests only; the cron always passes real time. */
+export function dateActive(s: { startDate: Date | null; endDate: Date | null; neverExpire: boolean; excludeDates: unknown }, now: Date = new Date()): boolean {
+  const today = new Date(now); today.setUTCHours(12, 0, 0, 0)
   if (s.startDate && today < new Date(new Date(s.startDate).setUTCHours(0, 0, 0, 0))) return false
   if (!s.neverExpire && s.endDate && today > new Date(new Date(s.endDate).setUTCHours(23, 59, 59, 0))) return false
   const ex = Array.isArray(s.excludeDates) ? s.excludeDates as Array<{ start?: string; end?: string }> : []
-  for (const r of ex) { if (r.start && r.end && today >= new Date(r.start) && today <= new Date(r.end)) return false }
+  for (const r of ex) {
+    if (!r.start || !r.end) continue
+    /**
+     * W4 — the range is INCLUSIVE of its end day. A date-only ISO string parses to UTC midnight,
+     * and `today` is pinned to UTC noon, so the bare `today <= new Date(r.end)` excluded every day
+     * of the range EXCEPT the last one — the operator's chosen end date was the one day the
+     * blackout did not cover. Same end-of-day treatment as the schedule's own endDate above.
+     */
+    const start = new Date(new Date(r.start).setUTCHours(0, 0, 0, 0))
+    const end = new Date(new Date(r.end).setUTCHours(23, 59, 59, 0))
+    if (today >= start && today <= end) return false
+  }
   return true
 }
 

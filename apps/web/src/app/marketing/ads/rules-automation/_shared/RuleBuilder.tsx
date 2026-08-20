@@ -880,6 +880,33 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       </div>
                     ))}
                     <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> AND</button>
+                    {/* W5 (2026-08-20) — Pacvue's "noise guard", as one-click AND conditions.
+                        Every rules platform in the research ships a minimum-evidence bar (min
+                        clicks / spend / impressions) so a rule cannot act on statistically thin
+                        data — one unlucky click on a €4 keyword reads as 100%+ ACoS and would be
+                        cut by any threshold rule. These are ordinary conditions once added —
+                        editable, removable — not a separate mechanism the engine has to know
+                        about. A guard whose metric this rule type does not offer, or that the
+                        group already carries, is simply not offered. */}
+                    {(() => {
+                      const opts = new Set((isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : METRICS).map((o) => o.value))
+                      const guards = [
+                        { metric: 'Clicks', value: '10', label: 'Clicks ≥ 10' },
+                        { metric: 'Spend', value: '5', label: 'Spend ≥ €5' },
+                        { metric: 'Impressions', value: '500', label: 'Impressions ≥ 500' },
+                      ].filter((gd) => opts.has(gd.metric) && !g.conditions.some((c) => c.metric === gd.metric))
+                      if (guards.length === 0) return null
+                      return (
+                        <div className="h10-rb-noise">
+                          <span className="lbl" title="A minimum-evidence bar: the rule only acts once the data is thick enough to mean something. Each button adds an ordinary AND condition you can edit or remove.">Noise guard</span>
+                          {guards.map((gd) => (
+                            <button key={gd.metric} type="button" onClick={() => setGroups((gs) => gs.map((x) => x.id === g.id ? { ...x, conditions: [...x.conditions, { metric: gd.metric, op: 'gte', value: gd.value }] } : x))}>
+                              <Plus size={11} aria-hidden /> {gd.label}
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
                     {isCampaign && (() => { const actions = isPlacement ? PLACEMENT_ACTIONS : isBidLike ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
                       <div className="cond then">
                         <span className="pill then">THEN</span>

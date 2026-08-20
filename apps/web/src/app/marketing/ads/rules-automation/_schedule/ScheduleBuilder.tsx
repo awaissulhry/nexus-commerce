@@ -122,6 +122,18 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
   const [endDate, setEndDate] = useState('')
   const [neverExpire, setNeverExpire] = useState(true)
   const [excludeDates, setExcludeDates] = useState(false)
+  /**
+   * W4 (2026-08-20) — BUDGET kind only: real blackout ranges, `[{start,end}]`.
+   *
+   * 🔴 The boolean above was the whole defect: the route sanitises `excludeDates` with
+   * `Array.isArray(...) ? ... : []`, so `true` was silently discarded, the executor's blackout
+   * branch (`ad-budget-schedule.job.ts dateActive()`) was unreachable from anything this builder
+   * could create, and the grid's two Exclude columns were permanently "—" — the exact outcome the
+   * old hard-coded null produced, one layer up. The executor and the route were ready the whole
+   * time; only the authoring was missing. Dayparting keeps its boolean untouched — its store is a
+   * different shape and this unit does not reach into it.
+   */
+  const [excludeRanges, setExcludeRanges] = useState<Array<{ id: number; start: string; end: string }>>([])
   const [creating, setCreating] = useState(false)
 
   // ── edit mode: load a saved dayparting schedule back into the builder ──
@@ -165,6 +177,13 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
         if (cp.metric1) setMetric1(cp.metric1); if (cp.metric2) setMetric2(cp.metric2); if (cp.groupBy) setGroupBy(cp.groupBy); if (cp.daysFilter) setDaysFilter(cp.daysFilter)
         if (typeof s.neverExpire === 'boolean') setNeverExpire(s.neverExpire)
         if (s.startDate) setStartDate(isoToMDY(s.startDate)); if (s.endDate) setEndDate(isoToMDY(s.endDate))
+        // W4 — restore the blackout ranges. Before this, an edit-save silently RESET them: the
+        // hydrate dropped the field and the PATCH then wrote the builder's empty default.
+        if (Array.isArray(s.excludeDates)) {
+          setExcludeRanges((s.excludeDates as Array<{ start?: string; end?: string }>)
+            .filter((r) => r?.start && r?.end)
+            .map((r) => ({ id: _wid++, start: isoToMDY(String(r.start)), end: isoToMDY(String(r.end)) })))
+        }
       } catch { /* ignore */ }
     })()
     return () => { alive = false }
@@ -264,7 +283,10 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
   const winComplete = (w: SchedWindow) => !!(w.start && w.end && w.adj) && (!adjNeedsValue(w.adj) || w.value.trim() !== '')
   const valid = name.trim().length > 0 && selCampaigns.length > 0 &&
     windows.some(winComplete) &&
-    (neverExpire || startDate.trim() !== '')
+    // W4 — budget: the Start Date is required, full stop. It is labelled with an asterisk and
+    // defaults to today, yet the old `neverExpire ||` let the DEFAULT path store `startDate: null`
+    // — "never expire" (no END) had been conflated with "no start". Dayparting keeps its rule.
+    (isDayparting ? (neverExpire || startDate.trim() !== '') : startDate.trim() !== '')
 
   const submit = useCallback(async () => {
     if (!valid || creating) return
@@ -272,10 +294,11 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
     try {
       const campaigns = selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, dailyBudget: c.dailyBudget }))
       const wins = windows.filter(winComplete).map((w) => ({ day: w.day, start: w.start, end: w.end, adj: w.adj, value: Number(w.value) || 0 }))
-      const dates = { startDate: neverExpire ? null : startDate, endDate: neverExpire ? null : (endDate || null), neverExpire, excludeDates }
       let ok = false
       if (isDayparting) {
         // Dayparting persists through the automation-rules store (trigger SCHEDULE) — starts disabled + dry-run.
+        // Its date shape (incl. the boolean excludeDates) is untouched by W4.
+        const dates = { startDate: neverExpire ? null : startDate, endDate: neverExpire ? null : (endDate || null), neverExpire, excludeDates }
         const payload = {
           name: name.trim(), trigger: 'SCHEDULE', conditions: [],
           actions: [{ type: 'dayparting-schedule', timezone, campaigns, windows: wins, chartPrefs: { metric1, metric2, groupBy, daysFilter }, ...dates }],
@@ -284,6 +307,24 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
         const r = await fetch(isEdit ? `${base}/${scheduleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         const j = await r.json().catch(() => ({})); ok = r.ok && j?.error == null
       } else {
+        /**
+         * W4 — the budget date block, rebuilt on three facts:
+         *   · `startDate` is ALWAYS sent (ISO). "Never expire" governs the END only.
+         *   · `excludeDates` is the array the route stores and the executor reads — incomplete
+         *     rows are dropped rather than sent half-empty.
+         *   · Dates go as ISO (`YYYY-MM-DD`): `new Date('MM/DD/YYYY')` parses in the machine's
+         *     LOCAL zone while ISO parses UTC, and the executor compares against UTC-noon —
+         *     one format on the wire keeps that comparison meaning one thing.
+         */
+        const mdyToIso = (v: string) => { const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : v.trim() }
+        const dates = {
+          startDate: startDate.trim() ? mdyToIso(startDate) : null,
+          endDate: neverExpire ? null : (endDate.trim() ? mdyToIso(endDate) : null),
+          neverExpire,
+          excludeDates: excludeRanges
+            .filter((r) => r.start.trim() !== '' && r.end.trim() !== '')
+            .map((r) => ({ start: mdyToIso(r.start), end: mdyToIso(r.end) })),
+        }
         const payload = { name: name.trim(), kind: 'budget', type, campaigns, windows: wins, chartPrefs: { metric1, metric2, groupBy, daysFilter }, ...dates }
         const base = `${getBackendUrl()}/api/advertising/budget-schedules`
         const r = await fetch(isEdit ? `${base}/${scheduleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -292,7 +333,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
       if (ok) router.push('/marketing/ads/rules-automation')
     } finally { setCreating(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valid, creating, name, type, isDayparting, timezone, selCampaigns, windows, metric1, metric2, groupBy, daysFilter, startDate, endDate, neverExpire, excludeDates, isEdit, scheduleId, router])
+  }, [valid, creating, name, type, isDayparting, timezone, selCampaigns, windows, metric1, metric2, groupBy, daysFilter, startDate, endDate, neverExpire, excludeDates, excludeRanges, isEdit, scheduleId, router])
 
   // render the weekly table grouped by WEEKDAYS order; the day short-label shows on the first window of each day.
   const orderedWindows = useMemo(() => {
@@ -481,8 +522,32 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                   <div className="f"><label>End Date</label>
                     <span className={`h10-sb-date ${neverExpire ? 'disabled' : ''}`}><Calendar size={15} /><input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="Enter a Date" disabled={neverExpire} aria-label="End date" /></span></div>
                   <label className="h10-sb-toggle"><button type="button" className={`h10-bktoggle ${neverExpire ? 'on' : ''}`} role="switch" aria-checked={neverExpire} aria-label="Never expire" onClick={() => setNeverExpire((v) => !v)}><span /></button> Never Expire</label>
-                  <label className="h10-sb-toggle"><button type="button" className={`h10-bktoggle ${excludeDates ? 'on' : ''}`} role="switch" aria-checked={excludeDates} aria-label="Exclude dates" onClick={() => setExcludeDates((v) => !v)}><span /></button> Exclude Dates</label>
+                  {/* W4 — dayparting keeps its boolean toggle (its store is a different shape);
+                      budget gets the REAL control, because the executor reads date ranges. */}
+                  {isDayparting && (
+                    <label className="h10-sb-toggle"><button type="button" className={`h10-bktoggle ${excludeDates ? 'on' : ''}`} role="switch" aria-checked={excludeDates} aria-label="Exclude dates" onClick={() => setExcludeDates((v) => !v)}><span /></button> Exclude Dates</label>
+                  )}
                 </div>
+                {!isDayparting && (
+                  <div className="h10-sb-exd">
+                    <div className="hd2">
+                      <b>Exclude Dates</b>
+                      <span>Blackout ranges — on these days the schedule stands down and campaigns hold their base budget.</span>
+                    </div>
+                    {excludeRanges.map((r) => (
+                      <div className="h10-sb-dates exrow" key={r.id}>
+                        <div className="f"><label>Exclude Start</label>
+                          <span className="h10-sb-date"><Calendar size={15} /><input value={r.start} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, start: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude start date" /></span></div>
+                        <div className="f"><label>Exclude End</label>
+                          <span className="h10-sb-date"><Calendar size={15} /><input value={r.end} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, end: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude end date" /></span></div>
+                        <button type="button" className="h10-sb-exdel" aria-label="Remove this exclude range" onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))}><X size={14} /></button>
+                      </div>
+                    ))}
+                    {/* `h10-rb-btn ghost` — this file's own labelled-button idiom (the ratchet
+                        counts EXCESS idioms per file; importing h10-am-btn here was +1). */}
+                    <button type="button" className="h10-rb-btn ghost" onClick={() => setExcludeRanges((rs) => [...rs, { id: _wid++, start: '', end: '' }])}><Plus size={13} /> Add exclude range</button>
+                  </div>
+                )}
               </div>
             </section>
 

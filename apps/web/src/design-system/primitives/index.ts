@@ -12,6 +12,9 @@ export { Toggle, type ToggleProps } from './Toggle'
 export { Radio, type RadioProps } from './Radio'
 export { RadioCard, type RadioCardProps } from './RadioCard'
 export { Tooltip, type TooltipProps } from './Tooltip'
+/** W6 — the portal-rendered tooltip: the only one that survives an `overflow:auto` container.
+ *  Prefer it over `Tooltip`/`HoverCard` anywhere near a scrolling pane. */
+export { InfoTip } from './InfoTip'
 export { Spinner, type SpinnerProps } from './Spinner'
 export { Skeleton, type SkeletonProps } from './Skeleton'
 export { Kbd, type KbdProps } from './Kbd'

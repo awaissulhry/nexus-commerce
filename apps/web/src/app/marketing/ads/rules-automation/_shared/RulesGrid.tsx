@@ -82,7 +82,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
+import { isLegacyRule } from '@nexus/shared/ads-rule-legacy'
 import { ruleLookback, ACTION_WINDOW, HARVEST_DEFAULTS, type RuleLookback } from '@nexus/shared/ads-rule-window'
 import {
   RULE_TAB_THRESHOLDS, THRESHOLD_SPEC, readThreshold, readThresholds, thresholdClauses, defaultClauses, eur,
@@ -132,6 +133,9 @@ interface RuleRow {
   freqTime: string
   /** B2 — the window this rule actually reads, derived; see `@nexus/shared/ads-rule-window`. */
   look: RuleLookback
+  /** W1 — created before the 2026-08-20 cutover, i.e. not authored by the operator. A label,
+   *  never a behaviour: see `@nexus/shared/ads-rule-legacy`. */
+  legacy: boolean
 }
 
 /**
@@ -476,6 +480,7 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
      * Measured on prod 2026-08-20, 1 of 5 rows. The fix is the map entry, not this call site.
      */
     look: ruleLookback(String(rule.trigger ?? ''), orderedActionTypes(rule, tabKey), tunableWindowDays(rule, tabKey)),
+    legacy: isLegacyRule(rule as { createdAt?: string | null }),
   }
 }
 
@@ -546,6 +551,25 @@ const ENGINE_OFF_LEVEL = 'PROPOSE'
 const LEVEL_WORD: Record<string, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
 
 type BulkKind = 'automation' | 'delete'
+
+/**
+ * W1 — the one filter every rule tab shares. "Legacy" = created before the 2026-08-20 cutover
+ * (seeded or machine-created; none authored by the operator) — see `@nexus/shared/ads-rule-legacy`.
+ * A single collapsed select rather than a filter bar: the H10 shape these tabs follow has no
+ * filter chrome, so the panel stays shut until asked for.
+ */
+const PROVENANCE_FILTERS: GridFilter[] = [{
+  key: 'provenance',
+  label: 'Provenance',
+  kind: 'select',
+  placeholder: 'All rules',
+  options: [
+    { value: 'legacy', label: 'Legacy', title: 'Created before 2026-08-20 — seeded or machine-created, not by you' },
+    { value: 'current', label: 'Created by you', title: 'Created on or after 2026-08-20' },
+  ],
+  value: (row: unknown) => ((row as RuleRow).legacy ? 'legacy' : 'current'),
+  tip: 'Every rule that predates 2026-08-20 was machine-created. The label changes nothing about how a rule runs.',
+}]
 
 /** B4 — one rule's real output, from `GET /advertising/automation-rules/activity`. */
 export interface RuleActivity {
@@ -1131,6 +1155,12 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         {!r.enabled && (
           <span className="h10-bd7-posture off" title="This rule is disabled — it is never evaluated, whatever its Automation mode says. Enable it on the Automations page.">off</span>
         )}
+        {/* W1 — provenance, not behaviour: every rule that predates 2026-08-20 was machine-created
+            (template seeder or an earlier build session), none by the operator. The chip marks
+            them for triage; it changes nothing about how the rule runs. */}
+        {r.legacy && (
+          <span className="h10-bd7-posture legacy" title="Legacy — this rule predates 2026-08-20 and was not created by you (seeded or machine-created). It runs exactly as configured; the label is for triage only.">legacy</span>
+        )}
         <span className="h10-nt-acts">
           <a className="h10-nt-open" href={href} onClick={overlay}><ExternalLink size={11} /> Open</a>
           <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
@@ -1185,6 +1215,8 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         searchable
         searchPlaceholder="Search rules…"
         searchValue={(r) => r.name}
+        filters={PROVENANCE_FILTERS}
+        filtersDefaultOpen={false}
         pagerCentered
         defaultSort={{ key: '__first', dir: 'asc' }}
         emptyNode={emptyNode}

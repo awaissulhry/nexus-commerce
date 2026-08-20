@@ -73,6 +73,10 @@ export interface DetailRule {
   marketplace: string | null
   categoryLabel: string
   categoryColor: string
+  /** W1 — predates the 2026-08-20 cutover ⇒ machine-created, not by the operator. A label,
+   *  never a behaviour. Optional: an API build older than W1 omits it, and absence must render
+   *  as nothing rather than as either state. */
+  legacy?: boolean | null
 }
 
 const eur = (c: number | null) => (c == null ? null : `€${(c / 100).toFixed(2)}`)

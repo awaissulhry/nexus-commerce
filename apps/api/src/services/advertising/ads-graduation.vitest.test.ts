@@ -96,10 +96,24 @@ describe('isLevelAllowed', () => {
 describe('builder-slug expansion', () => {
   const g = (types: string[], prot = true) => graduationCeiling({ actionTypes: types, hasKeywordProtections: prot })
 
-  it('a bid/budget/placement/sov/keyword-tracker slug reaches AUTO like its *_apply action', () => {
-    for (const slug of ['bid', 'budget', 'placement', 'sov', 'keyword-tracker']) {
+  it('a budget/placement/sov/keyword-tracker slug reaches AUTO like its *_apply action', () => {
+    for (const slug of ['budget', 'placement', 'sov', 'keyword-tracker']) {
       expect(g([slug]).maxLevel, slug).toBe('AUTO')
     }
+  })
+
+  /**
+   * C2 (2026-08-20, `876a0562a`) — the bid slug now expands to `pause_target`/`enable_target`
+   * as well as `bid_apply`, because the builder's THEN list gained Pause/Unpause Target. Pausing
+   * a target is STRUCTURAL by the ceiling's own policy (the hardest thing in an account to
+   * notice later), so the slug's ceiling correctly dropped AUTO → PROPOSE — the commit is even
+   * titled "…the ceiling reason that no longer contradicts it". This test asserted the pre-C2
+   * AUTO for a day; it now pins the intended behaviour instead.
+   */
+  it('the bid slug caps at PROPOSE since C2 — its expansion carries pause_target, which is structural', () => {
+    const r = g(['bid'])
+    expect(r.maxLevel).toBe('PROPOSE')
+    expect(r.blockedBy).toContain('pause_target')
   })
 
   it('a negation slug is recognised as the negation family, whitelist gate and all', () => {
