@@ -86,9 +86,9 @@ import {
 } from './slot-contract'
 import { ApplyRulesSections } from './ApplyRulesSections'
 import { ArBulkVerbs } from './ArBulkVerbs'
-import { BidRuleCell, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
+import { BidRuleCell, BidAlgoMenu, bidAlgoLabel, TargetAcosCell, MinMaxBidCell, BidAutomationCell, BudgetRuleCell } from '../../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../../_shared/RuleColumnEditors'
-import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal } from '../../_shared/CampaignRowCells'
+import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell } from '../../_shared/CampaignRowCells'
 import { useAdsSync, emitAdsChange } from '../_shared/adsBus'
 
 const DEFAULT_MARKET = 'all'
@@ -193,6 +193,10 @@ export function ApplyRulesClient() {
   const [autoBusy, setAutoBusy] = useState<Set<string>>(new Set())
   /** A refused bid-automation write, named. Cleared after six seconds. */
   const [autoErr, setAutoErr] = useState<string | null>(null)
+  /** C1 — the open bid-algorithm menu, anchored under its cell exactly as the Ad Manager anchors it. */
+  const [algoMenu, setAlgoMenu] = useState<{ row: CampaignRow; x: number; y: number } | null>(null)
+  /** C1 — algorithm picks not yet readable back through the 300s campaigns cache. As `autoOverride`. */
+  const [algoOverride, setAlgoOverride] = useState<Map<string, string>>(new Map())
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -278,6 +282,28 @@ export function ApplyRulesClient() {
       window.setTimeout(() => setAutoErr(null), 6000)
     } finally {
       setAutoBusy((b) => { const n = new Set(b); n.delete(row.id); return n })
+    }
+  }, [])
+
+  /**
+   * C1 — the bid algorithm, written to the same field and route the Ad Manager writes.
+   * Optimistic for the same reason `setBidAutomation` is: the campaigns payload is cached 300s.
+   */
+  const setBidAlgorithm = useCallback(async (row: CampaignRow, value: string) => {
+    setAlgoMenu(null)
+    setAlgoOverride((m) => new Map(m).set(row.id, value))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${row.id}/automation`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bidAlgorithm: value }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(String(j?.error ?? `HTTP ${r.status}`))
+      emitAdsChange('ads.guardrail.changed')
+    } catch (e) {
+      setAlgoOverride((m) => { const n = new Map(m); n.delete(row.id); return n })
+      setAutoErr(`${row.name}: ${(e as Error).message}`)
+      window.setTimeout(() => setAutoErr(null), 6000)
     }
   }, [])
 
@@ -431,8 +457,9 @@ export function ApplyRulesClient() {
         // 🔴 EUROS → cents, exactly once and only here. See `types.ts`.
         dailyBudgetCents: Math.round((Number(c.dailyBudget) || 0) * 100),
         biddingStrategy: c.biddingStrategy ?? null,
-        // U13 — an unread-back write wins over the cached payload; see `autoOverride`.
+        // U13 / C1 — an unread-back write wins over the cached payload; see `autoOverride`.
         bidAutomation: autoOverride.has(c.id) ? !!autoOverride.get(c.id) : (c.bidAutomation ?? null),
+        bidAlgorithm: algoOverride.get(c.id) ?? c.bidAlgorithm ?? null,
         portfolioId: c.portfolioId ?? null,
         portfolioName: g?.portfolioName ?? null,
         lineIds: linesOf.get(c.id) ?? [],
@@ -445,10 +472,10 @@ export function ApplyRulesClient() {
         suppressedBy: g?.suppressedBy ?? null,
         authorityMissing: !g,
         targetAcosPct: g?.targetAcosPct ?? null,
-        boundRules: Array.isArray(g?.boundRules) ? g.boundRules.length : 0,
+        boundRules: Array.isArray(g?.boundRules) ? g.boundRules.map((b) => String(b?.name ?? '')).filter(Boolean) : [],
       }
     })
-  }, [campaigns, guardrails, options, autoOverride])
+  }, [campaigns, guardrails, options, autoOverride, algoOverride])
 
   const portfolioNames = useMemo(() => {
     const m = new Map<string, string>()
@@ -744,11 +771,24 @@ export function ApplyRulesClient() {
       key: 'bidRule',
       label: 'Bid Rule',
       metric: false,
-      tip: 'Who owns this campaign\'s bids — a rank plan or schedule, a rule, or nobody. Read from the bid grid\'s own `bidder`, which really varies (measured 2026-08-19: 32 held by a schedule, 6 manual, 45 owned by nothing). H10 shows its bid ALGORITHM here; we have no per-campaign algorithm field, and the bid owner is the same question answered with a field that exists.',
-      sortValue: (r) => bidOwners?.get(r.id)?.bidderName ?? '',
+      tip: 'Two facts, one cell — the SAME cell the Ad Manager renders. Left: the bid algorithm (H10\'s Adtomic picker), stored in `dynamicBidding.bidAlgorithm`; Amazon has no such field, so it reaches our database and no further. Right: who actually owns this campaign\'s bids, from the bid grid\'s `bidder` — measured 2026-08-20: 32 held by a schedule, 6 manual, 45 owned by nothing, 137 not covered by that grid at all.',
+      sortValue: (r) => `${bidAlgoLabel(r.bidAlgorithm)} ${bidOwners?.get(r.id)?.bidderName ?? ''}`,
       // 🔴 U14 — `known` is false for the 137 campaigns the bid grid does not cover, and while the
       // fetch is still out. Both are "we have not been told", which is not "nobody owns them".
-      render: (r) => { const o = bidOwners?.get(r.id); return <BidRuleCell bidder={o?.bidder} bidderName={o?.bidderName} known={!!bidOwners?.has(r.id)} /> },
+      // C1 — the pencil is the Ad Manager's, opening the Ad Manager's menu, writing the Ad
+      // Manager's field. A column shared for reading and forked for writing is still two columns.
+      render: (r) => {
+        const o = bidOwners?.get(r.id)
+        return (
+          <span className="h10-edcell">
+            <BidRuleCell algorithm={r.bidAlgorithm} bidder={o?.bidder} bidderName={o?.bidderName} known={!!bidOwners?.has(r.id)} />
+            <button type="button" className="h10-editpen" title={`Set the bid algorithm for ${r.name}`} aria-label={`Set the bid algorithm for ${r.name}`}
+              onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAlgoMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
+              <Pencil size={11} aria-hidden />
+            </button>
+          </span>
+        )
+      },
     },
     {
       key: 'tacos',
@@ -771,7 +811,9 @@ export function ApplyRulesClient() {
     },
     {
       key: 'bounds',
-      label: 'Min · Max bid',
+      // C2 — the Ad Manager's spelling. Two labels for one field is two columns as far as an
+      // operator scanning both pages is concerned.
+      label: 'Min/Max Bid',
       metric: false,
       tip: 'The band the write gate enforces on this campaign\'s bids — DENIED at the gate, never clamped. "None" is not a band of zero: nothing bounds this campaign\'s bids but the €0.02 suppression floor. The pencil edits both ends; measured 2026-08-12, minBidCents was set on 0 of 220 — this is its first UI.',
       sortValue: (r) => r.maxBidCents ?? -1,
@@ -807,21 +849,29 @@ export function ApplyRulesClient() {
     // ── AR.S1 — this page's own governance columns ────────────────────────────────────────────
     {
       key: 'managed',
-      label: 'Automations',
+      // C2 — "Automation", singular, because that is what the Ad Manager's column carrying the
+      // identical fact is called. One name, one cell, two pages.
+      label: 'Automation',
       metric: false,
       tip: 'The write gate\'s verdict, which is the most useful sentence on this grid: MANAGED means armed automation can write to this campaign; OFF-LIMITS means rules still match it and every write is refused at campaign_allowlist. Resuming a paused campaign does NOT re-open the gate.',
       sortValue: (r) => (r.managed ? 1 : 0),
-      render: (r) => {
-        if (r.authorityMissing) return <span className="h10-ar-nd" title="The guardrail grid returned no row for this campaign — authority unknown, not open">unknown</span>
-        const nAcct = totals?.accountWideRules ?? 0
-        return r.managed
-          ? <span className="h10-ar-pill mg-on" title={`The gate is OPEN: the ${nAcct} account-wide rules (count includes market-scoped ones — the payload's own caveat) plus ${r.boundRules} bound to this campaign can write here, inside their caps.`}>Managed{r.boundRules > 0 ? ` · ${r.boundRules} bound` : ''}</span>
-          : <span className="h10-ar-pill mg-off" title={`The gate is SHUT: the same ${nAcct} account-wide rules match this campaign and every write is refused at campaign_allowlist. A refusal is the gate working, not a failure.`}>Off-limits</span>
-      },
+      // C2 — the Ad Manager's cell, not a second one shaped like it. The `h10-ar-pill mg-on/mg-off`
+      // pills this replaced said the same thing in different pixels; the pins and the suppression
+      // arrow are facts this page held in its row all along and never painted.
+      render: (r) => (
+        <AutomationCell
+          managed={r.managed} missing={r.authorityMissing} pins={r.pins}
+          boundRuleNames={r.boundRules}
+          accountWideRules={totals?.accountWideRules ?? 0}
+          suppressedAt={r.suppressedAt} suppressedBy={r.suppressedBy}
+          minCents={r.minBidCents} maxCents={r.maxBidCents}
+        />
+      ),
     },
     {
       key: 'strategy',
-      label: 'Bidding strategy',
+      // C2 — Title Case, matching the Ad Manager's column carrying the identical field.
+      label: 'Bidding Strategy',
       metric: false,
       tip: 'Amazon\'s campaign bidding strategy — a real, varying field (the column it replaces read a key the payload never contained and printed a constant). Up & down lets Amazon add up to +100% on top of placement multipliers. The pencil opens the same three-strategy dialog the Ad Manager uses.',
       sortValue: (r) => r.biddingStrategy ?? '',
@@ -1195,6 +1245,14 @@ export function ApplyRulesClient() {
           error={stratErr}
           onClose={() => setStratFor(null)}
           onConfirm={(v) => void writeCampaign(stratFor, { biddingStrategy: v }, 'bidding strategy')}
+        />
+      )}
+      {algoMenu && (
+        <BidAlgoMenu
+          current={algoMenu.row.bidAlgorithm}
+          anchor={{ x: algoMenu.x, y: algoMenu.y }}
+          onPick={(v) => void setBidAlgorithm(algoMenu.row, v)}
+          onClose={() => setAlgoMenu(null)}
         />
       )}
       {editPop && editPop.kind === 'bounds' && (

@@ -28,7 +28,7 @@ import { num } from '../../_grid/format'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { PlacementBidMultiplier } from '../../../_shared/PlacementBidMultiplier'
 
-interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }> }
+interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string }
 type StratUI = 'DOWN' | 'UPDOWN' | 'FIXED'
 const STRAT_TO_UI: Record<string, StratUI> = { LEGACY_FOR_SALES: 'DOWN', AUTO_FOR_SALES: 'UPDOWN', MANUAL: 'FIXED' }
 const UI_TO_STRAT: Record<StratUI, string> = { DOWN: 'LEGACY_FOR_SALES', UPDOWN: 'AUTO_FOR_SALES', FIXED: 'MANUAL' }
@@ -112,7 +112,13 @@ function buildInitial(c: CampaignDetailData | null): FormState {
     ros: pbValue(dyn, 'PLACEMENT_REST_OF_SEARCH'),
     sites: 'BEYOND',
     videoBoost: false, abBoost: false, abBoostPct: '', audienceMod: false,
-    algo: tAcos != null ? 'TARGET_ACOS' : 'NONE',
+    /**
+     * 🔴 C4 — reads the REAL field now. It used to infer the algorithm from whether a target ACoS
+     * happened to be set, which is why saving this form wrote `bidAutomation` (see `save`): the
+     * two were entangled because neither had a store of its own. `dynamicBidding.bidAlgorithm`
+     * has been that store since C1, and it is what both grids' Bid Rule column reads.
+     */
+    algo: dyn?.bidAlgorithm ?? (tAcos != null ? 'TARGET_ACOS' : 'NONE'),
     targetAcos: tAcos != null ? String(Math.round(num(tAcos) * 100)) : '',
     minmaxOn: true, minBid: '', maxBid: '',
   }
@@ -165,7 +171,18 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
     }
     if (form.algo !== baseline.algo || form.targetAcos !== baseline.targetAcos) {
       const isAcos = form.algo === 'TARGET_ACOS'
-      calls.push(patch('/automation', { bidAutomation: isAcos, targetAcos: isAcos && form.targetAcos !== '' ? Number(form.targetAcos) / 100 : null }))
+      /**
+       * 🔴 C4 — this used to send `bidAutomation: isAcos`, so choosing the Target ACoS algorithm
+       * here — or merely editing the target percentage — silently switched **Bid Automation** on,
+       * a field both grids present as an independent operator switch with its own toggle and its
+       * own bulk verb. One control, two meanings, depending on which page you were standing on.
+       * The algorithm now writes `bidAlgorithm`, which is its own field, and `bidAutomation` is
+       * left alone here: nothing but the switch itself should ever move it.
+       */
+      calls.push(patch('/automation', {
+        bidAlgorithm: isAcos ? 'TARGET_ACOS' : null,
+        targetAcos: isAcos && form.targetAcos !== '' ? Number(form.targetAcos) / 100 : null,
+      }))
     }
     const results = calls.length ? await Promise.all(calls) : []
     setSaving(false)

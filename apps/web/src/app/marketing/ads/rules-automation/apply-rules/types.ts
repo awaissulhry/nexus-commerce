@@ -50,6 +50,13 @@ export interface RawCampaign {
   targetAcos?: number | null
   /** U11 — H10's "Bid Automation" column reads this. Real field; false on all 220 today. */
   bidAutomation?: boolean | null
+  /**
+   * C1 — H10's Adtomic bid-ALGORITHM picker, stored in `dynamicBidding.bidAlgorithm`. Amazon
+   * exposes no per-campaign algorithm field, so this is ours and reaches no further than our
+   * database. Null = nobody has chosen; the shared cell names the fallback rather than the
+   * payload asserting one.
+   */
+  bidAlgorithm?: string | null
   lastSyncedAt?: string | null
 }
 
@@ -76,7 +83,7 @@ export interface RawGuardrailRow {
   pinNote?: string | null
   pinnedBy?: string | null
   pinnedAt?: string | null
-  boundRules?: unknown[] | null
+  boundRules?: Array<{ id?: string; name?: string }> | null
 }
 
 export interface GuardrailPayload {
@@ -126,6 +133,7 @@ export interface CampaignRow {
   dailyBudgetCents: number
   biddingStrategy: string | null
   bidAutomation: boolean | null
+  bidAlgorithm: string | null
   portfolioId: string | null
   portfolioName: string | null
   /** every product line this campaign advertises — a campaign can be in more than one */
@@ -148,7 +156,11 @@ export interface CampaignRow {
    */
   targetAcosPct: number | null
   /** how many rules are BOUND to this campaign (scope pinned to it) — 0 almost everywhere */
-  boundRules: number
+  /**
+   * C2 — the NAMES, not a count. The shared `AutomationCell` lists them in its tooltip ("Bound
+   * rules: …"), which a number cannot do; the count is `.length` where a count is wanted.
+   */
+  boundRules: string[]
 }
 
 /**

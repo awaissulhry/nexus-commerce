@@ -3262,6 +3262,22 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rc-bidrule.auto { color: #10457f; }
 .h10-rc-bidrule .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rc-reach { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #7c8595; white-space: nowrap; }
+/* C1 — the merged Bid Rule cell: <algorithm> · <owner>, one line, on both grids.
+   🔴 `max-width: 100%` and never a px cap: a rank plan's name carries the whole ASIN title and has
+   measured 1,227px, and a px cap wider than the cell licenses an overflow over the next column. */
+.h10-rc-bidrule2 { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; }
+.h10-rc-bidrule2 .algo { flex: 0 0 auto; }
+.h10-rc-bidrule2 > .h10-rc-owner,
+.h10-rc-bidrule2 > .h10-rc-unknown { min-width: 0; }
+/* The separator is drawn, not typed, so it cannot be selected or read out as content. */
+.h10-rc-bidrule2 > :nth-child(2)::before { content: ''; display: inline-block; width: 1px; height: 11px; margin-right: 6px; background: #d4d9e0; vertical-align: -1px; }
+.h10-rc-owner { display: inline-flex; align-items: center; gap: 4px; min-width: 0; font-size: 12px; color: #6b7383; }
+.h10-rc-owner .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-rc-owner.auto { color: #10457f; font-weight: 600; }
+/* "no owner" is a real reading, so it is muted but not italic — italic is reserved for `unknown`,
+   which is an ABSENCE of data. It deliberately does NOT get its own lighter colour: the obvious
+   pick (#8a93a1, what `.h10-rc-none` uses) measures 3.10:1 on white and fails AA for body text.
+   The Minus icon and the word carry the difference instead, at the shared 4.77:1. */
 /* The Bid Automation switch is READ-ONLY in these grids — H10 shows state here and edits it in the
    selection toolbar — so it is a span, not a button, and takes no pointer affordance. */
 .h10-rc-toggle { display: inline-flex; align-items: center; width: 34px; height: 18px; padding: 2px; border-radius: 999px; background: #d8dde4; transition: background .12s; }

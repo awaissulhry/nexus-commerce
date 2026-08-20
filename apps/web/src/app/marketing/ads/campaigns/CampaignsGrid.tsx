@@ -9,10 +9,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Shuffle, Bot } from 'lucide-react'
-import { TargetAcosCell, MinMaxBidCell, BidAutomationCell } from '../_shared/RuleColumnCells'
+import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
+import { TargetAcosCell, MinMaxBidCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
-import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
+import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -644,21 +644,15 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
   )
 }
 
-// P3 — bid algorithms (the "Bid Rule" cell dropdown). UI-only until Amazon exposes a per-campaign
-// bid-algorithm field; selection updates local state.
+// C1 (2026-08-20) — the bid-algorithm list, the label helper, the cell AND the menu all moved to
+// `_shared/RuleColumnCells.tsx`, because Apply Rules shows this column too and the two pages were
+// showing different things under one name. `BID_ALGOS` is imported above purely for the bulk-action
+// modal's dropdown and the toast; the cell and the menu are the shared components.
 //
-// ⛔ **KEEP. Do not delete this, the column, or the menu below.** It prints "Target ACOS" on every
-// row because the payload carries no `bidAlgorithm`, which reads like a decorative column and is
-// exactly the shape this programme has been removing everywhere else. It is the exception:
-// operator decision 2026-08-19 — *"whatever is missing, like the algorithm picker, I'll work on
-// them later, so we must not make any changes or remove it from the view."* The constant is a
-// placeholder for planned work, and the toast already tells the operator it is local.
-const BID_ALGOS: Array<{ value: string; label: string; desc: string }> = [
-  { value: 'TARGET_ACOS', label: 'Target ACOS', desc: 'A bid algorithm for products in a performance stage that should target an ACoS for scalable advertising.' },
-  { value: 'MAX_IMPRESSIONS', label: 'Max Impressions', desc: 'A bid algorithm for products in a launch stage that need to get as many impressions as possible.' },
-  { value: 'MAX_ORDERS', label: 'Max Orders', desc: 'A bid algorithm for products in a liquidate stage that should target maximum orders to clear out inventory.' },
-]
-const bidAlgoLabel = (c: Camp): string => BID_ALGOS.find((a) => a.value === (c.bidAlgorithm ?? 'TARGET_ACOS'))?.label ?? 'Target ACOS'
+// ⛔ **KEEP.** Operator decision 2026-08-19 — *"whatever is missing, like the algorithm picker,
+// I'll work on them later, so we must not make any changes or remove it from the view."* It is a
+// placeholder for planned work. C1 did not remove it; it gave it a real store
+// (`dynamicBidding.bidAlgorithm`) so the choice survives a reload and both grids read the same one.
 
 // P3 — H10 "Campaign Rules for …" modal. Per-campaign rules aren't exposed yet,
 // so it lists none and routes "Add Rule" to the Rules & Automation builder.
@@ -782,6 +776,29 @@ export function CampaignsGrid() {
     } catch { /* advisory — never block the grid on it */ }
   }, [])
   useEffect(() => { void loadAuthority() }, [loadAuthority])
+
+  /**
+   * C1 — who owns each campaign's bids, for the shared Bid Rule cell's second half. The same read
+   * Apply Rules does, so the two cells cannot show different owners.
+   *
+   * 🔴 `null` until it lands, and it stays absent for the campaigns the source does not cover:
+   * `bid-grid?view=campaigns` returns ENABLED-with-targets only — 83 rows against 220 on
+   * 2026-08-20 — so 137 campaigns are `known: false`, which the cell renders as `unknown` rather
+   * than asserting that nobody owns their bids.
+   */
+  const [bidOwners, setBidOwners] = useState<Map<string, { bidder: string | null; bidderName: string | null }> | null>(null)
+  useEffect(() => {
+    let alive = true
+    void fetch(`${getBackendUrl()}/api/advertising/bid-grid?view=campaigns&market=all`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive || !j) return
+        setBidOwners(new Map((j.rows ?? []).map((r: { id: string; bidder?: string; bidderName?: string }) =>
+          [String(r.id), { bidder: r.bidder ?? null, bidderName: r.bidderName ?? null }])))
+      })
+      .catch(() => { /* advisory: the owner half reads "unknown"; the column still shows the algorithm */ })
+    return () => { alive = false }
+  }, [])
 
   const load = useCallback(async (opts?: { sync?: boolean; range?: { start: Date; end: Date } }) => {
     if (opts?.sync) setSyncing(true)
@@ -1076,11 +1093,25 @@ export function CampaignsGrid() {
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, placements: pl } : x)))
     toast(ok ? `Bid multiplier updated · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
   }
-  // Bid algorithm + Min/Max bid have no Amazon field yet — update locally only.
-  const setCampaignBidAlgo = (c: Camp, bidAlgorithm: string) => {
+  /**
+   * C1 — the bid algorithm PERSISTS now, in `dynamicBidding.bidAlgorithm` through the same
+   * `/automation` route Target ACoS and Bid Automation use. It was React state and nothing else:
+   * the choice died on reload, and Apply Rules — which shows the same column — could never see it.
+   * Sharing the cell without sharing the store would have guaranteed the two pages disagreed the
+   * first time anyone used the picker.
+   *
+   * ⚠️ Still local in the sense that matters: Amazon has no per-campaign bid-algorithm field, so
+   * this reaches our database and no further. The toast says so rather than implying a push.
+   */
+  const setCampaignBidAlgo = async (c: Camp, bidAlgorithm: string) => {
     setBidRuleMenu(null)
+    const prev = c.bidAlgorithm ?? null
     setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAlgorithm } : x)))
-    toast(`Bid algorithm → ${BID_ALGOS.find((a) => a.value === bidAlgorithm)?.label ?? bidAlgorithm} · ${c.name} (local — Amazon field pending)`)
+    const ok = await patchJson(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/automation`, { bidAlgorithm })
+    if (!ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, bidAlgorithm: prev } : x)))
+    toast(ok
+      ? `Bid algorithm → ${BID_ALGOS.find((a) => a.value === bidAlgorithm)?.label ?? bidAlgorithm} · ${c.name} (stored locally — Amazon has no such field)`
+      : `Failed · ${c.name} — bid algorithm unchanged`)
   }
   /**
    * ADX G2 — persists to Campaign.minBidCents / maxBidCents, which ads-write-gate.ts
@@ -1130,7 +1161,16 @@ export function CampaignsGrid() {
     if (ok) setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, dailyBudget: String(v) } : x)))
     toast(ok ? `Daily budget → ${eur(v)} · ${c.name}` : `Failed (write-gate / non-live / not deployed) · ${c.name}`)
   }
-  const effStrat = (c: Camp) => edits[c.id]?.biddingStrategy ?? c.biddingStrategy ?? 'LEGACY_FOR_SALES'
+  /**
+   * 🔴 C4 — the trailing `?? 'LEGACY_FOR_SALES'` is gone. It made a campaign with NO bidding
+   * strategy read a confident **"Down only"** here, while Apply Rules — passing the same field
+   * straight through — showed the absence. Same class as the fabricated 30% target ACoS removed
+   * in U11c: a fallback presented as a setting.
+   * ⚠️ Latent, not observed: 0 of 220 campaigns carry a null strategy today, so nothing on screen
+   * changes. It is fixed because it is wrong, not because it was showing.
+   * The staged-edit lookup stays first — an unsaved edit is what the operator is looking at.
+   */
+  const effStrat = (c: Camp) => edits[c.id]?.biddingStrategy ?? c.biddingStrategy ?? null
   const effBudget = (c: Camp) => edits[c.id]?.dailyBudget ?? (c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : '')
 
   // per-campaign diff vs original (drives the footer + Apply confirmation)
@@ -1227,7 +1267,8 @@ export function CampaignsGrid() {
       <span className="h10-edcell">{display}<button type="button" className="h10-editpen" aria-label="Edit" onClick={(ev) => setEditPop({ id: c.id, kind, anchor: anchorFromEvent(ev) })}><Pencil size={11} /></button></span>
     )
     switch (key) {
-      case 'bidRule': return <span className="h10-edcell"><span className="h10-bidrule"><Shuffle size={13} /> {bidAlgoLabel(c)}</span><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
+      // C1 — the shared cell: <algorithm> · <owner>, identical to Apply Rules' by construction.
+      case 'bidRule': return <span className="h10-edcell"><BidRuleCell algorithm={c.bidAlgorithm} bidder={bidOwners?.get(c.id)?.bidder} bidderName={bidOwners?.get(c.id)?.bidderName} known={!!bidOwners?.has(c.id)} /><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
       // U11 — the DISPLAY halves now come from `_shared/RuleColumnCells.tsx`, the same cells Apply
       // Rules renders, so the two grids cannot drift apart visually. The edit pencils and their
       // popovers stay exactly as they were; only what the cell paints is shared.
@@ -1267,43 +1308,52 @@ export function CampaignsGrid() {
        * Measured 2026-08-05, all 22 enabled advertising rules are account-wide, so folding
        * them in would print "22" on all 216 rows and say nothing about any of them.
        */
+      // C2 — the shared cell. Was 30 lines of tooltip assembly here and a differently-shaped pill
+      // on Apply Rules; one component now, so the two columns cannot drift.
       case 'automation': {
         const a = authority?.byId?.[c.id]
-        if (!a) return <span className="h10-auto-cell"><span className="h10-pill">—</span></span>
-        const pins = ([['placement', 'Plc'], ['bids', 'Bid'], ['budget', 'Bgt']] as const)
-          .filter(([k]) => a.pins[k])
-        const bound = a.boundRules.length
-        const tip = [
-          a.managed
-            ? 'Managed: automation may write to this campaign.'
-            : 'Not managed: every automated write here is refused at the gate (default-deny). Re-enabling a paused campaign does not re-allowlist it.',
-          pins.length
-            ? `Hands off: ${pins.map(([, s]) => s).join(', ')}${a.pinnedBy ? ` — pinned by ${a.pinnedBy}` : ''}${a.pinNote ? ` (${a.pinNote})` : ''}`
-            : 'No dimension is pinned.',
-          bound ? `Bound rules: ${a.boundRules.map((r) => r.name).join(', ')}` : 'No rule is bound to this campaign.',
-          authority?.accountWideRules
-            ? `${authority.accountWideRules} enabled rule(s) govern every campaign because nothing narrows them.`
-            : '',
-          a.suppressedAt ? `Bids suppressed by ${a.suppressedBy?.replace('automation:', '') ?? 'an unknown owner'}.` : '',
-          a.minBidCents != null || a.maxBidCents != null
-            ? `Bid bounds: ${a.minBidCents != null ? eur(a.minBidCents / 100) : '—'} – ${a.maxBidCents != null ? eur(a.maxBidCents / 100) : '—'}`
-            : 'No bid bounds set.',
-        ].filter(Boolean).join('\n')
         return (
-          <span className="h10-auto-cell" title={tip}>
-            {/* Own class rather than `h10-pill bad`: that modifier is used by the delivery
-                column but has never been defined in ads.css, so it renders uncoloured.
-                Defining it here would silently restyle a column this change is not about. */}
-            <span className={`h10-auto-state ${a.managed ? 'on' : 'off'}`}>{a.managed ? 'Managed' : 'Off-limits'}</span>
-            {pins.map(([k, s]) => <span key={k} className="h10-auto-pin">{s}</span>)}
-            {bound > 0 && <span className="h10-auto-rules">{bound}</span>}
-            {a.suppressedAt && <span className="h10-auto-sup" aria-label="bids suppressed">↓</span>}
-          </span>
+          <AutomationCell
+            managed={a?.managed} missing={!a} pins={a?.pins}
+            boundRuleNames={(a?.boundRules ?? []).map((r) => r.name)}
+            accountWideRules={authority?.accountWideRules}
+            suppressedAt={a?.suppressedAt} suppressedBy={a?.suppressedBy}
+            minCents={a?.minBidCents} maxCents={a?.maxBidCents}
+          />
         )
       }
       case 'status': return <StatusCell status={c.status} name={c.name} onChange={(next) => void setCampaignStatus(c, next)} />
-      case 'minMaxBudget': return ed(c.minMaxBudget && (c.minMaxBudget.min != null || c.minMaxBudget.max != null) ? `${c.minMaxBudget.min != null ? eur(c.minMaxBudget.min) : '—'} – ${c.minMaxBudget.max != null ? eur(c.minMaxBudget.max) : '—'}` : 'None - None', 'minMaxBudget')
-      case 'rules': return <button type="button" className="h10-rules" onClick={() => setRulesModal(c)}><b>0</b> <Settings2 size={12} /></button>
+      // C5 — one empty-state vocabulary. This said "None - None" while the Min/Max BID cell
+      // beside it said "None" for the identical idea, and Target ACoS said "—". The rule now:
+      // **None** = settable, nothing set · **—** = no value · **unknown** = the source did not say.
+      // (It stays its own cell rather than borrowing `MinMaxBidCell`: a budget band and a bid band
+      // are different controls with different consequences, and a shared cell would need a copy
+      // prop to explain itself — which is a fork with extra steps.)
+      case 'minMaxBudget': return ed(c.minMaxBudget && (c.minMaxBudget.min != null || c.minMaxBudget.max != null) ? `${c.minMaxBudget.min != null ? eur(c.minMaxBudget.min) : '—'} – ${c.minMaxBudget.max != null ? eur(c.minMaxBudget.max) : '—'}` : 'None', 'minMaxBudget')
+      /**
+       * 🔴 C2 — this printed a hard-coded `<b>0</b>` on all 220 rows while the Automation cell
+       * immediately to its left said, in its own tooltip, that **20 enabled rules govern every
+       * campaign**. A column contradicting its neighbour's tooltip about the same fact.
+       * It now counts what actually reaches this campaign: the account-wide rules (nothing
+       * narrows them, so they reach everything) plus any bound to it specifically.
+       * ⚠️ Uniform today — measured 2026-08-20, 0 of the rules carry a campaign scope, so every
+       * row reads the same 20. That is the account's shape, not a placeholder, and the tooltip
+       * says which half is which instead of the cell implying per-campaign variation.
+       */
+      case 'rules': {
+        const a = authority?.byId?.[c.id]
+        const boundN = (a?.boundRules ?? []).length
+        const acct = authority?.accountWideRules ?? 0
+        const total = acct + boundN
+        return (
+          <button
+            type="button" className="h10-rules" onClick={() => setRulesModal(c)}
+            title={authority
+              ? `${total} rule(s) can write to this campaign: ${acct} account-wide (nothing narrows them) + ${boundN} bound to it.${a?.managed ? '' : ' The write gate is SHUT, so all of them are refused here.'}`
+              : 'Rule reach is still loading.'}
+          ><b>{authority ? total : '—'}</b> <Settings2 size={12} /></button>
+        )
+      }
       case 'biddingStrategy': return <BiddingStrategyCell strategy={effStrat(c)} onEdit={() => setStrategyModal(c)} />
       case 'bidMultiplier': return <button type="button" className="h10-gearbtn" aria-label={`Bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>
       case 'startDate': return fmtDate(c.startDate)
@@ -1695,20 +1745,7 @@ export function CampaignsGrid() {
       {bidRuleMenu && (() => {
         const c = rows.find((x) => x.id === bidRuleMenu.id)
         if (!c) return null
-        const cur = c.bidAlgorithm ?? 'TARGET_ACOS'
-        return (
-          <>
-            <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setBidRuleMenu(null)} />
-            <div className="h10-algomenu" style={{ position: 'fixed', left: bidRuleMenu.x, top: bidRuleMenu.y }} role="menu">
-              {BID_ALGOS.map((a) => (
-                <button key={a.value} type="button" role="menuitem" className={cur === a.value ? 'on' : ''} onClick={() => setCampaignBidAlgo(c, a.value)}>
-                  <span className="t"><Shuffle size={12} /> {a.label}</span>
-                  <span className="d">{a.desc}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )
+        return <BidAlgoMenu current={c.bidAlgorithm} anchor={{ x: bidRuleMenu.x, y: bidRuleMenu.y }} onPick={(v) => void setCampaignBidAlgo(c, v)} onClose={() => setBidRuleMenu(null)} />
       })()}
       {editPop && (() => {
         const c = rows.find((x) => x.id === editPop.id)

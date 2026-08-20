@@ -46,41 +46,110 @@ import { Shuffle, Sparkles, User, Minus } from 'lucide-react'
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
 /**
- * Bid Rule — who owns this campaign's bids.
+ * ── C1 (2026-08-20) — ONE Bid Rule cell, carrying BOTH facts, on both grids ─────────────────────
  *
- * 🔴 **U14: `known === false` is not "None".** The source, `GET /advertising/bid-grid?view=campaigns`,
- * returns ENABLED campaigns that carry targets and nothing else — measured 2026-08-20, **83 rows
- * against 220 campaigns**, so **137 campaigns (all 134 paused, plus 3 enabled with no targets) have
- * no row in it at all**. Until this prop existed every one of them fell into the branch below and
- * printed "None", which asserts that nobody owns those bids. The truth is that nobody was asked.
- * An absent answer and a negative answer are different facts and they now render differently.
+ * 🔴 **Operator instruction:** *"I want one shared cell showing both, just as it does on the ad
+ * manager page."* Before this, the same column name meant two unrelated things:
+ *
+ *   Ad Manager  → the Adtomic **bid-algorithm picker** (Target ACOS / Max Impressions / Max
+ *                 Orders). Printed "Target ACOS" on 100 of 100 rows, and — measured 2026-08-20 —
+ *                 `setCampaignBidAlgo` called **no API at all**, so a choice died on reload.
+ *   Apply Rules → the bid **owner** from the bid grid: none 45 · schedule 32 · manual 6.
+ *
+ * On `DE_Auto_Close` that read **"Target ACOS"** on one page and **"None"** on the other, for the
+ * same campaign, on the same day. Now one cell shows `<algorithm> · <owner>`: the picker stays and
+ * stays editable (operator decision 2026-08-19 — it is a placeholder for planned work, not dead
+ * code), and the owner is the fact that actually varies.
+ *
+ * The algorithm now **persists**, in `dynamicBidding.bidAlgorithm` through the same
+ * `PATCH /campaigns/:id/automation` route the other two settings use. Sharing a cell whose value
+ * lived in one page's React state would have guaranteed the two pages disagreed the moment anyone
+ * used it — the exact defect being fixed.
  */
-export function BidRuleCell({ bidder, bidderName, known }: {
-  bidder?: string | null
-  bidderName?: string | null
-  /** false when the bid grid returned no row for this campaign. Omit only where every id is present. */
-  known?: boolean
-}) {
+export const BID_ALGOS: Array<{ value: string; label: string; desc: string }> = [
+  { value: 'TARGET_ACOS', label: 'Target ACOS', desc: 'A bid algorithm for products in a performance stage that should target an ACoS for scalable advertising.' },
+  { value: 'MAX_IMPRESSIONS', label: 'Max Impressions', desc: 'A bid algorithm for products in a launch stage that need to get as many impressions as possible.' },
+  { value: 'MAX_ORDERS', label: 'Max Orders', desc: 'A bid algorithm for products in a liquidate stage that should target maximum orders to clear out inventory.' },
+]
+export const bidAlgoLabel = (v?: string | null): string =>
+  BID_ALGOS.find((a) => a.value === (v ?? 'TARGET_ACOS'))?.label ?? 'Target ACOS'
+
+/** The owner half, so the tooltip and the chip cannot describe different things. */
+function ownerBits(bidder?: string | null, bidderName?: string | null, known?: boolean) {
   if (known === false) {
-    return <span className="h10-rc-unknown" title="Unknown, not none: the bid grid covers enabled campaigns that carry targets, and it returned no row for this one. Nothing here claims its bids are unowned.">unknown</span>
+    return {
+      cls: 'h10-rc-unknown', Icon: null, text: 'unknown',
+      tip: 'Bid owner unknown, not none: the bid grid covers enabled campaigns that carry targets, and it returned no row for this one.',
+    }
   }
   if (!bidder || bidder === 'none') {
-    return <span className="h10-rc-none" title="No bid rule, rank plan or schedule owns this campaign's bids — they move only when someone changes them by hand.">None</span>
+    return {
+      cls: 'h10-rc-owner none', Icon: Minus, text: 'no owner',
+      tip: "No bid rule, rank plan or schedule owns this campaign's bids — they move only when someone changes them by hand.",
+    }
   }
-  const isSchedule = bidder === 'schedule'
-  const Icon = isSchedule ? Sparkles : bidder === 'manual' ? User : Shuffle
+  if (bidder === 'schedule') {
+    return {
+      cls: 'h10-rc-owner auto', Icon: Sparkles, text: bidderName ?? 'a rank schedule',
+      tip: `Bids here are held by a plan: ${bidderName ?? 'a rank schedule'}. It writes on its own cadence.`,
+    }
+  }
+  if (bidder === 'manual') {
+    return { cls: 'h10-rc-owner', Icon: User, text: 'manual', tip: 'Bids here were last set by hand — no rule or plan owns them.' }
+  }
+  return { cls: 'h10-rc-owner', Icon: Shuffle, text: bidderName ?? bidder, tip: `Owned by ${bidderName ?? bidder}.` }
+}
+
+export function BidRuleCell({ algorithm, bidder, bidderName, known }: {
+  /** `dynamicBidding.bidAlgorithm`. Null = nobody has chosen; the cell names the fallback itself. */
+  algorithm?: string | null
+  bidder?: string | null
+  bidderName?: string | null
+  /** false when the bid grid returned no row for this campaign (137 of 220 on 2026-08-20). */
+  known?: boolean
+}) {
+  const algo = bidAlgoLabel(algorithm)
+  const o = ownerBits(bidder, bidderName, known)
+  const algoTip = algorithm == null
+    ? `No bid algorithm has been chosen for this campaign; ${algo} is the default the optimizer would use. Amazon exposes no per-campaign algorithm field, so this is stored locally.`
+    : `Bid algorithm: ${algo}. Amazon exposes no per-campaign algorithm field, so this is stored locally.`
   return (
-    <span
-      className={`h10-rc-bidrule ${isSchedule ? 'auto' : ''}`}
-      title={isSchedule
-        ? `Bids here are held by a plan: ${bidderName ?? 'a rank schedule'}. It writes on its own cadence.`
-        : bidder === 'manual'
-          ? 'Bids here were last set by hand — no rule or plan owns them.'
-          : `Owned by ${bidderName ?? bidder}.`}
-    >
-      <Icon size={13} aria-hidden />
-      <span className="t">{bidderName ?? bidder}</span>
+    <span className="h10-rc-bidrule2">
+      <span className="h10-rc-bidrule algo" title={algoTip}>
+        <Shuffle size={13} aria-hidden />
+        <span className="t">{algo}</span>
+      </span>
+      <span className={o.cls} title={o.tip}>
+        {o.Icon ? <o.Icon size={12} aria-hidden /> : null}
+        <span className="t">{o.text}</span>
+      </span>
     </span>
+  )
+}
+
+/**
+ * The bid-algorithm picker, anchored under the cell — extracted from the Ad Manager grid so both
+ * pages open the SAME menu rather than one page having an editor and the other a read-only cell.
+ */
+export function BidAlgoMenu({ current, anchor, onPick, onClose }: {
+  current?: string | null
+  anchor: { x: number; y: number }
+  onPick: (value: string) => void
+  onClose: () => void
+}) {
+  const cur = current ?? 'TARGET_ACOS'
+  return (
+    <>
+      <button type="button" className="h10-menu-back" aria-label="Close" onClick={onClose} />
+      <div className="h10-algomenu" style={{ position: 'fixed', left: anchor.x, top: anchor.y }} role="menu">
+        {BID_ALGOS.map((a) => (
+          <button key={a.value} type="button" role="menuitem" className={cur === a.value ? 'on' : ''} onClick={() => onPick(a.value)}>
+            <span className="t"><Shuffle size={12} /> {a.label}</span>
+            <span className="d">{a.desc}</span>
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 

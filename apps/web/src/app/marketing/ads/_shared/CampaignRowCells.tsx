@@ -164,6 +164,63 @@ export function StatusCell({ status, name, onChange }: {
 }
 
 /** Bidding strategy: the label, plus the hover pencil that opens `StrategyModal`. */
+/**
+ * ── C2 (2026-08-20) — ONE Automation cell, on both grids ────────────────────────────────────────
+ *
+ * The write gate (`liveBidWritesEnabled`) had two renderings under two names for one fact:
+ *   Ad Manager  → column **"Automation"**  — Managed / Off-limits + pin badges + a bound count + a
+ *                 suppression arrow, with a five-line tooltip.
+ *   Apply Rules → column **"Automations"** — a pill reading `Managed · 2 bound` / `Off-limits`.
+ * Same endpoint, same row, same boolean. The Ad Manager's is the richer one and is the one that
+ * survives; Apply Rules' extra fact (it renders `unknown` when the guardrail grid has no row for a
+ * campaign) survives too, as `missing`, because that is a distinction the Ad Manager silently
+ * collapsed into an em dash.
+ *
+ * Takes primitives, like every other shared cell — the two grids carry different row types, and a
+ * cell that took a row would force one of them to adopt the other's.
+ */
+export function AutomationCell({ managed, missing, pins, boundRuleNames, accountWideRules, suppressedAt, suppressedBy, minCents, maxCents }: {
+  managed?: boolean
+  /** true when the guardrail grid returned no row for this campaign — authority unknown, not open. */
+  missing?: boolean
+  pins?: { placement?: boolean; bids?: boolean; budget?: boolean } | null
+  boundRuleNames?: string[]
+  accountWideRules?: number
+  suppressedAt?: string | null
+  suppressedBy?: string | null
+  minCents?: number | null
+  maxCents?: number | null
+}) {
+  if (missing) {
+    return <span className="h10-auto-cell"><span className="h10-rc-unknown" title="The guardrail grid returned no row for this campaign, so its authority is unknown — which is not the same as the gate being open.">unknown</span></span>
+  }
+  const shown = ([['placement', 'Plc'], ['bids', 'Bid'], ['budget', 'Bgt']] as const).filter(([k]) => pins?.[k])
+  const bound = boundRuleNames ?? []
+  const eur = (c: number) => `€${(c / 100).toFixed(2)}`
+  const tip = [
+    managed
+      ? 'Managed: automation may write to this campaign.'
+      : 'Not managed: every automated write here is refused at the gate (default-deny). Re-enabling a paused campaign does not re-allowlist it.',
+    shown.length ? `Hands off: ${shown.map(([, s]) => s).join(', ')}` : 'No dimension is pinned.',
+    bound.length ? `Bound rules: ${bound.join(', ')}` : 'No rule is bound to this campaign.',
+    accountWideRules ? `${accountWideRules} enabled rule(s) govern every campaign because nothing narrows them.` : '',
+    suppressedAt ? `Bids suppressed by ${suppressedBy?.replace('automation:', '') ?? 'an unknown owner'}.` : '',
+    minCents != null || maxCents != null
+      ? `Bid bounds: ${minCents != null ? eur(minCents) : '—'} – ${maxCents != null ? eur(maxCents) : '—'}`
+      : 'No bid bounds set.',
+  ].filter(Boolean).join('\n')
+  return (
+    <span className="h10-auto-cell" title={tip}>
+      {/* Own class rather than `h10-pill bad`: that modifier is used by the delivery column but has
+          never been defined in ads.css, so it renders uncoloured. */}
+      <span className={`h10-auto-state ${managed ? 'on' : 'off'}`}>{managed ? 'Managed' : 'Off-limits'}</span>
+      {shown.map(([k, s]) => <span key={k} className="h10-auto-pin">{s}</span>)}
+      {bound.length > 0 && <span className="h10-auto-rules">{bound.length}</span>}
+      {suppressedAt && <span className="h10-auto-sup" aria-label="bids suppressed">↓</span>}
+    </span>
+  )
+}
+
 export function BiddingStrategyCell({ strategy, onEdit }: { strategy?: string | null; onEdit?: () => void }) {
   const label = strategy ? (STRAT_LABEL[strategy] ?? strategy) : '—'
   if (!onEdit) return <span>{label}</span>

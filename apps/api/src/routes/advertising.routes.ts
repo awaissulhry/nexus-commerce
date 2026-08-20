@@ -209,7 +209,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // dynamicBidding JSON is stripped from the response.
       const base = campaigns.map((c) => {
         const { dynamicBidding, ...rest } = c
-        const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; targetAcos?: number; bidAutomation?: boolean }
+        const db = (dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }>; targetAcos?: number; bidAutomation?: boolean; bidAlgorithm?: string }
         const pb = db.placementBidding ?? []
         const find = (kw: string) => {
           const m = pb.find((p) => p.placement?.toLowerCase().includes(kw))
@@ -218,7 +218,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         // CBN.2h.6 — surface the Bulk-Actions-managed settings inline (stored in
         // dynamicBidding alongside placementBidding). targetAcos is a fraction
         // (0.3 = 30%) — the same shape the bid-optimizer reads.
-        return { ...rest, placements: { tos: find('top'), pdp: find('product'), ros: find('rest') }, targetAcos: db.targetAcos ?? null, bidAutomation: db.bidAutomation ?? false }
+        // C1 (2026-08-20) — `bidAlgorithm` joins them. Amazon exposes no per-campaign
+        // bid-algorithm field, so this is OUR store for the Adtomic-cluster picker. It was
+        // React state in the Ad Manager grid and nothing else: the choice died on reload, and
+        // Apply Rules could never show what the Ad Manager had been told. Null means nobody has
+        // chosen; the cell names its own fallback rather than the payload asserting one.
+        return { ...rest, placements: { tos: find('top'), pdp: find('product'), ros: find('rest') }, targetAcos: db.targetAcos ?? null, bidAutomation: db.bidAutomation ?? false, bidAlgorithm: db.bidAlgorithm ?? null }
       })
 
       if (!range) return { items: base, count: base.length, range: null }
@@ -1020,17 +1025,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Same read-modify-write pattern as /cpc-ceiling and /guardrails.
   fastify.patch('/advertising/campaigns/:id/automation', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as { bidAutomation?: boolean; targetAcos?: number | null }
+    const b = request.body as { bidAutomation?: boolean; targetAcos?: number | null; bidAlgorithm?: string | null }
     const c = await prisma.campaign.findUnique({ where: { id }, select: { dynamicBidding: true } })
     if (!c) { reply.status(404); return { error: 'campaign not found' } }
     const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
     if (b.bidAutomation !== undefined) db.bidAutomation = !!b.bidAutomation
+    // C1 — the Adtomic bid-algorithm picker's store. Whitelisted rather than free text: this
+    // feeds a three-option control, and an unknown value would render as a blank cell.
+    if (b.bidAlgorithm !== undefined) {
+      const allowed = ['TARGET_ACOS', 'MAX_IMPRESSIONS', 'MAX_ORDERS']
+      if (b.bidAlgorithm == null) delete db.bidAlgorithm
+      else if (allowed.includes(b.bidAlgorithm)) db.bidAlgorithm = b.bidAlgorithm
+      else { reply.status(400); return { error: `bidAlgorithm must be one of ${allowed.join(', ')}` } }
+    }
     if (b.targetAcos !== undefined) {
       if (b.targetAcos == null) delete db.targetAcos
       else db.targetAcos = Math.max(0, Math.min(5, Number(b.targetAcos))) // fraction; clamp 0–500%
     }
     await prisma.campaign.update({ where: { id }, data: { dynamicBidding: db as never } })
-    return { ok: true, bidAutomation: db.bidAutomation ?? false, targetAcos: db.targetAcos ?? null }
+    return { ok: true, bidAutomation: db.bidAutomation ?? false, targetAcos: db.targetAcos ?? null, bidAlgorithm: db.bidAlgorithm ?? null }
   })
 
   // ── Apex A.2a: per-campaign live-write allowlist toggle ─────────────────
