@@ -24,7 +24,6 @@ import { metricVal, type RawCell } from '../_schedule/heatMetrics'
 import { selectionToWindows, selectionHourCount } from './selectionToWindows'
 import { AddToScheduleModal, type ScheduleChoice } from './AddToScheduleModal'
 import { useRdData } from './_rd/RdData'
-import { useRdUrlState } from './_rd/useRdUrlState'
 import { getBackendUrl } from '@/lib/backend-url'
 
 /**
@@ -35,45 +34,33 @@ import { getBackendUrl } from '@/lib/backend-url'
  * window purely through calendar arithmetic. Offering weeks makes the label honest and every cell
  * comparable. Day counts are spelled out so nobody has to do the multiplication.
  */
-const WINDOWS = [
-  { value: '2', label: 'Last 2 weeks' },
-  { value: '4', label: 'Last 4 weeks' },
-  { value: '8', label: 'Last 8 weeks' },
-  { value: '13', label: 'Last 13 weeks' },
-  // FB.3c — the endpoint's own maximum. Marketing Stream reaches back to when it was switched on,
-  // so the coverage line beneath the grid says how much of a long window is actually filled.
-  { value: '26', label: 'Last 26 weeks' },
-]
-const WEEK_VALUES = new Set(WINDOWS.map((w) => w.value))
-
 export interface ScopeOption { value: string; label: string }
 
-export function HourlyPerformance({ scopes, schedules = [], market = 'all', onScheduleChanged }: {
+export function HourlyPerformance({ scopes, schedules = [], market = 'all', onScheduleChanged, from, to }: {
   scopes: ScopeOption[]
   /** RDX/D2 — every schedule, including empty ones: hours can be added to a plan that holds no
    *  campaigns yet. Distinct from `scopes`, which only lists groups that can produce a heatmap. */
   schedules?: ScheduleChoice[]
   market?: string
   onScheduleChanged?: () => void
+  /**
+   * FB.3d — the page's date range, as local `YYYY-MM-DD` inclusive bounds from the SHARED header
+   * picker. This card's own weeks select is gone: one page, one range control (the operator's
+   * "we will be using the same across everywhere"). Scope and metric stay local — they choose how
+   * to LOOK at the window, not which window.
+   */
+  from: string
+  to: string
 }) {
   const [scope, setScope] = useState('all')
   const [metric, setMetric] = useState('Spend')
-  /**
-   * FB.3c — the window lives in the URL (`?weeks=`), like every other reading on this page: the
-   * operator asked for the card to follow "the date range I select", and a range that resets to
-   * 8 weeks on every reload was following nothing. Scope and metric stay local — they choose how
-   * to LOOK at the same window, not which window.
-   */
-  const { state: url, set: setUrl } = useRdUrlState()
-  const weeks = WEEK_VALUES.has(url.weeks) ? url.weeks : '8'
-  const setWeeks = (w: string) => setUrl({ weeks: w === '8' ? '' : w })
   const [raw, setRaw] = useState<RawCell[]>([])
   const [hasData, setHasData] = useState(true)
   const [loading, setLoading] = useState(true)
   // What the server actually resolved the window to, and how much of it holds data. Shown verbatim
   // rather than echoing what was asked for — Marketing Stream is not backfilled, so a long window
   // over a young campaign is mostly empty and the operator must be able to see that.
-  const [meta, setMeta] = useState<{ from: string | null; to: string | null; weeks: number; daysWithData: number; restatedCells: number } | null>(null)
+  const [meta, setMeta] = useState<{ from: string | null; to: string | null; days: number; daysWithData: number; restatedCells: number } | null>(null)
 
   // RDX/D1 — paint hours off the evidence, save them as a schedule template.
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -124,19 +111,20 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
     // RDX/B1 — the header's market switch narrows the grid too, so it means the same thing here
     // as it does on the list below. 'all' sends nothing, keeping the original request shape.
     const mk = market && market !== 'all' ? `&marketplace=${encodeURIComponent(market)}` : ''
-    const qs = (scope === 'all' ? `scope=all&weeks=${weeks}` : `groupId=${encodeURIComponent(scope)}&weeks=${weeks}`) + mk
+    const win = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    const qs = (scope === 'all' ? `scope=all&${win}` : `groupId=${encodeURIComponent(scope)}&${win}`) + mk
     void fetch(`${getBackendUrl()}/api/advertising/dayparting/heatmap?${qs}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return
         setRaw(Array.isArray(j?.cells) ? j.cells : [])
         setHasData(!!j?.hasData)
-        setMeta({ from: j?.from ?? null, to: j?.to ?? null, weeks: Number(j?.weeks ?? 0), daysWithData: Number(j?.coverage?.daysWithData ?? 0), restatedCells: Number(j?.coverage?.restatedCells ?? 0) })
+        setMeta({ from: j?.from ?? null, to: j?.to ?? null, days: Number(j?.windowDays ?? 0), daysWithData: Number(j?.coverage?.daysWithData ?? 0), restatedCells: Number(j?.coverage?.restatedCells ?? 0) })
       })
       .catch(() => { if (alive) { setRaw([]); setHasData(false); setMeta(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [scope, weeks, market])
+  }, [scope, from, to, market])
 
   const cells = useMemo<HeatCell[]>(() => {
     const read = metricVal(metric).f
@@ -166,13 +154,19 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
             {market && market !== 'all' ? <>, {market} only</> : null}.
             {peak ? <> Busiest: <b>{peak}</b>.</> : null}
           </p>
-          {/* The exact range summed, and how many of its days actually carry data. Every weekday in
-              this window has the same number of occurrences, so the cells compare like for like. */}
-          {meta?.from && meta?.to && (
+          {/* The exact range summed, and how many of its days actually carry data. FB.3d — the
+              range comes from the shared header picker; when it is a whole number of weeks every
+              weekday has equal occurrences and the line says so, and when it is not, the DPS.4b
+              weekday bias is DISCLOSED rather than silently reintroduced. */}
+          {meta?.from && meta?.to && meta.days > 0 && (
             <p className="h10-dp-panelrange">
-              {meta.weeks} complete week{meta.weeks === 1 ? '' : 's'}: <b>{meta.from}</b> → <b>{meta.to}</b> · today excluded (still in progress) ·{' '}
-              {meta.daysWithData} of {meta.weeks * 7} days carry data
-              {meta.daysWithData < meta.weeks * 7 * 0.5 && <span className="warn"> — sparse, read with care</span>}
+              {meta.days % 7 === 0
+                ? <>{meta.days / 7} complete week{meta.days === 7 ? '' : 's'}</>
+                : <>{meta.days} day{meta.days === 1 ? '' : 's'}</>}
+              : <b>{meta.from}</b> → <b>{meta.to}</b> · today excluded (still in progress) ·{' '}
+              {meta.daysWithData} of {meta.days} days carry data
+              {meta.days % 7 !== 0 && <span className="warn"> — not whole weeks, so weekdays are sampled unevenly; compare cells with care</span>}
+              {meta.daysWithData < meta.days * 0.5 && <span className="warn"> — sparse, read with care</span>}
               {/* Disclosed rather than swallowed: these buckets held Amazon retractions that
                   out-weighed the traffic recorded inside this window, so they read as zero. */}
               {meta.restatedCells > 0 && <> · {meta.restatedCells} bucket{meta.restatedCells === 1 ? '' : 's'} floored at zero by Amazon restatements</>}
@@ -183,9 +177,11 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
           {/* FB.3 — "schedule", not "scope". This picks WHICH SCHEDULE the heatmap draws, and the
               page now has a real scope bar at the top; two adjacent controls both called scope,
               about different axes, is one of the duplicates the merge exists to remove. */}
+          {/* FB.3d — no period select here any more: the page's ONE range control is the shared
+              header picker, and a second window control an inch below it is the duplicate class
+              this section keeps removing. */}
           <H10Select width={210} options={scopeOptions} value={scope} onChange={setScope} ariaLabel="Heatmap schedule" />
           <H10Select width={140} options={CHART_METRICS} value={metric} onChange={setMetric} ariaLabel="Heatmap metric" />
-          <H10Select width={150} options={WINDOWS} value={weeks} onChange={setWeeks} ariaLabel="Heatmap period" />
         </div>
       </div>
       {/* RDX/D1 — paint the hours you just read, and hand them to the builder as a template.

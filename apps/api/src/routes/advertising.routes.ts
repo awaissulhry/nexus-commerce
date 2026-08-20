@@ -3765,7 +3765,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // DPS.4 — three ways to name the campaigns, so the Rank & Dayparting Schedules page can ask for
     // "the whole account" or "this schedule" without pushing 200+ cuids through a query string.
     // `campaignIds` is the original contract and is untouched.
-    const q = request.query as { campaignIds?: string; windowDays?: string; weeks?: string; tz?: string; scope?: string; groupId?: string; marketplace?: string }
+    const q = request.query as { campaignIds?: string; windowDays?: string; weeks?: string; tz?: string; scope?: string; groupId?: string; marketplace?: string; from?: string; to?: string }
     let ids = (q.campaignIds ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     if (!ids.length && q.groupId) {
       const members = await prisma.adSchedule.findMany({ where: { groupId: String(q.groupId) }, select: { campaignId: true } })
@@ -3808,6 +3808,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      */
     const weeksRaw = q.weeks != null ? Number(q.weeks) : Math.floor(Number(q.windowDays ?? 56) / 7)
     const weeks = Math.max(1, Math.min(26, Number.isFinite(weeksRaw) ? Math.floor(weeksRaw) : 8))
+    /**
+     * FB.3d (2026-08-21) — an EXPLICIT `from`/`to` window (local dates, inclusive), so the shared
+     * header range picker can drive this grid. Both must be well-formed or the pair is ignored —
+     * a half-window would be a guess. Reversed bounds are swapped, the same courtesy
+     * `resolveRange` extends. The end is clamped to yesterday inside the service (DB clock,
+     * display timezone); a range that lies entirely in the future resolves to an empty window and
+     * returns the honest empty shape rather than an error. ⚠ An arbitrary range loses the
+     * whole-weeks equal-weekday guarantee — the response carries the resolved day count and the
+     * card is the one that must disclose a non-multiple-of-7 read.
+     */
+    const YMD = /^\d{4}-\d{2}-\d{2}$/
+    let fromDay = YMD.test(q.from ?? '') && YMD.test(q.to ?? '') ? String(q.from) : null
+    let toDay = fromDay ? String(q.to) : null
+    if (fromDay && toDay && fromDay > toDay) { const t = fromDay; fromDay = toDay; toDay = t }
     const windowDays = weeks * 7
     const empty = { weeks, windowDays, timezone: tz, from: null as string | null, to: null as string | null, coverage: { daysWithData: 0, firstDay: null as string | null, lastDay: null as string | null }, hasData: false, cells: [] as unknown[] }
     if (!ids.length) return empty
@@ -3816,12 +3830,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // weeks, DB clock, today excluded, buckets floored, ratios derived after flooring) were each a
     // real defect once; a second copy would lose one of them.
     const { hourlyCells } = await import('../services/advertising/ads-hourly.service.js')
-    const { cells, restatedCells, meta: m } = await hourlyCells({ campaignIds: ids, windowDays, tz })
+    const { cells, restatedCells, meta: m } = await hourlyCells({ campaignIds: ids, windowDays, tz, fromDay: fromDay ?? undefined, toDay: toDay ?? undefined })
     if (!cells.length && !m) return empty
     const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null)
+    // The RESOLVED span (post-clamp), so the card renders what was summed, not what was asked.
+    const resolvedDays = m?.from_day && m?.to_day
+      ? Math.max(0, Math.round((m.to_day.getTime() - m.from_day.getTime()) / 86_400_000) + 1)
+      : windowDays
     reply.header('Cache-Control', 'private, max-age=300')
     return {
-      weeks, windowDays, timezone: tz,
+      weeks: Math.max(1, Math.floor(resolvedDays / 7)), windowDays: resolvedDays, timezone: tz,
       from: day(m?.from_day), to: day(m?.to_day),
       coverage: { daysWithData: Number(m?.days ?? 0), firstDay: day(m?.first_day), lastDay: day(m?.last_day), restatedCells },
       // A scope can have impressions with no spend and no clicks (7,404 such rows live) — judging

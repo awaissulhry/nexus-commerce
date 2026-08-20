@@ -25,8 +25,8 @@ import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { RdSection } from './_rd/RdSection'
-import { RdFleetBand } from './RdFleetBand'
 import { useAdsSync } from '../_shared/adsBus'
+import { ymdLocal } from '../_shared/adsScope'
 import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from './_rd/rdFilters'
 import { campaignMatchesScope } from './_rd/scope'
@@ -97,6 +97,32 @@ function DaypartingSchedulesBody() {
 
   const subtitle = useMemo(() => rulesTabByKey('dayparting')?.subtitle ?? '', [])
 
+  /**
+   * FB.3d — the page's date range, from the SHARED header picker (the same dual-calendar +
+   * presets control the Ad Manager shows, per the operator: "we will be using the same across
+   * everywhere"). CONTROLLED, from the URL — the header's own uncontrolled fallback stores the
+   * fact twice, which is the drift the Ad Manager still carries. Absent params = the default
+   * window: 56 complete days ending yesterday (the heatmap's old 8-week default, kept so a bare
+   * URL means what it meant). The end is clamped to yesterday — the in-progress day is partial,
+   * and the heatmap excludes it server-side anyway; a picker that shows today selected while the
+   * card says "today excluded" would be two truths.
+   */
+  const YMD_RE = /^\d{4}-\d{2}-\d{2}$/
+  const range = useMemo(() => {
+    const yesterday = new Date(); yesterday.setHours(0, 0, 0, 0); yesterday.setDate(yesterday.getDate() - 1)
+    const parse = (s: string) => { const d = new Date(`${s}T00:00:00`); return Number.isNaN(d.getTime()) ? null : d }
+    const from = YMD_RE.test(url.from) ? parse(url.from) : null
+    const to = YMD_RE.test(url.to) ? parse(url.to) : null
+    if (from && to && from <= to) return { start: from, end: to > yesterday ? yesterday : to }
+    const start = new Date(yesterday); start.setDate(start.getDate() - 55)
+    return { start, end: yesterday }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url.from, url.to])
+  const rangeDays = useMemo(
+    () => Math.max(1, Math.round((range.end.getTime() - range.start.getTime()) / 86_400_000) + 1),
+    [range],
+  )
+
   // FB.3 — the bar's definitions, from the same module the grid filters with. The tile counts are
   // the band's own predicate over the rows the scope leaves, so an option's number is what it
   // delivers. At schedules grain `rdFilters` returns the scope grains alone: the other three read
@@ -129,7 +155,11 @@ function DaypartingSchedulesBody() {
         showChangeLog
         showLearn={false}
         showDataSync={false}
-        showDateRange={false}
+        // FB.3d — the shared range picker, ON and CONTROLLED from the URL. It drives the hourly
+        // grid and the coverage window below; writes go through `ymdLocal` (a UTC slice shifts
+        // Rome local midnights back a day).
+        dateRange={range}
+        onDateRange={(s, e) => setUrl({ from: ymdLocal(s), to: ymdLocal(e) })}
         // Without an explicit primary the header falls back to an "Action ▾" dropdown, which on this
         // page would open EMPTY (no `actions` to put in it). The section's one creation verb is
         // making a schedule, so name it — same slot the index uses for "+ Rule".
@@ -144,7 +174,7 @@ function DaypartingSchedulesBody() {
           the schedules starting below the fold). The card obeys the header's market switch and
           keeps its whole-weeks window in the URL, so what it shows is always what the address says. */}
       <RdSection id="hourly">
-        <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} />
+        <HourlyPerformance scopes={scopes} schedules={allSchedules} market={market} onScheduleChanged={refresh} from={ymdLocal(range.start)} to={ymdLocal(range.end)} />
       </RdSection>
 
       {/* FB.3 — ONE bar: controls, then the numbers they produce, then the rows. It holds the three
@@ -165,9 +195,14 @@ function DaypartingSchedulesBody() {
           Unbuilt sections are NOT MOUNTED. An empty placeholder card is dead space, and the
           standard for this foundation is that the page must look no worse than it did before. */}
 
-      {/* P1 · Fleet state band — fleet grain. Five tiles, each a filter onto the grid;
-          "unscheduled" stays with Coverage (P6), which owns that number. */}
-      <RdFleetBand />
+      {/* P1 · Fleet state band — RETIRED as chips (FB.3d, operator: "remove the chips under the
+          filters"). The facet lives on in the bar's Fleet state select, whose options carry the
+          same counts from the same `tileMatch` predicate — one store (`?tile=`), one affordance.
+          Its old slot now holds the rank-control COVERAGE line, moved up from the bottom of the
+          page on the same instruction. */}
+      <RdSection id="coverage">
+        <CoveragePanel market={market} schedules={allSchedules} onChanged={refresh} days={Math.min(90, rangeDays)} />
+      </RdSection>
 
       {/* P2 · The grid — group ⇄ campaign. The section that fixes the page's structural flaw:
           the list is group-grained and every defect the study measured is campaign-grained.
@@ -182,13 +217,8 @@ function DaypartingSchedulesBody() {
           ("Base at cap"), where it is scoped, sortable and one click from the rows themselves.
           Spend ceilings keep their one owner: Automations → Limits. */}
 
-      {/* P6 · Evidence — what no schedule covers. The hourly grid moved to the TOP of the page
-          (operator instruction, FB.3c); the coverage gap stays down here beside the rows it
-          describes. RDX/D2 — `allSchedules` (not `scopes`): hours can be added to a plan holding
-          no campaigns. */}
-      <RdSection id="p6">
-        <CoveragePanel market={market} schedules={allSchedules} onChanged={refresh} />
-      </RdSection>
+      {/* P6 — empty since FB.3d: the hourly grid leads the page and the coverage line moved above
+          the grid. RDX/D2's `allSchedules` note rides with the CoveragePanel mount above. */}
 
       {/* P7 · Governance — events, versions, change log. */}
     </div>

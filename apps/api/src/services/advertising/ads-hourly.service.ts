@@ -32,14 +32,37 @@ export function resolveWeeks(weeksRaw: unknown, windowDaysRaw?: unknown): { week
   return { weeks, windowDays: weeks * 7 }
 }
 
-export async function hourlyCells(opts: { campaignIds: string[]; windowDays: number; tz: string }): Promise<HourlyResult> {
-  const { campaignIds: ids, windowDays, tz } = opts
+export async function hourlyCells(opts: {
+  campaignIds: string[]; windowDays: number; tz: string
+  /**
+   * FB.3d (2026-08-21) — an EXPLICIT local date window (`YYYY-MM-DD`, inclusive), for the shared
+   * header range picker. When both are present they replace the trailing-weeks window; everything
+   * else — DB-clock boundaries, today excluded, zero-flooring, ratios after flooring — is the same
+   * code path, which is the whole reason this lives here and not in a second query.
+   *
+   * `toDay` is clamped to yesterday IN SQL (`LEAST(..., now()::date - 1)`): the in-progress day is
+   * partial by definition, and the clamp uses the DATABASE clock in the display timezone for the
+   * same reason the weeks path does. ⚠ An arbitrary range loses the whole-weeks guarantee of equal
+   * weekday samples (the 11–33% bias DPS.4b measured) — the CALLER must disclose that whenever the
+   * resolved span is not a multiple of 7.
+   */
+  fromDay?: string; toDay?: string
+}): Promise<HourlyResult> {
+  const { campaignIds: ids, windowDays, tz, fromDay, toDay } = opts
   if (!ids.length) return { cells: [], restatedCells: 0, meta: undefined }
   const camps = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, externalCampaignId: true } })
       if (!camps.length) return { cells: [], restatedCells: 0, meta: undefined }
       const localIds = camps.map((c) => c.id)
       const extIds = camps.map((c) => c.externalCampaignId).filter(Boolean) as string[]
       const scope = Prisma.sql`("localEntityId" IN (${Prisma.join(localIds)})${extIds.length ? Prisma.sql` OR "entityId" IN (${Prisma.join(extIds)})` : Prisma.empty})`
+      const explicit = !!(fromDay && toDay)
+      // The two local-date bounds of the window, inclusive start / inclusive end (end ≤ yesterday).
+      const startDay = explicit
+        ? Prisma.sql`(${fromDay}::date)`
+        : Prisma.sql`((now() AT TIME ZONE ${tz})::date - ${windowDays}::int)`
+      const endDay = explicit
+        ? Prisma.sql`(LEAST(${toDay}::date, (now() AT TIME ZONE ${tz})::date - 1))`
+        : Prisma.sql`((now() AT TIME ZONE ${tz})::date - 1)`
       // Rows converted to local wall-clock and clipped to the window. The coarse `date` bounds keep
       // the index usable; the exact bound is on ts_local, because the window is a LOCAL one.
       const windowed = Prisma.sql`
@@ -49,12 +72,12 @@ export async function hourlyCells(opts: { campaignIds: string[]; windowDays: num
                  "costMicros", "orders7d", "sales7dCents", "impressions", "clicks"
           FROM "AmazonAdsHourlyPerformance"
           WHERE "entityType" = 'CAMPAIGN'
-            AND "date" >= (((now() AT TIME ZONE ${tz})::date - ${windowDays + 2}::int))
-            AND "date" <= (((now() AT TIME ZONE ${tz})::date + 1))
+            AND "date" >= (${startDay} - 2)
+            AND "date" <= (${endDay} + 2)
             AND ${scope}
         ) t
-        WHERE t.ts_local >= (((now() AT TIME ZONE ${tz})::date - ${windowDays}::int)::timestamp)
-          AND t.ts_local <  (((now() AT TIME ZONE ${tz})::date)::timestamp)`
+        WHERE t.ts_local >= (${startDay})::timestamp
+          AND t.ts_local <  ((${endDay}) + 1)::timestamp`
 
       const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint | null; orders: bigint | null; sales: bigint | null; impressions: bigint | null; clicks: bigint | null }>>`
         SELECT EXTRACT(DOW FROM ts_local)::int AS dow,
@@ -68,8 +91,8 @@ export async function hourlyCells(opts: { campaignIds: string[]; windowDays: num
       // never backfilled, so a 13-week window over a 4-week-old campaign is mostly empty — the UI
       // states this rather than letting the operator read a sparse grid as a real pattern.
       const meta = await prisma.$queryRaw<Array<{ from_day: Date; to_day: Date; days: bigint; first_day: Date | null; last_day: Date | null }>>`
-        SELECT ((now() AT TIME ZONE ${tz})::date - ${windowDays}::int) AS from_day,
-               ((now() AT TIME ZONE ${tz})::date - 1) AS to_day,
+        SELECT ${startDay} AS from_day,
+               ${endDay} AS to_day,
                (SELECT COUNT(DISTINCT ts_local::date) FROM (${windowed}) w2) AS days,
                (SELECT MIN(ts_local)::date FROM (${windowed}) w3) AS first_day,
                (SELECT MAX(ts_local)::date FROM (${windowed}) w4) AS last_day`

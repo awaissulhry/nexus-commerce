@@ -102,7 +102,7 @@ describe('the URL contract', () => {
     // additions, and the hourly card's weeks window all live in the URL now.
     expect(s).toEqual({
       market: 'all', portfolio: '', product: '', campaign: '', grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '',
-      status: '', health: '', baseline: '', windows: '', fresh: '', ceiling: '', cstatus: '', schedule: '', weeks: '',
+      status: '', health: '', baseline: '', windows: '', fresh: '', ceiling: '', cstatus: '', schedule: '', from: '', to: '',
     })
   })
 
@@ -135,7 +135,7 @@ describe('the URL contract', () => {
     const state = {
       market: 'DE', portfolio: 'p1', product: 'pr1', campaign: 'c1', grain: 'campaigns' as const, row: 'r1', drawer: 'next24', tile: 'capped', mode: 'holding,chasing', signal: 'no-signal', converge: 'no',
       // FB.3c — the widened contract round-trips too, comma-joined multiselects included.
-      status: 'active', health: 'bad,warn', baseline: 'own-top,comp-top', windows: 'none', fresh: 'stale,never', ceiling: 'base-alone', cstatus: 'PAUSED', schedule: 'g1', weeks: '13',
+      status: 'active', health: 'bad,warn', baseline: 'own-top,comp-top', windows: 'none', fresh: 'stale,never', ceiling: 'base-alone', cstatus: 'PAUSED', schedule: 'g1', from: '2026-07-01', to: '2026-08-15',
     }
     expect(parseUrlState(new URLSearchParams(urlStateToQuery(state)))).toEqual(state)
   })

@@ -49,8 +49,14 @@ interface Integrity {
 
 const eur = (cents: number) => `€${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
-export function CoveragePanel({ market, schedules, onChanged }: {
+export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
   market: string
+  /**
+   * FB.3d — the spend window, in days, from the page's shared header range (was a hardcoded 30).
+   * The server clamps 1–90; the caller passes `min(90, rangeDays)` so "€X spent in N days" is the
+   * N the operator actually picked, not a number that ignores the control beside it.
+   */
+  days?: number
   /** Schedules a campaign can be added to (id → name). */
   schedules: ScheduleOption[]
   /** Fired after a successful add so the list above can refresh its member counts. */
@@ -67,14 +73,14 @@ export function CoveragePanel({ market, schedules, onChanged }: {
 
   const load = useCallback(() => {
     setLoading(true)
-    const qs = new URLSearchParams({ days: '30', limit: '50' })
+    const qs = new URLSearchParams({ days: String(Math.max(1, Math.min(90, Math.round(days)))), limit: '50' })
     if (market && market !== 'all') qs.set('marketplace', market)
     return fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/coverage?${qs.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => setData(j && typeof j.total === 'number' ? j : null))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
-  }, [market])
+  }, [market, days])
 
   useEffect(() => { void load(); setSel(new Set()); setMsg('') }, [load])
 

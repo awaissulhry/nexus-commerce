@@ -200,3 +200,33 @@ market and range selected.
 
 DS note: nothing new was hand-rolled — the added filters render through the existing shared
 AdsFilterBar/H10Select kit; no new component, so nothing new to promote.
+
+## FB.3d — the shared range picker on Rank & Dayparting; chips retired; coverage moved up (2026-08-21)
+
+Three operator asks, verbatim: the timeframe control "should be the same as we have on the ad
+manager page… divided into two parts: the calendar for two months… and the presets", used "across
+everywhere possible"; "remove the chips under the filters"; and the campaigns-under-Rank-control
+section "must bring it upward as well".
+
+- **The header range picker is ON, controlled from the URL** (`?from=/?to=`, `ymdLocal` on the
+  wire). It is the existing `_shell/DateRangePicker` — the H10-matched dual-month calendar +
+  preset rail the Ad Manager already shows — not a new control. Default absent-from-URL window:
+  56 complete days ending yesterday (the heatmap's old 8-week default). The end clamps to
+  yesterday: the card says "today excluded", and a picker showing today selected would be a
+  second truth.
+- **The heatmap follows the range.** `hourlyCells` accepts an explicit local-date window (same
+  code path: DB-clock bounds, today excluded, zero-flooring, ratios after flooring), the route
+  accepts `from`/`to` (pair-or-ignored, reversed bounds swapped), and the card's own weeks
+  select is GONE — one page, one range control. DPS.4b's whole-weeks law is DISCLOSED, not
+  silently lost: a non-multiple-of-7 span renders "weekdays are sampled unevenly; compare cells
+  with care". The `?weeks=` param (one evening old) is superseded.
+- **The fleet chips are PARKED** (`RdFleetBand`). The facet lives on in the bar's Fleet state
+  select — same counts, same `tileMatch` predicate, same `?tile=` store.
+- **CoveragePanel moved up** into the chips' old slot (under the filter bar, above the grid) and
+  its spend window follows the header range too (`days = min(90, rangeDays)`; was a hardcoded
+  30).
+
+Standing rule recorded: the `_shell/DateRangePicker` is THE range control wherever a date range
+exists. Known debts it exposes elsewhere (not this unit's): the eBay digest header renders a
+picker wired to nothing; CampaignsGrid keeps its own uncontrolled copy of the range beside the
+header's.

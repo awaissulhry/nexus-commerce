@@ -1,6 +1,12 @@
 'use client'
 
 /**
+ * ⛔ PARKED 2026-08-21 (FB.3d) — UNMOUNTED, on operator instruction: "we can remove the chips
+ * under the filters." The facet lives on in the filter bar's Fleet state select, whose options
+ * carry the SAME counts from the SAME `tileMatch` predicate over the same `?tile=` store — one
+ * affordance where there were two. Its old slot now shows the rank-control coverage line.
+ * File kept per the section's parking convention; register: docs/2026-08-20-ra-w-series.md (FB.3d).
+ *
  * RD.P1 — the fleet-state band: five tiles, each a filter onto the campaign grid.
  *
  * Counts and filters share ONE predicate (`_rd/tiles.ts`), so a tile always delivers exactly its

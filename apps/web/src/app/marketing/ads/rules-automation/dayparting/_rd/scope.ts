@@ -116,11 +116,17 @@ export interface RdUrlState extends RdScope {
   ceiling: string
   cstatus: string
   schedule: string
-  /** The hourly card's whole-weeks window. In the URL so "the range I picked" survives a reload. */
-  weeks: string
+  /**
+   * FB.3d (2026-08-21) — the page's date range, from the SHARED header picker (the Ad Manager's
+   * dual-calendar + presets control), as local `YYYY-MM-DD` inclusive bounds. Supersedes the
+   * short-lived `?weeks=` param (shipped the previous evening; no links carried it). Absent =
+   * the default window (56 complete days ending yesterday — the old 8-week heatmap default).
+   */
+  from: string
+  to: string
 }
 
-export const EMPTY_URL_STATE: RdUrlState = { ...EMPTY_SCOPE, grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '', status: '', health: '', baseline: '', windows: '', fresh: '', ceiling: '', cstatus: '', schedule: '', weeks: '' }
+export const EMPTY_URL_STATE: RdUrlState = { ...EMPTY_SCOPE, grain: 'schedules', row: '', drawer: '', tile: '', mode: '', signal: '', converge: '', status: '', health: '', baseline: '', windows: '', fresh: '', ceiling: '', cstatus: '', schedule: '', from: '', to: '' }
 
 const GRAINS = new Set(['schedules', 'campaigns'])
 
@@ -160,7 +166,8 @@ export function parseUrlState(sp: URLSearchParams | null): RdUrlState {
     ceiling: get('ceiling'),
     cstatus: get('cstatus'),
     schedule: get('schedule'),
-    weeks: get('weeks'),
+    from: get('from'),
+    to: get('to'),
   }
 }
 
