@@ -4,13 +4,21 @@
  * CBN — AI Advertising dashboard (the "get-started" page), matched to Helium 10 Ads.
  * Empty-state: header → Get Started hero → Overview (KPI strip + chart) → Goals table.
  * Reuses the shared `.h10-*` design system; "+ Product Goal" launches the AI Goal builder.
+ *
+ * AIAD.0/1 (2026-08-20) — the page now tells the truth: Overview + per-goal Spend/Sales/
+ * ACoS/Orders/Utilization come from `/ai-goals/summary` (AmazonAdsDailyPerformance over each
+ * goal's materialized campaigns). A goal that has no campaigns yet shows "Not launched" with
+ * an inline Launch action (materialize), never fake zeros. "AI Control" reads the linked
+ * AutopilotPlan's autonomy — the same vocabulary the Control Room governs.
  */
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Video, ExternalLink, ChevronDown, Check, Plus, BookOpen, Download, SlidersHorizontal, Play, ChevronLeft, ChevronRight, ChevronsUpDown } from 'lucide-react'
+import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { DateRangePicker } from '../_shell/DateRangePicker'
 import { IconAtom } from '../_shell/builder-icons'
 import { getBackendUrl } from '@/lib/backend-url'
+import './aiad-live.css'
 
 const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸' }
 const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States' }
@@ -18,15 +26,15 @@ const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'F
 const HERO_CHECKS = ['Sponsored Product campaign management', 'Real-time bid optimization', 'Smart budget allocation', 'Keyword discovery and removal']
 
 // KPI dot colors sampled from the reference frames.
-const KPIS: Array<{ key: string; label: string; dot: string; fmt: (v: number) => string }> = [
-  { key: 'spend', label: 'Spend', dot: '#138ae7', fmt: (v) => `€${v.toFixed(2)}` },
-  { key: 'sales', label: 'Sales', dot: '#1a9796', fmt: (v) => `€${v.toFixed(2)}` },
-  { key: 'acos', label: 'ACoS', dot: '#f94773', fmt: (v) => `${v.toFixed(2)}%` },
-  { key: 'orders', label: 'PPC Orders', dot: '#5d24b8', fmt: (v) => `${v}` },
-]
+const KPI_META = [
+  { key: 'spend', label: 'Spend', dot: '#138ae7' },
+  { key: 'sales', label: 'Sales', dot: '#1a9796' },
+  { key: 'acos', label: 'ACoS', dot: '#f94773' },
+  { key: 'orders', label: 'PPC Orders', dot: '#5d24b8' },
+] as const
 
-// Goals table columns — exact H10 order; the table ends at Spend (no columns past it).
-// Start Date is the default sort.
+// Goals table columns — H10 order, extended with the performance metrics past Spend
+// (Sales / ACoS / Orders, per the AIAD.0 rollup). Start Date is the default sort.
 const COLS: Array<{ key: string; label: string; beta?: boolean; sortable?: boolean; sorted?: boolean }> = [
   { key: 'goal', label: 'Goal' },
   { key: 'aiTarget', label: 'AI Target', beta: true },
@@ -35,15 +43,32 @@ const COLS: Array<{ key: string; label: string; beta?: boolean; sortable?: boole
   { key: 'startDate', label: 'Start Date', sortable: true, sorted: true },
   { key: 'budgetMode', label: 'Budget Mode' },
   { key: 'dailyBudget', label: 'Daily Budget', sortable: true },
-  { key: 'budgetUtil', label: 'Budget Utilization(Today)' },
+  { key: 'budgetUtil', label: 'Budget Utilization' },
   { key: 'spend', label: 'Spend', sortable: true },
+  { key: 'sales', label: 'Sales' },
+  { key: 'acos', label: 'ACoS' },
+  { key: 'orders', label: 'Orders' },
 ]
 
-type Goal = { id: string; name: string; aiTarget: string; budgetMode: string; advancedAllocation: boolean; status: string; productCount: number; dailyBudgetCents: number; startDate: string }
+type Goal = {
+  id: string; name: string; aiTarget: string; budgetMode: string; advancedAllocation: boolean
+  status: string; productCount: number; dailyBudgetCents: number; startDate: string
+  materializedAt: string | null; planId: string | null; campaignCount: number; aiControl: string | null
+}
+type GoalPerf = { goalId: string; spendCents: number; salesCents: number; orders: number; clicks: number; impressions: number; acosPct: number | null; utilizationPct: number | null; utilizationDate: string | null }
+type Summary = {
+  goals: GoalPerf[]
+  series: Array<{ date: string; spendCents: number; salesCents: number; orders: number; acosPct: number | null }>
+  totals: { spendCents: number; salesCents: number; orders: number; acosPct: number | null }
+}
 const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS' }
 const MODE_LABEL: Record<string, string> = { STRICT: 'Strict Control', SHARED: 'Shared Budget' }
+const CONTROL_LABEL: Record<string, { label: string; cls: string }> = {
+  SUGGEST: { label: 'Propose', cls: 'propose' }, AUTO: { label: 'Auto', cls: 'auto' }, OFF: { label: 'Off', cls: 'off' },
+}
 const eur2 = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
+const dayParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 function AmazonMark() {
   return (
@@ -103,17 +128,77 @@ function EmptyChart() {
   )
 }
 
+/** AIAD.0 — the live overview chart: Spend/Sales on the € axis, ACoS on %, Orders on its own hidden scale. */
+function PerfChart({ series }: { series: Summary['series'] }) {
+  if (!series.length) return <EmptyChart />
+  const data = series.map((s) => ({
+    date: s.date.slice(5), spend: s.spendCents / 100, sales: s.salesCents / 100,
+    acos: s.acosPct, orders: s.orders,
+  }))
+  const fmt = (v: unknown, name: string) =>
+    name === 'ACoS' ? (v == null ? '—' : `${Number(v).toFixed(2)}%`) : name === 'PPC Orders' ? `${v ?? 0}` : `€${Number(v ?? 0).toFixed(2)}`
+  return (
+    <div className="h10-aiad-chart live">
+      <ResponsiveContainer width="100%" height={220}>
+        <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke="#eef1f5" vertical={false} />
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8b93a2' }} tickLine={false} axisLine={{ stroke: '#e3e7ee' }} minTickGap={24} />
+          <YAxis yAxisId="eur" tick={{ fontSize: 11, fill: '#8b93a2' }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} width={54} />
+          <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 11, fill: '#8b93a2' }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} width={44} />
+          <YAxis yAxisId="n" hide />
+          <Tooltip formatter={(v, name) => [fmt(v, String(name)), String(name)]} labelStyle={{ fontSize: 12, fontWeight: 600 }} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e3e7ee' }} />
+          <Line yAxisId="eur" dataKey="spend" name="Spend" stroke="#138ae7" strokeWidth={2} dot={false} />
+          <Line yAxisId="eur" dataKey="sales" name="Sales" stroke="#1a9796" strokeWidth={2} dot={false} />
+          <Line yAxisId="pct" dataKey="acos" name="ACoS" stroke="#f94773" strokeWidth={2} dot={false} strokeDasharray="4 3" connectNulls />
+          <Line yAxisId="n" dataKey="orders" name="PPC Orders" stroke="#5d24b8" strokeWidth={2} dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 export function AiAdvertisingDashboard() {
   const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 10); return { start: s, end: e } })
   const [tab, setTab] = useState<'ASIN' | 'Campaign'>('Campaign')
   const [goals, setGoals] = useState<Goal[]>([])
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<{ text: string; err: boolean } | null>(null)
+
   useEffect(() => {
     let alive = true
     fetch(`${getBackendUrl()}/api/advertising/ai-goals`).then((r) => r.json()).then((j) => { if (alive) setGoals(Array.isArray(j?.items) ? j.items : []) }).catch(() => {})
     return () => { alive = false }
-  }, [])
-  const totals = { spend: 0, sales: 0, acos: 0, orders: 0 }
+  }, [refreshKey])
+  useEffect(() => {
+    let alive = true
+    const q = `start=${dayParam(dateRange.start)}&end=${dayParam(dateRange.end)}`
+    fetch(`${getBackendUrl()}/api/advertising/ai-goals/summary?${q}`, { cache: 'no-store' })
+      .then((r) => r.json()).then((j) => { if (alive && j && Array.isArray(j.series)) setSummary(j as Summary) }).catch(() => {})
+    return () => { alive = false }
+  }, [dateRange, refreshKey])
+
+  const perfByGoal = new Map((summary?.goals ?? []).map((g) => [g.goalId, g]))
+  const totals = summary?.totals ?? { spendCents: 0, salesCents: 0, orders: 0, acosPct: null }
+  const kpiValue: Record<string, string> = {
+    spend: eur2(totals.spendCents), sales: eur2(totals.salesCents),
+    acos: totals.acosPct == null ? '—' : `${totals.acosPct.toFixed(2)}%`, orders: String(totals.orders),
+  }
   const fmtRangeLong = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+  const materialize = async (id: string) => {
+    if (busy) return
+    setBusy(id); setNote(null)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ai-goals/${id}/materialize`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Launch failed')
+      const n = Array.isArray(j?.campaigns) ? j.campaigns.length : 0
+      setNote({ text: `Launched ${n} campaign${n === 1 ? '' : 's'}. The AI proposes its first optimizations on the Suggestions page as data arrives.`, err: false })
+      setRefreshKey((k) => k + 1)
+    } catch (e) { setNote({ text: (e as Error).message, err: true }) } finally { setBusy(null) }
+  }
 
   return (
     <div className="h10-aiad">
@@ -160,14 +245,14 @@ export function AiAdvertisingDashboard() {
       <div className="h10-aiad-ov">
         <div className="ovh"><h3>Overview</h3><span className="sub">{fmtRangeLong(dateRange.start)} - {fmtRangeLong(dateRange.end)}</span></div>
         <div className="kpis">
-          {KPIS.map((k) => (
+          {KPI_META.map((k) => (
             <div className="kpi" key={k.key}>
               <span className="lb"><span className="dot" style={{ background: k.dot }} />{k.label}</span>
-              <span className="vl">{k.fmt(totals[k.key as keyof typeof totals])}</span>
+              <span className="vl">{kpiValue[k.key]}</span>
             </div>
           ))}
         </div>
-        <EmptyChart />
+        <PerfChart series={summary?.series ?? []} />
       </div>
 
       {/* Goals table */}
@@ -183,6 +268,7 @@ export function AiAdvertisingDashboard() {
           <button type="button" className="h10-am-btn"><Download size={13} /> Export Data...</button>
           <Link href="/marketing/ads/ai-advertising/new-goal" className="h10-am-btn primary"><Plus size={13} /> Product Goal</Link>
         </div>
+        {note && <div className={`h10-aiad-note${note.err ? ' err' : ''}`}>{note.text}</div>}
         <div className="grid">
           <table>
             <thead>
@@ -198,20 +284,33 @@ export function AiAdvertisingDashboard() {
             <tbody>
               {goals.length === 0 ? (
                 <tr><td className="empty" colSpan={COLS.length + 1}>There are no products set up with AI Advertising.</td></tr>
-              ) : goals.map((g) => (
+              ) : goals.map((g) => {
+                const p = perfByGoal.get(g.id)
+                const ctl = g.aiControl ? CONTROL_LABEL[g.aiControl] ?? { label: g.aiControl, cls: 'off' } : null
+                return (
                 <tr key={g.id}>
                   <td className="ck"><input type="checkbox" aria-label={`Select ${g.name}`} /></td>
-                  <td className="gname">{g.name}<span className="sub">{g.productCount} product{g.productCount === 1 ? '' : 's'}</span></td>
+                  <td className="gname">{g.name}<span className="sub">{g.productCount} product{g.productCount === 1 ? '' : 's'}{g.campaignCount > 0 ? ` · ${g.campaignCount} campaigns` : ''}</span></td>
                   <td>{TARGET_LABEL[g.aiTarget] ?? g.aiTarget}</td>
-                  <td><span className={`aictl ${g.advancedAllocation ? 'on' : ''}`}>{g.advancedAllocation ? 'Advanced' : 'Standard'}</span></td>
-                  <td><span className="gstatus">{g.status === 'ACTIVE' ? 'Enabled' : g.status}</span></td>
+                  <td>{ctl ? <span className={`aictl ${ctl.cls}`}>{ctl.label}</span> : <span className="aictl off">—</span>}</td>
+                  <td>
+                    {g.materializedAt
+                      ? <span className="gstatus">{g.status === 'ACTIVE' ? 'Enabled' : g.status}</span>
+                      : <span className="aiad-nl">
+                          <span className="gstatus warn">Not launched</span>
+                          <button type="button" className="h10-am-btn primary aiad-launch" disabled={busy === g.id} onClick={() => materialize(g.id)}>{busy === g.id ? 'Launching…' : 'Launch'}</button>
+                        </span>}
+                  </td>
                   <td>{fmtDay(g.startDate)}</td>
                   <td>{MODE_LABEL[g.budgetMode] ?? g.budgetMode}</td>
                   <td>{eur2(g.dailyBudgetCents)}</td>
-                  <td>0%</td>
-                  <td>{eur2(0)}</td>
+                  <td title={p?.utilizationDate ? `Latest reported day: ${p.utilizationDate}` : undefined}>{p?.utilizationPct != null ? `${p.utilizationPct}%` : '—'}</td>
+                  <td>{p ? eur2(p.spendCents) : '—'}</td>
+                  <td>{p ? eur2(p.salesCents) : '—'}</td>
+                  <td>{p ? (p.acosPct == null ? '—' : `${p.acosPct.toFixed(2)}%`) : '—'}</td>
+                  <td>{p ? p.orders : '—'}</td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

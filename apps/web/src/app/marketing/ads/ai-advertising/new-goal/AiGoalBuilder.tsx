@@ -98,6 +98,11 @@ export function AiGoalBuilder() {
       const r = await fetch(`${getBackendUrl()}/api/advertising/ai-goals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok || j?.ok === false) throw new Error(j?.error || 'Could not create the product goal')
+      // AIAD.1 — materialize immediately: goal → campaign scaffold + AutopilotPlan. If this
+      // step fails the goal still exists; the dashboard shows it as "Not launched" with a
+      // retryable Launch action, so we navigate either way.
+      const goalId = j?.goal?.id
+      if (goalId) { await fetch(`${getBackendUrl()}/api/advertising/ai-goals/${goalId}/materialize`, { method: 'POST' }).catch(() => {}) }
       router.push('/marketing/ads/ai-advertising')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
   }

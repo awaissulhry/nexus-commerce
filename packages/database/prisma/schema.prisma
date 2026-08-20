@@ -15072,6 +15072,12 @@ model AdProductGoal {
   status             String   @default("ACTIVE") // DRAFT | ACTIVE | ARCHIVED
   marketplace        String?
   portfolioId        String? // CBU — Amazon Ads portfolio to associate; applied when campaigns materialize
+  // AIAD.1 — materialization linkage. Empty/null until the goal is materialized into its
+  // campaign scaffold. campaignIds: [{ id: Campaign.id, role: AUTO|RESEARCH|PERF|PAT, label }];
+  // planId → the AutopilotPlan the ad-autopilot cron drives for this goal.
+  campaignIds        Json     @default("[]")
+  planId             String?
+  materializedAt     DateTime?
   createdBy          String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

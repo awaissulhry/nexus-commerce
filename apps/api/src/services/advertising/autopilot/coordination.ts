@@ -60,28 +60,49 @@ export async function syncLinkedRules(plan: PlanLike): Promise<LinkRef[]> {
   const modules = (plan.modules ?? {}) as Record<string, { on?: boolean }>
   const campaignIds = Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : []
   const linked = (Array.isArray(plan.linkedRuleIds) ? plan.linkedRuleIds : []) as LinkRef[]
-  const byModule = new Map(linked.map((l) => [l.module, l.ruleId]))
   const out: LinkRef[] = []
-  for (const module of ['harvest', 'negate'] as const) {
-    const want = moduleOn(modules, module)
-    const existing = byModule.get(module)
-    const cfg = ruleConfig(module, plan, campaignIds)
+
+  // AIAD.2 — sync the rules that already exist. A goal materialization provisions rules in
+  // the richer SPW-proven `harvest_and_negate` shape (sources/destinations per scaffold, and
+  // possibly SEVERAL per module for Strict-Control multi-product goals). For those, autonomy
+  // sync means enabled/dryRun/control ONLY — overwriting their actions with this file's older
+  // guessed shape would destroy the graduation destinations. Legacy links keep the old full
+  // re-provision behaviour.
+  for (const link of linked) {
+    const want = moduleOn(modules, link.module)
     try {
-      if (want) {
-        if (existing) {
-          await prisma.automationRule.update({ where: { id: existing }, data: { enabled: cfg.enabled, dryRun: cfg.dryRun, conditions: cfg.conditions, actions: cfg.actions } })
-          out.push({ module, ruleId: existing })
-        } else {
-          const created = await prisma.automationRule.create({ data: cfg })
-          out.push({ module, ruleId: created.id })
-        }
-      } else if (existing) {
-        await prisma.automationRule.update({ where: { id: existing }, data: { enabled: false } })
-        out.push({ module, ruleId: existing }) // keep the link, just disabled
+      const rule = await prisma.automationRule.findUnique({ where: { id: link.ruleId }, select: { id: true, actions: true } })
+      if (!rule) continue // rule deleted → drop the link
+      const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : null) as Record<string, unknown> | null
+      if (a0?.type === 'harvest_and_negate') {
+        const control = plan.autonomy === 'AUTO' ? 'automate' : 'manual'
+        const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) => (i === 0 ? { ...a, control } : a))
+        await prisma.automationRule.update({ where: { id: link.ruleId }, data: {
+          enabled: want && plan.autonomy !== 'OFF', dryRun: plan.autonomy !== 'AUTO', actions: actions as never,
+        } })
+      } else {
+        const cfg = ruleConfig(link.module, plan, campaignIds)
+        await prisma.automationRule.update({ where: { id: link.ruleId }, data: want
+          ? { enabled: cfg.enabled, dryRun: cfg.dryRun, conditions: cfg.conditions, actions: cfg.actions }
+          : { enabled: false } })
       }
+      out.push(link)
     } catch (e) {
-      logger.warn('[autopilot] syncLinkedRules failed', { planId: plan.id, module, error: (e as Error).message })
-      if (existing) out.push({ module, ruleId: existing })
+      logger.warn('[autopilot] syncLinkedRules failed', { planId: plan.id, module: link.module, error: (e as Error).message })
+      out.push(link)
+    }
+  }
+
+  // Modules that are ON but have no linked rule at all → provision the legacy default shape
+  // (pre-materialization plans, e.g. SP Super Wizard AI Control launches).
+  const haveModule = new Set(out.map((l) => l.module))
+  for (const module of ['harvest', 'negate'] as const) {
+    if (haveModule.has(module) || !moduleOn(modules, module)) continue
+    try {
+      const created = await prisma.automationRule.create({ data: ruleConfig(module, plan, campaignIds) })
+      out.push({ module, ruleId: created.id })
+    } catch (e) {
+      logger.warn('[autopilot] syncLinkedRules create failed', { planId: plan.id, module, error: (e as Error).message })
     }
   }
   return out
