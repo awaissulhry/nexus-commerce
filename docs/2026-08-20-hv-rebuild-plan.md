@@ -431,6 +431,107 @@ the adapter that silently drops half of it.
 
 ---
 
+## P1 — built (commit `0c2a768da`, 2026-08-20)
+
+Scope as approved: `packages/shared/ads-rule-window.ts` (+ its test),
+`_shared/RulesGrid.tsx`, `automation-action-handlers.ts`, and the two census scripts.
+
+**What shipped**
+
+| | before | after |
+|---|---|---|
+| Criteria, engine rule with `conditions: []` but thresholds on the action | `Always → harvest and negate` | `≥ 2 orders · spend ≥ €10 → harvest and negate @ €0.50` |
+| Criteria, rule with no thresholds anywhere | `Always → harvest and negate` | `Defaults: ≥ 2 orders · spend ≥ €10 → harvest and negate` |
+| Criteria, `SCHEDULE` rule whose action reads nothing | `Always → …` | `No criteria — runs on the clock → …` |
+| Criteria, rule whose trigger does the selecting | `Always → …` | `Any row its trigger selects → …` |
+| Criteria tooltip | the cell's own text | a sentence explaining which of those four it is |
+| Lookback, SCHEDULE + `harvest_and_negate` | `None` | the rule's own `windowDays` |
+| Lookback, a rule carrying harvest **and** a bid action | the bid window, on **both** tabs | the harvest window on Keyword Harvest, the bid window on Bid |
+
+`PARAM_CLAUSE` is a strict IF-side allowlist (`minOrders`, `minClicks`, `minSpendCents`,
+`maxAcosPct`). The census that produced it — `_hvr-params.mts`, every action type in the account —
+is mostly THEN-side (`reason`, `message`, `percent`, `target`, `campaignIds`, `floorCents`), and
+rendering any of those as a condition would have invented a criterion the same way `Always`
+invented an absence. `maxAcosPct` is supported with **zero rows carrying it**, because the builder
+can produce it and P2's column needs it: the reader exists before the data, not after.
+
+### 🔴 A defect the new test found that was not harvest's, and was live
+
+When an ACTION supplies the window, `ruleLookback` appends the TRIGGER's sentence for context.
+`describeTrigger('SCHEDULE', …)` is written as an absolute — *"🔴 It runs on the clock and is
+handed no performance data at all… Nothing in this rule reads campaign or keyword history before
+it acts."* True of a SCHEDULE rule whose action reads nothing; **false** of one whose action
+re-queries. Appended verbatim, it produced a tooltip that said
+
+> "This rule computes from the last 60 days of Amazon performance data … 🔴 It runs on the clock
+> and is handed no performance data at all."
+
+**23 of 51 rules are SCHEDULE-triggered**, and this has been true since B2 for every one of them
+carrying `bid_to_target_acos` or `defend_top_of_search` — not a harvest bug, found by a harvest
+test. `describeTrigger` now takes `actionSuppliesWindow` and phrases that case as a contribution
+("Its trigger adds nothing to that…"), keeping the absolute where it is still true. Pinned by a
+regression test that asserts both directions.
+
+### Two things deliberately recorded rather than fixed
+
+- **`previewHarvest` defaults `minSpendCents` to 1500 and the handler to 1000**, and the nightly
+  `ads-auto-harvest` cron calls `previewHarvest({})` with no arguments — so **the cron negates at
+  €15 while every rule negates at €10**. Written into `HARVEST_DEFAULTS`' docblock. Either number
+  moves live writes; that is P6.
+- The harvest window is `settled: false` because `previewHarvest` builds its own dates and never
+  calls `ruleWindowBounds`, unlike `SEARCH_TERM_CONVERTING`. The cell now says the two harvest
+  engines disagree instead of averaging them.
+
+### Also generalised
+
+`tosWindowDays` → `tunableWindowDays`. It keys on the `ACTION_WINDOW` entry's own `tunable` flag
+rather than a literal action name, and walks the same tab order `ruleLookback` walks. The old pair
+could disagree about *which action they were describing* on a rule carrying both re-queriers —
+nothing in the account triggered it, which is why it was worth removing rather than leaving armed.
+
+### ✅ Verified on production 2026-08-20 (deploy `27gdcjv1d`)
+
+**Keyword Harvest — 5 of 5 rows, every cell now derived from stored values:**
+
+| rule | Lookback | Criteria |
+|---|---|---|
+| Auto harvest & negate | 60 days ⚠ | `≥ 2 orders · spend ≥ €10 → harvest and negate @ €0.50` |
+| Auto match-type migration (broad → exact) | 30 days | `search-term orders ≥ 2 → promote to exact @ €0.60` |
+| Daily automation digest | **60 days ⚠** *(was 30 — the bid half)* | `Defaults: ≥ 2 orders · spend ≥ €10 → harvest and negate` |
+| Exact match discovery engine | 30 days ⚠ | `≥ 3 orders · spend ≥ €5 → harvest and negate @ €0.65` |
+| Harvest & negate search terms | 60 days ⚠ | `≥ 2 orders · spend ≥ €10 → harvest and negate @ €0.50` |
+
+**The cross-tab leak, closed and proven by the same rule reading differently in two places:**
+
+| Daily automation digest | Lookback | Criteria |
+|---|---|---|
+| on **Keyword Harvest** | 60 days | `Defaults: ≥ 2 orders · spend ≥ €10 → harvest and negate` |
+| on **Bid** | 30 days | `No criteria — runs on the clock → bid to target ACoS` |
+| on **Negative Targeting** | 60 days | `Defaults: ≥ 2 orders · spend ≥ €10 → harvest and negate` |
+
+**Section-wide, measured by DOM probe, four tabs:** Keyword Harvest 5 rules · Bid 18 · Negative
+Targeting 7 · Placement 8 — **0 rows reading "Always", 0 reading "None", 0 tooltips containing both
+"computes from the last N days" and "no performance data at all".** All three honest replacements
+appear and stay distinguishable: `Defaults: …`, `No criteria — runs on the clock`, `Any row its
+trigger selects`.
+
+**Geometry — no cap was needed, and none was added.** The Criteria strings roughly doubled in
+length, and `.h10-nt-crit` carries no truncation. Measured rather than guessed
+([[reference_grid_name_cell_content_cap]] — U2's px cap was a guess about another stylesheet):
+the column absorbed the growth at `table-layout: auto`, 411px → **516px**, table width **1600px
+against a 1600px card**, `pageOverflowX: false`, `tableOverflowsCard: false`, **0 clipped Criteria
+cells** on every tab checked. A speculative cap would have been the defect, not the fix.
+
+### 🔴 P7 partly overtaken while P1 was building
+
+A concurrent session shipped B4, which adds an **Activity** column to the shared grid — "10
+waiting" / "13 waiting" / "0 waiting" per rule. That is a large part of what P7 was going to build
+(the harvest queue's 33 pending suggestions being invisible from this page). **Re-scope P7 before
+starting it:** what remains is the link out to `/marketing/ads/suggestions` filtered to the harvest
+types, and the Change Log filter — not the count, which now exists.
+
+---
+
 ## Appendix — scripts
 
 `apps/api/scripts/_hvr-state.mts` — read-only, re-runnable. Rule shapes and parameters, campaign and
