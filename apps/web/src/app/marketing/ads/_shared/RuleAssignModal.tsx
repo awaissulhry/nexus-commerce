@@ -62,9 +62,14 @@ const METRICS: Array<{ field: string; label: string; hint: string }> = [
   { field: 'campaign.spendCents', label: 'Spend (cents)', hint: '5000 is €50' },
 ]
 
-export function RuleAssignModal({ campaignName, rules, selected, onToggle, onSetAll, onCreated, onClose, builderHref }: {
+export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, onToggle, onSetAll, onCreated, onClose, builderHref }: {
   campaignName: string
-  rules: AssignableRule[]
+  /**
+   * 🔴 `null` means the catalogue did not load; `[]` means it loaded and there are none. Collapsing
+   * the two is what made this modal announce "No budget rule exists yet" while six existed, on the
+   * day its endpoint 500'd — the same broke-vs-empty distinction the grid's four empty states keep.
+   */
+  rules: AssignableRule[] | null
   /** The ids currently selected — staged, not necessarily saved. */
   selected: string[]
   onToggle: (ruleId: string) => void
@@ -74,6 +79,8 @@ export function RuleAssignModal({ campaignName, rules, selected, onToggle, onSet
   onClose: () => void
   builderHref: string
 }) {
+  const rules = rulesOrNull ?? []
+  const failed = rulesOrNull === null
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -128,7 +135,13 @@ export function RuleAssignModal({ campaignName, rules, selected, onToggle, onSet
             Unassign everything and nothing may move it.
           </p>
 
-          {rules.length === 0 && (
+          {failed && (
+            <p className="h10-ram-broke" role="status">
+              The budget rules could not be loaded, so this list is incomplete. Nothing here says
+              there are none — close and reopen to try again.
+            </p>
+          )}
+          {!failed && rules.length === 0 && (
             <p className="h10-ram-empty">No budget rule exists yet. Create the first one below.</p>
           )}
 

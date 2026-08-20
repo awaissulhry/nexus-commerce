@@ -1337,9 +1337,12 @@ export function ApplyRulesClient() {
           information is easily readable … I should be able to create new rules directly from the
           modal"*. Same staging contract as before — choosing stages, the Apply bar commits. ── */}
       {assignMenu && (
+        /* `rules` is nullable on purpose — in the modal, null is "did not load" and [] is
+           "none exist". Collapsing them is what made it announce "No budget rule exists yet"
+           while six existed, on the day its endpoint 500'd. */
         <RuleAssignModal
           campaignName={assignMenu.row.name}
-          rules={assignRules ?? []}
+          rules={assignRules}
           selected={assignedIdsFor(assignMenu.row.id)}
           onToggle={(ruleId) => {
             const cur = assignedIdsFor(assignMenu.row.id)

@@ -24,6 +24,10 @@ import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegion } from '../services/advertising/ads-api-client.js'
+// D2b — the conditions in the Budget tab's own words. Static, and from a module with no imports:
+// a dynamic import of the budget-grid service resolved mid-evaluation through a circular chain and
+// threw "Cannot access 'conditionsTextOf' before initialization" on prod.
+import { conditionsTextOf } from '../services/advertising/rule-conditions-text.js'
 import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
 import { allocate, microsToCents, toEurCents } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
@@ -1128,9 +1132,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         conditionsText: conditionsTextOf(r.conditions),
       }))
-    // D2b — the conditions in the Budget tab's own words. Same formatter, so the modal and that
-    // tab cannot describe one rule two ways.
-    const { conditionsTextOf } = await import('../services/advertising/budget-grid.service.js')
     const byCampaign = new Map<string, string[]>()
     for (const l of links) {
       const arr = byCampaign.get(l.campaignId) ?? []

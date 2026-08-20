@@ -53,6 +53,7 @@
  */
 
 import prisma from '../../db.js'
+import { conditionsTextOf } from './rule-conditions-text.js'
 import { resolveScopeReach } from './ads-scope-reach.js'
 import { resolveAutonomy, type AutonomyLevel } from './ads-autonomy.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
@@ -412,21 +413,6 @@ const scopeTextOf = (r: { scopeMarketplace: string | null; scopePortfolioId: str
 }
 
 /** A readable one-liner for the conditions column. The full DSL is BUD.3's drawer. */
-/**
- * D2b — exported so the assignment modal can preview a rule's conditions with the SAME words the
- * Budget tab uses. A second formatter would drift the first time an operator compared them.
- */
-export const conditionsTextOf = (conditions: unknown): string => {
-  const list = (Array.isArray(conditions) ? conditions : []) as Array<Record<string, unknown>>
-  if (!list.length) return 'No conditions — matches every context'
-  return list.map((c) => {
-    const field = String(c.field ?? c.metric ?? '?')
-    const op = String(c.operator ?? c.op ?? '?')
-    const value = c.value ?? c.threshold
-    const sym = op === 'gte' ? '≥' : op === 'lte' ? '≤' : op === 'gt' ? '>' : op === 'lt' ? '<' : op === 'eq' ? '=' : op
-    return `${field} ${sym} ${String(value)}`
-  }).join(' AND ')
-}
 
 export async function getBudgetGrid(req: BudGridRequest): Promise<BudGridResult> {
   const since = new Date(Date.now() - req.windowDays * 86400_000)
