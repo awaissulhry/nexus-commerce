@@ -75,8 +75,15 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
   onCreated: (rule: { id: string; name: string }) => void
   onClose: () => void
 }) {
-  const rules = rulesOrNull ?? []
   const failed = rulesOrNull === null
+  /**
+   * D2d — ORDER carries the hierarchy, so no group headings are needed (the operator asked for
+   * less text, not more). Armed rules first — those are the ones that can actually move money —
+   * then the ones that only propose, then the ones switched off. Stable within each band, so the
+   * catalogue's alphabetical order still shows through.
+   */
+  const RANK: Record<string, number> = { AUTO: 0, PROPOSE: 1, OBSERVE: 2, OFF: 3 }
+  const rules = [...(rulesOrNull ?? [])].sort((a, b) => (RANK[a.level] ?? 9) - (RANK[b.level] ?? 9))
   const [creating, setCreating] = useState(false)
   const [madeOne, setMadeOne] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -144,8 +151,16 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
                     <span className="t">{r.name}</span>
                     {/* The state travels with the name: assigning a disabled rule governs nothing,
                         and two of these rules share a name — the state is what tells them apart. */}
-                    <span className={`lv ${r.enabled ? '' : 'off'}`}>{r.level}</span>
-                    {r.percent != null && <span className="pc">{r.percent > 0 ? '+' : ''}{r.percent}%</span>}
+                    {/* 🔴 D2d — AUTO and PROPOSE rendered in the SAME colour before this, so the
+                        one distinction that matters — can this rule actually move money, or does
+                        it only suggest — was invisible. AUTO is filled, PROPOSE outlined, OFF
+                        muted. */}
+                    <span className={`lv ${r.level.toLowerCase()}`}>{r.level}</span>
+                    {/* Direction was one grey for both: +15% and −20% read identically. The sign
+                        still carries it for anyone who cannot use the colour. */}
+                    {r.percent != null && (
+                      <span className={`pc ${r.percent > 0 ? 'up' : 'down'}`}>{r.percent > 0 ? '+' : '−'}{Math.abs(r.percent)}%</span>
+                    )}
                   </span>
                   <span className="d">{r.conditionsText || 'No conditions — matches every context'}</span>
                 </span>

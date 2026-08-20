@@ -3310,11 +3310,22 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
 .h10-ram-opt .b { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .h10-ram-opt .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .h10-ram-opt .t { font-size: 14px; font-weight: 700; color: #1f2c3d; }
-/* #10457f is 9.63:1 on white, #6b7383 4.77:1 — the OFF state is muted but still readable, because
-   "this rule is switched off" is the fact that decides whether assigning it does anything. */
-.h10-ram-opt .lv { font-size: 10.5px; font-weight: 800; color: #10457f; letter-spacing: .02em; }
-.h10-ram-opt .lv.off { color: #6b7383; }
-.h10-ram-opt .pc { font-size: 12px; font-weight: 700; color: #3a4452; font-variant-numeric: tabular-nums; }
+/* 🔴 D2d — AUTO and PROPOSE were the SAME colour (both #10457f), so the only distinction that
+   matters in this list — whether a rule can actually move money or merely suggests — was carried
+   by nothing but the word itself at 10.5px. They are now three visibly different objects:
+   AUTO filled, PROPOSE outlined, OFF muted. Measured on both grounds this list uses, white and
+   the #eef4fd selected row: white-on-#1f6fde 4.79:1 · #10457f-on-#e3edfb 8.15:1 ·
+   #5b6573-on-#eef1f5 5.22:1. */
+.h10-ram-opt .lv { flex: 0 0 auto; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: .03em; }
+.h10-ram-opt .lv.auto { background: #1f6fde; color: #fff; }
+.h10-ram-opt .lv.propose { background: #e3edfb; color: #10457f; }
+.h10-ram-opt .lv.off, .h10-ram-opt .lv.observe { background: #eef1f5; color: #5b6573; }
+/* Direction. Both were #3a4452, so a +15% raise and a −20% cut read identically. Colour is never
+   alone: the sign is right there. Greens/reds are ones the palette already carries.
+   #167a48 → 5.37:1 on white, 4.86:1 on the selected row · #a3342b → 6.81:1 / 6.16:1. */
+.h10-ram-opt .pc { flex: 0 0 auto; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.h10-ram-opt .pc.up { color: #167a48; }
+.h10-ram-opt .pc.down { color: #a3342b; }
 /* `white-space: normal` on purpose: this sits inside a modal, not a grid cell, and the conditions
    are a sentence that must wrap rather than a value that must not. #6b7480 is 4.74:1. */
 .h10-ram-opt .d { font-size: 12.5px; color: #6b7480; line-height: 1.45; white-space: normal; }
