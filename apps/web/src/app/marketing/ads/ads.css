@@ -3285,81 +3285,91 @@ a.h10-rc-bud.one:hover .t { text-decoration: underline; }
 a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; border-radius: 3px; }
 /* An uncommitted staged change. Amber like the staleness chip, because both mean "this is not
    settled yet". #8a5316 on #fff6e8 is 5.89:1 — computed, not guessed. */
-/* ── D2b — the "Budget rules for <campaign>" modal ───────────────────────────────────────────────
-   Chassis is `h10-rtm` (the "Select a Rule Type" modal), reused verbatim from rules-automation.css.
-   🔴 The widening is written `.h10-rtm.h10-ram` — two classes, 0,2,0 — so it beats `.h10-rtm`'s
-   width on SPECIFICITY and does not depend on source order. It has to: `ads.css` loads in the
-   PARENT layout and therefore comes BEFORE rules-automation.css, so an equal-specificity override
-   here would lose. 640px against the chassis's 560 is the operator's "slightly bigger".
-   Every colour below measured on its own ground, not estimated. */
-.h10-rtm.h10-ram { width: 640px; }
-/* D2c — `h10-ram-lede` DELETED. Two sentences explaining what the checkboxes already show, on
-   screen permanently. The one fact that could not be inferred moved to the footer note, which now
-   appears only after a rule is created. */
-.h10-ram-empty { margin: 8px 0 12px; font-size: 13px; color: #3a4452; }
-/* A FAILED load, which is not an empty one. Danger-toned and bordered so it cannot be mistaken for
-   the neutral "there are none" above it. #8c2f22 on #fdece9 is 7.21:1. */
-.h10-ram-broke { margin: 8px 0 12px; padding: 9px 11px; border: 1px solid #d38b80; border-radius: 8px; background: #fdece9; font-size: 12.5px; font-weight: 600; color: #8c2f22; line-height: 1.45; }
-/* A rule row: checkbox + name/state/percent on one line, its CONDITIONS underneath. The second
-   line is the whole point of the rebuild — the popover it replaces ellipsised the name and never
-   showed the conditions at all. */
-.h10-ram-opt { display: flex; align-items: flex-start; gap: 13px; padding: 10px 10px; margin: 0 -10px; border-radius: 8px; cursor: pointer; }
-.h10-ram-opt:hover { background: #f7f9fc; }
-.h10-ram-opt.on { background: #eef4fd; }
-.h10-ram-opt > input { margin-top: 3px; accent-color: #1f6fde; width: 17px; height: 17px; flex-shrink: 0; }
-.h10-ram-opt .b { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.h10-ram-opt .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.h10-ram-opt .t { font-size: 14px; font-weight: 700; color: #1f2c3d; }
-/* 🔴 D2d — AUTO and PROPOSE were the SAME colour (both #10457f), so the only distinction that
-   matters in this list — whether a rule can actually move money or merely suggests — was carried
-   by nothing but the word itself at 10.5px. They are now three visibly different objects:
-   AUTO filled, PROPOSE outlined, OFF muted. Measured on both grounds this list uses, white and
-   the #eef4fd selected row: white-on-#1f6fde 4.79:1 · #10457f-on-#e3edfb 8.15:1 ·
-   #5b6573-on-#eef1f5 5.22:1. */
-.h10-ram-opt .lv { flex: 0 0 auto; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: .03em; }
-.h10-ram-opt .lv.auto { background: #1f6fde; color: #fff; }
-.h10-ram-opt .lv.propose { background: #e3edfb; color: #10457f; }
-.h10-ram-opt .lv.off, .h10-ram-opt .lv.observe { background: #eef1f5; color: #5b6573; }
-/* Direction. Both were #3a4452, so a +15% raise and a −20% cut read identically. Colour is never
-   alone: the sign is right there. Greens/reds are ones the palette already carries.
-   #167a48 → 5.37:1 on white, 4.86:1 on the selected row · #a3342b → 6.81:1 / 6.16:1. */
-.h10-ram-opt .pc { flex: 0 0 auto; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.h10-ram-opt .pc.up { color: #167a48; }
-.h10-ram-opt .pc.down { color: #a3342b; }
-/* `white-space: normal` on purpose: this sits inside a modal, not a grid cell, and the conditions
-   are a sentence that must wrap rather than a value that must not. #6b7480 is 4.74:1. */
-.h10-ram-opt .d { font-size: 12.5px; color: #6b7480; line-height: 1.45; white-space: normal; }
+/* ── D3a — the "Budget rules" modal, from the design handoff ─────────────────────────────────────
+   Built on the DS `Modal` (`h10-ds-modal`) rather than the old `h10-rtm` chassis, per the handoff:
+   "recreate this design through DS components, not by transcribing inline styles". Every colour the
+   handoff names as a hex resolves to an existing --h10-* token — all 14 checked — so this block
+   uses the tokens and never the literals. Only the toggle animates (the DS Toggle owns that);
+   nothing else here transitions, which is the handoff's rule.
+   ⚠️ The width is the ONE deviation from "prefer the primitive": the handoff specifies 720px and
+   the DS offers 440/560/660/920, so `size="lg"` is overridden by a single declaration. Two classes
+   (0,2,0) so it beats `.h10-ds-modal.lg` on specificity rather than on source order. */
+.h10-ds-modal.h10-ram { width: 720px; max-height: 88vh; }
 
-/* D2c — `h10-ram-newbtn`, a bespoke dashed button invented for this modal, was DELETED. It was a
-   fourth button idiom in one dialog; the action is a plain `h10-am-btn sm` now, like everything
-   else in the tree. This row just lays them out. */
-.h10-ram-acts { display: flex; gap: 8px; margin: 14px 0 2px; }
-.h10-ram-new { margin: 12px 0 4px; padding: 14px; border: 1px solid #e6e9ee; border-radius: 10px; background: #fafbfd; }
+.h10-ram-title { display: inline-flex; align-items: baseline; gap: 9px; }
+/* The campaign is DATA — mono, so it reads as an identifier rather than prose. */
+.h10-ram-title .camp { font-family: var(--font-mono), ui-monospace, monospace; font-size: 13px; font-weight: 400; color: var(--h10-grey-500); }
+
+/* Control bar — search grows, segments keep their width. Wraps under 760px so the segmented
+   control drops beneath the field, as the handoff's responsive note requires. */
+.h10-ram-bar { display: flex; gap: 8px; padding: 0 20px 12px; }
+.h10-ram-bar .h10-ram-search { flex: 1 1 auto; min-width: 0; }
+.h10-ram-clear { display: inline-flex; border: 0; background: none; padding: 0; color: var(--h10-grey-500); cursor: pointer; }
+.h10-ram-clear:hover { color: var(--h10-grey-900); }
+@media (max-width: 760px) { .h10-ram-bar { flex-wrap: wrap; } .h10-ram-bar .h10-ram-search { flex-basis: 100%; } }
+
+.h10-ram-list { border-top: 1px solid var(--h10-grey-150); }
+
+/* Row — two lines reading as one sentence. `border-left` is the status bar; its colour is the
+   rule's MODE, and it drops to the subtlest grey when the rule is not assigned here. */
+.h10-ram-row { display: flex; align-items: center; gap: 12px; padding: 10px 20px 10px 17px; border-left: 3px solid var(--h10-grey-100); border-bottom: 1px solid var(--h10-grey-100); }
+.h10-ram-row:hover { background: var(--h10-grey-25); }
+.h10-ram-row .b { min-width: 0; flex: 1 1 auto; }
+.h10-ram-row .l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.h10-ram-row .nm { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--h10-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 🔴 A BARE WORD — no chip, no pill, no fill. The handoff's deliberate replacement for the old
+   Automation column of chips, and a deliberate reversal of the filled badges D2d added. */
+.h10-ram-row .md { flex-shrink: 0; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--h10-grey-400); }
+.h10-ram-row .l2 { display: flex; align-items: baseline; gap: 7px; min-width: 0; margin-top: 2px; font-family: var(--font-mono), ui-monospace, monospace; font-size: 12.5px; }
+.h10-ram-row .cond { color: var(--h10-grey-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-ram-row .arw { flex-shrink: 0; color: var(--h10-grey-400); }
+.h10-ram-row .dl { flex-shrink: 0; font-weight: 600; }
+
+/* Assigned: the mode colours the bar and the word. */
+.h10-ram-row.on.m-auto { border-left-color: var(--h10-blue-600); }
+.h10-ram-row.on.m-auto .md { color: var(--h10-blue-600); }
+.h10-ram-row.on.m-propose { border-left-color: var(--h10-blue-200); }
+.h10-ram-row.on.m-propose .md { color: var(--h10-grey-600); }
+.h10-ram-row.on.m-off { border-left-color: var(--h10-grey-150); }
+.h10-ram-row.on .dl.up { color: var(--h10-green-700); }
+.h10-ram-row.on .dl.down { color: var(--h10-red-700); }
+
+/* Unassigned: sunken, dimmed, and the delta loses its direction colour — nothing here will move
+   this budget, so nothing here should read as a live number. */
+/* 🔴 The one colour in the handoff with NO token: "surface sunken (row off)" #fbfcfd. It is
+   deliberately not --h10-grey-25 (#f7f9fb) — that is the RAISED surface, already used by this
+   row's hover, and an unassigned row must not look like a hovered one. Adding a token would mean
+   editing tokens.css, which is GENERATED from tokens/css-vars.ts and which the handoff puts in a
+   separate PR ("touches shared tokens, so it affects every screen"). So: the literal, named. */
+.h10-ram-row.off { background: #fbfcfd; }
+.h10-ram-row.off .nm { color: var(--h10-grey-500); }
+.h10-ram-row.off .md, .h10-ram-row.off .cond, .h10-ram-row.off .arw, .h10-ram-row.off .dl { color: var(--h10-grey-400); }
+
+.h10-ram-none { padding: 34px 20px; text-align: center; font-size: 13px; color: var(--h10-grey-500); }
+/* A FAILED load, which is not an empty one — bordered and danger-toned so it cannot be read as
+   "there are none". */
+.h10-ram-broke { margin: 12px 20px; padding: 9px 11px; border: 1px solid #d38b80; border-radius: 8px; background: #fdece9; font-size: 12.5px; font-weight: 600; color: #8c2f22; }
+
+/* `Unassign all` — kept out of the footer on the handoff's own instruction ("do not re-add a third
+   footer button"); it appears with the assigned context instead. */
+.h10-ram-sub { padding: 10px 20px; }
+.h10-ram-count { font-size: 12.5px; color: var(--h10-grey-500); }
+.h10-ram-note { font-size: 11.5px; color: var(--h10-grey-500); }
+.h10-ram-grow { flex: 1 1 auto; }
+
+/* The create form the prototype has no equivalent for — kept because the operator asked for it. */
+.h10-ram-new { margin: 12px 20px; padding: 14px; border: 1px solid var(--h10-grey-150); border-radius: 10px; background: var(--h10-grey-25); }
 .h10-ram-new .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; align-items: flex-end; }
+.h10-ram-new .row:first-child { margin-top: 0; }
 .h10-ram-new .f { display: flex; flex-direction: column; gap: 5px; flex: 1 1 auto; min-width: 0; }
 .h10-ram-new .f.narrow { flex: 0 0 auto; }
-.h10-ram-new .f > span:first-child { font-size: 11.5px; font-weight: 700; color: #6b7480; }
-.h10-ram-new .f input { width: 100%; padding: 7px 9px; border: 1px solid #d6dbe3; border-radius: 7px; font: inherit; font-size: 13px; color: #1f2c3d; background: #fff; }
-.h10-ram-new .f.narrow input { width: 84px; }
-.h10-ram-new .f input:focus-visible { outline: 2px solid #1f6fde; outline-offset: 1px; border-color: #1f6fde; }
-.h10-ram-new .pct { display: inline-flex; align-items: center; gap: 4px; }
-.h10-ram-new .pct i { font-style: normal; font-size: 12.5px; color: #6b7480; }
-/* D2c — the standing hint paragraph DELETED; the unit now labels its own field ("0.4 = 40%"),
-   which is where it is actually needed. */
-/* #8c2f22 on the #fafbfd panel is 7.97:1. */
+.h10-ram-new .f > span:first-child { font-size: 11.5px; font-weight: 700; color: var(--h10-grey-500); }
+.h10-ram-new .f input, .h10-ram-new .f .h10-ds-select { width: 100%; }
+.h10-ram-new .f input { padding: 7px 9px; border: 1px solid var(--h10-grey-200); border-radius: 9px; font: inherit; font-size: 13px; color: var(--h10-grey-900); background: #fff; }
+.h10-ram-new .f.narrow input, .h10-ram-new .f.narrow .h10-ds-select { width: 116px; }
+.h10-ram-new .f input:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: 1px; border-color: var(--h10-blue-600); }
 .h10-ram-new .err { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #8c2f22; }
 .h10-ram-new .acts { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-.h10-ram-new .acts .grow { flex: 1 1 auto; }
-
-.h10-rtm-f.h10-ram-f { gap: 12px; }
-.h10-rtm-f.h10-ram-f .grow { flex: 1 1 auto; }
-/* The one thing an operator cannot infer: the create route stores every new advertising rule
-   disabled + dry-run, so a rule made here is assigned but inert until armed. #6b7480 is 4.74:1. */
-.h10-rtm-f.h10-ram-f .note { font-size: 11.5px; color: #6b7480; text-align: right; max-width: 320px; line-height: 1.35; }
-
-/* D3's anchored assignment dropdown (`h10-assignmenu`) was REMOVED here, not orphaned: D2b
-   replaced it with `RuleAssignModal` and nothing references those classes any more. Verified by
-   grep across the ads tree before deleting. */
 
 /* D3 — the global Apply bar. Sticks to the bottom of the viewport so a staged change is never
    scrolled out of sight and forgotten, which is the failure mode of a footer that scrolls away. */

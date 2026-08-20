@@ -1,53 +1,59 @@
 'use client'
 
 /**
- * ── "Budget rules for <campaign>" ───────────────────────────────────────────────────────────────
+ * ── "Budget rules — <campaign>" ─────────────────────────────────────────────────────────────────
  *
  * Assign the budget rules that may move a campaign's daily budget, and create one without leaving.
  *
- * ── D2c (2026-08-20) — one button vocabulary, and far less prose ────────────────────────────────
- * 🔴 **Operator:** *"The buttons are inconsistent. There is a lot of text, unnecessary text."*
- * Both were true. D2b's version carried **four** button idioms in one dialog — a bespoke dashed
- * `h10-ram-newbtn` invented here, `h10-am-btn primary`, `h10-am-link`, and the chassis footer's
- * classless `.cancel`/`.next` — plus five blocks of prose that were on screen whether or not they
- * were relevant.
+ * ── D3a (2026-08-20) — rebuilt to the design handoff ────────────────────────────────────────────
+ * Built from `~/Downloads/design_handoff_budget_rules_modal` — the README plus the live prototype
+ * in `reference/`, which I served and interacted with before writing this, as the handoff asks.
+ * Every rule is a two-line row that reads as one sentence — toggle · name + mode word ·
+ * `condition → delta` in mono — and scanning moves from columns to live controls: type-to-filter
+ * and mode segments.
  *
- * **Every labelled button here is now `h10-am-btn`**, with `primary` on the one main action in
- * each context. That is the tree's own vocabulary, not a new one: measured across `marketing/ads`,
- * `h10-am-btn` and its modifiers account for **257** uses against a long tail of one-offs. The
- * header's `×` stays as the chassis's close affordance — an icon, not a labelled button.
- * ⚠️ `RuleTypeModal` still uses the chassis's `.cancel`/`.next`. Converging it is a small change
- * and was NOT made here: that file is another session's active work.
+ * 🔴 **Built through the DS, not by transcribing the prototype's inline styles**, per the handoff.
+ * `Modal`, `Input`, `SegmentedControl`, `Toggle` and `Button` are all `design-system` primitives —
+ * already used 97 times inside `marketing/ads`, so this is existing practice here, not a new
+ * dependency. Every colour the handoff names as a hex resolves to an existing `--h10-*` token
+ * (checked: all 14), so the CSS uses tokens and never the literals.
  *
- * **Text appears when it is needed, not permanently.** The standing lede, the "full builder"
- * escape hatch and the always-on footer note are gone; the one fact an operator cannot infer —
- * that a rule created here is assigned but not armed — now shows only after they create one.
- * `scripts/check-button-vocabulary.mjs` ratchets the button half so a fifth idiom cannot arrive
- * quietly.
+ * ── Three places the handoff did not match the repo, and what I did ─────────────────────────────
+ * 1. It places the modal at `rules-automation/budget/BudgetRulesModal.tsx`. That path holds the
+ *    Budget TAB — page header, tabs, rules grid — and mounts no modal at all; there is no 920px
+ *    column-based modal anywhere in the tree. The budget-rules assignment modal is THIS file,
+ *    mounted from Apply Rules, so the design was applied here. Building it where nothing mounts it
+ *    would have shipped a file the operator could never open.
+ * 2. The README says *"`OFF` is not rendered as a word when the row is off"*, but the prototype
+ *    renders all six mode words including `OFF` at `#aeb6c2` — which is also what the handoff's own
+ *    state table specifies for an unassigned row. Followed the prototype and the table.
+ * 3. The prototype has no create flow. The operator asked for one explicitly — *"I should be able
+ *    to create new rules directly from the modal"* — and it works, so it is KEPT, opened by the
+ *    handoff's own `New rule` footer button.
  *
- * ── Chassis ─────────────────────────────────────────────────────────────────────────────────────
- * `h10-rtm*` — the "Select a Rule Type" modal's box, header, body and footer — reused verbatim.
- * ⚠️ Before mounting outside `/rules-automation` (D6, the Ad Manager) that block must move from
- * `rules-automation.css` to `ads.css`; only the rules-automation layout loads it. A strict
- * widening, not done yet because that file is another session's work in progress.
+ * The handoff's `Unassign all` note is honoured: not a third footer button. It sits with the
+ * assigned context, appearing only when something is assigned.
  *
- * ── Creating a rule ─────────────────────────────────────────────────────────────────────────────
- * `POST /advertising/automation-rules` with the `CAMPAIGN_PERFORMANCE_BUDGET` shape the existing
- * budget rules use. Deliberately narrow — one metric, one threshold, one percentage; anything
- * richer belongs in the builder rather than in a second builder kept in step with the first.
- * The route stores every new advertising rule **disabled + dry-run** and that is not overridden.
+ * ⚠️ Width: the handoff specifies 720px; the DS `Modal` offers 440/560/660/920. `size="lg"` plus a
+ * width override in `ads.css` — the one deviation from "prefer the primitive", and it is a single
+ * declaration rather than a reimplemented modal.
  */
-import { useState } from 'react'
-import { X, Plus } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Search, X, Plus } from 'lucide-react'
+import { Modal } from '@/design-system/components/Modal'
+import { Input } from '@/design-system/primitives/Input'
+import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
+import { Toggle } from '@/design-system/primitives/Toggle'
+import { Button } from '@/design-system/primitives/Button'
+import { Select } from '@/design-system/primitives/Select'
 import { getBackendUrl } from '@/lib/backend-url'
-// The DS select for this tree. `marketing/ads` being allowlisted from the DS ratchet is a reason
-// not to be FAILED by it, not a licence to hand-roll a native <select>.
-import { H10Select } from '../campaigns/FilterDropdown'
+import { filterBudgetRules, type RuleSegment } from './useBudgetRuleFilter'
 
 export interface AssignableRule {
   id: string
   name: string
   enabled: boolean
+  /** the rule's own mode — AUTO / PROPOSE / OFF — independent of whether it is assigned here */
   level: string
   percent: number | null
   conditionsText?: string | null
@@ -60,6 +66,17 @@ const METRICS: Array<{ field: string; label: string; unit: string }> = [
   { field: 'campaign.budgetUtilization', label: 'Budget used', unit: '0.85 = 85%' },
   { field: 'campaign.spendCents', label: 'Spend', unit: 'cents, 5000 = €50' },
 ]
+
+const SEGMENTS: Array<{ value: RuleSegment; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'on', label: 'Active' },
+  { value: 'AUTO', label: 'Auto' },
+  { value: 'PROPOSE', label: 'Propose' },
+]
+
+/** U+2212, not a hyphen — the same glyph the criteria formatter uses. */
+const deltaOf = (percent: number | null): string =>
+  percent == null ? '' : `${percent > 0 ? '+' : '−'}${Math.abs(percent)}%`
 
 export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, onToggle, onSetAll, onCreated, onClose }: {
   campaignName: string
@@ -76,14 +93,9 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
   onClose: () => void
 }) {
   const failed = rulesOrNull === null
-  /**
-   * D2d — ORDER carries the hierarchy, so no group headings are needed (the operator asked for
-   * less text, not more). Armed rules first — those are the ones that can actually move money —
-   * then the ones that only propose, then the ones switched off. Stable within each band, so the
-   * catalogue's alphabetical order still shows through.
-   */
-  const RANK: Record<string, number> = { AUTO: 0, PROPOSE: 1, OBSERVE: 2, OFF: 3 }
-  const rules = [...(rulesOrNull ?? [])].sort((a, b) => (RANK[a.level] ?? 9) - (RANK[b.level] ?? 9))
+  const all = useMemo(() => rulesOrNull ?? [], [rulesOrNull])
+  const [query, setQuery] = useState('')
+  const [segment, setSegment] = useState<RuleSegment>('all')
   const [creating, setCreating] = useState(false)
   const [madeOne, setMadeOne] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -93,6 +105,15 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
   const [op, setOp] = useState<'gte' | 'lte'>('gte')
   const [value, setValue] = useState('')
   const [percent, setPercent] = useState('')
+
+  const shown = useMemo(() => {
+    const shaped = all.map((r) => ({
+      ...r,
+      condition: r.conditionsText || 'No conditions — matches every context',
+      delta: deltaOf(r.percent),
+    }))
+    return filterBudgetRules(shaped, query, segment, (id) => selected.includes(id))
+  }, [all, query, segment, selected])
 
   const metric = METRICS.find((m) => m.field === field) ?? METRICS[0]
   const pctNum = Number(percent)
@@ -125,104 +146,126 @@ export function RuleAssignModal({ campaignName, rules: rulesOrNull, selected, on
     } finally { setBusy(false) }
   }
 
+  const activeCount = all.filter((r) => selected.includes(r.id)).length
+
   return (
-    <div className="h10-rtm-back" onClick={onClose}>
-      <div className="h10-rtm h10-ram" role="dialog" aria-modal="true" aria-label={`Budget rules for ${campaignName}`} onClick={(e) => e.stopPropagation()}>
-        <div className="h10-rtm-h">
-          <b>Budget rules — {campaignName}</b>
-          <button type="button" className="x" onClick={onClose} aria-label="Close"><X size={18} /></button>
-        </div>
-
-        <div className="h10-rtm-b">
-          {failed && (
-            <p className="h10-ram-broke" role="status">Could not load the rules — this list is incomplete.</p>
-          )}
-          {!failed && rules.length === 0 && (
-            <p className="h10-ram-empty">No budget rule exists yet.</p>
-          )}
-
-          {rules.map((r) => {
-            const on = selected.includes(r.id)
-            return (
-              <label key={r.id} className={`h10-ram-opt ${on ? 'on' : ''}`}>
-                <input type="checkbox" checked={on} onChange={() => onToggle(r.id)} />
-                <span className="b">
-                  <span className="hd">
-                    <span className="t">{r.name}</span>
-                    {/* The state travels with the name: assigning a disabled rule governs nothing,
-                        and two of these rules share a name — the state is what tells them apart. */}
-                    {/* 🔴 D2d — AUTO and PROPOSE rendered in the SAME colour before this, so the
-                        one distinction that matters — can this rule actually move money, or does
-                        it only suggest — was invisible. AUTO is filled, PROPOSE outlined, OFF
-                        muted. */}
-                    <span className={`lv ${r.level.toLowerCase()}`}>{r.level}</span>
-                    {/* Direction was one grey for both: +15% and −20% read identically. The sign
-                        still carries it for anyone who cannot use the colour. */}
-                    {r.percent != null && (
-                      <span className={`pc ${r.percent > 0 ? 'up' : 'down'}`}>{r.percent > 0 ? '+' : '−'}{Math.abs(r.percent)}%</span>
-                    )}
-                  </span>
-                  <span className="d">{r.conditionsText || 'No conditions — matches every context'}</span>
-                </span>
-              </label>
-            )
-          })}
-
-          {!creating ? (
-            <div className="h10-ram-acts">
-              <button type="button" className="h10-am-btn sm" onClick={() => { setCreating(true); setErr(null) }}>
-                <Plus size={13} aria-hidden /> New rule
-              </button>
-              {selected.length > 0 && (
-                <button type="button" className="h10-am-btn sm" onClick={() => onSetAll([])}>Unassign all</button>
-              )}
-            </div>
-          ) : (
-            <div className="h10-ram-new">
-              <div className="row">
-                <label className="f">
-                  <span>Name</span>
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Trim on weak ACoS" aria-label="Rule name" />
-                </label>
-              </div>
-              <div className="row">
-                <span className="f">
-                  <span>When</span>
-                  <H10Select options={METRICS.map((m) => ({ value: m.field, label: m.label }))} value={field} onChange={setField} ariaLabel="Metric" width={160} />
-                </span>
-                <span className="f narrow">
-                  <span>is</span>
-                  <H10Select options={[{ value: 'gte', label: '≥' }, { value: 'lte', label: '≤' }]} value={op} onChange={(v) => setOp(v as 'gte' | 'lte')} ariaLabel="Comparison" width={70} />
-                </span>
-                <label className="f narrow">
-                  <span>{metric.unit}</span>
-                  <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Threshold" />
-                </label>
-                <label className="f narrow">
-                  <span>budget %</span>
-                  <input inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} aria-label="Budget change percent" placeholder="-15" />
-                </label>
-              </div>
-              {err && <p className="err" role="status">{err}</p>}
-              <div className="acts">
-                <span className="grow" />
-                <button type="button" className="h10-am-btn" onClick={() => { setCreating(false); setErr(null) }}>Cancel</button>
-                <button type="button" className="h10-am-btn primary" disabled={!valid || busy} aria-disabled={!valid || busy} onClick={() => void create()}>
-                  {busy ? 'Creating…' : 'Create'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="h10-rtm-f h10-ram-f">
-          {/* Shown only once they have made one — the single fact that cannot be inferred, at the
-              moment it becomes true, rather than permanently. */}
-          {madeOne && <span className="note">Created rules are assigned but not armed.</span>}
-          <span className="grow" />
-          <button type="button" className="h10-am-btn primary" onClick={onClose}>Done</button>
-        </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      className="h10-ram"
+      title={<span className="h10-ram-title">Budget rules <span className="camp">{campaignName}</span></span>}
+      footer={
+        <>
+          <span className="h10-ram-count">{activeCount} of {all.length} rules active</span>
+          {madeOne && <span className="h10-ram-note">Created rules are assigned but not armed.</span>}
+          <span className="h10-ram-grow" />
+          <Button variant="secondary" onClick={() => { setCreating(true); setErr(null) }}>
+            <Plus size={13} aria-hidden /> New rule
+          </Button>
+          <Button variant="primary" onClick={onClose}>Done</Button>
+        </>
+      }
+    >
+      <div className="h10-ram-bar">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter rules, metrics or thresholds"
+          aria-label="Filter rules"
+          fieldClassName="h10-ram-search"
+          leadingIcon={<Search size={14} aria-hidden />}
+          suffix={query !== '' ? (
+            <button type="button" className="h10-ram-clear" aria-label="Clear" onClick={() => setQuery('')}>
+              <X size={13} aria-hidden />
+            </button>
+          ) : undefined}
+        />
+        <SegmentedControl options={SEGMENTS} value={segment} onChange={(v) => setSegment(v as RuleSegment)} />
       </div>
-    </div>
+
+      <div className="h10-ram-list">
+        {failed && <p className="h10-ram-broke" role="status">Could not load the rules — this list is incomplete.</p>}
+        {!failed && all.length === 0 && <p className="h10-ram-none">No budget rule exists yet.</p>}
+        {!failed && all.length > 0 && shown.length === 0 && (
+          <p className="h10-ram-none">
+            {query.trim() !== '' ? <>No rules match “{query.trim()}”</> : 'No rules in this view'}
+          </p>
+        )}
+
+        {shown.map((r) => {
+          const on = selected.includes(r.id)
+          const mode = (r.level || 'OFF').toUpperCase()
+          return (
+            <div key={r.id} className={`h10-ram-row ${on ? 'on' : 'off'} m-${mode.toLowerCase()}`}>
+              <Toggle checked={on} onChange={() => onToggle(r.id)} aria-label={r.name} />
+              <div className="b">
+                <div className="l1">
+                  {/* Truncated, so the full string stays reachable — handoff accessibility note. */}
+                  <span className="nm" title={r.name}>{r.name}</span>
+                  {/* A bare word, deliberately: no chip, no pill, no fill. The handoff's replacement
+                      for the old Automation column of chips. */}
+                  <span className="md">{mode}</span>
+                </div>
+                <div className="l2">
+                  <span className="cond" title={r.condition}>{r.condition}</span>
+                  {r.delta !== '' && <span className="arw" aria-hidden>→</span>}
+                  {r.delta !== '' && <span className={`dl ${(r.percent ?? 0) > 0 ? 'up' : 'down'}`}>{r.delta}</span>}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Not a third footer button, per the handoff — it sits with the assigned context. */}
+        {!creating && activeCount > 0 && (
+          <div className="h10-ram-sub">
+            <Button variant="ghost" onClick={() => onSetAll([])}>Unassign all</Button>
+          </div>
+        )}
+
+        {creating && (
+          <div className="h10-ram-new">
+            <div className="row">
+              <label className="f">
+                <span>Name</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Trim on weak ACoS" aria-label="Rule name" />
+              </label>
+            </div>
+            <div className="row">
+              <label className="f narrow">
+                <span>When</span>
+                <Select value={field} onChange={(e) => setField(e.target.value)} aria-label="Metric">
+                  {METRICS.map((m) => <option key={m.field} value={m.field}>{m.label}</option>)}
+                </Select>
+              </label>
+              <label className="f narrow">
+                <span>is</span>
+                <Select value={op} onChange={(e) => setOp(e.target.value as 'gte' | 'lte')} aria-label="Comparison">
+                  <option value="gte">≥</option>
+                  <option value="lte">≤</option>
+                </Select>
+              </label>
+              <label className="f narrow">
+                <span>{metric.unit}</span>
+                <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Threshold" />
+              </label>
+              <label className="f narrow">
+                <span>budget %</span>
+                <input inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} aria-label="Budget change percent" placeholder="-15" />
+              </label>
+            </div>
+            {err && <p className="err" role="status">{err}</p>}
+            <div className="acts">
+              <span className="h10-ram-grow" />
+              <Button variant="secondary" onClick={() => { setCreating(false); setErr(null) }}>Cancel</Button>
+              <Button variant="primary" disabled={!valid || busy} aria-disabled={!valid || busy} onClick={() => void create()}>
+                {busy ? 'Creating…' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
