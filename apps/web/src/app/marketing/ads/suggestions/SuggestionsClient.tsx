@@ -489,11 +489,25 @@ function SuggestionsInner() {
     const uniq = (xs: Array<string | null | undefined>) => [...new Set(xs.filter(Boolean) as string[])]
     const types = uniq(items.map((s) => s.proposedAction?.type))
     const mkts = uniq(items.map((s) => s.marketplace))
-    const rules = uniq(items.map((s) => s.ruleName))
+    // One option per rule id; the label is the live name the API resolved onto the row.
+    const seen = new Map<string, string>()
+    for (const s2 of items) if (s2.ruleId && !seen.has(s2.ruleId)) seen.set(s2.ruleId, s2.ruleName ?? 'Rule')
+    const ruleOpts = [...seen].map(([value, label]) => ({ value, label }))
     return [
       { key: 'type', label: 'Type', kind: 'select', options: types.map((t) => ({ value: t, label: ACTION_LABEL[t] ?? t })), placeholder: 'All types', value: (r) => (r as Suggestion).proposedAction?.type ?? '' },
       { key: 'mkt', label: 'Marketplace', kind: 'select', options: mkts.map((m) => ({ value: m, label: m })), placeholder: 'All markets', value: (r) => (r as Suggestion).marketplace ?? '' },
-      { key: 'rule', label: 'Rule', kind: 'select', options: rules.map((r) => ({ value: r, label: r })), placeholder: 'All rules', wide: true, searchable: true, value: (r) => (r as Suggestion).ruleName ?? '' },
+      /**
+       * 🔴 B4 — keyed on `ruleId`, never on `ruleName`.
+       *
+       * `ruleName` is a snapshot frozen when the suggestion was written, so a renamed rule appears
+       * as TWO options holding half its queue each. Measured on prod 2026-08-20: 7 of the 11 rules
+       * with pending suggestions were split that way — picking "Auto harvest & negate" showed 1 of
+       * its 10, with nothing saying the other 9 existed. The API now resolves the live name onto
+       * every row, and the option is identified by the id, so one rule is one entry whatever it
+       * has been called. This is also what makes `?rule=<id>` from the Rules grid land on the
+       * whole queue rather than the fraction that happens to share today's spelling.
+       */
+      { key: 'rule', label: 'Rule', kind: 'select', options: ruleOpts, placeholder: 'All rules', wide: true, searchable: true, value: (r) => (r as Suggestion).ruleId ?? '' },
     ]
   }, [items])
 
