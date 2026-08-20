@@ -8989,7 +8989,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         governedElsewhere: ms.filter((m) => governed.has(m.campaignId)).length,
       }
     })
-    return { items, count: groups.length }
+    /**
+     * FB.3e (2026-08-21) — the per-campaign 30d map, EMITTED instead of discarded. It was already
+     * computed above to build each group's summed `performance`; the campaigns grain needed the
+     * same numbers per member and the cheapest honest source is the one already in memory — same
+     * window, same table, so the two grains cannot disagree. Keyed by local campaign id.
+     */
+    const perf: Record<string, { costCents: number; salesCents: number; orders: number; clicks: number; impressions: number }> = {}
+    for (const [cid, e] of perfByCampaign) perf[cid] = e
+    return { items, count: groups.length, perfByCampaign: perf, perfWindowDays: 30 }
   })
   // Guardrail data — which campaigns are currently held by a group, so the builder can warn that
   // saving would MOVE a campaign out of another schedule (one campaign → one schedule row).

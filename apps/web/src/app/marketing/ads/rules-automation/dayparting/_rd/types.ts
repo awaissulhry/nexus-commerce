@@ -199,4 +199,7 @@ export interface RdCampaignRow {
   lastEvaluatedAt: string | null
   lastApplied: string | null
   runtime: RdCampaignRuntime
+  /** FB.3e — this campaign's own 30d performance, from the same payload the group roll-up sums
+   *  (`perfByCampaign` on /rank-schedule-groups). Null = no rows in the window, never a zero. */
+  perf: { costCents: number; salesCents: number; orders: number; clicks: number; impressions: number } | null
 }

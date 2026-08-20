@@ -1033,7 +1033,11 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 /* Frozen left columns (checkbox + Campaign) during the horizontal scroll. */
 .h10-am-grid th.ck, .h10-am-grid td.ck { position: sticky; left: 0; z-index: 3; background: #fff; }
 .h10-am-grid thead th.ck { z-index: 6; background: #f7f9fb; }
-.h10-am-grid th.nm.fz, .h10-am-grid td.nm.fz { position: sticky; left: 40px; z-index: 3; background: #fff; border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+/* FB.3e (2026-08-21) — 40px → 46px: the checkbox column was widened to 46px (see the th.ck rule
+   above at 46px and .nm at left:46px), but this HIGHER-specificity .nm.fz rule kept the old 40px,
+   so every selectable grid's frozen name column pinned 6px short and overlapped the checkbox
+   column on horizontal scroll. One winning rule, one value, matching td.ck's width. */
+.h10-am-grid th.nm.fz, .h10-am-grid td.nm.fz { position: sticky; left: 46px; z-index: 3; background: #fff; border-right: 1px solid #d0d5dd; box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
 .h10-am-grid thead th.nm.fz { z-index: 6; background: #f7f9fb; }
 /* ER4 F1 — selectable={false} grids have no 40px checkbox column; without this
    the sticky first column pins 40px right of its slot and overlays column 2

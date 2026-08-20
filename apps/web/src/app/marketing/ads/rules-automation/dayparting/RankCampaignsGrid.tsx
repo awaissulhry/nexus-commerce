@@ -115,6 +115,43 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
       tip: 'The CPC ceiling, and whether it is the thing deciding this placement.',
       render: (r) => <CeilingCell ceiling={r.runtime.ceiling} />,
     },
+    /**
+     * FB.3e — decision numbers for the campaign grain, from `r.perf` (the per-campaign half of the
+     * SAME 30d payload the schedules grain sums — the two grains cannot disagree). Per the operator's
+     * call on recommendation: this stays a CONTROL surface, so ONE number (ACoS) is visible and the
+     * rest sit behind Customize. `perf: null` = no rows in the window, rendered as a dash with the
+     * reason — never a fabricated 0%.
+     */
+    {
+      key: 'acos', label: 'ACoS 30d', metric: true, sortable: true,
+      tip: 'This campaign’s own ad spend ÷ attributed sales over the last 30 days — whether the hold is paying for itself.',
+      sortValue: (r) => (r.perf && r.perf.salesCents > 0 ? r.perf.costCents / r.perf.salesCents : Number.MAX_SAFE_INTEGER),
+      render: (r) => (r.perf && r.perf.salesCents > 0
+        ? <span>{Math.round((r.perf.costCents / r.perf.salesCents) * 1000) / 10}%</span>
+        : <span className="rd-none" title={r.perf ? 'Spend without attributed sales in the window.' : 'No performance rows in the 30-day window.'}>—</span>),
+    },
+    {
+      key: 'spend', label: 'Spend 30d', metric: true, sortable: true, defaultHidden: true,
+      sortValue: (r) => r.perf?.costCents ?? -1,
+      render: (r) => (r.perf ? <span>{`€${(r.perf.costCents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span> : <span className="rd-none">—</span>),
+    },
+    {
+      key: 'sales', label: 'Sales 30d', metric: true, sortable: true, defaultHidden: true,
+      sortValue: (r) => r.perf?.salesCents ?? -1,
+      render: (r) => (r.perf ? <span>{`€${(r.perf.salesCents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span> : <span className="rd-none">—</span>),
+    },
+    {
+      key: 'roas', label: 'ROAS 30d', metric: true, sortable: true, defaultHidden: true,
+      sortValue: (r) => (r.perf && r.perf.costCents > 0 ? r.perf.salesCents / r.perf.costCents : -1),
+      render: (r) => (r.perf && r.perf.costCents > 0
+        ? <span>{`${(Math.round((r.perf.salesCents / r.perf.costCents) * 100) / 100).toFixed(2)}×`}</span>
+        : <span className="rd-none">—</span>),
+    },
+    {
+      key: 'orders', label: 'Orders 30d', metric: true, sortable: true, defaultHidden: true,
+      sortValue: (r) => r.perf?.orders ?? -1,
+      render: (r) => (r.perf ? <span>{r.perf.orders}</span> : <span className="rd-none">—</span>),
+    },
     {
       key: 'market', label: 'Market', metric: false, sortable: true, defaultHidden: true, sortValue: (r) => r.marketplace ?? '',
       render: (r) => (r.marketplace ? <span className="h10-rg-mkts"><span className="mk">{r.marketplace}</span></span> : <span className="rd-none">—</span>),
@@ -206,7 +243,10 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
         customizable
         // 🔴 Its OWN key. Sharing `rank-goals-grid` would apply a saved Schedules layout to a
         // fourteen-column grain and silently hide columns that do not exist in the other.
-        storageKey="rank-campaigns-grid"
+        // FB.3e — v2: a saved layout would surface the new defaultHidden metric columns (unknown
+        // keys restore as visible) and could hide the new ACoS; a fresh key applies the intended
+        // defaults for everyone.
+        storageKey="rank-campaigns-grid-v2"
         searchable
         searchPlaceholder="Search campaigns…"
         searchValue={(r) => r.campaignName}

@@ -225,7 +225,28 @@ export function RankGoalsList() {
           : <span className="h10-rg-mkts">{r.marketplaces.map((m) => <span key={m} className="mk">{m}</span>)}</span>
       ),
     },
-    { key: 'campaigns', label: 'Campaigns', metric: true, sortable: true, sortValue: (r) => r.campaigns, render: (r) => <span>{r.campaigns}</span> },
+    /**
+     * FB.3e — the count is a LINK into the campaigns grain, filtered to this schedule's members
+     * (the `?schedule=` filter). Operator: "when I click on it it should change the view to
+     * campaigns view and list me all the campaigns using the same rank rule." The patch clears
+     * every campaigns-grain filter so the destination shows exactly this schedule's members —
+     * `useRdUrlState.set` MERGES, and a leftover `?tile=`/`?mode=` would silently narrow it.
+     */
+    {
+      key: 'campaigns', label: 'Campaigns', metric: true, sortable: true, sortValue: (r) => r.campaigns,
+      tip: 'How many campaigns this schedule binds. Click a count to open those campaigns in the Campaigns view.',
+      render: (r) => (
+        <a
+          className="h10-am-link" href={`?grain=campaigns&schedule=${r.id}`}
+          title={`List ${r.campaigns} campaign${r.campaigns === 1 ? '' : 's'} bound to “${r.name}” in the Campaigns view`}
+          onClick={(e) => {
+            e.stopPropagation(); if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+            e.preventDefault()
+            setUrl({ grain: 'campaigns', schedule: r.id, row: '', drawer: '', tile: '', mode: '', signal: '', converge: '', fresh: '', ceiling: '', cstatus: '', campaign: '' })
+          }}
+        >{r.campaigns}</a>
+      ),
+    },
     {
       // RDX/B3 — was `windows.length`. The key stays 'windows' so anyone with a saved column
       // layout keeps the column instead of silently losing it.
@@ -273,7 +294,10 @@ export function RankGoalsList() {
       total: (rows) => <span>{eur(rows.reduce((n, r) => n + r.salesCents, 0))}</span>,
     },
     {
-      key: 'acos', label: 'ACoS 30d', metric: true, sortable: true, defaultHidden: true,
+      /* FB.3e — VISIBLE now (operator decision, on recommendation): the grid stays a control
+         surface, but ONE decision number rides beside the controls — ACoS answers "is this hold
+         paying?" without a tab switch. Spend/Sales stay behind Customize. */
+      key: 'acos', label: 'ACoS 30d', metric: true, sortable: true,
       // Unmeasurable sorts LAST rather than as 0%, which would read as perfect efficiency.
       sortValue: (r) => (r.acos == null ? Number.MAX_SAFE_INTEGER : r.acos),
       tip: 'Spend \u00f7 sales across the whole schedule. Derived from the summed totals, not averaged across campaigns.',
@@ -336,7 +360,9 @@ export function RankGoalsList() {
   const renderFirst = (r: RankRow) => (
     <span className="rg-namecell">
       <span className="rg-namew">
-        <a className="h10-nt-name rg-name" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
+        {/* FB.3e — `rd-campname`: the SAME 240px name cap the campaigns grain wears, so switching
+            grains no longer moves the first column (schedule names run to 144 characters). */}
+        <a className="h10-nt-name rg-name rd-campname" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={r.name}>{r.name}</a>
         <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
         {/* RDX/A4 — row click opens Activity too, but an explicit affordance keeps it discoverable
             next to Manage rather than relying on someone guessing the row is clickable. */}
@@ -376,7 +402,10 @@ export function RankGoalsList() {
         </span>
       )}
       customizable
-      storageKey="rank-goals-grid"
+      // FB.3e — v2: AdsDataGrid restores hidden-column sets from localStorage, so ACoS 30d would
+      // have stayed hidden for anyone with a saved layout. A new key trades one saved layout for
+      // the column the operator asked to see.
+      storageKey="rank-goals-grid-v2"
       searchable
       searchPlaceholder="Search rank schedules…"
       searchValue={(r) => r.name}

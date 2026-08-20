@@ -46,7 +46,17 @@ export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', 
   useEffect(() => { setTab(initialTab) }, [initialTab])
   const pick = useCallback((t: DrawerTab) => { setTab(t); onTabChange?.(t) }, [onTabChange])
 
-  const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
+  /**
+   * FB.3e — Escape must close the TOPMOST layer. The Plan-edits tab opens a restore confirm
+   * (`.h10-ntm-back`) OVER this drawer; the document-level listener used to fire behind it and
+   * close the whole drawer while the confirm was still asking. If a confirm overlay is in the
+   * DOM, Escape is its to handle, not ours.
+   */
+  const esc = useCallback((e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return
+    if (document.querySelector('.h10-ntm-back')) return
+    onClose()
+  }, [onClose])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
 
   return (
@@ -59,13 +69,22 @@ export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', 
           <button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
 
-        <div className="h10-act-tabs" role="tablist" aria-label="Schedule detail">
-          <button type="button" role="tab" aria-selected={tab === 'next24'} className={tab === 'next24' ? 'on' : ''} onClick={() => pick('next24')}>Next 24 hours</button>
-          <button type="button" role="tab" aria-selected={tab === 'activity'} className={tab === 'activity' ? 'on' : ''} onClick={() => pick('activity')}>Amazon changes</button>
-          <button type="button" role="tab" aria-selected={tab === 'changes'} className={tab === 'changes' ? 'on' : ''} onClick={() => pick('changes')}>Plan edits</button>
+        {/* FB.3e — real tab semantics: each tab names the panel it controls, the panel names the
+            tab that labels it, and only the active tab sits in the tab order (arrow keys move
+            within the list, the ARIA tabs pattern). */}
+        <div className="h10-act-tabs" role="tablist" aria-label="Schedule detail"
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+            const order: DrawerTab[] = ['next24', 'activity', 'changes']
+            const i = order.indexOf(tab)
+            pick(order[(i + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length])
+          }}>
+          <button type="button" role="tab" id="sad-tab-next24" aria-controls="sad-panel" tabIndex={tab === 'next24' ? 0 : -1} aria-selected={tab === 'next24'} className={tab === 'next24' ? 'on' : ''} onClick={() => pick('next24')}>Next 24 hours</button>
+          <button type="button" role="tab" id="sad-tab-activity" aria-controls="sad-panel" tabIndex={tab === 'activity' ? 0 : -1} aria-selected={tab === 'activity'} className={tab === 'activity' ? 'on' : ''} onClick={() => pick('activity')}>Amazon changes</button>
+          <button type="button" role="tab" id="sad-tab-changes" aria-controls="sad-panel" tabIndex={tab === 'changes' ? 0 : -1} aria-selected={tab === 'changes'} className={tab === 'changes' ? 'on' : ''} onClick={() => pick('changes')}>Plan edits</button>
         </div>
 
-        <div className="h10-hist-b">
+        <div className="h10-hist-b" role="tabpanel" id="sad-panel" aria-labelledby={`sad-tab-${tab}`}>
           {tab === 'next24' ? <Next24Preview groupId={group.id} />
             : tab === 'changes' ? <ScheduleVersions groupId={group.id} palette={palette} />
             : <ChangeList groupId={group.id} />}

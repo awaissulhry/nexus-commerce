@@ -282,6 +282,13 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
     const clock = (raw?.runtime?.['clock'] ?? null) as RdData['clock']
 
     const groupById = new Map(groups.map((g) => [g.id, g]))
+    /**
+     * FB.3e — per-campaign 30d performance, from the SAME payload the group roll-up sums
+     * (`perfByCampaign`, emitted by /rank-schedule-groups instead of discarded). Same window,
+     * same table, so the campaigns grain's ACoS and the schedules grain's ACoS cannot disagree.
+     * Absent key = no rows in the window, carried as null — never a fabricated zero.
+     */
+    const perfByCampaign = (raw?.groups?.['perfByCampaign'] ?? {}) as Record<string, { costCents: number; salesCents: number; orders: number; clicks: number; impressions: number }>
     const campaigns: RdCampaignRow[] = [...memberOf.entries()].map(([campaignId, m]) => {
       const c = campaignById.get(campaignId)
       const g = groupById.get(m.groupId)
@@ -302,6 +309,7 @@ export function RdDataProvider({ children }: { children: ReactNode }) {
         lastEvaluatedAt: rt?.lastEvaluatedAt ?? null,
         lastApplied: rt?.lastApplied ?? null,
         runtime: rt ?? { ...EMPTY_RUNTIME },
+        perf: perfByCampaign[campaignId] ?? null,
       }
     }).sort((a, b) => a.campaignName.localeCompare(b.campaignName))
 

@@ -230,3 +230,36 @@ Standing rule recorded: the `_shell/DateRangePicker` is THE range control wherev
 exists. Known debts it exposes elsewhere (not this unit's): the eBay digest header renders a
 picker wired to nothing; CampaignsGrid keeps its own uncontrolled copy of the range beside the
 header's.
+
+## FB.3e — the drawer tells the truth; the grids converge; the count clicks through (2026-08-21)
+
+Operator reports, closed:
+
+- 🔴 **The money-honesty bug, proven on the operator's own row.** The drawer's "Amazon changes"
+  tab (and the account-wide Change Log, a byte-identical copy) printed the RAW stored string —
+  and bids are stored in CENTS. Prod probe: `bid "35" → "2"` (€0.35 → the 2¢ suppression floor),
+  `dailyBudget "2.27" → "1.49"` (EUR decimals). One shared field-aware formatter now serves both
+  surfaces (`_shared/changeValue.ts`: bid/defaultBid=cents, dailyBudget=EUR, PLACEMENT_*=%),
+  with tests pinning the exact reported row.
+- **The drawer's other honesty gaps**: a failed changes/versions fetch used to render the
+  reassuring empty copy — broke and empty are separate states now; hour buckets and version
+  timestamps pin to Europe/Rome (they used the viewer's browser timezone); Escape no longer
+  closes the whole drawer from behind the restore confirm; the three tabs carry real ARIA tab
+  semantics (panel labelling, roving tabindex, arrow keys).
+- **Grid width convergence**: the schedules grain's frozen name column now wears the SAME 240px
+  cap as the campaigns grain (schedule names run to 144 chars), and a 6px frozen-column overlap
+  affecting EVERY selectable ads grid is fixed at its one winning rule (`.nm.fz` still pinned at
+  the old 40px after the checkbox column widened to 46px).
+- **The Campaigns count is a link**: click → the Campaigns view filtered to that schedule's
+  members (`?grain=campaigns&schedule=…`), with every campaigns-grain filter cleared in the
+  patch (set() MERGES; a leftover ?tile= would silently narrow the destination).
+- **Decision columns, per the operator's call on recommendation** (control surface, not
+  analytics): **ACoS 30d is VISIBLE on both grains**; Spend/Sales (+ new ROAS/Orders on
+  campaigns) sit behind Customize. The campaigns grain's numbers come from the per-campaign
+  half of the SAME 30d aggregation the schedules grain sums — `/rank-schedule-groups` now emits
+  the `perfByCampaign` map it always computed and discarded; zero new queries, and the two
+  grains cannot disagree. Both storageKeys bumped to v2 so saved layouts don't suppress the
+  new defaults.
+
+Deferred, named: the "~2¢" hardcoded floor copy in Next 24 hours (the payload carries no floor
+field; needs an API addition), and the drawer confirm's focus trap.

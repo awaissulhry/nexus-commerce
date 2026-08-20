@@ -25,6 +25,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_gri
 // One definition of "routine", shared with the chart annotations — the same split, for the same
 // reason, so the two surfaces cannot disagree about what counts as noise.
 import { isRoutine } from '../campaigns/ChangeAnnotations'
+import { fmtChangeValue } from '../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface Origin { kind: string; id: string | null; name: string }
@@ -96,9 +97,14 @@ const FIELD_LABEL: Record<string, string> = {
   PLACEMENT_TOP: 'Top-of-search bias', PLACEMENT_REST_OF_SEARCH: 'Rest-of-search bias', PLACEMENT_PRODUCT_PAGE: 'Product-page bias',
   bid: 'Bid', defaultBid: 'Ad-group bid', dailyBudget: 'Daily budget', status: 'Status',
 }
-const PCT = new Set(['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE'])
 const fieldLabel = (f: string) => FIELD_LABEL[f] ?? f.replace(/_/g, ' ')
-const val = (v: string | null, f: string) => (v == null ? '—' : PCT.has(f) ? `${v}%` : v)
+/**
+ * FB.3e (2026-08-21) — the value formatter is the SHARED, field-aware one. The local copy printed
+ * the raw stored string for every non-placement field, and bids are stored in CENTS — this page
+ * showed the operator "35 → 2" for a €0.35 → €0.02 change, identically to the schedule drawer it
+ * was copied from. One map now serves both: `_shared/changeValue.ts`.
+ */
+const val = fmtChangeValue
 
 const WINDOWS = [
   { value: '1', label: 'Last 24 hours' },

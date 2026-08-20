@@ -21,6 +21,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { H10Select } from '../../campaigns/FilterDropdown'
+import { fmtChangeValue } from '../../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface Delivery { state: string; attempts: number; lastError: string | null }
@@ -48,8 +49,13 @@ const FIELD_LABEL: Record<string, string> = {
   bid: 'Bid', defaultBid: 'Ad-group bid', dailyBudget: 'Daily budget', status: 'Status',
   placementBidding: 'Placement bias',
 }
-const PCT_FIELDS = new Set(['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE'])
-const fmtValue = (v: string | null, field: string) => (v == null ? '—' : PCT_FIELDS.has(field) ? `${v}%` : v)
+/**
+ * FB.3e — the value formatter is the SHARED, field-aware one. The local copy here printed the
+ * raw stored string for every non-placement field, and bids are stored in CENTS: the operator
+ * read a live row as "0.35 → 2" where reality was €0.35 → €0.02 (the 2¢ suppression floor).
+ * See `_shared/changeValue.ts` for the full unit map; the account-wide Change Log carried a
+ * byte-identical copy of this bug and now shares the same formatter.
+ */
 const fieldLabel = (f: string) => FIELD_LABEL[f] ?? f.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
 
 const ago = (iso: string) => {
@@ -57,7 +63,9 @@ const ago = (iso: string) => {
   return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago`
 }
 // Hour buckets — the grain the schedule itself thinks in ("what did it do at 22:00 last night").
-const hourKey = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', hour12: false })
+// FB.3e — pinned to Europe/Rome, the timezone the schedules resolve in: `undefined` meant the
+// VIEWER's browser timezone, so the same row bucketed under a different hour on a different laptop.
+const hourKey = (iso: string) => new Date(iso).toLocaleString(undefined, { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', hour12: false })
 
 export function ChangeList({ groupId, campaignId, showAllLink = true }: {
   /** Scope to a rank schedule — resolved server-side to its member schedules' actors. */
@@ -70,6 +78,9 @@ export function ChangeList({ groupId, campaignId, showAllLink = true }: {
   const [members, setMembers] = useState<Member[]>([])
   const [memberFilter, setMemberFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  /** FB.3e — a failed read is its own state. The catch used to `setItems([])`, so a 500 rendered
+   *  the reassuring "No Amazon changes recorded yet" — broke and empty must never share a screen. */
+  const [failedLoad, setFailedLoad] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -79,8 +90,9 @@ export function ChangeList({ groupId, campaignId, showAllLink = true }: {
     // A campaign scope needs no member picker — there is only one campaign — so the filter below
     // is driven by `members`, which the feed returns only for a group scope.
     if (campaignId ?? memberFilter) qs.set('campaignId', (campaignId ?? memberFilter) as string)
+    setFailedLoad(false)
     void fetch(`${getBackendUrl()}/api/advertising/changes?${qs.toString()}`, { cache: 'no-store' })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then((j) => {
         if (!alive) return
         setItems(Array.isArray(j?.items) ? j.items : [])
@@ -89,7 +101,7 @@ export function ChangeList({ groupId, campaignId, showAllLink = true }: {
         // would need to widen it again.
         if (Array.isArray(j?.members) && j.members.length) setMembers(j.members)
       })
-      .catch(() => { if (alive) setItems([]) })
+      .catch(() => { if (alive) { setItems([]); setFailedLoad(true) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [groupId, campaignId, memberFilter])
@@ -126,6 +138,11 @@ export function ChangeList({ groupId, campaignId, showAllLink = true }: {
       <div className="h10-act-list">
         {loading ? (
           <div className="h10-hist-msg">Loading…</div>
+        ) : failedLoad ? (
+          <div className="h10-hist-msg">
+            The change feed failed to load. This is a failed read, not an empty history — reopen the
+            drawer to retry; if it persists the changes API is down.
+          </div>
         ) : items.length === 0 ? (
           <div className="h10-hist-msg">
             No Amazon changes recorded yet. An entry appears whenever the rank loop moves a bid or a
@@ -138,7 +155,7 @@ export function ChangeList({ groupId, campaignId, showAllLink = true }: {
               <div className="h10-act-r">
                 <span className="fld">{fieldLabel(row.field)}</span>
                 <span className="chg">
-                  <b>{fmtValue(row.oldValue, row.field)}</b> → <b>{fmtValue(row.newValue, row.field)}</b>
+                  <b>{fmtChangeValue(row.oldValue, row.field)}</b> → <b>{fmtChangeValue(row.newValue, row.field)}</b>
                   {row.campaign?.name && <i title={row.campaign.name}>{row.campaign.name}</i>}
                   {row.reason && <em title={row.reason}>{row.reason}</em>}
                 </span>

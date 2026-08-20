@@ -99,14 +99,19 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [reload, setReload] = useState(0)
+  /** FB.3e — broke and empty must never share a screen; the catch used to render "No edits". */
+  const [failedLoad, setFailedLoad] = useState(false)
+  // FB.3e — timestamps pinned to Europe/Rome, the timezone the schedules resolve in.
+  const stamp = (iso: string) => new Date(iso).toLocaleString(undefined, { timeZone: 'Europe/Rome' })
 
   useEffect(() => {
     let alive = true
     setLoading(true)
+    setFailedLoad(false)
     void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/versions?limit=30`, { cache: 'no-store' })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then((j) => { if (alive) setItems(Array.isArray(j?.items) ? j.items : []) })
-      .catch(() => { if (alive) setItems([]) })
+      .catch(() => { if (alive) { setItems([]); setFailedLoad(true) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [groupId, reload])
@@ -138,6 +143,14 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
   )
 
   if (loading) return <div className="h10-hist-msg">Loading history…</div>
+  if (failedLoad) {
+    return (
+      <div className="h10-hist-msg">
+        The edit history failed to load. This is a failed read, not an empty history — reopen the
+        drawer to retry; if it persists the versions API is down.
+      </div>
+    )
+  }
   if (!items.length) {
     return (
       <div className="h10-hist-msg">
@@ -156,7 +169,7 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
             <div className="h10-ntm-h"><b>Restore this plan</b></div>
             <div className="h10-ntm-sub">
               Replaces the current windows and baseline with the version saved{' '}
-              <b>{new Date(confirming.createdAt).toLocaleString()}</b>. Campaigns, portfolio scope and
+              <b>{stamp(confirming.createdAt)}</b>. Campaigns, portfolio scope and
               armed/paused state are untouched, and the restore is itself recorded — so you can undo it.
               {' '}Bids already sent to Amazon are <b>not</b> reverted.
             </div>
@@ -177,7 +190,7 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
             <div className="hd">
               <b>{i === 0 ? 'Current' : ago(v.createdAt)}</b>
               <span className="by">{actorLabel(v.changedBy)}</span>
-              <span className="at" title={new Date(v.createdAt).toLocaleString()}>{new Date(v.createdAt).toLocaleString()}</span>
+              <span className="at" title={stamp(v.createdAt)}>{stamp(v.createdAt)}</span>
             </div>
             <ul className="diff">{diff.map((d, k) => <li key={k}>{d}</li>)}</ul>
             {/* The current plan is already in effect, so only earlier versions can be restored. */}
