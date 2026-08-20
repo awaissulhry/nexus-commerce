@@ -1081,6 +1081,131 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, count: r.count, enabled }
   })
 
+  /**
+   * ── D2/D3 (2026-08-20) — per-campaign rule assignment, read ───────────────────────────────────
+   *
+   * Every campaign's assigned rules of one kind, plus the catalogue to choose from, in ONE call —
+   * the Budget Rule column needs both and a second round trip would only make them disagree.
+   *
+   * 🔴 **All campaigns, not just the enabled ones.** The obvious source, `budget-grid`, returns
+   * ENABLED campaigns only — 86 of 220 on 2026-08-20 — so a column fed from it could never assign
+   * a rule to a paused campaign, and 134 rows would read "unknown" forever on a fact that is
+   * perfectly knowable. Assignment is a stored relation, so it is answerable for every campaign.
+   *
+   * The path is `campaign-rule-assignments`, deliberately NOT `campaigns/rule-assignments`:
+   * `campaigns/:id` already exists and a static-vs-param collision here is a boot crash away.
+   */
+  fastify.get('/advertising/campaign-rule-assignments', async (request) => {
+    const q = request.query as { kind?: string }
+    const kind = q.kind || 'budget'
+    const [links, rules] = await Promise.all([
+      prisma.campaignRuleAssignment.findMany({ where: { kind }, select: { campaignId: true, ruleId: true } }),
+      prisma.automationRule.findMany({
+        where: { domain: 'advertising' },
+        select: { id: true, name: true, enabled: true, autonomyLevel: true, dryRun: true, actions: true },
+        orderBy: { name: 'asc' },
+      }),
+    ])
+    // The catalogue is the rules that can DO this kind — the same `adjust_ad_budget` test
+    // `loadBudgetRules` uses, so the dropdown cannot offer a rule the engine would ignore.
+    const ACTION_FOR_KIND: Record<string, string> = { budget: 'adjust_ad_budget' }
+    const wanted = ACTION_FOR_KIND[kind]
+    const catalogue = rules
+      .filter((r) => !wanted || (Array.isArray(r.actions) && r.actions.some((a) => String((a as { type?: unknown })?.type ?? '') === wanted)))
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        enabled: r.enabled,
+        // The dial, resolved the way every other ads surface resolves it: `enabled=false` ⇒ OFF
+        // whatever the dial stores, and `dryRun` is dead.
+        level: r.enabled ? (r.autonomyLevel || 'PROPOSE') : 'OFF',
+        percent: (() => {
+          const a = (Array.isArray(r.actions) ? r.actions : []).find((x) => String((x as { type?: unknown })?.type ?? '') === wanted)
+          const v = (a as { percent?: unknown } | undefined)?.percent
+          return typeof v === 'number' ? v : null
+        })(),
+      }))
+    const byCampaign = new Map<string, string[]>()
+    for (const l of links) {
+      const arr = byCampaign.get(l.campaignId) ?? []
+      arr.push(l.ruleId)
+      byCampaign.set(l.campaignId, arr)
+    }
+    return {
+      kind,
+      rules: catalogue,
+      items: [...byCampaign.entries()].map(([campaignId, ruleIds]) => ({ campaignId, ruleIds })),
+      count: links.length,
+    }
+  })
+
+  /**
+   * ── D3 — the global Apply ─────────────────────────────────────────────────────────────────────
+   *
+   * Commits STAGED assignment changes for many campaigns at once. The operator's study: selecting
+   * in the dropdown stages, and one Apply finalises.
+   *
+   * 🔴 **One transaction.** A per-campaign loop that fails halfway leaves the account in a state
+   * nobody chose — half the campaigns governed by the new set and half by the old — and the
+   * operator's only evidence would be a toast. Set-replacement per campaign, all or nothing.
+   *
+   * `ruleIds: []` is a real instruction: unassign everything for that campaign and kind. It is
+   * how the study's "None" works, and under assignment-as-reach it means no budget rule may move
+   * that campaign at all.
+   */
+  fastify.post('/advertising/campaign-rule-assignments/bulk', async (request, reply) => {
+    const b = request.body as { kind?: string; changes?: Array<{ campaignId?: string; ruleIds?: string[] }> }
+    const kind = b.kind || 'budget'
+    const changes = (b.changes ?? []).filter((c) => typeof c.campaignId === 'string' && Array.isArray(c.ruleIds))
+    if (changes.length === 0) { reply.status(400); return { error: 'changes required' } }
+
+    // Validate BEFORE writing: an unknown campaign or rule id would otherwise fail at the foreign
+    // key mid-transaction and report itself as a database error rather than a bad request.
+    const campaignIds = [...new Set(changes.map((c) => c.campaignId as string))]
+    const ruleIds = [...new Set(changes.flatMap((c) => c.ruleIds as string[]))]
+    const [knownCampaigns, knownRules] = await Promise.all([
+      prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true } }),
+      ruleIds.length ? prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true } }) : Promise.resolve([]),
+    ])
+    const okCampaign = new Set(knownCampaigns.map((c) => c.id))
+    const okRule = new Set(knownRules.map((r) => r.id))
+    const badCampaign = campaignIds.filter((id) => !okCampaign.has(id))
+    const badRule = ruleIds.filter((id) => !okRule.has(id))
+    if (badCampaign.length || badRule.length) {
+      reply.status(400)
+      return { error: 'unknown id', campaigns: badCampaign.slice(0, 5), rules: badRule.slice(0, 5) }
+    }
+
+    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
+    let created = 0
+    let removed = 0
+    await prisma.$transaction(async (tx) => {
+      for (const c of changes) {
+        const want = new Set(c.ruleIds as string[])
+        const have = await tx.campaignRuleAssignment.findMany({
+          where: { campaignId: c.campaignId as string, kind },
+          select: { id: true, ruleId: true },
+        })
+        const haveIds = new Set(have.map((h) => h.ruleId))
+        const toRemove = have.filter((h) => !want.has(h.ruleId)).map((h) => h.id)
+        const toAdd = [...want].filter((id) => !haveIds.has(id))
+        if (toRemove.length) {
+          const r = await tx.campaignRuleAssignment.deleteMany({ where: { id: { in: toRemove } } })
+          removed += r.count
+        }
+        if (toAdd.length) {
+          const r = await tx.campaignRuleAssignment.createMany({
+            data: toAdd.map((ruleId) => ({ campaignId: c.campaignId as string, ruleId, kind, createdBy: actor })),
+            skipDuplicates: true,
+          })
+          created += r.count
+        }
+      }
+    })
+    logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor })
+    return { ok: true, kind, campaigns: changes.length, created, removed }
+  })
+
   // CB.5 — guided Campaign Builder launch. dryRun=true returns the PLAN (what would be
   // created) without writing; dryRun=false creates SP campaigns + ad groups + product ads
   // + keywords through the gated create primitives (real only on a live+gate-open market,

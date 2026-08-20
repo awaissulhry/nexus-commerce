@@ -3274,6 +3274,41 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-rc-owner { display: inline-flex; align-items: center; gap: 4px; min-width: 0; font-size: 12px; color: #6b7383; }
 .h10-rc-owner .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rc-owner.auto { color: #10457f; font-weight: 600; }
+/* D2 — Budget Rule, in the same chassis as Bid Rule: 12.5px, 13px icon, 6px gap, ellipsis, and
+   `max-width: 100%` rather than a px cap. #3a4452 is 9.87:1 on the #fff row. */
+.h10-rc-bud { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; font-size: 12.5px; color: #3a4452; }
+.h10-rc-bud .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A single assigned rule is a LINK to its configuration — H10's own behaviour. #10457f is 9.63:1
+   and carries an underline on hover, so the affordance is not colour alone. */
+a.h10-rc-bud.one { color: #10457f; font-weight: 600; text-decoration: none; }
+a.h10-rc-bud.one:hover .t { text-decoration: underline; }
+a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; border-radius: 3px; }
+/* An uncommitted staged change. Amber like the staleness chip, because both mean "this is not
+   settled yet". #8a5316 on #fff6e8 is 5.89:1 — computed, not guessed. */
+/* D3 — the assignment dropdown. Reuses `h10-algomenu`'s box (the bid-algorithm picker's) so the
+   two editors on this grid are the same object with different contents, then adds the rows. */
+.h10-assignmenu { min-width: 300px; max-width: 380px; padding: 6px; }
+.h10-assignmenu .hd { margin: 4px 8px 6px; font-size: 11.5px; font-weight: 800; color: #3a4452; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-assignmenu .sub { margin: 4px 8px 8px; font-size: 11.5px; color: #6b7383; white-space: normal; }
+.h10-assignmenu label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: #2b3440; }
+.h10-assignmenu label:hover { background: #f2f5f9; }
+.h10-assignmenu label.on { background: #eef4fd; }
+.h10-assignmenu label .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The rule's state travels with its name: assigning a disabled rule governs nothing, and the
+   operator should see that at the moment of choosing. #6b7383 is 4.77:1. */
+.h10-assignmenu label .lv { flex: 0 0 auto; font-size: 10.5px; font-weight: 800; color: #10457f; }
+.h10-assignmenu label .lv.off { color: #6b7383; }
+.h10-assignmenu .ft { display: flex; align-items: center; gap: 8px; padding: 6px 4px 2px; border-top: 1px solid #e6eaf0; margin-top: 4px; }
+.h10-assignmenu .ft .grow { flex: 1 1 auto; }
+
+/* D3 — the global Apply bar. Sticks to the bottom of the viewport so a staged change is never
+   scrolled out of sight and forgotten, which is the failure mode of a footer that scrolls away. */
+.h10-ar-applybar { position: sticky; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; border: 1px solid #e2b86a; border-radius: 10px; background: #fff6e8; box-shadow: 0 -2px 10px rgba(20,30,50,.08); }
+.h10-ar-applybar .n { font-size: 12.5px; font-weight: 800; color: #8a5316; }
+.h10-ar-applybar .er { font-size: 12px; font-weight: 700; color: #8c2f22; }
+.h10-ar-applybar .grow { flex: 1 1 auto; }
+
+.h10-rc-staged { flex: 0 0 auto; padding: 1px 5px; border-radius: 4px; background: #fff6e8; border: 1px solid #e2b86a; color: #8a5316; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
 /* "no owner" is a real reading, so it is muted but not italic — italic is reserved for `unknown`,
    which is an ABSENCE of data. It deliberately does NOT get its own lighter colour: the obvious
    pick (#8a93a1, what `.h10-rc-none` uses) measures 3.10:1 on white and fails AA for body text.

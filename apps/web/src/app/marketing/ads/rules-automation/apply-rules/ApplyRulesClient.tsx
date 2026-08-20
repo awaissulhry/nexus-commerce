@@ -197,6 +197,25 @@ export function ApplyRulesClient() {
   const [algoMenu, setAlgoMenu] = useState<{ row: CampaignRow; x: number; y: number } | null>(null)
   /** C1 — algorithm picks not yet readable back through the 300s campaigns cache. As `autoOverride`. */
   const [algoOverride, setAlgoOverride] = useState<Map<string, string>>(new Map())
+
+  /**
+   * ── D2/D3 (2026-08-20) — budget-rule assignment ──────────────────────────────────────────────
+   *
+   * `assignSaved` is what the server holds; `assignStaged` is what the operator has selected and
+   * not yet committed. The study's workflow depends on the two being separate: choosing in the
+   * dropdown STAGES, and one global Apply finalises. A cell reads staged-if-present, saved
+   * otherwise, so an uncommitted row shows the future and every other row shows the present.
+   *
+   * 🔴 Read from `/campaign-rule-assignments`, NOT from the budget grid. That grid returns ENABLED
+   * campaigns only — 86 of 220 — so a paused campaign could never be assigned and 134 rows would
+   * read "unknown" on a fact that is perfectly knowable.
+   */
+  const [assignRules, setAssignRules] = useState<Array<{ id: string; name: string; enabled: boolean; level: string; percent: number | null }> | null>(null)
+  const [assignSaved, setAssignSaved] = useState<Map<string, string[]> | null>(null)
+  const [assignStaged, setAssignStaged] = useState<Map<string, string[]>>(new Map())
+  const [assignMenu, setAssignMenu] = useState<{ row: CampaignRow; x: number; y: number } | null>(null)
+  const [assignBusy, setAssignBusy] = useState(false)
+  const [assignErr, setAssignErr] = useState<string | null>(null)
   const [options, setOptions] = useState<ScopeOptionsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -306,6 +325,50 @@ export function ApplyRulesClient() {
       window.setTimeout(() => setAutoErr(null), 6000)
     }
   }, [])
+
+  /** The set a row should DISPLAY: staged if the operator has touched it, saved otherwise. */
+  const assignedIdsFor = useCallback((id: string): string[] =>
+    assignStaged.get(id) ?? assignSaved?.get(id) ?? [], [assignStaged, assignSaved])
+
+  /** Stage one campaign's set. Staging an identical set is dropped, so Apply never no-ops. */
+  const stageAssignment = useCallback((id: string, ruleIds: string[]) => {
+    setAssignStaged((m) => {
+      const n = new Map(m)
+      const saved = [...(assignSaved?.get(id) ?? [])].sort().join(',')
+      const next = [...ruleIds].sort().join(',')
+      if (saved === next) n.delete(id); else n.set(id, ruleIds)
+      return n
+    })
+  }, [assignSaved])
+
+  /**
+   * D3 — the global Apply. One transactional call for every staged campaign, because a per-campaign
+   * loop that fails halfway leaves the account in a state nobody chose.
+   */
+  const applyAssignments = useCallback(async () => {
+    if (assignStaged.size === 0) return
+    setAssignBusy(true); setAssignErr(null)
+    const changes = [...assignStaged.entries()].map(([campaignId, ruleIds]) => ({ campaignId, ruleIds }))
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaign-rule-assignments/bulk`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'budget', changes }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j?.ok === false) throw new Error(String(j?.error ?? `HTTP ${r.status}`))
+      // Fold the committed sets into `saved` rather than refetching: the write is authoritative
+      // and a refetch would race the reads this page already has in flight.
+      setAssignSaved((m) => {
+        const n = new Map(m ?? [])
+        for (const c of changes) n.set(c.campaignId, c.ruleIds)
+        return n
+      })
+      setAssignStaged(new Map())
+      emitAdsChange('ads.rule.changed')
+    } catch (e) {
+      setAssignErr((e as Error).message)
+    } finally { setAssignBusy(false) }
+  }, [assignStaged])
 
   /**
    * U11d — status and bidding strategy, on the campaign PATCH the Ad Manager already uses.
@@ -423,6 +486,16 @@ export function ApplyRulesClient() {
           }])))
       })
       .catch(() => { /* as above */ })
+
+    // D2 — assignments for EVERY campaign, plus the catalogue to choose from, in one call.
+    void fetch(`${backend}/api/advertising/campaign-rule-assignments?kind=budget`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive || !j) return
+        setAssignRules(j.rules ?? [])
+        setAssignSaved(new Map((j.items ?? []).map((it: { campaignId: string; ruleIds: string[] }) => [String(it.campaignId), it.ruleIds ?? []])))
+      })
+      .catch(() => { /* the column reads "None"; the rest of the page is unaffected */ })
 
     return () => { alive = false }
   }, [reloadTick])
@@ -842,9 +915,28 @@ export function ApplyRulesClient() {
       key: 'budgetRule',
       label: 'Budget Rule',
       metric: false,
-      tip: 'Whether a budget rule has actually moved this campaign\'s budget, and how many can reach it. All six budget rules are account-wide, so reach alone is the same number everywhere — the cell leads with what varies.',
-      sortValue: (r) => (budgetOwners?.get(r.id)?.lastMovedByKind === 'rule' ? 1 : 0),
-      render: (r) => { const o = budgetOwners?.get(r.id); return <BudgetRuleCell reachedBy={o?.reachedBy} lastMovedByKind={o?.lastMovedByKind} lastMovedBy={o?.lastMovedBy} known={!!budgetOwners?.has(r.id)} /> },
+      tip: 'The budget rule ASSIGNED to this campaign — H10\'s own column. A budget rule does nothing until it is assigned, so "None" means no rule may move this budget at all. One assigned rule shows its name and links to its configuration; several show a count and are named in the tooltip. Choosing in the pencil STAGES the change; the Apply bar at the foot of the page commits every staged row in one transaction.',
+      // Sorts by how much is assigned; a staged row sorts by what it WILL be, which is what the
+      // operator is looking at.
+      sortValue: (r) => assignedIdsFor(r.id).length,
+      render: (r) => {
+        const ids = assignedIdsFor(r.id)
+        const byId = new Map((assignRules ?? []).map((x) => [x.id, x]))
+        const assigned = ids.map((id) => byId.get(id)).filter(Boolean) as Array<{ id: string; name: string; level: string; percent: number | null }>
+        return (
+          <span className="h10-edcell">
+            <BudgetRuleCell
+              assigned={assigned}
+              staged={assignStaged.has(r.id)}
+              ruleHref={(id) => `/marketing/ads/rules-automation/builder/budget?ruleId=${id}`}
+            />
+            <button type="button" className="h10-editpen" title={`Assign budget rules to ${r.name}`} aria-label={`Assign budget rules to ${r.name}`}
+              onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAssignMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
+              <Pencil size={11} aria-hidden />
+            </button>
+          </span>
+        )
+      },
     },
     // ── AR.S1 — this page's own governance columns ────────────────────────────────────────────
     {
@@ -881,7 +973,7 @@ export function ApplyRulesClient() {
   // they arrive AFTER the first render (separate fetches). Without them the memo keeps the empty
   // maps it was built with and the columns read "—" forever — the data layer loads and the render
   // layer never notices.
-  ], [portfolioNames, lineNames, push, totals?.accountWideRules, bidOwners, budgetOwners, autoBusy, setBidAutomation])
+  ], [portfolioNames, lineNames, push, totals?.accountWideRules, bidOwners, budgetOwners, autoBusy, setBidAutomation, assignedIdsFor, assignRules, assignStaged])
 
   // ── aggregate-grain columns ───────────────────────────────────────────────────────────────────
   //
@@ -1238,6 +1330,36 @@ export function ApplyRulesClient() {
           governance — it never touches Amazon); Target ACoS writes PATCH /automation, the same
           fraction the bulk verb sends. Both emit on the bus once the write settles, so every other
           open tab re-reads. */}
+      {/* ── D3 — the assignment dropdown, anchored under its cell like every other editor here ──
+          Multi-select, because a campaign may carry several budget rules (see `BudgetRuleCell`).
+          Choosing STAGES; nothing is written until the Apply bar is used. */}
+      {assignMenu && (() => {
+        const row = assignMenu.row
+        const current = assignedIdsFor(row.id)
+        const toggle = (id: string) => stageAssignment(row.id, current.includes(id) ? current.filter((x) => x !== id) : [...current, id])
+        return (
+          <>
+            <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setAssignMenu(null)} />
+            <div className="h10-algomenu h10-assignmenu" style={{ position: 'fixed', left: assignMenu.x, top: assignMenu.y }} role="dialog" aria-label={`Budget rules for ${row.name}`}>
+              <p className="hd">Budget rules — {row.name}</p>
+              {(assignRules ?? []).length === 0 && <p className="sub">No budget rule exists yet. Create one on the Budget tab and it appears here.</p>}
+              {(assignRules ?? []).map((r) => (
+                <label key={r.id} className={current.includes(r.id) ? 'on' : ''}>
+                  <input type="checkbox" checked={current.includes(r.id)} onChange={() => toggle(r.id)} />
+                  <span className="t">{r.name}</span>
+                  {/* The state is part of the choice: assigning a disabled rule governs nothing. */}
+                  <span className={`lv ${r.enabled ? '' : 'off'}`}>{r.level}{r.percent != null ? ` · ${r.percent > 0 ? '+' : ''}${r.percent}%` : ''}</span>
+                </label>
+              ))}
+              <div className="ft">
+                <button type="button" className="h10-am-link" onClick={() => stageAssignment(row.id, [])}>None</button>
+                <span className="grow" />
+                <button type="button" className="h10-am-btn" onClick={() => setAssignMenu(null)}>Done</button>
+              </div>
+            </div>
+          </>
+        )
+      })()}
       {stratFor && (
         <StrategyModal
           strategy={stratFor.biddingStrategy}
@@ -1267,6 +1389,19 @@ export function ApplyRulesClient() {
           onClose={() => setEditPop(null)}
           onApply={(mm) => void applyPop('guardrails', editPop.row, { minBidCents: mm?.minCents ?? null, maxBidCents: mm?.maxCents ?? null })}
         />
+      )}
+      {/* ── D3 — the global Apply. The operator's study: selecting stages, this finalises. Modelled
+          on the Ad Manager's Discard/Apply footer so the two pages stage the same way. ── */}
+      {assignStaged.size > 0 && (
+        <div className="h10-ar-applybar" role="region" aria-label="Staged budget rule assignments">
+          <span className="n">{assignStaged.size} campaign{assignStaged.size === 1 ? '' : 's'} staged</span>
+          {assignErr && <span className="er" role="status">{assignErr}</span>}
+          <span className="grow" />
+          <button type="button" className="h10-am-btn" disabled={assignBusy} aria-disabled={assignBusy} onClick={() => { setAssignStaged(new Map()); setAssignErr(null) }}>Discard</button>
+          <button type="button" className="h10-am-btn primary" disabled={assignBusy} aria-disabled={assignBusy} onClick={() => void applyAssignments()}>
+            {assignBusy ? 'Applying…' : 'Apply'}
+          </button>
+        </div>
       )}
       {editPop && editPop.kind === 'tacos' && (
         <ValuePopover

@@ -41,7 +41,7 @@
  *   be decorative, so the cell leads with what DOES vary: whether a rule has actually moved this
  *   campaign's budget (`lastMovedByKind === 'rule'` — true on 1 of 86), with the reach as context.
  */
-import { Shuffle, Sparkles, User, Minus } from 'lucide-react'
+import { Shuffle, Sparkles, User, Wallet } from 'lucide-react'
 
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
@@ -252,39 +252,67 @@ export function BidAutomationCell({ on, onToggle, busy }: {
 }
 
 /**
- * Budget Rule — leads with what varies (has a rule actually moved this budget?) and carries the
- * reach as context, because reach alone is the same number on every campaign today.
+ * ── Budget Rule — D2 (2026-08-20) ───────────────────────────────────────────────────────────────
+ *
+ * The operator's corrected study: the cell shows the NAME of the budget rule assigned to this
+ * campaign, or "None"; the name hyperlinks to that rule's configuration; a dropdown assigns and
+ * unassigns. H10's chassis exactly — the same `h10-edcell` + hover-pencil shape as Bid Rule,
+ * Target ACoS and Min/Max Bid.
+ *
+ * ── 🔴 Why it can show more than one name ───────────────────────────────────────────────────────
+ * H10's dropdown holds one rule per campaign. Ours is `(campaignId, ruleId)`-unique, so a campaign
+ * may carry several — an operator decision taken on measurement: **four enabled budget rules act
+ * on every campaign** today, and a strict one-per-campaign key admitted no faithful backfill
+ * (two live AUTO rules would have stopped cutting). So:
+ *
+ *   0 assigned → "None"          nothing may move this budget
+ *   1 assigned → the rule's name, hyperlinked — H10's reading exactly
+ *   N assigned → "N rules",      the tooltip names them
+ *
+ * As the operator thins assignments down, rows converge on H10's single name by themselves. The
+ * cell does not pretend that has already happened.
+ *
+ * ⚠️ After D1's backfill every campaign carries all six, so this reads "6 rules" everywhere until
+ * somebody uses the dropdown. That is the account's truth, not a placeholder — and D3 ships the
+ * control that changes it.
  */
-export function BudgetRuleCell({ reachedBy, lastMovedByKind, lastMovedBy, known }: {
-  reachedBy?: number | null
-  lastMovedByKind?: string | null
-  lastMovedBy?: string | null
-  /**
-   * 🔴 U14, the same absence as `BidRuleCell`: `GET /advertising/budget-grid?view=campaigns`
-   * returned **86 rows against 220 campaigns** on 2026-08-20, so **134 have no row**. Without this
-   * they all fell through to "None" — a claim that no budget rule reaches them, made about
-   * campaigns the source never mentioned.
-   */
-  known?: boolean
+export function BudgetRuleCell({ assigned, staged, ruleHref }: {
+  /** The rules assigned to this campaign, in the catalogue's order. */
+  assigned?: Array<{ id: string; name: string; level?: string | null; percent?: number | null }>
+  /** True when this campaign has an uncommitted staged change — see the Apply footer. */
+  staged?: boolean
+  /** Builds the link to a rule's configuration. Omitted where the caller has no router. */
+  ruleHref?: (ruleId: string) => string
 }) {
-  if (known === false) {
-    return <span className="h10-rc-unknown" title="Unknown, not none: the budget grid covers enabled campaigns and it returned no row for this one. Nothing here claims no budget rule reaches it.">unknown</span>
-  }
-  const n = reachedBy ?? 0
-  const moved = lastMovedByKind === 'rule'
-  if (moved) {
-    return (
-      <span className="h10-rc-bidrule auto" title={`This campaign's budget was last moved by a rule${lastMovedBy ? `: ${lastMovedBy}` : ''}. ${n} budget rule${n === 1 ? '' : 's'} can reach it.`}>
-        <Shuffle size={13} aria-hidden /><span className="t">{lastMovedBy ?? 'A rule'}</span>
+  const rules = assigned ?? []
+  const pct = (r: { percent?: number | null }) => (r.percent == null ? '' : ` ${r.percent > 0 ? '+' : ''}${r.percent}%`)
+  const tip = rules.length === 0
+    ? 'No budget rule is assigned to this campaign, so none may move its budget. Assignment is the only reach: a budget rule does nothing until it is assigned.'
+    : `${rules.length} budget rule${rules.length === 1 ? '' : 's'} assigned:\n${rules.map((r) => `· ${r.name} — ${r.level ?? 'PROPOSE'}${pct(r)}`).join('\n')}`
+
+  let body: React.ReactNode
+  if (rules.length === 0) {
+    body = <span className="h10-rc-none" title={tip}>None</span>
+  } else if (rules.length === 1) {
+    const r = rules[0]
+    const label = <><Wallet size={13} aria-hidden /><span className="t">{r.name}</span></>
+    body = ruleHref
+      // Its own click target, so following the link never opens the assignment dropdown.
+      ? <a className="h10-rc-bud one" href={ruleHref(r.id)} title={tip} onClick={(e) => e.stopPropagation()}>{label}</a>
+      : <span className="h10-rc-bud one" title={tip}>{label}</span>
+  } else {
+    body = (
+      <span className="h10-rc-bud" title={tip}>
+        <Wallet size={13} aria-hidden />
+        <span className="t">{rules.length} rules</span>
       </span>
     )
   }
-  if (n > 0) {
-    return (
-      <span className="h10-rc-reach" title={`${n} budget rule${n === 1 ? '' : 's'} can write to this campaign — all of them account-wide — but none has moved its budget yet.`}>
-        <Minus size={12} aria-hidden /> {n} can
-      </span>
-    )
-  }
-  return <span className="h10-rc-none" title="No budget rule reaches this campaign.">None</span>
+  return (
+    <span className="h10-rc-bidrule2">
+      {body}
+      {/* An uncommitted change, so the row says so before the operator hits Apply. */}
+      {staged && <span className="h10-rc-staged" title="Staged — not saved yet. Use Apply to commit, or Discard to revert.">staged</span>}
+    </span>
+  )
 }
