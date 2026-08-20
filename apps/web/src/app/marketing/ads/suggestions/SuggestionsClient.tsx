@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Check, X, RefreshCw, Sparkles, Wifi, ChevronRight, ExternalLink, RotateCcw } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
@@ -360,6 +361,22 @@ function SuggestionsInner() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [status, setStatus] = useState<'pending' | 'applied' | 'dismissed'>('pending')
   const [pricing, setPricing] = useState<Pricing | null>(null)
+  /**
+   * B4 — how many rows the server HAS, against how many it sent. The endpoint caps at 1000; when
+   * `count < total` the grid is showing a prefix and has to say so, because a silently truncated
+   * list reads as a complete one. It had already happened: the cap was 300 and 306 were pending.
+   */
+  const [total, setTotal] = useState<number | null>(null)
+  /**
+   * B4 — deep link from the Rules & Automation grid's Activity cell (`?rule=<name>`), seeding the
+   * Rule filter this page already has. Without it a count of "125 waiting" landed the operator on
+   * all 306 rows with no way back to the 125.
+   *
+   * ⚠ Keyed on the rule NAME, because that is what the existing filter matches on. Two rules can
+   * share a name in this account, so a deep link can show both — correct for the filter as built,
+   * and better than a number that leads nowhere.
+   */
+  const ruleParam = useSearchParams().get('rule')
   const { toast } = useToast()
 
   const load = useCallback(async () => {
@@ -367,9 +384,12 @@ function SuggestionsInner() {
       // limit=300 (the endpoint's ceiling), not the default 100. With 150 pending, the default
       // showed 100 rows under a "Spend at stake" tile computed over all 150 — the grid and the
       // money disagreeing about which rows they describe.
-      const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=${status}&limit=300`).then((r) => r.json())
+      // B4 — 1000, the endpoint's raised ceiling. It was 300 and 306 were pending, so six rows
+      // existed that no view in the product could reach. `total` below is the untruncated count.
+      const j = await fetch(`${getBackendUrl()}/api/advertising/suggestions?status=${status}&limit=1000`).then((r) => r.json())
       setItems(Array.isArray(j?.items) ? j.items : [])
-    } catch { setItems([]) } finally { setLoading(false) }
+      setTotal(typeof j?.total === 'number' ? j.total : null)
+    } catch { setItems([]); setTotal(null) } finally { setLoading(false) }
     // ACR.4.4 — pricing is a separate, slower call and only means anything for pending rows.
     // It is fetched AFTER the list and never awaited by it: an unpriced grid is a degraded
     // page, an empty one is a broken page, and a 30-day aggregate must not be able to cause
@@ -567,7 +587,9 @@ function SuggestionsInner() {
         firstSortValue={(s) => srcOf(s).label}
         columns={columns}
         filters={filters}
-        filtersDefaultOpen={false}
+        // B4 — seed from ?rule=, so the Activity cell's "125 waiting" lands on those 125.
+        initialFilters={ruleParam ? { rule: ruleParam } : undefined}
+        filtersDefaultOpen={!!ruleParam}
         groupBy={groupBy}
         // The shared grid's frozen first column assumes the 40px checkbox gutter — keep selection
         // on (matches every console grid + sets up S.4 bulk). Bulk-action wiring lands in S.4.
@@ -598,6 +620,15 @@ function SuggestionsInner() {
           </span>
         )}
         toolbarLeft={
+          <>
+            {/* 🔴 B4 — a truncated list must SAY it is truncated. The endpoint caps the page, and
+                when it does, every tile and count above describes a prefix while reading as the
+                whole. This had already bitten silently: the cap was 300 with 306 pending. */}
+            {total != null && total > items.length && (
+              <span className="h10-sug-trunc" role="status">
+                Showing {items.length.toLocaleString('en-IE')} of {total.toLocaleString('en-IE')} — this list is capped
+              </span>
+            )}
           <label className="h10-sug-group">
             <span>Group by</span>
             <Select value={group} onChange={(e) => setGroup(e.target.value as GroupKey)} aria-label="Group suggestions by">
@@ -607,6 +638,7 @@ function SuggestionsInner() {
               <option value="type">Type</option>
             </Select>
           </label>
+          </>
         }
         toolbarRight={
           <span className="h10-sug-toolbar">

@@ -5268,3 +5268,31 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-look.unsettled { color: #8a5316; }
 .h10-rg-look.unsettled svg { flex-shrink: 0; }
 .h10-rg-look.none { font-weight: 500; font-style: italic; color: #6b7280; }
+
+/* ── B4 (2026-08-20) — the rules grid's Activity cell ──────────────────────────────────────────
+   Where the rule's output actually went. Five states, and the two that matter most are the two
+   that used to look like nothing at all:
+
+   · `waiting`  — N suggestions queued, LINKED. Blue, because it is the one cell on the row that
+                  is a piece of work someone has to do.
+   · `never`    — Automation is on and the rule has never written a row. AMBER + ⚠, deliberately
+                  louder than "0 waiting": a rule that reports SUCCESS hourly and moves nothing is
+                  the failure this column exists to surface, and it must not read as a blank.
+   · `wrote`    — it really wrote; linked to the Change Log receipt.
+   · `quiet`    — 0 waiting. True, unremarkable, and styled to be skipped over.
+   · `unknown`  — the activity read failed. NOT "nothing": italic and grey, saying so.
+
+   Amber, not red, for `never`: nothing is broken in the sense of erroring — the rule is doing
+   exactly what it was built to do and that turns out to be nothing. Same tone the ceiling banner
+   uses. Contrast measured against each cell's own ground; figures in the B4 commit. */
+.h10-rg-act { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #16202b; text-decoration: none; }
+.h10-rg-act.waiting { color: #1f6fde; }
+.h10-rg-act.waiting:hover, .h10-rg-act.wrote:hover { text-decoration: underline; }
+.h10-rg-act.wrote { color: #16202b; font-weight: 500; }
+.h10-rg-act.wrote em { font-style: normal; font-weight: 500; color: #6b7280; }
+.h10-rg-act.never { color: #8a5316; }
+.h10-rg-act.never svg { flex-shrink: 0; }
+.h10-rg-act.quiet { font-weight: 500; color: #6b7280; }
+.h10-rg-act.unknown { font-weight: 500; font-style: italic; color: #6b7280; }
+.h10-rg-act.pendingread { color: #c3cad3; }
+.h10-rg-act:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px; border-radius: 4px; }

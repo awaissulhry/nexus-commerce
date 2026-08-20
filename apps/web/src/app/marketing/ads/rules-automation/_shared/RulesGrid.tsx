@@ -340,6 +340,28 @@ const LEVEL_WORD: Record<string, string> = { OFF: 'Off', OBSERVE: 'Observe', PRO
 
 type BulkKind = 'automation' | 'delete'
 
+/** B4 — one rule's real output, from `GET /advertising/automation-rules/activity`. */
+export interface RuleActivity {
+  /** AdsRuleSuggestion rows awaiting a human decision — the PROPOSE half's output */
+  pending: number
+  /** newest AdvertisingActionLog row written by `automation:<ruleId>`; null = never wrote */
+  lastWroteAt: string | null
+  writes7d: number
+}
+
+/** "4h", "3d", "just now" — short enough for a cell, exact enough in the tooltip beside it. */
+function ago(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return 'just now'
+  const m = Math.floor(ms / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return d < 30 ? `${d}d ago` : `${Math.floor(d / 30)}mo ago`
+}
+
 export interface RulesGridProps {
   /** the `RULE_TAB_ACTION_TYPES` key — membership and the tab badge share it */
   tabKey: string
@@ -368,6 +390,14 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
    * arrives as the 409 below, so a failed ceiling read costs a pre-emptive tooltip, not a control.
    */
   const [ceilings, setCeilings] = useState<Map<string, { ceiling: string; reason: string }>>(new Map())
+  /**
+   * B4 — what each rule has actually DONE, from `/automation-rules/activity`. Third parallel,
+   * non-blocking read, same contract as `ceilings`: the grid paints without it and the Activity
+   * cell fills in when it lands. A failed read leaves the cell saying it could not be checked,
+   * which is not the same as saying the rule did nothing.
+   */
+  const [activity, setActivity] = useState<Map<string, RuleActivity> | null>(null)
+  const [activityFailed, setActivityFailed] = useState(false)
   /** Rows with a mode write in flight — a second click must not race the first. */
   const [pending, setPending] = useState<Set<string>>(new Set())
   /** The last refusal, in the server's own words. Cleared when the next write is attempted. */
@@ -417,6 +447,17 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         }])))
       })
       .catch(() => { /* the 409 carries the same sentence; see `setAutomation` */ })
+
+    // B4 — what each rule has done. Also parallel: three groupBys, ~200ms on prod, and the grid
+    // must not wait on it to paint.
+    fetch(`${getBackendUrl()}/api/advertising/automation-rules/activity`, { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+      .then((j: { items?: Record<string, RuleActivity> }) => {
+        if (!alive) return
+        setActivity(new Map(Object.entries(j.items ?? {})))
+        setActivityFailed(false)
+      })
+      .catch(() => { if (alive) setActivityFailed(true) })
     return () => { alive = false }
   }, [tabKey])
 
@@ -664,6 +705,78 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
       },
     },
     /**
+     * B4 — Activity. WHERE THIS RULE'S OUTPUT WENT, and whether anything arrived.
+     *
+     * The operator study describes the Automation toggle as "a physical fork in the road": Off
+     * routes the output to the Suggestions page to wait for a human; On fires at Amazon and drops
+     * a receipt in the Change Log. Both halves are wired and neither could be seen from here — so
+     * this column reports the half the row's own mode uses.
+     *
+     * 🔴 **An AUTO rule reports what it WROTE, never that it ran.** `lastExecutedAt` moves on
+     * every evaluation whatever came of it; only an `AdvertisingActionLog` row proves a bid moved.
+     * Measured on prod 2026-08-20: four Bid rules are enabled at AUTO, evaluated within the hour,
+     * and have written **nothing, ever** — they run, they report SUCCESS, and no bid moves
+     * ([[reference_four_inert_ads_rules]]). A green tick that means "the evaluation completed" is
+     * exactly the reassurance that let that sit for months, so "never written" is a warning here,
+     * not a blank.
+     *
+     * A PROPOSE rule reports its queue, linked. 306 suggestions are pending account-wide against
+     * ONE ever applied, and one Bid rule is holding 125 of them; a number nobody can reach is how
+     * that happens. The link deep-links the Suggestions page's existing Rule filter.
+     */
+    {
+      key: 'activity', label: 'Activity', metric: false, sortable: true,
+      // Sorts by what the row is REPORTING: waiting count for a proposer, recency for an actor.
+      // A rule that has never written sinks in both directions rather than sorting as "0 seconds
+      // ago", which is what a 0 sentinel would have done.
+      sortValue: (r) => {
+        const a = activity?.get(r.id)
+        if (!a) return null
+        return r.automation ? (a.lastWroteAt ? Date.parse(a.lastWroteAt) : null) : a.pending
+      },
+      render: (r) => {
+        // ③ A failed read is its own state. "We could not check" must never render as "nothing".
+        if (activityFailed) return <span className="h10-rg-act unknown" title="The activity read failed, so this cell cannot say what this rule has done. It is not a claim that the rule did nothing — reload the page.">not checked</span>
+        if (!activity) return <span className="h10-rg-act pendingread" aria-hidden>·</span>
+        const a = activity.get(r.id) ?? { pending: 0, lastWroteAt: null, writes7d: 0 }
+
+        if (r.automation) {
+          if (!a.lastWroteAt) {
+            return (
+              <span className="h10-rg-act never" title={`Automation is on, so this rule writes straight to Amazon — but it has never written anything. Nothing in the action log was ever recorded by this rule.\n\nThat is not the same as “it has not run”: a rule can evaluate, match, report SUCCESS and still apply nothing. Open History to see what its executions actually returned.`}>
+                <AlertTriangle size={11} aria-hidden /> never written
+              </span>
+            )
+          }
+          return (
+            <a
+              className="h10-rg-act wrote"
+              href="/marketing/ads/changelog"
+              onClick={(e) => e.stopPropagation()}
+              title={`Last wrote ${new Date(a.lastWroteAt).toLocaleString('en-IE')} · ${a.writes7d} write${a.writes7d === 1 ? '' : 's'} in the last 7 days. Automation is on, so its changes go straight to Amazon and a receipt lands in the Change Log.`}
+            >
+              wrote {ago(a.lastWroteAt)}
+              {a.writes7d === 0 && <em> · none this week</em>}
+            </a>
+          )
+        }
+
+        if (a.pending === 0) {
+          return <span className="h10-rg-act quiet" title="Automation is off, so this rule queues its actions as suggestions for approval instead of writing them. Nothing is waiting.">0 waiting</span>
+        }
+        return (
+          <a
+            className="h10-rg-act waiting"
+            href={`/marketing/ads/suggestions?rule=${encodeURIComponent(r.name)}`}
+            onClick={(e) => e.stopPropagation()}
+            title={`${a.pending} suggestion${a.pending === 1 ? '' : 's'} from this rule are waiting for a decision. Automation is off, so nothing reaches Amazon until someone accepts them. Opens the Suggestions page filtered to this rule.`}
+          >
+            {a.pending} waiting
+          </a>
+        )
+      },
+    },
+    /**
      * B1 — Actions. One verb: delete, the operator study's trash can ("the kill switch").
      *
      * Deliberately NOT hover-revealed, unlike Open/History on the name cell. Those two are
@@ -685,7 +798,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         ><Trash2 size={14} aria-hidden /></button>
       ),
     },
-  ], [raw, ceilings, pending, setAutomation])
+  ], [raw, ceilings, pending, setAutomation, activity, activityFailed])
 
   const renderFirst = (r: RuleRow): ReactNode => {
     const href = `${builderHref}?ruleId=${r.id}`

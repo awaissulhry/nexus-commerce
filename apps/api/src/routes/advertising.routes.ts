@@ -6122,6 +6122,69 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * B4 (2026-08-20) — WHAT EACH RULE HAS ACTUALLY DONE.
+   *
+   * The Automation toggle is a fork in the road: Off (PROPOSE) queues an `AdsRuleSuggestion` for a
+   * human; On (AUTO) writes to Amazon and drops a receipt in the change log. Both halves worked
+   * and neither was visible — a rule with 125 proposals nobody has read renders identically to one
+   * with none, and a rule that has never moved a bid renders identically to one that moves them
+   * hourly.
+   *
+   * Three facts per rule, each from the table that actually records that half:
+   *   · `pending`     — AdsRuleSuggestion rows awaiting a decision. The PROPOSE half's output.
+   *   · `lastWroteAt` — the newest AdvertisingActionLog row written by this rule's own actor.
+   *   · `writes7d`    — how many it wrote in the last 7 days, so "wrote once in June" and "writes
+   *                     every hour" are different rows rather than the same green tick.
+   *
+   * 🔴 `lastWroteAt` is deliberately NOT `AutomationRule.lastExecutedAt`. Those are different
+   * facts and conflating them is this section's most expensive recurring mistake: `lastExecutedAt`
+   * moves every time the rule is EVALUATED, whatever came of it. Measured on prod today, 4 of the
+   * 18 Bid rules are enabled at AUTO with `lastExecutedAt` inside the last hour and have **never
+   * written a single row** — they run, they succeed, they do nothing
+   * ([[reference_four_inert_ads_rules]]). An action log row is the only proof a bid moved.
+   *
+   * The actor convention is `automation:<ruleId>` (`RULE_ACTOR`, automation-action-handlers.ts),
+   * and every rule write reaches it: `bulkUpdateAdTargetBids` delegates per entry to
+   * `updateAdTargetWithSync`, which calls `writeAdvertisingActionLog` with the actor. A write that
+   * returns `no_changes` logs nothing, which is correct — it was not a write.
+   *
+   * ⚠ Most `automation:` actors in that table are NOT rules: 54 of 56 are `automation:rank-defend-*`,
+   * the rank-defend cron, which has its own actor space. Match on the exact `automation:<ruleId>`
+   * string, never on the prefix, or the page inherits another job's activity.
+   *
+   * Three indexed groupBys; measured on prod at 122ms / 103ms / 201ms against 59,810 log rows.
+   */
+  fastify.get('/advertising/automation-rules/activity', async (request, reply) => {
+    const since = new Date(Date.now() - 7 * 86_400_000)
+    const [pending, wrote, recent] = await Promise.all([
+      prisma.adsRuleSuggestion.groupBy({ by: ['ruleId'], where: { status: 'pending' }, _count: true }),
+      prisma.advertisingActionLog.groupBy({
+        by: ['userId'], where: { userId: { startsWith: 'automation:' } }, _max: { createdAt: true },
+      }),
+      prisma.advertisingActionLog.groupBy({
+        by: ['userId'], where: { userId: { startsWith: 'automation:' }, createdAt: { gte: since } }, _count: true,
+      }),
+    ])
+    const ruleIds = new Set(
+      (await prisma.automationRule.findMany({ where: { domain: 'advertising' }, select: { id: true } })).map((r) => r.id),
+    )
+    const items: Record<string, { pending: number; lastWroteAt: string | null; writes7d: number }> = {}
+    const ensure = (id: string) => (items[id] ??= { pending: 0, lastWroteAt: null, writes7d: 0 })
+    for (const p of pending) if (p.ruleId) ensure(p.ruleId).pending = p._count
+    // Exact id match — see the rank-defend warning above.
+    for (const w of wrote) {
+      const id = String(w.userId ?? '').slice('automation:'.length)
+      if (ruleIds.has(id) && w._max.createdAt) ensure(id).lastWroteAt = w._max.createdAt.toISOString()
+    }
+    for (const w of recent) {
+      const id = String(w.userId ?? '').slice('automation:'.length)
+      if (ruleIds.has(id)) ensure(id).writes7d = w._count
+    }
+    reply.header('Cache-Control', 'private, max-age=30')
+    return { items }
+  })
+
+  /**
    * EA4 — the rule, plus how the BUILDER can show it.
    *
    * 🔴 `builderView` is non-null only for ENGINE-NATIVE rules (measured 2026-08-19: all 51 of them).
@@ -6368,15 +6431,27 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/suggestions', async (request) => {
     const q = request.query as { status?: string; limit?: string }
     const status = q.status ?? 'pending'
-    const rows = await prisma.adsRuleSuggestion.findMany({
-      where: { status },
-      orderBy: { createdAt: 'desc' },
-      take: Math.min(Number(q.limit) || 100, 300),
-    })
+    /**
+     * 🔴 B4 (2026-08-20) — the ceiling had been REACHED, silently.
+     *
+     * It was `min(limit || 100, 300)` and the page asks for 300, which was chosen when 150 were
+     * pending. There are now **306 pending**, so the page was serving 300 of them and calling the
+     * result `count` — six suggestions that no view in the product could reach, reported as the
+     * whole list. Raised to 1000 (306 fits with headroom) AND `total` is now the real count, so a
+     * page can tell the difference between "this is all of them" and "this is the first N".
+     *
+     * A cap is fine; a cap that cannot be seen is the defect. Whoever crosses 1000 should paginate
+     * rather than raise this again — `total` is what makes that visible in time.
+     */
+    const take = Math.min(Number(q.limit) || 100, 1000)
+    const [rows, total] = await Promise.all([
+      prisma.adsRuleSuggestion.findMany({ where: { status }, orderBy: { createdAt: 'desc' }, take }),
+      prisma.adsRuleSuggestion.count({ where: { status } }),
+    ])
     // S.1 — attach a resolved deep-link (`source`) per row so the page can navigate
     // straight to the campaign / ad-group / search-term the suggestion came from.
     const items = await attachSourceLinks(rows)
-    return { items, count: items.length }
+    return { items, count: items.length, total }
   })
 
   // Approve → re-run the proposed action LIVE against the frozen execution context (respects the

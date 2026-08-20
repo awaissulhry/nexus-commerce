@@ -103,3 +103,8 @@
 .h10-sug-stakebox.waste h4 b { color: var(--h10-danger-strong); }
 .h10-sug-stakebox h4 .dia { font-size: 11px; margin-right: 4px; }
 .h10-sug-stakebox p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--h10-text-2); }
+
+/* B4 (2026-08-20) — the truncation notice. Amber and inline with the toolbar, because it
+   qualifies every count and tile above it: when the server has more rows than it sent, the
+   page is describing a prefix. Not a toast — it is true for as long as the list is capped. */
+.h10-sug-trunc { display: inline-flex; align-items: center; padding: 4px 10px; margin-right: 12px; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 12px; font-weight: 600; white-space: nowrap; }
