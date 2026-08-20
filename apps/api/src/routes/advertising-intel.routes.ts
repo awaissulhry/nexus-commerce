@@ -1260,6 +1260,25 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // ── HV.5 — the harvested cohort ─────────────────────────────────────
   //
   // "Did the last batch work?" — the second half of the page's question. Read-only.
+  /**
+   * HV-R P3a — GET /advertising/harvest-pathways
+   *
+   * Every ad group that can SOURCE a harvest and every one that can RECEIVE it, so the Keyword
+   * Harvest tab's Ad Group View can answer *"which of my ad groups is harvesting, and which is
+   * not?"*. It previously derived its rows from `actions[0].mappings`, which only a BUILDER rule
+   * writes — and all five harvest rules here are ENGINE rules with none, so the view rendered 0
+   * rows and always would have.
+   *
+   * Read-only. No assignment is invented: an ad group with no rule attached is reported as exactly
+   * that, and P3b adds the binding that changes it.
+   */
+  fastify.get('/advertising/harvest-pathways', async (_request, reply) => {
+    const { listHarvestPathways } = await import('../services/advertising/harvest-pathways.service.js')
+    const out = await listHarvestPathways()
+    reply.header('Cache-Control', 'private, max-age=120')
+    return out
+  })
+
   fastify.get('/advertising/harvest-cohort', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()

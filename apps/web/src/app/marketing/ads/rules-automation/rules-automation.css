@@ -5310,3 +5310,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* The em dash is a STATEMENT, not a blank — it carries the only sentence saying this rule has no
    such ceiling, so it must be legible and hoverable rather than faded to the edge of visible. */
 .h10-rg-thr.none { font-weight: 500; color: #6b7280; cursor: help; }
+
+/* ── HV-R P3a: the Ad Group View's roster line ───────────────────────────────────────────────────
+   States the denominator the grid cannot: 122 of 289 ad groups can source a harvest and only 51 of
+   those sit in an enabled campaign. Without it the grid reads as "here are 122 ad groups" and hides
+   that two thirds of them are not running. */
+.h10-hv-roster { font-size: 12.5px; color: #55606d; }
+.h10-hv-roster b { font-weight: 700; color: #16202b; }

@@ -111,7 +111,32 @@ export interface ResolvedDestination {
   competingAdGroups: Array<{ id: string; name: string; campaignName: string }>
 }
 
-/** `roleOf` — the funnel's classifier, name first then the majority of positive targets. */
+/**
+ * Amazon's auto-targeting expression types. An ad group holding these IS an auto ad group — it is
+ * what "close match / loose match / substitutes / complements" means — whatever its name says.
+ */
+const AUTO_EXPRESSIONS = new Set([
+  'AUTO', 'SEARCH_CLOSE_MATCH', 'SEARCH_LOOSE_MATCH', 'PRODUCT_SUBSTITUTES', 'PRODUCT_COMPLEMENTS',
+])
+
+/**
+ * `roleOf` — the funnel's classifier, name first then the majority of positive targets.
+ *
+ * 🔴 HV-R P3a added the auto-expression fallback, and it only fires where this returned **null**
+ * before, so no existing answer moves. Measured on prod 2026-08-20, and the reason it was needed:
+ * classifying by NAME alone leaves **110 of 289 ad groups unclassified** while their own targets
+ * say exactly what they are — names like "Ad group - 06/07/2023 06:09:36.860" holding nothing but
+ * BROAD targets. Name-vs-targets agreed on 136, disagreed on **1**, and the name was blank-but-
+ * knowable on 110. An Ad Group View built on the name guess would have hidden 38% of the account.
+ *
+ * ⚠ `AdGroup.targetingType` is NOT the signal, however much it looks like it: it reads **MANUAL on
+ * all 289 rows**, including the 39 inside AUTO campaigns. Another column that renders a constant
+ * ([[reference_fleet_stale_constant_class]]) — do not reach for it.
+ *
+ * ⚠ `expressionType` OSCILLATES between `EXACT` and `_EXACT` at ~65 rows/minute while two ingests
+ * fight over it, so it is normalised here rather than compared raw
+ * ([[reference_adtarget_expressiontype_oscillates]]).
+ */
 export function roleOf(name: string, targets: Array<{ expressionType: string; isNegative: boolean }>): HvMatchRole | null {
   const n = (name || '').toUpperCase()
   if (n.includes('AUTO')) return 'AUTO'
@@ -119,9 +144,19 @@ export function roleOf(name: string, targets: Array<{ expressionType: string; is
   if (n.includes('PHRASE')) return 'PHRASE'
   if (n.includes('BROAD')) return 'BROAD'
   const counts: Record<string, number> = {}
-  for (const t of targets) { if (t.isNegative) continue; const e = t.expressionType.toUpperCase(); counts[e] = (counts[e] ?? 0) + 1 }
-  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
-  return top === 'EXACT' || top === 'PHRASE' || top === 'BROAD' ? top : null
+  for (const t of targets) {
+    if (t.isNegative) continue
+    const e = String(t.expressionType ?? '').toUpperCase().replace(/^_+/, '').replace(/^NEGATIVE_/, '')
+    counts[e] = (counts[e] ?? 0) + 1
+  }
+  const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1])
+  const top = ranked[0]?.[0]
+  if (top === 'EXACT' || top === 'PHRASE' || top === 'BROAD') return top
+  // Nothing keyword-shaped led. If ANY auto expression is present the ad group is an auto ad group:
+  // those four types are only ever written by auto targeting, so their presence is not ambiguous
+  // the way a keyword majority is.
+  if (ranked.some(([e]) => AUTO_EXPRESSIONS.has(e))) return 'AUTO'
+  return null
 }
 
 const isExactType = (t: string | null | undefined): boolean =>
