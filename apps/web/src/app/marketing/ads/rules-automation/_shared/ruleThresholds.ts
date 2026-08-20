@@ -114,6 +114,52 @@ export const THRESHOLD_SPEC: Record<ThresholdKey, ThresholdSpec> = {
 export const THRESHOLD_ORDER: ThresholdKey[] = ['minOrders', 'minClicks', 'minSpendCents', 'maxAcosPct']
 
 /**
+ * 🔴 The SAME threshold, stored in the other place.
+ *
+ * An engine rule can carry its order bar as an action parameter (`minOrders: 2`) **or** as a flat
+ * condition (`{field:'searchTerm.orders', op:'gte', value:2}`). Reading only the first shipped a
+ * column asserting *"This rule names no order threshold"* directly beside a Criteria cell reading
+ * *"search-term orders ≥ 2"* — measured on prod, 1 of 5 rows, within minutes of P2 landing. Two
+ * cells on one row contradicting each other is worse than the "Always" this whole series removed,
+ * because here the truth is visible in the next column and the operator has to decide which of us
+ * is lying.
+ *
+ * ⚠ **`gte` and `lte` only, deliberately.** `orders > 2` is a minimum of THREE, not two, so
+ * rendering it as "Min 2 orders" would be an off-by-one dressed as a fact. A `gt`/`lt` condition
+ * stays in the Criteria sentence where its operator is printed literally.
+ */
+const CONDITION_FIELD: Record<ThresholdKey, { fields: string[]; ops: string[] }> = {
+  minOrders: { fields: ['searchTerm.orders', 'adTarget.ordersCount'], ops: ['gte'] },
+  minClicks: { fields: ['adTarget.clicks', 'searchTerm.clicks'], ops: ['gte'] },
+  minSpendCents: { fields: ['adTarget.spendCents', 'campaign.spendCents', 'searchTerm.costCents'], ops: ['gte'] },
+  maxAcosPct: { fields: ['campaign.acos', 'adTarget.acos', 'searchTerm.acos'], ops: ['lte'] },
+}
+
+export interface RuleCondition { field?: string; metric?: string; op?: string; value?: unknown }
+
+/** The index of the flat condition carrying `key`, or -1. */
+export function conditionIndexFor(conds: RuleCondition[], key: ThresholdKey): number {
+  const spec = CONDITION_FIELD[key]
+  return conds.findIndex((c) => {
+    const f = String(c?.field ?? c?.metric ?? '')
+    return spec.fields.includes(f) && spec.ops.includes(String(c?.op ?? '')) && Number.isFinite(Number(c?.value))
+  })
+}
+
+/**
+ * Which flat conditions this tab has already promoted into columns, so `summariseRule` can leave
+ * them out of its sentence. Same law as `thresholdClauses`: a threshold is a column or a clause.
+ */
+export function columnedConditionIndexes(conds: RuleCondition[], tabKey?: string): Set<number> {
+  const out = new Set<number>()
+  for (const key of tabKey ? RULE_TAB_THRESHOLDS[tabKey] ?? [] : []) {
+    const i = conditionIndexFor(conds, key)
+    if (i >= 0) out.add(i)
+  }
+  return out
+}
+
+/**
  * Which tabs promote thresholds out of `Criteria` into columns of their own.
  *
  * 🔴 Deliberately a per-tab **column set**, not a prop on the grid. `RulesGrid` is shared by ten
@@ -126,18 +172,35 @@ export const RULE_TAB_THRESHOLDS: Record<string, ThresholdKey[]> = {
   'keyword-harvest': ['minOrders', 'maxAcosPct'],
 }
 
-/** Read one threshold off the action THIS tab is describing. */
-export function readThreshold(action: Record<string, unknown> | null, key: ThresholdKey): ThresholdRead {
+/**
+ * Read one threshold, from wherever this rule actually keeps it.
+ *
+ * Order matters: an action PARAMETER wins over a flat CONDITION, because the parameter is what the
+ * handler reads (`automation-action-handlers.ts` takes `action.minOrders`), while a condition is
+ * evaluated by the engine before the handler ever runs. A rule carrying both is over-constrained
+ * rather than contradictory — both bars must clear — and naming the handler's is the more useful
+ * half on a page about what the action does.
+ */
+export function readThreshold(
+  action: Record<string, unknown> | null,
+  key: ThresholdKey,
+  conds: RuleCondition[] = [],
+): ThresholdRead {
   const raw = action?.[key]
   if (typeof raw === 'number' && Number.isFinite(raw)) return { value: raw, source: 'rule' }
+  const i = conditionIndexFor(conds, key)
+  if (i >= 0) return { value: Number(conds[i].value), source: 'rule' }
   const fallback = THRESHOLD_SPEC[key].fallback(String(action?.type ?? ''))
   return fallback == null ? { value: null, source: 'none' } : { value: fallback, source: 'default' }
 }
 
 /** Every threshold, for the row. */
-export function readThresholds(action: Record<string, unknown> | null): Record<ThresholdKey, ThresholdRead> {
+export function readThresholds(
+  action: Record<string, unknown> | null,
+  conds: RuleCondition[] = [],
+): Record<ThresholdKey, ThresholdRead> {
   return Object.fromEntries(
-    THRESHOLD_ORDER.map((k) => [k, readThreshold(action, k)]),
+    THRESHOLD_ORDER.map((k) => [k, readThreshold(action, k, conds)]),
   ) as Record<ThresholdKey, ThresholdRead>
 }
 

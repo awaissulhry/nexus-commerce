@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
 import {
-  readThreshold, readThresholds, thresholdClauses, defaultClauses,
+  readThreshold, readThresholds, thresholdClauses, defaultClauses, conditionIndexFor, columnedConditionIndexes,
   RULE_TAB_THRESHOLDS, THRESHOLD_SPEC, THRESHOLD_ORDER,
 } from './ruleThresholds'
 
@@ -81,6 +81,47 @@ describe('a threshold is a column OR a clause, never both', () => {
     expect(defaultClauses(HARVEST_BARE, 'negative-targeting')).toEqual(['≥ 2 orders', 'spend ≥ €10'])
     // and on the tab where orders has its own column, only the spend default is left to say
     expect(defaultClauses(HARVEST_BARE, 'keyword-harvest')).toEqual(['spend ≥ €10'])
+  })
+})
+
+/**
+ * 🔴 The same threshold, stored in the other place. Found on prod within minutes of P2 landing:
+ * "Auto match-type migration (broad → exact)" keeps its order bar as a flat CONDITION, so an
+ * action-parameters-only reader printed "—" with the tooltip "This rule names no order threshold"
+ * beside a Criteria cell reading "search-term orders ≥ 2". Two cells on one row, contradicting.
+ */
+describe('a threshold stored as a flat condition', () => {
+  const PROMOTE = { type: 'promote_to_exact', bidEur: 0.6 }
+  const CONDS = [{ field: 'searchTerm.orders', op: 'gte', value: 2 }]
+
+  it('reads the order bar out of the conditions when the action has no parameter', () => {
+    expect(readThreshold(PROMOTE, 'minOrders', CONDS)).toEqual({ value: 2, source: 'rule' })
+    // and without the conditions it is the "—" that started this
+    expect(readThreshold(PROMOTE, 'minOrders').value).toBeNull()
+  })
+
+  it('marks that condition as columned so Criteria stops repeating it', () => {
+    expect([...columnedConditionIndexes(CONDS, 'keyword-harvest')]).toEqual([0])
+    // no threshold columns on that tab → nothing is removed from the sentence
+    expect([...columnedConditionIndexes(CONDS, 'negative-targeting')]).toEqual([])
+  })
+
+  it('🔴 refuses `gt`, because "orders > 2" is a minimum of THREE', () => {
+    // An off-by-one dressed as a fact is worse than leaving the clause in the sentence, where its
+    // operator is printed literally.
+    const gt = [{ field: 'searchTerm.orders', op: 'gt', value: 2 }]
+    expect(conditionIndexFor(gt, 'minOrders')).toBe(-1)
+    expect(readThreshold(PROMOTE, 'minOrders', gt).value).toBeNull()
+  })
+
+  it('an action PARAMETER wins over a condition — it is what the handler reads', () => {
+    const both = { type: 'harvest_and_negate', minOrders: 5 }
+    expect(readThreshold(both, 'minOrders', CONDS).value).toBe(5)
+  })
+
+  it('does not mistake an unrelated field for a threshold', () => {
+    const other = [{ field: 'campaign.budgetUtilization', op: 'gte', value: 90 }]
+    for (const k of THRESHOLD_ORDER) expect(conditionIndexFor(other, k), k).toBe(-1)
   })
 })
 

@@ -86,7 +86,7 @@ import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { ruleLookback, ACTION_WINDOW, HARVEST_DEFAULTS, type RuleLookback } from '@nexus/shared/ads-rule-window'
 import {
   RULE_TAB_THRESHOLDS, THRESHOLD_SPEC, readThreshold, readThresholds, thresholdClauses, defaultClauses, eur,
-  type ThresholdKey, type ThresholdRead,
+  columnedConditionIndexes, type ThresholdKey, type ThresholdRead, type RuleCondition,
 } from './ruleThresholds'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
@@ -348,7 +348,19 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
   }
 
   // engine shape: flat conditions + a real action type with its own parameters
-  const ifs = (conds as Array<{ field?: string; op?: string; value?: unknown }>).map((c) => clause(c)).filter(Boolean).join(', ')
+  /**
+   * 🔴 Drop the conditions this tab has promoted into threshold COLUMNS — a threshold is a column
+   * or a clause, never both, and it holds for conditions exactly as it holds for action parameters.
+   *
+   * The first cut of P2 read parameters only, so "Auto match-type migration" — which keeps its bar
+   * as `{searchTerm.orders gte 2}` rather than as `minOrders` — rendered an Order Threshold of "—"
+   * with the tooltip "This rule names no order threshold" **directly beside** a Criteria cell
+   * reading "search-term orders ≥ 2". Measured on prod, 1 of 5 rows.
+   */
+  const flat = conds as RuleCondition[]
+  const skip = columnedConditionIndexes(flat, tabKey)
+  const hadConditions = flat.length > 0
+  const ifs = flat.map((c, i) => (skip.has(i) ? '' : clause(c))).filter(Boolean).join(', ')
   const type = String(a0?.type ?? '')
   let then = ACTION_LABEL[type] ?? type.replace(/_/g, ' ')
   if (type === 'bid_to_target_acos' && typeof a0?.targetAcos === 'number') then += ` ${asPercent(a0.targetAcos as number)}`
@@ -374,9 +386,19 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
    * reads as the rule's whole criterion when there are two more conditions one column to the left.
    */
   const columned = (tabKey ? RULE_TAB_THRESHOLDS[tabKey] ?? [] : [])
-    .map((k) => { const r = readThreshold(a0, k); return r.value == null ? null : THRESHOLD_SPEC[k].clause(r.value) })
+    .map((k) => { const r = readThreshold(a0, k, flat); return r.value == null ? null : THRESHOLD_SPEC[k].clause(r.value) })
     .filter(Boolean) as string[]
   const alsoText = columned.length ? ` It also requires ${columned.join(' and ')}, shown in its own column${columned.length === 1 ? '' : 's'}.` : ''
+  /**
+   * Every condition this rule had went into a column. That is NOT "no criteria" — saying so would
+   * reintroduce the exact fabrication P1 removed, one column to the right of the evidence.
+   */
+  if (!ifs && hadConditions && skip.size === flat.length) {
+    return {
+      text: then || 'No conditions',
+      why: `This rule's criteria are shown in their own columns on this tab${then ? `, and then: ${then}` : ''}.${alsoText}`,
+    }
+  }
   if (params.length) {
     const ps = params.join(' · ')
     return {
@@ -427,7 +449,7 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
     enabled: rule.enabled !== false,
     criteria: crit.text,
     criteriaWhy: crit.why,
-    thresholds: readThresholds(tabAction),
+    thresholds: readThresholds(tabAction, (Array.isArray(rule.conditions) ? rule.conditions : []) as RuleCondition[]),
     freqDay,
     freqTime,
     /**
