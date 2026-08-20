@@ -714,7 +714,17 @@ function BulkModal({ kind, count, nounLower, cappedCount, onApply, onClose }: {
   onClose: () => void
 }) {
   const [on, setOn] = useState(true)
-  const TITLE: Record<BulkKind, string> = { automation: 'Set Automation', delete: 'Delete Rules' }
+  /**
+   * 🔴 B1 — the title counts. Opened from the row's trash icon this dialog is always about ONE
+   * rule, and it greeted that with "Delete Rules" as both its heading and its `aria-label` —
+   * measured on prod, deleting "ACoS convergence (proportional correction)" announced itself in
+   * the plural. A confirmation that misstates how much it is about to destroy is the one piece of
+   * copy on the page that has to be exact.
+   */
+  const TITLE: Record<BulkKind, string> = {
+    automation: 'Set Automation',
+    delete: count === 1 ? 'Delete Rule' : 'Delete Rules',
+  }
   const ruleNoun = count === 1 ? nounLower : `${nounLower}s`
   return (
     <div className="h10-ntm-back" onClick={onClose}>

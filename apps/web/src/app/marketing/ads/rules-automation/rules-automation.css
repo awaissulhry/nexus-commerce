@@ -5233,10 +5233,16 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    the name cell are shortcuts to things reachable another way, but delete is not, and a control
    revealed only on hover is one a keyboard user never finds.
 
-   The resting ink is #5b6674 on the row's white ground (7.0:1) rather than a light grey, because
-   this is the only destructive control on the row and it must not read as decoration. Red arrives
-   on hover/focus (#a3211a, 7.4:1) — the same danger ink `.h10-rowmenu button.danger` already uses,
-   so the section has one red rather than a second one invented here.
+   The resting ink is #5b6674 rather than a light grey, because this is the only destructive
+   control on the row and it must not read as decoration. Red arrives on hover/focus (#a3211a on
+   #fbdedb) — the same danger ink `.h10-rowmenu button.danger` already uses, so the section has one
+   red rather than a second one invented here.
+
+   Contrast MEASURED on prod, compositing each state against the ground it is actually painted on
+   (reference_contrast_probe_own_background — reading the parent instead scores nonsense):
+   resting #5b6674 on the row's #ffffff = **5.84:1**; hover #a3211a on #fbdedb = **5.94:1**. Both
+   clear 4.5:1 for text and 3:1 for the icon. These are readings, not estimates — the two figures
+   that stood here before this line were guesses at 7.0/7.4 and both were wrong by ~1.2 points.
 
    Defined in this stylesheet on purpose: an undefined class is silent
    (reference_undefined_css_class_is_silent), and this is the file every other h10-* rules-grid
