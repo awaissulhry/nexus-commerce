@@ -771,7 +771,7 @@ export function ApplyRulesClient() {
       key: 'bidRule',
       label: 'Bid Rule',
       metric: false,
-      tip: 'Two facts, one cell — the SAME cell the Ad Manager renders. Left: the bid algorithm (H10\'s Adtomic picker), stored in `dynamicBidding.bidAlgorithm`; Amazon has no such field, so it reaches our database and no further. Right: who actually owns this campaign\'s bids, from the bid grid\'s `bidder` — measured 2026-08-20: 32 held by a schedule, 6 manual, 45 owned by nothing, 137 not covered by that grid at all.',
+      tip: 'The SAME cell the Ad Manager renders. The bid algorithm (H10\'s Adtomic picker), stored in `dynamicBidding.bidAlgorithm` — Amazon has no such field, so it reaches our database and no further. A second chip names whoever actually holds these bids, and appears ONLY when somebody does: measured 2026-08-20, that is 38 of 220 campaigns (32 held by one of 4 rank plans, 6 manual). The rest are unowned or not covered by the bid grid, and say so in the tooltip rather than with a chip.',
       sortValue: (r) => `${bidAlgoLabel(r.bidAlgorithm)} ${bidOwners?.get(r.id)?.bidderName ?? ''}`,
       // 🔴 U14 — `known` is false for the 137 campaigns the bid grid does not cover, and while the
       // fetch is still out. Both are "we have not been told", which is not "nobody owns them".

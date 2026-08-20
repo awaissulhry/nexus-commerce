@@ -57,9 +57,9 @@ const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
  *   Apply Rules → the bid **owner** from the bid grid: none 45 · schedule 32 · manual 6.
  *
  * On `DE_Auto_Close` that read **"Target ACOS"** on one page and **"None"** on the other, for the
- * same campaign, on the same day. Now one cell shows `<algorithm> · <owner>`: the picker stays and
- * stays editable (operator decision 2026-08-19 — it is a placeholder for planned work, not dead
- * code), and the owner is the fact that actually varies.
+ * same campaign, on the same day. Now one cell shows the algorithm, plus the owner **when there is
+ * one** (C6 — see `ownerBits`): the picker stays and stays editable (operator decision 2026-08-19 —
+ * it is a placeholder for planned work, not dead code), and the owner is the fact that varies.
  *
  * The algorithm now **persists**, in `dynamicBidding.bidAlgorithm` through the same
  * `PATCH /campaigns/:id/automation` route the other two settings use. Sharing a cell whose value
@@ -74,30 +74,43 @@ export const BID_ALGOS: Array<{ value: string; label: string; desc: string }> = 
 export const bidAlgoLabel = (v?: string | null): string =>
   BID_ALGOS.find((a) => a.value === (v ?? 'TARGET_ACOS'))?.label ?? 'Target ACOS'
 
-/** The owner half, so the tooltip and the chip cannot describe different things. */
+/**
+ * The owner half — or `null` when there is nothing to report.
+ *
+ * 🔴 **C6 (2026-08-20), operator: *"why do I have to see the owner next to it?"*** The first cut
+ * put a chip on every row, and measured on prod that meant **182 of 220 read `— no owner` or
+ * `unknown`** — a chip carrying nothing, on 83% of the grid. Only **38** campaigns have an owner
+ * worth naming (32 held by a rank plan, 6 manual). A quiet row now says nothing at all, which is
+ * both calmer and more honest than a chip announcing an absence; the reason moves into the
+ * algorithm's own tooltip, where it costs no pixels.
+ *
+ * The owner half is NOT redundant with the campaign name, which is the other half of that
+ * question. Measured: **4 rank plans own 32 campaigns** — `IT GALE JACKET` (11), `IT AIREON` (10),
+ * `IT AIRMESH` (10) — and only **1 of 32** plan names restates its campaign's name (the single
+ * -campaign plan `Rank plan — GALE EXACT DE`). The other 31 name a cross-campaign grouping that
+ * appears nowhere else on the row.
+ */
 function ownerBits(bidder?: string | null, bidderName?: string | null, known?: boolean) {
-  if (known === false) {
-    return {
-      cls: 'h10-rc-unknown', Icon: null, text: 'unknown',
-      tip: 'Bid owner unknown, not none: the bid grid covers enabled campaigns that carry targets, and it returned no row for this one.',
-    }
-  }
-  if (!bidder || bidder === 'none') {
-    return {
-      cls: 'h10-rc-owner none', Icon: Minus, text: 'no owner',
-      tip: "No bid rule, rank plan or schedule owns this campaign's bids — they move only when someone changes them by hand.",
-    }
-  }
+  // Nothing to report: no data, or a real "nobody owns these bids". Both stay silent in the cell
+  // and are explained in the algorithm tooltip — see `quietReason`.
+  if (known === false || !bidder || bidder === 'none') return null
   if (bidder === 'schedule') {
     return {
       cls: 'h10-rc-owner auto', Icon: Sparkles, text: bidderName ?? 'a rank schedule',
-      tip: `Bids here are held by a plan: ${bidderName ?? 'a rank schedule'}. It writes on its own cadence.`,
+      tip: `Bids here are held by a plan: ${bidderName ?? 'a rank schedule'}. It writes on its own cadence, and the plan usually covers several campaigns.`,
     }
   }
   if (bidder === 'manual') {
     return { cls: 'h10-rc-owner', Icon: User, text: 'manual', tip: 'Bids here were last set by hand — no rule or plan owns them.' }
   }
   return { cls: 'h10-rc-owner', Icon: Shuffle, text: bidderName ?? bidder, tip: `Owned by ${bidderName ?? bidder}.` }
+}
+
+/** What a silent owner half means, for the algorithm tooltip. */
+function quietReason(bidder?: string | null, known?: boolean): string | null {
+  if (known === false) return 'Bid owner unknown: the bid grid covers enabled campaigns that carry targets, and it returned no row for this one. Nothing here claims its bids are unowned.'
+  if (!bidder || bidder === 'none') return "No bid rule, rank plan or schedule owns this campaign's bids — they move only when someone changes them by hand."
+  return null
 }
 
 export function BidRuleCell({ algorithm, bidder, bidderName, known }: {
@@ -110,19 +123,26 @@ export function BidRuleCell({ algorithm, bidder, bidderName, known }: {
 }) {
   const algo = bidAlgoLabel(algorithm)
   const o = ownerBits(bidder, bidderName, known)
-  const algoTip = algorithm == null
-    ? `No bid algorithm has been chosen for this campaign; ${algo} is the default the optimizer would use. Amazon exposes no per-campaign algorithm field, so this is stored locally.`
-    : `Bid algorithm: ${algo}. Amazon exposes no per-campaign algorithm field, so this is stored locally.`
+  const algoTip = [
+    algorithm == null
+      ? `No bid algorithm has been chosen for this campaign; ${algo} is the default the optimizer would use. Amazon exposes no per-campaign algorithm field, so this is stored locally.`
+      : `Bid algorithm: ${algo}. Amazon exposes no per-campaign algorithm field, so this is stored locally.`,
+    o ? null : quietReason(bidder, known),
+  ].filter(Boolean).join('\n')
   return (
     <span className="h10-rc-bidrule2">
       <span className="h10-rc-bidrule algo" title={algoTip}>
         <Shuffle size={13} aria-hidden />
         <span className="t">{algo}</span>
       </span>
-      <span className={o.cls} title={o.tip}>
-        {o.Icon ? <o.Icon size={12} aria-hidden /> : null}
-        <span className="t">{o.text}</span>
-      </span>
+      {/* Only when something actually holds these bids. The CSS separator hangs off the second
+          child, so it disappears with the chip rather than leaving a stray rule. */}
+      {o && (
+        <span className={o.cls} title={o.tip}>
+          <o.Icon size={12} aria-hidden />
+          <span className="t">{o.text}</span>
+        </span>
+      )}
     </span>
   )
 }
