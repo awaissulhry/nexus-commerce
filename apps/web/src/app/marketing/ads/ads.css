@@ -1890,87 +1890,6 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-aia-empty h2 { font-size: 20px; font-weight: 700; color: #1c2530; margin: 0 0 10px; }
 .h10-aia-empty p { font-size: 13.5px; line-height: 1.6; color: #5b6573; max-width: 540px; margin: 0 0 22px; }
 
-/* ── CBN — AI Advertising dashboard (get-started), Helium 10 Ads match ───────── */
-.h10-aiad { max-width: 1320px; }
-/* header */
-.h10-aiad-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
-.h10-aiad-hdr .l h1 { display: flex; align-items: center; gap: 10px; font-size: 23px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; margin: 0; }
-.h10-aiad-hdr .l h1 .ic { display: inline-flex; }
-.h10-aiad-hdr .l p { font-size: 13px; color: #5b6573; margin: 5px 0 0; }
-.h10-aiad-hdr .r { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.h10-aiad-acct { position: relative; }
-.h10-aiad-acct .h10-hbtn.acct { gap: 8px; }
-.h10-aiad-acct .chip { font-size: 13px; font-weight: 600; color: #1c2530; }
-
-/* Get Started hero */
-.h10-aiad-hero { display: flex; align-items: stretch; justify-content: space-between; gap: 28px; background: linear-gradient(135deg, #e7f0fc 0%, #eef5fd 45%, #f5f9fe 100%); border: 1px solid #d8e6fb; border-radius: 14px; padding: 30px 34px; margin-bottom: 20px; }
-.h10-aiad-hero .hl { max-width: 560px; }
-.h10-aiad-hero .hl h2 { font-size: 28px; font-weight: 800; color: #1c2530; letter-spacing: -0.02em; margin: 0 0 12px; }
-.h10-aiad-hero .hl > p { font-size: 13.5px; line-height: 1.55; color: #46586c; margin: 0 0 16px; }
-.h10-aiad-hero .checks { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.h10-aiad-hero .checks li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #2b3440; }
-.h10-aiad-hero .checks .ck { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: #d6f3e1; color: #15a34a; flex-shrink: 0; }
-.h10-aiad-hero .cta-lbl { font-size: 13.5px; font-weight: 700; color: #1c2530; margin-bottom: 12px; }
-.h10-aiad-hero .cta { display: flex; gap: 10px; }
-/* video panel */
-.h10-aiad-hero .hr { display: flex; align-items: center; }
-.h10-aiad-hero .vid { position: relative; width: 430px; max-width: 42vw; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: linear-gradient(135deg, #25364b, #18263b); box-shadow: 0 10px 30px rgba(20,30,50,.22); }
-.h10-aiad-hero .vid .brand { position: absolute; top: 16px; left: 18px; display: flex; align-items: center; gap: 9px; color: #fff; }
-.h10-aiad-hero .vid .brand .mk { display: inline-flex; background: #fff; border-radius: 7px; padding: 4px; }
-.h10-aiad-hero .vid .brand b { display: block; font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
-.h10-aiad-hero .vid .brand span { font-size: 10.5px; color: #b9c6d8; }
-.h10-aiad-hero .vid .play { position: absolute; inset: 0; margin: auto; width: 52px; height: 52px; border-radius: 50%; border: none; background: rgba(31,111,222,.92); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
-.h10-aiad-hero .vid .play:hover { background: #1f6fde; }
-.h10-aiad-hero .vid .ctrl { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: linear-gradient(transparent, rgba(0,0,0,.45)); color: #fff; }
-.h10-aiad-hero .vid .ctrl .bar { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.35); }
-.h10-aiad-hero .vid .ctrl .bar span { display: block; width: 4%; height: 100%; border-radius: 3px; background: #ff4d4f; }
-.h10-aiad-hero .vid .ctrl .tt { font-size: 10px; }
-
-/* Overview */
-.h10-aiad-ov { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 18px 22px 8px; margin-bottom: 16px; }
-.h10-aiad-ov .ovh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
-.h10-aiad-ov .ovh h3 { font-size: 17px; font-weight: 700; color: #1c2530; margin: 0; }
-.h10-aiad-ov .ovh .sub { font-size: 12.5px; color: #8a93a1; }
-.h10-aiad-ov .kpis { display: flex; gap: 46px; margin-bottom: 8px; }
-.h10-aiad-ov .kpi { display: flex; flex-direction: column; gap: 5px; }
-.h10-aiad-ov .kpi .lb { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #5b6573; }
-.h10-aiad-ov .kpi .lb .dot { width: 8px; height: 8px; border-radius: 50%; }
-.h10-aiad-ov .kpi .vl { font-size: 19px; font-weight: 700; color: #1c2530; }
-.h10-aiad-chart { position: relative; height: 220px; }
-.h10-aiad-chart svg { width: 100%; height: 100%; }
-.h10-aiad-chart .nodata { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #98a2b3; }
-
-/* Goals table */
-.h10-aiad-tbl { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; }
-.h10-aiad-tbl .tbar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
-.h10-aiad-tbl .tbar .cnt { font-size: 13px; font-weight: 600; color: #344054; }
-.h10-aiad-tbl .tbar .grow { flex: 1; }
-.h10-aiad-tbl .seg { display: inline-flex; background: #eef1f5; border-radius: 999px; padding: 3px; }
-.h10-aiad-tbl .seg button { border: none; background: transparent; font: inherit; font-size: 12.5px; font-weight: 600; color: #5b6573; padding: 6px 22px; border-radius: 999px; cursor: pointer; }
-.h10-aiad-tbl .seg button.on { background: #fff; color: #1c2530; box-shadow: 0 1px 3px rgba(20,28,38,.14); }
-.h10-aiad-tbl .grid { overflow-x: auto; border-top: 1px solid #eef1f5; }
-.h10-aiad-tbl table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.h10-aiad-tbl thead th { background: #f7f9fb; border-bottom: 1px solid #e6e9ee; padding: 11px 16px; text-align: left; white-space: nowrap; }
-.h10-aiad-tbl thead th.ck { width: 44px; text-align: center; }
-.h10-aiad-tbl thead th .h { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #475467; }
-.h10-aiad-tbl thead th.sorted .h { color: #1f6fde; }
-.h10-aiad-tbl thead th .beta { font-style: normal; font-size: 8.5px; font-weight: 800; letter-spacing: .04em; color: #1f6fde; background: #e7f0fd; border-radius: 4px; padding: 1px 4px; }
-.h10-aiad-tbl thead th .srt { color: #b6bdc8; }
-.h10-aiad-tbl thead th.sorted .srt { color: #1f6fde; }
-.h10-aiad-tbl td.empty { text-align: center; color: #8a93a1; padding: 64px 16px; font-size: 13px; }
-.h10-aiad-tbl .pager { display: flex; align-items: center; gap: 6px; padding: 12px 16px; }
-.h10-aiad-tbl .pager .grow { flex: 1; }
-.h10-aiad-tbl .pager .pg { min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e0e4ea; background: #fff; border-radius: 7px; color: #5b6573; font: inherit; font-size: 13px; cursor: pointer; }
-.h10-aiad-tbl .pager .pg.on { background: #eef5ff; border-color: #bcd6fb; color: #1f6fde; font-weight: 700; }
-.h10-aiad-tbl .pager .rpp { font-size: 12.5px; color: #5b6573; margin-left: 8px; }
-.h10-aiad-tbl .pager .rpp b { color: #1c2530; }
-
-/* footer */
-.h10-aiad-foot { display: flex; align-items: center; gap: 18px; padding: 18px 4px 6px; font-size: 12px; color: #8a93a1; }
-.h10-aiad-foot .grow { flex: 1; }
-.h10-aiad-foot span:not(.grow):not(.cp) { cursor: pointer; }
-.h10-aiad-foot span:not(.grow):not(.cp):hover { color: #1f6fde; }
-
 /* ── AI Goal builder — deep config (product table, keywords, drawer, modal) ──── */
 .h10-aig-adv { display: grid; grid-template-columns: 18px 1fr; column-gap: 9px; align-items: start; margin-top: 16px; cursor: pointer; }
 .h10-aig-adv input { width: 16px; height: 16px; margin-top: 1px; accent-color: #1f6fde; }
@@ -2126,15 +2045,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-aig-bottombar .err { font-size: 12.5px; color: #d4493f; margin-right: 4px; }
 
 /* AI Advertising dashboard — populated goal rows */
-.h10-aiad-tbl tbody td { border-bottom: 1px solid #eef1f5; padding: 12px 16px; font-size: 13px; color: #283441; white-space: nowrap; }
-.h10-aiad-tbl tbody td.ck { text-align: center; }
-.h10-aiad-tbl tbody tr:hover { background: #f7faff; }
-.h10-aiad-tbl td.gname { font-weight: 600; color: #1c2530; }
-.h10-aiad-tbl td.gname .sub { display: block; font-size: 11px; font-weight: 400; color: #8a93a1; margin-top: 2px; }
-.h10-aiad-tbl .gstatus { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #15a34a; }
-.h10-aiad-tbl .gstatus::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #15a34a; }
-.h10-aiad-tbl .aictl { font-size: 12.5px; color: #5b6573; }
-.h10-aiad-tbl .aictl.on { color: #1f6fde; font-weight: 600; }
+
 
 /* ── SP Super Wizard (SPW-series) · Campaign Builder : SP Super Wizard ───────────
    Inline builder (rail stays visible). Header + 3-step stepper + sticky step-1

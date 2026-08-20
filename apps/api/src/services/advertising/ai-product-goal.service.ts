@@ -122,7 +122,7 @@ export async function listProductGoals(opts?: { marketplace?: string | null }) {
 export async function productGoalSummary(opts?: { start?: string; end?: string; marketplace?: string | null }) {
   const where: { status: { not: string }; marketplace?: string } = { status: { not: 'ARCHIVED' } }
   if (opts?.marketplace) where.marketplace = opts.marketplace
-  const goals = await prisma.adProductGoal.findMany({ where, select: { id: true, budgetMode: true, totalBudgetCents: true, products: true, campaignIds: true } })
+  const goals = await prisma.adProductGoal.findMany({ where, select: { id: true, budgetMode: true, totalBudgetCents: true, products: true, campaignIds: true, planId: true } })
   const idsByGoal = new Map<string, string[]>()
   for (const g of goals) {
     const refs = Array.isArray(g.campaignIds) ? (g.campaignIds as Array<{ id?: string }>) : []
@@ -137,13 +137,30 @@ export async function productGoalSummary(opts?: { start?: string; end?: string; 
   }
   const end = parseDay(opts?.end) ?? new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')
   const start = parseDay(opts?.start) ?? new Date(end.getTime() - 29 * 86_400_000)
-  if (!allIds.length) return { goals: [], series: [], totals: { spendCents: 0, salesCents: 0, orders: 0, acosPct: null } }
+  const empty = { spendCents: 0, salesCents: 0, orders: 0, acosPct: null as number | null }
+  if (!allIds.length) return { goals: [], series: [], totals: empty, prevTotals: empty }
 
-  const rows = await prisma.amazonAdsDailyPerformance.groupBy({
-    by: ['localEntityId', 'date'],
-    where: { entityType: 'CAMPAIGN', localEntityId: { in: allIds }, date: { gte: start, lte: end } },
-    _sum: { costMicros: true, sales7dCents: true, clicks: true, orders7d: true, impressions: true },
-  })
+  // AIAD.3 — KPI deltas: the same-length window immediately before `start`.
+  const prevEnd = new Date(start.getTime() - 86_400_000)
+  const prevStart = new Date(prevEnd.getTime() - (end.getTime() - start.getTime()))
+  // AIAD.3 — "Proposals" per goal: PROPOSED AutopilotDecision rows on the goal's plan
+  // (includes the mirrored harvest/negate suggestions via coordination.mirrorRuleDecisions).
+  const planIds = goals.map((g) => g.planId).filter((x): x is string => !!x)
+  const [rows, prevRows, pendingByPlan] = await Promise.all([
+    prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId', 'date'],
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: allIds }, date: { gte: start, lte: end } },
+      _sum: { costMicros: true, sales7dCents: true, clicks: true, orders7d: true, impressions: true },
+    }),
+    prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['entityType'],
+      where: { entityType: 'CAMPAIGN', localEntityId: { in: allIds }, date: { gte: prevStart, lte: prevEnd } },
+      _sum: { costMicros: true, sales7dCents: true, orders7d: true },
+    }),
+    planIds.length
+      ? prisma.autopilotDecision.groupBy({ by: ['planId'], where: { planId: { in: planIds }, status: 'PROPOSED' }, _count: { _all: true } })
+      : Promise.resolve([] as Array<{ planId: string; _count: { _all: number } }>),
+  ])
   type Acc = { spendCents: number; salesCents: number; orders: number; clicks: number; impressions: number }
   const blank = (): Acc => ({ spendCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0 })
   const goalOfCampaign = new Map<string, string>()
@@ -171,6 +188,7 @@ export async function productGoalSummary(opts?: { start?: string; end?: string; 
   }
 
   const acos = (spend: number, sales: number) => (sales > 0 ? Math.round((spend / sales) * 10_000) / 100 : null)
+  const pendingOfPlan = new Map(pendingByPlan.map((p) => [p.planId, p._count._all]))
   const goalRows = goals.filter((g) => idsByGoal.has(g.id)).map((g) => {
     const a = byGoal.get(g.id) ?? blank()
     const products = Array.isArray(g.products) ? (g.products as unknown as GoalProduct[]) : []
@@ -183,6 +201,7 @@ export async function productGoalSummary(opts?: { start?: string; end?: string; 
       goalId: g.id, ...a, acosPct: acos(a.spendCents, a.salesCents),
       utilizationPct: utilSpend != null && dailyBudgetCents > 0 ? Math.round((utilSpend / dailyBudgetCents) * 1000) / 10 : null,
       utilizationDate,
+      pendingProposals: g.planId ? (pendingOfPlan.get(g.planId) ?? 0) : 0,
     }
   })
   const series = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, a]) => ({
@@ -190,7 +209,45 @@ export async function productGoalSummary(opts?: { start?: string; end?: string; 
   }))
   const t = blank()
   for (const a of byDay.values()) { t.spendCents += a.spendCents; t.salesCents += a.salesCents; t.orders += a.orders; t.clicks += a.clicks; t.impressions += a.impressions }
-  return { goals: goalRows, series, totals: { spendCents: t.spendCents, salesCents: t.salesCents, orders: t.orders, acosPct: acos(t.spendCents, t.salesCents) } }
+  const p = prevRows[0]?._sum
+  const prevSpend = Math.round(Number(p?.costMicros ?? 0n) / 10_000)
+  const prevSales = p?.sales7dCents ?? 0
+  return {
+    goals: goalRows, series,
+    totals: { spendCents: t.spendCents, salesCents: t.salesCents, orders: t.orders, acosPct: acos(t.spendCents, t.salesCents) },
+    prevTotals: { spendCents: prevSpend, salesCents: prevSales, orders: p?.orders7d ?? 0, acosPct: acos(prevSpend, prevSales) },
+  }
+}
+
+/**
+ * AIAD.3 — one goal, fully resolved for the drawer: config + the scaffold campaigns (joined
+ * with their live Campaign rows, in scaffold-role order) + the driving plan + pending count.
+ */
+export async function getProductGoalDetail(id: string) {
+  const g = await prisma.adProductGoal.findUnique({ where: { id } })
+  if (!g) return null
+  const refs = Array.isArray(g.campaignIds) ? (g.campaignIds as Array<{ id?: string; role?: string; label?: string }>) : []
+  const ids = refs.map((r) => String(r?.id ?? '')).filter(Boolean)
+  const campaigns = ids.length
+    ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, status: true, dailyBudget: true, marketplace: true, liveBidWritesEnabled: true, externalCampaignId: true } })
+    : []
+  const byId = new Map(campaigns.map((c) => [c.id, c]))
+  const campaignsOut = refs.flatMap((r) => {
+    const c = r?.id ? byId.get(String(r.id)) : undefined
+    if (!c) return []
+    return [{
+      id: c.id, role: String(r.role ?? ''), name: c.name, status: c.status,
+      dailyBudgetCents: Math.round(Number(c.dailyBudget) * 100), marketplace: c.marketplace,
+      live: !!c.liveBidWritesEnabled, onAmazon: !!c.externalCampaignId,
+    }]
+  })
+  const plan = g.planId
+    ? await prisma.autopilotPlan.findUnique({ where: { id: g.planId }, select: { id: true, goal: true, autonomy: true, enabled: true, stage: true, lastEvaluatedAt: true, lastDecisionAt: true } })
+    : null
+  const pendingProposals = g.planId
+    ? await prisma.autopilotDecision.count({ where: { planId: g.planId, status: 'PROPOSED' } })
+    : 0
+  return { goal: g, campaigns: campaignsOut, plan, pendingProposals }
 }
 
 export async function archiveProductGoal(id: string) {

@@ -15,6 +15,16 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
     return productGoalSummary({ start: q.start, end: q.end, marketplace: q.marketplace ?? null })
   })
 
+  // AIAD.3 — one goal fully resolved for the drawer (config + campaigns by role + plan).
+  fastify.get('/advertising/ai-goals/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { getProductGoalDetail } = await import('../services/advertising/ai-product-goal.service.js')
+    const detail = await getProductGoalDetail(id)
+    if (!detail) { reply.status(404); return { error: 'not found' } }
+    reply.header('Cache-Control', 'private, max-age=15')
+    return detail
+  })
+
   // AIAD.1 — materialize a goal: campaign scaffold + harvest/negate rules + AutopilotPlan.
   fastify.post('/advertising/ai-goals/:id/materialize', async (request, reply) => {
     const { id } = request.params as { id: string }
