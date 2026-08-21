@@ -5441,3 +5441,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    descriptions are just as long. The name keeps its ellipsis; the description wraps. */
 .h10-rb-tmpl-modal .tmn { flex: 1 1 auto; min-width: 0; }
 .h10-rb-tmpl-modal .tmdesc { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.45; }
+
+/* SG.6 — the Queue segment's link-out (one inbox: deciding lives on the Suggestions page).
+   The count stays here because "how much is waiting" belongs on the section's front page. */
+.h10-au-queueout { padding: 26px 22px; border: 1px solid var(--h10-border); border-radius: 11px; background: var(--h10-surface); }
+.h10-au-queueout .q { margin: 0 0 6px; font-size: 14px; color: var(--h10-text-1); }
+.h10-au-queueout .q b { font-weight: 800; }
+.h10-au-queueout .s { margin: 0 0 16px; max-width: 62ch; font-size: 12.5px; line-height: 1.6; color: var(--h10-text-2); }

@@ -1,6 +1,18 @@
 'use client'
 
 /**
+ * ⛔ PARKED — SG.6 (2026-08-21). NOT MOUNTED, NOT DELETED.
+ *
+ * What it is: the Automations section's own approval queue, on `?view=queue`.
+ * Why it left: ONE INBOX. It rendered the same `/advertising/suggestions` endpoint as the
+ *   Suggestions page with a third mental model — no per-family columns, no delivery truth
+ *   (an apply returns at ENQUEUE; the gate settles it minutes later), no undo handle, and no
+ *   lifecycle. A decision made here could not be explained anywhere. The segment now shows the
+ *   count and links out; the deciding lives at /marketing/ads/suggestions.
+ * Re-mounting it is one import — but read the SG record first: what this file does per-row,
+ *   the Suggestions page does with the write's actual fate attached.
+ * Manifest: `docs/2026-08-16-ra-parked-sections.md`.
+ *
  * AUTO.A6 — the section's ONE inbox.
  *
  * Measured: 225 pending = 8 distinct (proposedKey × entityType) decisions — the unique key

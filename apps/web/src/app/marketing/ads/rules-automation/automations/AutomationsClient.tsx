@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
@@ -37,7 +38,7 @@ import { RuleDetail, type Readiness, type DetailRule } from './RuleDetail'
 import { EngineDetail, type EngineActor, type ObservedActor } from './EngineDetail'
 import { LimitsView } from './LimitsView'
 import { LedgerView } from './LedgerView'
-import { QueueView } from './QueueView'
+// SG.6 — QueueView is ⛔ PARKED (one inbox: the Suggestions page). Its file stays at this path.
 import type { ScopeOptions, ScopeValue } from './ScopeForm'
 import { triggerText } from './ruleText'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
@@ -853,10 +854,30 @@ export function AutomationsClient() {
 
       {view === 'limits' && <LimitsView scopeOptions={scopeOptions} global={actors?.global ?? null} />}
       {view === 'ledger' && <LedgerView />}
-      {/* RT.1 — a queue decision is the one write on this page other pages care about: approving a
-          harvest proposal creates a keyword, so Keyword Harvest must hear it too. */}
+      {/**
+        * SG.6 — ONE inbox. This segment used to render its own queue (QueueView, now ⛔ PARKED):
+        * the same endpoint, a third mental model, and decisions made here that the Suggestions
+        * page could not explain — no delivery truth, no undo, no per-family columns. The count
+        * stays, because "how much is waiting" belongs on the section's front page; the deciding
+        * moved to the page built for it. RT.1's cross-page emit went with the verbs.
+        */}
       {view === 'queue' && (
-        <QueueView onDecided={() => { void load(); emitAdsChange('ads.suggestion.changed'); emitAdsChange('ads.keyword.changed') }} />
+        <div className="h10-au-queueout">
+          <p className="q">
+            {pendingCount === null
+              ? 'The queue could not be counted just now.'
+              : pendingCount === 0
+                ? 'Nothing is waiting for your approval.'
+                : <><b>{num(pendingCount)}</b> proposed change{pendingCount === 1 ? '' : 's'} {pendingCount === 1 ? 'is' : 'are'} waiting for your approval.</>}
+          </p>
+          <p className="s">
+            {/* {' '} after </em> and </b>: the build strips a plain space there ("Suggestions— the"). */}
+            Rules set to <em>Manual</em>{' '}park their proposals in <b>Suggestions</b>{' '}— the review
+            queue, with each family&rsquo;s own columns, the evidence behind every proposal, and what
+            actually reached Amazon after you approve.
+          </p>
+          <Link className="h10-am-btn primary" href="/marketing/ads/suggestions">Open Suggestions</Link>
+        </div>
       )}
 
       {view === 'actors' && counts.allFailing.length > 0 && (

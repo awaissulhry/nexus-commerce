@@ -747,3 +747,17 @@ Automations › Engines · Change Log. Each row above names its destination; re-
 single import.
 U8 Budget Schedules · U9 Apply Rules · U10 tab bar · U11 the five rule columns
 (additive — nothing parked). Each unit appends its own table here.
+
+---
+
+## SG.6 (2026-08-21) — Automations › Queue
+
+| Parked | Path | Why it left | Where the work went |
+|---|---|---|---|
+| `QueueView` (`?view=queue`) | `rules-automation/automations/QueueView.tsx` | **One inbox.** It rendered the same `/advertising/suggestions` endpoint as the Suggestions page with a third mental model: no per-family columns, no delivery truth (an apply returns at ENQUEUE — the write gate settles it minutes later, where this view never looked), no undo handle, no lifecycle. A decision made here could not be explained on any other surface. | `/marketing/ads/suggestions` — the rebuilt review queue (SG.0–SG.7). The Queue segment KEEPS its count and links out; only the deciding moved. |
+
+The segment itself is deliberately **not** removed: "how much is waiting" belongs on the section's
+front page, and the operator's standing rule is that ⛔ KEEP surfaces are a roadmap, not clutter.
+Re-mounting `QueueView` is one import — but read the SG record first
+(`docs/2026-08-21-sg-suggestions-rebuild.md`): every per-row verb it offers, the Suggestions page
+now offers with the write's actual fate attached.
