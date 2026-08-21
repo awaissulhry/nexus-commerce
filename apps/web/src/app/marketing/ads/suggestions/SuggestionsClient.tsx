@@ -142,6 +142,8 @@ interface AiDecision {
   /** SG.9 — the write's real fate, joined from OutboundSyncQueue. null = no handle (or nothing
    *  was written yet); an APPLIED status alone only means the write was ENQUEUED. */
   delivery?: { state: 'delivered' | 'pending' | 'refused' | 'failed' | 'unknown'; detail: string | null } | null
+  /** SG.10 — the Change-Log handle this decision can be reversed through; null = none offered */
+  undo?: { actionLogId: string; rolledBack: boolean } | null
 }
 
 /** Compact before→after reading for a decision's Json pair — only keys that CHANGED, "—" when
@@ -1332,6 +1334,50 @@ function SuggestionsInner() {
     } catch { toast('Could not apply the changes', 'danger') } finally { setBulkBusy(false) }
   }, [bulkBusy, aiItems, toast, refreshCounts, aiRestore])
 
+  /**
+   * SG.10 — undo an approved A.I. change. Deliberately the SAME two-step shape as the family
+   * tab's undo (SG.3): the first click asks the rollback service whether it is even eligible
+   * and how many rows it would reverse, and an ineligible change lands as a TOAST rather than
+   * arming a doomed request. The handle is the decision's executionId — for a bid apply that
+   * is one log from its change set, and rollback follows the set.
+   */
+  const [aiArmedUndo, setAiArmedUndo] = useState<{ id: string; note: string } | null>(null)
+  useEffect(() => {
+    if (!aiArmedUndo) return
+    const t = setTimeout(() => setAiArmedUndo(null), 6000)
+    return () => clearTimeout(t)
+  }, [aiArmedUndo])
+  const aiArmUndo = useCallback(async (d: AiDecision) => {
+    if (!d.undo) return
+    const p = await fetch(`${getBackendUrl()}/api/advertising/changes/${d.undo.actionLogId}/undo-preview`, { cache: 'no-store' })
+      .then((r) => r.json()).catch(() => null) as { eligible?: boolean; reason?: string; groupedWith?: number } | null
+    if (!p?.eligible) { toast(p?.reason ?? 'No undo is offered for this row here', 'info'); return }
+    setAiArmedUndo({
+      id: d.id,
+      note: p.groupedWith && p.groupedWith > 1
+        ? `Reverses ${p.groupedWith} grouped changes together — click again to undo`
+        : 'Click again to undo this change at Amazon',
+    })
+  }, [toast])
+  const aiDoUndo = useCallback(async (d: AiDecision) => {
+    if (!d.undo) return
+    setAiArmedUndo(null)
+    setBulkBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/changes/${d.undo.actionLogId}/undo`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: `undo from the A.I. Bids queue (decision ${d.id})` }),
+      })
+      const j = await r.json().catch(() => null) as { ok?: boolean; reversed?: number; reason?: string; error?: string } | null
+      if (r.ok && j?.ok !== false) {
+        setAiItems((cur) => (cur ?? []).map((x) => (x.id === d.id && x.undo ? { ...x, undo: { ...x.undo, rolledBack: true } } : x)))
+        toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
+      } else {
+        toast(j?.reason ?? j?.error ?? 'The undo was declined', 'danger')
+      }
+    } finally { setBulkBusy(false) }
+  }, [toast])
+
   /** Commit the A.I. staged buffer — H10's [Apply N Changes], the family interaction. */
   const applyAiStaged = useCallback(() => {
     const ops = [...aiStaged].map(([id, k]) => ({ id, kind: (k === 'apply' ? 'approve' : k === 'mute' ? 'mute' : 'dismiss') as 'approve' | 'dismiss' | 'mute' }))
@@ -1958,6 +2004,34 @@ function SuggestionsInner() {
                   ),
                 } as GridColumn<AiDecision>,
               ] : aiStatus === 'applied' ? [
+                {
+                  /**
+                   * SG.10 — undo an approved A.I. change, through the SAME rollback service the
+                   * family tab uses (two-step: the first click PREVIEWS eligibility in the
+                   * service's own words and arms; the second executes). A bid apply reverses its
+                   * whole change set, which the preview states as "N grouped changes".
+                   */
+                  key: 'undo', label: 'Undo', metric: false, sortable: false, freezeRight: true, width: 96,
+                  tip: 'Reverses this change at Amazon through the rollback service (24h window). A bid apply moved several targets in one change set and reverses as a set. Rows with no handle say so rather than offering a button that cannot act.',
+                  render: (r: AiDecision) => {
+                    if (r.status !== 'APPLIED') return dash('Nothing was written for this row, so there is nothing to reverse')
+                    if (r.undo?.rolledBack) return <span className="h10-sug-applied">Undone</span>
+                    if (!r.undo) return dash('No undo is offered for this row here — the change may still exist; this queue just holds no handle to it')
+                    const armed = aiArmedUndo?.id === r.id
+                    return (
+                      <button
+                        type="button"
+                        className={`h10-sug-iconbtn${armed ? ' pz armed' : ''}`}
+                        disabled={bulkBusy}
+                        aria-label={armed ? aiArmedUndo!.note : 'Undo this change (click twice)'}
+                        title={armed ? aiArmedUndo!.note : 'Undo this change at Amazon — first click previews, second executes'}
+                        onClick={() => (armed ? void aiDoUndo(r) : void aiArmUndo(r))}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )
+                  },
+                } as GridColumn<AiDecision>,
                 {
                   /**
                    * SG.9 — DELIVERY, not intent. An approve returns at ENQUEUE: the write gate

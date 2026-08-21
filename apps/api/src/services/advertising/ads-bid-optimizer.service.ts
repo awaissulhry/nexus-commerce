@@ -245,7 +245,20 @@ export async function previewBidOptimization(
   return { targetAcos: flatTargetAcos, profitMode, bayesian, proposals }
 }
 
-export async function applyBidOptimization(args: { changes: Array<{ targetId: string; proposedBidCents: number }>; actor?: string; dryRun?: boolean }): Promise<{ applied: number; dryRun: boolean }> {
+export async function applyBidOptimization(args: {
+  changes: Array<{ targetId: string; proposedBidCents: number }>; actor?: string; dryRun?: boolean
+  /** SG.10 (additive) — group the batch into ONE reversible change set (see bulkUpdateAdTargetBids). */
+  changeSetId?: string | null
+}): Promise<{
+  applied: number; dryRun: boolean
+  /**
+   * SG.10 (additive) — the receipts this function used to discard. `actionLogIds[0]` is enough
+   * to undo the WHOLE batch when a changeSetId was passed, because rollback follows the set.
+   * Existing callers read `applied`/`dryRun` and are unaffected.
+   */
+  actionLogIds?: string[]
+  outboundQueueIds?: string[]
+}> {
   if (args.dryRun) return { applied: 0, dryRun: true }
   // Pre-F fix (NAF V9): this used to pass `{updates}` (with {id,
   // newBidCents} rows) into a function whose contract is `{entries:
@@ -257,9 +270,13 @@ export async function applyBidOptimization(args: { changes: Array<{ targetId: st
   const actor: AdsActor = args.actor?.startsWith('user:')
     ? (args.actor as AdsActor)
     : `automation:${args.actor ?? 'bid-optimizer'}`
-  const out = await bulkUpdateAdTargetBids({ entries, actor, reason: 'AX.8 target-ACOS optimization' })
+  const out = await bulkUpdateAdTargetBids({ entries, actor, reason: 'AX.8 target-ACOS optimization', changeSetId: args.changeSetId ?? null })
   logger.info('[AX.8] bid optimization applied', { count: out.applied, skipped: out.skipped, failed: out.failed })
-  return { applied: out.applied, dryRun: false }
+  return {
+    applied: out.applied, dryRun: false,
+    actionLogIds: out.outcomes.map((o) => o.actionLogId).filter((x): x is string => !!x),
+    outboundQueueIds: out.outcomes.map((o) => o.outboundQueueId).filter((x): x is string => !!x),
+  }
 }
 
 // ── Automation handler: bid_to_target_acos ────────────────────────────────

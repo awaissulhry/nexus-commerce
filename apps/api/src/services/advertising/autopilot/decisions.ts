@@ -147,6 +147,18 @@ export async function listAiDecisions(statusKey: string): Promise<{ items: unkno
     : []
   const nameById = new Map(camps.map((c) => [c.id, c.name]))
   const delivery = await deliveryByQueueId(rows.map((r) => r.outboundQueueId).filter((x): x is string => !!x))
+  /**
+   * SG.10 — the undo handle, and whether it has already been used. `executionId` on a decided
+   * row is an AdvertisingActionLog id (budget: its own write; bid: any log from the batch's
+   * change set — rollback follows the set, so one handle reverses them all). Read
+   * `rolledBackAt` so a reload cannot re-offer an undo that already happened; a handle whose
+   * log has vanished offers nothing rather than a doomed request.
+   */
+  const logIds = rows.map((r) => r.executionId).filter((x): x is string => !!x)
+  const logs = logIds.length
+    ? await prisma.advertisingActionLog.findMany({ where: { id: { in: logIds } }, select: { id: true, rolledBackAt: true } })
+    : []
+  const logById = new Map(logs.map((l) => [l.id, l]))
   return {
     items: rows.map((r) => ({
       id: r.id, at: r.at, module: r.module, cycle: r.cycle, action: r.action,
@@ -158,6 +170,11 @@ export async function listAiDecisions(statusKey: string): Promise<{ items: unkno
       planEnabled: r.plan?.enabled ?? false,
       // null on PROPOSED rows (nothing written yet) and on pre-SG.9 history.
       delivery: r.outboundQueueId ? delivery.get(r.outboundQueueId) ?? null : null,
+      // null ⇒ "no undo is offered from here", never "cannot be undone" (the change may still
+      // be reversible from the Change Log — this queue just holds no handle to it).
+      undo: r.executionId && logById.has(r.executionId)
+        ? { actionLogId: r.executionId, rolledBack: !!logById.get(r.executionId)!.rolledBackAt }
+        : null,
     })),
     total: rows.length,
   }

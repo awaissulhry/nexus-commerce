@@ -18,6 +18,9 @@ const { db, applyMock, gatherMock } = vi.hoisted(() => {
       create: vi.fn(), deleteMany: vi.fn(),
     },
     campaign: { findMany: vi.fn() },
+    outboundSyncQueue: { findMany: vi.fn() },
+    advertisingActionLog: { findMany: vi.fn() },
+    adsSuggestionMute: { findMany: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
   }
   return { db, applyMock: vi.fn(), gatherMock: vi.fn(async () => []) }
 })
@@ -28,7 +31,7 @@ vi.mock('../../../jobs/ad-autopilot.job.js', () => ({ gatherSignals: gatherMock 
 
 import {
   approveDecision, dismissDecision, restoreDecision, bulkDecide,
-  actionFromDecision, suppressDismissed,
+  actionFromDecision, suppressDismissed, listAiDecisions,
 } from './decisions.js'
 
 const PLAN = { id: 'p1', enabled: true, autonomy: 'SUGGEST', goal: 'BALANCED', marketplace: 'IT', guardrails: {} }
@@ -162,5 +165,46 @@ describe('bulkDecide', () => {
     expect(r.okCount).toBe(1)
     expect(r.results[0]).toMatchObject({ id: 'a', ok: true })
     expect(r.results[1]).toMatchObject({ id: 'b', ok: false })
+  })
+})
+
+describe('listAiDecisions — delivery + undo handles (SG.9/SG.10)', () => {
+  const base = {
+    id: 'd1', at: new Date(), module: 'budget', cycle: 'fast', action: 'BUDGET_UP',
+    campaignId: 'c1', before: null, after: null, reason: 'r', planId: 'p1',
+    status: 'APPLIED', plan: { id: 'p1', name: 'Plan', enabled: true },
+  }
+  beforeEach(() => {
+    db.campaign.findMany.mockResolvedValue([{ id: 'c1', name: 'Camp' }])
+    db.outboundSyncQueue.findMany.mockResolvedValue([])
+    db.advertisingActionLog.findMany.mockResolvedValue([])
+  })
+
+  it('a SKIPPED queue row is REFUSED in the gate\'s words, never a silent success', async () => {
+    db.autopilotDecision.findMany.mockResolvedValue([{ ...base, outboundQueueId: 'q1', executionId: null }])
+    db.outboundSyncQueue.findMany.mockResolvedValue([{ id: 'q1', syncStatus: 'SKIPPED', errorCode: 'WRITE_GATE_DENIED', errorMessage: null, isDead: false }])
+    const { items } = await listAiDecisions('applied')
+    expect((items[0] as any).delivery).toMatchObject({ state: 'refused' })
+    expect((items[0] as any).delivery.detail).toContain('write gate')
+  })
+
+  it('APPLIED with no queue handle is delivery-null — not a confident "delivered"', async () => {
+    db.autopilotDecision.findMany.mockResolvedValue([{ ...base, outboundQueueId: null, executionId: null }])
+    const { items } = await listAiDecisions('applied')
+    expect((items[0] as any).delivery).toBeNull()
+  })
+
+  it('the undo handle reports whether it was ALREADY used', async () => {
+    db.autopilotDecision.findMany.mockResolvedValue([{ ...base, outboundQueueId: null, executionId: 'log1' }])
+    db.advertisingActionLog.findMany.mockResolvedValue([{ id: 'log1', rolledBackAt: new Date() }])
+    const { items } = await listAiDecisions('applied')
+    expect((items[0] as any).undo).toMatchObject({ actionLogId: 'log1', rolledBack: true })
+  })
+
+  it('a handle whose log has vanished offers NO undo rather than a doomed request', async () => {
+    db.autopilotDecision.findMany.mockResolvedValue([{ ...base, outboundQueueId: null, executionId: 'gone' }])
+    db.advertisingActionLog.findMany.mockResolvedValue([])
+    const { items } = await listAiDecisions('applied')
+    expect((items[0] as any).undo).toBeNull()
   })
 })

@@ -1117,6 +1117,14 @@ export async function bulkUpdateAdTargetBids(args: {
   actor: AdsActor
   reason?: string | null
   applyImmediately?: boolean
+  /**
+   * SG.10 (additive) — stamp every write in this batch with ONE change-set id, so the batch is
+   * reversible as a unit: `AdvertisingActionLog.executionId` IS the change set, and
+   * `rollbackByActionLogId` follows it to reverse all its siblings. Without it a bid batch is N
+   * unrelated writes and an "Undo" offered on any one of them would silently revert 1 of N.
+   * Omitted ⇒ previous behaviour exactly (each write its own set).
+   */
+  changeSetId?: string | null
 }): Promise<BulkBidOutcome> {
   const out: BulkBidOutcome = {
     applied: 0,
@@ -1135,6 +1143,7 @@ export async function bulkUpdateAdTargetBids(args: {
         actor: args.actor,
         reason: args.reason ?? null,
         applyImmediately: args.applyImmediately ?? false,
+        changeSetId: args.changeSetId ?? null,
       })
       out.outcomes.push(outcome)
       if (outcome.ok && outcome.outboundQueueId) out.applied += 1

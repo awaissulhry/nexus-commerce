@@ -62,9 +62,20 @@ export async function applyPlanActions(opts: {
           .filter((c) => c.proposedBidCents !== c.current)
           .map((c) => ({ targetId: c.targetId, proposedBidCents: c.proposedBidCents }))
         if (changes.length) {
-          await applyBidOptimization({ changes, actor, dryRun: false })
+          // SG.10 — one change set for the whole batch, so the operator's Undo reverses every
+          // bid this decision moved rather than whichever target happened to be logged first.
+          // The id is the plan + campaign + this moment: readable in the log, unique per apply.
+          const changeSetId = `autopilot-bid-${planId}-${campaignId}-${Date.now()}`
+          const res = await applyBidOptimization({ changes, actor, dryRun: false, changeSetId })
           applied += 1
-          decisions.push({ module: 'bid', campaignId, action: 'BID_APPLY', after: { targets: changes.length, targetAcosPct: Math.round(targetAcos * 100) }, reason: `Optimised ${changes.length} keyword bids → ${Math.round(targetAcos * 100)}% target ACoS`, status: 'APPLIED' })
+          decisions.push({
+            module: 'bid', campaignId, action: 'BID_APPLY',
+            after: { targets: changes.length, targetAcosPct: Math.round(targetAcos * 100) },
+            reason: `Optimised ${changes.length} keyword bids → ${Math.round(targetAcos * 100)}% target ACoS`,
+            status: 'APPLIED',
+            // any log id in the set is a handle to the whole set
+            executionId: res.actionLogIds?.[0] ?? null,
+          })
         }
       } catch (e) { logger.warn('[autopilot] bid apply failed', { planId, campaignId, error: (e as Error).message }) }
     }
