@@ -162,7 +162,7 @@
 
 .rpt-i {
   display: inline-flex; flex: 0 0 auto; align-items: center;
-  color: rgb(var(--text-tertiary)); cursor: help;
+  color: rgb(var(--text-tertiary));
 }
 .rpt-i:hover { color: var(--color-primary); }
 
