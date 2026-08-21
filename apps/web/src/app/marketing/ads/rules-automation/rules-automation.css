@@ -5499,3 +5499,19 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* "unknown" market and the "+N more blackout ranges" hint — dimmed facts, not controls. */
 .h10-bs-unknown { color: #626c7c; font-style: italic; }
 .h10-bs-more { color: #1a61c6; font-weight: 700; }
+
+/* ── BSP-B5 — starter schedules in the builder ─────────────────────────────────────────────────
+   Reuses the rule builder's starter rows (.tmgrp/.tmlist/.tmrow/.tmn/.tmdesc) so the two builders
+   present starters identically; only the container and the gate note are new. `.tmn`/`.tmdesc`
+   already carry BUD-P4's wrap fix, so a long derived description is not clipped.
+   🔴 `aria-disabled` rather than `disabled`: an unavailable starter must still answer a hover and
+   say what would unlock it, which a truly disabled button cannot do. */
+.h10-sb-starters { margin: 18px 0 4px; padding: 14px 16px 12px; border: 1px solid var(--h10-border, #e4e8ee); border-radius: 10px; background: #fbfcfd; }
+.h10-sb-starters .tmgrp { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #626c7c; }
+.h10-sb-starters .tmlist { display: flex; flex-direction: column; gap: 6px; }
+.h10-sb-starters .tmrow { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid #eef1f5; border-radius: 8px; background: #fff; }
+.h10-sb-starters .tmn { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; color: #1c2530; }
+.h10-sb-starters .tmdesc { display: block; margin-top: 2px; font-style: normal; font-weight: 500; font-size: 12px; line-height: 1.5; color: #55606d; white-space: normal; }
+.h10-sb-starters .h10-rb-btn[aria-disabled="true"] { opacity: .5; }
+.h10-sb-startnote { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.5; color: #626c7c; }
+

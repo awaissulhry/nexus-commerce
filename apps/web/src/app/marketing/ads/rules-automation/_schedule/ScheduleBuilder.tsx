@@ -18,6 +18,9 @@ import { DaypartingHeatmap, type HeatCell } from './DaypartingHeatmap'
 import { metricVal, type RawCell } from './heatMetrics'
 import { DaypartingChart, type ChartCell } from './DaypartingChart'
 import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, TIMEZONES, adjustmentsFor, CHART_WINDOW_DAYS, chartWindowLabel } from './scheduleConfig'
+// BSP-B5 — budget-only, and imported only for that branch. Dayparting has its own recommender
+// (`recommendWindows` below) and is not touched by any of this.
+import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
@@ -239,6 +242,25 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
   const toggleRow = (id: number) => setSelRows((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const allSelected = windows.length > 0 && selRows.size === windows.length
   const toggleAll = () => setSelRows(allSelected ? new Set() : new Set(windows.map((w) => w.id)))
+
+  /**
+   * BSP-B5 — starters, recomputed from the SELECTED campaigns' own cells. They are derived, not
+   * shipped: with no cells there are no windows and each starter states why (`reason`), which is
+   * what the disabled button then says out loud rather than failing silently on click.
+   */
+  const starters = useMemo(
+    () => (isDayparting ? [] : budgetStarters(rawCells, selCampaigns.length, selCampaigns.map((c) => c.dailyBudget))),
+    [isDayparting, rawCells, selCampaigns],
+  )
+
+  /** Apply one: switch to the type it needs, then replace the window rows with its own. */
+  const applyStarter = useCallback((key: string) => {
+    const st = starters.find((x) => x.key === key)
+    if (!st?.windows) return
+    setType(starterType(key))
+    setWindows(st.windows.map((w) => ({ id: _wid++, day: w.day, start: w.start, end: w.end, adj: w.adj, value: w.value })))
+    setSelRows(new Set())
+  }, [starters])
 
   // ── best-in-class (dayparting): AI recommend · copy/bulk days · overlap · active-hours preview ──
   const [showPreview, setShowPreview] = useState(false)
@@ -481,6 +503,37 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                       : <DaypartingChart cells={chartCells} metric1={metric1} metric2={metric2} unit1={metricVal(metric1).unit} unit2={metricVal(metric2).unit} groupBy={groupBy as 'hour' | 'weekday'} daysFilter={daysFilter as 'all' | 'weekdays' | 'weekends'} />}
                 </div>
               </div>
+
+              {/* ── BSP-B5 — starter schedules, derived from THESE campaigns' own hours ──────────
+                  Reuses the rule builder's starter idiom (`tmgrp`/`tmlist`/`tmrow`/`tmn`/`tmdesc`)
+                  rather than inventing a second look — but the payloads are schedule-shaped
+                  (windows, not criteria), so they live in ./budgetStarters and nothing is copied
+                  out of RuleBuilder.
+
+                  🔴 A starter with no data is DISABLED and says why. It is never hidden — the
+                  operator needs to know the option exists and what would unlock it — and it never
+                  silently no-ops on click (`reference_disabled_control_cannot_explain`). */}
+              {!isDayparting && (
+                <div className="h10-sb-starters">
+                  <div className="tmgrp">Starter schedules — built from these campaigns&rsquo; last {CHART_WINDOW_DAYS} days</div>
+                  <div className="tmlist">
+                    {starters.map((st) => (
+                      <div className="tmrow" key={st.key}>
+                        <span className="tmn" title={st.name}>{st.name}<em className="tmdesc">{st.windows ? st.desc : st.reason}</em></span>
+                        <HoverCard text={st.windows ? `${st.desc} ${DAY_MOVE_NOTE}` : st.reason} placement="above">
+                          <button
+                            type="button"
+                            className="h10-rb-btn ghost sm"
+                            aria-disabled={!st.windows}
+                            onClick={() => (st.windows ? applyStarter(st.key) : undefined)}
+                          >Apply</button>
+                        </HoverCard>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="h10-sb-startnote">{DAY_MOVE_NOTE}</p>
+                </div>
+              )}
 
               {/* best-in-class toolbar (Dayparting): AI recommend · preview · bulk-apply */}
               {isDayparting && (

@@ -212,6 +212,41 @@ createServer(async (req, res) => {
       log(`GET hourly market=${market ?? 'all'} grain=${grain} → ${out.series.length} buckets, ${out.bucketsWithoutSales} without sales`)
       return json(200, out)
     }
+    /**
+     * The builder's per-campaign heatmap, which feeds the BSP-B5 starters. Same reason as the
+     * campaign picker: prod's copy needs `ads.view` and this rig has no session, so a proxied call
+     * 401s and the starters would render "no hourly spend" against an account that has 90 days of
+     * it — a rig artefact that looks exactly like a product defect. Served from prod Neon in the
+     * `RawCell` shape the builder reads.
+     */
+    if (url === '/api/advertising/dayparting/heatmap' && req.method === 'GET') {
+      const ids = (params.get('campaignIds') ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+      const days = Number(params.get('windowDays') ?? 60)
+      const tz = params.get('tz') || 'Europe/Rome'
+      const since = new Date(); since.setUTCDate(since.getUTCDate() - days); since.setUTCHours(0, 0, 0, 0)
+      const rows = ids.length ? await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint; sales: bigint; orders: bigint; clicks: bigint; impressions: bigint }>>`
+        SELECT EXTRACT(DOW FROM ts)::int AS dow, EXTRACT(HOUR FROM ts)::int AS hour,
+               SUM("costMicros") AS cost, SUM(COALESCE("sales7dCents",0)) AS sales,
+               SUM(COALESCE("orders7d",0)) AS orders, SUM("clicks") AS clicks, SUM("impressions") AS impressions
+        FROM (
+          SELECT (("date" + (("hour")::text || ' hours')::interval) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) AS ts,
+                 "costMicros","sales7dCents","orders7d","clicks","impressions","localEntityId"
+          FROM "AmazonAdsHourlyPerformance" WHERE "date" >= ${since}
+        ) AS t WHERE "localEntityId" = ANY(${ids}::text[])
+        GROUP BY dow, hour ORDER BY dow, hour` : []
+      const cells = rows.map((r) => {
+        const costCents = Math.round(Number(r.cost) / 1e4)
+        const salesCents = Number(r.sales)
+        return {
+          dow: Number(r.dow), hour: Number(r.hour), costCents, salesCents,
+          orders: Number(r.orders), clicks: Number(r.clicks), impressions: Number(r.impressions),
+          acos: salesCents > 0 ? Math.round((costCents / salesCents) * 1000) / 10 : null,
+          roas: costCents > 0 ? Math.round((salesCents / costCents) * 100) / 100 : null,
+        }
+      })
+      log(`GET heatmap ids=${ids.length} → ${cells.length} cells, spend €${(cells.reduce((a, c) => a + c.costCents, 0) / 100).toFixed(2)}`)
+      return json(200, { windowDays: days, timezone: tz, hasData: cells.some((c) => c.costCents > 0), cells })
+    }
     if (url === '/api/advertising/budget-schedules/context' && req.method === 'GET') {
       const out = await context(market)
       log(`GET context market=${market ?? 'all'} → ${out.enabledCampaigns} enabled, ${out.outOfBudget} out of budget, ${out.budgetWrites24h} writes/24h (${out.budgetWritesBlocked24h} blocked)`)

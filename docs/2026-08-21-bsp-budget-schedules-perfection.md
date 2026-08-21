@@ -543,6 +543,78 @@ Item 3 of the recommendation — a per-schedule `reassertOnce` for the under-pac
 as optional and is **not built**. It is the only remaining lever if the operator later finds
 schedules losing too often, and it should be armed on evidence, not in advance.
 
+---
+
+# B5 — STARTER SCHEDULES, built 2026-08-22 (+ a research sweep)
+
+## The sweep, before the build
+
+Mechanical field-flow audit (what the builder SENDS → what the route STORES → what the executor
+READS), not read from memory:
+
+| finding | verdict |
+|---|---|
+| `autoRefill` — route accepts it in POST **and** PATCH, executor reads it **0** times, builder sends it **0** times | 🔴 a write path with no reader. Not reachable from the UI, so not a live lie, but the API will accept a value the system cannot honour |
+| Builder sends `kind: 'budget'`; the route **ignores it** and hardcodes `kind: 'BUDGET'` | Latent trap: if anyone ever made the route respect `b.kind`, the executor's `where: { kind: 'BUDGET' }` would stop matching and every schedule would go silently inert |
+| The **"Learn" button has no `onClick`** | 🔴 Real, and **programme-wide** — `ScheduleBuilder`, `RankGoalBuilder`, `AiGoalBuilder` and `AdsPageHeader`'s `showLearn` all render it dead (`RuleBuilder` repurposed the class into a working Preview). NOT fixed here: fixing only mine would fork a shared placeholder, and `feedback_keep_placeholder_controls` says ask before sweeping |
+| `groupBy=cell` (7×24) — **I** added the branch in P5 and nothing calls it | 🔴 mine to answer: either mount the heatmap or drop the branch |
+| Everything else the builder sends | reaches a reader |
+
+Two things that looked like defects and were not, both checked rather than assumed:
+- **The builder mounts TWICE on the local dev rig** (2 top bars, 2 week tables). Prod renders **one**.
+  A Next dev/StrictMode artefact — and the reason the rig's `1 Issue` badge shows
+  `ReactDOMInput: Mixing React and non-React radio inputs with the same name`: two trees sharing
+  `name="schedtype"`. No such error on prod.
+- The new endpoints **401 to `curl`** (`ads.view`). RBAC working; verify in the browser.
+
+## The starters
+
+`_schedule/budgetStarters.ts` — three, and **every window is derived from the selected campaigns'
+own 60-day cells**, because the approved row said "built from *this* account's measured hours" and a
+hard-coded `18:00–23:00` would look identical whether the account peaked at 18:00 or 04:00.
+
+| starter | what it derives |
+|---|---|
+| **Fund the peak hours** | the contiguous span within 40% of the spend peak → `incPct 50` on all 7 days |
+| **Stand down in the dead hours** | the longest run that **spent** and returned **no** sales → `decPct 30` |
+| **Weekend multiplier** | Sat+Sun spend share → `mult 1.5`, **no hours** (the all-day grain BSP-P4 made authorable) |
+
+Both percentages are pinned to the write gate's own limits — **+50%** is the largest raise that
+always clears the ceiling, **−30%** is exactly the drop limit — so a starter cannot propose a write
+the gate will refuse on arithmetic alone. `DAY_MOVE_NOTE` states the bound rather than promising a
+landing.
+
+## Three honesty corrections the build itself forced
+
+1. 🔴 **A flat curve is not a peak.** On the real IT selection the derivation faithfully returned
+   **11:00–00:00 — a thirteen-hour "peak"**. The number was true and the word was not: a +50% lift
+   across 13 hours a day is an across-the-board budget rise, which is an `AdBudgetPlan` decision,
+   not a schedule. At ≥12 hours the starter now **refuses itself** and says the flatness is the
+   finding. Verified on the rig: it is disabled on this account today, with that reason.
+2. 🔴 **The €1-floor caveat existed only in my own header comment.** The module doc claimed a
+   `floorNote` explained that a cut on a floored campaign is a no-op; **no such field existed**.
+   Found by running the real executor on the starter's payload — `computeBudget(1, …, 'decPct', 30)`
+   returns **€1.00**. The cut starter now counts the floored campaigns *in the current selection*:
+   on prod's 70 enabled it reads **"47 of the 70 selected campaigns are already at Amazon's €1
+   floor… this window cannot move them."**
+3. An unavailable starter is **disabled, visible, and explains itself** (`aria-disabled` + HoverCard,
+   never hidden and never a silent no-op click).
+
+## Verification
+
+- **The wire, end to end.** The exact POST the "dead hours" starter produced in the browser
+  (`7 windows, 05:00→08:00, decPct 30, 70 campaigns`) was fed to the **real executor functions**
+  (`_bsp-b5-wirecheck.mts`): ACTIVE at 06:30 and 07:59 Rome, inactive at 04:30, at 08:00
+  (end-exclusive) and at 20:00; €2.49→€1.74, €6.17→€4.32, €80→€56, **€1.00→€1.00 (the no-op)**. The
+  multiplier starter: all-day ACTIVE Saturday, inactive Wednesday, €6.17×1.5=€9.25.
+- **24 tests**, and they were **mutation-checked**: hard-coding the peak window makes 2 of them
+  fail, including "moving the spend peak moves the window". A test that cannot fail on a constant
+  cannot defend a derivation.
+- Ratchets at baseline (286 / 27 / **0** / pass / 0); web vitest **985**.
+- 🔴 **Pre-existing failure on `origin/main`, NOT mine**: `ads-bid-optimizer-apply.vitest.test.ts`
+  fails at clean `origin/main` (isolated in a detached worktree) — `e40ca5d80` threads a
+  `changeSetId` that the test's exact-match assertion does not expect. Reported to the SG session.
+
 ## Still open after P1–P5 + BSP.6
 
 🔴 **Corrected 2026-08-22 after an audit of the plan against the shipped code.** Two entries below
@@ -552,10 +624,15 @@ and built, and **starter schedules were omitted entirely** — they were named i
 built. The strip half of B5 shipped; the starter half did not. Under-reporting an undelivered item
 is the same class of error as over-claiming a delivered one.
 
-- 🔴 **B5 starter schedules — PLANNED, APPROVED, NOT BUILT.** Zero starter/template references exist
-  in `ScheduleBuilder.tsx`, `scheduleConfig.ts` or `SchedulesSection.tsx`. Every other perfected tab
-  has starters in its builder's template modal; this one has none. It pairs naturally with P6 —
-  a starter is what an operator would arm — so the two should be decided together.
+- ✅ **B5 starter schedules — BUILT 2026-08-22**, see the section above.
+- 🔴 **`groupBy=cell` still has no caller** — I added that branch in P5 and the heatmap that would
+  consume it is not mounted. Either mount it or drop the branch; a served-and-unconsumed endpoint
+  branch is the same class of thing this programme removes.
+- 🔴 **The "Learn" button is dead in four files** (`ScheduleBuilder`, `RankGoalBuilder`,
+  `AiGoalBuilder`, `AdsPageHeader.showLearn`). Programme-wide, so it is an operator decision, not a
+  surgical fix inside this tab.
+- **`autoRefill` is settable through the API and read by nothing**; the builder's `kind: 'budget'`
+  is sent and ignored. Both are latent rather than live — worth closing, neither urgent.
 - **B3 is half done.** Day-of-Week grouping shipped (7 buckets, the competitor adopt-item), and the
   `cell` (7×24) grain is SERVED by the endpoint, but **no heatmap view is mounted on the tab**.
   `_schedule/DaypartingHeatmap` takes `cells: HeatCell[]` and is documented as data-source-agnostic,
