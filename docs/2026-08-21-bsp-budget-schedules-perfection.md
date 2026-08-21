@@ -543,12 +543,26 @@ Item 3 of the recommendation — a per-schedule `reassertOnce` for the under-pac
 as optional and is **not built**. It is the only remaining lever if the operator later finds
 schedules losing too often, and it should be armed on evidence, not in advance.
 
-## Still open after P1–P5
+## Still open after P1–P5 + BSP.6
 
-- **P6 arming** — the operator's click. The rig shows what a schedule will look like; prod still has
-  **0 `BudgetSchedule` rows**.
-- **The precedence question itself is still the operator's.** P3 makes a `yielded` stand-down
-  visible; it does not decide whether a schedule should re-fight the pacer. That is BSP.6.
-- The `cell` (7×24) grain is served but no heatmap view is mounted on the tab yet; `DaypartingHeatmap`
-  is ready to take it unchanged.
+🔴 **Corrected 2026-08-22 after an audit of the plan against the shipped code.** Two entries below
+were wrong in the first version of this list: BSP.6 was recorded as open *after* it had been decided
+and built, and **starter schedules were omitted entirely** — they were named in the approved P5 row
+("Census strip + starter schedules built from *this* account's measured hours (B5)") and were not
+built. The strip half of B5 shipped; the starter half did not. Under-reporting an undelivered item
+is the same class of error as over-claiming a delivered one.
+
+- 🔴 **B5 starter schedules — PLANNED, APPROVED, NOT BUILT.** Zero starter/template references exist
+  in `ScheduleBuilder.tsx`, `scheduleConfig.ts` or `SchedulesSection.tsx`. Every other perfected tab
+  has starters in its builder's template modal; this one has none. It pairs naturally with P6 —
+  a starter is what an operator would arm — so the two should be decided together.
+- **B3 is half done.** Day-of-Week grouping shipped (7 buckets, the competitor adopt-item), and the
+  `cell` (7×24) grain is SERVED by the endpoint, but **no heatmap view is mounted on the tab**.
+  `_schedule/DaypartingHeatmap` takes `cells: HeatCell[]` and is documented as data-source-agnostic,
+  so it can be mounted unchanged. Colour it by **spend or clicks, never ACoS/CVR** — 60 orders
+  across 168 cells.
+- **P6 arming** — the operator's click. Prod still has **0 `BudgetSchedule` rows**, so nothing this
+  session built has yet run against a real row.
 - `TRIGGER_BY_SLUG['budget-schedule']` is still a dead entry in `RuleBuilder.tsx` — BUD-P's file.
+- ✅ **BSP.6 is CLOSED**, not open — decided by the operator 2026-08-22 and built; see the section
+  above. The earlier version of this line said the precedence question was still undecided.
