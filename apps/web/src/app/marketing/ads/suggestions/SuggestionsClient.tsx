@@ -1968,13 +1968,22 @@ function SuggestionsInner() {
                    * "Applied". Same treatment as the family tabs' Delivery column.
                    */
                   key: 'st', label: 'Delivery', metric: false, sortable: true, freezeRight: true, width: 104,
-                  tip: 'What actually happened at Amazon. Approving ENQUEUES the write; the gate and the drain worker settle it afterwards — Delivered reached Amazon, Refused is the gate’s governed stop (reason on hover), Failed dead-lettered, Pending is still in flight. Skipped means the apply found nothing to change. “—” = this row predates delivery tracking.',
+                  tip: 'What actually happened at Amazon. Approving ENQUEUES the write; the gate and the drain worker settle it afterwards — Delivered reached Amazon, Refused is the gate’s governed stop (reason on hover), Failed dead-lettered, Pending is still in flight. Skipped means the apply found nothing to change. “—” means no single delivery handle: a bid apply writes each target separately, and rows decided before this column existed carry none — the Change Log has those receipts.',
                   sortValue: (r: AiDecision) => r.delivery?.state ?? r.status,
                   render: (r: AiDecision) => {
                     if (r.status === 'DENIED') return <span className="h10-sug-dl rf" title={r.reason}>Refused</span>
                     if (r.status === 'SKIPPED') return <span className="h10-sug-dl uk" title={r.reason}>Skipped</span>
                     const d = r.delivery
-                    if (!d) return <span className="h10-sug-dl uk" title="This decision predates delivery tracking — its fate at Amazon was not recorded">—</span>
+                    if (!d) {
+                      // Honest about WHY there is no handle. A bid apply fans out across every
+                      // target in the campaign — many queue rows, no single one to point at — so
+                      // claiming "predates tracking" on a decision approved a minute ago would be
+                      // a false sentence. Only the other modules can truthfully say that.
+                      const why = r.module === 'bid'
+                        ? 'A bid apply writes each target separately, so there is no single delivery handle to read — the receipts are in the Change Log.'
+                        : 'This decision was made before delivery was tracked here — its fate at Amazon was not recorded.'
+                      return <span className="h10-sug-dl uk" title={why}>—</span>
+                    }
                     const M: Record<string, { cls: string; label: string }> = {
                       delivered: { cls: 'ok', label: 'Delivered' }, pending: { cls: 'pd', label: 'Pending' },
                       refused: { cls: 'rf', label: 'Refused' }, failed: { cls: 'fl', label: 'Failed' }, unknown: { cls: 'uk', label: '—' },
