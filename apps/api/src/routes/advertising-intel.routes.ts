@@ -1220,9 +1220,9 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // executes exactly that plan. They share `planPromotion`, so the sentence the dialog states and
   // the number written cannot diverge.
   //
-  // This arms no automation. HV.0 stands: ads-auto-harvest stays propose-only and the five rules
-  // stay at PROPOSE. `ads-graduation.ts` caps AUTOMATIONS; an operator pressing a button is a
-  // different actor.
+  // This arms no automation. Harvest rules are capped at PROPOSE by `ads-graduation.ts`
+  // (the ads-auto-harvest cron itself was retired in HP5, 2026-08-21) — that caps AUTOMATIONS;
+  // an operator pressing a button is a different actor.
   fastify.get('/advertising/harvest-promote', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()

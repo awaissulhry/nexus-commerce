@@ -9,9 +9,10 @@
  *
  * ── 🔴 Why this reimplements `previewHarvest` instead of calling it ───────────────────────────
  *
- * `ads-harvest.service.ts` is called by the live cron (`ads-auto-harvest.service.ts:31/48`), by
- * `ads-recommendations.service.ts`, by `automation-action-handlers.ts`, and by two routes in
- * `advertising.routes.ts`. Changing it changes five write paths. So the query is rebuilt here with
+ * `ads-harvest.service.ts` is called by `ads-recommendations.service.ts`, by
+ * `automation-action-handlers.ts`, and by two routes in `advertising.routes.ts` (the nightly
+ * cron caller was retired in HP5, 2026-08-21). Changing it changes four write paths. So the
+ * query is rebuilt here with
  * four repairs that make the count TRUE, and the write path is left exactly where it was.
  *
  * The four repairs, each measured on prod 2026-08-12 (`scripts/_hv-1-candidates.mts`):

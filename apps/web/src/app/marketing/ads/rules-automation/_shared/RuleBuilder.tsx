@@ -43,6 +43,23 @@ const LOOKBACK_DAYS = ['7', '14', '30', '60', '90'].map((d) => ({ value: d, labe
  * Bid only for now; other slugs add their own lists when their sessions take them up.
  */
 const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payload: { conditions: Array<{ conditions: Condition[]; action: { op: string; value: string } }> } }>> = {
+  'keyword-harvesting': [
+    {
+      name: 'Harvest proven winners',
+      desc: '≥2 orders with ACoS ≤ 30% → promote (the Max-ACoS guard no legacy rule ever carried)',
+      payload: { conditions: [{ conditions: [{ metric: 'PPC Orders', op: 'gte', value: '2' }, { metric: 'ACOS', op: 'lte', value: '30' }], action: { op: 'set', value: '' } }] },
+    },
+    {
+      name: 'Strict performance ladder',
+      desc: '≥3 orders with ACoS ≤ 20% — H10’s performance-tier bar',
+      payload: { conditions: [{ conditions: [{ metric: 'PPC Orders', op: 'gte', value: '3' }, { metric: 'ACOS', op: 'lte', value: '20' }], action: { op: 'set', value: '' } }] },
+    },
+    {
+      name: 'Volume harvest, noise-guarded',
+      desc: '≥2 orders with ≥10 clicks — enough evidence before a new target spends',
+      payload: { conditions: [{ conditions: [{ metric: 'PPC Orders', op: 'gte', value: '2' }, { metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'set', value: '' } }] },
+    },
+  ],
   bid: [
     {
       name: 'Cut bids on high ACoS',
@@ -231,12 +248,20 @@ const MATCH_TYPES_NEG: MatchType[] = [
 const MATCH_TYPES_POS: MatchType[] = [
   { key: 'P', tip: 'Phrase' },
   { key: 'E', tip: 'Exact' },
-  { key: 'product', product: true, tip: 'Product (ASIN)' },
+  // HP1 — honest while it waits: the engine has no product-target create path yet, so a ticked
+  // ASIN type is refused BY NAME in the run's outcome; the keyword types on the mapping still land.
+  { key: 'product', product: true, tip: 'Product (ASIN) — creation not supported yet; the engine names the refusal in the run outcome. Phrase/Exact on this mapping still land.' },
 ]
 
 // Ad-group selection (H2): the "Add Ad Group" popover → the populated left/right two-panel.
 interface AdGroupItem { id: string; name: string; campaignId: string; campaignName: string | null; status: string; campaignStatus: string | null; adProduct: string | null; portfolioId: string | null }
-interface SelGroup extends AdGroupItem { look: boolean; types: { P: boolean; E: boolean; product: boolean } }
+interface SelGroup extends AdGroupItem {
+  look: boolean
+  types: { P: boolean; E: boolean; product: boolean }
+  /** HP2 — set by the Ad Group View's per-pathway pause; the builder PRESERVES it through an
+   *  edit-save (it is not rendered here — the Ad Group View is the pause surface). */
+  paused?: boolean
+}
 // H3 — a rule can hold multiple source→target "Ad Group Mapping" blocks (Harvest; Negative uses one).
 interface MapBlock { id: number; groups: SelGroup[] }
 let _bid = 1
@@ -433,7 +458,13 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [creating, setCreating] = useState(false)
   // ── H7 best-in-class (beyond the recording) ──
   const [negateInSource, setNegateInSource] = useState(false)
-  const [bidMode, setBidMode] = useState<'suggested' | 'fixed'>('suggested')
+  /**
+   * HP1 — H10's four bid modes, all REAL now (`resolveHarvestBidEur` in the engine): the term's
+   * own CPC (default — the going rate, Scale Insights' model), CPC + %, the destination ad
+   * group's default bid, or a custom figure. The old 'suggested' mode was a €0.75 constant
+   * behind a computed-sounding label; stored rules carrying it hydrate as 'cpc'.
+   */
+  const [bidMode, setBidMode] = useState<'cpc' | 'cpcPlus' | 'adGroupDefault' | 'fixed'>('cpc')
   const [bidValue, setBidValue] = useState('')
   const [brandExclude, setBrandExclude] = useState('')
   const [competitorOnly, setCompetitorOnly] = useState(false)
@@ -479,14 +510,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const clearCampaigns = () => setSelCampaigns([])
   // load saved templates for this rule type (backend may not be live yet — fail soft)
   useEffect(() => {
-    if (!isCampaign) return
+    if (!isCampaign && !isHarvest) return
     let alive = true
     ;(async () => {
       try { const j = await fetch(`${getBackendUrl()}/api/advertising/rule-templates?type=${slug}`).then((r) => r.json())
         if (alive && Array.isArray(j?.items)) setTemplates(j.items) } catch { /* templates backend not live yet */ }
     })()
     return () => { alive = false }
-  }, [isCampaign, slug])
+  }, [isCampaign, isHarvest, slug])
   // Bid keeps lookback per-criteria (group[0] is canonical for the template); Budget keeps its global lookback.
   const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, schedule: { frequency, everyN, interval, onDay, time, timezone } })
   const saveTemplate = async () => {
@@ -733,7 +764,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
           ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
           ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
-          mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types })) })),
+          mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
         }],
         // P2.2 — ceiling, write cap and market scope are sent for EVERY rule type. They used to be
         // budget-only, so every other builder rule was created account-wide with no way to scope
@@ -816,6 +847,16 @@ export function RuleBuilder({ slug }: { slug: string }) {
         setControl(a.control === 'automate' ? 'automate' : 'manual')
         initialControl.current = a.control === 'automate' ? 'automate' : 'manual'
         setDedupe(a.dedupe !== false)
+        // HP1 — these four were never hydrated, so an edit-save silently reset them to defaults.
+        if (typeof a.negateInSource === 'boolean') setNegateInSource(a.negateInSource)
+        if (a.bid != null) {
+          const b = a.bid as { mode?: string; value?: unknown }
+          setBidMode(b.mode === 'fixed' ? 'fixed' : b.mode === 'cpcPlus' ? 'cpcPlus' : b.mode === 'adGroupDefault' ? 'adGroupDefault' : 'cpc')
+          if (b.value != null && String(b.value).trim() !== '') setBidValue(String(b.value))
+        }
+        const flt = a.filters as { brandExclude?: unknown; competitorOnly?: unknown } | undefined
+        if (Array.isArray(flt?.brandExclude)) setBrandExclude((flt.brandExclude as unknown[]).map(String).join('\n'))
+        if (typeof flt?.competitorOnly === 'boolean') setCompetitorOnly(flt.competitorOnly)
         if (typeof a.protectConverting === 'boolean') setProtectConverting(a.protectConverting)
         if (a.protectDays != null) setProtectDays(String(a.protectDays))
         if (a.negationLevel) setNegationLevel(a.negationLevel)
@@ -848,7 +889,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         if (s.time) setTime(s.time)
         if (s.timezone) setTimezone(s.timezone)
         const maps = Array.isArray(a.mappings) ? a.mappings : []
-        if (maps.length) setBlocks(maps.map((m: { groups?: Array<Partial<SelGroup>> }) => ({ id: ++_bid, groups: (Array.isArray(m.groups) ? m.groups : []).map((g) => ({ id: String(g.id), name: g.name ?? String(g.id), campaignId: g.campaignId ?? '', campaignName: g.campaignName ?? null, status: g.status ?? 'ENABLED', campaignStatus: null, adProduct: g.adProduct ?? null, portfolioId: g.portfolioId ?? null, look: g.look !== false, types: g.types ?? { P: true, E: true, product: false } })) })))
+        if (maps.length) setBlocks(maps.map((m: { groups?: Array<Partial<SelGroup>> }) => ({ id: ++_bid, groups: (Array.isArray(m.groups) ? m.groups : []).map((g) => ({ id: String(g.id), name: g.name ?? String(g.id), campaignId: g.campaignId ?? '', campaignName: g.campaignName ?? null, status: g.status ?? 'ENABLED', campaignStatus: null, adProduct: g.adProduct ?? null, portfolioId: g.portfolioId ?? null, look: g.look !== false, types: g.types ?? { P: true, E: true, product: false }, paused: g.paused === true })) })))
       } catch { /* ignore */ }
     })()
     return () => { alive = false }
@@ -967,7 +1008,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             <section id="rb-criteria" className={`h10-rb-sec${locked?.level === 'meta' ? ' held' : ''}`} {...(locked?.level === 'meta' ? { inert: '' as unknown as boolean, 'aria-disabled': true } : {})}>
               <div className="h10-rb-crit-hd">
                 <div className="t"><h2>Criteria</h2><p className="h10-rb-desc">Set up the performance criteria and actions</p></div>
-                {isCampaign && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> Apply Template</button>}
+                {(isCampaign || isHarvest) && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> Apply Template</button>}
               </div>
 
               {groups.map((g, gi) => (
@@ -1233,10 +1274,19 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 {isHarvest && (
                 <div className="advblock">
                   <b>New Target Bid</b>
-                  <p>Starting bid for the keywords / product targets this rule creates</p>
+                  <p>Starting bid for the targets this rule creates. Current CPC inherits what the search term actually costs per click in the rule’s window; the write gate’s campaign ceilings still bind.</p>
                   <div className="freqrow">
-                    <H10Select width={180} options={[{ value: 'suggested', label: 'Suggested bid' }, { value: 'fixed', label: 'Fixed bid' }]} value={bidMode} onChange={(v) => setBidMode(v as 'suggested' | 'fixed')} ariaLabel="New target bid mode" />
-                    {bidMode === 'fixed' && <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="0.75" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Fixed bid amount" /></span>}
+                    {/* HP1 — H10's four modes, every one computed by the engine (the old
+                        "Suggested bid" was a €0.75 constant). CPC = the term's own measured
+                        cost-per-click in the rule's window — the going rate for that demand. */}
+                    <H10Select width={230} options={[
+                      { value: 'cpc', label: 'Set to Current CPC' },
+                      { value: 'cpcPlus', label: 'Current CPC + %' },
+                      { value: 'adGroupDefault', label: 'Ad group default bid' },
+                      { value: 'fixed', label: 'Custom bid' },
+                    ]} value={bidMode} onChange={(v) => setBidMode(v as 'cpc' | 'cpcPlus' | 'adGroupDefault' | 'fixed')} ariaLabel="New target bid mode" />
+                    {bidMode === 'fixed' && <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="0.75" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Custom bid amount" /></span>}
+                    {bidMode === 'cpcPlus' && <span className="h10-rb-val bidv hassf"><input inputMode="decimal" placeholder="10" value={bidValue} onChange={(e) => setBidValue(e.target.value)} aria-label="Percent above the term’s CPC" /><span className="sf">%</span></span>}
                   </div>
                 </div>
                 )}
@@ -1253,6 +1303,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 {isEdit
                   ? ' Changing the mode here applies when you save.'
                   : ' The rule is live at the mode you choose as soon as you create it — Manual queues every action on the Suggestions page for your approval; Automate applies them on its own, inside the rule’s caps and the write gate.'}
+                {/* HP4 — the graduation ceiling, stated BEFORE save (the bid builder's
+                    pause-action HoverCard precedent): a structural rule cannot reach full
+                    automation, and the radio must not promise it. */}
+                {(isHarvest || isNegative) && ' This rule CREATES things, and creation is held below full automation by policy: whichever you choose, its actions queue on the Suggestions page for your approval.'}
               </p>
               <div className="h10-rb-card control">
                 {surface === 'search-terms' && (<div className="h10-rb-dedupe">
@@ -1286,7 +1340,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             <div className="h10-rb-foot">
               <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
               <span className="grow" />
-              {isCampaign && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
+              {(isCampaign || isHarvest) && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
               <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
             </div>
           </div>
@@ -1428,6 +1482,8 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
   const [tab, setTab] = useState('Ad Groups')
   const [all, setAll] = useState<AdGroupItem[]>([])
   const [portfolios, setPortfolios] = useState<Array<{ id: string; name: string }>>([])
+  /** HP3 — product lines WITH their campaigns, for the Products tab (was a "coming soon" stub). */
+  const [lines, setLines] = useState<Array<{ id: string; sku: string; name: string; campaigns: string[] }>>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [campStatus, setCampStatus] = useState('ENABLED')
@@ -1436,14 +1492,20 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
     let alive = true
     ;(async () => {
       try {
-        const [a, p] = await Promise.all([
+        const [a, p, sj] = await Promise.all([
           fetch(`${getBackendUrl()}/api/advertising/ad-groups?limit=3000`).then((r) => r.json()).catch(() => ({ items: [] })),
           fetch(`${getBackendUrl()}/api/advertising/portfolios`).then((r) => r.json()).catch(() => ({ items: [] })),
+          // HP3 — the SAME payload CampaignSection's Products tab reads (`/advertising/
+          // scope-options` carries each product line WITH its campaigns); a failure leaves the
+          // tab saying so, never taking the ad-group list down with it.
+          fetch(`${getBackendUrl()}/api/advertising/scope-options`).then((r) => r.json()).catch(() => ({})),
         ])
         if (!alive) return
         setAll((a.items ?? []) as AdGroupItem[])
         const praw = (a && (p.items ?? p) || []) as Array<{ id: string | number; name?: string }>
         setPortfolios((Array.isArray(praw) ? praw : []).map((x) => ({ id: String(x.id), name: String(x.name ?? x.id) })))
+        const lraw = (sj?.productLines ?? []) as Array<{ id: string; sku: string; name: string; campaigns?: string[] }>
+        setLines((Array.isArray(lraw) ? lraw : []).filter((l) => Array.isArray(l.campaigns) && l.campaigns.length).map((l) => ({ id: l.id, sku: l.sku, name: l.name, campaigns: l.campaigns as string[] })))
       } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
@@ -1471,21 +1533,27 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
   }
   const groups = tab === 'Campaigns' ? byKey((g) => g.campaignId, (g) => g.campaignName ?? '—')
     : tab === 'Portfolios' ? byKey((g) => g.portfolioId ?? '__none', (g) => (g.portfolioId ? (portfolios.find((p) => p.id === g.portfolioId)?.name ?? g.portfolioId) : 'No Portfolio'))
+    : tab === 'Products' ? lines
+      .filter((l) => !ql || l.name.toLowerCase().includes(ql) || l.sku.toLowerCase().includes(ql))
+      .map((l) => ({ name: `${l.name || l.sku} · ${l.sku}`, items: all.filter((g) => l.campaigns.includes(g.campaignId) && (!campStatus || g.campaignStatus === campStatus) && (!agStatus || g.status === agStatus)) }))
+      .filter((grp) => grp.items.length)
     : null
   return (
     <div className="h10-rb-agpop" ref={ref} role="dialog" aria-label="Add Ad Group to Rule">
       <div className="t">Add Ad Group to Rule</div>
-      <div className="srch"><Search size={14} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search ad groups" /></div>
+      <div className="srch"><Search size={14} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search'} aria-label={tab === 'Products' ? 'Search products' : 'Search ad groups'} /></div>
       <div className="tabs">{TABS.map((t) => <button key={t} type="button" className={t === tab ? 'on' : ''} onClick={() => setTab(t)}>{t}</button>)}</div>
       <div className="filters">
         <div className="f"><label>Campaign Status</label><H10Select width={150} options={AG_STATUS} value={campStatus} onChange={setCampStatus} ariaLabel="Campaign status" /></div>
         <div className="f"><label>Ad Groups Status</label><H10Select width={150} options={AG_STATUS} value={agStatus} onChange={setAgStatus} ariaLabel="Ad groups status" /></div>
-        <button type="button" className="addall" disabled={tab === 'Products' || !fresh(filtered).length} onClick={() => onAdd(fresh(filtered))}>Add All</button>
+        <button type="button" className="addall"
+          disabled={tab === 'Products' ? !fresh((groups ?? []).flatMap((g) => g.items)).length : !fresh(filtered).length}
+          onClick={() => onAdd(tab === 'Products' ? fresh((groups ?? []).flatMap((g) => g.items)) : fresh(filtered))}>Add All</button>
       </div>
       <div className="list">
         {loading ? <div className="agpop-msg">Loading…</div>
-          : tab === 'Products' ? <div className="agpop-msg">Scope by product is coming soon — use Ad&nbsp;Groups, Campaigns, or Portfolios.</div>
-          : filtered.length === 0 ? <div className="agpop-msg">No ad groups match.</div>
+          : tab === 'Products' && (!groups || groups.length === 0) ? <div className="agpop-msg">{lines.length ? 'No products match.' : 'No product lines are mapped to campaigns yet.'}</div>
+          : filtered.length === 0 && tab !== 'Products' ? <div className="agpop-msg">No ad groups match.</div>
           : groups ? groups.map((grp, i) => (
               <div className="grp" key={i}>
                 <div className="grph"><span className="gn" title={grp.name}>{grp.name}</span><button type="button" className="add" disabled={!fresh(grp.items).length} onClick={() => onAdd(fresh(grp.items))}><Plus size={12} /> Add</button></div>

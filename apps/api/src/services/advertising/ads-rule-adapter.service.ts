@@ -16,6 +16,7 @@
  * handlers, safety spine, audit rows — runs it unchanged. Returns null for non-builder rules.
  */
 import { logger } from '../../utils/logger.js'
+import { normalizeHarvestWire, normalizeHarvestBidMode } from './ads-harvest-wire.js'
 
 const BUILDER_SLUGS = new Set(['budget', 'placement', 'bid', 'negative-targeting', 'keyword-harvesting', 'dayparting-schedule', 'sov', 'keyword-tracker'])
 
@@ -636,35 +637,76 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
     }
   }
 
+  /**
+   * HP1 — the two search-term families translate their condition groups as OR-of-ANDs.
+   *
+   * Their groups share ONE THEN (unlike the campaign family, where each block carries its own
+   * action), so multiple criteria blocks mean "this bar OR that bar". The old flatten AND-ed
+   * every group's conditions together — stricter than authored, fail-safe but false. The blocks
+   * reuse BP.P4b's evaluator selection (first matching block acts; the actions are identical
+   * across blocks, so first-match IS the OR).
+   */
   if (slug === 'negative-targeting') {
     // SEARCH_TERM_WASTING context carries the query + campaign/adgroup; conditions gate on its metrics.
-    const { leaves, unmapped } = translateConditions(groups, SEARCHTERM_METRIC, rule.id)
+    const actions: Array<Record<string, unknown>> = [{
+      type: 'add_negative_exact',
+      scope: NEG_SCOPE[(a0.negationLevel as string) ?? 'campaign'] ?? 'CAMPAIGN',
+      protectConverting: a0.protectConverting !== false,
+      protectDays: a0.protectDays != null ? num(a0.protectDays) : 30,
+      reason: `Negative rule ${rule.id}`,
+    }]
+    const blocks: NonNullable<TranslatedRule['blocks']> = []
+    const unmappedAll: string[] = []
+    for (const g of groups.length ? groups : [{} as BuilderGroup]) {
+      const { leaves, unmapped } = translateConditions([g], SEARCHTERM_METRIC, rule.id)
+      unmappedAll.push(...unmapped)
+      blocks.push({ conditions: leaves, actions })
+    }
     return {
-      conditions: leaves,
-      ...(unmapped.length ? { untranslatable: unmapped } : {}),
-      actions: [{
-        type: 'add_negative_exact',
-        scope: NEG_SCOPE[(a0.negationLevel as string) ?? 'campaign'] ?? 'CAMPAIGN',
-        protectConverting: a0.protectConverting !== false,
-        protectDays: a0.protectDays != null ? num(a0.protectDays) : 30,
-        reason: `Negative rule ${rule.id}`,
-      }],
+      conditions: blocks[0].conditions,
+      actions,
+      blocks,
+      ...(unmappedAll.length ? { untranslatable: unmappedAll } : {}),
     }
   }
 
   if (slug === 'keyword-harvesting') {
-    // SEARCH_TERM_CONVERTING context. promote_to_exact reads query+adGroup from context; bid from the rule.
-    const bidMode = (a0.bid as { mode?: string; value?: string } | undefined)?.mode
-    const bidValue = (a0.bid as { mode?: string; value?: string } | undefined)?.value
+    /**
+     * HP1 — the WHOLE form rides into execution. `normalizeHarvestWire` carries the ad-group
+     * mapping matrix, the Search Terms contains-filters, the brand filters and `dedupe`;
+     * `action.bid` carries the mode+value so the handler computes the bid (CPC-inheriting by
+     * default) instead of the pre-HP1 €0.75 constant behind a "Suggested bid" label. The
+     * negate-in-source action gets the SAME source allowlist, so a mapped rule never negates a
+     * term it did not harvest.
+     */
+    const wire = normalizeHarvestWire(a0)
+    const bid = (a0.bid ?? {}) as { mode?: unknown; value?: unknown }
     const actions: Array<Record<string, unknown>> = [{
       type: 'promote_to_exact',
-      bidEur: bidMode === 'fixed' && bidValue ? num(bidValue) : 0.75,
+      bid: { mode: normalizeHarvestBidMode(bid.mode), value: bid.value != null && String(bid.value).trim() !== '' ? num(bid.value) : null },
+      harvest: wire,
       reason: `Harvest rule ${rule.id}`,
     }]
-    // negate-in-source: also add the harvested term as a negative in its source ad group
-    if (a0.negateInSource === true) actions.push({ type: 'add_negative_exact', scope: 'AD_GROUP', reason: `Harvest negate-in-source ${rule.id}` })
-    const { leaves, unmapped } = translateConditions(groups, SEARCHTERM_METRIC, rule.id)
-    return { conditions: leaves, ...(unmapped.length ? { untranslatable: unmapped } : {}), actions }
+    if (a0.negateInSource === true) {
+      actions.push({
+        type: 'add_negative_exact', scope: 'AD_GROUP',
+        ...(wire.blocks ? { sourceLookAdGroupIds: [...new Set(wire.blocks.flatMap((b) => b.look))] } : {}),
+        reason: `Harvest negate-in-source ${rule.id}`,
+      })
+    }
+    const blocks: NonNullable<TranslatedRule['blocks']> = []
+    const unmappedAll: string[] = []
+    for (const g of groups.length ? groups : [{} as BuilderGroup]) {
+      const { leaves, unmapped } = translateConditions([g], SEARCHTERM_METRIC, rule.id)
+      unmappedAll.push(...unmapped)
+      blocks.push({ conditions: leaves, actions })
+    }
+    return {
+      conditions: blocks[0].conditions,
+      actions,
+      blocks,
+      ...(unmappedAll.length ? { untranslatable: unmappedAll } : {}),
+    }
   }
 
   if (slug === 'dayparting-schedule') {

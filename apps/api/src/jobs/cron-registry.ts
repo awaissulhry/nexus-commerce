@@ -310,12 +310,6 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // NAF.AP.4/AP.5 — expire what has run out, run what the undo window released.
   'approval-maintenance': () =>
     import('./approval-maintenance.job.js').then((m) => m.runApprovalMaintenanceOnce()),
-  'ads-auto-harvest': () => import('../services/advertising/ads-auto-harvest.service.js').then(async (m) => {
-    const r = await m.runAutoHarvestOnce()
-    return r.skipped
-      ? `skipped=${r.skipped}`
-      : `neg=${r.negativesAdded}/${r.proposedNegatives} grad=${r.keywordsGraduated}/${r.proposedGraduations} dryRun=${r.dryRun}`
-  }),
   'ads-anomaly-guard': () => import('../services/advertising/ads-anomaly-guard.service.js').then(async (m) => {
     const r = await m.runAnomalyGuardOnce()
     return `tripped=${r.tripped} actions=${r.actionsLastHour}/${r.thresholds.maxActionsPerHour} spend=${r.spendLastHourCents}/${r.thresholds.maxHourlySpendCentsEur}c`

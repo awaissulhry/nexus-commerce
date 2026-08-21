@@ -90,7 +90,6 @@ let v1ExportIngestTask: ReturnType<typeof cron.schedule> | null = null
 let keywordBidResyncTask: ReturnType<typeof cron.schedule> | null = null
 let anomalyGuardTask: ReturnType<typeof cron.schedule> | null = null
 let autoBidTask: ReturnType<typeof cron.schedule> | null = null
-let autoHarvestTask: ReturnType<typeof cron.schedule> | null = null
 let coverageEngineTask: ReturnType<typeof cron.schedule> | null = null
 let campaignSettingsSyncTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -704,24 +703,6 @@ export function startAutoBidCron(): void {
   logger.info('ads-auto-bid cron: scheduled', { schedule })
 }
 
-// TD.2 — automatic keyword harvest + prune. Daily (search-term reports are T+1):
-// promote converters to exact, auto-negative wasteful terms. Autonomy-gated.
-export async function runAutoHarvestCron(): Promise<void> {
-  await recordCronRun('ads-auto-harvest', async () => {
-    const { runAutoHarvestOnce } = await import('../services/advertising/ads-auto-harvest.service.js')
-    const r = await runAutoHarvestOnce()
-    return r.skipped ? `skipped=${r.skipped}` : `neg=${r.negativesAdded}/${r.proposedNegatives} grad=${r.keywordsGraduated}/${r.proposedGraduations} dryRun=${r.dryRun}`
-  }).catch((err) => logger.error('ads-auto-harvest cron: failure', { error: String(err) }))
-}
-
-export function startAutoHarvestCron(): void {
-  if (autoHarvestTask) { logger.warn('ads-auto-harvest already started'); return }
-  const schedule = process.env.NEXUS_ADS_AUTO_HARVEST_SCHEDULE ?? '30 6 * * *'
-  if (!cron.validate(schedule)) { logger.error('ads-auto-harvest: invalid schedule', { schedule }); return }
-  autoHarvestTask = cron.schedule(schedule, () => { void runAutoHarvestCron() })
-  logger.info('ads-auto-harvest cron: scheduled', { schedule })
-}
-
 // ACR.3 — the coverage engine: holds each term of an ENABLED coverage set at its target share.
 // OBSERVE by default (NEXUS_COVERAGE_ENGINE_MODE=off|observe|auto): decisions log as would-do
 // and nothing writes until BOTH a set is enabled AND the mode is raised to auto. Daily at 07:10,
@@ -792,8 +773,8 @@ export function startAllAdvertisingCrons(): void {
   startAnomalyGuardCron()
   // TD.1 — automatic profit-native target-ACOS bidding.
   startAutoBidCron()
-  // TD.2 — automatic keyword harvest + prune.
-  startAutoHarvestCron()
+  // HP5 (2026-08-21) — ads-auto-harvest RETIRED after 82 dry runs, zero governing rules:
+  // harvesting is builder rules through the advertising-rule evaluator. Do not re-add a cron.
   // ACR.3 — coverage engine (observe-first; enabled sets only).
   startCoverageEngineCron()
 }
@@ -830,12 +811,11 @@ export function stopAllAdvertisingCrons(): void {
     ['keywordBidResyncTask', keywordBidResyncTask] as const,
     ['anomalyGuardTask', anomalyGuardTask] as const,
     ['autoBidTask', autoBidTask] as const,
-    ['autoHarvestTask', autoHarvestTask] as const,
   ]) {
     if (task) { task.stop(); logger.debug(`${key} stopped`) }
   }
   reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null; reportCreateApTask = null
   reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
   v1ExportCreateTask = null; v1ExportPollTask = null; v1ExportIngestTask = null
-  keywordBidResyncTask = null; anomalyGuardTask = null; autoBidTask = null; autoHarvestTask = null
+  keywordBidResyncTask = null; anomalyGuardTask = null; autoBidTask = null
 }

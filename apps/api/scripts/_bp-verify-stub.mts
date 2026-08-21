@@ -154,6 +154,22 @@ createServer(async (req, res) => {
       })
       return json(200, { rows: rows.map((t) => ({ ...t, campaignId: t.adGroup?.campaignId ?? null })) })
     }
+    // ── HP (harvest) reads ───────────────────────────────────────────────────
+    if (url === '/api/advertising/ad-groups' && req.method === 'GET') {
+      const rows = await prisma.adGroup.findMany({
+        select: { id: true, name: true, status: true, campaignId: true, campaign: { select: { name: true, status: true, adProduct: true, portfolioId: true } } },
+        orderBy: { name: 'asc' }, take: 3000,
+      })
+      return json(200, { items: rows.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaign?.name ?? null, status: g.status, campaignStatus: g.campaign?.status ?? null, adProduct: g.campaign?.adProduct ?? null, portfolioId: g.campaign?.portfolioId ?? null })) })
+    }
+    if (url === '/api/advertising/harvest-pathways' && req.method === 'GET') {
+      const { listHarvestPathways } = await import('../src/services/advertising/harvest-pathways.service.js')
+      return json(200, await listHarvestPathways())
+    }
+    if (url === '/api/advertising/harvest-cohort' && req.method === 'GET') {
+      const { getHarvestCohort } = await import('../src/services/advertising/harvest-cohort.service.js')
+      return json(200, await getHarvestCohort({ market: 'all', outcome: null, actor: null, since: null, q: null } as never))
+    }
     if (url === '/api/advertising/suggestions/count' && req.method === 'GET') {
       return json(200, { pending: await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } }) })
     }

@@ -71,8 +71,6 @@ interface Gap {
 interface Actor {
   id: string; type: ActorType; name: string; what: string
   level: Level; ceiling: Level; ceilingReason: string; blockedBy: string[]
-  heldBy: { flag: string; set: boolean; effect: string } | null
-  registryDisagrees: { says: string; why: string } | null
   trigger: string | null; schedule: string | null
   actionTypes: string[]; writes: boolean
   scope: { kind: string; name: string | null }
@@ -254,10 +252,9 @@ export function HvActors({ scope, push }: HvSlotProps) {
           <AlertTriangle size={13} />
           <span>
             Every <b>rule</b> here is held at <b>Propose</b> by the same ceiling, because creating a
-            keyword or a negative leaves something behind that a person has to reap. The{' '}
-            <b>engine</b> doing the identical thing had no ceiling applied to it at all — it was
-            gated only by a global switch shared with every other engine, until{' '}
-            <code>NEXUS_ADS_AUTO_HARVEST_ARMED</code> was added on 12 Aug 2026.
+            keyword or a negative leaves something behind that a person has to reap. The nightly{' '}
+            <b>engine</b> that did the identical thing with no ceiling at all was retired on
+            21 Aug 2026 — its historical writes remain in the cohort record below.
           </span>
         </p>
       ) : null}
@@ -341,23 +338,6 @@ function ActorDetail({ actor }: { actor: Actor | null }) {
             )}
         </div>
       </div>
-
-      {actor.heldBy ? (
-        <p className="h10-hva-held">
-          <b>{actor.heldBy.flag}</b> is {actor.heldBy.effect}. The account dial is a ceiling over
-          every actor, and it is not what is holding this one down — this flag is.
-        </p>
-      ) : null}
-
-      {actor.registryDisagrees ? (
-        <p className="h10-hva-clash">
-          <AlertTriangle size={13} />
-          <span>
-            The Control Room lists this engine as <b>{actor.registryDisagrees.says}</b>.{' '}
-            {actor.registryDisagrees.why} Handed to that programme — this page changes nothing.
-          </span>
-        </p>
-      ) : null}
 
       {actor.lastRunSummary ? (
         <p className="h10-hva-note">

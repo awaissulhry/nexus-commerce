@@ -5144,6 +5144,18 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    match-type chips so the grid and the builder describe one thing the same way. Defined here
    because an undefined class is silent (reference_undefined_css_class_is_silent). */
 .h10-hv-badges { display: inline-flex; align-items: center; gap: 4px; }
+
+/* HP2 — the Ad Group View's pathway chips: rule link + per-pathway pause + detach. */
+.h10-hv-badges.hp2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h10-hv-pathway { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #dfe4ea; border-radius: 8px; background: #f8fafc; }
+.h10-hv-pathway.paused { background: #f4f6f9; border-style: dashed; }
+.h10-hv-pathway.paused .h10-nt-name { color: #74808f; }
+/* base toggle is 34×19 with an abspos left-anim knob (ads.css) — the sm variant keeps that model */
+.h10-hv-pathway .h10-bktoggle.sm { width: 26px; height: 15px; flex-shrink: 0; }
+.h10-hv-pathway .h10-bktoggle.sm span { width: 11px; height: 11px; top: 2px; left: 2px; }
+.h10-hv-pathway .h10-bktoggle.sm.on span { left: 13px; }
+.h10-hv-detach { border: 0; background: none; color: #98a2b3; cursor: pointer; display: inline-flex; padding: 2px; border-radius: 5px; }
+.h10-hv-detach:hover { color: #e5484d; background: #fdecec; }
 .h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: .01em; background: #e8f1fd; color: #10457f; }
 .h10-hv-mt.neg { background: #fdeceb; color: #a2231d; }
 
@@ -5420,3 +5432,8 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rb-noise .lbl { font-size: 12px; font-weight: 700; color: #5f6875; }
 .h10-rb-noise button { display: inline-flex; align-items: center; gap: 4px; border: 1px dashed #c6cedb; background: none; color: #2b5aa7; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
 .h10-rb-noise button:hover { background: #f2f7ff; border-color: #9db8e0; }
+
+/* HP4 — the cohort line under the harvest view pill: what harvesting has produced. */
+.h10-hv-cohortline { margin: 0 0 12px; padding: 0 2px; font-size: 12.5px; color: #55606d; }
+.h10-hv-cohortline b { color: #1c2530; font-weight: 700; }
+.h10-hv-cohortline .h10-nt-open { display: inline-flex; }

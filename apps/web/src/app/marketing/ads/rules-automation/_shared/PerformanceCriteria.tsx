@@ -60,6 +60,9 @@ export function PcWindowNote({ slug }: { slug: string }) {
       {d == null
         ? 'Rank is the latest snapshot; spend and ACOS cover the last 30 days. The most recent 2 days are still settling and are excluded.'
         : `Measured over the last ${d} days — this trigger's fixed window. The most recent 2 days are still settling and are excluded.`}
+      {/* HP1 — the invisible floor, made visible: the emitter only surfaces terms already at
+          ≥2 orders, so conditions can tighten that bar but never lower it. */}
+      {slug === 'keyword-harvesting' && ' Search terms surface only once they have at least 2 orders in the window — conditions can raise that bar, never lower it.'}
     </p>
   )
 }
@@ -90,7 +93,9 @@ export const PC_METRICS_PLACEMENT = METRICS_PLACEMENT.map((m) => ({ value: m, la
 export const pcMetricsFor = (slug: string): Array<{ value: string; label: string }> =>
   (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : slug === 'bid' ? METRICS_BID : METRICS_BASE).map((m) => ({ value: m, label: m }))
 export const pcDefaultCondition = (slug: string): Condition =>
-  slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' }
+  // HP1 — 2, not 1: the SEARCH_TERM_CONVERTING emitter only surfaces terms with ≥2 orders
+  // (NEXUS_CONVERTING_MIN_ORDERS), so a '≥1 order' default promised what the engine cannot do.
+  slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '2' }
     : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' }
       : slug === 'sov' ? { metric: 'Share of Voice', op: 'lt', value: '' }
         : slug === 'keyword-tracker' ? { metric: 'Organic Rank', op: 'gt', value: '' }

@@ -881,10 +881,10 @@ async function resolveRuleSweepScope(ruleId: string): Promise<{
 // printing "Always" over a rule that harvests at ≥2 orders and €10. Two copies of a threshold is
 // how a grid starts describing a rule the engine does not run.
 //
-// ⚠ These are NOT `previewHarvest`'s own defaults — it falls back to minSpendCents **1500**, and
-// the nightly `ads-auto-harvest` cron calls `previewHarvest({})` with no arguments, so the cron
-// negates at €15 while every rule negates at €10. Recorded in the shared file, deliberately not
-// reconciled here: either number moves live writes (HV-R plan P6).
+// ⚠ These are NOT `previewHarvest`'s own defaults — it falls back to minSpendCents **1500**
+// (€15) where every rule negates at €10. The gap stopped biting when HP5 (2026-08-21) retired
+// the nightly cron that called `previewHarvest({})` bare; the remaining bare-preview callers
+// are read-only surfaces.
 ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<ActionResult> => {
   const windowDays = typeof action.windowDays === 'number' ? action.windowDays : HARVEST_DEFAULTS.windowDays
   const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : HARVEST_DEFAULTS.minSpendCents
@@ -1074,6 +1074,23 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
     const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
     if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
     if (!externalCampaignId) return { type: action.type, ok: false, error: 'No externalCampaignId in context' }
+    /**
+     * HP1 — a negate-at-source coupled to a MAPPED harvest rule must not fire outside the
+     * mapping. The paired `promote_to_exact` skips terms whose source ad group is not in the
+     * rule's `look` set; without the same check here, the rule would negate a term it never
+     * harvested — silencing demand it did not act on. Absent (every non-harvest caller, and
+     * unmapped rules), nothing changes.
+     */
+    const sourceAllow = Array.isArray(action.sourceLookAdGroupIds)
+      ? (action.sourceLookAdGroupIds as unknown[]).map(String)
+      : null
+    if (sourceAllow) {
+      const srcExt = (action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId
+      const srcLocal = srcExt ? await prisma.adGroup.findFirst({ where: { externalAdGroupId: srcExt }, select: { id: true } }) : null
+      if (!srcLocal || !sourceAllow.includes(srcLocal.id)) {
+        return { type: action.type, ok: true, output: { skipped: 'source-ad-group-not-in-mappings', keyword } }
+      }
+    }
     // EA2 — honor the builder's Negation Level: AD_GROUP scopes to the source ad group; CAMPAIGN (default) is broader.
     const scope = (action.scope as string | undefined) === 'AD_GROUP' ? 'AD_GROUP' : 'CAMPAIGN'
     const externalAdGroupId = scope === 'AD_GROUP'
@@ -1112,21 +1129,132 @@ ACTION_HANDLERS.add_negative_exact = makeAddNegativeHandler('NEGATIVE_EXACT')
 ACTION_HANDLERS.add_negative_phrase = makeAddNegativeHandler('NEGATIVE_PHRASE')
 
 // ── promote_to_exact ──────────────────────────────────────────────────
-// Take a converting search term and create an EXACT match keyword in the
-// ad group (or a specified target ad group). The match-type migration engine.
+// Take a converting search term and create new targets from it.
+//
+// HP1 (2026-08-21) — the handler honours the WHOLE builder form now. A builder harvest rule
+// carries `action.harvest` (the normalised wire: mapping blocks, term filters, dedupe) and
+// `action.bid` ({mode, value} — CPC-inheriting by default, never a silent constant): terms are
+// read only from the mapped `look` ad groups, targets are created in the mapped destinations
+// with the ticked types, and every skip or refusal is named in the output. Before HP1 all of
+// that was stored-but-unread: EXACT-only, in the source ad group, account-wide, at a constant
+// bid — and `ok: true` even when the write gate refused and the keyword existed only locally
+// (the 209-of-218 never-reached-Amazon mechanism). An action WITHOUT `harvest` is an
+// engine-native rule and keeps the exact pre-HP1 behaviour.
 ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<ActionResult> => {
   const query = (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
-  const targetAdGroupId = (action.adGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId
-  const bidEur = Number(action.bidEur ?? 0.5)
+  const srcExternalAdGroupId = (action.adGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId
   if (!query) return { type: action.type, ok: false, error: 'No query in context' }
-  if (!targetAdGroupId) return { type: action.type, ok: false, error: 'No adGroupId' }
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, query, matchType: 'EXACT', bidEur } }
-  const { createKeywordLocal } = await import('./ads-create.service.js')
-  // Resolve local adGroup id from externalAdGroupId
-  const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: targetAdGroupId }, select: { id: true } })
-  if (!ag) return { type: action.type, ok: false, error: `No local ad group for externalAdGroupId=${targetAdGroupId}` }
-  await createKeywordLocal({ adGroupId: ag.id, keywordText: query, matchType: 'EXACT', bidEur })
-  return { type: action.type, ok: true, output: { query, matchType: 'EXACT', adGroupId: ag.id, bidEur } }
+  if (!srcExternalAdGroupId) return { type: action.type, ok: false, error: 'No adGroupId' }
+  const { createKeywordLocal, pushExistingKeyword } = await import('./ads-create.service.js')
+  const src = await prisma.adGroup.findFirst({ where: { externalAdGroupId: srcExternalAdGroupId }, select: { id: true } })
+  if (!src) return { type: action.type, ok: false, error: `No local ad group for externalAdGroupId=${srcExternalAdGroupId}` }
+
+  const wire = (action.harvest ?? null) as import('./ads-harvest-wire.js').HarvestWire | null
+  if (!wire) {
+    // engine-native path, byte-for-byte the pre-HP1 behaviour — except the write's fate is
+    // reported: a create the gate refused is a failure, not a success that silenced nothing.
+    const bidEur = Number(action.bidEur ?? 0.5)
+    if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, query, matchType: 'EXACT', bidEur } }
+    const r = await createKeywordLocal({ adGroupId: src.id, keywordText: query, matchType: 'EXACT', bidEur, evidence: ctxEvidence(context) })
+    if (r.externalTargetId == null) {
+      return { type: action.type, ok: false, error: r.denied ? `Write gate denied at ${r.denied.deniedAt}: ${r.denied.reason}` : r.pushError ?? (r.existed ? 'keyword exists locally but never reached Amazon' : 'created locally only — Amazon did not take the keyword'), output: { query, matchType: 'EXACT', adGroupId: src.id, bidEur, adTargetId: r.id, reachedAmazon: false } }
+    }
+    return { type: action.type, ok: true, output: { query, matchType: 'EXACT', adGroupId: src.id, bidEur, externalTargetId: r.externalTargetId, reachedAmazon: true } }
+  }
+
+  const { matchedBlocks, termPassesFilters, resolveHarvestBidEur, normalizeHarvestBidMode } = await import('./ads-harvest-wire.js')
+
+  // 1 — is this term's SOURCE ad group inside the rule's mappings?
+  const blocks = matchedBlocks(wire.blocks, src.id)
+  if (blocks !== 'account-wide' && blocks.length === 0) {
+    return { type: action.type, ok: true, output: { skipped: 'source-ad-group-not-in-mappings', query, sourceAdGroupId: src.id } }
+  }
+
+  // 2 — the term filters (contains / does-not-contain / brand / competitor-only)
+  const looksLikeAsin = /^b0[a-z0-9]{8}$/i.test(query.trim())
+  const isOwnAsin = wire.filters.competitorOnly && looksLikeAsin
+    ? (await prisma.adProductAd.count({ where: { asin: { equals: query.trim(), mode: 'insensitive' } } })) > 0
+    : false
+  const filt = termPassesFilters(query, wire.filters, isOwnAsin)
+  if (filt.pass === false) return { type: action.type, ok: true, output: { skipped: 'term-filter', reason: filt.reason, query } }
+
+  // 3 — the creation set: mapped destinations × ticked types; account-wide keeps create-in-source EXACT
+  const targets = blocks === 'account-wide'
+    ? [{ adGroupId: src.id, types: ['EXACT' as const] }]
+    : (() => {
+      const seen = new Map<string, Set<string>>()
+      for (const b of blocks) for (const c of b.create) {
+        const s = seen.get(c.adGroupId) ?? new Set<string>()
+        for (const t of c.types) s.add(t)
+        seen.set(c.adGroupId, s)
+      }
+      return [...seen.entries()].map(([adGroupId, types]) => ({ adGroupId, types: [...types] as Array<'PHRASE' | 'EXACT' | 'ASIN'> }))
+    })()
+
+  // dedupe scope = the campaigns of every mapped ad group ("the campaigns from this rule group");
+  // an account-wide rule dedupes account-wide.
+  const mappedAgIds = blocks === 'account-wide' ? null : [...new Set(blocks.flatMap((b) => [...b.look, ...b.create.map((c) => c.adGroupId)]))]
+  const dedupeCampaignIds = mappedAgIds
+    ? (await prisma.adGroup.findMany({ where: { id: { in: mappedAgIds } }, select: { campaignId: true } })).map((g) => g.campaignId)
+    : null
+
+  const st = (context as any)?.searchTerm as { clicks?: number; spendCents?: number } | undefined
+  const termCpcEur = st && Number(st.clicks) > 0 ? (Number(st.spendCents ?? 0) / Number(st.clicks)) / 100 : null
+  const bidMode = normalizeHarvestBidMode((action.bid as { mode?: unknown } | undefined)?.mode)
+  const bidValue = (action.bid as { value?: unknown } | undefined)?.value
+  const bidValueNum = bidValue != null && Number.isFinite(Number(bidValue)) ? Number(bidValue) : null
+
+  const outcomes: Array<Record<string, unknown>> = []
+  let confirmed = 0
+  let failedWrites = 0
+  for (const target of targets) {
+    const agDefault = bidMode === 'adGroupDefault'
+      ? await prisma.adGroup.findUnique({ where: { id: target.adGroupId }, select: { defaultBidCents: true } }).then((g) => (g?.defaultBidCents != null ? g.defaultBidCents / 100 : null))
+      : null
+    for (const matchType of target.types) {
+      if (matchType === 'ASIN') {
+        // Named, never silent: a product-target create path does not exist yet. The keyword types
+        // on the same mapping still land; this refusal is visible in the execution row.
+        outcomes.push({ adGroupId: target.adGroupId, matchType, refused: 'product-target (ASIN) creation is not supported yet — keyword types on this mapping were still processed' })
+        continue
+      }
+      if (wire.dedupe) {
+        const exists = await prisma.adTarget.findFirst({
+          where: {
+            kind: 'KEYWORD', isNegative: false, expressionType: matchType,
+            expressionValue: { equals: query, mode: 'insensitive' },
+            ...(dedupeCampaignIds ? { adGroup: { campaignId: { in: dedupeCampaignIds } } } : {}),
+          },
+          select: { id: true },
+        })
+        if (exists) { outcomes.push({ adGroupId: target.adGroupId, matchType, skipped: 'dedupe — the term already exists with this match type in this rule group' }); continue }
+      }
+      const bid = resolveHarvestBidEur(bidMode, bidValueNum, termCpcEur, agDefault)
+      if ('refuse' in bid) { failedWrites += 1; outcomes.push({ adGroupId: target.adGroupId, matchType, refused: `bid: ${bid.refuse}` }); continue }
+      if (meta.dryRun) { outcomes.push({ adGroupId: target.adGroupId, matchType, wouldCreate: true, bidEur: bid.bidEur }); continue }
+      const r = await createKeywordLocal({ adGroupId: target.adGroupId, keywordText: query, matchType, bidEur: bid.bidEur, evidence: ctxEvidence(context) })
+      if (r.externalTargetId != null) { confirmed += 1; outcomes.push({ adGroupId: target.adGroupId, matchType, bidEur: bid.bidEur, externalTargetId: r.externalTargetId, reachedAmazon: true, existed: r.existed === true }); continue }
+      if (r.existed) {
+        // The local-only backlog's live fix: an existing row Amazon never saw gets a PUSH, not a
+        // silent idempotent no-op (HV.4's pushExistingKeyword, on the rule path at last).
+        const p = await pushExistingKeyword({ adTargetId: r.id, evidence: ctxEvidence(context) })
+        if (p.ok && p.externalTargetId) { confirmed += 1; outcomes.push({ adGroupId: target.adGroupId, matchType, pushedExisting: true, externalTargetId: p.externalTargetId, reachedAmazon: true }); continue }
+        failedWrites += 1
+        outcomes.push({ adGroupId: target.adGroupId, matchType, reachedAmazon: false, refused: p.refusal ? `${p.refusal.deniedAt}: ${p.refusal.reason}` : p.error ?? 'exists locally and the push did not land' })
+        continue
+      }
+      failedWrites += 1
+      outcomes.push({ adGroupId: target.adGroupId, matchType, adTargetId: r.id, reachedAmazon: false, refused: r.denied ? `write gate denied at ${r.denied.deniedAt}: ${r.denied.reason}` : r.pushError ?? 'created locally only — Amazon did not take the keyword' })
+    }
+  }
+
+  return {
+    type: action.type,
+    // Skips are policy working; a write that did not land is a failure. All-skips is a clean run.
+    ok: failedWrites === 0,
+    error: failedWrites > 0 ? `${failedWrites} creation${failedWrites === 1 ? '' : 's'} did not reach Amazon — see outcomes` : undefined,
+    output: { query, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes },
+  }
 }
 
 // ── sync_negatives_across_campaigns ──────────────────────────────────

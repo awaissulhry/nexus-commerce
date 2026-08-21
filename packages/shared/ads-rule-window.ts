@@ -98,9 +98,8 @@ export const BID_WINDOW_MAX = 90
  *
  * 🔴 These are the **handler's** defaults (`automation-action-handlers.ts`), which imports them
  * from here, and they are NOT the harvest service's. `previewHarvest` defaults `minSpendCents` to
- * **1500**, and the nightly `ads-auto-harvest` cron calls `previewHarvest({})` with no arguments —
- * so the cron negates at €15 while every rule negates at €10. Recorded rather than reconciled:
- * changing either number moves live writes, which is a decision, not a tidy-up (HV-R plan P6).
+ * **1500** (€15) where every rule negates at €10. The nightly cron that ran the €15 path bare
+ * was retired in HP5 (2026-08-21); the €15 fallback now binds only read-only previews.
  *
  * Exported so the Rules grid can say what binds a rule that states nothing, instead of printing
  * "Always" — the fabricated-cell class this section has shipped three times

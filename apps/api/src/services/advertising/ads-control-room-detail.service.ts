@@ -74,11 +74,6 @@ const EVIDENCE: Record<string, EvidenceSource> = {
     writesEntities: true,
     emptyNote: 'Runs on schedule and has proposed nothing in this window.',
   },
-  'auto-harvest': {
-    actors: ['automation:auto-harvest'],
-    writesEntities: true,
-    emptyNote: 'No terms promoted or negated in this window.',
-  },
   'tos-defense': {
     actors: ['automation:tos-optimizer'],
     writesEntities: true,

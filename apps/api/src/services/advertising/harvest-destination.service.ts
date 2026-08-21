@@ -13,8 +13,9 @@
  * **No destination ⇒ the keyword is created back in the ad group that discovered it ⇒
  * `promotedElsewhere` is false ⇒ the source is never negated.** "Promoted into the source" and
  * "did not negate the source" are ONE defect. Only the SP Super Wizard has ever populated that
- * map; `automation-templates.ts`'s standalone rule and `ads-auto-harvest.service.ts:48` both pass
- * `undefined`, so **every** harvest this account has ever run took the fallback.
+ * map; `automation-templates.ts`'s standalone rule and the nightly cron (retired in HP5,
+ * 2026-08-21) both passed `undefined`, so **every** harvest this account has ever run took the
+ * fallback.
  *
  * ── 🔴 Why the resolver proposes a SHORTLIST and never a destination ──────────────────────────
  *

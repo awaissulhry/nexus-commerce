@@ -141,8 +141,10 @@ describe('engines', () => {
     const bid = f.engines.find((e) => e.key === 'auto-bid')!
     expect(bid.cadence).toBe('every 6 h at :20')
     expect(bid.fires).toBe(4)
-    const harvest = f.engines.find((e) => e.key === 'auto-harvest')!
-    expect(harvest.fires).toBe(1)
+    const coverage = f.engines.find((e) => e.key === 'coverage-engine')!
+    expect(coverage.fires).toBe(1)
+    // HP5 (2026-08-21): the auto-harvest engine is retired — the forecast must not list it.
+    expect(f.engines.find((e) => e.key === 'auto-harvest')).toBeUndefined()
   })
 
   it('a stopped account blocks every engine, with the halt as the stated reason', async () => {

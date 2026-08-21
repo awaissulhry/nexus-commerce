@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Search, Zap, FlaskConical, Trash2, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Sparkles, Copy, ChevronDown, AlertTriangle } from 'lucide-react'
+import { Search, Zap, FlaskConical, Trash2, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Copy, ChevronDown, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { checkRuleLogic } from './synthetic-test'
 import { fieldDef, actionDef, triggerDef, OPS, fieldSuffix, condFromRaw, type FieldUnit } from './vocab'
@@ -293,7 +293,6 @@ export function AutomationHub({ initialRules, initialState }: { initialRules: Ru
         <div className="az-engine">
           {[
             { key: 'bid', path: 'automation/auto-bid/run', label: 'Bid optimisation', icon: <TrendingUp size={15} />, desc: 'Tune every keyword bid toward its profit-ACOS target now.' },
-            { key: 'harvest', path: 'automation/auto-harvest/run', label: 'Harvest & negate', icon: <Sparkles size={15} />, desc: 'Promote converting search terms + negate wasted ones now.' },
             { key: 'guard', path: 'automation/guard/run', label: 'Retail guard', icon: <ShieldAlert size={15} />, desc: 'Pause ads on out-of-stock / lost-Buy-Box products now.' },
             { key: 'daypart', path: 'dayparting/run-now', label: 'Dayparting', icon: <Zap size={15} />, desc: 'Apply hour-of-day bid modifiers from your dayparting plan.' },
           ].map((e) => (

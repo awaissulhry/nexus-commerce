@@ -52,8 +52,9 @@ export interface EngineLever {
   /**
    * Whether this engine actually consults the account halt / autonomy dial.
    *
-   * Measured, not assumed: `ads-auto-bid` and `ads-auto-harvest` check
-   * `state.effectivelyStopped`; `ad-rank-defend`, `ad-dayparting`, `ad-budget-enforce`,
+   * Measured, not assumed: `ads-auto-bid` checks `state.effectivelyStopped`
+   * (`ads-auto-harvest` did too, until HP5 retired it 2026-08-21);
+   * `ad-rank-defend`, `ad-dayparting`, `ad-budget-enforce`,
    * `budget-pool-rebalance` and the delivery drain contain no such check at all.
    *
    * This distinction is the difference between a control surface and a decorative one. On
@@ -69,7 +70,7 @@ export interface EngineLever {
  * How an engine relates to the account halt / autonomy dial.
  *
  *   honours  — reads `effectivelyStopped` itself and stands down before doing any work.
- *              Only `ads-auto-bid` and `ads-auto-harvest` do this.
+ *              Only `ads-auto-bid` does this.
  *   gated    — still evaluates while halted, but every write it produces is refused by
  *              `ads-write-gate` (ACR.0.7). Nothing reaches Amazon; the engine merely
  *              wastes a tick. This is the state rank-defend, dayparting, budget
@@ -174,7 +175,7 @@ export async function getAccountGuardrails(): Promise<AccountGuardrails> {
 export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global: { autonomy: string; halted: boolean; degraded: boolean; envKill: boolean } }> {
   const CRONS = [
     'ad-rank-defend', 'ad-dayparting', 'ad-budget-enforce', 'budget-pool-rebalance',
-    'ads-auto-bid', 'ads-auto-harvest', 'ads-anomaly-guard', 'top-of-search-defense',
+    'ads-auto-bid', 'ads-anomaly-guard', 'top-of-search-defense',
     'tos-is-ingest', 'sqp-ingest', 'ads-structural-reconcile', 'drain-ads-sync',
     'ads-coverage-engine', 'fleet-sweep', 'fleet-council',
   ]
@@ -288,10 +289,6 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
 
     mk('auto-bid', 'Bid optimiser', 'Moves target bids toward a target ACOS',
       'ads-auto-bid', 'every 6 h',
-      masterOff ? 'OFF' : 'AUTO', masterOff?.why ?? 'Runs on the account autonomy dial', null, 'honours'),
-
-    mk('auto-harvest', 'Harvest & negate', 'Promotes converting search terms and negates wasteful ones',
-      'ads-auto-harvest', 'daily 06:30',
       masterOff ? 'OFF' : 'AUTO', masterOff?.why ?? 'Runs on the account autonomy dial', null, 'honours'),
 
     mk('anomaly-guard', 'Anomaly breaker', 'Halts all automation on an action or spend excursion',

@@ -45,17 +45,6 @@ import prisma from '../../db.js'
 import { resolveAutonomy, type AutonomyLevel } from './ads-autonomy.js'
 import { graduationCeiling } from './ads-graduation.js'
 import { getAutomationState } from './ads-automation-state.service.js'
-import { getEngineLevers } from './ads-control-room.service.js'
-import { ARMED_FLAG } from './ads-auto-harvest.service.js'
-import { envEnabled } from '../../utils/env-flag.js'
-
-/** Level order, for comparing what a surface CLAIMS against what an actor holds. */
-const RANK: string[] = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO']
-
-/** The engine's key in the registry. C8: one display name per engine, and it comes from there. */
-const ENGINE_KEY = 'auto-harvest'
-/** The actor string `applyHarvest` stamps on every keyword the nightly engine writes. */
-const ENGINE_ACTOR = 'automation:auto-harvest'
 
 /**
  * An action that can bring a keyword or a negative into existence.
@@ -115,23 +104,6 @@ export interface HvActorRow {
   ceiling: AutonomyLevel
   ceilingReason: string
   blockedBy: string[]
-  /**
-   * The named condition holding this actor below its ceiling, when one exists.
-   *
-   * The engine only. Rendered as a flag with a state — NEVER as a fifth mode word, which would
-   * break C1's four-word contract the moment someone read it as one.
-   */
-  heldBy: { flag: string; set: boolean; effect: string } | null
-  /**
-   * 🔴 What the engine registry reports for this actor, when it disagrees with `level`.
-   *
-   * `ads-control-room.service.ts:293` hardcodes `masterOff ? 'OFF' : 'AUTO'` for this engine and
-   * reads no flag — unlike its neighbours `rank-defend` (`NEXUS_ENABLE_RANK_DEFEND`) and
-   * `budget-enforce` (`NEXUS_BUDGET_ENFORCE_APPLY`), which both read theirs and say so. So the
-   * Control Room lists this engine as Auto while HV.0 has it previewing and applying nothing.
-   * Rendered, not fixed: that file belongs to the Control Room programme (locks §3 #7).
-   */
-  registryDisagrees: { says: string; why: string } | null
   trigger: string | null
   schedule: string | null
   actionTypes: string[]
@@ -318,7 +290,7 @@ function gapsFor(actionTypes: string[], stated: string | null, autoTargetingRows
 }
 
 export async function getHarvestActors(opts: { market: string }): Promise<HvActorsPayload> {
-  const [state, rules, protections, levers, writes, autoTargeting, campaignTotals] = await Promise.all([
+  const [state, rules, protections, writes, autoTargeting, campaignTotals] = await Promise.all([
     getAutomationState(),
     prisma.automationRule.findMany({
       where: { domain: 'advertising' },
@@ -331,7 +303,6 @@ export async function getHarvestActors(opts: { market: string }): Promise<HvActo
       orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
     }),
     prisma.adKeywordProtection.count(),
-    getEngineLevers().catch(() => ({ levers: [] as Array<Record<string, unknown>> })),
     countWrites(),
     // The blind spot's victim count: rows whose match type the converting-context filter cannot see.
     prisma.amazonAdsSearchTerm.count({ where: { matchType: { in: ['TARGETING_EXPRESSION', 'TARGETING_EXPRESSION_PREDEFINED'] } } }),
@@ -354,76 +325,10 @@ export async function getHarvestActors(opts: { market: string }): Promise<HvActo
 
   const actors: HvActorRow[] = []
 
-  // ── the engine ────────────────────────────────────────────────────────────
-  // Its name comes from the registry and nowhere else (C8): `Harvest & negate`, never
-  // `ads-auto-harvest`, never `automation:auto-harvest`. Its LEVEL does not — see below.
-  const lever = ((levers as { levers?: Array<Record<string, unknown>> }).levers ?? []).find((l) => l.key === ENGINE_KEY)
-  const armed = envEnabled(ARMED_FLAG)
-  const engineLevel: AutonomyLevel = armed ? 'AUTO' : 'PROPOSE'
-  const engineWrites = writes.get(ENGINE_ACTOR) ?? { wrote: 0, landed: 0 }
-  const registrySays = lever?.mode == null ? null : String(lever.mode)
-  const engineCeiling = graduationCeiling({ actionTypes: ['harvest_and_negate'], hasKeywordProtections: protections > 0 })
-  const lastSummary = lever?.lastRunSummary == null ? null : String(lever.lastRunSummary)
-  const foundMatch = lastSummary?.match(/neg=(\d+)\/(\d+)\s+grad=(\d+)\/(\d+)/)
-
-  actors.push({
-    id: `engine:${ENGINE_KEY}`,
-    type: 'engine',
-    name: lever?.name == null ? 'Harvest & negate' : String(lever.name),
-    what: lever?.what == null ? 'Promotes converting search terms and negates wasteful ones' : String(lever.what),
-    level: engineLevel,
-    // The ceiling is the same one every rule below is held at — and that is the point of the
-    // panel: the identical action, judged by the identical rule, had no ceiling applied to it
-    // at all until HV.0. It was gated only by a global switch on another page.
-    ceiling: engineCeiling.maxLevel,
-    ceilingReason: engineCeiling.reason,
-    blockedBy: engineCeiling.blockedBy,
-    heldBy: {
-      flag: ARMED_FLAG,
-      set: armed,
-      effect: armed
-        ? 'set — this engine applies its harvest every night'
-        : 'unset — it previews every night and applies nothing',
-    },
-    registryDisagrees: registrySays != null && registrySays !== engineLevel
-      ? {
-        says: registrySays,
-        // The direction matters and must not be asserted. The registry reads no flag, so it can
-        // land either side of the truth: OFF when the ads cron master switch is down, AUTO when it
-        // is up. Naming the wrong direction would be the same class of error this panel exists to
-        // catch, so the sentence is derived from the comparison rather than written once.
-        why: RANK.indexOf(registrySays) > RANK.indexOf(engineLevel)
-          ? 'The engine registry hardcodes this entry and reads no flag, unlike rank-defend and budget-enforce which read theirs and say so. The Control Room therefore lists this engine ABOVE what it can actually do.'
-          : 'The engine registry hardcodes this entry and reads no flag. It is reporting a lower level than this engine actually holds, from a different switch — so the two surfaces disagree in the safe direction, which is still a disagreement.',
-      }
-      : null,
-    trigger: 'SCHEDULE',
-    schedule: lever?.schedule == null ? 'daily 06:30' : String(lever.schedule),
-    actionTypes: ['harvest_and_negate'],
-    writes: true,
-    scope: { kind: 'account', name: null },
-    found: foundMatch
-      ? {
-        n: Number(foundMatch[2]) + Number(foundMatch[4]),
-        label: `${foundMatch[4]} to graduate · ${foundMatch[2]} to negate`,
-        caveat: 'Candidates processed on its last run — not writes made. The engine’s own summary counts both the same way.',
-      }
-      : null,
-    wrote: engineWrites.wrote,
-    landed: engineWrites.wrote > 0 ? engineWrites.landed : null,
-    outcomes: {
-      // The engine is a cron, not an AutomationRule: it has no execution rows to grade. Its record
-      // is what it wrote, which is the column beside this one. Four zeroes here would be a lie in
-      // the other direction, so the panel renders a dash and says where its record is.
-      acted: 0, proposed: 0, refused: 0, failed: 0, refusedIsHistorical: true, refusedNewest: null,
-    },
-    stated: null,
-    executed: executedFor(['harvest_and_negate'], [{ type: 'harvest_and_negate' }]),
-    gaps: gapsFor(['harvest_and_negate'], null, autoTargeting, 'engine'),
-    lastRunAt: lever?.lastRunAt == null ? null : String(lever.lastRunAt),
-    lastRunSummary: lastSummary,
-    href: '/marketing/ads/rules-automation/control-room',
-  })
+  // ── HP5 (2026-08-21): the `ads-auto-harvest` engine row is GONE because the engine is ────────
+  // gone — cron unscheduled, service deleted, after 82 dry runs with zero governing rules. Its
+  // historical writes keep their `automation:auto-harvest` actor stamp in the audit log and the
+  // cohort view. The only harvesting actors left are the rules below, through the evaluator.
 
   // ── the rules ─────────────────────────────────────────────────────────────
   for (const r of actorRules) {
@@ -448,8 +353,6 @@ export async function getHarvestActors(opts: { market: string }): Promise<HvActo
       ceiling: ceiling.maxLevel,
       ceilingReason: ceiling.reason,
       blockedBy: ceiling.blockedBy,
-      heldBy: null,
-      registryDisagrees: null,
       trigger: r.trigger,
       schedule: null,
       actionTypes: acting,
@@ -491,8 +394,6 @@ export async function getHarvestActors(opts: { market: string }): Promise<HvActo
     ceiling: 'AUTO',
     ceilingReason: 'A person is not gated by the graduation ceiling — it exists to decide what may run unattended.',
     blockedBy: [],
-    heldBy: null,
-    registryDisagrees: null,
     trigger: null,
     schedule: null,
     actionTypes: ['promote_to_exact', 'add_negative_exact'],

@@ -10,10 +10,10 @@
  *
  * ── What it is NOT ────────────────────────────────────────────────────────────────────────────
  *
- * It arms no automation. HV.0 stands: `ads-auto-harvest` remains propose-only and the five harvest
- * rules remain at PROPOSE. `ads-graduation.ts` caps *automations* because structural actions have
- * no retirement path — **an operator pressing a button is a different actor and is not what that
- * ceiling governs.** Nothing here reads or writes `NEXUS_ADS_AUTO_HARVEST_ARMED`.
+ * It arms no automation. Harvest rules are capped at PROPOSE by `ads-graduation.ts`, which caps
+ * *automations* because structural actions have no retirement path — **an operator pressing a
+ * button is a different actor and is not what that ceiling governs.** (The rule-less nightly
+ * cron this note used to cite was retired in HP5, 2026-08-21.)
  *
  * ── The three defects it must not reproduce ───────────────────────────────────────────────────
  *

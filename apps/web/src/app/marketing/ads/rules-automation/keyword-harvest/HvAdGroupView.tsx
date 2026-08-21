@@ -23,15 +23,24 @@
  * genuinely nothing. Rendering those three the same is the defect this page has been correcting
  * all day ([[reference_fleet_stale_constant_class]]).
  *
- * ⚠ Still read-only. P3b adds the Assigned-Rule dropdown and the per-pathway toggle, and the
- * `AdsHarvestAssignment` table behind them. Nothing here writes.
+ * HP2 (2026-08-21) — the view WRITES now, and the binding lives on the RULE ITSELF. HV-R P3b
+ * proposed an `AdsHarvestAssignment` table because all five rules were engine-shaped with no
+ * `mappings` field; W7 deleted them, every future rule is builder-shaped and owns a real
+ * `mappings` array, so the Assigned-Rule control edits THE RULE — one source of truth the
+ * builder, this view and the engine all read (`normalizeHarvestWire`). Assign adds a look-only
+ * source entry; detach removes the entry; the per-pathway pause sets `paused` on it, which the
+ * engine skips on BOTH sides (wire test HP2). The engine reads the same field in the same
+ * release — never a stale-constant column ([[reference_fleet_stale_constant_class]]).
  */
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ExternalLink } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Plus, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
+import { H10Select } from '../../campaigns/FilterDropdown'
+import { RuleTypeModal } from '../_shared/RuleTypeModal'
+import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 
 const BUILDER = '/marketing/ads/rules-automation/builder/keyword-harvesting'
 
@@ -64,6 +73,8 @@ interface ReachingRule {
   name: string
   reach: Reach
   enabled: boolean
+  /** HP2 — this pathway is paused on that rule (the engine skips it on both sides) */
+  paused: boolean
   /** builder mapping only: what it creates / negates in this ad group */
   creates: string[]
   negates: string[]
@@ -73,6 +84,7 @@ interface ReachingRule {
 interface Row {
   key: string
   adGroup: string
+  campaignId: string
   role: string
   adProduct: string
   campaign: string
@@ -99,6 +111,15 @@ export function HvAdGroupView() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [totals, setTotals] = useState<Pathways['totals'] | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  /** HP2 — the builder-shaped harvest rules, kept raw so a write can edit their mappings. */
+  const [rawRules, setRawRules] = useState<Map<string, Record<string, unknown>>>(new Map())
+  const [pending, setPending] = useState<Set<string>>(new Set())
+  const [notice, setNotice] = useState<string | null>(null)
+  const noticeRef = useRef<HTMLDivElement | null>(null)
+  const [picker, setPicker] = useState(false)
+  const [reloadNonce, setReloadNonce] = useState(0)
+  useAdsSync(['ads.rule.changed'], useCallback(() => setReloadNonce((n) => n + 1), []))
+  useEffect(() => { noticeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [notice])
 
   useEffect(() => {
     let alive = true
@@ -115,6 +136,7 @@ export function HvAdGroupView() {
         if (!alive) return
         const all = (Array.isArray(rulesJson?.rules) ? rulesJson.rules : Array.isArray(rulesJson?.items) ? rulesJson.items : []) as Array<Record<string, unknown>>
         const harvest = all.filter((r) => ruleBelongsToTab(r.actions, 'keyword-harvest'))
+        setRawRules(new Map(harvest.map((r) => [String(r.id), r])))
 
         /**
          * 🔴 A rule with neither `mappings` nor `sources` is ACCOUNT-WIDE, not unscoped-and-inert.
@@ -136,7 +158,7 @@ export function HvAdGroupView() {
           const negateInSource = a0?.negateInSource === true
 
           if (!groups.length && !sources.length) {
-            accountWide.push({ id, name, reach: 'account', enabled, creates: [], negates: [], destinations: [] })
+            accountWide.push({ id, name, reach: 'account', enabled, paused: false, creates: [], negates: [], destinations: [] })
             continue
           }
           const destinations = groups
@@ -148,7 +170,7 @@ export function HvAdGroupView() {
             if (!gid || g.look !== true) continue
             const creates = (['P', 'E', 'product'] as const).filter((k) => (g.types as Record<string, unknown> | undefined)?.[k]).map(badgeOf)
             perAdGroup.set(gid, [...(perAdGroup.get(gid) ?? []), {
-              id, name, reach: 'mapped', enabled, creates,
+              id, name, reach: 'mapped', enabled, paused: g.paused === true, creates,
               negates: negateInSource ? ['E'] : [],
               destinations,
             }])
@@ -157,7 +179,7 @@ export function HvAdGroupView() {
             const gid = String(s.adGroupId ?? '')
             if (!gid || s.harvestFrom !== true) continue
             perAdGroup.set(gid, [...(perAdGroup.get(gid) ?? []), {
-              id, name, reach: 'mapped', enabled,
+              id, name, reach: 'mapped', enabled, paused: false,
               creates: (Array.isArray(s.graduate) ? s.graduate : []).map(String),
               negates: (Array.isArray(s.negate) ? s.negate : []).map(String),
               destinations: [],
@@ -172,6 +194,7 @@ export function HvAdGroupView() {
           return {
             key: ag.id,
             adGroup: ag.name,
+            campaignId: ag.campaignId,
             role: ag.role ? ROLE_LABEL[ag.role] ?? ag.role : '—',
             adProduct: ag.adProduct ? PRODUCT_LABEL[ag.adProduct] ?? ag.adProduct : '—',
             campaign: ag.campaignName || ag.campaignId,
@@ -190,7 +213,77 @@ export function HvAdGroupView() {
       })
       .catch((e) => { if (alive) setErr((e as Error).message || 'failed') })
     return () => { alive = false }
-  }, [])
+  }, [reloadNonce])
+
+  /**
+   * HP2 — ONE writer for every pathway edit: read the rule, mutate its mappings, PATCH the
+   * actions back (the route applies only the keys sent). The grid refetches from what was STORED
+   * (`ads.rule.changed`), so a cell can never show a binding the engine will not honour.
+   */
+  const patchMappings = useCallback(async (
+    ruleId: string,
+    mutate: (mappings: Array<{ groups?: Array<Record<string, unknown>> }>) => Array<{ groups?: Array<Record<string, unknown>> }>,
+    describe: string,
+  ): Promise<void> => {
+    const rule = rawRules.get(ruleId)
+    if (!rule || !Array.isArray(rule.actions)) { setNotice(`That rule could not be read — reload the page.`); return }
+    const key = `${ruleId}`
+    setNotice(null)
+    setPending((sp) => new Set(sp).add(key))
+    try {
+      const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) => {
+        if (i !== 0) return a
+        const mappings = mutate(Array.isArray(a.mappings) ? structuredClone(a.mappings) as Array<{ groups?: Array<Record<string, unknown>> }> : [])
+        return { ...a, mappings }
+      })
+      const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${ruleId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
+      })
+      if (!res.ok) throw new Error(`(${res.status})`)
+      emitAdsChange('ads.rule.changed')
+    } catch (e) {
+      setNotice(`${describe} did not save ${String((e as Error).message || '')} — the pathway is unchanged. Reload and retry.`)
+    } finally {
+      setPending((sp) => { const n = new Set(sp); n.delete(key); return n })
+    }
+  }, [rawRules])
+
+  const assignRule = useCallback((ruleId: string, row: Row) => {
+    void patchMappings(ruleId, (mappings) => {
+      const blocks = mappings.length ? mappings : [{ groups: [] }]
+      const g0 = blocks[0].groups ?? (blocks[0].groups = [])
+      if (!g0.some((g) => String(g.id) === row.key)) {
+        // A look-only SOURCE entry: this ad group starts feeding the rule's existing
+        // destinations. Which types get created stays the rule's mapping matrix — assignment
+        // from here answers "harvest from this ad group?", not "create what, where?".
+        g0.push({ id: row.key, name: row.adGroup, campaignId: row.campaignId, campaignName: row.campaign, status: 'ENABLED', adProduct: null, portfolioId: null, look: true, types: { P: false, E: false, product: false } })
+      }
+      return blocks
+    }, `Assigning “${rawRules.get(ruleId)?.name ?? ruleId}”`)
+  }, [patchMappings, rawRules])
+
+  const detachRule = useCallback((ruleId: string, row: Row) => {
+    void patchMappings(ruleId, (mappings) =>
+      mappings.map((m) => ({ ...m, groups: (m.groups ?? []).filter((g) => String(g.id) !== row.key) })),
+    `Detaching “${rawRules.get(ruleId)?.name ?? ruleId}”`)
+  }, [patchMappings, rawRules])
+
+  const setPathwayPaused = useCallback((ruleId: string, row: Row, paused: boolean) => {
+    void patchMappings(ruleId, (mappings) =>
+      mappings.map((m) => ({ ...m, groups: (m.groups ?? []).map((g) => (String(g.id) === row.key ? { ...g, paused } : g)) })),
+    `${paused ? 'Pausing' : 'Resuming'} this pathway on “${rawRules.get(ruleId)?.name ?? ruleId}”`)
+  }, [patchMappings, rawRules])
+
+  /** The builder-shaped rules this row could still be assigned to. */
+  const assignableFor = useCallback((row: Row): Array<{ value: string; label: string }> => {
+    const already = new Set(row.rules.filter((x) => x.reach === 'mapped').map((x) => x.id))
+    return [...rawRules.values()]
+      .filter((r) => {
+        const a0 = (Array.isArray(r.actions) ? r.actions[0] : null) as { type?: string } | null
+        return a0?.type === 'keyword-harvesting' && !already.has(String(r.id))
+      })
+      .map((r) => ({ value: String(r.id), label: String(r.name ?? r.id) }))
+  }, [rawRules])
 
   const columns: GridColumn<Row>[] = useMemo(() => [
     {
@@ -221,11 +314,49 @@ export function HvAdGroupView() {
       key: 'reach', label: 'Harvest Rule', metric: false, sortable: true, sortValue: (r) => (r.reach === 'mapped' ? 2 : r.reach === 'account' ? 1 : 0),
       tip: 'Which rules harvest from this ad group — one mapped to it specifically, or the account-wide rules that cover every ad group.',
       render: (r) => {
+        const busy = pending.has.bind(pending)
+        const assignable = assignableFor(r)
+        /**
+         * HP2 — the assign control renders on EVERY sourceable row (H10's Assigned Rule
+         * dropdown). Mapped rules render as chips carrying their own pause toggle and detach —
+         * the micro-study's two verbs, on the pathway, without touching the rest of the rule.
+         */
+        const assignSelect = assignable.length > 0 ? (
+          <H10Select
+            width={130}
+            options={[{ value: '', label: '+ Assign rule' }, ...assignable]}
+            value=""
+            onChange={(v) => { if (v) assignRule(v, r) }}
+            ariaLabel={`Assign a harvest rule to ${r.adGroup}`}
+          />
+        ) : null
         if (r.reach === 'mapped') {
           const m = r.rules.filter((x) => x.reach === 'mapped')
           return (
-            <span className="h10-hv-badges">
-              {m.map((x) => <a key={x.id} className="h10-nt-name" href={`${BUILDER}?ruleId=${x.id}`} title={`“${x.name}” is mapped to this ad group specifically.`}>{x.name}</a>)}
+            <span className="h10-hv-badges hp2">
+              {m.map((x) => (
+                <span key={x.id} className={`h10-hv-pathway${x.paused ? ' paused' : ''}`}>
+                  <a className="h10-nt-name" href={`${BUILDER}?ruleId=${x.id}`} title={`“${x.name}” is mapped to this ad group specifically.${x.paused ? ' This pathway is PAUSED — the engine reads nothing from it and creates nothing in it until it is resumed.' : ''}`}>{x.name}</a>
+                  <button
+                    type="button"
+                    className={`h10-bktoggle sm${x.paused ? '' : ' on'}`}
+                    role="switch"
+                    aria-checked={!x.paused}
+                    aria-disabled={busy(x.id)}
+                    aria-label={`Pathway active for ${x.name} on ${r.adGroup}`}
+                    title={x.paused ? 'Paused — this ad group neither feeds this rule nor receives from it. Click to resume.' : 'Active — click to pause just this pathway; the rule and its other ad groups keep running.'}
+                    onClick={() => { if (!busy(x.id)) setPathwayPaused(x.id, r, !x.paused) }}
+                  ><span /></button>
+                  <button
+                    type="button"
+                    className="h10-hv-detach"
+                    aria-label={`Detach ${x.name} from ${r.adGroup}`}
+                    title={`Detach “${x.name}” from this ad group — the rule keeps running on its other mappings. Re-assigning is one click.`}
+                    onClick={() => { if (!busy(x.id)) detachRule(x.id, r) }}
+                  ><X size={11} aria-hidden /></button>
+                </span>
+              ))}
+              {assignSelect}
             </span>
           )
         }
@@ -238,7 +369,13 @@ export function HvAdGroupView() {
             >{r.rules.length} account-wide{live.length ? '' : ' (all off)'}</span>
           )
         }
-        return <span className="h10-rg-thr none" title="No harvest rule reaches this ad group — no rule is mapped to it and none runs account-wide.">Not assigned</span>
+        return (
+          <span className="h10-hv-badges hp2">
+            {assignable.length > 0
+              ? assignSelect
+              : <span className="h10-rg-thr none" title="No harvest rule reaches this ad group — no builder rule exists to assign yet. Create one with + Rule.">Not assigned</span>}
+          </span>
+        )
       },
     },
     {
@@ -265,7 +402,7 @@ export function HvAdGroupView() {
         ? <span className="h10-hv-badges">{r.negates.map((t) => <span key={t} className="h10-hv-mt neg" title="The harvested term is negated here, in its source">{t}</span>)}</span>
         : <span className="h10-rg-thr none" title="Nothing is negated at source, so this ad group keeps competing for a term after it has been promoted elsewhere.">—</span>),
     },
-  ], [])
+  ], [pending, assignableFor, assignRule, detachRule, setPathwayPaused])
 
   /**
    * The Filters card H10 keeps above this grid. Built from the ROSTER rather than from the visible
@@ -312,6 +449,13 @@ export function HvAdGroupView() {
   )
 
   return (
+    <>
+    {notice && (
+      <div className="h10-au-banner warn" role="alert" ref={noticeRef}>
+        <AlertTriangle size={15} aria-hidden />
+        <span>{notice}</span>
+      </div>
+    )}
     <AdsDataGrid<Row>
       rows={rows ?? []}
       loading={rows == null && err == null}
@@ -339,7 +483,11 @@ export function HvAdGroupView() {
       toolbarLeft={totals
         ? <span className="h10-hv-roster">{totals.sources} of {totals.adGroups} ad groups can source a harvest · <b>{totals.sourcesLive}</b> in an enabled campaign · {totals.destinations} can receive one</span>
         : null}
-      toolbarRight={<a className="h10-am-btn primary" href={BUILDER}>Rule <ExternalLink size={12} aria-hidden /></a>}
+      /* HP2 — the SAME "+ Rule" idiom as the Rules View: the type modal, seeded to this tab.
+         The old link read "Rule ⧉" and jumped straight into the builder past the modal. */
+      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</button>}
     />
+    {picker && <RuleTypeModal initial="keyword-harvesting" onClose={() => setPicker(false)} />}
+    </>
   )
 }

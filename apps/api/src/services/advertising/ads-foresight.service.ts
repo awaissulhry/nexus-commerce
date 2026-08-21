@@ -105,7 +105,6 @@ const ENGINE_CRONS: { key: string; name: string; env: string; fallback: string; 
   { key: 'rank-defend', name: 'Rank & Dayparting', env: 'NEXUS_RANK_DEFEND_SCHEDULE', fallback: '*/15 * * * *', flag: 'NEXUS_ENABLE_RANK_DEFEND', flagOffReason: 'NEXUS_ENABLE_RANK_DEFEND is off' },
   { key: 'budget-enforce', name: 'Budget enforcement', env: 'NEXUS_BUDGET_ENFORCE_SCHEDULE', fallback: '*/30 * * * *', flag: 'NEXUS_BUDGET_ENFORCE_APPLY', flagOffReason: 'NEXUS_BUDGET_ENFORCE_APPLY is off — it computes but never applies' },
   { key: 'auto-bid', name: 'Bid optimiser', env: 'NEXUS_ADS_AUTO_BID_SCHEDULE', fallback: '20 */6 * * *' },
-  { key: 'auto-harvest', name: 'Harvest & negate', env: 'NEXUS_ADS_AUTO_HARVEST_SCHEDULE', fallback: '30 6 * * *' },
   { key: 'anomaly-guard', name: 'Anomaly breaker', env: 'NEXUS_ADS_ANOMALY_GUARD_SCHEDULE', fallback: '*/10 * * * *' },
   { key: 'structural-reconcile', name: 'Account reconcile', env: 'NEXUS_ADS_STRUCTURAL_RECONCILE_SCHEDULE', fallback: '35 */6 * * *' },
   { key: 'settings-sync', name: 'Settings sync', env: 'NEXUS_ADS_SETTINGS_SYNC_SCHEDULE', fallback: '*/20 * * * *' },

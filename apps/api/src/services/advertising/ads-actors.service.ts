@@ -31,7 +31,6 @@ const ENGINE_ACTORS: Record<string, { actors?: string[]; actorPrefix?: string }>
   'budget-enforce': { actors: ['automation:budget-manager-cron'] },
   'budget-pools': { actors: ['automation:budget-pool-rebalance'] },
   'auto-bid': { actors: ['automation:auto-bid'] },
-  'auto-harvest': { actors: ['automation:auto-harvest'] },
   'tos-defense': { actors: ['automation:tos-optimizer'] },
   'coverage-engine': { actors: ['automation:coverage-engine'] },
 }

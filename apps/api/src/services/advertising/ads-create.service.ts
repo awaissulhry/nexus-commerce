@@ -199,7 +199,14 @@ export interface NewKeyword {
    */
   evidence?: AdWriteEvidence | null
 }
-export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string; externalTargetId: string | null }> {
+/**
+ * HP1 — the return says WHY a keyword did not reach Amazon, not just that it didn't.
+ * `existed` = the idempotence branch fired (the row predates this call); `denied` = the write
+ * gate refused (its own words); `pushError` = the Amazon call threw. All additive — every
+ * pre-HP1 caller reads only `id`/`externalTargetId` and is unchanged. `promote_to_exact` reads
+ * them to report a local-only create as the failure it is (the 209-of-218 mechanism).
+ */
+export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string; externalTargetId: string | null; existed?: boolean; denied?: { deniedAt: string; reason: string }; pushError?: string }> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
   if (!ag) throw new Error('ad group not found')
   /**
@@ -221,18 +228,31 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
     where: { adGroupId: input.adGroupId, kind: 'KEYWORD', isNegative: false, expressionType: input.matchType, expressionValue: { equals: input.keywordText, mode: 'insensitive' } },
     select: { id: true, externalTargetId: true },
   })
-  if (existing) return { id: existing.id, externalTargetId: existing.externalTargetId }
+  if (existing) return { id: existing.id, externalTargetId: existing.externalTargetId, existed: true }
   let externalId: string | null = null
+  let denied: { deniedAt: string; reason: string } | undefined
+  let pushError: string | undefined
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100) })
       if (gate.allowed) {
         const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' as const }
-        const r = isSbKeyword ? await createSbKeyword(ctx, args) : await createKeyword(ctx, args)
-        externalId = r.externalId
+        // HP1 — a throw used to abort the whole call with the local row unwritten and the reason
+        // lost; the mirror is still written below and the caller gets the error to report.
+        try {
+          const r = isSbKeyword ? await createSbKeyword(ctx, args) : await createKeyword(ctx, args)
+          externalId = r.externalId
+        } catch (e) { pushError = (e as Error).message }
+      } else {
+        const g = gate as { deniedAt?: string; reason?: string }
+        denied = { deniedAt: g.deniedAt ?? 'gate', reason: g.reason ?? 'write gate refused' }
       }
+    } else {
+      denied = { deniedAt: 'connection', reason: `no ads connection context for ${ag.campaign.marketplace}` }
     }
+  } else {
+    denied = { deniedAt: 'ids', reason: 'the ad group or campaign has no Amazon ids to create under' }
   }
   const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: Math.round(input.bidEur * 100), status: 'ENABLED', externalTargetId: externalId } })
   // 🔴 `reachedAmazon` is `externalId != null`, and the payload says so explicitly rather than
@@ -247,7 +267,7 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
     // whatever `ad-rank-defend` last moved it to.
     { keywordText: input.keywordText, matchType: input.matchType, externalId, reachedAmazon: externalId != null, bidCents: Math.round(input.bidEur * 100) },
     input.userId, {}, 'SUCCESS', input.evidence ?? null)
-  return { id: t.id, externalTargetId: externalId }
+  return { id: t.id, externalTargetId: externalId, denied, pushError }
 }
 
 /**

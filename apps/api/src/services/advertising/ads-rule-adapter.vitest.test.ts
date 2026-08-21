@@ -348,3 +348,78 @@ describe('BP.P4b — each criteria block translates to its own conditions + acti
     expect(maybeTranslateAdsRule(windowed)!.actions[0].windowDays).toBe(30)
   })
 })
+
+/**
+ * HP1 — the harvest wire rides the translation: mappings, term filters, dedupe, bid modes,
+ * OR-of-ANDs condition blocks, and the negate-in-source source-allowlist coupling.
+ */
+describe('HP1 — the harvest builder form survives into execution', () => {
+  const harvestRule = (extra: Record<string, unknown> = {}, conditions?: unknown[]) => ({
+    id: 'hp1',
+    actions: [{
+      type: 'keyword-harvesting',
+      negateInSource: true,
+      dedupe: true,
+      bid: { mode: 'suggested', value: '' },
+      searchTerms: [{ term: 'moto', op: 'contains' }],
+      filters: { brandExclude: ['xavia'], competitorOnly: false },
+      mappings: [{ groups: [
+        { id: 'src1', look: true, types: { P: false, E: false, product: false } },
+        { id: 'dst1', look: false, types: { P: true, E: true, product: false } },
+      ] }],
+      ...extra,
+    }],
+    conditions: conditions ?? [
+      { match: 'all', conditions: [{ metric: 'PPC Orders', op: 'gte', value: '2' }] },
+      { match: 'all', conditions: [{ metric: 'Sales', op: 'gte', value: '50' }, { metric: 'ACOS', op: 'lte', value: '25' }] },
+    ],
+  })
+
+  it('promote_to_exact carries the whole wire; "suggested" bid becomes cpc', () => {
+    const t = maybeTranslateAdsRule(harvestRule())!
+    const promote = t.actions[0] as Record<string, unknown>
+    expect(promote.type).toBe('promote_to_exact')
+    expect(promote.bid).toEqual({ mode: 'cpc', value: null })
+    const harvest = promote.harvest as { blocks: unknown; filters: Record<string, unknown>; dedupe: boolean }
+    expect(harvest.dedupe).toBe(true)
+    expect(harvest.blocks).toEqual([{ look: ['src1'], create: [{ adGroupId: 'dst1', types: ['PHRASE', 'EXACT'] }] }])
+    expect(harvest.filters).toEqual({ containsAny: ['moto'], notContains: [], brandExclude: ['xavia'], competitorOnly: false })
+  })
+
+  it('negate-in-source gets the SAME source allowlist, so a mapped rule never negates outside it', () => {
+    const t = maybeTranslateAdsRule(harvestRule())!
+    const neg = t.actions[1] as Record<string, unknown>
+    expect(neg.type).toBe('add_negative_exact')
+    expect(neg.scope).toBe('AD_GROUP')
+    expect(neg.sourceLookAdGroupIds).toEqual(['src1'])
+  })
+
+  it('condition groups become OR blocks sharing one THEN (the old flatten AND-ed them)', () => {
+    const t = maybeTranslateAdsRule(harvestRule())!
+    expect(t.blocks).toHaveLength(2)
+    expect(t.blocks![0].conditions).toHaveLength(1)
+    expect(t.blocks![1].conditions).toHaveLength(2)
+    expect(t.blocks![0].actions).toBe(t.blocks![1].actions) // same THEN, by identity
+    expect(t.conditions).toEqual(t.blocks![0].conditions)
+  })
+
+  it('negative-targeting groups get the same OR treatment', () => {
+    const t = maybeTranslateAdsRule({
+      id: 'hp1n',
+      actions: [{ type: 'negative-targeting', negationLevel: 'adgroup' }],
+      conditions: [
+        { match: 'all', conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '20' }] },
+        { match: 'all', conditions: [{ metric: 'ACOS', op: 'gte', value: '150' }] },
+      ],
+    })!
+    expect(t.blocks).toHaveLength(2)
+    expect((t.actions[0] as Record<string, unknown>).scope).toBe('AD_GROUP')
+  })
+
+  it('an unmapped rule stays account-wide (blocks null) and fixed bids still ride', () => {
+    const t = maybeTranslateAdsRule(harvestRule({ mappings: [], bid: { mode: 'fixed', value: '0.65' } }))!
+    const promote = t.actions[0] as Record<string, unknown>
+    expect((promote.harvest as { blocks: unknown }).blocks).toBeNull()
+    expect(promote.bid).toEqual({ mode: 'fixed', value: 0.65 })
+  })
+})

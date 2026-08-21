@@ -17,10 +17,10 @@ import { logger } from '../../utils/logger.js'
 import { createNegative, type NegativeMatchType } from './ads-negative-kw.service.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
 import { createKeywordLocal, createNegativeKeywordCampaignLocal, createTargetLocal, createNegativeProductTargetLocal, mirrorNegativeKeywordLocal } from './ads-create.service.js'
-// NEG.0(a) — enforced HERE rather than at applyHarvest's five callers, for the reason the write
-// gate gives about itself: a protection only some callers honour is not a protection. The five are
-// the rule engine, the POST route, ads-auto-harvest (which wrote the 22 engine-attributed rows),
-// and two recommendation-accept paths.
+// NEG.0(a) — enforced HERE rather than at applyHarvest's callers, for the reason the write
+// gate gives about itself: a protection only some callers honour is not a protection. The callers
+// are the rule engine, the POST route, and two recommendation-accept paths (a fifth,
+// ads-auto-harvest — which wrote the 22 engine-attributed rows — was retired in HP5, 2026-08-21).
 import { checkProtectConverting, normaliseNegTerm, type NegationDecision, type ProtectConvertingConfig } from './ads-protect-converting.js'
 
 export interface HarvestCandidate {
@@ -81,8 +81,9 @@ export async function previewHarvest(opts: { windowDays?: number; minSpendCents?
 
 /**
  * HV.4 — one row per candidate the caller asked for, so a bulk write reports N outcomes rather
- * than one number. Additive: every counter below is unchanged, and `ads-auto-harvest.service.ts:48`
- * and `ads-recommendations.service.ts:171/173` read only those.
+ * than one number. Additive: every counter below is unchanged, and
+ * `ads-recommendations.service.ts:171/173` reads only those (the other reader,
+ * `ads-auto-harvest.service.ts`, was retired in HP5, 2026-08-21).
  *
  * 🔴 `reachedAmazon` is `externalTargetId != null` — never "we called create". 209 of the engine's
  * 218 graduations reported success and do not exist at Amazon, because `createKeywordLocal` writes
@@ -422,8 +423,8 @@ export async function applyHarvest(args: {
         // reading of "never negate a term that converted" refuses every isolation negation. Applied
         // as written and counted under `path: 'isolation'` so the effect is legible on the result
         // rather than showing up as an unexplained zero. Unreachable today — the only caller that
-        // has ever run this service (ads-auto-harvest) passes no `destinations`, so
-        // `promotedElsewhere` is false for it.
+        // has ever run this service (the cron retired in HP5) passed no `destinations`, so
+        // `promotedElsewhere` was false for it.
         const refused = refusalFor(g.query)
         if (refused) { recordRefusal(g.query, 'isolation', refused); negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: null, reachedAmazon: false, refusal: { deniedAt: 'protect_converting', reason: refused.reason } }; negateReason = `The isolation negative was refused: ${refused.reason}` }
         else {

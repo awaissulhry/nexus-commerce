@@ -264,11 +264,18 @@ Operator reports, closed:
 Deferred, named: the "~2¢" hardcoded floor copy in Next 24 hours (the payload carries no floor
 field; needs an API addition), and the drawer confirm's focus trap.
 
-## BP — Bid page + builder perfection, P1–P6 (2026-08-21, LOCAL — the per-subpage programme's first target)
+## BP — Bid page + builder perfection, P1–P6 (2026-08-21 — SHIPPED `9da305684`, prod-verified same day)
 
-Study + build record: `docs/2026-08-21-bp-bid-perfection.md`. Operator approved the P1–P6 plan
-("Go ahead"); everything LOCAL and uncommitted per the session's local-first instruction; batch
-commit+push on the operator's word. Two new operator laws recorded: new components go INTO the
+Study + build record: `docs/2026-08-21-bp-bid-perfection.md`. Operator approved P1–P6 ("Go
+ahead"), reviewed locally, then "commit and push": **shipped as ONE commit `9da305684`** (three
+shared files blob-split so the SG session's WIP stayed out — and one near-miss: the first commit
+swept SG's evaluator sweep-block because a diff-grep without `-a` read as clean; caught by the
+tip-worktree tsc, soft-reset to the explicit parent, recommitted clean). Railway SUCCESS +
+Vercel Ready on the sha, ancestry-verified. **Prod-verified by clicking:** builder typography
+13.5/14/18 + connector clears the noise guard (line x=352, label x=401) + Learn gone + caps
+100/10 prefilled + Rome timezone; a REAL rule created at Manual landed `enabled:true PROPOSE
+control:manual windowDays:14` server-side (the arming path, live), grid showed no off-chip ·
+"14 days" · "0 waiting" · no Filters card; deleted after — account restored to 0 rules. Two new operator laws recorded: new components go INTO the
 design system; **100% round-trip honesty** (displayed = real reading; changed = reaches Amazon).
 
 - **P1** — the arming path made real: a builder rule's Control step and the grid toggle now write
@@ -302,3 +309,45 @@ POST/PATCH regardless of CORS headers — the 2026-08-20 stub recipe's allow-met
 suffices in hand-Chrome; local write-path verification runs through Playwright route
 interception (`apps/web/scripts/_bp-e2e-local.mjs`) — and for HAND-driven Chrome, `next.config.js`
 gained an env-gated `rewrites()` (`NEXT_DEV_STUB_PROXY`) proxying /api/* same-origin to the stub.
+
+## Unit HP — Keyword Harvest perfection (2026-08-21, HP1–HP4 BUILT; LOCAL/UNCOMMITTED)
+
+Study + build record: `docs/2026-08-21-hp-keyword-harvest-perfection.md`. Programme target 2
+(after BP). Operator approved HP1–HP6; 1–5 built; the operator delegated the two decisions
+("I leave it up to you") — **HP5 decided RETIRE (code done), HP6 decided
+propose-path-only/no-bulk-push (deploy-day runbook, doc §7)**. Everything below is LOCAL —
+batch commit on the operator's command.
+
+- **HP1 — the wire is WHOLE.** The harvest builder collected H10's full form while the engine
+  honoured a fraction. New `ads-harvest-wire.ts` (normaliser + pure predicates, 11 tests);
+  the adapter's harvest branch now carries mappings→blocks, term/brand filters, dedupe and
+  `bid:{mode,value}` (4 modes — 'suggested' was a €0.75 CONSTANT, now cpc-inherit), with
+  harvest+negative condition groups as OR-of-ANDs sharing one THEN (5 adapter tests);
+  `promote_to_exact` REWRITTEN (9 tests): scans only look=✓ groups, creates ticked types in
+  mapped destinations (ASIN = named refusal), rule-group dedupe, **non-landed writes are
+  FAILURES naming the gate** (the 209-of-218 mechanism), local-only rows get
+  `pushExistingKeyword`. Builder hydration for bid/negate/filters (edit-save used to reset
+  them silently); default criterion aligned to the ≥2-orders emit floor and the floor stated.
+- **HP2 — Ad Group View is the application layer.** D-A re-decided (post-W7 every rule owns a
+  real `mappings` array): assign/pause/detach edit the RULE's own mappings through one
+  `patchMappings` writer; per-pathway `paused` skipped on BOTH sides of the wire; pathway
+  chips + pause toggle + detach; "+ Rule" idiom unified.
+- **HP3 — DS/shared.** View pill → DS `SegmentedControl`; the Add-Group popover's Products
+  tab made REAL (scope-options product lines, 99 groups live) — the "coming soon" stub is gone.
+- **HP5 — one engine.** The rule-less nightly `ads-auto-harvest` cron RETIRED end-to-end
+  (schedule, registry, route, Automation Hub card, ACR lever + mappings, foresight row, HV
+  Actors engine row, the service file) with every surface/comment that named it made truthful;
+  history keeps its actor stamp. HP6 armed through the honest path only: one starter rule at
+  PROPOSE post-deploy, approvals through the real gate (82/86 ENABLED campaigns allowlisted),
+  152 local-only backlog NOT mass-pushed — `pushExistingKeyword` heals re-earned terms.
+- **HP4 — the loop closes.** Graduation-ceiling sentence on Control BEFORE save; 3 guarded
+  harvest starters; Apply/Save Template extended to harvest; live cohort strip on the rules
+  view (219 harvested · 9 served · 152 local-only) linking to Suggestions; absent-not-fabricated
+  on failed reads.
+
+Gates (after HP5): api 4,975 ✓ (only SG's 6 scope-flip reds; the transient
+`ebay-shared-listing-push` red resolved on the sibling's side) · web 922 ✓ · both tsc ✓ · all
+five ratchets at baseline. E2E: `_hp-e2e-local.mjs` over the `NEXT_DEV_STUB_PROXY` rig — every assertion passed,
+stub log shows CREATE→LEVEL(PROPOSE)→3×PATCH[actions]. ⚠ Commit day: blob-split
+`automation-action-handlers.ts` (SG scope-flip ~1076) and `rules-automation.css` (SG.1 moves);
+diff-audit shared files WITH `grep -a`; tip-worktree tsc before push.

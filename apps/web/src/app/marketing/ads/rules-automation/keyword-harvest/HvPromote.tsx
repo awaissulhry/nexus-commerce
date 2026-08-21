@@ -21,10 +21,10 @@
  *
  * ── What it does not do ───────────────────────────────────────────────────────────────────────
  *
- * It arms no automation. HV.0 stands: `ads-auto-harvest` is still propose-only and the five harvest
- * rules are still at PROPOSE. `ads-graduation.ts` caps *automations* because structural actions have
- * no retirement path — an operator pressing a button is a different actor, and the dialog says so
- * rather than leaving anyone to read this as reversing HV.0.
+ * It arms no automation. Harvest rules are capped at PROPOSE by `ads-graduation.ts` — it caps
+ * *automations* because structural actions have no retirement path. An operator pressing a button
+ * is a different actor, and the dialog says so rather than leaving anyone to read this as
+ * arming something.
  *
  * ── D4, in full ───────────────────────────────────────────────────────────────────────────────
  *
@@ -223,8 +223,8 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
                   </span>
                 </p>
                 <p className="note">
-                  This does not arm any automation. <code>ads-auto-harvest</code> stays propose-only and the five
-                  harvest rules stay at PROPOSE — that ceiling governs automations, not you.
+                  This does not arm any automation. Harvest rules stay capped at Propose —
+                  that ceiling governs automations, not you.
                 </p>
               </div>
             )}

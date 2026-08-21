@@ -20,6 +20,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
+import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
+import { useEffect, useState } from 'react'
+import { getBackendUrl } from '@/lib/backend-url'
 import { HvAdGroupView } from './HvAdGroupView'
 
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
@@ -37,6 +40,28 @@ export function KeywordHarvestRulesClient() {
     router.replace(q ? `?${q}` : '?', { scroll: false })
   }
 
+  /**
+   * HP4 — the loop, closed: what harvesting has actually produced, on the page that manages it.
+   * `census` comes from the cohort service (the post-graduation read no competitor ships). On a
+   * failed read the strip is absent — supplementary context may be missing, never fabricated.
+   */
+  const [census, setCensus] = useState<{ cohort: number; served: number; pushable: number } | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch(`${getBackendUrl()}/api/advertising/harvest-cohort?market=all`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive || !j?.census) return
+        setCensus({
+          cohort: Number(j.census.cohort ?? 0),
+          served: Number(j.census.byOutcome?.served ?? 0),
+          pushable: Number(j.census.backlog?.pushable ?? 0),
+        })
+      })
+      .catch(() => { /* absent, never invented */ })
+    return () => { alive = false }
+  }, [])
+
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
@@ -52,19 +77,24 @@ export function KeywordHarvestRulesClient() {
       />
       <RulesTabs active="keyword-harvest" />
 
-      <div className="h10-hv-viewseg" role="tablist" aria-label="Keyword Harvest view">
-        <button
-          type="button" role="tab" aria-selected={view === 'rules'}
-          className={`seg ${view === 'rules' ? 'on' : ''}`}
-          onClick={() => push({ view: '' })}
-        >Rules View</button>
-        <button
-          type="button" role="tab" aria-selected={view === 'ad-groups'}
-          className={`seg ${view === 'ad-groups' ? 'on' : ''}`}
-          onClick={() => push({ view: 'ad-groups' })}
-        >Ad Group View</button>
+      {/* HP3 — the DS SegmentedControl (the same primitive the dayparting GrainSwitch uses),
+          replacing a hand-rolled div[role=tablist] with no arrow-key navigation. The wrapper
+          class keeps the pill's placement styles. */}
+      <div className="h10-hv-viewseg">
+        <SegmentedControl
+          value={view === 'ad-groups' ? 'ad-groups' : 'rules'}
+          onChange={(v) => push({ view: v === 'ad-groups' ? 'ad-groups' : '' })}
+          options={[{ value: 'rules', label: 'Rules View' }, { value: 'ad-groups', label: 'Ad Group View' }]}
+        />
       </div>
 
+      {view !== 'ad-groups' && census && (
+        <p className="h10-hv-cohortline">
+          <b>{census.cohort.toLocaleString('en-IE')}</b> keywords harvested by the engine to date · <b>{census.served.toLocaleString('en-IE')}</b> went on to serve
+          {census.pushable > 0 && <> · <b>{census.pushable.toLocaleString('en-IE')}</b> exist locally and never reached Amazon</>}
+          {' '}· rule output queues on <a className="h10-nt-open" href="/marketing/ads/suggestions">Suggestions</a>
+        </p>
+      )}
       {view === 'ad-groups' ? (
         <HvAdGroupView />
       ) : (

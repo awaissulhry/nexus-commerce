@@ -26,11 +26,9 @@
  * distinction, because the graduation model reads that distinction and two implementations would
  * disagree about it.
  *
- * 🔴 Stated, not hidden: an ENGINE on Propose cannot queue a suggestion — `AdsRuleSuggestion`
- * requires a `ruleId` and `ads-auto-harvest` has none, so the disarmed engine's propose-only mode
- * is notify-only. What appears here is what RULES propose. Widening the model (nullable ruleId +
- * actor) is on the arming decision's table, where it belongs — queueability and armability are
- * the same conversation.
+ * What appears here is what RULES propose — `AdsRuleSuggestion` requires a `ruleId`, and since
+ * HP5 (2026-08-21) retired the rule-less nightly engine, rules through the evaluator are the
+ * only automated harvest path, so the queue shows every automated proposal there is.
  */
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'

@@ -231,9 +231,8 @@ export function HvThresholds({ criteria, attrition, census, scope, push, reload,
           Saving writes <b>{c.minOrders}+ orders · {c.minClicks}+ clicks · {c.maxAcosPct == null ? 'no ACoS ceiling' : `ACoS ≤ ${c.maxAcosPct}%`} · {c.windowDays}d · {c.excludeExactMatched ? 'excluding exact-matched' : 'any match type'}</b>{' '}
           as the default for <b>{saveTarget}</b>
           {scope.market !== 'all' && p.saveGrain === 'account' && <> — not just {scope.market}</>}.
-          {' '}It changes what this page proposes, and <b>nothing else</b>: <code>ads-auto-harvest</code> is
-          propose-only and still evaluates its own thresholds, and the five harvest rules still read theirs.
-          Reversible from here.
+          {' '}It changes what this page proposes, and <b>nothing else</b>: harvest rules read their
+          own builder criteria, never these defaults. Reversible from here.
         </p>
       )}
 
