@@ -65,9 +65,18 @@ export async function applyPlanActions(opts: {
     const bud = acts.find((a) => a.module === 'budget' && a.afterCents != null)
     if (bud) {
       try {
-        await updateCampaignWithSync({ campaignId, patch: { dailyBudget: (bud.afterCents as number) / 100 }, actor, reason: bud.reason, applyImmediately: true } as never)
-        applied += 1
-        decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: bud.reason, status: 'APPLIED' })
+        // SG.8 — READ the outcome. The sync path RETURNS failure ({ok:false, error:'not_found'…})
+        // rather than throwing, and this branch used to count APPLIED unconditionally — a budget
+        // write that never landed was recorded as an applied decision (the `as never` trap).
+        // The outcome's actionLogId is the Change-Log receipt, threaded as executionId.
+        const out = await updateCampaignWithSync({ campaignId, patch: { dailyBudget: (bud.afterCents as number) / 100 }, actor, reason: bud.reason, applyImmediately: true } as never)
+        if (out.ok) {
+          applied += 1
+          decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: bud.reason, status: 'APPLIED', executionId: out.actionLogId ?? null })
+        } else {
+          denied += 1
+          decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: `${bud.reason} — the write did not land: ${out.error ?? 'unknown'}`, status: 'DENIED' })
+        }
       } catch (e) { logger.warn('[autopilot] budget apply failed', { planId, campaignId, error: (e as Error).message }) }
     }
 

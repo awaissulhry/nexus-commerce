@@ -67,6 +67,57 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
       reply.status(500); return { ok: false, error: (e as Error)?.message }
     }
   })
+
+  // ── SG.8 — the A.I. Bids tab's verbs (operator ask 2026-08-21) ───────────────────────────
+  // The tab was read-only because no decision route existed; these are those routes. Approve
+  // executes through applyPlanActions — the SAME engine an AUTO plan uses (write-gated,
+  // audited) — so operator approval and autonomy share one implementation. The old list route
+  // GET /advertising/suggestions/ai-bids (advertising.routes.ts) is superseded by the list
+  // here and is retired by its owning block; /suggestions/count keeps serving the tab pill.
+
+  // status: proposed (default) | applied (incl. the executor's DENIED/SKIPPED history) | dismissed
+  fastify.get('/advertising/ai-decisions', async (request) => {
+    const q = request.query as { status?: string }
+    const { listAiDecisions } = await import('../services/advertising/autopilot/decisions.js')
+    return listAiDecisions(q.status ?? 'proposed')
+  })
+
+  fastify.post('/advertising/ai-decisions/:id/approve', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { approveDecision } = await import('../services/advertising/autopilot/decisions.js')
+    const res = await approveDecision(id)
+    if (!res.ok && !res.refused) reply.status(409)
+    return res
+  })
+
+  fastify.post('/advertising/ai-decisions/:id/dismiss', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { dismissDecision } = await import('../services/advertising/autopilot/decisions.js')
+    const res = await dismissDecision(id)
+    if (!res.ok) reply.status(409)
+    return res
+  })
+
+  fastify.post('/advertising/ai-decisions/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { restoreDecision } = await import('../services/advertising/autopilot/decisions.js')
+    const res = await restoreDecision(id)
+    if (!res.ok) reply.status(409)
+    return res
+  })
+
+  // The staging bar's [Apply N Changes] — one round trip, per-row outcomes (the W2 lesson:
+  // a partial result must name which rows were refused and why, not dissolve into a count).
+  fastify.post('/advertising/ai-decisions/bulk', async (request, reply) => {
+    const body = (request.body ?? {}) as { ops?: Array<{ id?: unknown; kind?: unknown }> }
+    const ops = (body.ops ?? []).filter(
+      (o): o is { id: string; kind: 'approve' | 'dismiss' | 'restore' } =>
+        typeof o?.id === 'string' && (o?.kind === 'approve' || o?.kind === 'dismiss' || o?.kind === 'restore'),
+    )
+    if (!ops.length) { reply.status(400); return { error: 'ops[] with {id, kind: approve|dismiss|restore} required' } }
+    const { bulkDecide } = await import('../services/advertising/autopilot/decisions.js')
+    return bulkDecide(ops)
+  })
 }
 
 export default advertisingAiRoutes

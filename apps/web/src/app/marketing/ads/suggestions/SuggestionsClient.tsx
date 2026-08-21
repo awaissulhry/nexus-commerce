@@ -129,12 +129,16 @@ const VIEWS: Array<{ key: string; label: string; family: string | null; noun: st
   { key: 'recommendations', label: 'Recommendations', family: null, noun: 'recommendation' },
 ]
 
-/** SG.4 — one PROPOSED autopilot decision, as `/suggestions/ai-bids` serves it. */
+/** SG.4/SG.8 — one autopilot decision, as `/advertising/ai-decisions` serves it. */
 interface AiDecision {
   id: string; at: string; module: string; cycle: string; action: string
   campaignId: string | null; campaignName: string | null
   before: Record<string, unknown> | null; after: Record<string, unknown> | null
   reason: string; planId: string; planName: string | null
+  /** PROPOSED | APPLIED | SKIPPED | DENIED | DISMISSED — the decided views chip on it */
+  status: string
+  /** a disabled plan's proposals are stale; approve refuses them server-side */
+  planEnabled: boolean
 }
 
 /** Compact before→after reading for a decision's Json pair — only keys that CHANGED, "—" when
@@ -145,12 +149,16 @@ const AI_KEY_READERS: Record<string, { label: string; fmt: (v: unknown) => strin
   dailyBudgetEur: { label: 'Budget', fmt: (v) => (Number.isFinite(Number(v)) ? `€${Number(v).toFixed(2)}` : String(v)) },
   budgetCents: { label: 'Budget', fmt: (v) => (Number.isFinite(Number(v)) ? `€${(Number(v) / 100).toFixed(2)}` : String(v)) },
 }
-function aiChangeText(before: Record<string, unknown> | null, after: Record<string, unknown> | null): string {
+function aiChangeText(module: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null): string {
   const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])]
   const parts = keys
     .filter((k) => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k]))
     .map((k) => {
+      // SG.8 — the conductor's OWN storage key is the bare `{cents}` (ad-autopilot.job.ts
+      // wraps beforeCents/afterCents); the module names what the cents are. Without this,
+      // every real proposal printed "cents 42 → 51" — storage keys, not operator units (D2d).
       const r = AI_KEY_READERS[k]
+        ?? (k === 'cents' ? { label: module === 'budget' ? 'Budget' : 'Bid', fmt: (v: unknown) => (Number.isFinite(Number(v)) ? `€${(Number(v) / 100).toFixed(2)}` : String(v)) } : undefined)
       const read = (v: unknown) => (v == null ? '—' : r ? r.fmt(v) : String(v))
       return `${r?.label ?? k} ${read(before?.[k])} → ${read(after?.[k])}`
     })
@@ -746,11 +754,24 @@ function SuggestionsInner() {
   // SG.5 — the Bid Settings gear (shared modal; mounts on the bid-relevant views).
   const [bidSettingsOpen, setBidSettingsOpen] = useState(false)
   /**
-   * SG.7 — the A.I. view's Filters card, so the tab wears the page's one anatomy (tabs →
+   * SG.7/SG.8 — the A.I. view's Filters card, so the tab wears the page's one anatomy (tabs →
    * Filters → grid). Honest facets only: a decision carries its campaign, module, action and
    * plan — no scope grains (the notesSlot states why), cut client-side at this volume.
+   * SG.8 adds the Status axis (Proposed | Applied | Dismissed), URL-owned via ?status= like
+   * every other view, and the staging buffer behind the ✓/✕ verbs.
    */
-  const [aiFilterState, setAiFilterState] = useState<FilterState>({})
+  const aiStatus = status === 'applied' ? 'applied' : status === 'dismissed' ? 'dismissed' : 'proposed'
+  /** ✓/✕ stage; [Apply N Changes] commits the batch — no per-row € override here (a bid
+   *  approve re-runs the plan's optimizer, so there is no single figure to edit). */
+  const [aiStaged, setAiStaged] = useState<Map<string, 'apply' | 'remove'>>(new Map())
+  const aiStage = useCallback((id: string, kind: 'apply' | 'remove') => {
+    setAiStaged((cur) => {
+      const next = new Map(cur)
+      if (next.get(id) === kind) next.delete(id)
+      else next.set(id, kind)
+      return next
+    })
+  }, [])
   const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [pricing, setPricing] = useState<Pricing | null>(null)
@@ -791,7 +812,7 @@ function SuggestionsInner() {
   }, [])
   /** the Dismissed/Expired tabs' checkbox selection (bulk Restore) — separate from staging */
   const [sel, setSel] = useState<Set<string>>(new Set())
-  useEffect(() => { setSel(new Set()); setStaged(new Map()) }, [view, status])
+  useEffect(() => { setSel(new Set()); setStaged(new Map()); setAiStaged(new Map()) }, [view, status])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkReport, setBulkReport] = useState<BulkReport | null>(null)
   const [reload, setReload] = useState(0)
@@ -852,19 +873,19 @@ function SuggestionsInner() {
   }, [status, scopeQs])
   useEffect(() => { setLoading(true); void load() }, [load, reload])
 
-  // SG.4 — the A.I. view's rows, fetched on entry (and on Refresh via `reload`). Read-only:
-  // no decision approve/dismiss route exists; the verbs live on the plan in AI Advertising.
+  // SG.4/SG.8 — the A.I. view's rows, fetched on entry, on Refresh (`reload`) and per status
+  // view. The verbs are SG.8's decision routes; approve runs the same engine an AUTO plan does.
   useEffect(() => {
     if (view !== 'ai') return
     let alive = true
     setAiLoading(true)
-    fetch(`${getBackendUrl()}/api/advertising/suggestions/ai-bids`, { cache: 'no-store' })
+    fetch(`${getBackendUrl()}/api/advertising/ai-decisions?status=${status === 'applied' ? 'applied' : status === 'dismissed' ? 'dismissed' : 'proposed'}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => { if (alive) setAiItems(Array.isArray(j?.items) ? j.items : []) })
       .catch(() => { if (alive) setAiItems(null) })
       .finally(() => { if (alive) setAiLoading(false) })
     return () => { alive = false }
-  }, [view, reload])
+  }, [view, reload, status])
 
   // After a write the acted rows are patched out locally (a full reload would lose the j/k
   // position), but the tab pills come from /count — refetch just that, so the pills tell the
@@ -873,6 +894,8 @@ function SuggestionsInner() {
     try {
       const c = await fetch(`${getBackendUrl()}/api/advertising/suggestions/count`, { cache: 'no-store' }).then((r) => r.json())
       setPendingFamilies(c?.families && typeof c.families === 'object' ? c.families : null)
+      // SG.8 — the A.I. pill must move too: approve/dismiss changes the PROPOSED population.
+      setAiBidsCount(typeof c?.aiBids === 'number' ? c.aiBids : null)
     } catch { /* the pill keeps its last honest value; the next load corrects it */ }
   }, [])
 
@@ -888,6 +911,9 @@ function SuggestionsInner() {
   })
 
   // SG.7 — the A.I. facets, from the loaded rows (an option that matches nothing is a lie).
+  // SG.8 — Status heads the card (family placement): Proposed is the live queue; Applied is
+  // the decided history (operator approvals AND an AUTO plan's own writes); Dismissed waits
+  // out the 7-day suppression window.
   const aiFilters = useMemo<GridFilter[]>(() => {
     const rows = aiItems ?? []
     const opts = (get: (r: AiDecision) => string | null, labelOf?: (v: string, r: AiDecision) => string) => {
@@ -896,12 +922,25 @@ function SuggestionsInner() {
       return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
     }
     return [
+      {
+        key: '__status', label: 'Status', kind: 'select', placeholder: 'Proposed',
+        options: [{ value: 'applied', label: 'Applied' }, { value: 'dismissed', label: 'Dismissed' }],
+        tip: 'Proposed is the live queue (the plan re-evaluates it every 15 minutes). Applied is the decided history — your approvals and an AUTO plan’s own writes, each row carrying its real outcome. Dismissed proposals stay suppressed for 7 days, then may return.',
+      },
       { key: 'aiCampaign', label: 'Campaign', kind: 'select', wide: true, searchable: true, placeholder: 'All campaigns', options: opts((r) => r.campaignId, (v, r) => r.campaignName ?? v), value: (r) => (r as AiDecision).campaignId ?? '' },
       { key: 'aiModule', label: 'Module', kind: 'select', placeholder: 'All modules', options: opts((r) => r.module), value: (r) => (r as AiDecision).module },
       { key: 'aiAction', label: 'Action', kind: 'select', placeholder: 'All actions', options: opts((r) => r.action, (v) => v.replace(/_/g, ' ').toLowerCase()), value: (r) => (r as AiDecision).action },
       { key: 'aiPlan', label: 'Plan', kind: 'select', placeholder: 'All plans', options: opts((r) => r.planId, (v, r) => r.planName ?? v), value: (r) => (r as AiDecision).planId },
     ]
   }, [aiItems])
+  const aiUrlValues = useMemo<FilterState>(
+    () => ({ __status: aiStatus === 'proposed' ? '' : aiStatus }),
+    [aiStatus],
+  )
+  const onAiUrlChange = useCallback((patch: Record<string, string>) => {
+    writeUrl({ status: patch.__status ?? '', row: '' })
+  }, [writeUrl])
+  const { filterState: aiFilterState, setFilterState: setAiFilterState } = useMergedFilters({ urlValues: aiUrlValues, onUrlChange: onAiUrlChange })
 
   // ── the view cut (client-side, over the server-attached family) ───────────
   const activeView = VIEWS.find((v) => v.key === view) ?? (view === 'other' ? { key: 'other', label: 'Other', family: 'other', noun: 'other' } : VIEWS[1])
@@ -1093,6 +1132,78 @@ function SuggestionsInner() {
     }
     void runOps(ops, () => setStaged(new Map()))
   }, [staged, items, runOps])
+
+  /** SG.8 — undo an A.I. removal / restore dismissed decisions: bulk restore, then refetch
+   *  (a restored row rejoins the proposed queue, which the local patch-out cannot show). */
+  const aiRestore = useCallback(async (ids: string[]) => {
+    await fetch(`${getBackendUrl()}/api/advertising/ai-decisions/bulk`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ops: ids.map((id) => ({ id, kind: 'restore' })) }),
+    }).catch(() => null)
+    setReload((n) => n + 1)
+  }, [])
+
+  /**
+   * SG.8 — the A.I. staging bar's one round trip (and the dismissed view's Restore N),
+   * mirroring `runOps`: per-row outcomes, refusals into the report banner that survives
+   * (W2), toasts in the page's one copy family. Approve outcomes are the SERVER's words:
+   * 'applied' wrote through the AUTO engine; 'skipped' settled with nothing to change.
+   */
+  const aiRunOps = useCallback(async (
+    ops: Array<{ id: string; kind: 'approve' | 'dismiss' | 'restore' }>,
+    onDone?: () => void,
+  ) => {
+    if (!ops.length || bulkBusy) return
+    setBulkBusy(true)
+    try {
+      const r = await fetch(`${getBackendUrl()}/api/advertising/ai-decisions/bulk`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ops }),
+      })
+      const j = (await r.json()) as { okCount?: number; results?: Array<{ id: string; kind: string; ok: boolean; refused?: boolean; outcome?: string; error?: string }> }
+      if (!r.ok) { toast(`Could not apply the changes: ${(j as { error?: string })?.error ?? r.status}`, 'danger'); return }
+      const results = j.results ?? []
+      const okIds = results.filter((x) => x.ok).map((x) => x.id)
+      const labelById = new Map((aiItems ?? []).map((d) => [d.id, d.campaignName ?? d.planName ?? d.id]))
+      const refusals = results.filter((x) => !x.ok).map((x) => ({ id: x.id, label: labelById.get(x.id) ?? x.id, error: x.error ?? 'failed' }))
+      setAiItems((cur) => (cur ?? []).filter((d) => !okIds.includes(d.id)))
+      void refreshCounts()
+      const appliedOk = results.filter((x) => x.ok && x.kind === 'approve' && x.outcome === 'applied').length
+      const skippedOk = results.filter((x) => x.ok && x.kind === 'approve' && x.outcome === 'skipped').length
+      const removedOk = results.filter((x) => x.ok && x.kind === 'dismiss').map((x) => x.id)
+      const restoredOk = results.filter((x) => x.ok && x.kind === 'restore').length
+      if (refusals.length === 0) {
+        if (appliedOk > 0 || skippedOk > 0) {
+          const parts = [
+            appliedOk > 0 ? `Applied ${appliedOk} ${appliedOk === 1 ? 'change' : 'changes'}` : null,
+            skippedOk > 0 ? `${skippedOk} settled with nothing to change` : null,
+            removedOk.length ? `removed ${removedOk.length}` : null,
+          ].filter(Boolean)
+          toast(<>
+            {parts.join(' · ')}.
+            {appliedOk > 0 ? <>{' '}Changes may take a few minutes to complete — view them in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.</> : null}
+          </>, 'success')
+        } else if (removedOk.length) {
+          toast(<>Removed {removedOk.length} — the plan won’t re-propose {removedOk.length === 1 ? 'it' : 'them'} for 7 days · <button type="button" className="h10-am-link" onClick={() => void aiRestore(removedOk)}>Undo</button></>, 'info', { duration: 8000 })
+        } else if (restoredOk) {
+          toast(`Restored ${restoredOk} to proposed`, 'success')
+          setReload((n) => n + 1)
+        }
+      } else {
+        setBulkReport({
+          verb: ops.some((o) => o.kind === 'approve') ? 'Applied' : ops.some((o) => o.kind === 'restore') ? 'Restored' : 'Removed',
+          ok: okIds.length, fail: refusals.length, refusals,
+          undoIds: removedOk.length ? removedOk : undefined,
+        })
+      }
+      onDone?.()
+    } catch { toast('Could not apply the changes', 'danger') } finally { setBulkBusy(false) }
+  }, [bulkBusy, aiItems, toast, refreshCounts, aiRestore])
+
+  /** Commit the A.I. staged buffer — H10's [Apply N Changes], the family interaction. */
+  const applyAiStaged = useCallback(() => {
+    const ops = [...aiStaged].map(([id, k]) => ({ id, kind: (k === 'apply' ? 'approve' : 'dismiss') as 'approve' | 'dismiss' }))
+    void aiRunOps(ops, () => setAiStaged(new Map()))
+  }, [aiStaged, aiRunOps])
 
   // SG.2e — the summary band is GONE (operator, twice): H10 puts nothing between the tabs and
   // Filters, and the money facts already live on the rows — the € at stake column, the ♦
@@ -1550,17 +1661,38 @@ function SuggestionsInner() {
         <StaleBanner stale={stale} subject="The queue" onRefresh={() => setReload((n) => n + 1)} />
       </div>
 
+      {/* The bulk outcome report — ABOVE the view fork (SG.8: the A.I. verbs report here too);
+          outside any popover so a partial result survives it (W2). */}
+      {bulkReport && (
+        <div className="h10-sug-report" role="status">
+          <b>{bulkReport.verb} {bulkReport.ok} · {bulkReport.fail} refused</b>
+          <ul>
+            {bulkReport.refusals.slice(0, 8).map((r) => <li key={r.id}><span className="nm">{r.label}</span> — {r.error}</li>)}
+            {bulkReport.refusals.length > 8 && <li>…and {bulkReport.refusals.length - 8} more</li>}
+          </ul>
+          <span className="h10-sug-repacts">
+            {bulkReport.undoIds?.length ? (
+              <button type="button" className="h10-am-link" onClick={() => { void (view === 'ai' ? aiRestore(bulkReport.undoIds!) : restore(bulkReport.undoIds!)); setBulkReport(null) }}>
+                Undo the {bulkReport.ok}
+              </button>
+            ) : null}
+            <button type="button" className="h10-am-link" onClick={() => setBulkReport(null)}>Dismiss</button>
+          </span>
+        </div>
+      )}
+
       {view === 'recommendations' ? (
         /* SG.4/SG.7 — the AI + 5-engine impact feed, folded in from /marketing/ads/
            recommendations (which now redirects here) and rebuilt on the page's one anatomy:
            the SAME Filters card + grid as every family view, ?status/?row shared with them. */
         <RecommendationsView status={status === 'applied' ? 'applied' : 'pending'} rowParam={rowParam} writeUrl={writeUrl} />
       ) : view === 'ai' ? (
-        /* SG.4 — PROPOSED autopilot decisions, read-only BY DESIGN: no decision approve/
-           dismiss route exists yet, so the verbs live on the plan in AI Advertising and this
-           tab tells that truth instead of rendering buttons that cannot act.
-           SG.7 — the same Filters card as every other view sits above the grid; when the
-           store is empty the grid card carries the EmptyState CTA (the family views' shape). */
+        /* SG.8 — autopilot decisions with the family verbs (operator ask 2026-08-21: "nothing
+           to approve, snooze or ignore — do it as we did on the other pages"). ✓/✕ STAGE and
+           [Apply N Changes] commits the batch; approve executes through applyPlanActions —
+           the same write-gated engine an AUTO plan uses. Status views: Proposed (the live
+           queue, re-evaluated every 15 min) · Applied (the decided history, each row wearing
+           its REAL outcome) · Dismissed (suppressed for 7 days; Restore any time). */
         <>
           <AdsFilterBar
             filters={aiFilters}
@@ -1573,26 +1705,98 @@ function SuggestionsInner() {
             rows={aiItems ?? []}
             loading={aiLoading}
             rowId={(r) => r.id}
-            /* read-only grid: no verbs exist, so no checkbox column promising bulk ones
-               (AdsDataGrid defaults selectable TRUE — the FB.3c trap) */
-            selectable={false}
+            /* proposed: the ✓/✕ verbs ARE the selection (family rule — no checkbox column);
+               dismissed keeps checkboxes for Restore N (the FB.3c selectable-default trap) */
+            selectable={aiStatus === 'dismissed'}
+            selected={sel}
+            onSelectedChange={setSel}
             noun="A.I. bid decision"
             firstColLabel="Campaign"
             renderFirst={(r) => <span className="h10-sug-src"><Tag tone="info">{r.module}</Tag><span className="h10-sug-agx">{r.campaignName ?? r.planName ?? 'account-wide'}</span></span>}
             firstSortValue={(r) => r.campaignName ?? r.planName ?? ''}
             columns={[
-              { key: 'action', label: 'Action', metric: false, sortable: true, sortValue: (r) => r.action, render: (r) => <Tag tone="neutral">{r.action.replace(/_/g, ' ').toLowerCase()}</Tag> },
-              { key: 'change', label: 'Change', metric: false, render: (r) => <span className="h10-sug-reason" title={aiChangeText(r.before, r.after)}>{aiChangeText(r.before, r.after)}</span> },
-              { key: 'reason', label: 'Reason', metric: false, render: (r) => <span className="h10-sug-reason" title={r.reason}>{r.reason}</span> },
-              { key: 'plan', label: 'Plan', metric: false, sortable: true, sortValue: (r) => r.planName ?? '', render: (r) => <span className="h10-sug-agx"><Link href="/marketing/ads/ai-advertising" title="Operate this plan in AI Advertising">{r.planName ?? r.planId}</Link></span> },
-              { key: 'cycle', label: 'Cycle', metric: false, sortable: true, sortValue: (r) => r.cycle, render: (r) => <span className="h10-sug-when">{r.cycle}</span> },
-              { key: 'at', label: 'Proposed', metric: false, sortable: true, sortValue: (r) => r.at, render: (r) => <span className="h10-sug-when">{new Date(r.at).toLocaleDateString('en-GB')}</span> },
+              { key: 'action', label: 'Action', metric: false, sortable: true, sortValue: (r) => r.action, render: (r) => <Tag tone="neutral">{r.action.replace(/_/g, ' ').toLowerCase()}</Tag> } as GridColumn<AiDecision>,
+              { key: 'change', label: 'Change', metric: false, render: (r) => <span className="h10-sug-reason" title={aiChangeText(r.module, r.before, r.after)}>{aiChangeText(r.module, r.before, r.after)}</span> } as GridColumn<AiDecision>,
+              { key: 'reason', label: 'Reason', metric: false, render: (r) => <span className="h10-sug-reason" title={r.reason}>{r.reason}</span> } as GridColumn<AiDecision>,
+              { key: 'plan', label: 'Plan', metric: false, sortable: true, sortValue: (r) => r.planName ?? '', render: (r) => <span className="h10-sug-agx"><Link href="/marketing/ads/ai-advertising" title="Operate this plan in AI Advertising">{r.planName ?? r.planId}</Link></span> } as GridColumn<AiDecision>,
+              { key: 'cycle', label: 'Cycle', metric: false, sortable: true, sortValue: (r) => r.cycle, render: (r) => <span className="h10-sug-when">{r.cycle}</span> } as GridColumn<AiDecision>,
+              { key: 'at', label: aiStatus === 'dismissed' ? 'Dismissed' : aiStatus === 'applied' ? 'Decided' : 'Proposed', metric: false, sortable: true, sortValue: (r) => r.at, render: (r) => <span className="h10-sug-when">{new Date(r.at).toLocaleDateString('en-GB')}</span> } as GridColumn<AiDecision>,
+              ...(aiStatus === 'proposed' ? [
+                {
+                  key: 'ok', label: '✓', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+                  tip: 'Stage this proposal for Apply — approval executes through the same write-gated engine an AUTO plan uses. A bid approve re-runs the plan’s optimizer at apply time, so the applied bids are computed fresh and can differ from the shown figure. Click again to un-stage.',
+                  render: (r: AiDecision) => {
+                    const on = aiStaged.get(r.id) === 'apply'
+                    return (
+                      <button type="button" className={`h10-sug-iconbtn ok${on ? ' on' : ''}`} disabled={bulkBusy} aria-pressed={on} aria-label={on ? 'Staged to apply — click to un-stage' : 'Stage this proposal for Apply'} onClick={() => aiStage(r.id, 'apply')}>
+                        <Check size={14} />
+                      </button>
+                    )
+                  },
+                } as GridColumn<AiDecision>,
+                {
+                  key: 'no', label: '✕', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+                  tip: 'Remove this proposal — the plan won’t re-propose it for 7 days (restore it from the Dismissed view any time). Stages with Apply; click again to un-stage.',
+                  render: (r: AiDecision) => {
+                    const on = aiStaged.get(r.id) === 'remove'
+                    return (
+                      <button type="button" className={`h10-sug-iconbtn no${on ? ' on' : ''}`} disabled={bulkBusy} aria-pressed={on} aria-label={on ? 'Staged to remove — click to un-stage' : 'Remove for 7 days'} onClick={() => aiStage(r.id, 'remove')}>
+                        <X size={14} />
+                      </button>
+                    )
+                  },
+                } as GridColumn<AiDecision>,
+              ] : aiStatus === 'applied' ? [
+                {
+                  key: 'st', label: 'Outcome', metric: false, sortable: true, freezeRight: true, width: 96,
+                  tip: 'What actually happened, in the engine’s own words: Applied wrote through the write gate; Refused is the gate’s governed stop (its reason on hover); Skipped found nothing to change at apply time.',
+                  sortValue: (r: AiDecision) => r.status,
+                  render: (r: AiDecision) => {
+                    const M: Record<string, { cls: string; label: string }> = { APPLIED: { cls: 'ok', label: 'Applied' }, SKIPPED: { cls: 'uk', label: 'Skipped' }, DENIED: { cls: 'rf', label: 'Refused' } }
+                    const m = M[r.status] ?? { cls: 'uk', label: r.status.toLowerCase() }
+                    return <span className={`h10-sug-dl ${m.cls}`} title={r.reason}>{m.label}</span>
+                  },
+                } as GridColumn<AiDecision>,
+              ] : [
+                {
+                  key: 'rs', label: 'Restore', metric: false, sortable: false, freezeRight: true, width: 84,
+                  render: (r: AiDecision) => (
+                    <button type="button" className="h10-sug-iconbtn" disabled={bulkBusy} aria-label="Restore to proposed" title="Restore to proposed — the plan re-evaluates it on its next tick" onClick={() => void aiRunOps([{ id: r.id, kind: 'restore' }])}>
+                      <RotateCcw size={14} />
+                    </button>
+                  ),
+                } as GridColumn<AiDecision>,
+              ]),
             ]}
             filters={aiFilters}
             filterState={aiFilterState}
             onFilterStateChange={setAiFilterState}
             hideFilterPanel
-            toolbarLeft={<span className="h10-sug-when">Read-only — approve or decline these on the plan in <Link href="/marketing/ads/ai-advertising">AI Advertising</Link></span>}
+            keyboardNav
+            onRowKey={(r, k) => {
+              if (aiStatus === 'proposed') {
+                if (k === 'a') aiStage(r.id, 'apply')
+                else if (k === 'e') aiStage(r.id, 'remove')
+              } else if (aiStatus === 'dismissed' && k === 'r') void aiRunOps([{ id: r.id, kind: 'restore' }])
+            }}
+            toolbarLeft={aiStatus === 'proposed' ? (
+              /* H10's master pair, the family interaction: stage with the row verbs, commit
+                 in ONE batch. Disabled at 0 = self-explaining (the count is the label). */
+              <span className="h10-sug-applybar">
+                <button type="button" className="h10-am-link" disabled={aiStaged.size === 0 || bulkBusy} onClick={() => setAiStaged(new Map())}>
+                  Discard Changes
+                </button>
+                <Button variant="primary" size="sm" disabled={aiStaged.size === 0 || bulkBusy} onClick={applyAiStaged}>
+                  <Check size={13} /> Apply {aiStaged.size} {aiStaged.size === 1 ? 'Change' : 'Changes'}
+                </Button>
+              </span>
+            ) : aiStatus === 'dismissed' ? (
+              <span className="h10-sug-applybar">
+                <Button variant="secondary" size="sm" disabled={sel.size === 0 || bulkBusy} onClick={() => void aiRunOps([...sel].map((id) => ({ id, kind: 'restore' as const })), () => setSel(new Set()))}>
+                  <RotateCcw size={13} /> Restore {sel.size}
+                </Button>
+              </span>
+            ) : null}
             toolbarRight={
               <span className="h10-sug-toolbar">
                 <Button variant="secondary" size="sm" onClick={() => setBidSettingsOpen(true)}><Settings size={13} /> Bid Settings</Button>
@@ -1601,12 +1805,16 @@ function SuggestionsInner() {
             }
             defaultSort={{ key: 'at', dir: 'desc' }}
             emptyNode={
-              /* Honest state: no plan is proposing anything. The tab's true content is this
-                 sentence and the door to AI Advertising — inside the grid card, the family shape. */
               <EmptyState
                 icon={<Sparkles size={26} />}
-                title="No A.I. bid suggestions yet"
-                description={<>A.I. bid suggestions come from <Link className="h10-sug-lnk" href="/marketing/ads/ai-advertising">AI Advertising</Link> goals. Launch a goal and its proposed bids will queue here for your approval.</>}
+                title={aiStatus === 'applied' ? 'No decided A.I. changes yet'
+                  : aiStatus === 'dismissed' ? 'Nothing dismissed'
+                  : 'No A.I. bid suggestions yet'}
+                description={aiStatus === 'applied'
+                  ? 'Approve a proposal and its real outcome lands here — an AUTO plan’s own writes are recorded here too.'
+                  : aiStatus === 'dismissed'
+                    ? 'Removed proposals wait here for 7 days — the plan won’t re-propose them meanwhile. Restore one any time.'
+                    : <>A.I. bid suggestions come from <Link className="h10-sug-lnk" href="/marketing/ads/ai-advertising">AI Advertising</Link> goals. Launch a goal and its proposed bids will queue here for your approval.</>}
               />
             }
             reportLabel="A.I. bid decisions"
@@ -1614,20 +1822,6 @@ function SuggestionsInner() {
         </>
       ) : (
         <>
-          {bulkReport && (
-            <div className="h10-sug-report" role="status">
-              <b>{bulkReport.verb} {bulkReport.ok} · {bulkReport.fail} refused</b>
-              <ul>
-                {bulkReport.refusals.slice(0, 8).map((r) => <li key={r.id}><span className="nm">{r.label}</span> — {r.error}</li>)}
-                {bulkReport.refusals.length > 8 && <li>…and {bulkReport.refusals.length - 8} more</li>}
-              </ul>
-              <span className="h10-sug-repacts">
-                {bulkReport.undoIds?.length ? <button type="button" className="h10-am-link" onClick={() => { void restore(bulkReport.undoIds!); setBulkReport(null) }}>Undo the {bulkReport.ok}</button> : null}
-                <button type="button" className="h10-am-link" onClick={() => setBulkReport(null)}>Dismiss</button>
-              </span>
-            </div>
-          )}
-
           <AdsFilterBar
             filters={filters}
             value={filterState}

@@ -14,6 +14,7 @@ import { runConductorCycle, type PlanModules } from '../services/advertising/aut
 import { DEFAULT_GUARDRAILS, type CampaignSignals, type Goal, type Guardrails } from '../services/advertising/autopilot/presets.js'
 import { syncLinkedRules, mirrorRuleDecisions } from '../services/advertising/autopilot/coordination.js'
 import { applyPlanActions } from '../services/advertising/autopilot/apply.js'
+import { suppressDismissed, DISMISS_SUPPRESSION_MS } from '../services/advertising/autopilot/decisions.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
 
@@ -106,16 +107,33 @@ export async function runAutopilotOnce(): Promise<{ plans: number; decisions: nu
         decisions += res.decisions.length
       }
     } else if (result.actions.length) {
-      // SUGGEST/dry-run: record fresh proposals (NO live writes).
-      await prisma.autopilotDecision.createMany({
-        data: result.actions.map((a) => ({
-          planId: plan.id, cycle: 'fast', module: a.module, campaignId: a.campaignId, action: a.action,
-          before: (a.beforeCents != null ? { cents: a.beforeCents } : a.before ?? undefined) as object | undefined,
-          after: (a.afterCents != null ? { cents: a.afterCents } : a.after ?? undefined) as object | undefined,
-          reason: a.reason, status: 'PROPOSED', source: 'autopilot',
-        })),
+      // SG.8 — a dismissal from the Suggestions tab must STICK. This branch deletes and
+      // re-proposes every tick, so without suppression a dismissed proposal would return in
+      // 15 minutes. Fingerprint = module|campaignId|action (the family tabs' proposedKey
+      // semantics — the VALUE may wobble tick to tick; the identity is what was dismissed).
+      // Expired dismissals are pruned first, which is exactly what lets a proposal return
+      // after the window — the suggestions re-propose sweep's 7-day behaviour.
+      // SUGGEST-only on purpose: AUTO is delegated autonomy — an old snooze must not veto it.
+      await prisma.autopilotDecision.deleteMany({
+        where: { planId: plan.id, status: 'DISMISSED', at: { lt: new Date(Date.now() - DISMISS_SUPPRESSION_MS) } },
       })
-      decisions += result.actions.length
+      const dismissed = await prisma.autopilotDecision.findMany({
+        where: { planId: plan.id, status: 'DISMISSED' },
+        select: { module: true, campaignId: true, action: true },
+      })
+      const fresh = suppressDismissed(result.actions, dismissed)
+      // SUGGEST/dry-run: record fresh proposals (NO live writes).
+      if (fresh.length) {
+        await prisma.autopilotDecision.createMany({
+          data: fresh.map((a) => ({
+            planId: plan.id, cycle: 'fast', module: a.module, campaignId: a.campaignId, action: a.action,
+            before: (a.beforeCents != null ? { cents: a.beforeCents } : a.before ?? undefined) as object | undefined,
+            after: (a.afterCents != null ? { cents: a.afterCents } : a.after ?? undefined) as object | undefined,
+            reason: a.reason, status: 'PROPOSED', source: 'autopilot',
+          })),
+        })
+      }
+      decisions += fresh.length
     }
     // Coordinate with the Rule-Setting session's harvest/negate engine: provision the linked
     // rules for this plan + mirror their pending decisions into our unified feed (real-time sync).
