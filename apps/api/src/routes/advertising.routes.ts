@@ -67,7 +67,7 @@ import {
 } from '../jobs/advertising-rule-evaluator.job.js'
 import { evaluateRule } from '../services/automation-rule.service.js'
 import { rollbackByExecutionId } from '../services/advertising/rollback.service.js'
-import { attachSourceLinks, familyOfRow, projectBidCents } from '../services/advertising/ads-suggestions.service.js'
+import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmuteSuggestion } from '../services/advertising/ads-suggestions.service.js'
 import {
   rebalanceAndAudit,
   computeRebalance,
@@ -6847,6 +6847,21 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * SG.9 — H10's third verb at its documented meaning: stop PROPOSING for this entity. Nothing
+   * is written to Amazon and the keyword/target keeps running — the opposite of a pause. The
+   * `/pause-target` route below is the real pause, which now lives in the row drawer.
+   */
+  fastify.post('/advertising/suggestions/:id/mute', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return sendOutcome(reply, await muteSuggestion(id))
+  })
+
+  fastify.post('/advertising/suggestions/:id/unmute', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return sendOutcome(reply, await unmuteSuggestion(id))
+  })
+
+  /**
    * SG.2 — H10's third icon: pause the UNDERLYING TARGET and set the suggestion aside.
    *
    * Operator-clicked, so the real `status:'PAUSED'` is allowed (the no-pause policy binds the
@@ -6905,7 +6920,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
        *  each accept optionally carrying the operator's inline override. */
       ops?: Array<{ id?: unknown; kind?: unknown; value?: unknown; resultBidCents?: unknown; resultBudgetEur?: unknown }>
     }
-    type Op = { id: string; kind: 'apply' | 'dismiss' | 'restore'; ov: ApplyOverride }
+    // SG.9 — `mute` / `unmute` join the staged batch: H10 commits all three row verbs through
+    // the one "Apply N Changes", so the third one cannot be a side-channel POST.
+    type Op = { id: string; kind: 'apply' | 'dismiss' | 'restore' | 'mute' | 'unmute'; ov: ApplyOverride }
+    const KINDS = ['apply', 'dismiss', 'restore', 'mute', 'unmute']
     const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
     let ops: Op[] = []
     if (Array.isArray(b.ops)) {
@@ -6913,18 +6931,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       for (const o of b.ops) {
         const id = typeof o?.id === 'string' ? o.id : ''
         const kind = String(o?.kind ?? '')
-        if (!id || seen.has(id) || !['apply', 'dismiss', 'restore'].includes(kind)) continue
+        if (!id || seen.has(id) || !KINDS.includes(kind)) continue
         seen.add(id)
         ops.push({ id, kind: kind as Op['kind'], ov: { value: num(o.value), resultBidCents: num(o.resultBidCents), resultBudgetEur: num(o.resultBudgetEur) } })
       }
     } else {
       const ids = Array.isArray(b.ids) ? [...new Set(b.ids.filter((x): x is string => typeof x === 'string'))] : []
       const kind = String(b.kind ?? '')
-      if (['apply', 'dismiss', 'restore'].includes(kind)) ops = ids.map((id) => ({ id, kind: kind as Op['kind'], ov: {} }))
+      if (KINDS.includes(kind)) ops = ids.map((id) => ({ id, kind: kind as Op['kind'], ov: {} }))
     }
     if (!ops.length || ops.length > 200) {
       reply.code(400)
-      return { error: 'ops (1–200 of {id, kind apply|dismiss|restore}) or ids+kind required' }
+      return { error: 'ops (1–200 of {id, kind apply|dismiss|restore|mute|unmute}) or ids+kind required' }
     }
     if (ops.some((o) => o.kind === 'apply')) {
       const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
@@ -6936,7 +6954,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       while (i < ops.length) {
         const op = ops[i++]
         try {
-          byId.set(op.id, op.kind === 'apply' ? await applySuggestion(op.id, op.ov) : op.kind === 'dismiss' ? await dismissSuggestion(op.id) : await restoreSuggestion(op.id))
+          byId.set(op.id, op.kind === 'apply' ? await applySuggestion(op.id, op.ov)
+            : op.kind === 'dismiss' ? await dismissSuggestion(op.id)
+            : op.kind === 'mute' ? await muteSuggestion(op.id)
+            : op.kind === 'unmute' ? await unmuteSuggestion(op.id)
+            : await restoreSuggestion(op.id))
         } catch (e) {
           byId.set(op.id, { ok: false, error: (e as Error).message })
         }

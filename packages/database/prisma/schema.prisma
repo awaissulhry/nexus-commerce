@@ -13126,6 +13126,41 @@ model AdsRuleSuggestion {
   @@index([ruleId, createdAt(sort: Desc)])
 }
 
+/// SG.9 — "stop suggesting for this one", H10's third verb.
+///
+/// Their KB (Helium 10 Ads Suggestions, "Pausing Suggestions"): *"Pausing a Suggestion means
+/// you no longer wish to collect data on the keyword or target in the campaign and ad group
+/// for suggestions"* — and, from their review guide, it *"ensur[es] that it remains active
+/// regardless of performance"*. So this is a MUTE, not a pause: the entity keeps running at
+/// Amazon and the producers stop proposing changes for it. (A real pause is a rule ACTION
+/// that arrives as a suggestion row and is approved with ✓ — a different thing entirely.)
+///
+/// `scope` keeps the three producers honest about their own reach, because each consults this
+/// table separately and a mute made on one surface must not silently gag another:
+///   rules           → ads-suggestions.service.ts (the AdsRuleSuggestion writer)
+///   ai              → ad-autopilot.job.ts (the conductor's SUGGEST branch)
+///   recommendations → ads-recommendations.service.ts (the computed feed)
+model AdsSuggestionMute {
+  id String @id @default(cuid())
+
+  /// which producer this mute binds: rules | ai | recommendations
+  scope String @default("rules")
+  /// AD_TARGET | SEARCH_TERM | CAMPAIGN | MARKETPLACE | ACCOUNT | RECOMMENDATION
+  entityType String
+  entityId   String
+  /// denormalised so the Muted view can name what it silenced without a join back to a
+  /// possibly-deleted entity — the label is the only record left for a removed target
+  entityName  String?
+  marketplace String?
+
+  reason    String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([scope, entityType, entityId])
+  @@index([scope])
+}
+
 // SK3 — keyword rank tracker. A time-series of organic / paid (sponsored) rank snapshots per
 // keyword × marketplace, feeding the Keyword Tracker report + the KEYWORD_RANK_BID rule. Amazon's
 // SP-API does NOT expose organic rank, so rows arrive via ingestion (manual / import / a future
@@ -14876,6 +14911,12 @@ model AutopilotDecision {
   reason      String
   status      String        @default("PROPOSED") // PROPOSED|APPLIED|SKIPPED|DENIED|ROLLED_BACK
   executionId String? // → existing audit/sync row for one-click rollback
+  /// SG.9 — the delivery handle. `updateCampaignWithSync` returns at ENQUEUE: `ok:true` means
+  /// the row is queued, NOT that Amazon took it — the write gate runs later in ads-sync.worker
+  /// and can stamp SKIPPED/WRITE_GATE_DENIED (measured on this account: 298 of 398 budget
+  /// writes in one week). So a decision keeps its queue id and the A.I. tab reads the queue's
+  /// `syncStatus` for the truth, exactly as attachDeliveryData does for suggestions (SG.3).
+  outboundQueueId String?
   source      String        @default("autopilot") // autopilot | rule-setting (coordinated/linked)
 
   @@index([planId, at])

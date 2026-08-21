@@ -109,14 +109,69 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
   // The staging bar's [Apply N Changes] — one round trip, per-row outcomes (the W2 lesson:
   // a partial result must name which rows were refused and why, not dissolve into a count).
   fastify.post('/advertising/ai-decisions/bulk', async (request, reply) => {
+    const KINDS = ['approve', 'dismiss', 'restore', 'mute']
     const body = (request.body ?? {}) as { ops?: Array<{ id?: unknown; kind?: unknown }> }
     const ops = (body.ops ?? []).filter(
-      (o): o is { id: string; kind: 'approve' | 'dismiss' | 'restore' } =>
-        typeof o?.id === 'string' && (o?.kind === 'approve' || o?.kind === 'dismiss' || o?.kind === 'restore'),
+      (o): o is { id: string; kind: 'approve' | 'dismiss' | 'restore' | 'mute' } =>
+        typeof o?.id === 'string' && typeof o?.kind === 'string' && KINDS.includes(o.kind),
     )
-    if (!ops.length) { reply.status(400); return { error: 'ops[] with {id, kind: approve|dismiss|restore} required' } }
+    if (!ops.length) { reply.status(400); return { error: 'ops[] with {id, kind: approve|dismiss|restore|mute} required' } }
     const { bulkDecide } = await import('../services/advertising/autopilot/decisions.js')
     return bulkDecide(ops)
+  })
+
+  /**
+   * SG.9 — the A.I. Muted view: campaigns the plans have been told to stop proposing for.
+   * The campaigns keep running; only the proposing stopped (H10's "Pausing Suggestions").
+   */
+  fastify.get('/advertising/ai-decisions/mutes', async () => {
+    const { listAiMutes } = await import('../services/advertising/autopilot/decisions.js')
+    return listAiMutes()
+  })
+
+  fastify.delete('/advertising/ai-decisions/mutes/:campaignId', async (request, reply) => {
+    const { campaignId } = request.params as { campaignId: string }
+    const { unmuteAiCampaign } = await import('../services/advertising/autopilot/decisions.js')
+    const res = await unmuteAiCampaign(campaignId)
+    if (!res.ok) reply.status(409)
+    return res
+  })
+
+  /**
+   * SG.9 — the Recommendations tab's third verb. The feed is COMPUTED, so there is no row to
+   * mark: the mute is keyed on the recommendation's deterministic id and `buildRecommendations`
+   * drops it from the feed (and from the counts, so the totals describe what is on screen).
+   */
+  fastify.post('/advertising/recommendation-mutes', async (request, reply) => {
+    const b = (request.body ?? {}) as { id?: unknown; label?: unknown }
+    if (typeof b.id !== 'string' || !b.id) { reply.status(400); return { error: 'id required' } }
+    const prisma = (await import('../db.js')).default
+    await prisma.adsSuggestionMute.upsert({
+      where: { scope_entityType_entityId: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id } },
+      create: {
+        scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id,
+        entityName: typeof b.label === 'string' ? b.label.slice(0, 300) : null,
+        reason: 'muted from the Recommendations tab', createdBy: 'operator',
+      },
+      update: {},
+    })
+    return { ok: true }
+  })
+
+  /** The Recommendations Muted view — the same feed, filtered to what was silenced. */
+  fastify.get('/advertising/recommendations-muted', async (request, reply) => {
+    const { buildRecommendations } = await import('../services/advertising/ads-recommendations.service.js')
+    reply.header('Cache-Control', 'private, max-age=30')
+    return buildRecommendations({ includeMuted: true })
+  })
+
+  fastify.delete('/advertising/recommendation-mutes/:id', async (request) => {
+    const { id } = request.params as { id: string }
+    const prisma = (await import('../db.js')).default
+    const { count } = await prisma.adsSuggestionMute.deleteMany({
+      where: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: decodeURIComponent(id) },
+    })
+    return { ok: count > 0, removed: count }
   })
 }
 

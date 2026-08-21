@@ -17,6 +17,7 @@ import { previewHarvest, applyHarvest, type HarvestCandidate } from './ads-harve
 import { previewPacing, applyPacing } from './ads-budget-pacing.service.js'
 import { analyzeShareOfVoice } from './ads-impression-share.service.js'
 import { analyzeRetailReadiness, applyRetailGuard } from './ads-retail-readiness.service.js'
+import { mutedKeys } from './ads-suggestions.service.js'
 
 export type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
 export type RecSeverity = 'high' | 'medium' | 'low'
@@ -41,9 +42,11 @@ export interface RecommendationsResult {
   counts: Record<RecCategory, number>
   potentialMonthlyImpactCents: number
   recommendations: Recommendation[]
+  /** SG.9 — how many recommendations the operator has muted (the Muted view's pill) */
+  mutedCount?: number
 }
 
-export async function buildRecommendations(opts: { windowDays?: number; targetAcos?: number } = {}): Promise<RecommendationsResult> {
+export async function buildRecommendations(opts: { windowDays?: number; targetAcos?: number; includeMuted?: boolean } = {}): Promise<RecommendationsResult> {
   const windowDays = opts.windowDays ?? 30
   const [bid, harvest, pacing, sov, retail] = await Promise.all([
     previewBidOptimization({ targetAcos: opts.targetAcos }),
@@ -154,11 +157,25 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
     return b.estImpactCents - a.estImpactCents
   })
 
-  const counts: Record<RecCategory, number> = { bid: 0, negative: 0, graduate: 0, budget: 0, sov: 0, retail: 0 }
-  for (const r of recs) counts[r.category]++
-  const potentialMonthlyImpactCents = recs.reduce((s, r) => s + (r.category === 'sov' ? 0 : r.estImpactCents), 0)
+  /**
+   * SG.9 — recommendations the operator muted ("stop suggesting this"). This feed is COMPUTED
+   * from live data every call, so there is no row to mark: the mute is keyed on the
+   * recommendation's own id, which is deterministic across reloads by construction. Dropped
+   * here rather than in the route so the counts and the €/mo total describe what is actually
+   * on screen. `opts.includeMuted` is how the Muted view lists them back.
+   */
+  const muted = await mutedKeys('recommendations')
+  const visible = opts.includeMuted ? recs : recs.filter((r) => !muted.has(`RECOMMENDATION|${r.id}`))
 
-  return { generatedAt: new Date().toISOString(), windowDays, counts, potentialMonthlyImpactCents, recommendations: recs }
+  const counts: Record<RecCategory, number> = { bid: 0, negative: 0, graduate: 0, budget: 0, sov: 0, retail: 0 }
+  for (const r of visible) counts[r.category]++
+  const potentialMonthlyImpactCents = visible.reduce((s, r) => s + (r.category === 'sov' ? 0 : r.estImpactCents), 0)
+
+  return {
+    generatedAt: new Date().toISOString(), windowDays, counts, potentialMonthlyImpactCents,
+    recommendations: opts.includeMuted ? visible.filter((r) => muted.has(`RECOMMENDATION|${r.id}`)) : visible,
+    mutedCount: muted.size,
+  }
 }
 
 export async function applyRecommendation(args: { kind: string; payload: Record<string, unknown>; userId?: string }): Promise<{ ok: boolean; result: unknown }> {

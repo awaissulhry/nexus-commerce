@@ -97,6 +97,40 @@ const STATUS_SETS: Record<string, string[]> = {
   proposed: ['PROPOSED'],
   applied: ['APPLIED', 'SKIPPED', 'DENIED'],
   dismissed: ['DISMISSED'],
+  muted: [], // not a row status — the muted view lists MUTES, see listAiMutes
+}
+
+/**
+ * SG.9 — delivery truth for a decided row, the same join `attachDeliveryData` does for
+ * suggestions (SG.3). An APPLIED decision was recorded at ENQUEUE; only the queue row says
+ * whether Amazon took it. A row with no queue handle is `unknown` — never a confident
+ * "delivered", because most of these predate the handle existing.
+ */
+type Delivery = { state: 'delivered' | 'pending' | 'refused' | 'failed' | 'unknown'; detail: string | null }
+async function deliveryByQueueId(ids: string[]): Promise<Map<string, Delivery>> {
+  const out = new Map<string, Delivery>()
+  if (!ids.length) return out
+  const rows = await prisma.outboundSyncQueue.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, syncStatus: true, errorCode: true, errorMessage: true, isDead: true },
+  })
+  for (const q of rows) {
+    const s = String(q.syncStatus)
+    const state: Delivery['state'] =
+      s === 'SUCCESS' ? 'delivered'
+      : s === 'SKIPPED' ? 'refused'
+      : q.isDead || s === 'FAILED' ? 'failed'
+      : 'pending'
+    out.set(q.id, {
+      state,
+      detail: state === 'refused'
+        ? (q.errorMessage ?? (q.errorCode === 'WRITE_GATE_DENIED' ? 'The write gate declined this write' : q.errorCode ?? 'refused before it reached Amazon'))
+        : state === 'failed' ? (q.errorMessage ?? q.errorCode ?? 'the write failed')
+        : state === 'pending' ? 'Queued — the drain worker has not settled this write yet.'
+        : 'The change reached Amazon.',
+    })
+  }
+  return out
 }
 
 export async function listAiDecisions(statusKey: string): Promise<{ items: unknown[]; total: number }> {
@@ -112,6 +146,7 @@ export async function listAiDecisions(statusKey: string): Promise<{ items: unkno
     ? await prisma.campaign.findMany({ where: { id: { in: campIds } }, select: { id: true, name: true } })
     : []
   const nameById = new Map(camps.map((c) => [c.id, c.name]))
+  const delivery = await deliveryByQueueId(rows.map((r) => r.outboundQueueId).filter((x): x is string => !!x))
   return {
     items: rows.map((r) => ({
       id: r.id, at: r.at, module: r.module, cycle: r.cycle, action: r.action,
@@ -121,9 +156,60 @@ export async function listAiDecisions(statusKey: string): Promise<{ items: unkno
       planId: r.planId, planName: r.plan?.name ?? null,
       status: r.status,
       planEnabled: r.plan?.enabled ?? false,
+      // null on PROPOSED rows (nothing written yet) and on pre-SG.9 history.
+      delivery: r.outboundQueueId ? delivery.get(r.outboundQueueId) ?? null : null,
     })),
     total: rows.length,
   }
+}
+
+/** The A.I. Muted view: campaigns the operator told the plans to stop proposing for. */
+export async function listAiMutes(): Promise<{ items: unknown[]; total: number }> {
+  const rows = await prisma.adsSuggestionMute.findMany({ where: { scope: 'ai' }, orderBy: { createdAt: 'desc' }, take: 500 })
+  const ids = rows.map((r) => r.entityId)
+  const camps = ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : []
+  const nameById = new Map(camps.map((c) => [c.id, c.name]))
+  return {
+    items: rows.map((r) => ({
+      id: r.id, at: r.createdAt, campaignId: r.entityId,
+      // the denormalised label survives a deleted campaign; the live name wins while it exists
+      campaignName: nameById.get(r.entityId) ?? r.entityName ?? null,
+      reason: r.reason, createdBy: r.createdBy,
+    })),
+    total: rows.length,
+  }
+}
+
+/**
+ * SG.9 — "stop suggesting changes for this campaign" (H10's third verb, `scope:'ai'`). The
+ * campaign keeps running and its budget/bids are untouched; the conductor simply stops
+ * proposing for it, and its currently-proposed rows leave the queue.
+ */
+export async function muteAiDecision(id: string): Promise<DecideResult> {
+  const row = await prisma.autopilotDecision.findUnique({ where: { id }, include: { plan: { select: { marketplace: true } } } })
+  if (!row) return { ok: false, error: 'This proposal no longer exists — the plan re-evaluated and superseded it' }
+  if (!row.campaignId) return { ok: false, refused: true, error: 'This decision names no campaign to mute' }
+  const camp = await prisma.campaign.findUnique({ where: { id: row.campaignId }, select: { name: true } })
+  await prisma.adsSuggestionMute.upsert({
+    where: { scope_entityType_entityId: { scope: 'ai', entityType: 'CAMPAIGN', entityId: row.campaignId } },
+    create: {
+      scope: 'ai', entityType: 'CAMPAIGN', entityId: row.campaignId, entityName: camp?.name ?? null,
+      marketplace: row.plan?.marketplace ?? null, reason: 'muted from the A.I. Bids tab', createdBy: 'operator',
+    },
+    update: {},
+  })
+  const { count } = await prisma.autopilotDecision.updateMany({
+    where: { campaignId: row.campaignId, status: 'PROPOSED', source: { not: 'rule-setting' } },
+    data: { status: 'DISMISSED', at: new Date() },
+  })
+  return { ok: true, note: `Muted — ${count} proposal${count === 1 ? '' : 's'} left the queue` }
+}
+
+/** Un-mute a campaign: the plans may propose for it again on their next tick. */
+export async function unmuteAiCampaign(campaignId: string): Promise<DecideResult> {
+  const { count } = await prisma.adsSuggestionMute.deleteMany({ where: { scope: 'ai', entityType: 'CAMPAIGN', entityId: campaignId } })
+  if (!count) return { ok: false, error: 'That campaign is not muted' }
+  return { ok: true }
 }
 
 // ── the verbs ───────────────────────────────────────────────────────────────
@@ -185,6 +271,8 @@ export async function approveDecision(id: string): Promise<DecideResult> {
     after: (entry.after ?? row.after ?? undefined) as object | undefined,
     reason: entry.reason,
     executionId: entry.executionId ?? null,
+    // SG.9 — the delivery handle. APPLIED here means ENQUEUED; the tab reads the queue row.
+    outboundQueueId: entry.outboundQueueId ?? null,
     at: new Date(),
   }
   const updated = await prisma.autopilotDecision.updateMany({ where: { id, status: 'PROPOSED' }, data })
@@ -221,14 +309,17 @@ export async function restoreDecision(id: string): Promise<DecideResult> {
 }
 
 // ── the staging bar's one round trip ────────────────────────────────────────
-export interface DecisionOp { id: string; kind: 'approve' | 'dismiss' | 'restore' }
+export interface DecisionOp { id: string; kind: 'approve' | 'dismiss' | 'restore' | 'mute' }
 export interface DecisionOpResult extends DecideResult { id: string; kind: DecisionOp['kind'] }
 
 export async function bulkDecide(ops: DecisionOp[]): Promise<{ okCount: number; results: DecisionOpResult[] }> {
   const results: DecisionOpResult[] = []
   // Sequential on purpose — clean audit ordering, and the bid path can do real work per row.
   for (const op of ops) {
-    const fn = op.kind === 'approve' ? approveDecision : op.kind === 'dismiss' ? dismissDecision : restoreDecision
+    const fn = op.kind === 'approve' ? approveDecision
+      : op.kind === 'dismiss' ? dismissDecision
+      : op.kind === 'mute' ? muteAiDecision
+      : restoreDecision
     try {
       results.push({ id: op.id, kind: op.kind, ...(await fn(op.id)) })
     } catch (e) {

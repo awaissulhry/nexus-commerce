@@ -26,7 +26,7 @@
  * Status filter's tip says so.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Sparkles, AlertTriangle, Check, X, ChevronRight, RefreshCw } from 'lucide-react'
+import { Sparkles, AlertTriangle, Check, X, ChevronRight, RefreshCw, Pause, Volume2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
 import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
 import { useMergedFilters } from '../rules-automation/_shared/useMergedFilters'
@@ -40,6 +40,7 @@ import { useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { eur2, pct, intl, roas as roasFmt } from '../_canvas/format'
 import { dash, eur, AcosCell, RoasCell, type SuggestionMetrics } from './cells'
+import { ApproveHoverCard, type HoverContent } from './ApproveHoverCard'
 import type { RecMetrics } from '@/app/_shared/ads-ui'
 import '../recommendations/recommendations.css'
 
@@ -87,11 +88,36 @@ const rAcos = (m?: RecMetrics) => {
 }
 const rRoas = (m?: RecMetrics) => (m?.roas != null ? <RoasCell m={{ roas: m.roas, spendCents: m.spendCents ?? 0 } as SuggestionMetrics} /> : dash(REC_NO_DATA))
 
+/**
+ * SG.9 — what hovering ✓ promises on this tab. A recommendation carries a fixed server-side
+ * payload (no editable magnitude), so the card states the engine, the exact change and the
+ * account mode that will govern it — and its button opens the row for review rather than
+ * offering an edit this feed cannot honour.
+ */
+function recHoverContent(r: Recommendation, onReview: () => void, mode: string): HoverContent {
+  const strat = STRATEGY.find((x) => x.key === r.category)
+  return {
+    title: `Engine: ${strat?.label ?? CAT_LABEL[r.category]}`,
+    sub: `${strat?.blurb ?? 'An impact-ranked recommendation.'} ${mode === 'sandbox' ? 'Applying is simulated while the account is in sandbox.' : 'Applying routes through the write gate — it reaches Amazon only where you have enabled writes.'}`,
+    headers: ['Severity', 'Impact', 'What it does', 'Scope', 'Notes'],
+    rows: [{
+      badge: null,
+      typeLabel: r.severity,
+      bid: r.category !== 'sov' && r.estImpactCents > 0 ? `${eur(r.estImpactCents)}/mo` : '—',
+      campaign: r.title,
+      adGroup: 'account-wide',
+      adProduct: null,
+      note: r.apply ? 'One-click apply' : 'Review only',
+    }],
+    action: { label: 'Review recommendation', onClick: onReview },
+  }
+}
+
 type Confirm = { kind: 'one'; rec: Recommendation } | { kind: 'all'; recs: Recommendation[] } | null
 
 export function RecommendationsView({ status, rowParam, writeUrl }: {
-  /** the page's ?status= — this feed knows only pending | applied; anything else reads pending */
-  status: 'pending' | 'applied'
+  /** the page's ?status= — pending | applied | muted (this feed has no server-side status) */
+  status: 'pending' | 'applied' | 'muted'
   /** the page's ?row= deep link — recommendation ids are deterministic across reloads */
   rowParam: string | null
   /** the page's one URL writer (replace for filters, push for the drawer) */
@@ -113,9 +139,37 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
   const load = useCallback(() => {
     const base = getBackendUrl()
     setLoading(true)
-    fetch(`${base}/api/advertising/recommendations`, { cache: 'no-store' }).then((x) => x.json()).then(setData).catch(() => {}).finally(() => setLoading(false))
+    // SG.9 — the Muted view asks for the silenced set; every other view gets the live feed
+    // (which the server has already filtered, so counts describe what is on screen).
+    const url = status === 'muted' ? `${base}/api/advertising/recommendations-muted` : `${base}/api/advertising/recommendations`
+    fetch(url, { cache: 'no-store' }).then((x) => x.json()).then(setData).catch(() => {}).finally(() => setLoading(false))
     fetch(`${base}/api/advertising/summary`, { cache: 'no-store' }).then((x) => x.json()).then((s) => setMode(s?.mode ?? 'sandbox')).catch(() => {})
-  }, [])
+  }, [status])
+
+  /**
+   * SG.9 — H10's third verb on a COMPUTED feed. There is no stored row to mark, so the mute is
+   * keyed on the recommendation's own id (deterministic across reloads) and the server drops it
+   * from the feed AND from the counts. Nothing is written to Amazon; the engines simply stop
+   * raising this one. Immediate rather than staged — this tab has no staging buffer, because
+   * each apply is its own gated POST — so it carries an Undo instead.
+   */
+  const muteRec = useCallback(async (r: Recommendation) => {
+    setBusy(r.id)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/advertising/recommendation-mutes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, label: r.title }),
+      }).then((x) => x.json()).catch(() => null)
+      if (!res?.ok) { toast('Could not mute that recommendation', 'danger'); return }
+      if (rowParam === r.id) writeUrl({ row: '' })
+      setData((d) => (d ? { ...d, recommendations: d.recommendations.filter((x) => x.id !== r.id) } : d))
+      toast(<>Muted — nothing was changed at Amazon; the engines stop raising this one · <button type="button" className="h10-am-link" onClick={() => void unmuteRec(r.id)}>Undo</button></>, 'success', { duration: 8000 })
+    } finally { setBusy(null) }
+  }, [rowParam, writeUrl, toast]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const unmuteRec = useCallback(async (id: string) => {
+    await fetch(`${getBackendUrl()}/api/advertising/recommendation-mutes/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null)
+    load()
+  }, [load])
   useEffect(() => { load() }, [load])
 
   // Apply — POST { kind, payload }. The server-side write-gate decides simulate-vs-live.
@@ -154,7 +208,9 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
   // ── the status cut (client truth: Applied is this browser's memory) ────────
   const all = useMemo(() => data?.recommendations ?? [], [data])
   const rows = useMemo(
-    () => all.filter((r) => !dismissed.has(r.id)).filter((r) => (status === 'applied' ? applied.has(r.id) : !applied.has(r.id))),
+    // the Muted view's rows ARE the muted set (the server sent exactly those), so the
+    // applied/dismissed cut does not apply to it
+    () => (status === 'muted' ? all : all.filter((r) => !dismissed.has(r.id)).filter((r) => (status === 'applied' ? applied.has(r.id) : !applied.has(r.id)))),
     [all, dismissed, applied, status],
   )
   const highPending = all.filter((r) => r.severity === 'high' && r.apply && !applied.has(r.id) && !dismissed.has(r.id))
@@ -166,8 +222,8 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
   const filters = useMemo<GridFilter[]>(() => [
     {
       key: '__status', label: 'Status', kind: 'select', placeholder: 'Pending',
-      options: [{ value: 'applied', label: 'Applied' }],
-      tip: 'Pending is the live feed. Applied is what you have applied from this browser — recommendations carry no stored status on the server, so this memory is per-browser.',
+      options: [{ value: 'applied', label: 'Applied' }, { value: 'muted', label: 'Muted' }],
+      tip: 'Pending is the live feed. Applied is what you have applied from this browser — recommendations carry no stored status on the server, so this memory is per-browser. Muted holds the ones you told the engines to stop raising; nothing about them changed at Amazon.',
     },
     {
       key: 'cat', label: 'Strategy', kind: 'select', wide: true, placeholder: 'All strategies',
@@ -197,6 +253,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
   const wd = data?.windowDays ?? 30
   const metricTip = (what: string) => `${what} behind this recommendation, over the engine’s ${wd}-day window. “—” = not reported — absence, not zero.`
   const isPending = status === 'pending'
+  const isMuted = status === 'muted'
 
   const columns: GridColumn<Recommendation>[] = [
     { key: 'cat', label: 'Strategy', metric: false, sortable: true, tip: 'The engine that produced this recommendation.', sortValue: (r) => CAT_LABEL[r.category], render: (r) => <Tag tone="neutral">{CAT_LABEL[r.category]}</Tag> },
@@ -223,18 +280,40 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
     // it has no bulk apply endpoint: each apply is its own gated POST.
     ...(isPending ? [
       {
-        key: 'ok', label: '✓', tip: 'Apply this recommendation — a confirm states the account mode (sandbox = simulated · live = gated writes) before anything is sent.', metric: false, sortable: false, freezeRight: true, width: 52,
+        key: 'ok', label: '✓', tip: 'Apply this recommendation — hover for exactly what it does; a confirm states the account mode (sandbox = simulated · live = gated writes) before anything is sent.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => r.apply ? (
-          <button type="button" className="h10-sug-iconbtn ok" disabled={busy === r.id} aria-label="Apply this recommendation" onClick={() => setConfirm({ kind: 'one', rec: r })}>
-            <Check size={14} />
-          </button>
+          <ApproveHoverCard content={() => recHoverContent(r, () => writeUrl({ row: r.id }, { history: true }), mode)}>
+            <button type="button" className="h10-sug-iconbtn ok" disabled={busy === r.id} aria-label="Apply this recommendation" onClick={() => setConfirm({ kind: 'one', rec: r })}>
+              <Check size={14} />
+            </button>
+          </ApproveHoverCard>
         ) : dash('No one-click apply for this recommendation — open the row to review it'),
       } as GridColumn<Recommendation>,
       {
-        key: 'no', label: '✕', tip: 'Dismiss — hides it for this session (the feed recomputes, so it may return). Undo lives in the toast.', metric: false, sortable: false, freezeRight: true, width: 52,
+        key: 'no', label: '✕', tip: 'Snooze — hides it for this session. The engines recompute this feed continuously, so it comes back with the next run; ⏸ is how you stop it for good. Undo lives in the toast.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => (
-          <button type="button" className="h10-sug-iconbtn no" disabled={busy === r.id} aria-label="Dismiss this recommendation for this session" onClick={() => dismiss(r)}>
+          <button type="button" className="h10-sug-iconbtn no" disabled={busy === r.id} aria-label="Snooze this recommendation for this session" onClick={() => dismiss(r)}>
             <X size={14} />
+          </button>
+        ),
+      } as GridColumn<Recommendation>,
+      {
+        // SG.9 — H10's third verb: stop raising this one. Nothing changes at Amazon; the
+        // engines simply stop proposing it until you unmute.
+        key: 'pz', label: '⏸', tip: 'Stop suggesting this. Nothing is changed at Amazon — the engines just stop raising it, permanently, until you unmute it under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: 52,
+        render: (r: Recommendation) => (
+          <button type="button" className="h10-sug-iconbtn pz" disabled={busy === r.id} aria-label="Stop suggesting this recommendation" title="Stop suggesting this — nothing changes at Amazon" onClick={() => void muteRec(r)}>
+            <Pause size={14} />
+          </button>
+        ),
+      } as GridColumn<Recommendation>,
+    ] : isMuted ? [
+      {
+        key: 'unmute', label: 'Unmute', metric: false, sortable: false, freezeRight: true, width: 88,
+        tip: 'Let the engines raise this recommendation again when the data still warrants it.',
+        render: (r: Recommendation) => (
+          <button type="button" className="h10-sug-iconbtn" disabled={busy === r.id} aria-label="Resume suggesting this recommendation" title="Resume — the engines may raise it again" onClick={() => void unmuteRec(r.id)}>
+            <Volume2 size={14} />
           </button>
         ),
       } as GridColumn<Recommendation>,
@@ -306,10 +385,12 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         emptyNode={
           <EmptyState
             icon={<Sparkles size={26} />}
-            title={isPending ? 'Nothing to act on right now' : 'Nothing applied yet'}
-            description={isPending
-              ? 'The engines recompute this feed from live account data — when one finds something worth doing, it appears here.'
-              : 'Apply a recommendation and it moves here. Applied is this browser’s memory — the receipt of any live write is in the Change Log.'}
+            title={isMuted ? 'Nothing muted' : isPending ? 'Nothing to act on right now' : 'Nothing applied yet'}
+            description={isMuted
+              ? '⏸ a recommendation and it lands here: nothing about your account changed, the engines simply stop raising it. Unmute any time.'
+              : isPending
+                ? 'The engines recompute this feed from live account data — when one finds something worth doing, it appears here.'
+                : 'Apply a recommendation and it moves here. Applied is this browser’s memory — the receipt of any live write is in the Change Log.'}
           />
         }
       />

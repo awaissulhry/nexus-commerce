@@ -15,6 +15,7 @@ import { DEFAULT_GUARDRAILS, type CampaignSignals, type Goal, type Guardrails } 
 import { syncLinkedRules, mirrorRuleDecisions } from '../services/advertising/autopilot/coordination.js'
 import { applyPlanActions } from '../services/advertising/autopilot/apply.js'
 import { suppressDismissed, DISMISS_SUPPRESSION_MS } from '../services/advertising/autopilot/decisions.js'
+import { mutedKeys } from '../services/advertising/ads-suggestions.service.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
 
@@ -121,7 +122,11 @@ export async function runAutopilotOnce(): Promise<{ plans: number; decisions: nu
         where: { planId: plan.id, status: 'DISMISSED' },
         select: { module: true, campaignId: true, action: true },
       })
+      // SG.9 — and campaigns the operator muted from the A.I. Bids tab: "stop suggesting
+      // changes for this campaign". The campaign keeps running; only the proposing stops.
+      const muted = await mutedKeys('ai')
       const fresh = suppressDismissed(result.actions, dismissed)
+        .filter((a) => !muted.has(`CAMPAIGN|${a.campaignId}`))
       // SUGGEST/dry-run: record fresh proposals (NO live writes).
       if (fresh.length) {
         await prisma.autopilotDecision.createMany({

@@ -19,6 +19,14 @@ export interface AppliedDecision {
   module: string; campaignId: string; action: string
   before?: unknown; after?: unknown; reason: string
   status: 'APPLIED' | 'DENIED' | 'SKIPPED'; executionId?: string | null
+  /**
+   * SG.9 — the outbound queue handle, and the reason APPLIED here does not mean delivered.
+   * `updateCampaignWithSync` returns at ENQUEUE; the write gate runs afterwards in
+   * ads-sync.worker and can stamp SKIPPED/WRITE_GATE_DENIED (measured: 298 of 398 budget
+   * writes in a week). Whoever records this decision keeps the id so delivery can be read
+   * from `OutboundSyncQueue.syncStatus` instead of asserted.
+   */
+  outboundQueueId?: string | null
 }
 
 export async function applyPlanActions(opts: {
@@ -70,9 +78,13 @@ export async function applyPlanActions(opts: {
         // write that never landed was recorded as an applied decision (the `as never` trap).
         // The outcome's actionLogId is the Change-Log receipt, threaded as executionId.
         const out = await updateCampaignWithSync({ campaignId, patch: { dailyBudget: (bud.afterCents as number) / 100 }, actor, reason: bud.reason, applyImmediately: true } as never)
-        if (out.ok) {
+        if (out.ok && !out.outboundQueueId) {
+          // `ok:true` with no queue id is the `no_changes` path — the patch diffed to nothing.
+          // Recording that as APPLIED would claim a write that was never even queued.
+          decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: `${bud.reason} — already at this value; nothing to write`, status: 'SKIPPED' })
+        } else if (out.ok) {
           applied += 1
-          decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: bud.reason, status: 'APPLIED', executionId: out.actionLogId ?? null })
+          decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: bud.reason, status: 'APPLIED', executionId: out.actionLogId ?? null, outboundQueueId: out.outboundQueueId })
         } else {
           denied += 1
           decisions.push({ module: 'budget', campaignId, action: bud.action, before: { cents: bud.beforeCents }, after: { cents: bud.afterCents }, reason: `${bud.reason} — the write did not land: ${out.error ?? 'unknown'}`, status: 'DENIED' })

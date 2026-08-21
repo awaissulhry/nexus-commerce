@@ -119,6 +119,28 @@ function proposedKey(action: Record<string, unknown>): string {
   return parts.join(':')
 }
 
+/**
+ * SG.9 — the mute set for a producer, as `${entityType}|${entityId}` keys.
+ *
+ * H10's third verb ("Pausing Suggestions") means *stop collecting data on this keyword or
+ * target for suggestions* — the entity keeps running at Amazon, we simply stop proposing for
+ * it. That is enforced HERE, at the writer, not at read time: a muted entity must stop
+ * generating rows, otherwise the queue keeps growing behind a filter and the operator's
+ * "stop suggesting this" was cosmetic.
+ */
+export async function mutedKeys(scope: 'rules' | 'ai' | 'recommendations'): Promise<Set<string>> {
+  try {
+    const rows = await prisma.adsSuggestionMute.findMany({ where: { scope }, select: { entityType: true, entityId: true } })
+    return new Set(rows.map((r) => `${r.entityType}|${r.entityId}`))
+  } catch {
+    // A mute table we cannot read must not silently un-mute the account: callers treat a
+    // throw as "unknown" and skip proposing nothing new — but an empty set here would do the
+    // opposite. Fail LOUD-ish by returning empty only after logging; the tick is idempotent.
+    logger.warn('[ads-suggestions] mute lookup failed — proposing without mutes this tick')
+    return new Set()
+  }
+}
+
 export async function generateSuggestionsFromExecution(args: {
   ruleId: string; ruleName: string; trigger: string; executionId: string
   context: unknown
@@ -128,6 +150,7 @@ export async function generateSuggestionsFromExecution(args: {
   try {
     const entity = extractEntity(args.context)
     if (!entity) return 0
+    const muted = await mutedKeys('rules')
     const marketplace = (args.context as { marketplace?: string })?.marketplace ?? null
     let written = 0
     for (let i = 0; i < args.actionResults.length; i++) {
@@ -156,6 +179,9 @@ export async function generateSuggestionsFromExecution(args: {
       // Everything else keeps its real entity, so `bid_down`'s sixty distinct proposals stay sixty.
       const sweep = SWEEP_ACTIONS.has(String(action.type ?? ''))
       const ent = sweep ? ACCOUNT_ENTITY : entity
+      // SG.9 — the operator muted this entity: stop proposing for it. The entity keeps
+      // running at Amazon; only the suggestions stop (H10's "Pausing Suggestions").
+      if (muted.has(`${ent.type}|${ent.id}`)) continue
       // upsert on the dedupe key — keep one row per rule×entity×change. The update branch never
       // touches `status` (the operator's decision is not overwritten by a tick); resurrection is
       // the LIFECYCLE SWEEP's job, with its windows (see sweepSuggestionLifecycle below).
@@ -943,4 +969,56 @@ export async function sweepSuggestionLifecycle(now = new Date()): Promise<{ expi
     logger.warn('[ads-suggestions] lifecycle sweep failed', { error: (e as Error).message })
     return { expired: 0, reproposed: 0 }
   }
+}
+
+// ── SG.9 — "stop suggesting for this one" ────────────────────────────────────
+/** Mirrors the routes file's DecideOutcome so the bulk endpoint can treat every verb alike. */
+export type DecideResult = { ok: boolean; httpStatus?: number; error?: string; refused?: boolean; result?: unknown }
+
+/**
+ * H10's third verb, at its real meaning. Their KB: *"Pausing a Suggestion means you no longer
+ * wish to collect data on the keyword or target in the campaign and ad group for suggestions"*,
+ * and it *"ensur[es] that it remains active regardless of performance"*. So muting is the
+ * OPPOSITE of pausing the entity: nothing is written to Amazon, the target keeps running, and
+ * only the proposing stops.
+ *
+ * Two effects, and both are needed or the verb half-works:
+ *   1. the mute row — consulted by the writer, so no NEW row is generated for the entity;
+ *   2. every pending row for that entity moves to `muted`, so the queue clears immediately
+ *      rather than keeping proposals the operator just said they did not want to see.
+ *
+ * `muted` is out of the lifecycle sweep's reach by construction: the sweep only touches
+ * `pending`, `expired`, and `dismissed` rows whose decidedBy is exactly 'operator'.
+ */
+export async function muteSuggestion(id: string, opts: { by?: string } = {}): Promise<DecideResult> {
+  const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
+  if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
+  if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
+  await prisma.adsSuggestionMute.upsert({
+    where: { scope_entityType_entityId: { scope: 'rules', entityType: sug.entityType, entityId: sug.entityId } },
+    create: {
+      scope: 'rules', entityType: sug.entityType, entityId: sug.entityId,
+      entityName: sug.entityName, marketplace: sug.marketplace,
+      reason: `muted from the Suggestions queue (suggestion ${sug.id})`, createdBy: opts.by ?? 'operator',
+    },
+    update: {},
+  })
+  const { count } = await prisma.adsRuleSuggestion.updateMany({
+    where: { entityType: sug.entityType, entityId: sug.entityId, status: 'pending' },
+    data: { status: 'muted', decidedAt: new Date(), decidedBy: 'operator:muted' },
+  })
+  return { ok: true, result: { muted: count } }
+}
+
+/** Un-mute: the entity may be proposed for again, and its muted rows return to the queue. */
+export async function unmuteSuggestion(id: string): Promise<DecideResult> {
+  const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
+  if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
+  if (sug.status !== 'muted') return { ok: false, httpStatus: 409, error: `cannot unmute ${sug.status}` }
+  await prisma.adsSuggestionMute.deleteMany({ where: { scope: 'rules', entityType: sug.entityType, entityId: sug.entityId } })
+  const { count } = await prisma.adsRuleSuggestion.updateMany({
+    where: { entityType: sug.entityType, entityId: sug.entityId, status: 'muted' },
+    data: { status: 'pending', decidedAt: null, decidedBy: null },
+  })
+  return { ok: true, result: { restored: count } }
 }

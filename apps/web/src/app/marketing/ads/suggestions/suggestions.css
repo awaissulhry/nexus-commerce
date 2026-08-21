@@ -97,6 +97,16 @@
 /* SG.2b — the staged verbs: the FILL is the staged state (H10's blue-boxed ✓/✕) */
 .h10-sug-iconbtn.ok.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
 .h10-sug-iconbtn.no.on { background: #8a5316; border-color: #8a5316; color: #fff; }
+/* SG.9 — ⏸ is a MUTE now (stop suggesting), so it wears the quiet slate fill rather than the
+   amber "armed, about to write" treatment its pause ancestor used. Nothing reaches Amazon. */
+.h10-sug-iconbtn.pz.on { background: var(--h10-text-2); border-color: var(--h10-text-2); color: #fff; }
+
+/* SG.9 — the REAL pause, rehoused in the drawer. Amber because this one does write. */
+.h10-sug-pausebox { border: 1px solid #f0dcbe; border-radius: 10px; padding: 12px 14px; background: #fff6e8; }
+.h10-sug-pausebox h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #8a5316; }
+.h10-sug-pausebox p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--h10-text-2); }
+.h10-sug-pausebox p b { color: var(--h10-text); }
+.h10-sug-armed { border-color: #c68a2e !important; color: #8a5316 !important; background: #fdeed5 !important; box-shadow: 0 0 0 2px #f0dcbe; }
 
 /* Discard Changes uses the app-wide `.h10-am-link` idiom (ads.css) — the button-vocabulary
    ratchet is at zero new idioms, and a link-style verb already has one class. */

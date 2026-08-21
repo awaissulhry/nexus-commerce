@@ -24,14 +24,14 @@
  * Everything shareable lives in the URL: ?view= ?status= ?market= ?line/portfolio/campaign/
  * adGroup= ?rule= ?row= — a copied link reproduces the view you are looking at.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Check, X, RefreshCw, Sparkles, ChevronRight, ExternalLink, RotateCcw, Pause, Settings } from 'lucide-react'
+import { Check, X, RefreshCw, Sparkles, ChevronRight, ExternalLink, RotateCcw, Pause, Volume2, Settings } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
 import { RecommendationsView } from './RecommendationsView'
+import { ApproveHoverCard, type HoverContent } from './ApproveHoverCard'
 import { AdsBidSettingsModal } from '../_shared/AdsBidSettingsModal'
 import { HoverCard } from '../campaigns/FilterDropdown'
 import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
@@ -108,7 +108,7 @@ interface Suggestion {
 }
 
 type GroupKey = 'none' | 'rule' | 'campaign' | 'type'
-type Status = 'pending' | 'applied' | 'dismissed' | 'expired'
+type Status = 'pending' | 'applied' | 'dismissed' | 'expired' | 'muted'
 
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
@@ -139,6 +139,9 @@ interface AiDecision {
   status: string
   /** a disabled plan's proposals are stale; approve refuses them server-side */
   planEnabled: boolean
+  /** SG.9 — the write's real fate, joined from OutboundSyncQueue. null = no handle (or nothing
+   *  was written yet); an APPLIED status alone only means the write was ENQUEUED. */
+  delivery?: { state: 'delivered' | 'pending' | 'refused' | 'failed' | 'unknown'; detail: string | null } | null
 }
 
 /** Compact before→after reading for a decision's Json pair — only keys that CHANGED, "—" when
@@ -163,6 +166,38 @@ function aiChangeText(module: string, before: Record<string, unknown> | null, af
       return `${r?.label ?? k} ${read(before?.[k])} → ${read(after?.[k])}`
     })
   return parts.length ? parts.join(' · ') : '—'
+}
+
+/**
+ * SG.9 — what hovering ✓ on an A.I. row promises. The bid module needs its own sentence: the
+ * approve does NOT write the figure in the Change column — it re-runs the plan's optimizer at
+ * apply time, so the bids that land are computed fresh. Saying that here is the difference
+ * between a preview and a guess.
+ */
+const AI_MODULE_EXPLAINER: Record<string, string> = {
+  bid: 'Approving re-runs this plan’s bid optimizer over the campaign’s targets at apply time, inside the plan’s bid band. The bids that land are computed fresh, so they can differ from the figure shown here.',
+  budget: 'Approving sets this campaign’s daily budget to the proposed value, through the same write gate an AUTO plan uses.',
+  placement: 'Approving nudges this campaign’s Top-of-Search bid modifier toward the proposed value.',
+}
+function aiHoverContent(r: AiDecision, onEdit: () => void): HoverContent {
+  const applyable = ['bid', 'budget', 'placement'].includes(r.module)
+  return {
+    title: `Plan: ${r.planName ?? 'A.I. plan'}`,
+    sub: applyable
+      ? (AI_MODULE_EXPLAINER[r.module] ?? 'Approving executes this change through the write gate.')
+      : `The ${r.module} module has no live apply path yet — this row can only be removed or muted.`,
+    headers: ['Module', 'Change', 'Campaign', 'Cycle', 'Notes'],
+    rows: [{
+      badge: null,
+      typeLabel: r.module,
+      bid: aiChangeText(r.module, r.before, r.after),
+      campaign: r.campaignName ?? 'account-wide',
+      adProduct: null,
+      adGroup: r.cycle,
+      note: r.planEnabled ? (applyable ? 'Applicable' : 'Not applyable') : 'Plan disabled — proposals are stale',
+    }],
+    action: { label: 'Review decision', onClick: onEdit },
+  }
 }
 
 /** Where "create a rule that feeds this tab" lives, per family — H10's empty-state CTA. */
@@ -524,51 +559,18 @@ function approveHoverContent(s: Suggestion): { title: string; sub: string; rows:
   return null
 }
 
+/**
+ * SG.9 — the family tabs' card is now the SHARED `ApproveHoverCard` (one implementation for
+ * all seven tabs); this wrapper only supplies the family content and the Edit button.
+ */
 function ApproveHover({ s, onEdit, children }: { s: Suggestion; onEdit: () => void; children: ReactNode }) {
-  const [pos, setPos] = useState<{ bottom: number; right: number } | null>(null)
-  const wrapRef = useRef<HTMLSpanElement>(null)
-  const showT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const hideT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const show = () => {
-    clearTimeout(hideT.current)
-    showT.current = setTimeout(() => {
-      const r = wrapRef.current?.getBoundingClientRect()
-      if (!r) return
-      setPos({ bottom: window.innerHeight - r.top + 8, right: Math.max(16, window.innerWidth - r.right) })
-    }, 280)
-  }
-  const hide = () => {
-    clearTimeout(showT.current)
-    hideT.current = setTimeout(() => setPos(null), 180)
-  }
-  useEffect(() => () => { clearTimeout(showT.current); clearTimeout(hideT.current) }, [])
-  const content = pos ? approveHoverContent(s) : null
   return (
-    <span ref={wrapRef} className="h10-sug-ahwrap" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <ApproveHoverCard content={() => {
+      const c = approveHoverContent(s)
+      return c ? { ...c, action: { label: 'Edit Suggestion', onClick: onEdit } } : null
+    }}>
       {children}
-      {pos && content && createPortal(
-        <div className="h10-sug-ahover" style={{ bottom: pos.bottom, right: pos.right }} role="tooltip" onMouseEnter={() => clearTimeout(hideT.current)} onMouseLeave={hide}>
-          <b className="ti">{content.title}</b>
-          <p className="sub">{content.sub}</p>
-          <div className="tbl" role="table">
-            <div className="hd" role="row"><span>Type</span><span>Bid</span><span>To Campaign</span><span>To Ad Group</span><span>Notes</span></div>
-            {content.rows.map((r, i) => (
-              <div className="rw" role="row" key={i}>
-                <span className="ty">{r.badge && <i className={`h10-sug-mt ${r.badge.cls}`} aria-hidden>{r.badge.letter}</i>}{r.typeLabel}</span>
-                <span className="bd">{r.bid}</span>
-                <span className="cp">{r.adProduct && <i className="h10-sug-adp" aria-hidden>{r.adProduct}</i>}{r.campaign}</span>
-                <span className="ag">{r.adGroup}</span>
-                <span className="nt">{r.note}</span>
-              </div>
-            ))}
-          </div>
-          <div className="ft">
-            <button type="button" className="h10-am-btn primary" onClick={onEdit}>Edit Suggestion</button>
-          </div>
-        </div>,
-        document.body,
-      )}
-    </span>
+    </ApproveHoverCard>
   )
 }
 
@@ -586,13 +588,21 @@ function FlowNode({ eyebrow, title, sub, tone, href, last }: { eyebrow: string; 
 }
 
 /** Detail drawer — provenance flow (Signal → Rule → Action → Target), edit-before-apply, decide. */
-function SuggestionDrawer({ suggestion, priced, busy, onClose, onAct }: {
+function SuggestionDrawer({ suggestion, priced, busy, onClose, onAct, onPauseTarget }: {
   suggestion: Suggestion
   priced?: Priced
   busy: boolean
   onClose: () => void
   onAct: (id: string, kind: 'apply' | 'dismiss' | 'restore', overrideValue?: number) => Promise<void>
+  /** SG.9 — the REAL pause (a live Amazon write), moved off the grid's ⏸ column and in here */
+  onPauseTarget: (id: string) => Promise<void>
 }) {
+  const [armPause, setArmPause] = useState(false)
+  useEffect(() => {
+    if (!armPause) return
+    const t = setTimeout(() => setArmPause(false), 4000)
+    return () => clearTimeout(t)
+  }, [armPause])
   const a = suggestion.proposedAction ?? {}
   const src = srcOf(suggestion)
   const st = suggestion.status
@@ -689,12 +699,114 @@ function SuggestionDrawer({ suggestion, priced, busy, onClose, onAct }: {
           </div>
         )}
 
+        {/* SG.9 — the REAL pause. It used to be the grid's ⏸, which now means "stop suggesting"
+            (H10's own meaning). A live Amazon write belongs where the row is fully described,
+            not behind a 28px icon next to a mute — so it lives here, still two-step armed. */}
+        {st === 'pending' && suggestion.entityType === 'AD_TARGET' && (
+          <div className="h10-sug-pausebox">
+            <h4>Pause this target at Amazon</h4>
+            <p>
+              A real change to your account: <b>{src.label}</b>{' '}stops serving until you re-enable it.
+              This is not the ⏸ on the row — that one only stops us suggesting.
+            </p>
+            <Button
+              variant="secondary" size="sm" disabled={busy}
+              className={armPause ? 'h10-sug-armed' : undefined}
+              onClick={() => { if (armPause) { setArmPause(false); void onPauseTarget(suggestion.id).then(onClose) } else setArmPause(true) }}
+            >
+              <Pause size={14} /> {armPause ? 'Click again to pause it at Amazon' : 'Pause target'}
+            </Button>
+          </div>
+        )}
+
         {/* Meta */}
         <dl className="h10-sug-meta">
           <div><dt>First proposed</dt><dd>{ago(suggestion.createdAt)}</dd></div>
           {suggestion.trigger ? <div><dt>Trigger</dt><dd>{suggestion.trigger}</dd></div> : null}
           <div><dt>Status</dt><dd>{suggestion.status}{suggestion.status === 'expired' ? ' — the engine stopped proposing this; restore to keep it anyway' : ''}</dd></div>
         </dl>
+      </div>
+    </Drawer>
+  )
+}
+
+/**
+ * SG.9 — the A.I. decision drawer. The tab had none, so its hover card had nowhere to send you.
+ * Read-first: the provenance, the change in operator units, the plan's own reason, and — for a
+ * decided row — what the write gate actually did with it. The verbs act immediately here (the
+ * grid is where staging happens), which is the family drawer's convention.
+ */
+function AiDecisionDrawer({ decision, busy, onClose, onAct }: {
+  decision: AiDecision
+  busy: boolean
+  onClose: () => void
+  onAct: (id: string, kind: 'approve' | 'dismiss' | 'mute' | 'restore') => Promise<void>
+}) {
+  const applyable = ['bid', 'budget', 'placement'].includes(decision.module)
+  const proposed = decision.status === 'PROPOSED'
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title={<span className="h10-sug-dh"><Tag tone="info">{decision.module}</Tag> {decision.campaignName ?? decision.planName ?? 'account-wide'}</span>}
+      footer={
+        <div className="h10-sug-dfoot">
+          <Link href="/marketing/ads/ai-advertising" className="open"><ExternalLink size={14} /> Open the plan</Link>
+          <span className="grow" />
+          {proposed && (
+            <>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => void onAct(decision.id, 'mute').then(onClose)}><Pause size={14} /> Stop suggesting</Button>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => void onAct(decision.id, 'dismiss').then(onClose)}><X size={14} /> Remove</Button>
+              <Button variant="primary" size="sm" disabled={busy || !applyable} onClick={() => void onAct(decision.id, 'approve').then(onClose)}
+                title={applyable ? undefined : `The ${decision.module} module has no live apply path yet`}
+                aria-disabled={!applyable}>
+                <Check size={14} /> Approve
+              </Button>
+            </>
+          )}
+          {decision.status === 'DISMISSED' && (
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void onAct(decision.id, 'restore').then(onClose)}><RotateCcw size={14} /> Restore</Button>
+          )}
+        </div>
+      }
+    >
+      <div className="h10-sug-dbody">
+        <div className="h10-sug-flow">
+          <FlowNode eyebrow="Plan" title={decision.planName ?? 'A.I. plan'} sub={decision.planEnabled ? 'Enabled · proposing' : 'Disabled — its proposals are stale'} />
+          <FlowNode eyebrow="Module" title={decision.module} sub={`${decision.cycle} cycle`} />
+          <FlowNode eyebrow="Proposed change" title={aiChangeText(decision.module, decision.before, decision.after)} sub={decision.reason} tone="info" />
+          <FlowNode eyebrow="Applies to" title={decision.campaignName ?? 'account-wide'} sub="Campaign" href={decision.campaignId ? `/marketing/ads/campaigns/${decision.campaignId}` : null} last />
+        </div>
+
+        {proposed && (
+          <div className="h10-sug-edit">
+            <h4>What approving does</h4>
+            <p className="hint">
+              <span>
+                {applyable
+                  ? (AI_MODULE_EXPLAINER[decision.module] ?? 'It executes through the write gate.')
+                  : `The ${decision.module} module has no live apply path yet, so this row can only be removed or muted.`}
+                {' '}It runs through the same engine an AUTO plan uses, so approval and autonomy cannot drift apart.
+              </span>
+            </p>
+          </div>
+        )}
+
+        {decision.status !== 'PROPOSED' && (
+          <div className="h10-sug-dlblock">
+            <h4>
+              Delivery
+              <span className={`h10-sug-dl ${{ delivered: 'ok', pending: 'pd', refused: 'rf', failed: 'fl', unknown: 'uk' }[decision.delivery?.state ?? 'unknown']}`}>
+                {decision.status === 'DENIED' ? 'Refused' : decision.status === 'SKIPPED' ? 'Skipped'
+                  : { delivered: 'Delivered', pending: 'Pending', refused: 'Refused', failed: 'Failed', unknown: '—' }[decision.delivery?.state ?? 'unknown']}
+              </span>
+            </h4>
+            <p>
+              {decision.delivery?.detail ?? decision.reason}
+              {' '}The receipt lives in the <Link className="h10-sug-lnk" href="/marketing/ads/changelog">Change Log</Link>.
+            </p>
+          </div>
+        )}
       </div>
     </Drawer>
   )
@@ -716,7 +828,7 @@ function SuggestionsInner() {
 
   // ── URL state — the source of truth for everything shareable ──────────────
   const view = params.get('view') ?? 'bids'
-  const status = (['pending', 'applied', 'dismissed', 'expired'].includes(params.get('status') ?? '') ? params.get('status') : 'pending') as Status
+  const status = (['pending', 'applied', 'dismissed', 'expired', 'muted'].includes(params.get('status') ?? '') ? params.get('status') : 'pending') as Status
   const market = params.get('market') ?? 'all'
   const scope: ScopeValue = {
     line: params.get('line') ?? '',
@@ -760,11 +872,11 @@ function SuggestionsInner() {
    * SG.8 adds the Status axis (Proposed | Applied | Dismissed), URL-owned via ?status= like
    * every other view, and the staging buffer behind the ✓/✕ verbs.
    */
-  const aiStatus = status === 'applied' ? 'applied' : status === 'dismissed' ? 'dismissed' : 'proposed'
+  const aiStatus = status === 'applied' ? 'applied' : status === 'dismissed' ? 'dismissed' : status === 'muted' ? 'muted' : 'proposed'
   /** ✓/✕ stage; [Apply N Changes] commits the batch — no per-row € override here (a bid
    *  approve re-runs the plan's optimizer, so there is no single figure to edit). */
-  const [aiStaged, setAiStaged] = useState<Map<string, 'apply' | 'remove'>>(new Map())
-  const aiStage = useCallback((id: string, kind: 'apply' | 'remove') => {
+  const [aiStaged, setAiStaged] = useState<Map<string, 'apply' | 'remove' | 'mute'>>(new Map())
+  const aiStage = useCallback((id: string, kind: 'apply' | 'remove' | 'mute') => {
     setAiStaged((cur) => {
       const next = new Map(cur)
       if (next.get(id) === kind) next.delete(id)
@@ -790,9 +902,9 @@ function SuggestionsInner() {
    * The pending grid therefore has NO checkbox column — the verbs are the selection. The
    * Dismissed/Expired tabs keep checkboxes for bulk Restore.
    */
-  type StagedEntry = { kind: 'apply' | 'remove'; value?: number }
+  type StagedEntry = { kind: 'apply' | 'remove' | 'mute'; value?: number }
   const [staged, setStaged] = useState<Map<string, StagedEntry>>(new Map())
-  const stage = useCallback((id: string, kind: 'apply' | 'remove') => {
+  const stage = useCallback((id: string, kind: 'apply' | 'remove' | 'mute') => {
     setStaged((cur) => {
       const next = new Map(cur)
       const existing = next.get(id)
@@ -879,7 +991,10 @@ function SuggestionsInner() {
     if (view !== 'ai') return
     let alive = true
     setAiLoading(true)
-    fetch(`${getBackendUrl()}/api/advertising/ai-decisions?status=${status === 'applied' ? 'applied' : status === 'dismissed' ? 'dismissed' : 'proposed'}`, { cache: 'no-store' })
+    const aiUrl = status === 'muted'
+      ? `${getBackendUrl()}/api/advertising/ai-decisions/mutes`
+      : `${getBackendUrl()}/api/advertising/ai-decisions?status=${status === 'applied' ? 'applied' : status === 'dismissed' ? 'dismissed' : 'proposed'}`
+    fetch(aiUrl, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => { if (alive) setAiItems(Array.isArray(j?.items) ? j.items : []) })
       .catch(() => { if (alive) setAiItems(null) })
@@ -906,6 +1021,7 @@ function SuggestionsInner() {
   const cursorUrl = `${getBackendUrl()}/api/advertising/suggestions/cursor`
   const baseline = useCursorBaseline<{ pending: number; fp: string }>(cursorUrl, {}, `${reload}:${baselineKey}`)
   const detail = rowParam ? items.find((s) => s.id === rowParam) ?? null : null
+  const aiDetail = rowParam ? (aiItems ?? []).find((d) => d.id === rowParam) ?? null : null
   const { stale } = useCursorPoll<{ pending: number; fp: string }>({
     url: cursorUrl, params: {}, baseline, enabled: !detail && !bulkBusy,
   })
@@ -924,15 +1040,19 @@ function SuggestionsInner() {
     return [
       {
         key: '__status', label: 'Status', kind: 'select', placeholder: 'Proposed',
-        options: [{ value: 'applied', label: 'Applied' }, { value: 'dismissed', label: 'Dismissed' }],
-        tip: 'Proposed is the live queue (the plan re-evaluates it every 15 minutes). Applied is the decided history — your approvals and an AUTO plan’s own writes, each row carrying its real outcome. Dismissed proposals stay suppressed for 7 days, then may return.',
+        options: [{ value: 'applied', label: 'Applied' }, { value: 'dismissed', label: 'Dismissed' }, { value: 'muted', label: 'Muted' }],
+        tip: 'Proposed is the live queue (the plan re-evaluates it every 15 minutes). Applied is the decided history — your approvals and an AUTO plan’s own writes, each row carrying its real outcome. Dismissed proposals stay suppressed for 7 days, then may return. Muted campaigns keep running — the plans simply stop proposing for them.',
       },
       { key: 'aiCampaign', label: 'Campaign', kind: 'select', wide: true, searchable: true, placeholder: 'All campaigns', options: opts((r) => r.campaignId, (v, r) => r.campaignName ?? v), value: (r) => (r as AiDecision).campaignId ?? '' },
-      { key: 'aiModule', label: 'Module', kind: 'select', placeholder: 'All modules', options: opts((r) => r.module), value: (r) => (r as AiDecision).module },
-      { key: 'aiAction', label: 'Action', kind: 'select', placeholder: 'All actions', options: opts((r) => r.action, (v) => v.replace(/_/g, ' ').toLowerCase()), value: (r) => (r as AiDecision).action },
-      { key: 'aiPlan', label: 'Plan', kind: 'select', placeholder: 'All plans', options: opts((r) => r.planId, (v, r) => r.planName ?? v), value: (r) => (r as AiDecision).planId },
+      // A mute row carries only its campaign — module/action/plan facets would be empty
+      // selects that narrow nothing, so this view does not render them.
+      ...(aiStatus === 'muted' ? [] : [
+        { key: 'aiModule', label: 'Module', kind: 'select', placeholder: 'All modules', options: opts((r) => r.module), value: (r) => (r as AiDecision).module },
+        { key: 'aiAction', label: 'Action', kind: 'select', placeholder: 'All actions', options: opts((r) => r.action, (v) => v.replace(/_/g, ' ').toLowerCase()), value: (r) => (r as AiDecision).action },
+        { key: 'aiPlan', label: 'Plan', kind: 'select', placeholder: 'All plans', options: opts((r) => r.planId, (v, r) => r.planName ?? v), value: (r) => (r as AiDecision).planId },
+      ] as GridFilter[]),
     ]
-  }, [aiItems])
+  }, [aiItems, aiStatus])
   const aiUrlValues = useMemo<FilterState>(
     () => ({ __status: aiStatus === 'proposed' ? '' : aiStatus }),
     [aiStatus],
@@ -989,19 +1109,13 @@ function SuggestionsInner() {
   }, [post, toast, restore, refreshCounts])
 
   /**
-   * SG.2 — the pause verb (H10's third icon). A REAL status write on the underlying target —
-   * allowed because it is operator-clicked (the no-pause policy binds the engine) — so it is
-   * two-step: first click ARMS the button (amber, 3.5s), second click executes. A refusal at
-   * the gate comes back in the server's words and the row stays pending.
+   * SG.2/SG.9 — the REAL pause: a status write on the underlying target, allowed because it is
+   * operator-clicked (the no-pause policy binds the ENGINE). It is no longer the grid's ⏸ —
+   * that icon now carries H10's own meaning, "stop suggesting for this" — so this lives in the
+   * row drawer, which arms it there. A refusal at the gate comes back in the server's words
+   * and the row stays pending.
    */
-  const [armedPause, setArmedPause] = useState<string | null>(null)
-  useEffect(() => {
-    if (!armedPause) return
-    const t = setTimeout(() => setArmedPause(null), 3500)
-    return () => clearTimeout(t)
-  }, [armedPause])
   const pauseTarget = useCallback(async (id: string) => {
-    setArmedPause(null)
     setBusy((b) => ({ ...b, [id]: true }))
     try {
       const res = await fetch(`${getBackendUrl()}/api/advertising/suggestions/${id}/pause-target`, { method: 'POST' })
@@ -1070,7 +1184,7 @@ function SuggestionsInner() {
   /** One bulk call; shared by the staged batch and the Restore-N path. The per-row outcome
    *  report renders OUTSIDE any popover so a partial result survives it (W2). */
   const runOps = useCallback(async (
-    ops: Array<{ id: string; kind: 'apply' | 'dismiss' | 'restore'; value?: number; resultBidCents?: number; resultBudgetEur?: number }>,
+    ops: Array<{ id: string; kind: 'apply' | 'dismiss' | 'restore' | 'mute' | 'unmute'; value?: number; resultBidCents?: number; resultBudgetEur?: number }>,
     onDone?: () => void,
   ) => {
     if (!ops.length || bulkBusy) return
@@ -1092,6 +1206,19 @@ function SuggestionsInner() {
       const appliedOk = results.filter((x) => x.ok && x.kind === 'apply').length
       const removedOk = results.filter((x) => x.ok && x.kind === 'dismiss').map((x) => x.id)
       const restoredOk = results.filter((x) => x.ok && x.kind === 'restore').length
+      const mutedOk = results.filter((x) => x.ok && x.kind === 'mute').length
+      const unmutedOk = results.filter((x) => x.ok && x.kind === 'unmute').length
+      if (refusals.length === 0 && (mutedOk > 0 || unmutedOk > 0) && appliedOk === 0 && !removedOk.length) {
+        // SG.9 — the mute is a producer-side stop, and the copy has to say the entity is
+        // still running or "paused" is exactly what the operator will assume.
+        if (mutedOk > 0) {
+          toast(<>Muted {mutedOk} — nothing was changed at Amazon; the {mutedOk === 1 ? 'target keeps' : 'targets keep'} running and we stop suggesting for {mutedOk === 1 ? 'it' : 'them'}. Find {mutedOk === 1 ? 'it' : 'them'} under Status → Muted.</>, 'success')
+        } else {
+          toast(`Unmuted ${unmutedOk} — suggestions resume on the next evaluation`, 'success')
+        }
+        onDone?.()
+        return
+      }
       if (refusals.length === 0) {
         if (appliedOk > 0) {
           // H10's own honest copy — an apply is enqueued, not instant, and the receipt lives
@@ -1119,9 +1246,10 @@ function SuggestionsInner() {
   /** Commit the staged buffer: accepts (with inline overrides that differ from the projection)
    *  and removals, one batch — H10's [Apply N Changes]. */
   const applyStaged = useCallback(() => {
-    const ops: Array<{ id: string; kind: 'apply' | 'dismiss'; resultBidCents?: number; resultBudgetEur?: number }> = []
+    const ops: Array<{ id: string; kind: 'apply' | 'dismiss' | 'mute'; resultBidCents?: number; resultBudgetEur?: number }> = []
     for (const [id, e] of staged) {
       if (e.kind === 'remove') { ops.push({ id, kind: 'dismiss' }); continue }
+      if (e.kind === 'mute') { ops.push({ id, kind: 'mute' }); continue }
       const row = items.find((s) => s.id === id)
       const projBid = row?.suggested?.bidCents ?? null
       const projBud = row?.suggested?.budgetEur ?? null
@@ -1150,7 +1278,7 @@ function SuggestionsInner() {
    * 'applied' wrote through the AUTO engine; 'skipped' settled with nothing to change.
    */
   const aiRunOps = useCallback(async (
-    ops: Array<{ id: string; kind: 'approve' | 'dismiss' | 'restore' }>,
+    ops: Array<{ id: string; kind: 'approve' | 'dismiss' | 'restore' | 'mute' }>,
     onDone?: () => void,
   ) => {
     if (!ops.length || bulkBusy) return
@@ -1171,6 +1299,11 @@ function SuggestionsInner() {
       const skippedOk = results.filter((x) => x.ok && x.kind === 'approve' && x.outcome === 'skipped').length
       const removedOk = results.filter((x) => x.ok && x.kind === 'dismiss').map((x) => x.id)
       const restoredOk = results.filter((x) => x.ok && x.kind === 'restore').length
+      const mutedOk = results.filter((x) => x.ok && x.kind === 'mute').length
+      if (refusals.length === 0 && mutedOk > 0 && appliedOk === 0 && !removedOk.length) {
+        toast(<>Muted {mutedOk} {mutedOk === 1 ? 'campaign' : 'campaigns'} — nothing was changed at Amazon; {mutedOk === 1 ? 'it keeps' : 'they keep'} running and the plans stop proposing. Find {mutedOk === 1 ? 'it' : 'them'} under Status → Muted.</>, 'success')
+        onDone?.(); return
+      }
       if (refusals.length === 0) {
         if (appliedOk > 0 || skippedOk > 0) {
           const parts = [
@@ -1201,7 +1334,7 @@ function SuggestionsInner() {
 
   /** Commit the A.I. staged buffer — H10's [Apply N Changes], the family interaction. */
   const applyAiStaged = useCallback(() => {
-    const ops = [...aiStaged].map(([id, k]) => ({ id, kind: (k === 'apply' ? 'approve' : 'dismiss') as 'approve' | 'dismiss' }))
+    const ops = [...aiStaged].map(([id, k]) => ({ id, kind: (k === 'apply' ? 'approve' : k === 'mute' ? 'mute' : 'dismiss') as 'approve' | 'dismiss' | 'mute' }))
     void aiRunOps(ops, () => setAiStaged(new Map()))
   }, [aiStaged, aiRunOps])
 
@@ -1245,8 +1378,9 @@ function SuggestionsInner() {
         { value: 'applied', label: 'Applied' },
         { value: 'dismissed', label: 'Dismissed' },
         { value: 'expired', label: 'Expired' },
+        { value: 'muted', label: 'Muted' },
       ],
-      tip: 'Pending is the live queue. Applied / Dismissed / Expired are its history — Dismissed rows return on their own when the engine generates a new suggestion.',
+      tip: 'Pending is the live queue. Applied / Dismissed / Expired are its history — Dismissed rows return on their own when the engine generates a new suggestion. Muted holds the keywords and targets you told the engine to stop proposing for; they keep running at Amazon.',
     },
     {
       key: 'rule', label: 'Rule', kind: 'select', options: ruleOptions, placeholder: 'All rules',
@@ -1545,19 +1679,32 @@ function SuggestionsInner() {
         },
       } as GridColumn<Suggestion>,
       {
-        key: 'pz', label: '⏸', tip: 'Pause the underlying keyword/target at Amazon and set this suggestion aside. Click once to arm, again to confirm.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
-        render: (s: Suggestion) => s.entityType === 'AD_TARGET' ? (
-          <button
-            type="button"
-            className={`h10-sug-iconbtn pz${armedPause === s.id ? ' armed' : ''}`}
-            disabled={!!busy[s.id]}
-            aria-label={armedPause === s.id ? 'Click again to pause this target' : 'Pause the underlying target'}
-            title={armedPause === s.id ? 'Click again to PAUSE this target at Amazon' : 'Pause the underlying target (click twice)'}
-            onClick={() => (armedPause === s.id ? void pauseTarget(s.id) : setArmedPause(s.id))}
-          >
-            <Pause size={14} />
-          </button>
-        ) : dash('Only a keyword/target row can pause its target'),
+        /**
+         * SG.9 — H10's third verb, at the meaning their KB actually gives it: *"Pausing a
+         * Suggestion means you no longer wish to collect data on the keyword or target … for
+         * suggestions"*, and it *"ensur[es] that it remains active regardless of performance"*.
+         * So this MUTES the producer and writes nothing to Amazon — the target keeps running.
+         * (It used to pause the target here, which is close to the opposite; the real pause
+         * still exists and now lives in the row drawer, where its blast radius is legible.)
+         */
+        key: 'pz', label: '⏸', tip: 'Stop suggesting for this keyword/target. Nothing is changed at Amazon — it keeps running; we simply stop proposing changes for it. Stages with Apply; find muted rows under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+        render: (s: Suggestion) => {
+          const on = staged.get(s.id)?.kind === 'mute'
+          const what = ENTITY_LABEL[s.entityType]?.toLowerCase() ?? 'entity'
+          return (
+            <button
+              type="button"
+              className={`h10-sug-iconbtn pz${on ? ' on' : ''}`}
+              disabled={!!busy[s.id]}
+              aria-pressed={on}
+              aria-label={on ? 'Staged to mute — click to un-stage' : `Stop suggesting for this ${what}`}
+              title={on ? 'Staged to mute — click to un-stage' : `Stop suggesting for this ${what} — it keeps running at Amazon`}
+              onClick={() => stage(s.id, 'mute')}
+            >
+              <Pause size={14} />
+            </button>
+          )
+        },
       } as GridColumn<Suggestion>,
     ] : status === 'applied' ? [
       {
@@ -1601,6 +1748,18 @@ function SuggestionsInner() {
             </button>
           )
         },
+      } as GridColumn<Suggestion>,
+    ] : status === 'muted' ? [
+      {
+        // SG.9 — the Muted view's way back. Un-muting lets the producers propose for the
+        // entity again and returns its silenced rows to the queue.
+        key: 'act', label: 'Unmute', metric: false, sortable: false, freezeRight: true, width: 88,
+        tip: 'Resume suggestions for this keyword/target. Its muted rows return to the queue and the engine may propose for it again on the next evaluation.',
+        render: (s: Suggestion) => (
+          <button type="button" className="h10-sug-iconbtn" disabled={!!busy[s.id] || bulkBusy} aria-label="Resume suggestions for this entity" title="Resume suggestions — the engine may propose for it again" onClick={() => void runOps([{ id: s.id, kind: 'unmute' }])}>
+            <Volume2 size={14} />
+          </button>
+        ),
       } as GridColumn<Suggestion>,
     ] : [
       {
@@ -1685,7 +1844,7 @@ function SuggestionsInner() {
         /* SG.4/SG.7 — the AI + 5-engine impact feed, folded in from /marketing/ads/
            recommendations (which now redirects here) and rebuilt on the page's one anatomy:
            the SAME Filters card + grid as every family view, ?status/?row shared with them. */
-        <RecommendationsView status={status === 'applied' ? 'applied' : 'pending'} rowParam={rowParam} writeUrl={writeUrl} />
+        <RecommendationsView status={status === 'applied' ? 'applied' : status === 'muted' ? 'muted' : 'pending'} rowParam={rowParam} writeUrl={writeUrl} />
       ) : view === 'ai' ? (
         /* SG.8 — autopilot decisions with the family verbs (operator ask 2026-08-21: "nothing
            to approve, snooze or ignore — do it as we did on the other pages"). ✓/✕ STAGE and
@@ -1710,17 +1869,33 @@ function SuggestionsInner() {
             selectable={aiStatus === 'dismissed'}
             selected={sel}
             onSelectedChange={setSel}
-            noun="A.I. bid decision"
+            noun={aiStatus === 'muted' ? 'muted campaign' : 'A.I. bid decision'}
             firstColLabel="Campaign"
-            renderFirst={(r) => <span className="h10-sug-src"><Tag tone="info">{r.module}</Tag><span className="h10-sug-agx">{r.campaignName ?? r.planName ?? 'account-wide'}</span></span>}
+            /* A muted row is a MUTE, not a decision — it carries a campaign and nothing else,
+               so the module chip (and the decision columns below) are dropped rather than
+               rendered empty. */
+            renderFirst={(r) => (
+              <span className="h10-sug-src">
+                {aiStatus !== 'muted' && <Tag tone="info">{r.module}</Tag>}
+                {/* a MUTE always names a campaign — falling back to "account-wide" there would
+                    describe a reach it does not have; the id is the honest last resort. */}
+                <span className="h10-sug-agx">{aiStatus === 'muted'
+                  ? (r.campaignName ?? r.campaignId ?? '—')
+                  : (r.campaignName ?? r.planName ?? 'account-wide')}</span>
+              </span>
+            )}
             firstSortValue={(r) => r.campaignName ?? r.planName ?? ''}
             columns={[
+              ...(aiStatus === 'muted' ? [] : [
               { key: 'action', label: 'Action', metric: false, sortable: true, sortValue: (r) => r.action, render: (r) => <Tag tone="neutral">{r.action.replace(/_/g, ' ').toLowerCase()}</Tag> } as GridColumn<AiDecision>,
               { key: 'change', label: 'Change', metric: false, render: (r) => <span className="h10-sug-reason" title={aiChangeText(r.module, r.before, r.after)}>{aiChangeText(r.module, r.before, r.after)}</span> } as GridColumn<AiDecision>,
-              { key: 'reason', label: 'Reason', metric: false, render: (r) => <span className="h10-sug-reason" title={r.reason}>{r.reason}</span> } as GridColumn<AiDecision>,
+              ]),
+              { key: 'reason', label: aiStatus === 'muted' ? 'Why' : 'Reason', metric: false, render: (r) => <span className="h10-sug-reason" title={r.reason}>{r.reason}</span> } as GridColumn<AiDecision>,
+              ...(aiStatus === 'muted' ? [] : [
               { key: 'plan', label: 'Plan', metric: false, sortable: true, sortValue: (r) => r.planName ?? '', render: (r) => <span className="h10-sug-agx"><Link href="/marketing/ads/ai-advertising" title="Operate this plan in AI Advertising">{r.planName ?? r.planId}</Link></span> } as GridColumn<AiDecision>,
               { key: 'cycle', label: 'Cycle', metric: false, sortable: true, sortValue: (r) => r.cycle, render: (r) => <span className="h10-sug-when">{r.cycle}</span> } as GridColumn<AiDecision>,
-              { key: 'at', label: aiStatus === 'dismissed' ? 'Dismissed' : aiStatus === 'applied' ? 'Decided' : 'Proposed', metric: false, sortable: true, sortValue: (r) => r.at, render: (r) => <span className="h10-sug-when">{new Date(r.at).toLocaleDateString('en-GB')}</span> } as GridColumn<AiDecision>,
+              ]),
+              { key: 'at', label: aiStatus === 'dismissed' ? 'Dismissed' : aiStatus === 'applied' ? 'Decided' : aiStatus === 'muted' ? 'Muted' : 'Proposed', metric: false, sortable: true, sortValue: (r) => r.at, render: (r) => <span className="h10-sug-when">{new Date(r.at).toLocaleDateString('en-GB')}</span> } as GridColumn<AiDecision>,
               ...(aiStatus === 'proposed' ? [
                 {
                   key: 'ok', label: '✓', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
@@ -1728,9 +1903,11 @@ function SuggestionsInner() {
                   render: (r: AiDecision) => {
                     const on = aiStaged.get(r.id) === 'apply'
                     return (
-                      <button type="button" className={`h10-sug-iconbtn ok${on ? ' on' : ''}`} disabled={bulkBusy} aria-pressed={on} aria-label={on ? 'Staged to apply — click to un-stage' : 'Stage this proposal for Apply'} onClick={() => aiStage(r.id, 'apply')}>
-                        <Check size={14} />
-                      </button>
+                      <ApproveHoverCard content={() => aiHoverContent(r, () => writeUrl({ row: r.id }, { history: true }))}>
+                        <button type="button" className={`h10-sug-iconbtn ok${on ? ' on' : ''}`} disabled={bulkBusy} aria-pressed={on} aria-label={on ? 'Staged to apply — click to un-stage' : 'Stage this proposal for Apply'} onClick={() => aiStage(r.id, 'apply')}>
+                          <Check size={14} />
+                        </button>
+                      </ApproveHoverCard>
                     )
                   },
                 } as GridColumn<AiDecision>,
@@ -1746,15 +1923,64 @@ function SuggestionsInner() {
                     )
                   },
                 } as GridColumn<AiDecision>,
+                {
+                  // SG.9 — the mute, at this tab's grain: a decision names a campaign, so
+                  // "stop suggesting for this" means the plans stop proposing for that
+                  // campaign. Nothing is written; the campaign keeps running and spending.
+                  key: 'pz', label: '⏸', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+                  tip: 'Stop the A.I. proposing for this campaign. Nothing is changed at Amazon — the campaign keeps running; only the proposals stop. Stages with Apply; find muted campaigns under Status → Muted.',
+                  render: (r: AiDecision) => {
+                    const on = aiStaged.get(r.id) === 'mute'
+                    return (
+                      <button type="button" className={`h10-sug-iconbtn pz${on ? ' on' : ''}`} disabled={bulkBusy || !r.campaignId} aria-pressed={on}
+                        aria-label={on ? 'Staged to mute — click to un-stage' : 'Stop suggesting for this campaign'}
+                        title={r.campaignId ? (on ? 'Staged to mute — click to un-stage' : 'Stop suggesting for this campaign — it keeps running at Amazon') : 'This decision names no campaign to mute'}
+                        onClick={() => aiStage(r.id, 'mute')}>
+                        <Pause size={14} />
+                      </button>
+                    )
+                  },
+                } as GridColumn<AiDecision>,
+              ] : aiStatus === 'muted' ? [
+                {
+                  key: 'unmute', label: 'Unmute', metric: false, sortable: false, freezeRight: true, width: 88,
+                  tip: 'Let the plans propose for this campaign again from their next tick.',
+                  render: (r: AiDecision) => (
+                    <button type="button" className="h10-sug-iconbtn" disabled={bulkBusy}
+                      aria-label="Resume A.I. suggestions for this campaign" title="Resume suggestions — the plans may propose for it again"
+                      onClick={() => {
+                        void fetch(`${getBackendUrl()}/api/advertising/ai-decisions/mutes/${encodeURIComponent(r.campaignId ?? '')}`, { method: 'DELETE' })
+                          .then(() => { toast('Unmuted — the plans may propose for this campaign again', 'success'); setReload((n) => n + 1); void refreshCounts() })
+                          .catch(() => toast('Could not unmute', 'danger'))
+                      }}>
+                      <Volume2 size={14} />
+                    </button>
+                  ),
+                } as GridColumn<AiDecision>,
               ] : aiStatus === 'applied' ? [
                 {
-                  key: 'st', label: 'Outcome', metric: false, sortable: true, freezeRight: true, width: 96,
-                  tip: 'What actually happened, in the engine’s own words: Applied wrote through the write gate; Refused is the gate’s governed stop (its reason on hover); Skipped found nothing to change at apply time.',
-                  sortValue: (r: AiDecision) => r.status,
+                  /**
+                   * SG.9 — DELIVERY, not intent. An approve returns at ENQUEUE: the write gate
+                   * runs afterwards in the drain worker and refuses a large share of writes
+                   * (measured on this account: 298 of 398 budget writes in a week). So an
+                   * APPLIED decision reads its outbound queue row and says what actually
+                   * happened; a row with no queue handle is an honest "—", never a confident
+                   * "Applied". Same treatment as the family tabs' Delivery column.
+                   */
+                  key: 'st', label: 'Delivery', metric: false, sortable: true, freezeRight: true, width: 104,
+                  tip: 'What actually happened at Amazon. Approving ENQUEUES the write; the gate and the drain worker settle it afterwards — Delivered reached Amazon, Refused is the gate’s governed stop (reason on hover), Failed dead-lettered, Pending is still in flight. Skipped means the apply found nothing to change. “—” = this row predates delivery tracking.',
+                  sortValue: (r: AiDecision) => r.delivery?.state ?? r.status,
                   render: (r: AiDecision) => {
-                    const M: Record<string, { cls: string; label: string }> = { APPLIED: { cls: 'ok', label: 'Applied' }, SKIPPED: { cls: 'uk', label: 'Skipped' }, DENIED: { cls: 'rf', label: 'Refused' } }
-                    const m = M[r.status] ?? { cls: 'uk', label: r.status.toLowerCase() }
-                    return <span className={`h10-sug-dl ${m.cls}`} title={r.reason}>{m.label}</span>
+                    if (r.status === 'DENIED') return <span className="h10-sug-dl rf" title={r.reason}>Refused</span>
+                    if (r.status === 'SKIPPED') return <span className="h10-sug-dl uk" title={r.reason}>Skipped</span>
+                    const d = r.delivery
+                    if (!d) return <span className="h10-sug-dl uk" title="This decision predates delivery tracking — its fate at Amazon was not recorded">—</span>
+                    const M: Record<string, { cls: string; label: string }> = {
+                      delivered: { cls: 'ok', label: 'Delivered' }, pending: { cls: 'pd', label: 'Pending' },
+                      refused: { cls: 'rf', label: 'Refused' }, failed: { cls: 'fl', label: 'Failed' }, unknown: { cls: 'uk', label: '—' },
+                    }
+                    const m = M[d.state] ?? M.unknown
+                    return <span className={`h10-sug-dl ${m.cls}`} title={d.detail ?? r.reason}>{m.label}</span>
                   },
                 } as GridColumn<AiDecision>,
               ] : [
@@ -1772,11 +1998,12 @@ function SuggestionsInner() {
             filterState={aiFilterState}
             onFilterStateChange={setAiFilterState}
             hideFilterPanel
-            keyboardNav
+            keyboardNav={!aiDetail}
             onRowKey={(r, k) => {
               if (aiStatus === 'proposed') {
                 if (k === 'a') aiStage(r.id, 'apply')
                 else if (k === 'e') aiStage(r.id, 'remove')
+                else if (k === 'p') aiStage(r.id, 'mute')
               } else if (aiStatus === 'dismissed' && k === 'r') void aiRunOps([{ id: r.id, kind: 'restore' }])
             }}
             toolbarLeft={aiStatus === 'proposed' ? (
@@ -1804,14 +2031,18 @@ function SuggestionsInner() {
               </span>
             }
             defaultSort={{ key: 'at', dir: 'desc' }}
+            onRowClick={aiStatus === 'muted' ? undefined : (r) => writeUrl({ row: r.id }, { history: true })}
             emptyNode={
               <EmptyState
                 icon={<Sparkles size={26} />}
                 title={aiStatus === 'applied' ? 'No decided A.I. changes yet'
                   : aiStatus === 'dismissed' ? 'Nothing dismissed'
+                  : aiStatus === 'muted' ? 'Nothing muted'
                   : 'No A.I. bid suggestions yet'}
                 description={aiStatus === 'applied'
                   ? 'Approve a proposal and its real outcome lands here — an AUTO plan’s own writes are recorded here too.'
+                  : aiStatus === 'muted'
+                    ? '⏸ a row and its campaign lands here: still running and spending at Amazon, just no longer proposed for. Unmute any time.'
                   : aiStatus === 'dismissed'
                     ? 'Removed proposals wait here for 7 days — the plan won’t re-propose them meanwhile. Restore one any time.'
                     : <>A.I. bid suggestions come from <Link className="h10-sug-lnk" href="/marketing/ads/ai-advertising">AI Advertising</Link> goals. Launch a goal and its proposed bids will queue here for your approval.</>}
@@ -1866,11 +2097,9 @@ function SuggestionsInner() {
               if (status === 'pending') {
                 if (k === 'a') stage(s.id, 'apply')
                 else if (k === 'e') stage(s.id, 'remove')
-                else if (k === 'p' && s.entityType === 'AD_TARGET') {
-                  if (armedPause === s.id) void pauseTarget(s.id)
-                  else setArmedPause(s.id)
-                }
+                else if (k === 'p') stage(s.id, 'mute')
               } else if ((status === 'dismissed' || status === 'expired') && k === 'r') void act(s.id, 'restore')
+              else if (status === 'muted' && k === 'r') void runOps([{ id: s.id, kind: 'unmute' }])
             }}
             toolbarLeft={
               <>
@@ -1924,6 +2153,7 @@ function SuggestionsInner() {
                 title={status === 'applied' ? 'No applied suggestions yet'
                   : status === 'dismissed' ? 'Nothing dismissed'
                   : status === 'expired' ? 'Nothing has expired'
+                  : status === 'muted' ? 'Nothing muted'
                   : `No ${activeView.noun} suggestions right now`}
                 description={status === 'pending'
                   ? familyCta
@@ -1931,6 +2161,7 @@ function SuggestionsInner() {
                     : <>When a rule set to <em>Manual</em> finds something to do, its proposed change appears here for you to approve.</>
                   : status === 'applied' ? 'Suggestions you approve will be listed here.'
                   : status === 'expired' ? 'A pending suggestion the engine stops re-proposing expires on its own and lands here — the queue only ever holds the engine’s current opinion.'
+                  : status === 'muted' ? '⏸ a row and its keyword or target lands here: still running at Amazon, just no longer proposed for. Unmute any time to let the engine speak up about it again.'
                   : 'Suggestions you remove land here, and come back on their own when the engine generates a new one. You can also restore them by hand.'}
               />
             }
@@ -1938,7 +2169,16 @@ function SuggestionsInner() {
         </>
       )}
 
-      {detail && <SuggestionDrawer suggestion={detail} priced={pricing?.byId[detail.id]} busy={!!busy[detail.id]} onClose={() => writeUrl({ row: '' })} onAct={act} />}
+      {view === 'ai' && aiDetail && (
+        <AiDecisionDrawer
+          decision={aiDetail}
+          busy={bulkBusy}
+          onClose={() => writeUrl({ row: '' })}
+          onAct={(id, kind) => aiRunOps([{ id, kind }])}
+        />
+      )}
+
+      {detail && <SuggestionDrawer suggestion={detail} priced={pricing?.byId[detail.id]} busy={!!busy[detail.id]} onClose={() => writeUrl({ row: '' })} onAct={act} onPauseTarget={pauseTarget} />}
 
       <AdsBidSettingsModal open={bidSettingsOpen} onClose={() => setBidSettingsOpen(false)} markets={MARKETS} />
     </div>
