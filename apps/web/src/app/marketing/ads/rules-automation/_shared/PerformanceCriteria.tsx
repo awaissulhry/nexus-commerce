@@ -54,19 +54,25 @@ export const pcWindowLabel = (slug: string): string => {
   return d == null ? 'Latest snapshot' : `Last ${d} Days`
 }
 export const PC_TRUTH_EXCLUDE = 'Last 2 Days'
-export function PcWindowNote({ slug }: { slug: string }) {
-  const d = PC_WINDOW_DAYS[slug]
+export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
+  // BUD-P3 — a rule that chooses its own lookback (Bid, Budget) passes the chosen days so the
+  // sentence states the window the engine will actually read, not the trigger's default.
+  const d = days ?? PC_WINDOW_DAYS[slug]
   return (
     <p className="h10-pc-winnote">
       {d == null
         ? 'Rank is the latest snapshot; spend and ACOS cover the last 30 days. The most recent 2 days are still settling and are excluded.'
-        : `Measured over the last ${d} days — this trigger's fixed window. The most recent 2 days are still settling and are excluded.`}
+        : days != null
+          ? `Measured over the last ${d} days — this rule's own lookback. The most recent 2 days are still settling and are excluded.`
+          : `Measured over the last ${d} days — this trigger's fixed window. The most recent 2 days are still settling and are excluded.`}
       {/* HP1 — the invisible floor, made visible: the emitter only surfaces terms already at
           ≥2 orders, so conditions can tighten that bar but never lower it. */}
       {slug === 'keyword-harvesting' && ' Search terms surface only once they have at least 2 orders in the window — conditions can raise that bar, never lower it.'}
       {/* NEG-P2 — the same honesty for the wasting emitter; the numbers come from the SAME
           declaration the emitter reads (WASTING_FLOOR), so this sentence cannot drift. */}
       {slug === 'negative-targeting' && ` Search terms surface only once they have zero orders on at least ${WASTING_FLOOR.minClicks} clicks and €${(WASTING_FLOOR.minSpendCents / 100).toFixed(0)} of spend in the window — conditions can raise that bar, never lower it.`}
+      {/* BUD-P1 — the budget context's floor + H10's Budget Utilization formula, stated. */}
+      {slug === 'budget' && ' Enabled campaigns surface only once they have ad spend inside the window. Budget Utilization = average daily spend in the window ÷ the campaign’s CURRENT daily budget, so it reads above 100% where the budget has since been lowered.'}
     </p>
   )
 }
@@ -79,6 +85,10 @@ export const PC_METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
   'Organic Rank': '', 'Sponsored Rank': '', 'Rank Change': '', 'Search Volume': '',
 }
 const METRICS_BASE = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders']
+// BUD-P1 — Budget rules add the campaign-level "Budget Utilization" signal (H10's signature
+// budget metric). Declared HERE so the builder's catalog and pcMetricsFor cannot drift apart —
+// RuleBuilder used to carry its own copy of this list.
+const METRICS_BUDGET = [...METRICS_BASE, 'Budget Utilization']
 // BP.P4 — H10's Bid list carries "Current Bid" (the target's live bid, in €). Bid rules only:
 // the KEYWORD_HIGH_ACOS context is the one that carries adTarget.bidCents.
 const METRICS_BID = [...METRICS_BASE, 'Current Bid']
@@ -90,12 +100,13 @@ const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search V
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
 export const PC_METRICS = METRICS_BASE.map((m) => ({ value: m, label: m }))
+export const PC_METRICS_BUDGET = METRICS_BUDGET.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_BID = METRICS_BID.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_SOV = METRICS_SOV.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_RANK = METRICS_RANK.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_PLACEMENT = METRICS_PLACEMENT.map((m) => ({ value: m, label: m }))
 export const pcMetricsFor = (slug: string): Array<{ value: string; label: string }> =>
-  (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : slug === 'bid' ? METRICS_BID : METRICS_BASE).map((m) => ({ value: m, label: m }))
+  (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : slug === 'bid' ? METRICS_BID : slug === 'budget' ? METRICS_BUDGET : METRICS_BASE).map((m) => ({ value: m, label: m }))
 export const pcDefaultCondition = (slug: string): Condition =>
   // HP1 — 2, not 1: the SEARCH_TERM_CONVERTING emitter only surfaces terms with ≥2 orders
   // (NEXUS_CONVERTING_MIN_ORDERS), so a '≥1 order' default promised what the engine cannot do.

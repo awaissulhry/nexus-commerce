@@ -484,10 +484,9 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
    * which made the six account-wide budget rules' existing reach explicit — so this changes no
    * behaviour on the day it ships.
    */
-  const isBudgetRule = (actions: unknown): boolean =>
-    Array.isArray(actions) && actions.some((a) => String((a as { type?: unknown })?.type ?? '') === 'adjust_ad_budget')
+  const { isEngineBudgetRule, builderBudgetCampaignIds } = await import('../services/advertising/ads-rule-adapter.service.js')
   const assignedByRule = new Map<string, string[]>()
-  const budgetRuleIds = rules.filter((r) => isBudgetRule(r.actions)).map((r) => r.id)
+  const budgetRuleIds = rules.filter((r) => isEngineBudgetRule(r.actions)).map((r) => r.id)
   if (budgetRuleIds.length > 0) {
     // Seed every budget rule with [] FIRST: absent from the assignment table must read as
     // "assigned to nothing", not as "not assignment-governed".
@@ -497,6 +496,19 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
       select: { ruleId: true, campaignId: true },
     })
     for (const l of links) assignedByRule.get(l.ruleId)?.push(l.campaignId)
+  }
+  /**
+   * BUD-P2 — the OTHER budget shape. A builder rule (`actions[0].type === 'budget'`) is governed
+   * by its own picker list, which `rule-campaign-binding.service` keeps equal to the assignment
+   * rows in both directions. Reading the rule rather than the table means a mirror that lost a
+   * race can leave the COLUMN stale but can never make a live rule silently match nothing.
+   *
+   * Until now these rules reached the matcher ungoverned — only `budget_apply`'s own
+   * `campaignIds` check (EA4) held them in, so every non-picked campaign was still evaluated.
+   */
+  for (const r of rules) {
+    const own = builderBudgetCampaignIds(r.actions)
+    if (own != null) assignedByRule.set(r.id, own)
   }
 
   /**
@@ -542,7 +554,7 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   // Identity maps, only if any rule actually scopes below marketplace level.
   // D1 — an assignment-governed rule needs the campaign identity too, or every context would
   // arrive with `campaignId: null` and the matcher would refuse all of them.
-  const needsCampaignIdentity = rules.some((r) => r.scopePortfolioId != null || r.scopeCampaignId != null) || budgetRuleIds.length > 0
+  const needsCampaignIdentity = rules.some((r) => r.scopePortfolioId != null || r.scopeCampaignId != null) || assignedByRule.size > 0
   const extToLocal = new Map<string, string>()
   const localToPortfolio = new Map<string, string | null>()
   if (needsCampaignIdentity) {
@@ -631,8 +643,14 @@ interface CampaignBudgetContext {
   }
 }
 
-async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
-  const { since, until } = ruleWindowBounds(BUDGET_RULE_WINDOW_DAYS) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+/**
+ * BUD-P3 — `overrideDays` builds the SAME contexts over a Budget rule's own lookback
+ * (`actions[0].windowDays`), for the per-window passes in the tick; absent, the trigger's
+ * default 7 settled days apply exactly as before. Mirrors BP.P4's bid mechanism.
+ */
+async function buildCampaignBudgetContexts(overrideDays?: number): Promise<CampaignBudgetContext[]> {
+  const windowDays = overrideDays ?? BUDGET_RULE_WINDOW_DAYS
+  const { since, until } = ruleWindowBounds(windowDays) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const campaigns = await prisma.campaign.findMany({
     where: { status: 'ENABLED' },
     select: { id: true, name: true, externalCampaignId: true, marketplace: true, dailyBudget: true },
@@ -656,7 +674,7 @@ async function buildCampaignBudgetContexts(): Promise<CampaignBudgetContext[]> {
     const clicks = p?._sum.clicks ?? 0
     const orders = p?._sum.orders7d ?? 0
     const dailyBudgetCents = Math.round(Number(c.dailyBudget) * 100)
-    const avgDailySpendCents = Math.round(spendCents / BUDGET_RULE_WINDOW_DAYS)
+    const avgDailySpendCents = Math.round(spendCents / windowDays)
     out.push({
       trigger: 'CAMPAIGN_PERFORMANCE_BUDGET',
       marketplace: c.marketplace,
@@ -1303,13 +1321,32 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const highAcosByWindow = await Promise.all(customWindows.map(async (w) =>
     [w, await buildHighAcosKeywordContexts(w)] as const))
 
+  // BUD-P3 — the same per-window mechanism for Budget rules (actions[0].windowDays, 7–90).
+  const budgetRuleWindow = (actions: unknown): number | null => {
+    const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
+    if (a0?.type !== 'budget' || typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
+    const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
+    return clamped === WINDOW('CAMPAIGN_PERFORMANCE_BUDGET') ? null : clamped
+  }
+  const budgetWindowRules = await prisma.automationRule.findMany({
+    where: { domain: 'advertising', trigger: 'CAMPAIGN_PERFORMANCE_BUDGET', enabled: true },
+    select: { actions: true },
+  })
+  const budgetWindows = [...new Set(budgetWindowRules.map((r) => budgetRuleWindow(r.actions)).filter((w): w is number => w != null))]
+  const budgetByWindow = await Promise.all(budgetWindows.map(async (w) =>
+    [w, await buildCampaignBudgetContexts(w)] as const))
+
   type Pass = [string, Array<{ marketplace: string | null }>, ((r: { id: string; actions: unknown }) => boolean)?]
   const passes: Pass[] = [
     ['FBA_AGE_THRESHOLD_REACHED', fbaAge],
     ['AD_SPEND_PROFITABILITY_BREACH', profitability],
     ['CAC_SPIKE', cacSpike],
     ['AD_TARGET_UNDERPERFORMING', underperform],
-    ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget],
+    // Default window — Budget rules that chose their own lookback are excluded here and get
+    // their own pass below with contexts built over THEIR window (BUD-P3, mirrors bid's).
+    ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget, (r) => budgetRuleWindow(r.actions) == null],
+    ...budgetByWindow.map(([w, ctxs]): Pass => (
+      ['CAMPAIGN_PERFORMANCE_BUDGET', ctxs, (r) => budgetRuleWindow(r.actions) === w])),
     ['KEYWORD_ZERO_IMPRESSIONS', zeroImpression],
     ['KEYWORD_LOW_CTR', lowCtr],
     ['CVR_DROP', cvrDrop],

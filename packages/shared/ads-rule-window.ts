@@ -253,6 +253,16 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     source: 'advertising-rule-evaluator.job.ts buildHighAcosKeywordContexts + targetPerformance (both via ruleWindowBounds)',
     tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
+  /**
+   * BUD-P3 — a builder Budget rule may choose its own lookback (Advanced Settings, 7–90,
+   * default = the trigger's 7). Same mechanism as `bid`: per-window context passes in the
+   * evaluator, and the grid's Lookback cell reads this entry's tunable clamp.
+   */
+  budget: {
+    kind: 'window', days: 7, settled: true,
+    source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via ruleWindowBounds)',
+    tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
+  },
 }
 
 export interface RuleLookback extends RuleWindowSpec {

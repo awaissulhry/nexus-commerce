@@ -24,6 +24,7 @@
  */
 import prisma from '../../db.js'
 import { ruleMatchesScope, type RuleScope } from '../automation-rule-scope.js'
+import { isEngineBudgetRule, builderBudgetCampaignIds } from './ads-rule-adapter.service.js'
 
 export interface RuleReach {
   /** campaigns this rule's scope admits */
@@ -120,10 +121,8 @@ export async function reachForRules(
    * would still say 220 for a rule assigned to three. Callers that do not select `actions` pass
    * `undefined` and keep the old answer, which is correct for every non-budget rule.
    */
-  const isBudgetRule = (actions: unknown): boolean =>
-    Array.isArray(actions) && actions.some((a) => String((a as { type?: unknown })?.type ?? '') === 'adjust_ad_budget')
   const assignedByRule = new Map<string, string[]>()
-  const budgetRuleIds = rules.filter((r) => isBudgetRule(r.actions)).map((r) => r.id)
+  const budgetRuleIds = rules.filter((r) => isEngineBudgetRule(r.actions)).map((r) => r.id)
   if (budgetRuleIds.length > 0) {
     for (const id of budgetRuleIds) assignedByRule.set(id, [])
     const links = await prisma.campaignRuleAssignment.findMany({
@@ -131,6 +130,15 @@ export async function reachForRules(
       select: { ruleId: true, campaignId: true },
     })
     for (const l of links) assignedByRule.get(l.ruleId)?.push(l.campaignId)
+  }
+  /**
+   * BUD-P2 — a BUILDER budget rule is governed by its own picker list (the same list
+   * `budget_apply` enforces and the evaluator now matches on). Without this the reach number
+   * over-reported it exactly the way D1's note warns against: "220" for a rule bound to twelve.
+   */
+  for (const r of rules) {
+    const own = builderBudgetCampaignIds(r.actions)
+    if (own != null) assignedByRule.set(r.id, own)
   }
 
   const out = new Map<string, RuleReach>()

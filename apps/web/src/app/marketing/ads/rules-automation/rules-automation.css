@@ -5441,3 +5441,12 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    sentence, and textContent-based probes read the hidden word fine. In a strip it is a plain
    inline text link; #1a61c6 because #1f6fde is 4.42:1 on this ground (below AA). */
 .h10-hv-cohortline .h10-nt-open { display: inline; opacity: 1; background: none; color: #1a61c6; padding: 0; border-radius: 0; font-size: inherit; font-weight: 700; text-decoration: underline; white-space: normal; }
+
+/* BUD-P4 — starter template descriptions were CLIPPED on every tab. `.tmn` carries
+   `white-space: nowrap` + `text-overflow: ellipsis`, which is right for a SAVED template's
+   one-line name; the starter description is a block child of the same span and inherited it, so
+   the modal rendered "…and budget ≥90% consumed -" and stopped mid-sentence. Measured on the
+   Budget tab, but it has been true since BP.P5 shipped the starters — the harvest and negative
+   descriptions are just as long. The name keeps its ellipsis; the description wraps. */
+.h10-rb-tmpl-modal .tmn { flex: 1 1 auto; min-width: 0; }
+.h10-rb-tmpl-modal .tmdesc { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.45; }

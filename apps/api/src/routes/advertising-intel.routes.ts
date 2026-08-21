@@ -1457,6 +1457,16 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // 🔴 Read-only, and it will stay read-only. BUD.1 shows the ratchet; it does not stop it. The
   // guardrails that stop it are BUD.2 and they are POSTs of their own.
+  /**
+   * BUD-P4 — the Budget tab's one-line strip. `grep -a`ed every routes file first:
+   * `/advertising/budget-rules/strip` appears nowhere else, and no `:param` route sits above
+   * `/advertising/budget-rules` that could swallow it (a duplicate route is a boot crash).
+   */
+  fastify.get('/advertising/budget-rules/strip', async () => {
+    const { getBudgetRulesStrip } = await import('../services/advertising/budget-grid.service.js')
+    return getBudgetRulesStrip()
+  })
+
   fastify.get('/advertising/budget-grid', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     // `all` is accepted and is the page default: a budget total and a floor count both sum honestly

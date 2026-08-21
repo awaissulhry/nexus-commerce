@@ -17,13 +17,13 @@ import { ruleTypeBySlug } from './ruleTypes'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
-import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
+import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_BUDGET, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 import { emitAdsChange } from './adsBus'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
-// Budget rules add the campaign-level "Budget Utilization" signal (best-in-class) — the others carry over.
-const METRICS_BUDGET = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'PPC Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions', 'Budget Utilization'].map((m) => ({ value: m, label: m }))
+// BUD-P1 — single-sourced from PerformanceCriteria (a local copy of this list once drifted).
+const METRICS_BUDGET = PC_METRICS_BUDGET
 // SOV / Keyword-Tracker / operator / lookback / exclude catalogs — single-sourced from PerformanceCriteria.
 const METRICS_SOV = PC_METRICS_SOV
 const METRICS_RANK = PC_METRICS_RANK
@@ -79,6 +79,38 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
       name: 'Click sink, no sales',
       desc: 'Zero orders on ≥20 clicks — H10’s own default bar (Sales = 0, Clicks ≥ 20)',
       payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '20' }], action: { op: 'set', value: '' } }] },
+    },
+  ],
+  /**
+   * BUD-P4 — budget starters. Two constraints shape all three, and both come from the census:
+   *
+   *   · **55 of 86 enabled campaigns sit at the €1 floor**, where the guardrail makes any Decrease
+   *     a no-op. So every cut starter carries a SPEND floor that a €1/day campaign cannot clear
+   *     (€1/day × 7 settled days = €7 maximum) — the starter excludes them by arithmetic rather
+   *     than promising a cut it cannot deliver.
+   *   · **a raise moves real money**, so both raise conditions demand evidence: not ACoS alone,
+   *     which is noise on one order, but ACoS with orders behind it and a budget actually being
+   *     consumed.
+   *
+   * Budget Utilization is the campaign's average daily spend ÷ its daily budget over the rule's
+   * own lookback — H10's signature budget metric, and the only one that can tell "this winner is
+   * capped" from "this winner has room".
+   */
+  budget: [
+    {
+      name: 'Feed capped winners',
+      desc: 'ACoS ≤ 20% with ≥2 orders and budget ≥90% consumed → raise the daily budget 20%',
+      payload: { conditions: [{ conditions: [{ metric: 'ACOS', op: 'lte', value: '20' }, { metric: 'Orders', op: 'gte', value: '2' }, { metric: 'Budget Utilization', op: 'gte', value: '90' }], action: { op: 'incPct', value: '20' } }] },
+    },
+    {
+      name: 'Trim high-ACoS spend',
+      desc: 'ACoS ≥ 40% on ≥€50 spend → cut the daily budget 15% (the spend floor clears the €1-floor campaigns, where a cut would do nothing)',
+      payload: { conditions: [{ conditions: [{ metric: 'ACOS', op: 'gte', value: '40' }, { metric: 'Spend', op: 'gte', value: '50' }], action: { op: 'decPct', value: '15' } }] },
+    },
+    {
+      name: 'Reclaim idle budget',
+      desc: 'Under 10% of budget consumed on ≥€5 spend → cut the daily budget 25%, freeing headroom for the capped winners above',
+      payload: { conditions: [{ conditions: [{ metric: 'Budget Utilization', op: 'lte', value: '10' }, { metric: 'Spend', op: 'gte', value: '5' }], action: { op: 'decPct', value: '25' } }] },
     },
   ],
   bid: [
@@ -522,7 +554,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
    * one evaluation window — and says so). Stored as `actions[0].windowDays`, clamped 7–90 by
    * both engine readers (the context emitter and targetPerformance).
    */
-  const [lookbackDays, setLookbackDays] = useState('14')
+  // BUD-P3 — the default is each trigger's own fixed window (bid 14 · budget 7), so an untouched
+  // select stores the same number the engine would have used anyway.
+  const [lookbackDays, setLookbackDays] = useState(slug === 'budget' ? '7' : '14')
   // ── B3: rule templates (Budget) ──
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; payload?: unknown }>>([])
   const [tmpl, setTmpl] = useState<{ mode: 'save' | 'apply' } | null>(null)
@@ -787,6 +821,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
           ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
           ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
+          ...(isBudget ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
         }],
         // P2.2 — ceiling, write cap and market scope are sent for EVERY rule type. They used to be
@@ -1197,7 +1232,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 {advLookback && (
                 <div className="advblock">
                   <b>Measurement window</b>
-                  <PcWindowNote slug={slug} />
+                  {/* BUD-P3 — Budget rules choose their own lookback (H10 keeps it in Advanced
+                      Settings); the note then states the CHOSEN window, not the default. */}
+                  {isBudget && (
+                    <div className="lbrow">
+                      <H10Select width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
+                    </div>
+                  )}
+                  <PcWindowNote slug={slug} {...(isBudget ? { days: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {})} />
                 </div>
                 )}
                 <div className="advblock">

@@ -130,6 +130,53 @@ function builderCampaignIds(a0: Record<string, unknown>): string[] {
   if (Array.isArray(a0.campaignIds)) return (a0.campaignIds as unknown[]).map((c) => String(c ?? '')).filter(Boolean)
   return []
 }
+
+/**
+ * ── BUD-P2 (2026-08-21) — ONE test for "which campaigns may this budget rule move" ────────────
+ *
+ * A budget rule exists in TWO shapes, and only one of them was ever recognised:
+ *   · **engine-native** — `actions[].type === 'adjust_ad_budget'`, governed by
+ *     `CampaignRuleAssignment` (D1).
+ *   · **builder** — `actions[0].type === 'budget'` carrying the picker's `campaigns: [{id}]`,
+ *     which `budget_apply` has honoured since EA4.
+ *
+ * 🔴 Three call sites tested only the first — the evaluator's assignment block, `reachForRules`,
+ * and the Apply Rules column CATALOGUE — so a builder budget rule was **invisible in the column's
+ * dropdown**, **ungoverned by assignment**, and **over-reported by reach** (every campaign in
+ * scope, not the twelve the operator picked), while the handler quietly enforced the picker list
+ * all along. Latent today only because W7 left 0 budget rules and 0 assignment rows.
+ *
+ * `builderBudgetCampaignIds` returns the three states `RuleScope.assignedCampaignIds` documents:
+ *   · `null`  — not assignment-governed (every non-budget rule; unchanged)
+ *   · `[]`    — governed and assigned to nothing → matches NO campaign (H10's "None")
+ *   · `[ids]` — governed by exactly those campaigns
+ *
+ * A BUILDER rule is governed by its **own** stored list, not by a table read. The two are kept
+ * equal in both directions by `rule-campaign-binding.service`, so the answers agree — but reading
+ * the rule means a failed mirror can only make the COLUMN stale (visible, correctable), never
+ * make a live rule silently inert. An engine-native rule keeps reading the table, as D1 built it.
+ */
+export function isEngineBudgetRule(actions: unknown): boolean {
+  return Array.isArray(actions)
+    && actions.some((a) => String((a as { type?: unknown })?.type ?? '') === 'adjust_ad_budget')
+}
+
+/**
+ * The picker list of a BUILDER budget rule, or `null` if this is not one. `null` also covers a
+ * pre-EA4 budget rule that stored no campaigns array at all — it stays ungoverned rather than
+ * silently becoming a rule that matches nothing.
+ */
+export function builderBudgetCampaignIds(actions: unknown): string[] | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as Record<string, unknown> | undefined) : undefined
+  if (!a0 || String(a0.type ?? '') !== 'budget') return null
+  if (!Array.isArray(a0.campaigns) && !Array.isArray(a0.campaignIds)) return null
+  return builderCampaignIds(a0)
+}
+
+/** True for a budget rule of EITHER shape — the catalogue test the column should have used. */
+export function isBudgetRuleOfAnyShape(actions: unknown): boolean {
+  return isEngineBudgetRule(actions) || builderBudgetCampaignIds(actions) != null
+}
 const convert = (raw: unknown, conv: 'frac' | 'cents' | 'plain'): number =>
   conv === 'frac' ? num(raw) / 100 : conv === 'cents' ? Math.round(num(raw) * 100) : num(raw)
 
@@ -545,6 +592,10 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
           value: num(act.value),
           minEur: a0.budgetFloor != null ? num(a0.budgetFloor) : 1,
           maxEur: a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
+          // BUD-P3 — the rule's own lookback (Advanced Settings), honoured by per-window
+          // CAMPAIGN_PERFORMANCE_BUDGET passes in the evaluator; absent = the trigger's 7 days.
+          ...(typeof a0.windowDays === 'number' && Number.isFinite(a0.windowDays)
+            ? { windowDays: Math.max(7, Math.min(90, Math.round(a0.windowDays))) } : {}),
           // 🔴 EA4 — the picker's campaigns were dropped here, so a Budget rule listing 12
           // campaigns ran account-wide. `budget_apply` reads this now; empty = no restriction.
           campaignIds: builderCampaignIds(a0),

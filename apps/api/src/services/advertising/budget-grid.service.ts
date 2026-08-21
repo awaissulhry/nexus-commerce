@@ -815,3 +815,95 @@ export async function getBudgetCursorForRequest(
     req.status ?? 'enabled',
   )
 }
+
+/**
+ * ── BUD-P4 (2026-08-21) — the Budget tab's one-line strip ─────────────────────────────────────
+ *
+ * The HP4/NEG-P3 pattern: the account's budget posture, censused SERVER-side over the whole
+ * account and never recomposed from a page of rows. This tab needs it more than any other,
+ * because two facts decide whether a budget rule can do anything at all and neither was ever
+ * stated on the page:
+ *
+ *   · **the €1 floor** — Amazon's hard minimum is also the handler's clamp, so a −15% trim is a
+ *     literal no-op on every campaign already sitting there (55 of 86 on 2026-08-21). An operator
+ *     writing a cut rule deserves to know its real surface before they arm it.
+ *   · **who actually moves budgets today** — 336 of 339 `AD_BUDGET_UPDATE` rows in the last 7 days
+ *     came from Budget Manager PACING (tab 4's cron), not from any rule. With 0 budget rules on
+ *     the account, a page that shows only rules implies nothing is moving money. Something is.
+ *
+ * `reachable` is the rule CONTEXT floor, computed with the same two tests
+ * `buildCampaignBudgetContexts` applies — ENABLED ∧ non-zero spend in the settled window — so the
+ * number cannot drift from what the engine will actually see.
+ */
+export interface BudgetStrip {
+  enabledCampaigns: number
+  atFloor: number
+  reachable: number
+  baselines: number
+  windowDays: number
+  pacerWrites7d: number
+  ruleWrites7d: number
+}
+
+export async function getBudgetRulesStrip(): Promise<BudgetStrip> {
+  const { TRIGGER_WINDOW } = await import('@nexus/shared/ads-rule-window')
+  const { ruleWindowBounds } = await import('@nexus/shared/data-vintage')
+  const spec = TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET
+  const windowDays = spec && spec.kind === 'window' ? spec.days : 7
+  const { since, until } = ruleWindowBounds(windowDays)
+  const writesSince = new Date(Date.now() - 7 * 864e5)
+
+  const [enabled, baselines, perf, writes] = await Promise.all([
+    prisma.campaign.findMany({ where: { status: 'ENABLED' }, select: { id: true, dailyBudget: true } }),
+    prisma.campaign.count({ where: { budgetBaselineCents: { not: null } } }),
+    prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'CAMPAIGN', date: { gte: since, lte: until } },
+      _sum: { costMicros: true },
+    }),
+    prisma.advertisingActionLog.groupBy({
+      by: ['userId'],
+      where: { actionType: 'AD_BUDGET_UPDATE', createdAt: { gte: writesSince } },
+      _count: { _all: true },
+    }),
+  ])
+
+  const enabledIds = new Set(enabled.map((c) => c.id))
+  /**
+   * The floor test the handler applies, in cents.
+   *
+   * 🔴 NOT `eurosToCents` — `Campaign.dailyBudget` is a Prisma `Decimal`, which is neither
+   * `number` nor `string`, so that converter takes its `NaN` branch and returns null for EVERY
+   * row. Measured: the strip reported "0 at the €1 floor" against a true 55. A silent zero on
+   * the one number that decides whether a cut rule can do anything. `Number(Decimal)` is the
+   * same conversion `buildCampaignBudgetContexts` uses for the very same column.
+   */
+  const floorCount = enabled.filter((c) => {
+    const cents = Math.round(Number(c.dailyBudget) * 100)
+    return Number.isFinite(cents) && cents <= BUDGET_FLOOR_CENTS
+  }).length
+  // Same floor as the context builder: a campaign with zero spend in the window emits no context,
+  // so no budget rule can ever see it.
+  const reachable = perf.filter((p) => p.localEntityId != null
+    && enabledIds.has(p.localEntityId)
+    && microsToCents(p._sum.costMicros) > 0).length
+
+  // The pacer writes under its own cron actor; a rule writes under `automation:<ruleId>`. Splitting
+  // them is the whole point of the line — "budgets moved 336× and no rule did any of it".
+  let pacerWrites = 0
+  let ruleWrites = 0
+  for (const w of writes) {
+    if (w.userId === 'automation:budget-manager-cron') pacerWrites += w._count._all
+    else ruleWrites += w._count._all
+  }
+
+  return {
+    enabledCampaigns: enabled.length,
+    atFloor: floorCount,
+    reachable,
+    baselines,
+    windowDays,
+    pacerWrites7d: pacerWrites,
+    ruleWrites7d: ruleWrites,
+  }
+}

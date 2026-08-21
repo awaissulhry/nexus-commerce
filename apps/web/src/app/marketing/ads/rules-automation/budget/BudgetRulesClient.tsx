@@ -19,10 +19,17 @@
  * framing of the same fact. Nothing about the budget write path changed; `ads-write-gate.ts` is
  * untouched and every endpoint is still served.
  */
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
+import { getBackendUrl } from '@/lib/backend-url'
+
+interface BudgetStrip {
+  enabledCampaigns: number; atFloor: number; reachable: number
+  baselines: number; windowDays: number; pacerWrites7d: number; ruleWrites7d: number
+}
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
 
@@ -30,6 +37,23 @@ export function BudgetRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
   const market = params.get('market') || 'all'
+  /**
+   * BUD-P4 — the strip. Server-censused (never recomposed from the grid's rows), and ABSENT on a
+   * failed read rather than fabricated: a zero here would read as "nothing is at the floor" and
+   * "no rule ever fires", which are the two claims this line exists to disprove.
+   */
+  const [strip, setStrip] = useState<BudgetStrip | null>(null)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const j = await fetch(`${getBackendUrl()}/api/advertising/budget-rules/strip`, { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+        if (alive && j && typeof j.enabledCampaigns === 'number') setStrip(j)
+      } catch { /* absent, not fabricated */ }
+    })()
+    return () => { alive = false }
+  }, [])
 
   return (
     <div className="h10-rules-page">
@@ -50,6 +74,19 @@ export function BudgetRulesClient() {
         showChangeLog
       />
       <RulesTabs active="budget" />
+      {strip && (
+        <p className="h10-hv-cohortline">
+          <b>{strip.enabledCampaigns.toLocaleString('en-IE')}</b> enabled campaigns · <b>{strip.reachable.toLocaleString('en-IE')}</b> with spend in the last {strip.windowDays} settled days, the most a budget rule can reach
+          {strip.atFloor > 0 && <> · <b>{strip.atFloor.toLocaleString('en-IE')}</b> already at the €1 floor, where a cut does nothing</>}
+          {strip.baselines > 0 && <> · <b>{strip.baselines.toLocaleString('en-IE')}</b> baselines captured</>}
+          {strip.pacerWrites7d > 0 && (
+            <> · budgets moved <b>{strip.pacerWrites7d.toLocaleString('en-IE')}×</b> in 7 days by{' '}
+              <a className="h10-nt-open" href="/marketing/ads/budget-manager">Budget Manager pacing</a>
+              {strip.ruleWrites7d === 0 ? ', not by any rule' : <> and <b>{strip.ruleWrites7d.toLocaleString('en-IE')}×</b> by rules</>}</>
+          )}
+          {' '}· rule output queues on <a className="h10-nt-open" href="/marketing/ads/suggestions">Suggestions</a>
+        </p>
+      )}
       <RulesGrid
         tabKey="budget"
         noun="Budget Rule"

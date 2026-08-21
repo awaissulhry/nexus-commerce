@@ -17,7 +17,7 @@ import { graduationCeiling, isLevelAllowed, type AutonomyLevel } from '../src/se
 
 const { default: prisma } = await import('../src/db.js')
 
-const PORT = 8099
+const PORT = Number(process.env.BP_STUB_PORT ?? 8099)
 const PROD = 'https://nexusapi-production-b7bb.up.railway.app'
 
 interface MemRule extends Record<string, unknown> { id: string }
@@ -169,6 +169,11 @@ createServer(async (req, res) => {
     if (url === '/api/advertising/negatives/strip' && req.method === 'GET') {
       const { getNegativesStrip } = await import('../src/services/advertising/negatives.service.js')
       return json(200, await getNegativesStrip())
+    }
+    // BUD-P4 — the Budget tab's strip, served from the real service against prod data.
+    if (url === '/api/advertising/budget-rules/strip' && req.method === 'GET') {
+      const { getBudgetRulesStrip } = await import('../src/services/advertising/budget-grid.service.js')
+      return json(200, await getBudgetRulesStrip())
     }
     if (url === '/api/advertising/harvest-cohort' && req.method === 'GET') {
       const { getHarvestCohort } = await import('../src/services/advertising/harvest-cohort.service.js')

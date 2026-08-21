@@ -1113,12 +1113,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { name: 'asc' },
       }),
     ])
-    // The catalogue is the rules that can DO this kind — the same `adjust_ad_budget` test
-    // `loadBudgetRules` uses, so the dropdown cannot offer a rule the engine would ignore.
+    /**
+     * The catalogue is the rules that can DO this kind, so the dropdown cannot offer a rule the
+     * engine would ignore.
+     *
+     * 🔴 BUD-P2 — it used to test `adjust_ad_budget` ALONE, which is only the engine-native
+     * spelling. Every rule the Budget rule BUILDER writes stores `type: 'budget'` with the
+     * picker's campaigns, so none of them could be selected here: the column silently offered a
+     * catalogue that excluded the rules operators actually create. Both shapes now qualify.
+     */
     const ACTION_FOR_KIND: Record<string, string> = { budget: 'adjust_ad_budget' }
     const wanted = ACTION_FOR_KIND[kind]
+    const { isBudgetRuleOfAnyShape } = await import('../services/advertising/ads-rule-adapter.service.js')
     const catalogue = rules
-      .filter((r) => !wanted || (Array.isArray(r.actions) && r.actions.some((a) => String((a as { type?: unknown })?.type ?? '') === wanted)))
+      .filter((r) => !wanted || (kind === 'budget'
+        ? isBudgetRuleOfAnyShape(r.actions)
+        : (Array.isArray(r.actions) && r.actions.some((a) => String((a as { type?: unknown })?.type ?? '') === wanted))))
       .map((r) => ({
         id: r.id,
         name: r.name,
@@ -1189,6 +1199,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const actor = actorFromHeaders(request.headers as Record<string, unknown>)
     let created = 0
     let removed = 0
+    /**
+     * BUD-P2 — every rule this Apply TOUCHES, which is not the same as every rule it names.
+     * Unchecking a rule everywhere sends `ruleIds: []`, so the rule losing its last campaign
+     * appears nowhere in the request body. Collecting the rows we DELETE as well as the ones we
+     * add is what lets the inverse mirror below clear that rule's own list — without it, "remove
+     * this rule from this campaign" would still have been a no-op for builder rules.
+     */
+    const affectedRuleIds = new Set<string>(ruleIds)
     await prisma.$transaction(async (tx) => {
       for (const c of changes) {
         const want = new Set(c.ruleIds as string[])
@@ -1196,6 +1214,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           where: { campaignId: c.campaignId as string, kind },
           select: { id: true, ruleId: true },
         })
+        for (const h of have) affectedRuleIds.add(h.ruleId)
         const haveIds = new Set(have.map((h) => h.ruleId))
         const toRemove = have.filter((h) => !want.has(h.ruleId)).map((h) => h.id)
         const toAdd = [...want].filter((id) => !haveIds.has(id))
@@ -1212,8 +1231,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
     })
-    logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor })
-    return { ok: true, kind, campaigns: changes.length, created, removed }
+    /**
+     * BUD-P2 — the inverse mirror. A BUILDER budget rule is governed by its own `campaigns` list
+     * (that is what `budget_apply` enforces and what the evaluator matches on), so a column edit
+     * only REACHES the engine once that list is rewritten from the links just committed. Without
+     * this the column moved rows the engine never read — it displayed a binding that did nothing.
+     *
+     * Outside the transaction on purpose: the assignments are committed and must stay committed;
+     * a failure here is a stale rule list to re-converge, not a reason to undo the operator's Apply.
+     */
+    let rulesRewritten: string[] = []
+    if (kind === 'budget' && affectedRuleIds.size > 0) {
+      try {
+        const { syncBuilderRuleFromAssignments } = await import('../services/advertising/rule-campaign-binding.service.js')
+        rulesRewritten = (await syncBuilderRuleFromAssignments([...affectedRuleIds], actor)).updated
+      } catch (e) {
+        logger.error('[ADS-RULE-BINDING] bulk inverse mirror failed', { ruleIds: [...affectedRuleIds], error: String(e) })
+      }
+    }
+    logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor, rulesRewritten: rulesRewritten.length })
+    return { ok: true, kind, campaigns: changes.length, created, removed, rulesRewritten: rulesRewritten.length }
   })
 
   // CB.5 — guided Campaign Builder launch. dryRun=true returns the PLAN (what would be
@@ -6310,6 +6347,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         createdBy: 'user',
       },
     })
+    // BUD-P2 — mirror a builder BUDGET rule's picker list into `CampaignRuleAssignment`, so the
+    // Apply Rules Budget-Rule column shows what this rule actually governs. Never fatal: the rule
+    // is saved and the engine reads the rule's own list, so a failed mirror leaves the COLUMN
+    // stale, not the rule broken.
+    try {
+      const { syncRuleCampaignBinding } = await import('../services/advertising/rule-campaign-binding.service.js')
+      await syncRuleCampaignBinding(rule.id, body.actions, actorFromHeaders(request.headers as Record<string, unknown>))
+    } catch (e) {
+      logger.error('[ADS-RULE-BINDING] create mirror failed', { ruleId: rule.id, error: String(e) })
+    }
     return { rule }
   })
 
@@ -6392,6 +6439,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.maxWritesPerDay !== undefined) data.maxWritesPerDay = body.maxWritesPerDay
     if (body.scopeMarketplace !== undefined) data.scopeMarketplace = body.scopeMarketplace
     const rule = await prisma.automationRule.update({ where: { id }, data })
+    // BUD-P2 — the picker list changed only if `actions` was sent; re-mirror from the SAVED rule
+    // so the column follows an edit that removed campaigns as faithfully as one that added them.
+    if (body.actions !== undefined) {
+      try {
+        const { syncRuleCampaignBinding } = await import('../services/advertising/rule-campaign-binding.service.js')
+        await syncRuleCampaignBinding(rule.id, rule.actions, actorFromHeaders(request.headers as Record<string, unknown>))
+      } catch (e) {
+        logger.error('[ADS-RULE-BINDING] patch mirror failed', { ruleId: rule.id, error: String(e) })
+      }
+    }
     return { rule }
   })
 
