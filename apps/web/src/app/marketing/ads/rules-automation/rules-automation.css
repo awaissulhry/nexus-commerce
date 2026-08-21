@@ -5436,4 +5436,8 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* HP4 — the cohort line under the harvest view pill: what harvesting has produced. */
 .h10-hv-cohortline { margin: 0 0 12px; padding: 0 2px; font-size: 12.5px; color: #55606d; }
 .h10-hv-cohortline b { color: #1c2530; font-weight: 700; }
-.h10-hv-cohortline .h10-nt-open { display: inline-flex; }
+/* NEG-P3 fix — `.h10-nt-open` is the GRID's hover-reveal pill (opacity 0 until row hover), so
+   inside a strip it rendered an INVISIBLE link: "queues on   ·" shipped with a hole in the
+   sentence, and textContent-based probes read the hidden word fine. In a strip it is a plain
+   inline text link; #1a61c6 because #1f6fde is 4.42:1 on this ground (below AA). */
+.h10-hv-cohortline .h10-nt-open { display: inline; opacity: 1; background: none; color: #1a61c6; padding: 0; border-radius: 0; font-size: inherit; font-weight: 700; text-decoration: underline; white-space: normal; }
