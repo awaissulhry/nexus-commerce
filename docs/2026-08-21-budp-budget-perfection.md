@@ -430,3 +430,33 @@ FR scope returns 0 with an explanation, 0 page errors ✓.
 ⚠ Mid-verification the shared tree's `tsc` went red in `ad-budget-schedule.job.ts` (108 uncommitted
 lines) and in a committed `advertising.routes.ts` delivery-tally block — another session's in-flight
 Budget-Schedules work, not this change. It cleared on its own before the gates were re-run.
+
+## 6 · Shipped — `5d57b09a7`, prod-verified 2026-08-22
+
+Pushed from a detached worktree (the shared tree carried the BSP session's Budget-Schedules WIP).
+Railway SUCCESS · Vercel Ready.
+
+The commit was split again: `rules-automation.css` had ONE 51-line EOF hunk carrying the BSP
+session's `BSP-P1`, `BSP-P4` and `BSP-P3` blocks interleaved with my 12 — hunk filtering classified
+it "MINE" because it matched a marker *somewhere*, which is precisely the failure that recipe warns
+about. Staged as a rebuilt blob (HEAD + my block only, **0 deletions**); BSP's CSS stayed
+uncommitted in the tree. Every other file was verified free of foreign markers first.
+
+**Route live on prod:** `POST /advertising/automation-rules/preview` returns 401 (RBAC) while a
+sibling nonsense path under the same prefix returns 404 — the discriminator that proves
+registration rather than an SPA fallback.
+
+**Read on prod**, builder → Add All (70) → "Reclaim idle budget" starter → scope Germany (DE):
+
+> *Live, read-only: the 2 of 70 selected campaigns that match these criteria right now, and the
+> daily budget each would get. Evaluated by the rule engine over the last 7 settled days.*
+>
+> | Campaign | Market | Utilization | Current | New Budget |
+> |---|---|---|---|---|
+> | GALE PHRASE DE | DE | 7.3% | €80.00 | €60.00 |
+> | DE_Exact_3_Keywords | DE | 9.5% | €15.00 | €11.25 |
+>
+> 70 selected · 43 with spend in the window · 4 in scope · **2 match**
+
+Identical to what the armed rule actually proposed. The old preview, on the same draft, would have
+listed all 70 with values computed from the wrong anchor.
