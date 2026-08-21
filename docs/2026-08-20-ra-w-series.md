@@ -391,3 +391,47 @@ Gates: api 5,009 ✓ (SG's updated protect-converting suite green beside the new
 web 922 ✓ · both tsc ✓ · five ratchets at baseline · link-targets ✓ · Playwright smoke all-pass.
 ⚠ Blob-split this commit: `automation-action-handlers.ts` (SG scope hunk) and
 `advertising-rule-evaluator.job.ts` (SG sweep hunk) — both carry my hunks beside theirs.
+
+## BSP-P — Budget Pacing & Schedules (2026-08-22)
+
+`docs/2026-08-21-bsp-budget-schedules-perfection.md` — study, build record and the BSP.6 decision.
+Prod census first: **0 `BudgetSchedule` rows**, so none of this machinery had ever run on a real
+row, and **11 of the tab's 20 files are parked dead code** (`BudgetSchedulesClient` has had no
+importer since U8; both existing vitest files test only parked code).
+
+- **P1 — the chart stops lying.** `acos: null` survives to the screen as a GAP (line breaks into
+  subpaths, isolated points become dots, tooltip "no sales"). It was coerced to 0 by
+  `Number(x) || 0`, and ACoS is the default Metric 2 — hours 03/06/07 have zero sales on €11/€29/€61
+  of spend and were drawn as the three most efficient hours of the day. Both value axes labelled.
+  The builder's **Period** was the frozen string `04/18/2026 - 06/16/2026` against a real 60-day
+  window with **zero days of overlap**; it now derives from `CHART_WINDOW_DAYS`, the same constant
+  the fetch uses.
+- **P2 — the market selector binds.** It had offered IT/DE/ES/FR since U8 and nothing read it;
+  `hourly-performance` destructured `marketplace` and dropped it. The markets peak up to four hours
+  apart (IT h22 · DE h18 · ES h15 · FR h19), so the merged curve was true of no market. A `Markets`
+  column comes with it, and the empty label says what a filter hid.
+- **P3 — one truth about "applied".** Both `updateCampaignWithSync` sites READ `.ok` (`as never`
+  casts gone); `lastApplied` gains `state`/`live`/`actionLogId`/`outboundQueueId`, additive, no
+  migration. A **Delivery column** reads `OutboundSyncQueue` in one query for the page, because
+  `ok:true` means queued and **298 of 398 budget writes in 7d were SKIPPED at the gate**. Status can
+  say "Active · not in force". `automation:budget-schedule-<id>` becomes a first-class Change-Log
+  origin (it was an anonymous job with `id:null`, so `originId` could never target a schedule).
+- **P4 — the form can say what the engine can do.** Budget Multiplier is authorable as the daily
+  schedule its own radio promises (the executor always supported an all-day window; `winComplete`
+  forbade it). Deterministic schedule precedence (`createdAt asc`) = H10's "most recently created
+  wins". Local day key; `+N` blackout hint.
+- **P5 — Day-of-Week grouping** (competitor adopt-item #5; newly supportable — the hourly store is
+  now 90 days, retiring the 2026-08-11 study's "not until late September"), plus the census strip
+  (out-of-budget from Amazon's own `CAMPAIGN_OUT_OF_BUDGET`, writes vs delivered vs blocked, the
+  day-move ceiling) and the first tests the live surface has ever had.
+- 🔴 **BSP.6 — the precedence rule, operator-decided.** *A schedule owns a campaign only while its
+  own window is open; it writes once per window entry, gives the budget back once, and when another
+  writer takes it mid-window it stands down and RECORDS WHO.* **Do not "just copy H10" here** — H10
+  has no pacer, and its criteria rule ("opposite direction → do nothing") would decide an evening
+  lift on a coin flip: the pacer raised 18 and cut 18 campaigns in 24h. `windowKey` replaces the
+  value memo, which only *looked* like once-per-window because the restore reset it.
+
+Gates: api **5,072** ✓ · web **954** ✓ · both tsc ✓ · five ratchets at baseline (286 / 27 / 0 /
+pass / 0) · contrast 4.78–9.18 measured on own backgrounds · `cursor:help` 0. Verified on a local
+rig (`_bsp-verify-stub.mts`) whose `hourly-performance` and `/context` run the REAL SQL against prod.
+Not armed: prod still has 0 schedules — creating the first is an operator action.

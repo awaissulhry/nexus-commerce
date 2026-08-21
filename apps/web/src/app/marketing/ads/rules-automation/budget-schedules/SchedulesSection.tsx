@@ -26,6 +26,32 @@
  * authoring gap — the builder used to send `excludeDates` as a BOOLEAN the route discarded, so
  * the executor's blackout branch was unreachable and these columns were "—" in practice.
  *
+ * ── BSP-P2/P3/P4 (2026-08-21) ───────────────────────────────────────────────────────────────
+ *
+ * · **The market selector binds.** The page header has offered IT/DE/ES/FR since U8 and this
+ *   section read none of it: both fetches went out unscoped. Measured on prod with the header
+ *   reading "🇩🇪 Germany", the chart was byte-identical — and the markets peak up to four hours
+ *   apart (IT h22 · DE h18 · ES h15 · FR h19), so the merged curve was true of no market. A
+ *   `Markets` column comes with it: filtering by a market while hiding which markets a row spans
+ *   would just move the opacity.
+ * · **Delivery is a column now.** `lastApplied[...].state = 'applied'` means written locally and
+ *   QUEUED. On this account the write gate skipped 298 of 398 budget writes in 7 days, so "applied"
+ *   and "at Amazon" are different facts and the grid shows both. `yielded` is the third: another
+ *   writer moved the budget and the schedule stood down — previously silent, while the Status pill
+ *   went on saying the windows were in force.
+ * · **BSP.6 — a yield NAMES its counterparty.** The precedence rule the operator settled on
+ *   2026-08-22 is "a schedule owns a campaign only while its own window is open", so standing down
+ *   is correct behaviour rather than a fault. But yielding to the budget pacer (the monthly
+ *   envelope holding) and yielding to the operator's own hand call for opposite responses, and one
+ *   word for both hid the only distinction that matters. `describeYields` is shared by the Status
+ *   tooltip and the Delivery tooltip so they cannot tell different stories about the same row.
+ * · **The Status pill uses a LOCAL day key.** It was `new Date().toISOString().slice(0,10)` — UTC —
+ *   compared against local calendar dates, so between 00:00 and 02:00 Rome a schedule that ended
+ *   yesterday still read "Active" ([[reference_day_grouping_utc_local_trap]]).
+ * · **All blackout ranges are visible.** The route has always returned `excludeRanges` (a count)
+ *   and this grid dropped it while showing only the FIRST range — a partial truth shown as a whole
+ *   one.
+ *
  * W4 also added the Status column (toggle + Scheduled/Active/Completed/Off pill — the API's
  * `enabled` used to be dropped on the floor here, leaving a live schedule indistinguishable from
  * a disabled one and no way to stop one short of deleting it), and the DELETE/disable routes now
@@ -40,27 +66,38 @@ import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { MetricSelect } from '../_schedule/MetricSelect'
+import { H10Select } from '../../campaigns/FilterDropdown'
+import { GROUP_BY } from '../_schedule/scheduleConfig'
 import { HourlyPerformanceCard } from './HourlyPerformanceCard'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SectionEmpty } from './SectionShell'
+// BSP-P5 — the state vocabulary lives in a pure module so it can be TESTED. A client component
+// cannot be loaded under vitest here, and these three functions are exactly what the operator
+// reads about whether a schedule is working. Same move as `bid/bidState.ts`.
+import { deliveryCell, localDayKey, scheduleStatus, type ScheduleDelivery } from './scheduleState'
+import { ScheduleContextStrip } from './ScheduleContextStrip'
 
 /** W4 — `autoRefill` dropped (dead client state since BSP.2 removed its column); `enabled` added
  *  (the API always returned it; nothing read it). */
-interface ScheduleRow { id: string; name: string; type: string; days: string; enabled: boolean; startDate: string; endDate: string; excludeStart: string; excludeEnd: string }
-
-/** Scheduled / Active / Completed / Off — derived, because no status field exists to drift from.
- *  ISO date strings compare correctly as strings; '—' means "no bound on this side". */
-function scheduleStatus(r: ScheduleRow, todayIso: string): { word: string; cls: string; why: string } {
-  if (!r.enabled) return { word: 'Off', cls: 'off', why: 'Paused — the executor skips this schedule and campaigns hold their base budgets.' }
-  if (r.startDate !== '—' && r.startDate > todayIso) return { word: 'Scheduled', cls: 'bs-sched', why: `Starts ${r.startDate}. Until then, nothing is changed.` }
-  if (r.endDate !== '—' && r.endDate < todayIso) return { word: 'Completed', cls: 'bs-done', why: `Ended ${r.endDate}. Budgets have been restored to base.` }
-  return { word: 'Active', cls: 'bs-active', why: 'In its date range — the weekly windows decide each campaign’s budget right now.' }
+interface ScheduleRow {
+  id: string; name: string; type: string; days: string; enabled: boolean
+  startDate: string; endDate: string; excludeStart: string; excludeEnd: string
+  /** BSP-P4 — the route returns how many blackout ranges exist; the grid used to drop it and show
+   *  only the first, which reads as "there is one". */
+  excludeRanges: number
+  /** BSP-P2 — the markets this schedule's campaigns are in. A BudgetSchedule has no marketplace
+   *  column: its reach IS its campaign snapshot. */
+  markets: string[]
+  /** BSP-P3 — what it last did, and how much of that reached Amazon. */
+  delivery: ScheduleDelivery | null
+  lastEvaluatedAt: string | null
 }
 
 const TYPE_LABEL: Record<string, string> = { 'campaign-budget': 'Campaign Budget', 'budget-multiplier': 'Budget Multiplier' }
 
-export function SchedulesSection() {
+export function SchedulesSection({ market }: { market?: string }) {
   const router = useRouter()
+  const scope = market && market !== 'all' ? market : null
   const [rows, setRows] = useState<ScheduleRow[]>([])
   const [loading, setLoading] = useState(true)
   // 🔴 The fix for :42. A fetch that threw is a different fact from an account with no schedules,
@@ -69,25 +106,43 @@ export function SchedulesSection() {
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [metric1, setMetric1] = useState('Spend')
   const [metric2, setMetric2] = useState('ACoS')
+  /**
+   * BSP-P5 — Day-of-Week grouping, which the BUILDER has had all along and the TAB — the screen
+   * where the decision is actually made — did not. It is newly supportable: the 2026-08-11 study
+   * measured 1.14 samples per weekday and ruled it out until late September; the store now holds 90
+   * distinct days, so a 60-day window carries ~8.6 per weekday. Shares `GROUP_BY` with the builder
+   * so the two cannot offer different words for the same thing.
+   */
+  const [groupBy, setGroupBy] = useState<'hour' | 'weekday'>('hour')
   const [chartOpen, setChartOpen] = useState(true)
+  const [total, setTotal] = useState(0)
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
   const [toggleErr, setToggleErr] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
+    setLoading(true)
     ;(async () => {
       try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/budget-schedules`, { cache: 'no-store' })
+        // BSP-P2 — scoped. `total` comes back too, so the grid can say what a market filter HID
+        // rather than letting a filtered-to-nothing view read as "you have no schedules".
+        const qs = scope ? `?marketplace=${encodeURIComponent(scope)}` : ''
+        const r = await fetch(`${getBackendUrl()}/api/advertising/budget-schedules${qs}`, { cache: 'no-store' })
         if (!r.ok) throw new Error(`The schedules request failed (${r.status}).`)
         const j = await r.json()
         const items = (Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : []) as Array<Record<string, unknown>>
         if (alive) {
           setErr(null)
+          setTotal(typeof j?.total === 'number' ? j.total : items.length)
           setRows(items.map((s) => ({
             id: String(s.id), name: String(s.name ?? ''), type: TYPE_LABEL[String(s.type ?? '')] ?? String(s.type ?? '—'),
             days: String(s.days ?? '—'), enabled: s.enabled !== false,
             startDate: s.startDate ? String(s.startDate) : '—', endDate: s.endDate ? String(s.endDate) : '—',
             excludeStart: s.excludeStart ? String(s.excludeStart) : '—', excludeEnd: s.excludeEnd ? String(s.excludeEnd) : '—',
+            excludeRanges: Number(s.excludeRanges ?? 0),
+            markets: Array.isArray(s.markets) ? (s.markets as string[]).map(String) : [],
+            delivery: (s.delivery ?? null) as ScheduleDelivery | null,
+            lastEvaluatedAt: s.lastEvaluatedAt ? String(s.lastEvaluatedAt) : null,
           })))
         }
       } catch (e) {
@@ -95,7 +150,7 @@ export function SchedulesSection() {
       } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
-  }, [])
+  }, [scope])
 
   /**
    * W4 — pause/resume, on the PATCH that existed with no caller. Optimistic with revert-on-failure
@@ -118,7 +173,15 @@ export function SchedulesSection() {
     }
   }, [])
 
-  const todayIso = new Date().toISOString().slice(0, 10)
+  /**
+   * 🔴 BSP-P4 — a LOCAL day key. This was `toISOString().slice(0,10)` — UTC — compared against
+   * `startDate`/`endDate`, which are local calendar dates the operator typed. In Europe/Rome every
+   * instant between 00:00 and 02:00 local is still "yesterday" in UTC, so a schedule that ended
+   * yesterday kept reporting **Active** for the first two hours of every day, and one starting
+   * today read **Scheduled**. [[reference_day_grouping_utc_local_trap]] — derive the key from
+   * getFullYear/getMonth/getDate, never from an ISO string.
+   */
+  const todayIso = useMemo(() => localDayKey(), [])
   const columns: GridColumn<ScheduleRow>[] = useMemo(() => [
     /**
      * W4 — H10's color-coded Status pill (Scheduled / Active / Completed), plus the pause switch.
@@ -145,7 +208,34 @@ export function SchedulesSection() {
         )
       },
     },
+    /**
+     * 🔴 BSP-P3 — the column this tab never had: did the last write REACH AMAZON?
+     *
+     * `applied` in the schedule's own memo means written locally and queued. The write gate runs
+     * afterwards in the sync worker and skipped 298 of 398 budget writes on this account in 7 days,
+     * so a schedule can report success while nothing moved at Amazon. `yielded` is the other silent
+     * outcome: another writer took the budget and the schedule stood down.
+     */
+    {
+      key: 'delivery', label: 'Delivery', metric: false, sortable: true,
+      sortValue: (r) => deliveryCell(r.delivery).word,
+      render: (r) => {
+        const d = deliveryCell(r.delivery)
+        return (
+          <HoverCard text={d.why} placement="below">
+            <span className={`h10-bs-deliv ${d.cls}`}>{d.word}</span>
+          </HoverCard>
+        )
+      },
+    },
     { key: 'type', label: 'Type', metric: false, sortable: true, render: (r) => r.type },
+    // BSP-P2 — a schedule's reach IS its campaign snapshot; with a market filter live, saying which
+    // markets a row spans is what keeps the filter legible.
+    {
+      key: 'markets', label: 'Markets', metric: false, sortable: true,
+      sortValue: (r) => r.markets.join(','),
+      render: (r) => (r.markets.length ? r.markets.join(', ') : <span className="h10-bs-unknown" title="This schedule's campaign snapshot carries no marketplace, so its reach is unknown — it is never hidden by a market filter.">unknown</span>),
+    },
     { key: 'days', label: 'Days', metric: false, sortable: false, render: (r) => r.days },
     // BSP.2 (§2.3) — the Auto Refill column is GONE, not relabelled: `autoRefill` has zero
     // readers anywhere in api or web, the builder never sends it, and a column that is
@@ -154,8 +244,22 @@ export function SchedulesSection() {
     { key: 'endDate', label: 'End Date', metric: false, sortable: true, render: (r) => r.endDate },
     // §2.2 — these two now render REAL values: the route stopped hard-coding nulls and returns
     // the first stored blackout range (rows that stored the old boolean fall through to none).
+    // BSP-P4 — the grid has two columns and a schedule may hold many blackout ranges. Showing the
+    // first and dropping the count read as "there is one"; the extras are now named.
     { key: 'excludeStart', label: 'Exclude Start Date', metric: false, sortable: false, render: (r) => r.excludeStart },
-    { key: 'excludeEnd', label: 'Exclude End Date', metric: false, sortable: false, render: (r) => r.excludeEnd },
+    {
+      key: 'excludeEnd', label: 'Exclude End Date', metric: false, sortable: false,
+      render: (r) => (
+        <>
+          {r.excludeEnd}
+          {r.excludeRanges > 1 && (
+            <HoverCard text={`This schedule has ${r.excludeRanges} blackout ranges. The grid has room for the first; open the schedule to see them all.`} placement="below">
+              <span className="h10-bs-more"> +{r.excludeRanges - 1}</span>
+            </HoverCard>
+          )}
+        </>
+      ),
+    },
   ], [todayIso, toggleEnabled])
 
   const renderFirst = (r: ScheduleRow): ReactNode => (
@@ -213,22 +317,26 @@ export function SchedulesSection() {
 
   return (
     <>
+      {/* BSP-P5 — the census strip, above the work. Renders nothing if its fetch fails. */}
+      <ScheduleContextStrip market={market} />
+
       <div className="h10-sb-listchart">
         <div className="hd">
           <b>Hourly Campaign Performance</b>
-          <HoverCard text="Spend, ACoS and other metrics by hour of day — use it to decide when to raise or lower budgets." placement="below"><span className="i" aria-hidden="true"><Info size={14} /></span></HoverCard>
+          <HoverCard text="Spend, ACoS and other metrics by hour of day or day of week — use it to decide when to raise or lower budgets. Read over the last 60 days, in the account timezone." placement="below"><span className="i" aria-hidden="true"><Info size={14} /></span></HoverCard>
         </div>
         {chartOpen && (
           <div className="bd">
             <div className="controls">
               <MetricSelect value={metric1} onChange={setMetric1} dot="#0b2447" label="Metric 1" />
+              <H10Select width={168} options={GROUP_BY} value={groupBy} onChange={(v) => setGroupBy(v === 'weekday' ? 'weekday' : 'hour')} ariaLabel="Group by" />
               <span className="grow" />
               <MetricSelect value={metric2} onChange={setMetric2} dot="#1f6fde" label="Metric 2" />
             </div>
             {/* U8 — was the constant "Hourly data is not available for this marketplace." with two
                 metric pickers that changed nothing. The card reads the endpoint now; that sentence
                 still renders, but only when the endpoint says `hasData: false`. */}
-            <HourlyPerformanceCard metric1={metric1} metric2={metric2} />
+            <HourlyPerformanceCard metric1={metric1} metric2={metric2} market={market} groupBy={groupBy} />
           </div>
         )}
       </div>
@@ -259,7 +367,9 @@ export function SchedulesSection() {
         searchValue={(r) => r.name}
         pagerCentered
         defaultSort={{ key: 'startDate', dir: 'desc' }}
-        emptyLabel="No budget schedules yet"
+        emptyLabel={scope && total > 0
+          ? `No budget schedules reach ${scope} — ${total} exist${total === 1 ? 's' : ''} on other markets`
+          : 'No budget schedules yet'}
         toolbarRight={<>
           <button type="button" className="h10-sb-eye" aria-label={chartOpen ? 'Hide hourly chart' : 'Show hourly chart'} aria-pressed={chartOpen} onClick={() => setChartOpen((v) => !v)}>{chartOpen ? <Eye size={17} /> : <EyeOff size={17} />}</button>
           {/* 🔴 The fix for :120 — the noun on this page is Schedule. */}

@@ -17,7 +17,7 @@ import { MetricSelect } from './MetricSelect'
 import { DaypartingHeatmap, type HeatCell } from './DaypartingHeatmap'
 import { metricVal, type RawCell } from './heatMetrics'
 import { DaypartingChart, type ChartCell } from './DaypartingChart'
-import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, TIMEZONES, adjustmentsFor } from './scheduleConfig'
+import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTIONS, TIMEZONES, adjustmentsFor, CHART_WINDOW_DAYS, chartWindowLabel } from './scheduleConfig'
 import { getBackendUrl } from '@/lib/backend-url'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
@@ -135,6 +135,9 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
    */
   const [excludeRanges, setExcludeRanges] = useState<Array<{ id: number; start: string; end: string }>>([])
   const [creating, setCreating] = useState(false)
+  /** BSP-P1 — computed once per mount, not per render: a date label that ticks over mid-session
+   *  would make the field flicker between two truths. Both branches render it. */
+  const [periodLabel] = useState(() => chartWindowLabel())
 
   // ── edit mode: load a saved dayparting schedule back into the builder ──
   useEffect(() => {
@@ -197,7 +200,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
     setCellsLoading(true)
     const t = setTimeout(async () => {
       try {
-        const qs = new URLSearchParams({ campaignIds: campaignKey, windowDays: '60', tz: timezone })
+        const qs = new URLSearchParams({ campaignIds: campaignKey, windowDays: String(CHART_WINDOW_DAYS), tz: timezone })
         const j = await fetch(`${getBackendUrl()}/api/advertising/dayparting/heatmap?${qs}`).then((r) => r.json())
         if (!alive) return
         setRawCells(Array.isArray(j?.cells) ? j.cells : [])
@@ -280,7 +283,27 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
 
   const adjustments = adjustmentsFor(cfg.kind, type)
   const adjNeedsValue = (adj: string) => (adjustments.find((a) => a.value === adj)?.unit ?? 'eur') !== 'none'
-  const winComplete = (w: SchedWindow) => !!(w.start && w.end && w.adj) && (!adjNeedsValue(w.adj) || w.value.trim() !== '')
+  /**
+   * 🔴 BSP-P4 (2026-08-21) — Budget Multiplier is a DAILY schedule, and the form could not say so.
+   *
+   * H10's own radio copy is "Budget Multiplier — Set up a **daily** schedule to adjust your
+   * campaign's budget multiplier", and the executor has supported an all-day window from the start:
+   * `activeWindow()` reads `if (!w.start || !w.end) return wDay === day`. But `winComplete` demanded
+   * both times, and the row rendered the same two hourly selects for either type — measured on prod
+   * 2026-08-21, clicking the radio changed the controls not at all. So the engine's daily branch was
+   * **unreachable from the only authoring surface**, and the radio's description was a promise the
+   * form could not keep.
+   *
+   * Multiplier rows are now all-day by construction: no time selects, and completeness is the
+   * adjustment plus its value. Campaign Budget keeps its hourly windows exactly as they were, and
+   * Dayparting is untouched (`adjustmentsFor` only returns the multiplier catalog for
+   * kind='budget'), so this cannot reach the RD builder.
+   */
+  const isAllDay = !isDayparting && type === 'budget-multiplier'
+  const winComplete = (w: SchedWindow) =>
+    isAllDay
+      ? !!w.adj && (!adjNeedsValue(w.adj) || w.value.trim() !== '')
+      : !!(w.start && w.end && w.adj) && (!adjNeedsValue(w.adj) || w.value.trim() !== '')
   const valid = name.trim().length > 0 && selCampaigns.length > 0 &&
     windows.some(winComplete) &&
     // W4 — budget: the Start Date is required, full stop. It is labelled with an asterisk and
@@ -293,7 +316,15 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
     setCreating(true)
     try {
       const campaigns = selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, dailyBudget: c.dailyBudget }))
-      const wins = windows.filter(winComplete).map((w) => ({ day: w.day, start: w.start, end: w.end, adj: w.adj, value: Number(w.value) || 0 }))
+      // BSP-P4 — an all-day row sends NO hours. Without this, switching Campaign Budget →
+      // Budget Multiplier after picking times would ship those stale hours, and the executor would
+      // read the row as an hourly window — the opposite of what the screen now says.
+      const wins = windows.filter(winComplete).map((w) => ({
+        day: w.day,
+        start: isAllDay ? '' : w.start,
+        end: isAllDay ? '' : w.end,
+        adj: w.adj, value: Number(w.value) || 0,
+      }))
       let ok = false
       if (isDayparting) {
         // Dayparting persists through the automation-rules store (trigger SCHEDULE) — starts disabled + dry-run.
@@ -416,8 +447,13 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     </div>
                   </div>
                   <div className="row2">
-                    <div className="f"><label>Period <HoverCard text="The window of hourly performance data shown in the chart." placement="above"><span className="h10-sb-i" aria-hidden="true">ⓘ</span></HoverCard></label>
-                      <span className="h10-sb-date wide"><Calendar size={15} /><input value="04/18/2026 - 06/16/2026" readOnly aria-label="Period" /></span></div>
+                    {/* 🔴 BSP-P1 — this was the literal string "04/18/2026 - 06/16/2026". See
+                        `chartWindowLabel` in ./scheduleConfig for what it was claiming and what the
+                        fetch beside it was actually asking for. The label is derived from the same
+                        constant the request uses, and the field says out loud that it is fixed —
+                        a readOnly input that looks editable is a smaller lie of the same kind. */}
+                    <div className="f"><label>Period <HoverCard text={`The window of hourly performance data shown in the chart: the last ${CHART_WINDOW_DAYS} days. Fixed — this chart is a read of your own history, not a report you configure.`} placement="above"><span className="h10-sb-i" aria-hidden="true">ⓘ</span></HoverCard></label>
+                      <span className="h10-sb-date wide"><Calendar size={15} /><input value={periodLabel} readOnly aria-readonly="true" title={`Fixed at the last ${CHART_WINDOW_DAYS} days`} aria-label="Period" /></span></div>
                     {chartMode === 'line' && <>
                     <div className="f"><label>Group By <HoverCard text="Bucket the chart by hour of day or by day of week." placement="above"><span className="h10-sb-i" aria-hidden="true">ⓘ</span></HoverCard></label>
                       <H10Select width={170} options={GROUP_BY} value={groupBy} onChange={setGroupBy} ariaLabel="Group by" /></div>
@@ -431,7 +467,14 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     : !cellsHasData ? (
                       <div className="h10-sb-nodata">
                         <span className="ill"><Search size={26} /></span>
-                        <span className="t">{selCampaigns.length === 0 ? 'Add campaigns to see hourly performance.' : 'Hourly data is not available for this marketplace.'}</span>
+                        {/* 🔴 BSP-P1 — the second sentence used to blame "this marketplace". The
+                            fetch is scoped to the SELECTED CAMPAIGNS, not to a market, so the true
+                            cause is that these campaigns have no hourly rows in the window. An empty
+                            state that names the wrong cause sends the operator to change the wrong
+                            thing. */}
+                        <span className="t">{selCampaigns.length === 0
+                          ? 'Add campaigns to see hourly performance.'
+                          : `None of the ${selCampaigns.length} selected campaign${selCampaigns.length === 1 ? '' : 's'} reported hourly performance in the last ${CHART_WINDOW_DAYS} days.`}</span>
                       </div>
                     ) : chartMode === 'grid'
                       ? <DaypartingHeatmap cells={heatCells} unit={metricVal(metric1).unit} />
@@ -470,9 +513,15 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                     <span className="ck"><input type="checkbox" checked={selRows.has(w.id)} onChange={() => toggleRow(w.id)} aria-label={`Select ${short || 'row'}`} /></span>
                     <span className="day">{short}</span>
                     <span className="time">
-                      <H10Select width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.start} onChange={(v) => setWin(w.id, { start: v })} ariaLabel="Start time" />
-                      <span className="dash">-</span>
-                      <H10Select width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.end} onChange={(v) => setWin(w.id, { end: v })} ariaLabel="End time" />
+                      {/* BSP-P4 — a multiplier row is all-day, so it says so instead of offering
+                          hour bounds the engine will ignore and the radio never promised. */}
+                      {isAllDay
+                        ? <span className="h10-sb-allday" title="A Budget Multiplier applies for the whole day — the executor treats a window with no hours as covering that weekday.">All day</span>
+                        : <>
+                          <H10Select width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.start} onChange={(v) => setWin(w.id, { start: v })} ariaLabel="Start time" />
+                          <span className="dash">-</span>
+                          <H10Select width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.end} onChange={(v) => setWin(w.id, { end: v })} ariaLabel="End time" />
+                        </>}
                     </span>
                     <span className="adj">
                       <H10Select width={200} options={[{ value: '', label: 'Select adjustment type' }, ...adjustments]} value={w.adj} onChange={(v) => setWin(w.id, { adj: v })} ariaLabel="Adjustment type" />

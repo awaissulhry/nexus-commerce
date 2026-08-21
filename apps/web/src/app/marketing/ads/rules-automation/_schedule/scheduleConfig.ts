@@ -79,6 +79,29 @@ export const TIMEZONES = [
   { value: 'UTC', label: 'UTC — Coordinated Universal Time' },
 ]
 
+/**
+ * BSP-P1 (2026-08-21) — 🔴 the ONE definition of the chart's lookback.
+ *
+ * The builder's "Period" field was the literal string `"04/18/2026 - 06/16/2026"`, `readOnly`,
+ * under an ⓘ reading "The window of hourly performance data shown in the chart." The fetch beside
+ * it asked for `windowDays: '60'`. Measured on prod 2026-08-21: stated `04/18/2026 - 06/16/2026`,
+ * real `2026-06-22 → 2026-08-21` — **zero days of overlap**. A control that states a fact, cannot
+ * be changed, and is wrong by more than its own width.
+ *
+ * The number now lives here and is read by BOTH the fetch and the label, so they cannot drift —
+ * the same single-sourcing lesson as BUD-P1's two copies of the metric list.
+ */
+export const CHART_WINDOW_DAYS = 60
+
+/** The window the chart actually covers, as the MM/DD/YYYY the builder renders everywhere else.
+ *  `now` is injectable so a test can assert the relationship rather than a frozen string. */
+export const chartWindowLabel = (now: Date = new Date()): string => {
+  const mdy = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
+  const from = new Date(now)
+  from.setDate(from.getDate() - CHART_WINDOW_DAYS)
+  return `${mdy(from)} - ${mdy(now)}`
+}
+
 // ── chart catalog (order/units mirror the H10 "Hourly Campaign Performance" pickers) ──
 export const CHART_METRICS = ['Spend', 'ACoS', 'Sales', 'Orders', 'Clicks', 'Impressions', 'CPC', 'CTR', 'CVR', 'ROAS', 'CPA'].map((m) => ({ value: m, label: m }))
 export const GROUP_BY = [

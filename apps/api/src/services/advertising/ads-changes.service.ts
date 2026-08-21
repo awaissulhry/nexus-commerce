@@ -89,6 +89,19 @@ export function parseActor(actor: string | null | undefined): { source: ChangeSo
   const typed: Array<[string, ChangeOrigin['kind']]> = [
     ['rank-defend-', 'schedule'],
     ['rank-plan-', 'plan'],
+    /**
+     * 🔴 BSP-P3 (2026-08-21) — a budget schedule was an ANONYMOUS JOB in the change feed.
+     *
+     * `ad-budget-schedule.job.ts` and the pause/delete restore in `advertising.routes.ts` both
+     * write `automation:budget-schedule-<cuid>`. With no entry here it fell through to
+     * `kind:'job', id:null` — and because the **id was dropped**, `originId` could never target a
+     * budget schedule, so a schedule could not be linked to its own changes and its writes showed
+     * as an anonymous job named by a raw cuid. Dayparting (`rank-defend-`) has been first-class
+     * since RC2. Same shape as the SG.0 bare-cuid fix below.
+     *
+     * It must sit before the bare-cuid branch, and it cannot collide with `rule-`/`rank-*`.
+     */
+    ['budget-schedule-', 'schedule'],
     ['rule-', 'rule'],
   ]
   for (const [prefix, kind] of typed) {
@@ -129,16 +142,24 @@ async function resolveOrigins(rows: ChangeRow[]): Promise<void> {
     else if (r.origin.kind === 'plan') planIds.add(r.origin.id)
     else if (r.origin.kind === 'rule') ruleIds.add(r.origin.id)
   }
-  const [scheds, plans, rules] = await Promise.all([
+  const [scheds, budgetScheds, plans, rules] = await Promise.all([
     scheduleIds.size
       // The actor carries the AdSchedule id, but the operator thinks in named GROUPS — so resolve
       // through to the group's name and fall back to the per-campaign row's name if it has none.
       ? prisma.adSchedule.findMany({ where: { id: { in: [...scheduleIds] } }, select: { id: true, name: true, group: { select: { name: true } } } })
       : Promise.resolve([]),
+    // BSP-P3 — `kind:'schedule'` now covers TWO stores: dayparting's `AdSchedule` and this tab's
+    // `BudgetSchedule`. They are disjoint id spaces, so one lookup each and first match wins.
+    scheduleIds.size
+      ? prisma.budgetSchedule.findMany({ where: { id: { in: [...scheduleIds] } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
     planIds.size ? prisma.productRankPlan.findMany({ where: { id: { in: [...planIds] } }, select: { id: true, parentAsin: true, marketplace: true } }) : Promise.resolve([]),
     ruleIds.size ? prisma.automationRule.findMany({ where: { id: { in: [...ruleIds] } }, select: { id: true, name: true } }) : Promise.resolve([]),
   ])
-  const sName = new Map(scheds.map((s) => [s.id, s.group?.name ?? s.name]))
+  const sName = new Map<string, string>([
+    ...budgetScheds.map((s) => [s.id, s.name] as [string, string]),
+    ...scheds.map((s) => [s.id, s.group?.name ?? s.name] as [string, string]),
+  ])
   const pName = new Map(plans.map((p) => [p.id, `${p.parentAsin ?? 'family'} · ${p.marketplace}`]))
   const rName = new Map(rules.map((r) => [r.id, r.name]))
   for (const r of rows) {

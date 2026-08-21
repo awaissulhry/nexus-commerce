@@ -8914,9 +8914,92 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   }
   const bsFmtDate = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null)
 
-  fastify.get('/advertising/budget-schedules', async (_request, reply) => {
+  /** BSP-P2 — the markets a schedule actually reaches, from its own campaign snapshot. A
+   *  BudgetSchedule has no marketplace column: its reach is whatever its campaigns are. */
+  const bsMarkets = (campaigns: unknown): string[] => {
+    const cs = Array.isArray(campaigns) ? (campaigns as Array<{ marketplace?: unknown }>) : []
+    return [...new Set(cs.map((c) => String(c?.marketplace ?? '')).filter(Boolean))].sort()
+  }
+
+  /**
+   * BSP-P2 (2026-08-21) — this list is now MARKET-SCOPED.
+   *
+   * 🔴 The page header has offered IT/DE/ES/FR since U8 and wrote `?market=`, and NOTHING on the
+   * tab read it: this route had no filter and `hourly-performance` destructured `marketplace` and
+   * dropped it. Measured on prod with the header reading "🇩🇪 Germany", the chart was byte-identical
+   * — and the four markets peak up to four hours apart (IT h22 €142 · DE h18 €53 · ES h15 · FR h19),
+   * so the merged curve was true of no market. A control that changes nothing is the stale-constant
+   * class: [[reference_fleet_stale_constant_class]].
+   *
+   * Filtering happens in JS because `campaigns` is a Json snapshot, not a relation. That is fine at
+   * this grain — a budget schedule is an operator-authored object and there are single digits of
+   * them — and it keeps the reach definition in ONE place (`bsMarkets`) for the row and the filter.
+   */
+  /**
+   * BSP-P3 — the per-schedule DELIVERY reading.
+   *
+   * 🔴 `lastApplied[campaignId].state === 'applied'` means "written locally and queued", NOT
+   * "Amazon took it". The gate runs later in the sync worker and on this account it SKIPPED 298 of
+   * 398 budget writes in 7 days (`campaign_allowlist` 238 · `budget_day_move` 60). So the row's own
+   * memo can say `applied` while nothing changed at Amazon — which is exactly the class of lie this
+   * programme exists to remove.
+   *
+   * The answer lives on `OutboundSyncQueue`, keyed by the `outboundQueueId` the executor now keeps.
+   * One `findMany` for every schedule on the page rather than a query per row.
+   */
+  const bsDelivery = async (schedules: Array<{ id: string; lastApplied: unknown }>) => {
+    const ids: string[] = []
+    for (const s of schedules) {
+      const la = (s.lastApplied ?? null) as Record<string, { outboundQueueId?: string | null }> | null
+      if (!la) continue
+      for (const v of Object.values(la)) if (v?.outboundQueueId) ids.push(v.outboundQueueId)
+    }
+    const rows = ids.length
+      ? await prisma.outboundSyncQueue.findMany({ where: { id: { in: ids } }, select: { id: true, syncStatus: true, errorMessage: true } })
+      : []
+    const byQueueId = new Map(rows.map((r) => [r.id, r]))
+    return (s: { id: string; lastApplied: unknown }) => {
+      const la = (s.lastApplied ?? null) as Record<string, { state?: string; live?: number; budget?: number; outboundQueueId?: string | null; error?: string | null; overriddenBy?: { kind?: string; label?: string } }> | null
+      const entries = Object.entries(la ?? {})
+      const tally = { campaigns: entries.length, applied: 0, held: 0, yielded: 0, refused: 0, failed: 0, delivered: 0, notDelivered: 0, unknown: 0 }
+      // BSP.6 item 2 — WHO took the budget, counted per kind. A yield to the operator's own hand
+      // is a different fact from a yield to the pacer, and the grid must not blur them into one word.
+      const byKind = new Map<string, { kind: string; label: string; count: number }>()
+      let lastError: string | null = null
+      for (const [, v] of entries) {
+        if (v?.state === 'yielded' && v.overriddenBy) {
+          const k = String(v.overriddenBy.kind ?? 'job')
+          const e = byKind.get(k) ?? { kind: k, label: String(v.overriddenBy.label ?? k), count: 0 }
+          e.count++
+          byKind.set(k, e)
+        }
+        // Rows written before BSP-P3 carry no `state`; call them `held` rather than inventing one.
+        const st = v?.state ?? 'held'
+        if (st === 'applied') tally.applied++
+        else if (st === 'yielded') tally.yielded++
+        else if (st === 'refused') { tally.refused++; lastError ??= v?.error ?? null }
+        else if (st === 'failed') { tally.failed++; lastError ??= v?.error ?? null }
+        else tally.held++
+        const qrow = v?.outboundQueueId ? byQueueId.get(v.outboundQueueId) : undefined
+        if (!v?.outboundQueueId) { if (st === 'applied') tally.unknown++ }
+        else if (!qrow) tally.unknown++
+        // OutboundSyncStatus: PENDING · IN_PROGRESS · SUCCESS · FAILED · SKIPPED · CANCELLED.
+        // 🔴 SKIPPED is the one that matters here — it is what the write gate returns, and it is
+        // 298 of 398 budget writes on this account in 7 days. It is NOT a success.
+        else if (qrow.syncStatus === 'SUCCESS') tally.delivered++
+        else if (qrow.syncStatus === 'PENDING' || qrow.syncStatus === 'IN_PROGRESS') tally.unknown++
+        else { tally.notDelivered++; lastError ??= qrow.errorMessage ?? null }
+      }
+      return { ...tally, lastError, yieldedBy: [...byKind.values()].sort((a, b) => b.count - a.count) }
+    }
+  }
+
+  fastify.get('/advertising/budget-schedules', async (request, reply) => {
     reply.header('Cache-Control', 'private, max-age=15')
+    const q = request.query as { marketplace?: string }
+    const market = q.marketplace && q.marketplace !== 'all' ? q.marketplace.toUpperCase() : null
     const items = await prisma.budgetSchedule.findMany({ where: { kind: 'BUDGET' }, orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }] })
+    const deliveryFor = await bsDelivery(items)
     const shaped = items.map((s) => {
       // BSP.2 (§2.2) — the columns stop being hard-coded nulls: the FIRST stored blackout range
       // renders (the grid has two columns, not a list); pre-fix rows that stored the builder's
@@ -8926,12 +9009,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         id: s.id, name: s.name, type: s.type, enabled: s.enabled, autoRefill: s.autoRefill,
         days: bsScheduleDays(s.windows),
+        markets: bsMarkets(s.campaigns),
         startDate: bsFmtDate(s.startDate), endDate: s.neverExpire ? null : bsFmtDate(s.endDate),
         excludeStart: first?.start ?? null, excludeEnd: first?.end ?? null,
         excludeRanges: ex.length,
+        // BSP-P3 — what this schedule last DID, and how much of it reached Amazon.
+        lastEvaluatedAt: s.lastEvaluatedAt?.toISOString() ?? null,
+        delivery: deliveryFor(s),
       }
     })
-    return { items: shaped, count: shaped.length }
+    // A schedule whose campaigns carry NO marketplace at all is never hidden by a market filter —
+    // "we don't know where this runs" must not read as "it doesn't run here".
+    const visible = market ? shaped.filter((s) => s.markets.length === 0 || s.markets.includes(market)) : shaped
+    return { items: visible, count: visible.length, total: shaped.length, marketplace: market }
   })
 
   fastify.get('/advertising/budget-schedules/:id', async (request, reply) => {
@@ -8984,10 +9074,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    *     this route must not take on its own.
    * Best-effort per campaign, same as dayparting's resume.
    */
-  const bsRestoreBase = async (s: { id: string; campaigns: unknown; lastApplied: unknown }): Promise<void> => {
+  const bsRestoreBase = async (s: { id: string; campaigns: unknown; lastApplied: unknown }): Promise<{ restored: number; refused: number }> => {
     const camps = Array.isArray(s.campaigns) ? s.campaigns as Array<{ id: string; dailyBudget?: number | null }> : []
     const last = (s.lastApplied as Record<string, { budget?: number }> | null) ?? {}
-    if (camps.length === 0) return
+    let restored = 0, refused = 0
+    if (camps.length === 0) return { restored, refused }
     const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
     for (const c of camps) {
       const applied = last[c.id]?.budget
@@ -9002,9 +9093,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const target = Math.max(1, Math.round(base * 100) / 100)
       if (live === target) continue
       try {
-        await updateCampaignWithSync({ campaignId: c.id, patch: { dailyBudget: target }, actor: `automation:budget-schedule-${s.id}` as never, reason: 'budget schedule removed or disabled — restore base budget', applyImmediately: true } as never)
-      } catch { /* best-effort, mirrors dayparting's resume */ }
+        // 🔴 BSP-P3 — the second of the two bare call sites. `updateCampaignWithSync` returns
+        // `{ ok:false }` rather than throwing ([[reference_mutation_outcome_returned_not_thrown]]),
+        // so this `catch` never saw a refusal and the route reported a restore that never happened.
+        // The `as never` casts are gone: they are what hid the return type from review.
+        const outcome = await updateCampaignWithSync({
+          campaignId: c.id,
+          patch: { dailyBudget: target },
+          actor: `automation:budget-schedule-${s.id}`,
+          reason: 'budget schedule removed or disabled — restore base budget',
+          applyImmediately: true,
+        })
+        // `.ok` is three-way: `no_changes` is ok:true and enqueues nothing, so counting it as a
+        // restore would overstate what this route gave back. Same branch as the executor's.
+        if (outcome.ok && outcome.error !== 'no_changes') restored++
+        else if (!outcome.ok) { refused++; fastify.log.warn({ scheduleId: s.id, campaignId: c.id, error: outcome.error }, '[budget-schedule] restore refused') }
+      } catch { refused++ /* best-effort, mirrors dayparting's resume */ }
     }
+    return { restored, refused }
   }
 
   fastify.patch('/advertising/budget-schedules/:id', async (request, reply) => {
@@ -9024,7 +9130,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const schedule = await prisma.budgetSchedule.update({ where: { id }, data })
       // Disable AFTER the update: the executor only reads enabled schedules, so once the row says
       // enabled:false the cron cannot race this restore by re-applying the window.
-      if (before?.enabled === true) await bsRestoreBase(before)
+      // BSP-P3 — the outcome is REPORTED now: "paused" and "paused, and 3 campaigns kept the boost
+      // because the restore was refused" are different facts and the operator gets the second one.
+      const restore = before?.enabled === true ? await bsRestoreBase(before) : null
       await prisma.advertisingActionLog.create({
         data: {
           userId: actorFromHeaders(request.headers as Record<string, unknown>),
@@ -9033,7 +9141,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           amazonResponseStatus: 'SUCCESS',
         },
       }).catch(() => { /* best-effort */ })
-      return { schedule }
+      return { schedule, restore }
     } catch { reply.status(404); return { error: 'not found' } }
   })
 
@@ -9044,7 +9152,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // W4 — restore base AFTER the delete (the executor can no longer see the row, so it cannot
       // re-apply mid-restore). Before this, deleting a schedule mid-window left the boosted
       // budget in place forever — the one writer that knew the base was gone.
-      if (gone.enabled) await bsRestoreBase(gone)
+      // BSP-P3 — and the outcome is reported rather than assumed.
+      const restore = gone.enabled ? await bsRestoreBase(gone) : null
       await prisma.advertisingActionLog.create({
         data: {
           userId: actorFromHeaders(request.headers as Record<string, unknown>),
@@ -9053,18 +9162,44 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           amazonResponseStatus: 'SUCCESS',
         },
       }).catch(() => { /* best-effort */ })
-      return { ok: true }
+      return { ok: true, restore }
     } catch { reply.status(404); return { error: 'not found' } }
   })
 
-  // BS chart — "Hourly Campaign Performance" aggregated by hour-of-day (Rome), from the AMS
-  // hourly store. Empty (hasData:false) until Marketing Stream is provisioned for the market.
+  /**
+   * BS chart — "Hourly Campaign Performance" aggregated by hour-of-day (Rome), from the AMS
+   * hourly store.
+   *
+   * 🔴 BSP-P2 — `marketplace` was destructured here and never used, the same defect shape already
+   * flagged at `advertising-intel.routes.ts:2522`. It binds now. `hasData` is reported for the
+   * SCOPE ASKED FOR, so "no hourly data" means no data *for this market*, which is what the caller
+   * renders.
+   *
+   * 🔴 BSP-P1 — `acos: null` is the contract when a bucket has NO attributed sales, and it must
+   * survive to the screen. It is not zero: measured over the 60-day window, hours 03/06/07 have
+   * zero sales on €11/€29/€61 of spend, and a client that coerces null to 0 draws the account's
+   * three worst hours as its three most efficient. `hoursWithoutSales` is returned so the caller
+   * can SAY how many buckets it could not compute rather than quietly dropping them.
+   */
   fastify.get('/advertising/budget-schedules/hourly-performance', async (request, reply) => {
-    const q = request.query as { start?: string; end?: string; marketplace?: string }
+    const q = request.query as { start?: string; end?: string; marketplace?: string; groupBy?: string }
     const since = q.start ? new Date(q.start) : (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - 60); d.setUTCHours(0, 0, 0, 0); return d })()
     const until = q.end ? new Date(q.end) : new Date()
-    const rows = await prisma.$queryRaw<Array<{ hour: number; cost: bigint | null; sales: bigint | null; orders: bigint | null; clicks: bigint | null; impressions: bigint | null }>>`
-      SELECT EXTRACT(HOUR FROM ts_rome)::int AS hour,
+    const market = q.marketplace && q.marketplace !== 'all' ? q.marketplace.toUpperCase() : null
+    /**
+     * BSP-P5 — `hour` (24 buckets) · `weekday` (7) · `cell` (7×24).
+     *
+     * The weekday and cell grains are newly SUPPORTABLE, and that is the whole reason they exist:
+     * the 2026-08-11 study measured 8 usable days of hourly data — 1.14 samples per weekday — and
+     * concluded a 7×24 grid was out of reach until late September. The store now holds
+     * **2026-05-21 → 2026-08-21, 90 distinct days, 29,425 rows**, so a 60-day window carries ~8.6
+     * samples per weekday. This also closes the one competitor gap named for this page: Scale
+     * Insights' "Daily Budget by weekday" (docs/2026-08-04-competitor-deep-dives.md §"What to take
+     * from both", item 5 — "we have hour-of-day, not day-of-week").
+     */
+    const grain = q.groupBy === 'weekday' ? 'weekday' : q.groupBy === 'cell' ? 'cell' : 'hour'
+    const rows = await prisma.$queryRaw<Array<{ dow: number; hour: number; cost: bigint | null; sales: bigint | null; orders: bigint | null; clicks: bigint | null; impressions: bigint | null }>>`
+      SELECT EXTRACT(DOW FROM ts_rome)::int AS dow, EXTRACT(HOUR FROM ts_rome)::int AS hour,
              SUM("costMicros") AS cost, SUM(COALESCE("sales7dCents",0)) AS sales,
              SUM(COALESCE("orders7d",0)) AS orders, SUM("clicks") AS clicks, SUM("impressions") AS impressions
       FROM (
@@ -9072,16 +9207,112 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
                "costMicros", "sales7dCents", "orders7d", "clicks", "impressions"
         FROM "AmazonAdsHourlyPerformance"
         WHERE "date" >= ${since} AND "date" <= ${until}
+          AND (${market}::text IS NULL OR "marketplace" = ${market})
       ) t
-      GROUP BY hour ORDER BY hour`
-    const series = Array.from({ length: 24 }, (_, h) => {
-      const r = rows.find((x) => Number(x.hour) === h)
-      const spend = r ? Number(r.cost ?? 0n) / 1e6 : 0
-      const sales = r ? Number(r.sales ?? 0n) / 100 : 0
-      return { hour: h, spend: Math.round(spend * 100) / 100, sales: Math.round(sales * 100) / 100, orders: r ? Number(r.orders ?? 0n) : 0, clicks: r ? Number(r.clicks ?? 0n) : 0, impressions: r ? Number(r.impressions ?? 0n) : 0, acos: sales > 0 ? Math.round((spend / sales) * 1000) / 10 : null }
-    })
+      GROUP BY dow, hour ORDER BY dow, hour`
+
+    /** One bucket's numbers. `acos` is null — NOT zero — when nothing was attributed: see BSP-P1. */
+    const bucket = (rs: typeof rows, key: { hour?: number; dow?: number }) => {
+      const cost = rs.reduce((a, r) => a + Number(r.cost ?? 0n), 0)
+      const salesC = rs.reduce((a, r) => a + Number(r.sales ?? 0n), 0)
+      const spend = cost / 1e6
+      const sales = salesC / 100
+      return {
+        ...key,
+        spend: Math.round(spend * 100) / 100,
+        sales: Math.round(sales * 100) / 100,
+        orders: rs.reduce((a, r) => a + Number(r.orders ?? 0n), 0),
+        clicks: rs.reduce((a, r) => a + Number(r.clicks ?? 0n), 0),
+        impressions: rs.reduce((a, r) => a + Number(r.impressions ?? 0n), 0),
+        acos: sales > 0 ? Math.round((spend / sales) * 1000) / 10 : null,
+      }
+    }
+
+    const series = grain === 'weekday'
+      ? Array.from({ length: 7 }, (_, d) => bucket(rows.filter((r) => Number(r.dow) === d), { dow: d }))
+      : grain === 'cell'
+        ? rows.map((r) => bucket([r], { dow: Number(r.dow), hour: Number(r.hour) }))
+        : Array.from({ length: 24 }, (_, h) => bucket(rows.filter((r) => Number(r.hour) === h), { hour: h }))
+
     reply.header('Cache-Control', 'private, max-age=300')
-    return { groupBy: 'hour', timezone: 'Europe/Rome', hasData: rows.length > 0, series }
+    return {
+      groupBy: grain, timezone: 'Europe/Rome', marketplace: market,
+      windowStart: since.toISOString().slice(0, 10), windowEnd: until.toISOString().slice(0, 10),
+      hasData: rows.length > 0,
+      // The count of buckets whose ACoS could NOT be computed — so the caller can say so out loud
+      // rather than quietly plotting a zero, which is the defect BSP-P1 exists to remove.
+      bucketsWithoutSales: series.filter((s) => s.acos == null).length,
+      series,
+    }
+  })
+
+  /**
+   * BSP-P5 — the tab's census strip: the four facts that decide whether authoring a budget schedule
+   * here is worth doing, each a real reading and none of them computed by the page.
+   *
+   * This is the ownership line made visible. The BSP/BUD boundary the operator settled on
+   * 2026-08-12 is "BSP decides how much money exists; BUD decides who may move it" — so
+   * **out-of-budget hours belong here**, and until now this tab showed nothing about them at all
+   * while `Campaign.deliveryStatus` already carried Amazon's own answer (9 of 70 ENABLED campaigns
+   * were NOT_DELIVERING with `["CAMPAIGN_OUT_OF_BUDGET"]` when this was written).
+   *
+   * 🔴 It also states the DAY-MOVE CEILING, because that is the bound a budget schedule collides
+   * with and nothing on this page named it: a schedule's whole purpose is a large intraday jump,
+   * and the gate caps total daily movement at -30% / +50%-or-EUR10 across every writer. An operator
+   * authoring "double the budget at 18:00" on an EUR80 campaign deserves to know that is refused
+   * BEFORE they write it.
+   *
+   * Every number is absent-not-fabricated: a field that could not be read comes back null and the
+   * strip omits that clause rather than printing a zero.
+   */
+  fastify.get('/advertising/budget-schedules/context', async (request, reply) => {
+    reply.header('Cache-Control', 'private, max-age=60')
+    const q = request.query as { marketplace?: string }
+    const market = q.marketplace && q.marketplace !== 'all' ? q.marketplace.toUpperCase() : null
+    const where = { status: 'ENABLED' as const, ...(market ? { marketplace: market } : {}) }
+
+    const campaigns = await prisma.campaign.findMany({
+      where,
+      select: { id: true, name: true, marketplace: true, dailyBudget: true, deliveryStatus: true, deliveryReasons: true, budgetBaselineCents: true },
+    }).catch(() => null)
+
+    // Amazon's own answer, already synced — not our inference from spend curves.
+    const outOfBudget = campaigns?.filter((c) => {
+      const reasons = Array.isArray(c.deliveryReasons) ? (c.deliveryReasons as unknown[]).map(String) : []
+      return c.deliveryStatus === 'NOT_DELIVERING' && reasons.some((r) => r.includes('OUT_OF_BUDGET'))
+    }) ?? null
+
+    const since = new Date(Date.now() - 24 * 3600e3)
+    const [logRows, queueRows] = await Promise.all([
+      prisma.advertisingActionLog.count({ where: { actionType: 'AD_BUDGET_UPDATE', createdAt: { gte: since } } }).catch(() => null),
+      prisma.outboundSyncQueue.groupBy({ by: ['syncStatus'], where: { syncType: 'AD_BUDGET_UPDATE', createdAt: { gte: since } }, _count: { _all: true } }).catch(() => null),
+    ])
+    const delivered = queueRows?.find((r) => r.syncStatus === 'SUCCESS')?._count._all ?? null
+    const blocked = queueRows
+      ? queueRows.filter((r) => r.syncStatus === 'SKIPPED' || r.syncStatus === 'FAILED' || r.syncStatus === 'CANCELLED').reduce((a, r) => a + r._count._all, 0)
+      : null
+
+    const pctEnvLocal = (name: string, fallback: number) => { const v = Number(process.env[name]); return Number.isFinite(v) && v > 0 && v < 100 ? v : fallback }
+    const riseAbs = Number(process.env.NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS)
+
+    return {
+      marketplace: market,
+      enabledCampaigns: campaigns?.length ?? null,
+      // 🔴 `Campaign.dailyBudget` is a Prisma Decimal — `Number(dec)`, never a typeof-based
+      // converter, which nulls every row: [[reference_prisma_decimal_silent_zero]].
+      atFloor: campaigns?.filter((c) => Number(c.dailyBudget ?? 0) <= 1).length ?? null,
+      withBaseline: campaigns?.filter((c) => c.budgetBaselineCents != null).length ?? null,
+      outOfBudget: outOfBudget?.length ?? null,
+      outOfBudgetSample: outOfBudget?.slice(0, 3).map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace })) ?? null,
+      budgetWrites24h: logRows,
+      budgetWritesDelivered24h: delivered,
+      budgetWritesBlocked24h: blocked,
+      dayMove: {
+        dropPct: pctEnvLocal('NEXUS_ADS_BUDGET_DAY_DROP_PCT', 30),
+        risePct: pctEnvLocal('NEXUS_ADS_BUDGET_DAY_RISE_PCT', 50),
+        riseAbsEur: (Number.isFinite(riseAbs) && riseAbs >= 0 ? riseAbs : 1_000) / 100,
+      },
+    }
   })
 
   // ── AC — AI Control / Autopilot: plans CRUD + decisions + real-time SSE feed ──────

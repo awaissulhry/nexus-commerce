@@ -5449,6 +5449,23 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-au-queueout .q b { font-weight: 800; }
 .h10-au-queueout .s { margin: 0 0 16px; max-width: 62ch; font-size: 12.5px; line-height: 1.6; color: var(--h10-text-2); }
 
+/* ── BSP-P1 — the hourly chart gets a scale, and a gap that reads as a gap ──────────────────────
+   `.axlab` — the two value axes. The chart had three unlabelled gridlines, so neither series had a
+   magnitude: "is that bar €5 or €500?" was unanswerable without hovering. Left = Metric 1 (navy),
+   right = Metric 2 (blue), same colours as the pickers' dots.
+   `.hit` — a full-height transparent hover target per hour. An hour whose Metric 1 is null draws no
+   bar; without this it would also answer no hover, and a silent gap reads as zero.
+   `.dot2` — an isolated non-null point in the Metric 2 line. A one-point run cannot be a path
+   segment, so it would vanish; drawn as a dot it stays visible and honest.
+   Appended at the END on purpose: source order beats specificity in this stylesheet. */
+/* #626c7c, not the #7c8595 the x-axis uses: measured 3.72:1 on white, below AA. Same swap for
+   the two dimmed cells below — a new dimmed label has to clear 4.5:1 even when a neighbouring
+   older one does not. */
+.h10-bsp-hourly .axlab { fill: #626c7c; font-size: 10.5px; font-weight: 600; }
+.h10-bsp-hourly .axlab.m2 { fill: #1f6fde; }
+.h10-bsp-hourly .hit { fill: transparent; }
+.h10-bsp-hourly .dot2 { fill: #1f6fde; }
+
 /* BUD-PP — the honest Budget Preview. Five columns (campaign · market · utilization · current ·
    new budget) plus a census footer, because a preview that lists rows without saying what it
    CONSIDERED is how the old one implied 86 budget changes for a rule that could make two.
@@ -5460,3 +5477,25 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rb-prev .ptr .newb .pnote { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: #8a5316; }
 .h10-rb-prev .pfoot { margin: 0; padding: 12px 22px 16px; border-top: 1px solid #eef1f5; font-size: 12px; color: #5b6573; }
 .h10-rb-prev .pfoot b { color: #1c2530; font-weight: 800; }
+
+/* BSP-P4 — the all-day chip that replaces the two hour selects on a Budget Multiplier row.
+   Sized to sit on the same baseline as an H10Select so the column does not jump when the type
+   radio changes. Not a control: it states the grain the executor will actually use. */
+.h10-sb-week-r .h10-sb-allday { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border: 1px dashed #d5dbe3; border-radius: 7px; background: #f7f9fb; font-size: 12.5px; font-weight: 700; color: #55606d; }
+
+/* ── BSP-P3 — the Delivery column, and the Status pill's contested state ───────────────────────
+   Colours follow the existing `.h10-bd7-posture` vocabulary rather than inventing a second one:
+   green = confirmed at Amazon, amber = the schedule stood down for another writer, red = the write
+   was refused or never reached the channel, grey = nothing to report. The point of the column is
+   that "applied" and "at Amazon" are different facts, so they must not share a colour.
+   `bs-contested` is the Status pill saying so: in its date range, but not in force. */
+.h10-bs-deliv { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.h10-bs-deliv.ok { background: #e9f7ef; color: #116b3a; }
+.h10-bs-deliv.warn { background: #faf3e3; color: #7a5a12; }
+.h10-bs-deliv.bad { background: #fdf1f0; color: #b42318; }
+.h10-bs-deliv.wait { background: #eef4fd; color: #17436f; }
+.h10-bs-deliv.none { background: transparent; color: #626c7c; font-weight: 600; }
+.h10-bd7-posture.bs-contested { background: #faf3e3; color: #7a5a12; }
+/* "unknown" market and the "+N more blackout ranges" hint — dimmed facts, not controls. */
+.h10-bs-unknown { color: #626c7c; font-style: italic; }
+.h10-bs-more { color: #1a61c6; font-weight: 700; }

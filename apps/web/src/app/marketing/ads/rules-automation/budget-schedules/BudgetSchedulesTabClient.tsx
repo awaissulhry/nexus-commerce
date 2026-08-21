@@ -58,7 +58,10 @@ export function BudgetSchedulesTabClient() {
         showChangeLog
       />
       <RulesTabs active="budget-schedules" />
-      <SchedulesSection />
+      {/* BSP-P2 — the market the header is showing now reaches the section. It did not before: the
+          picker wrote `?market=` and nothing read it, so the grid and the hourly chart stayed
+          account-wide under a header that said "Germany". */}
+      <SchedulesSection market={market} />
     </div>
   )
 }
