@@ -67,7 +67,7 @@ import {
 } from '../jobs/advertising-rule-evaluator.job.js'
 import { evaluateRule } from '../services/automation-rule.service.js'
 import { rollbackByExecutionId } from '../services/advertising/rollback.service.js'
-import { attachSourceLinks } from '../services/advertising/ads-suggestions.service.js'
+import { attachSourceLinks, familyOfRow, projectBidCents } from '../services/advertising/ads-suggestions.service.js'
 import {
   rebalanceAndAudit,
   computeRebalance,
@@ -6501,13 +6501,114 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── ES1: Manual-rule Suggestions — list / approve(apply-live) / dismiss ──
   // F1 — lightweight pending count for the nav badge (no row payload).
+  // SG.0 — also the per-family tallies for the page's type tabs, derived through the ONE
+  // exported family map (familyOfRow) so the tabs and the list can never disagree.
   fastify.get('/advertising/suggestions/count', async () => {
-    const pending = await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } })
-    return { pending }
+    const rows = await prisma.adsRuleSuggestion.findMany({
+      where: { status: 'pending' },
+      select: { proposedAction: true, proposedKey: true },
+    })
+    const families: Record<string, number> = {}
+    for (const r of rows) {
+      const f = familyOfRow(r)
+      families[f] = (families[f] ?? 0) + 1
+    }
+    // SG.4 — the A.I. Bids tab's pill: PROPOSED autopilot decisions, excluding the
+    // 'rule-setting' mirrors (coordination.ts copies pending rule suggestions there —
+    // counting both would double-count the same change).
+    const aiBids = await prisma.autopilotDecision.count({
+      where: { status: 'PROPOSED', source: { not: 'rule-setting' } },
+    })
+    return { pending: rows.length, families, aiBids }
+  })
+
+  /**
+   * SG.5 — "Enforce Maximum": clamp pending BID suggestions that project above their market's
+   * MARKET-grain ceiling (AdBidPolicy). The proposedAction is rewritten to a setValue op at the
+   * cap, with the clamp recorded on the action (`enforcedMaxBid`) so the row can say what
+   * happened. `dryRun: true` only counts — the modal shows the count before the operator commits.
+   *
+   * Honest scope, stated where the operator reads it: the engine REFRESHES proposedAction on its
+   * next evaluation, so a rule that still computes an over-cap bid will propose it again — and
+   * the write gate remains the durable enforcement (it DENIES over-cap applies, naming the
+   * policy). This sweep exists so what the operator approves is a bid that will actually land.
+   */
+  fastify.post('/advertising/suggestions/enforce-max-bid', async (request) => {
+    const b = (request.body ?? {}) as { dryRun?: boolean }
+    const policies = await prisma.adBidPolicy.findMany({
+      where: { grain: 'MARKET', enabled: true, maxBidCents: { not: null } },
+      select: { scopeId: true, maxBidCents: true, label: true },
+    })
+    const capByMkt = new Map(policies.map((p) => [p.scopeId, { cents: p.maxBidCents as number, label: p.label }]))
+    if (capByMkt.size === 0) return { ok: true, dryRun: !!b.dryRun, clamped: 0, perMarket: {}, note: 'No market ceilings are set — nothing to enforce.' }
+
+    const rows = await prisma.adsRuleSuggestion.findMany({ where: { status: 'pending' } })
+    const bidRows = rows.filter((r) => familyOfRow(r) === 'bids' && r.entityType === 'AD_TARGET' && r.marketplace && capByMkt.has(r.marketplace))
+    const targets = bidRows.length
+      ? await prisma.adTarget.findMany({ where: { id: { in: bidRows.map((r) => r.entityId) } }, select: { id: true, bidCents: true } })
+      : []
+    const bidByTarget = new Map(targets.map((t) => [t.id, t.bidCents]))
+
+    let clamped = 0
+    const perMarket: Record<string, number> = {}
+    for (const r of bidRows) {
+      const cap = capByMkt.get(r.marketplace as string)!
+      const action = (r.proposedAction ?? {}) as Record<string, unknown>
+      const projected = projectBidCents(action, bidByTarget.get(r.entityId) ?? null)
+      if (projected == null || projected <= cap.cents) continue
+      clamped += 1
+      perMarket[r.marketplace as string] = (perMarket[r.marketplace as string] ?? 0) + 1
+      if (b.dryRun) continue
+      const current = bidByTarget.get(r.entityId)
+      await prisma.adsRuleSuggestion.update({
+        where: { id: r.id },
+        data: {
+          proposedAction: {
+            ...action,
+            op: 'setValue',
+            value: cap.cents / 100,
+            wouldChange: `${current ?? '?'}¢ → ${cap.cents}¢`,
+            enforcedMaxBid: { fromCents: projected, toCents: cap.cents, policy: cap.label, at: new Date().toISOString() },
+          },
+        },
+      })
+    }
+    return { ok: true, dryRun: !!b.dryRun, clamped, perMarket }
+  })
+
+  // SG.4 — the A.I. Bids tab reads the AUTOPILOT store, not AdsRuleSuggestion. Read-only by
+  // design: no decision approve/dismiss route exists yet (verified before building — the
+  // green-gates lesson), so the tab lists what is proposed and links to AI Advertising where
+  // the plan itself is operated. When an approval route ships, the verbs land here too.
+  fastify.get('/advertising/suggestions/ai-bids', async () => {
+    const rows = await prisma.autopilotDecision.findMany({
+      where: { status: 'PROPOSED', source: { not: 'rule-setting' } },
+      orderBy: { at: 'desc' },
+      take: 500,
+      include: { plan: { select: { id: true, name: true } } },
+    })
+    const campIds = [...new Set(rows.map((r) => r.campaignId).filter((x): x is string => !!x))]
+    const camps = campIds.length
+      ? await prisma.campaign.findMany({ where: { id: { in: campIds } }, select: { id: true, name: true } })
+      : []
+    const nameById = new Map(camps.map((c) => [c.id, c.name]))
+    return {
+      items: rows.map((r) => ({
+        id: r.id, at: r.at, module: r.module, cycle: r.cycle, action: r.action,
+        campaignId: r.campaignId,
+        campaignName: r.campaignId ? nameById.get(r.campaignId) ?? null : null,
+        before: r.before, after: r.after, reason: r.reason,
+        planId: r.planId, planName: r.plan?.name ?? null,
+      })),
+      total: rows.length,
+    }
   })
 
   fastify.get('/advertising/suggestions', async (request) => {
-    const q = request.query as { status?: string; limit?: string }
+    const q = request.query as {
+      status?: string; limit?: string; family?: string; market?: string
+      campaign?: string; portfolio?: string; line?: string; adGroup?: string
+    }
     const status = q.status ?? 'pending'
     /**
      * 🔴 B4 (2026-08-20) — the ceiling had been REACHED, silently.
@@ -6547,27 +6648,113 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      * since been deleted — there the snapshot is the only record of what proposed the change.
      */
     const ruleIds = [...new Set(rows.map((r) => r.ruleId).filter(Boolean))]
-    const live = new Map(
-      (await prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true } }))
-        .map((r) => [r.id, r.name]),
-    )
-    const fresh = rows.map((r) => ({ ...r, ruleName: live.get(r.ruleId) ?? r.ruleName }))
+    const liveRules = await prisma.automationRule.findMany({
+      where: { id: { in: ruleIds } },
+      select: { id: true, name: true, conditions: true, actions: true },
+    })
+    const live = new Map(liveRules.map((r) => [r.id, r.name]))
+    // SG.2b — H10's Rule cell prints the CRITERIA, not just the name ("PPC Orders >= 2, ACOS <=
+    // 40%"). One formatter, the dependency-free conditionsTextOf — never a second reading of a
+    // rule's conditions (and it already speaks operator units, not database paths).
+    // SG.2d — the rule's ACoS threshold rides along for the ADAPTIVE traffic dot (precedence:
+    // campaign target → this → the default 30% band), via acosThresholdOf (both rule shapes).
+    const { conditionsTextOf } = await import('../services/advertising/rule-conditions-text.js')
+    const { acosThresholdOf } = await import('../services/advertising/ads-suggestions.service.js')
+    const criteria = new Map(liveRules.map((r) => [r.id, conditionsTextOf(r.conditions)]))
+    const ruleAcos = new Map(liveRules.map((r) => [r.id, acosThresholdOf(r.conditions)]))
+    // SG.2f — the Lookback Period column, from the ONE window table the engine itself reads
+    // (@nexus/shared/ads-rule-window). Per ROW, because the trigger lives on the suggestion.
+    const { ruleLookback } = await import('@nexus/shared/ads-rule-window')
+    const ruleActs = new Map(liveRules.map((r) => [r.id, Array.isArray(r.actions) ? (r.actions as Array<Record<string, unknown>>) : []]))
+    const fresh = rows.map((r) => {
+      const acts = ruleActs.get(r.ruleId) ?? []
+      const actionTypes = acts.map((a) => String(a.type ?? '')).filter(Boolean)
+      const windowDays = acts.map((a) => Number(a.windowDays)).find((n) => Number.isFinite(n)) ?? null
+      const lb = r.trigger ? ruleLookback(r.trigger, actionTypes, windowDays) : null
+      return {
+        ...r,
+        ruleName: live.get(r.ruleId) ?? r.ruleName,
+        ruleCriteria: criteria.get(r.ruleId) ?? null,
+        ruleAcosPct: ruleAcos.get(r.ruleId) ?? null,
+        lookback: lb ? { label: lb.label, why: Array.isArray(lb.why) ? lb.why.join(' ') : String(lb.why ?? '') } : null,
+      }
+    })
+    /**
+     * SG.0/SG.1 — view filters, applied AFTER the fetch: the family lives inside the JSON
+     * payload and the scope lives behind the source join, so SQL cannot select on either, and
+     * the row volume here is hundreds, capped at 1000.
+     *
+     *   market  narrows to one marketplace (row.marketplace).
+     *   scope   campaign / portfolio / line resolve SERVER-side to a campaign-id set
+     *           (scopeCampaignIds — the scope-options picker's own joins), matched against the
+     *           resolved source; adGroup matches source.adGroupId. A row that cannot be
+     *           attributed to a campaign (ACCOUNT sweeps, MARKETPLACE rows) is DROPPED by a
+     *           scope filter rather than kept — "unknown scope" inside a scoped view would read
+     *           as "this scope's" (same rule the pricing service follows).
+     *   family  narrows to one type tab (familyOfRow — the ONE map). `families` tallies the
+     *           scope-narrowed set BEFORE the family cut, so the tab counts and the grid
+     *           describe the same rows. When the fetch hit its cap (`total > count`) the
+     *           tallies describe the fetched prefix and the page must keep saying so.
+     */
+    const marketRows = q.market && q.market !== 'all' ? fresh.filter((r) => r.marketplace === q.market) : fresh
     // S.1 — attach a resolved deep-link (`source`) per row so the page can navigate
     // straight to the campaign / ad-group / search-term the suggestion came from.
-    const items = await attachSourceLinks(fresh)
-    return { items, count: items.length, total }
+    // SG.2 — then the decision data: live 30d metrics, current bid/budget, projected value.
+    const { scopeCampaignIds, attachDecisionData } = await import('../services/advertising/ads-suggestions.service.js')
+    const sourced = await attachDecisionData(await attachSourceLinks(marketRows))
+    const scopeSet = await scopeCampaignIds({ campaign: q.campaign, portfolio: q.portfolio, line: q.line })
+    const scoped = sourced.filter((r) => {
+      if (scopeSet) {
+        const cid = r.entityType === 'CAMPAIGN' ? r.entityId : r.source.campaignId
+        if (!cid || !scopeSet.has(cid)) return false
+      }
+      if (q.adGroup && r.source.adGroupId !== q.adGroup) return false
+      return true
+    })
+    // Each row CARRIES its family (the one server-side map) so no client ever re-derives it.
+    const rowsWithFamily = scoped.map((r) => ({ ...r, family: familyOfRow(r) }))
+    const families: Record<string, number> = {}
+    for (const r of rowsWithFamily) families[r.family] = (families[r.family] ?? 0) + 1
+    const filtered = q.family ? rowsWithFamily.filter((r) => r.family === q.family) : rowsWithFamily
+    // SG.3 — applied rows carry their DELIVERY fate + the undo handle (attachDeliveryData);
+    // `appliedResult.ok` alone is "enqueued", never "landed at Amazon".
+    const { attachDeliveryData } = await import('../services/advertising/ads-suggestions.service.js')
+    const items = status === 'applied' ? await attachDeliveryData(filtered) : filtered
+    return { items, count: items.length, total, families }
   })
+
+  /**
+   * ── SG.0 — ONE decide path, shared by the single routes and the bulk route ──────────────────
+   *
+   * Each helper returns a plain outcome instead of writing to `reply`, so the bulk route can
+   * report per-row results and the single routes can map the same outcome to an HTTP code.
+   * `httpStatus` is set only for the outcomes that are protocol-level (404/409/422/423);
+   * a REFUSAL is not one of them — see applySuggestion.
+   */
+  type DecideOutcome = { ok: boolean; httpStatus?: number; error?: string; refused?: boolean; result?: unknown }
+
+  /**
+   * SG.2b — the operator's override, in either of two grammars:
+   *   value            replaces the action's own magnitude (the drawer's edit: decPct 15 → 20).
+   *   resultBidCents / resultBudgetEur
+   *                    replaces the RESULT (H10's inline staging input: type €0.35 in the row).
+   *                    Expressed by rewriting the action to the setValue op of its family — the
+   *                    one honest translation of "make it exactly this" — with every other field
+   *                    (entity ids, context) preserved. The write gate still binds either way,
+   *                    and `appliedResult.override` records the edit, which graduation reads as
+   *                    agreement-with-correction.
+   */
+  type ApplyOverride = { value?: number; resultBidCents?: number; resultBudgetEur?: number }
 
   // Approve → re-run the proposed action LIVE against the frozen execution context (respects the
   // automation halt + the handlers' own spend caps). The operator already approved, so we apply
   // the action directly rather than re-evaluating conditions.
-  fastify.post('/advertising/suggestions/:id/apply', async (request, reply) => {
-    const { id } = request.params as { id: string }
+  const applySuggestion = async (id: string, ov: ApplyOverride = {}): Promise<DecideOutcome> => {
     const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
-    if (!sug) { reply.code(404); return { error: 'not_found' } }
-    if (sug.status !== 'pending') { reply.code(409); return { error: `already ${sug.status}` } }
+    if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
+    if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
     const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
-    if (await isAutomationHalted()) { reply.code(423); return { error: 'automation_halted' } }
+    if (await isAutomationHalted()) return { ok: false, httpStatus: 423, error: 'automation_halted' }
     // The frozen execution context is pruned after a few days. Don't hard-fail a stale
     // suggestion: budget/bid/placement actions are self-contained (they carry campaignId + op +
     // value and read current values live from the DB), so they re-apply correctly against an
@@ -6582,37 +6769,209 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // S.5 — optional edit-before-apply: the operator may override the action's magnitude
     // (`value`) from the detail drawer. The handler still clamps to the action's own min/max
     // bounds (e.g. minEur/maxEur), so an override can't escape the rule's guardrails.
-    const body = (request.body ?? {}) as { value?: number }
-    const action = { ...(sug.proposedAction as Record<string, unknown>) }
-    const overridden = typeof body.value === 'number' && Number.isFinite(body.value) && body.value !== action.value
-    if (overridden) action.value = body.value
+    let action = { ...(sug.proposedAction as Record<string, unknown>) }
+    let overridden = false
+    let overrideRecord: Record<string, number> | null = null
+    if (typeof ov.resultBidCents === 'number' && Number.isFinite(ov.resultBidCents) && ov.resultBidCents > 0) {
+      action = { ...action, type: 'bid_apply', op: 'setValue', value: ov.resultBidCents / 100 }
+      overridden = true
+      overrideRecord = { resultBidCents: ov.resultBidCents }
+    } else if (typeof ov.resultBudgetEur === 'number' && Number.isFinite(ov.resultBudgetEur) && ov.resultBudgetEur > 0) {
+      action = { ...action, type: 'budget_apply', op: 'setValue', value: ov.resultBudgetEur }
+      overridden = true
+      overrideRecord = { resultBudgetEur: ov.resultBudgetEur }
+    } else if (typeof ov.value === 'number' && Number.isFinite(ov.value) && ov.value !== action.value) {
+      action.value = ov.value
+      overridden = true
+      overrideRecord = { value: ov.value }
+    }
     const handler = ACTION_HANDLERS[String(action.type)]
-    if (!handler) { reply.code(422); return { error: `no handler for ${action.type}` } }
+    if (!handler) return { ok: false, httpStatus: 422, error: `no handler for ${action.type}` }
     const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId })
+    /**
+     * 🔴 SG.0 — a refused apply STAYS PENDING.
+     *
+     * This route used to mark the row `applied` unconditionally, so a write-gate denial or a
+     * protectConverting refusal landed in the Applied tab looking like a success — two rows with
+     * identical status meaning "landed at Amazon" and "refused at the gate". A refusal is a
+     * governed stop, not a decision the operator made: the row keeps waiting, and the caller
+     * gets the server's own sentence to show.
+     */
+    if (result.ok === false) {
+      return { ok: false, refused: true, error: result.error ?? 'refused', result }
+    }
     await prisma.adsRuleSuggestion.update({
-      where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: { ...(result as object), ...(overridden ? { override: { value: body.value } } : {}) } as object },
+      where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
     })
-    return { ok: result.ok !== false, result }
+    return { ok: true, result }
+  }
+
+  const dismissSuggestion = async (id: string): Promise<DecideOutcome> => {
+    const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id }, select: { status: true } })
+    if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
+    if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
+    await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'dismissed', decidedAt: new Date(), decidedBy: 'operator' } })
+    return { ok: true }
+  }
+
+  // S.4 — Undo a dismiss: put a dismissed (or SG.0-expired) suggestion back to pending.
+  // SG.3 — an APPLIED row may come back too, but ONLY when its write never landed (the gate
+  // refused it after the approve, or delivery dead-lettered). A change that reached Amazon is
+  // not un-applied here — that is the rollback path's job, from the Change Log handle.
+  const restoreSuggestion = async (id: string): Promise<DecideOutcome> => {
+    const sug = await prisma.adsRuleSuggestion.findUnique({
+      where: { id },
+      select: { status: true, entityType: true, entityId: true, decidedAt: true, appliedResult: true },
+    })
+    if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
+    if (sug.status === 'applied') {
+      const { attachDeliveryData } = await import('../services/advertising/ads-suggestions.service.js')
+      const [row] = await attachDeliveryData([sug])
+      if (row.delivery.state !== 'refused' && row.delivery.state !== 'failed') {
+        return { ok: false, httpStatus: 409, error: 'this change was delivered — undo it from the Change Log instead of restoring the suggestion' }
+      }
+      // the appliedResult (the refusal, in the server's words) stays on the row as history
+      await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'pending', decidedAt: null, decidedBy: null } })
+      return { ok: true }
+    }
+    if (sug.status !== 'dismissed' && sug.status !== 'expired') return { ok: false, httpStatus: 409, error: `cannot restore ${sug.status}` }
+    await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'pending', decidedAt: null, decidedBy: null } })
+    return { ok: true }
+  }
+
+  const sendOutcome = (reply: { code: (n: number) => unknown }, out: DecideOutcome) => {
+    if (out.httpStatus) { reply.code(out.httpStatus); return { error: out.error } }
+    return { ok: out.ok, ...(out.refused ? { refused: true, error: out.error } : {}), ...(out.result !== undefined ? { result: out.result } : {}) }
+  }
+
+  fastify.post('/advertising/suggestions/:id/apply', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = (request.body ?? {}) as ApplyOverride
+    return sendOutcome(reply, await applySuggestion(id, body))
   })
 
   fastify.post('/advertising/suggestions/:id/dismiss', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'dismissed', decidedAt: new Date(), decidedBy: 'operator' } })
-      return { ok: true }
-    } catch { reply.code(404); return { error: 'not_found' } }
+    return sendOutcome(reply, await dismissSuggestion(id))
   })
 
-  // S.4 — Undo a dismiss: put a dismissed suggestion back to pending. Deliberately scoped to
-  // dismissed → pending only; an APPLIED suggestion ran a live action and is NOT un-applied here
-  // (use the execution rollback path for that).
   fastify.post('/advertising/suggestions/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return sendOutcome(reply, await restoreSuggestion(id))
+  })
+
+  /**
+   * SG.2 — H10's third icon: pause the UNDERLYING TARGET and set the suggestion aside.
+   *
+   * Operator-clicked, so the real `status:'PAUSED'` is allowed (the no-pause policy binds the
+   * ENGINE; a human clicking Pause is the documented exception, and `pause_target` itself was
+   * operator-approved as a rule verb in C2). AD_TARGET rows only — pausing a campaign from a
+   * suggestion row would be a much bigger action than the row describes, and the engine-side
+   * no-pause policy still holds for campaigns and ad groups.
+   *
+   * The suggestion is marked dismissed with `decidedBy:'operator:paused'` — a paused target
+   * stops producing evaluator contexts, so its `lastSeenAt` stops moving and the lifecycle's
+   * re-propose can never nag about it (and the sweep's operator-dismiss clause matches
+   * decidedBy 'operator' EXACTLY, so this marker is out of its reach by construction).
+   * `updateAdTargetWithSync` returns at ENQUEUE — delivery is the write gate + drain worker's
+   * business, same as every apply (SG.3 renders that truth).
+   */
+  fastify.post('/advertising/suggestions/:id/pause-target', async (request, reply) => {
     const { id } = request.params as { id: string }
     const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
     if (!sug) { reply.code(404); return { error: 'not_found' } }
-    if (sug.status !== 'dismissed') { reply.code(409); return { error: `cannot restore ${sug.status}` } }
-    await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'pending', decidedAt: null, decidedBy: null } })
+    if (sug.status !== 'pending') { reply.code(409); return { error: `already ${sug.status}` } }
+    if (sug.entityType !== 'AD_TARGET') { reply.code(422); return { error: 'only a keyword/target row can pause its target' } }
+    const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
+    if (await isAutomationHalted()) { reply.code(423); return { error: 'automation_halted' } }
+    const target = await prisma.adTarget.findUnique({ where: { id: sug.entityId }, select: { id: true, status: true } })
+    if (!target) { reply.code(404); return { error: 'target_gone' } }
+    // No `as never` here — [[reference_as_never_hides_write_failures]]: the exact signature, or
+    // a dropped argument silently unroutes the gate.
+    const { updateAdTargetWithSync } = await import('../services/advertising/ads-mutation.service.js')
+    const res = await updateAdTargetWithSync({
+      adTargetId: target.id,
+      patch: { status: 'PAUSED' },
+      actor: 'user:operator',
+      reason: `paused from the Suggestions queue (suggestion ${sug.id})`,
+    })
+    if (res.ok === false) {
+      return { ok: false, refused: true, error: res.error ?? 'the write was refused' }
+    }
+    await prisma.adsRuleSuggestion.update({
+      where: { id },
+      data: { status: 'dismissed', decidedAt: new Date(), decidedBy: 'operator:paused', appliedResult: { pausedTarget: target.id, previousStatus: target.status } },
+    })
     return { ok: true }
+  })
+
+  /**
+   * SG.0 — bulk decide. One round trip for "Apply N changes" instead of N client-side POSTs,
+   * and — the part the client loop could never give — a PER-ROW outcome list, so a partial
+   * result can name which rows were refused and why instead of dissolving into a count.
+   * Applies run with concurrency 3 (each is a live write path: local DB write + queue enqueue),
+   * matching the old client loop's pacing.
+   */
+  fastify.post('/advertising/suggestions/bulk', async (request, reply) => {
+    const b = (request.body ?? {}) as {
+      ids?: unknown; kind?: string
+      /** SG.2b — H10's staged batch: accepts and removals COMMIT TOGETHER on "Apply N Changes",
+       *  each accept optionally carrying the operator's inline override. */
+      ops?: Array<{ id?: unknown; kind?: unknown; value?: unknown; resultBidCents?: unknown; resultBudgetEur?: unknown }>
+    }
+    type Op = { id: string; kind: 'apply' | 'dismiss' | 'restore'; ov: ApplyOverride }
+    const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+    let ops: Op[] = []
+    if (Array.isArray(b.ops)) {
+      const seen = new Set<string>()
+      for (const o of b.ops) {
+        const id = typeof o?.id === 'string' ? o.id : ''
+        const kind = String(o?.kind ?? '')
+        if (!id || seen.has(id) || !['apply', 'dismiss', 'restore'].includes(kind)) continue
+        seen.add(id)
+        ops.push({ id, kind: kind as Op['kind'], ov: { value: num(o.value), resultBidCents: num(o.resultBidCents), resultBudgetEur: num(o.resultBudgetEur) } })
+      }
+    } else {
+      const ids = Array.isArray(b.ids) ? [...new Set(b.ids.filter((x): x is string => typeof x === 'string'))] : []
+      const kind = String(b.kind ?? '')
+      if (['apply', 'dismiss', 'restore'].includes(kind)) ops = ids.map((id) => ({ id, kind: kind as Op['kind'], ov: {} }))
+    }
+    if (!ops.length || ops.length > 200) {
+      reply.code(400)
+      return { error: 'ops (1–200 of {id, kind apply|dismiss|restore}) or ids+kind required' }
+    }
+    if (ops.some((o) => o.kind === 'apply')) {
+      const { isAutomationHalted } = await import('../services/advertising/ads-automation-state.service.js')
+      if (await isAutomationHalted()) { reply.code(423); return { error: 'automation_halted' } }
+    }
+    const byId = new Map<string, DecideOutcome>()
+    let i = 0
+    const worker = async () => {
+      while (i < ops.length) {
+        const op = ops[i++]
+        try {
+          byId.set(op.id, op.kind === 'apply' ? await applySuggestion(op.id, op.ov) : op.kind === 'dismiss' ? await dismissSuggestion(op.id) : await restoreSuggestion(op.id))
+        } catch (e) {
+          byId.set(op.id, { ok: false, error: (e as Error).message })
+        }
+      }
+    }
+    await Promise.all([worker(), worker(), worker()])
+    const results = ops.map(({ id, kind }) => {
+      const out = byId.get(id) ?? { ok: false, error: 'not_processed' }
+      return { id, kind, ok: out.ok, ...(out.refused ? { refused: true } : {}), ...(out.error ? { error: out.error } : {}) }
+    })
+    const okCount = results.filter((r) => r.ok).length
+    return { ok: okCount === results.length, okCount, failCount: results.length - okCount, results }
+  })
+
+  // SG.0 — the poll cursor (see ads-cursors.service.ts for the house rules: a value fingerprint
+  // over the queue's MEMBERSHIP, never a row timestamp). Uncached on purpose: a cursor behind a
+  // cache is a cursor that lies for its TTL.
+  fastify.get('/advertising/suggestions/cursor', async (request, reply) => {
+    reply.header('cache-control', 'no-store')
+    const { getSuggestionsCursor } = await import('../services/advertising/ads-cursors.service.js')
+    return getSuggestionsCursor()
   })
 
   // Test a rule against a synthetic context — used by the rule-builder
@@ -7780,6 +8139,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = (request.body ?? {}) as { maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null }
     const { setGuardThresholds, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
     await setGuardThresholds(b)
+    return getAutomationState()
+  })
+  // SG.5 — account default ACoS target (INTEGER percent; null clears). One reader:
+  // bid_apply's targetAcos ops, as fallback when the rule carries no target.
+  fastify.post('/advertising/automation/default-target-acos', async (request, reply) => {
+    const b = (request.body ?? {}) as { pct?: number | null }
+    if (b.pct !== null && (!Number.isFinite(b.pct) || (b.pct as number) < 1 || (b.pct as number) > 500 || !Number.isInteger(b.pct))) {
+      reply.status(400); return { error: 'pct must be an integer percent between 1 and 500, or null to clear' }
+    }
+    const { setDefaultTargetAcosPct, getAutomationState } = await import('../services/advertising/ads-automation-state.service.js')
+    await setDefaultTargetAcosPct(b.pct ?? null, actorFromHeaders(request.headers as Record<string, unknown>))
     return getAutomationState()
   })
   fastify.post('/advertising/automation/guard/run', async () => {
@@ -11618,10 +11988,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * `limit` is passed at the pending COUNT, not the default 15: the caller wants a row per
    * proposal, and the service's own `top` slice exists for boards that want a shortlist.
    */
-  fastify.get('/advertising/suggestions/pricing', async (_request, reply) => {
+  fastify.get('/advertising/suggestions/pricing', async (request, reply) => {
     const { pricePendingProposals } = await import('../services/advertising/ads-proposal-pricing.service.js')
+    // SG.1 — the pricing follows the SAME scope params as the list, resolved by the SAME
+    // function, so the money tiles can never describe a different row set from the grid under
+    // them. An adGroup narrows pricing to its campaign (the pricing grain is campaign-level).
+    const q = request.query as { campaign?: string; portfolio?: string; line?: string; adGroup?: string }
+    const { scopeCampaignIds } = await import('../services/advertising/ads-suggestions.service.js')
+    let scopeSet = await scopeCampaignIds({ campaign: q.campaign, portfolio: q.portfolio, line: q.line })
+    if (!scopeSet && q.adGroup) {
+      const ag = await prisma.adGroup.findUnique({ where: { id: q.adGroup }, select: { campaignId: true } })
+      if (ag?.campaignId) scopeSet = new Set([ag.campaignId])
+    }
     const pending = await prisma.adsRuleSuggestion.count({ where: { status: 'pending' } })
-    const p = await pricePendingProposals(Math.max(pending, 1))
+    const p = await pricePendingProposals(Math.max(pending, 1), scopeSet ? { campaignIds: [...scopeSet] } : {})
     const byId: Record<string, {
       spendAtStakeCents: number | null
       salesAtStakeCents: number | null

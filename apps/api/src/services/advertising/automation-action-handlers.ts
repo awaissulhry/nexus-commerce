@@ -1230,11 +1230,26 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
         return { type: action.type, ok: true, output: { skipped: 'source-ad-group-not-in-mappings', keyword } }
       }
     }
-    // EA2 — honor the builder's Negation Level: AD_GROUP scopes to the source ad group; CAMPAIGN (default) is broader.
-    const scope = (action.scope as string | undefined) === 'AD_GROUP' ? 'AD_GROUP' : 'CAMPAIGN'
+    /**
+     * 🔴 SG.0 — the default scope is AD_GROUP now, not CAMPAIGN.
+     *
+     * EA2 honoured the builder's Negation Level with CAMPAIGN as the fallback — and campaign-scope
+     * negatives have a measured landing rate of 0 of 20 EVER in this account, against 2,017 of
+     * 2,037 (99%) at ad-group scope (`ads-harvest.service.ts:194-197`, which flipped its own
+     * default for the same reason). An explicit `scope:'CAMPAIGN'` on the action is still
+     * honoured — the builder's "both" maps there — but the fallback now takes the path that
+     * demonstrably reaches Amazon. When AD_GROUP is intended and no ad group can be resolved
+     * from the action or the trigger context, this FAILS CLOSED rather than silently widening
+     * to the campaign: a negation that lands somewhere other than where the operator approved
+     * it is worse than one that asks to be re-scoped.
+     */
+    const scope = (action.scope as string | undefined) === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
     const externalAdGroupId = scope === 'AD_GROUP'
       ? ((action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId)
       : undefined
+    if (scope === 'AD_GROUP' && !externalAdGroupId) {
+      return { type: action.type, ok: false, error: 'No ad group in context to scope the negative to — set scope:"CAMPAIGN" explicitly to negate campaign-wide' }
+    }
 
     // NEG.0(b) — the gate's FIRST substantive check is `if (!ctx.marketplace) → deniedAt:'connection'`
     // (ads-write-gate.ts:165-171), BEFORE the whitelist at :304. This handler used to hide the missing
@@ -1756,9 +1771,17 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
       // action): bid = CURRENT BID × (target / actual). Above target the factor is < 1 and the
       // bid comes down; below it, up. The clamp below is what stops a 5% actual ACoS from
       // multiplying a bid by twenty.
-      const targetPct = Number(action.value)
+      let targetPct = Number(action.value)
       if (!Number.isFinite(targetPct) || targetPct <= 0) {
-        return { type: action.type, ok: false, error: `${String(action.op)} needs a positive target ACoS percentage; this rule stores ${JSON.stringify(action.value)}`, output: { adTargetId: id } }
+        // SG.5 — the account default (Suggestions gear → AdsAutomationState.defaultTargetAcosPct,
+        // INTEGER percent). This is that column's ONE reader. Dynamic import: the state service
+        // is cycle-free but this file sits under half the engine — keep it that way.
+        const { getAutomationState } = await import('./ads-automation-state.service.js')
+        const st = await getAutomationState().catch(() => null)
+        if (st?.defaultTargetAcosPct != null && st.defaultTargetAcosPct > 0) targetPct = st.defaultTargetAcosPct
+      }
+      if (!Number.isFinite(targetPct) || targetPct <= 0) {
+        return { type: action.type, ok: false, error: `${String(action.op)} needs a positive target ACoS percentage — this rule stores ${JSON.stringify(action.value)} and no account default is set (Suggestions → Bid Settings)`, output: { adTargetId: id } }
       }
       if (perf.acos == null) {
         return { type: action.type, ok: false, error: `this target has spend but no attributed sales in the rule's window, so its actual ACoS is undefined — a bid cannot be scaled by it`, output: { adTargetId: id, clicks: perf.clicks } }

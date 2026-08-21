@@ -34,6 +34,9 @@ export interface AdsAutomationStateView {
   haltedBy: string | null
   maxHourlySpendCentsEur: number | null
   maxActionsPerHour: number | null
+  /** SG.5 — account default ACoS target, INTEGER percent (30 = 30%). ONE reader:
+   *  bid_apply's targetAcos/curBidTargetAcos ops, as fallback when the rule has no target. */
+  defaultTargetAcosPct: number | null
   lastCheckedAt: string | null
   // Derived: env kill-switch OR halted OR autonomy=OFF.
   effectivelyStopped: boolean
@@ -78,6 +81,7 @@ export async function getAutomationState(): Promise<AdsAutomationStateView> {
     haltedBy: r?.haltedBy ?? null,
     maxHourlySpendCentsEur: r?.maxHourlySpendCentsEur ?? null,
     maxActionsPerHour: r?.maxActionsPerHour ?? null,
+    defaultTargetAcosPct: r?.defaultTargetAcosPct ?? null,
     lastCheckedAt: r?.lastCheckedAt?.toISOString() ?? null,
     effectivelyStopped: envKill() || halted || autonomy === 'OFF',
     degraded: r == null,
@@ -143,6 +147,16 @@ export async function setAutonomy(level: Autonomy, by: string): Promise<void> {
     update: { autonomy: level },
   })
   logger.info('[ads-automation] autonomy set', { level, by })
+}
+
+/** SG.5 — set (or clear, with null) the account default ACoS target. INTEGER percent. */
+export async function setDefaultTargetAcosPct(pct: number | null, by: string): Promise<void> {
+  await prisma.adsAutomationState.upsert({
+    where: { id: SINGLETON },
+    create: { id: SINGLETON, defaultTargetAcosPct: pct },
+    update: { defaultTargetAcosPct: pct },
+  })
+  logger.info('[ads-automation] default target ACoS set', { pct, by })
 }
 
 export async function setGuardThresholds(opts: { maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null }): Promise<void> {

@@ -99,6 +99,19 @@ export function parseActor(actor: string | null | undefined): { source: ChangeSo
       return { source: 'automation', origin: { kind, id: id || null, name: id || kind } }
     }
   }
+  /**
+   * 🔴 SG.0 — the RULE actor carries NO prefix. `RULE_ACTOR` (automation-action-handlers.ts)
+   * writes `automation:<ruleId>` — a bare cuid — while this parser only recognised
+   * `automation:rule-<id>`, so every rule write (including every operator-approved suggestion
+   * apply) fell through to `kind:'job'` and rendered as an anonymous job named by a raw cuid.
+   * A bare cuid after `automation:` is therefore treated as a rule id; resolveOrigins() DEMOTES
+   * it back to 'job' when no such rule exists, so a non-rule actor that happens to look like a
+   * cuid cannot be mislabelled for long. The written actor string itself must NOT change —
+   * `maxWritesPerDay` counting and the B4 measurements key on it exactly.
+   */
+  if (/^c[a-z0-9]{20,}$/.test(rest)) {
+    return { source: 'automation', origin: { kind: 'rule', id: rest, name: rest } }
+  }
   // Standing jobs with no per-instance id: autopilot, ads-write-reconcile, tos-optimizer.
   return { source: 'automation', origin: { kind: 'job', id: null, name: rest.replace(/-/g, ' ') } }
 }
@@ -133,6 +146,16 @@ async function resolveOrigins(rows: ChangeRow[]): Promise<void> {
     const hit = r.origin.kind === 'schedule' ? sName.get(r.origin.id)
       : r.origin.kind === 'plan' ? pName.get(r.origin.id)
         : r.origin.kind === 'rule' ? rName.get(r.origin.id) : undefined
+    // SG.0 — a bare-cuid actor was classified 'rule' on shape alone (parseActor). When no such
+    // rule exists it was never a rule: demote to an anonymous job rather than claiming a
+    // deleted rule. Only the PREFIXED form (`automation:rule-<id>`) asserts rule-ness strongly
+    // enough to say "(deleted)" — but the prefixed and bare forms are indistinguishable here,
+    // so the honest fallback for a missing rule id is the job label.
+    if (r.origin.kind === 'rule' && hit == null) {
+      r.origin.kind = 'job'
+      r.origin.name = r.origin.id
+      continue
+    }
     // A deleted schedule leaves its history behind on purpose — say so rather than showing a cuid.
     r.origin.name = hit ?? `${r.origin.kind} (deleted)`
   }

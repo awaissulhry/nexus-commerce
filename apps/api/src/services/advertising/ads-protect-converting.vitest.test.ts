@@ -159,7 +159,7 @@ describe('add_negative_exact — the handler reads the toggle', () => {
       { query: 'giacca moto', marketplace: 'IT', _sum: { orders7d: 2, sales7dCents: 16722 } },
     ] as never)
 
-    const r = await call({ type: 'add_negative_exact', keyword: 'Giacca Moto' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } })
+    const r = await call({ type: 'add_negative_exact', keyword: 'Giacca Moto' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' }, searchTerm: { externalAdGroupId: 'AG1' } })
 
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/protect converting/i)
@@ -167,7 +167,7 @@ describe('add_negative_exact — the handler reads the toggle', () => {
   })
 
   it('negates a term with no orders — and passes the marketplace the gate needs (fix b)', async () => {
-    const r = await call({ type: 'add_negative_exact', keyword: 'saponette moto' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } })
+    const r = await call({ type: 'add_negative_exact', keyword: 'saponette moto' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' }, searchTerm: { externalAdGroupId: 'AG1' } })
 
     expect(r.ok).toBe(true)
     expect(h.createNegative).toHaveBeenCalledTimes(1)
@@ -184,7 +184,7 @@ describe('add_negative_exact — the handler reads the toggle', () => {
 
     const r = await call(
       { type: 'add_negative_exact', keyword: 'giacca moto', protectConverting: false },
-      { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } },
+      { marketplace: 'IT', campaign: { externalCampaignId: 'C1' }, searchTerm: { externalAdGroupId: 'AG1' } },
     )
 
     expect(r.ok).toBe(true)
@@ -194,7 +194,7 @@ describe('add_negative_exact — the handler reads the toggle', () => {
   it('refuses rather than writing blind when the context carries no marketplace', async () => {
     // Previously this reached `createNegative` with `marketplace: undefined` behind an `as never`,
     // was denied at the gate's connection check, and reported ok:true to the execution row.
-    const r = await call({ type: 'add_negative_exact', keyword: 'saponette moto' }, { campaign: { externalCampaignId: 'C1' } })
+    const r = await call({ type: 'add_negative_exact', keyword: 'saponette moto' }, { campaign: { externalCampaignId: 'C1' }, searchTerm: { externalAdGroupId: 'AG1' } })
 
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/marketplace/i)
@@ -204,7 +204,7 @@ describe('add_negative_exact — the handler reads the toggle', () => {
   it('reports a gate denial as a failure instead of success', async () => {
     h.createNegative.mockResolvedValue({ ok: false, alreadyExisted: false, denied: { reason: 'protected term', deniedAt: 'protection' }, externalNegativeKeywordId: null })
 
-    const r = await call({ type: 'add_negative_exact', keyword: 'xavia' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } })
+    const r = await call({ type: 'add_negative_exact', keyword: 'xavia' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' }, searchTerm: { externalAdGroupId: 'AG1' } })
 
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/protected term/)
@@ -217,7 +217,7 @@ describe('add_negative_exact — the handler reads the toggle', () => {
 
     const r = await (ACTION_HANDLERS.add_negative_exact as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; error?: string; output?: unknown }>)(
       { type: 'add_negative_exact', keyword: 'giacca moto' },
-      { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } },
+      { marketplace: 'IT', campaign: { externalCampaignId: 'C1' }, searchTerm: { externalAdGroupId: 'AG1' } },
       { dryRun: true, ruleId: 'rule-1' },
     )
 
@@ -227,5 +227,23 @@ describe('add_negative_exact — the handler reads the toggle', () => {
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/protect converting/i)
     expect(h.createNegative).not.toHaveBeenCalled()
+  })
+
+  // ── SG.0 — the default scope is AD_GROUP, and it FAILS CLOSED without one ──────────────────
+  // Campaign-scope negatives have a measured landing rate of 0 of 20 ever; ad-group scope lands
+  // 99%. The fixtures above carry `searchTerm.externalAdGroupId` because the default path now
+  // resolves the source ad group before anything else.
+  it('SG.0 — no ad group anywhere and no explicit scope → refuses, never silently widens', async () => {
+    const r = await call({ type: 'add_negative_exact', keyword: 'saponette moto' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } })
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/no ad group/i)
+    expect(h.createNegative).not.toHaveBeenCalled()
+  })
+
+  it('SG.0 — an explicit scope:CAMPAIGN still negates campaign-wide without an ad group', async () => {
+    const r = await call({ type: 'add_negative_exact', keyword: 'saponette moto', scope: 'CAMPAIGN' }, { marketplace: 'IT', campaign: { externalCampaignId: 'C1' } })
+    expect(r.ok).toBe(true)
+    expect(h.createNegative).toHaveBeenCalledTimes(1)
+    expect(h.createNegative.mock.calls[0][0]).toMatchObject({ scope: 'CAMPAIGN', keywordText: 'saponette moto' })
   })
 })

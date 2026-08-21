@@ -17,7 +17,7 @@
  * the page rather than directly above this card, which is what the eleven Rules & Automation
  * pages needed in order to show one bar instead of a scope bar plus a filter bar.
  */
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { H10Select, HoverCard } from '../FilterDropdown'
@@ -55,6 +55,17 @@ export interface GridColumn<T> {
    *  ReactNode stays static exactly as before. */
   total?: ReactNode | ((visibleRows: T[]) => ReactNode)
   defaultHidden?: boolean
+  /**
+   * SG.2 — pin this column to the RIGHT edge during horizontal scroll (H10's decision columns:
+   * the ✓ / ✕ / ⏸ verbs stay reachable however wide the metrics get). Requires `width`, because
+   * a right-pinned column's offset is the sum of the pinned widths after it — computable only
+   * when those widths are declared, never measured. Offsets are computed over the VISIBLE
+   * pinned set, so hiding one via Customize re-packs the rest. Additive: columns that don't
+   * pass it render byte-identically.
+   */
+  freezeRight?: boolean
+  /** fixed width in px — required with freezeRight (also applied as the column's width) */
+  width?: number
 }
 
 export interface GridRangeFilter { key: string; label: string; kind: 'range'; unit?: '€' | '%' | ''; tip?: string; value?: (row: unknown) => number }
@@ -340,6 +351,25 @@ export function AdsDataGrid<T>({
   const persistVisible = (vis: string[]) => { if (storageKey) { try { localStorage.setItem(storageKey, JSON.stringify(vis)) } catch { /* ignore */ } } }
   const visibleCols = useMemo(() => columns.filter((c) => !hidden.has(c.key)), [columns, hidden])
 
+  // SG.2 — right-pinned columns: cumulative offsets over the VISIBLE pinned set, right-to-left.
+  // The leftmost pinned column carries the separator (class `fzr0`).
+  const fzRight = useMemo(() => {
+    const list = visibleCols.filter((c) => c.freezeRight && c.width != null)
+    const offsets = new Map<string, number>()
+    let acc = 0
+    for (let i = list.length - 1; i >= 0; i--) {
+      offsets.set(list[i].key, acc)
+      acc += list[i].width!
+    }
+    return { offsets, first: list[0]?.key }
+  }, [visibleCols])
+  const fzrClass = (c: GridColumn<T>): string =>
+    fzRight.offsets.has(c.key) ? (c.key === fzRight.first ? ' fzr fzr0' : ' fzr') : ''
+  const fzrStyle = (c: GridColumn<T>): CSSProperties | undefined =>
+    fzRight.offsets.has(c.key)
+      ? { right: fzRight.offsets.get(c.key), width: c.width, minWidth: c.width, maxWidth: c.width }
+      : c.width != null ? { width: c.width, minWidth: c.width, maxWidth: c.width } : undefined
+
   // internal selection fallback when uncontrolled
   const [selInner, setSelInner] = useState<Set<string>>(new Set())
   const sel = selected ?? selInner
@@ -368,6 +398,10 @@ export function AdsDataGrid<T>({
           const acc = f.value ?? filterAccessor.get(f.key)?.filterValue
           if (!acc) continue
           const v = (acc as (row: T) => number)(row)
+          // NaN = "not measured" by every consumer's convention, and their filter tips promise
+          // an unmeasured row never matches a SET range — NaN compares false both ways, so
+          // without this it would silently pass instead.
+          if (Number.isNaN(v)) return false
           if (r.min !== '' && v < Number(r.min)) return false
           if (r.max !== '' && v > Number(r.max)) return false
         } else if (f.kind === 'multiselect') {
@@ -749,7 +783,7 @@ export function AdsDataGrid<T>({
               {selectable && <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>}
               <th className={`nm fz${sort?.key === '__first' ? ' sorted' : ''}`}><button type="button" className="sortable" onClick={() => onSort('__first')}>{firstColLabel} {firstSortValue && sortIcon('__first')}</button></th>
               {visibleCols.map((c) => (
-                <th key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${sort?.key === c.key ? ' sorted' : ''}`}>
+                <th key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${sort?.key === c.key ? ' sorted' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>
                   {c.sortable === false
                     ? <span className="hl">{c.tip ? <HoverCard text={c.tip} placement="above" delay={600}><span>{c.label}</span></HoverCard> : c.label}</span>
                     : <button type="button" className="sortable" onClick={() => onSort(c.key)}>
@@ -767,7 +801,7 @@ export function AdsDataGrid<T>({
                 <tr key={`sk${i}`} className="sk">
                   {selectable && <td className="ck"><span className="skb" style={{ width: 15 }} /></td>}
                   <td className="nm fz"><span className="skb" style={{ width: 170 }} /></td>
-                  {visibleCols.map((c) => <td key={c.key} className={c.metric === false ? 'ed' : 'num'}><span className="skb" style={{ width: 52 }} /></td>)}
+                  {visibleCols.map((c) => <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${fzrClass(c)}`} style={fzrStyle(c)}><span className="skb" style={{ width: 52 }} /></td>)}
                 </tr>
               ))
             ) : paged.length === 0 ? (
@@ -778,7 +812,7 @@ export function AdsDataGrid<T>({
                   <tr className="h10-am-total">
                     {selectable && <td className="ck" />}
                     <td className="nm fz"><b>{totalFirst}</b></td>
-                    {visibleCols.map((c) => <td key={c.key} className={c.metric === false ? 'ed' : 'num'}>{(typeof c.total === 'function' ? (c.total as (r: T[]) => ReactNode)(sorted) : c.total) ?? ''}</td>)}
+                    {visibleCols.map((c) => <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${fzrClass(c)}`} style={fzrStyle(c)}>{(typeof c.total === 'function' ? (c.total as (r: T[]) => ReactNode)(sorted) : c.total) ?? ''}</td>)}
                   </tr>
                 )}
                 {paged.map((row, idx) => {
@@ -799,7 +833,7 @@ export function AdsDataGrid<T>({
                         <td className={`nm fz${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
                         {visibleCols.map((c) => {
                           const cf = editing ? editByKey.get(c.key) : undefined
-                          return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}`}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
+                          return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
                         })}
                       </tr>
                     </Fragment>

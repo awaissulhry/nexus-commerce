@@ -205,6 +205,13 @@ export function useCursorPoll<C extends Record<string, unknown>>({
   // "changed" banner that is really just "you moved".
   useEffect(() => { setCursor(null) }, [key])
 
+  // A baseline with NEW CONTENT (scope change, reload, or the caller re-baselining after its own
+  // write) makes any held poll cursor obsolete: comparing an old cursor against a fresh baseline
+  // announces the caller's own write as someone else's change, and the false banner stands until
+  // the next tick. Keyed on content, not identity — a caller may rebuild the object every render.
+  const baselineKey = baseline == null ? null : JSON.stringify(baseline)
+  useEffect(() => { if (baselineKey != null) setCursor(null) }, [baselineKey])
+
   useEffect(() => {
     if (!enabled) return
     let timer: ReturnType<typeof setInterval> | null = null

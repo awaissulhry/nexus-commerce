@@ -323,3 +323,30 @@ export async function getNegativesCursor(scope: { market: string; campaign?: str
  * moment `BudgetSchedule.count() > 0`. Shipping an empty-but-armed cursor here would have been the
  * "feels live and is lying" failure the contract exists to prevent.
  */
+
+// ── 7 · Suggestions ─────────────────────────────────────────────────────────────────────────────
+export interface SugCursor {
+  /** pending rows */
+  pending: number
+  /**
+   * Fingerprint over the queue's MEMBERSHIP: the sorted pending ids + the per-status counts.
+   * 🔴 NOT the payloads — the evaluator's upsert refreshes `proposedAction` (with fresh live
+   * numbers inside `wouldChange`) on every 15-minute tick, so a payload fold would be a
+   * metronome: a banner every tick about a queue whose row set never moved. The row SET changes
+   * only when a suggestion is created, decided, expired or re-proposed — exactly the events the
+   * page should refresh for.
+   */
+  fp: string
+}
+
+export async function getSuggestionsCursor(): Promise<SugCursor> {
+  const [pendingIds, byStatus] = await Promise.all([
+    prisma.adsRuleSuggestion.findMany({ where: { status: 'pending' }, select: { id: true }, orderBy: { id: 'asc' } }),
+    prisma.adsRuleSuggestion.groupBy({ by: ['status'], _count: { _all: true } }),
+  ])
+  const counts = byStatus
+    .map((g) => `${g.status}:${g._count._all}`)
+    .sort()
+    .join(',')
+  return { pending: pendingIds.length, fp: hash(`${pendingIds.map((r) => r.id).join('|')}#${counts}`) }
+}

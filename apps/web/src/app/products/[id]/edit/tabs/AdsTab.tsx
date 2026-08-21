@@ -504,7 +504,8 @@ export function AdsTab({
           // Recommendations inbox, so the label follows the destination rather than
           // sending an operator to a page that no longer calls itself that.
           { href: '/marketing/ads/dashboard',       label: 'Analytics' },
-          { href: '/marketing/ads/recommendations', label: 'Recommendations' },
+          // SG.4 — the feed is the Suggestions page's Recommendations tab now.
+          { href: '/marketing/ads/suggestions?view=recommendations', label: 'Recommendations' },
           { href: '/marketing/ads/campaigns',       label: 'All Campaigns' },
         ].map(({ href, label }) => (
           <a

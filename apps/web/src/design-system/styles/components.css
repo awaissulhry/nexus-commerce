@@ -104,6 +104,70 @@
   border-radius: 2px;
 }
 
+/* SG.1 — the PAGE-level tab bar (size="lg"): H10's Suggestions/Analytics treatment. Bolder,
+   larger, near-black idle labels; a 3px primary indicator; count pills and promo badges as
+   first-class parts of the tab. Additive — the default 'md' bar above is untouched. */
+.h10-ds-tabs.lg {
+  gap: 12px;
+}
+.h10-ds-tabs.lg .h10-ds-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 11px 10px;
+}
+.h10-ds-tabs.lg .h10-ds-tab:not(.on):hover {
+  color: var(--color-primary);
+}
+.h10-ds-tabs.lg .h10-ds-tab.on {
+  color: var(--color-primary);
+}
+.h10-ds-tabs.lg .h10-ds-tab.on::after {
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+.h10-ds-tab-ic {
+  display: inline-flex;
+  align-items: center;
+}
+.h10-ds-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  /* the bar sits on the page canvas, where the sunken grey alone can vanish — the inset
+     ring keeps the pill legible without changing its box size */
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.h10-ds-tab.on .h10-ds-tab-count {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.h10-ds-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 /* ── Pagination ──────────────────────────────────────────────────── */
 .h10-ds-pager {
   display: inline-flex;

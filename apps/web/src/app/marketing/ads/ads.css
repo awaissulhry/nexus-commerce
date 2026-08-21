@@ -547,6 +547,9 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-am-link { background: none; border: none; color: #1f6fde; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 8px; }
 .h10-am-link:hover { text-decoration: underline; }
 .h10-am-link:disabled { color: #c2c9d3; cursor: default; text-decoration: none; }
+/* Inside a toast the surface is DARK (--text-primary); brand blue fails contrast there, so the
+   one link-verb class adapts to the container: inherit the inverse text, underline for affordance. */
+.h10-ds-toast .h10-am-link { color: inherit; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; }
 .h10-am-btn.sm { padding: 6px 14px; font-size: 13px; }
 
 /* saved-filter library popover */
@@ -3315,3 +3318,56 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid #1f6fde; outline-offset: 2px
    mounts them (`.h10-ar-nd` lives in rules-automation.css and the Ad Manager never loads it).
    #667080 on the #fff row ground is 5.01:1 — measured in the deployed DOM, not estimated. */
 .h10-rc-unknown { font-size: 11px; font-style: italic; color: #667080; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   SG.1 — two shared-component styles PROMOTED from rules-automation.css, verbatim.
+   `_shared/ScopeNotes.tsx` (.h10-ra-note) and `_shared/StaleBanner.tsx` (.h10-bd-stale) gained
+   their first consumer outside the Rules & Automation layout (the Suggestions page), so their one
+   definition moves to the sheet every /marketing/ads route loads. Do NOT re-add copies to
+   rules-automation.css — a component's style lives where every consumer can load it.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+/* ── FB.2 — the one scope note, replacing h10-bd-note / h10-plc-note / *-blind ────────────────────
+   Lives INSIDE the merged filter bar, under the controls (see `_shared/ScopeNotes.tsx`). The
+   neutral form is the intersection and the blind-spot facts; `.bad` is the server's refusal. */
+.h10-am-fpanel .h10-ra-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: #f1f4f8; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #55606d; }
+.h10-am-fpanel .h10-ra-note svg { flex: none; margin-top: 3px; color: #667080; }
+.h10-am-fpanel .h10-ra-note b { font-weight: 800; color: #1c2530; }
+.h10-am-fpanel .h10-ra-note .lnk { font: inherit; font-weight: 700; color: #1f6fde; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.h10-am-fpanel .h10-ra-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-am-fpanel .h10-ra-note.bad svg { color: #8a5316; }
+.h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
+.h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }
+/* The cursor poll found a change. It offers; it never reorders the grid under a reading operator. */
+.h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bd-stale:hover { background: #fdeed5; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   SG.2 — right-pinned columns (`GridColumn.freezeRight` on AdsDataGrid). The mirror of the
+   `.nm.fz` left freeze above: H10 pins the decision verbs (✓ / ✕ / ⏸) to the right edge so
+   they stay reachable however wide the metric set gets. Inline style carries position:sticky's
+   `right` offset + the fixed width (computed per VISIBLE pinned column); this block carries
+   the paint. `fzr0` is the LEFTMOST pinned column and owns the separator shadow.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+.h10-am-grid th.fzr, .h10-am-grid td.fzr { position: sticky; z-index: 3; background: #fff; }
+.h10-am-grid th.fzr0, .h10-am-grid td.fzr0 { border-left: 1px solid #d0d5dd; box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.h10-am-grid thead th.fzr { z-index: 6; background: #f7f9fb; }
+.h10-am-grid tbody tr:hover td.fzr { background: #f7faff; }
+.h10-am-grid tbody tr.on td.fzr { background: #eef5ff; }
+.h10-am-grid tr.h10-am-total td.fzr { background: #f7f9fb; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   SG.5 — the Bid Settings gear modal (shared: _shared/AdsBidSettingsModal.tsx). Three sections,
+   each naming its REAL enforcement point in `.h10-bset-why` — a setting that doesn't say who
+   reads it reads like it governs everything.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+.h10-bset { display: flex; flex-direction: column; gap: 22px; }
+.h10-bset-sec h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--h10-text-1); }
+.h10-bset-why { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--h10-text-2); }
+.h10-bset-why svg { flex: none; margin-top: 2px; color: var(--h10-live); }
+.h10-bset-grid { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 8px 12px; align-items: center; max-width: 420px; }
+.h10-bset-grid .h10-bset-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--h10-text-3); }
+.h10-bset-row { display: contents; }
+.h10-bset-mkt { font-size: 13px; font-weight: 700; color: var(--h10-text-1); }
+.h10-bset-acts { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.h10-bset-quiet { font-size: 12.5px; color: var(--h10-text-3); }
+.h10-bset-pct { max-width: 110px; }

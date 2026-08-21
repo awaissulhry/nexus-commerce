@@ -1,6 +1,11 @@
 'use client'
 
 /**
+ * ⛔ PARKED — SG.4 (2026-08-21). The feed moved to `../suggestions/RecommendationsView.tsx`
+ * (Recommendations is the Suggestions page's 7th tab now; this route redirects there). This
+ * file keeps the pre-move shape for reference and is imported by NOTHING. `AccountPlanPanel`
+ * and `recommendations.css` in this folder stay LIVE — the moved view imports both.
+ *
  * E3 — Recommendations inbox. The AI + 5-engine impact-ranked feed (bid optimizer, harvest,
  * pacing, share-of-voice, retail-readiness), distinct from Suggestions (which is the propose-only
  * queue for *your* Manual rules). Ports the legacy /marketing/advertising/recommendations logic

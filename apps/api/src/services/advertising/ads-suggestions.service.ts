@@ -8,6 +8,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 
 interface Entity { type: string; id: string; name: string | null }
 function extractEntity(context: unknown): Entity | null {
@@ -49,6 +50,65 @@ const SWEEP_ACTIONS = new Set(['harvest_and_negate', 'sync_negatives_across_camp
 
 /** The one entity an account-wide sweep is actually about. */
 const ACCOUNT_ENTITY = { type: 'ACCOUNT', id: 'account', name: 'the whole account' } as const
+
+// ── SG.0 — the view families ─────────────────────────────────────────────────
+/**
+ * The Suggestions page groups the queue into H10's tabs by ACTION TYPE. This is the ONE map —
+ * the /count endpoint, the list route's `family` filter and the page all read it. A client-side
+ * copy is how the Automations type filter came to be blind to 17 of 51 rules; never make one.
+ */
+export type SuggestionFamily = 'bids' | 'new-keywords' | 'negatives' | 'budget' | 'placement' | 'other'
+export const SUGGESTION_FAMILIES: readonly SuggestionFamily[] = ['bids', 'new-keywords', 'negatives', 'budget', 'placement', 'other']
+const FAMILY_BY_ACTION: Record<string, SuggestionFamily> = {
+  bid_apply: 'bids', bid_down: 'bids', bid_up: 'bids', lower_bid_to_floor: 'bids',
+  raise_bids_for_rank_defense: 'bids', scale_bids_for_price_change: 'bids',
+  pause_target: 'bids', enable_target: 'bids',
+  promote_to_exact: 'new-keywords', harvest_and_negate: 'new-keywords',
+  add_negative_exact: 'negatives', add_negative_phrase: 'negatives', sync_negatives_across_campaigns: 'negatives',
+  budget_apply: 'budget', adjust_ad_budget: 'budget', set_daily_budget: 'budget', reroute_marketplace_budget: 'budget',
+  placement_apply: 'placement', set_placement_multiplier: 'placement',
+}
+export function familyOf(actionType: unknown): SuggestionFamily {
+  return FAMILY_BY_ACTION[String(actionType ?? '')] ?? 'other'
+}
+/** Family of a stored row. The action type leads `proposedKey`, so old rows resolve too. */
+export function familyOfRow(row: { proposedAction: unknown; proposedKey: string }): SuggestionFamily {
+  const t = (row.proposedAction as { type?: unknown } | null)?.type ?? row.proposedKey.split(':')[0]
+  return familyOf(t)
+}
+
+/**
+ * SG.2d — the rule's own ACoS criterion, for the ADAPTIVE traffic dot.
+ *
+ * The dot's precedence is: campaign target ACoS → THIS (the threshold the operator wrote into
+ * the rule that produced the row) → the default 30% band. Reads BOTH rule shapes (engine-flat
+ * `[{field,op,value}]` and builder-nested `[{conditions:[…]}]` — reading only one is how the
+ * grid once printed "—" on 18 of 18 rules), takes the first `.acos` condition, and normalises
+ * the stored unit with the established discriminator: a share cannot exceed 1, so ≤ 1 is a
+ * fraction (0.4 → 40) and anything above is already a percent (the 0.3-vs-30 trap is live in
+ * stored rules — never blind-multiply).
+ */
+export function acosThresholdOf(conditions: unknown): number | null {
+  const leaves: Array<Record<string, unknown>> = []
+  const walk = (list: unknown) => {
+    if (!Array.isArray(list)) return
+    for (const c of list) {
+      if (!c || typeof c !== 'object') continue
+      const o = c as Record<string, unknown>
+      if (Array.isArray(o.conditions)) walk(o.conditions) // builder group
+      else leaves.push(o) // engine-flat leaf
+    }
+  }
+  walk(conditions)
+  for (const leaf of leaves) {
+    const field = String(leaf.field ?? '')
+    if (!/\.acos$/i.test(field)) continue
+    const v = Number(leaf.value)
+    if (!Number.isFinite(v) || v <= 0) continue
+    return v <= 1 ? v * 100 : v
+  }
+  return null
+}
 
 // stable change-kind key (intent, not current value) so the same proposed change dedupes.
 function proposedKey(action: Record<string, unknown>): string {
@@ -96,8 +156,12 @@ export async function generateSuggestionsFromExecution(args: {
       // Everything else keeps its real entity, so `bid_down`'s sixty distinct proposals stay sixty.
       const sweep = SWEEP_ACTIONS.has(String(action.type ?? ''))
       const ent = sweep ? ACCOUNT_ENTITY : entity
-      // upsert on the dedupe key — keep one row per rule×entity×change; don't resurrect a
-      // dismissed/applied row (the operator already decided).
+      // upsert on the dedupe key — keep one row per rule×entity×change. The update branch never
+      // touches `status` (the operator's decision is not overwritten by a tick); resurrection is
+      // the LIFECYCLE SWEEP's job, with its windows (see sweepSuggestionLifecycle below).
+      // `lastSeenAt` is stamped on every sighting: it records the newest evaluation that still
+      // proposes this change, which is what expiry and re-propose both key on. `createdAt` stays
+      // the FIRST sighting.
       const proposal = { ...action, ...(res.output as object) } as object
       await prisma.adsRuleSuggestion.upsert({
         where: { ruleId_entityId_proposedKey: { ruleId: args.ruleId, entityId: ent.id, proposedKey: key } },
@@ -107,8 +171,7 @@ export async function generateSuggestionsFromExecution(args: {
           proposedAction: proposal, proposedKey: key, status: 'pending',
         },
         update: {
-          // refresh the latest proposal + execution for a still-pending suggestion (no-op if decided)
-          executionId: args.executionId, proposedAction: proposal,
+          executionId: args.executionId, proposedAction: proposal, lastSeenAt: new Date(),
         },
       })
       written++
@@ -259,4 +322,625 @@ export async function attachSourceLinks<T extends SourceRow>(items: T[]): Promis
   }
 
   return items.map((it) => ({ ...it, source: resolveSourceLink(it, lk) }))
+}
+
+// ── SG.2 — the decision data: live metrics, current values, the projected value ──────────────
+//
+// The operator judges a suggestion against the entity's real performance, so every row carries:
+//   metrics   trailing 30-day performance for the entity the suggestion touches. NULL when the
+//             entity has no performance row in the window — target-level coverage is ~18% of
+//             targets (measured, BID.S2), so absence is the COMMON case and must render "—",
+//             never a confident 0. When a row exists, its zeros are real zeros.
+//   current   the live value the change would move (bid cents / daily budget EUR) + the
+//             campaign's own target ACoS, read at request time — never parsed out of the frozen
+//             `wouldChange` string.
+//   suggested the projected new value, computed from the action's op/value against `current` —
+//             ONE implementation, so the Suggested column cannot drift from what apply computes
+//             (the handler's own min/max clamps still bind at apply time; this is the preview).
+//
+// 🔴 Aggregates over AmazonAdsDailyPerformance MUST exclude the AMS-stream duplicates
+// (EXCLUDE_AMS_DAILY — the RPT session measured +40.7% spend without it), and must never read
+// the AdTarget lifetime counters (dead columns, zero on all rows since H.2e).
+
+export interface SuggestionMetrics {
+  windowDays: number
+  impressions: number
+  clicks: number
+  spendCents: number
+  salesCents: number
+  orders: number
+  /** derived; null when the denominator is 0 — "not measurable", never 0 */
+  acos: number | null
+  roas: number | null
+  ctr: number | null
+  cvr: number | null
+  cpcCents: number | null
+}
+
+export interface SuggestionCurrent {
+  bidCents?: number | null
+  dailyBudgetEur?: number | null
+  /** the campaign's own target ACoS, as PERCENT (stored as a fraction; both units exist in the
+   *  wild — same defensive discriminator as toImpressionShareFraction: a target over 1 is
+   *  already a percent). */
+  targetAcosPct?: number | null
+  entityStatus?: string | null
+}
+
+export interface SuggestionDestination {
+  matchType: string
+  bidCents: number | null
+  campaignName: string | null
+  /** SPONSORED_PRODUCTS | SPONSORED_BRANDS | SPONSORED_DISPLAY — the SP/SB/SD pill */
+  adProduct: string | null
+  adGroupName: string | null
+  note: string
+}
+
+export interface SuggestionSuggested {
+  bidCents?: number | null
+  budgetEur?: number | null
+  /**
+   * SG.2b/f — where the change LANDS (H10's approve-hover card: "will be added to the
+   * following entities when changes are applied"). New keywords resolve the action's external
+   * ad-group id; negatives resolve the external campaign (+ ad group at AD_GROUP scope). A
+   * promote today has ONE destination — the list shape is H10's, and multi-destination
+   * harvest is the known ENGINE gap, not a display one.
+   */
+  destinations?: SuggestionDestination[]
+}
+
+const WINDOW_DAYS = 30
+const BID_FLOOR_CENTS = 5
+
+function derive(sum: { impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number }): SuggestionMetrics {
+  return {
+    windowDays: WINDOW_DAYS,
+    ...sum,
+    acos: sum.salesCents > 0 ? sum.spendCents / sum.salesCents : null,
+    roas: sum.spendCents > 0 ? sum.salesCents / sum.spendCents : null,
+    ctr: sum.impressions > 0 ? sum.clicks / sum.impressions : null,
+    cvr: sum.clicks > 0 ? sum.orders / sum.clicks : null,
+    cpcCents: sum.clicks > 0 ? Math.round(sum.spendCents / sum.clicks) : null,
+  }
+}
+
+const asPct = (v: unknown): number | null => {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n <= 1 ? n * 100 : n
+}
+
+/** The projected new value for a bid-family action, in cents. Mirrors the handlers' math. */
+export function projectBidCents(action: Record<string, unknown>, currentCents: number | null): number | null {
+  const type = String(action.type ?? '')
+  const op = String(action.op ?? '')
+  const v = Number(action.value)
+  if (type === 'lower_bid_to_floor') return BID_FLOOR_CENTS
+  if (type === 'bid_down' && currentCents != null) return Math.round(currentCents * (1 - Number(action.percent ?? 0) / 100))
+  if (type === 'bid_up' && currentCents != null) return Math.round(currentCents * (1 + Number(action.percent ?? 0) / 100))
+  if (type === 'bid_apply' && Number.isFinite(v)) {
+    if (op === 'setValue') return Math.round(v * 100) // builder bid values are EUR
+    if (currentCents == null) return null
+    if (op === 'incPct') return Math.round(currentCents * (1 + v / 100))
+    if (op === 'decPct') return Math.round(currentCents * (1 - v / 100))
+  }
+  return null
+}
+
+/** The projected new daily budget for a budget-family action, in EUR. Mirrors the handlers. */
+export function projectBudgetEur(action: Record<string, unknown>, currentEur: number | null): number | null {
+  const type = String(action.type ?? '')
+  const op = String(action.op ?? '')
+  const v = Number(action.value)
+  if (type === 'set_daily_budget' && Number.isFinite(v)) return v
+  if (type === 'adjust_ad_budget' && currentEur != null) return Math.max(1, currentEur * (1 + Number(action.percent ?? 0) / 100))
+  if (type === 'budget_apply' && Number.isFinite(v)) {
+    if (op === 'setValue') return v
+    if (currentEur == null) return null
+    if (op === 'incPct') return Math.max(1, currentEur * (1 + v / 100))
+    if (op === 'decPct') return Math.max(1, currentEur * (1 - v / 100))
+  }
+  return null
+}
+
+export interface DecisionRow extends SourceRow {
+  proposedAction: unknown
+  proposedKey: string
+}
+
+export async function attachDecisionData<T extends DecisionRow>(
+  items: T[],
+): Promise<Array<T & { metrics: SuggestionMetrics | null; current: SuggestionCurrent; suggested: SuggestionSuggested; volume: number | null }>> {
+  if (items.length === 0) return []
+  const since = new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000)
+
+  const targetIds = [...new Set(items.filter((i) => i.entityType === 'AD_TARGET').map((i) => i.entityId))]
+  const campaignIds = [...new Set(items.filter((i) => i.entityType === 'CAMPAIGN').map((i) => i.entityId))]
+  const termPairs = items
+    .filter((i) => i.entityType === 'SEARCH_TERM')
+    .map((i) => {
+      const idx = i.entityId.indexOf(':')
+      return { ext: idx >= 0 ? i.entityId.slice(0, idx) : i.entityId, query: idx >= 0 ? i.entityId.slice(idx + 1) : '' }
+    })
+
+  const [targets, campaigns] = await Promise.all([
+    targetIds.length
+      ? prisma.adTarget.findMany({
+        where: { id: { in: targetIds } },
+        select: {
+          id: true, bidCents: true, status: true, externalTargetId: true,
+          adGroup: { select: { campaign: { select: { dynamicBidding: true } } } },
+        },
+      })
+      : [],
+    campaignIds.length
+      ? prisma.campaign.findMany({
+        where: { id: { in: campaignIds } },
+        select: { id: true, dailyBudget: true, status: true, externalCampaignId: true, dynamicBidding: true },
+      })
+      : [],
+  ])
+  const targetById = new Map(targets.map((t) => [t.id, t] as const))
+  const campaignById = new Map(campaigns.map((c) => [c.id, c] as const))
+
+  // SG.2b/f — destination resolution for the approve-hover card.
+  // promote_to_exact carries an EXTERNAL ad-group id; negatives carry an EXTERNAL campaign id
+  // (+ ad group at AD_GROUP scope). Batch-resolve both families.
+  const acts = items.map((i) => (i.proposedAction ?? {}) as Record<string, unknown>)
+  const destExtIds = [
+    ...new Set(
+      acts
+        .filter((a) => String(a.type ?? '') === 'promote_to_exact' && typeof a.adGroupId === 'string')
+        .map((a) => a.adGroupId as string)
+        .concat(
+          acts
+            .filter((a) => String(a.type ?? '').startsWith('add_negative') && typeof a.externalAdGroupId === 'string')
+            .map((a) => a.externalAdGroupId as string),
+        ),
+    ),
+  ]
+  const negExtCampaignIds = [
+    ...new Set(
+      acts
+        .filter((a) => String(a.type ?? '').startsWith('add_negative') && typeof a.externalCampaignId === 'string')
+        .map((a) => a.externalCampaignId as string),
+    ),
+  ]
+  // HP1/NEG-P wire rules: the dry-run's own `outcomes[]` carries the full creation set (LOCAL
+  // ad-group ids, per-destination bids for promotes, level for negatives) — the engine computed
+  // it, so the hover card reads it verbatim, never a parallel expansion of the mapping.
+  // Negatives adopted the same contract on 2026-08-21 (peer push 09751db79).
+  const wireCreates = (a: Record<string, unknown>) => {
+    const t = String(a.type ?? '')
+    return (t === 'promote_to_exact' || t.startsWith('add_negative')) && Array.isArray(a.outcomes)
+      ? (a.outcomes as Array<Record<string, unknown>>).filter((o) => o?.wouldCreate === true && typeof o.adGroupId === 'string')
+      : []
+  }
+  const localDestIds = [...new Set(acts.flatMap((a) => wireCreates(a).map((o) => o.adGroupId as string)))]
+  const [destGroups, negCampaigns, localDestGroups] = await Promise.all([
+    destExtIds.length
+      ? prisma.adGroup.findMany({
+        where: { externalAdGroupId: { in: destExtIds } },
+        select: { externalAdGroupId: true, name: true, campaign: { select: { name: true, adProduct: true } } },
+      })
+      : [],
+    negExtCampaignIds.length
+      ? prisma.campaign.findMany({
+        where: { externalCampaignId: { in: negExtCampaignIds } },
+        select: { externalCampaignId: true, name: true, adProduct: true },
+      })
+      : [],
+    localDestIds.length
+      ? prisma.adGroup.findMany({
+        where: { id: { in: localDestIds } },
+        select: { id: true, name: true, campaign: { select: { name: true, adProduct: true } } },
+      })
+      : [],
+  ])
+  const destByExt = new Map(destGroups.map((g) => [g.externalAdGroupId, g] as const))
+  const negCampByExt = new Map(negCampaigns.map((c) => [c.externalCampaignId, c] as const))
+  const destByLocalId = new Map(localDestGroups.map((g) => [g.id, g] as const))
+
+  // SG.2f — market search volume for SEARCH_TERM rows, from the Brand Analytics feed (brand-level
+  // rows, asin null = the whole market's volume). Latest period wins; absence renders "—" — the
+  // feed covers a minority of queries and a missing row is not a zero.
+  const termQueries = [...new Set(termPairs.map((p) => p.query).filter(Boolean))]
+  const termMkts = [...new Set(items.filter((i) => i.entityType === 'SEARCH_TERM').map((i) => i.marketplace).filter((x): x is string => !!x))]
+  const volRows = termQueries.length
+    ? await prisma.searchQueryPerformance.findMany({
+      where: { searchQuery: { in: termQueries }, ...(termMkts.length ? { marketplace: { in: termMkts } } : {}), asin: null },
+      select: { searchQuery: true, marketplace: true, searchQueryVolume: true, startDate: true },
+      orderBy: { startDate: 'desc' },
+      take: 2000,
+    })
+    : []
+  const volByKey = new Map<string, number>()
+  for (const v of volRows) {
+    const k = `${v.marketplace}|${v.searchQuery}`
+    if (!volByKey.has(k)) volByKey.set(k, v.searchQueryVolume) // newest first
+  }
+
+  const extTargetIds = targets.map((t) => t.externalTargetId).filter((x): x is string => !!x)
+  const extCampaignIds = campaigns.map((c) => c.externalCampaignId).filter((x): x is string => !!x)
+
+  const sum = (r: { _sum: { impressions: number | null; clicks: number | null; costMicros: bigint | null; sales7dCents: number | null; orders7d: number | null } }) => ({
+    impressions: r._sum.impressions ?? 0,
+    clicks: r._sum.clicks ?? 0,
+    spendCents: Math.round(Number(r._sum.costMicros ?? 0) / 10_000),
+    salesCents: r._sum.sales7dCents ?? 0,
+    orders: r._sum.orders7d ?? 0,
+  })
+
+  const [targetPerf, campaignPerf, termRows] = await Promise.all([
+    extTargetIds.length
+      ? prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['entityId'],
+        where: { entityType: 'AD_TARGET', entityId: { in: extTargetIds }, date: { gte: since }, ...EXCLUDE_AMS_DAILY },
+        _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+      })
+      : [],
+    extCampaignIds.length
+      ? prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['entityId'],
+        where: { entityType: 'CAMPAIGN', entityId: { in: extCampaignIds }, date: { gte: since }, ...EXCLUDE_AMS_DAILY },
+        _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+      })
+      : [],
+    termPairs.length
+      ? prisma.amazonAdsSearchTerm.findMany({
+        where: {
+          campaignId: { in: [...new Set(termPairs.map((p) => p.ext))] },
+          query: { in: [...new Set(termPairs.map((p) => p.query))] },
+          date: { gte: since },
+        },
+        select: { campaignId: true, query: true, impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+      })
+      : [],
+  ])
+  const perfByExtTarget = new Map(targetPerf.map((r) => [r.entityId, sum(r)] as const))
+  const perfByExtCampaign = new Map(campaignPerf.map((r) => [r.entityId, sum(r)] as const))
+  // Exact-pair reduction — a `campaignId IN … AND query IN …` fetch is a cross product, so the
+  // fold matches the exact (campaign, query) pair and nothing else.
+  const perfByTermPair = new Map<string, { impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number }>()
+  for (const r of termRows) {
+    const key = `${r.campaignId}:${r.query}`
+    const acc = perfByTermPair.get(key) ?? { impressions: 0, clicks: 0, spendCents: 0, salesCents: 0, orders: 0 }
+    acc.impressions += r.impressions
+    acc.clicks += r.clicks
+    acc.spendCents += Math.round(Number(r.costMicros) / 10_000)
+    acc.salesCents += r.sales7dCents ?? 0
+    acc.orders += r.orders7d ?? 0
+    perfByTermPair.set(key, acc)
+  }
+
+  return items.map((it) => {
+    const action = (it.proposedAction ?? {}) as Record<string, unknown>
+    let metrics: SuggestionMetrics | null = null
+    const current: SuggestionCurrent = {}
+    const suggested: SuggestionSuggested = {}
+    let volume: number | null = null
+    if (it.entityType === 'AD_TARGET') {
+      const t = targetById.get(it.entityId)
+      if (t) {
+        current.bidCents = t.bidCents
+        current.entityStatus = t.status
+        current.targetAcosPct = asPct((t.adGroup?.campaign?.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos)
+        const p = t.externalTargetId ? perfByExtTarget.get(t.externalTargetId) : undefined
+        if (p) metrics = derive(p)
+      }
+      suggested.bidCents = projectBidCents(action, current.bidCents ?? null)
+    } else if (it.entityType === 'CAMPAIGN') {
+      const c = campaignById.get(it.entityId)
+      if (c) {
+        current.dailyBudgetEur = c.dailyBudget != null ? Number(c.dailyBudget) : null
+        current.entityStatus = c.status
+        current.targetAcosPct = asPct((c.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos)
+        const p = c.externalCampaignId ? perfByExtCampaign.get(c.externalCampaignId) : undefined
+        if (p) metrics = derive(p)
+      }
+      suggested.budgetEur = projectBudgetEur(action, current.dailyBudgetEur ?? null)
+    } else if (it.entityType === 'SEARCH_TERM') {
+      const p = perfByTermPair.get(it.entityId)
+      if (p) metrics = derive(p)
+      volume = volByKey.get(`${it.marketplace}|${it.entityName ?? it.entityId.slice(it.entityId.indexOf(':') + 1)}`) ?? null
+      // a harvest promotion proposes a STARTING bid — surface it in the same column family
+      const bidEur = Number(action.bidEur)
+      if (Number.isFinite(bidEur) && bidEur > 0) suggested.bidCents = Math.round(bidEur * 100)
+      const type = String(action.type ?? '')
+      const creates = wireCreates(action)
+      if (type === 'promote_to_exact' && creates.length > 0) {
+        // HP1 wire rule — one term fans into the mapped destinations × ticked types, each with
+        // its own resolved bid. Read straight off the dry-run's outcomes.
+        suggested.destinations = creates.map((o) => {
+          const g = destByLocalId.get(o.adGroupId as string)
+          const bidEur = Number(o.bidEur)
+          return {
+            matchType: String(o.matchType ?? 'EXACT'),
+            bidCents: Number.isFinite(bidEur) && bidEur > 0 ? Math.round(bidEur * 100) : null,
+            campaignName: g?.campaign?.name ?? null,
+            adProduct: g?.campaign?.adProduct ?? null,
+            adGroupName: g?.name ?? 'ad group',
+            note: 'Applicable',
+          }
+        })
+      } else if (type === 'promote_to_exact' && typeof action.adGroupId === 'string') {
+        const g = destByExt.get(action.adGroupId)
+        if (g) {
+          suggested.destinations = [{
+            campaignName: g.campaign?.name ?? null, adProduct: g.campaign?.adProduct ?? null,
+            adGroupName: g.name, matchType: 'EXACT', bidCents: suggested.bidCents ?? null, note: 'Applicable',
+          }]
+        }
+      } else if (type.startsWith('add_negative') && creates.length > 0) {
+        // NEG-P wire rule — same outcomes[] contract as harvest: one term negated across the
+        // mapped destinations, each at its own level. Read verbatim; the destination's campaign
+        // names the row even for CAMPAIGN-level entries (dst is the mapped ad group).
+        suggested.destinations = creates.map((o) => {
+          const g = destByLocalId.get(o.adGroupId as string)
+          const mt = String(o.matchType ?? 'EXACT')
+          const campaignWide = String(o.level ?? '') === 'CAMPAIGN'
+          return {
+            matchType: mt.startsWith('NEGATIVE') ? mt : `NEGATIVE_${mt}`,
+            bidCents: null,
+            campaignName: g?.campaign?.name ?? null,
+            adProduct: g?.campaign?.adProduct ?? null,
+            adGroupName: campaignWide ? null : (g?.name ?? 'ad group'),
+            note: campaignWide ? 'Campaign-wide' : 'Applicable',
+          }
+        })
+      } else if (type.startsWith('add_negative')) {
+        const c = typeof action.externalCampaignId === 'string' ? negCampByExt.get(action.externalCampaignId) : undefined
+        const g = typeof action.externalAdGroupId === 'string' ? destByExt.get(action.externalAdGroupId) : undefined
+        const scope = action.scope === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
+        suggested.destinations = [{
+          matchType: type === 'add_negative_phrase' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT',
+          bidCents: null,
+          campaignName: c?.name ?? null,
+          adProduct: c?.adProduct ?? null,
+          adGroupName: scope === 'CAMPAIGN' ? null : (g?.name ?? 'the source ad group'),
+          note: scope === 'CAMPAIGN' ? 'Campaign-wide' : 'Applicable',
+        }]
+      }
+    }
+    return { ...it, metrics, current, suggested, volume }
+  })
+}
+
+// ── SG.3 — delivery truth + undo linkage for APPLIED rows ────────────────────
+//
+// An apply returns at ENQUEUE, and the write gate runs later in the drain worker — so
+// `appliedResult.ok` is "accepted for delivery", never "landed at Amazon". This join reads the
+// write's actual fate:
+//
+//   delivered  the queue row reached SUCCESS (or a create carries its externalTargetId)
+//   pending    still queued / in flight — the drain worker has not settled it yet
+//   refused    the gate said no AFTER the apply (SKIPPED · WRITE_GATE_DENIED), in its own words
+//   failed     dead-lettered or errored — the change exists locally and Amazon never took it
+//   unknown    a pre-SG row whose result shape carries no fate — absence, not success
+//
+// `undo` resolves the AdvertisingActionLog handle the rollback service is keyed on — matched on
+// (entityId, createdAt within a short window of decidedAt), NEVER the change feed's h:/a:
+// display ids (reference_ads_changes_display_ids: passing a display id claims a real change
+// does not exist). No handle ⇒ "no undo is offered for this row here" — which is a different
+// claim from "cannot be undone", and only one of them is true.
+
+export interface SuggestionDelivery {
+  state: 'delivered' | 'pending' | 'refused' | 'failed' | 'unknown'
+  detail: string | null
+}
+export interface SuggestionUndo { actionLogId: string; rolledBack: boolean }
+
+interface AppliedRow { entityType: string; entityId: string; decidedAt: Date | null; appliedResult: unknown }
+
+const UNDO_MATCH_BEFORE_MS = 10_000
+const UNDO_MATCH_AFTER_MS = 60_000
+
+export async function attachDeliveryData<T extends AppliedRow>(
+  items: T[],
+): Promise<Array<T & { delivery: SuggestionDelivery; undo: SuggestionUndo | null }>> {
+  if (items.length === 0) return []
+
+  const queueIds = [...new Set(items
+    .map((i) => ((i.appliedResult as { output?: { outboundQueueId?: unknown } } | null)?.output?.outboundQueueId))
+    .filter((x): x is string => typeof x === 'string'))]
+  const decideds = items.map((i) => i.decidedAt).filter((d): d is Date => d != null)
+  const entityIds = [...new Set(items.map((i) => i.entityId))]
+
+  const [queueRows, logRows] = await Promise.all([
+    queueIds.length
+      ? prisma.outboundSyncQueue.findMany({
+        where: { id: { in: queueIds } },
+        select: { id: true, syncStatus: true, errorCode: true, errorMessage: true, isDead: true, syncedAt: true },
+      })
+      : [],
+    entityIds.length && decideds.length
+      ? prisma.advertisingActionLog.findMany({
+        where: {
+          entityId: { in: entityIds },
+          createdAt: {
+            gte: new Date(Math.min(...decideds.map((d) => d.getTime())) - UNDO_MATCH_BEFORE_MS),
+            lte: new Date(Math.max(...decideds.map((d) => d.getTime())) + UNDO_MATCH_AFTER_MS),
+          },
+        },
+        select: { id: true, entityId: true, createdAt: true, rolledBackAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      : [],
+  ])
+  const queueById = new Map(queueRows.map((q) => [q.id, q] as const))
+  const logsByEntity = new Map<string, typeof logRows>()
+  for (const l of logRows) {
+    const arr = logsByEntity.get(l.entityId) ?? []
+    arr.push(l)
+    logsByEntity.set(l.entityId, arr)
+  }
+
+  return items.map((it) => {
+    const ar = (it.appliedResult ?? null) as { ok?: boolean; error?: string; output?: Record<string, unknown> } | null
+    const out = ar?.output ?? {}
+    let delivery: SuggestionDelivery = { state: 'unknown', detail: null }
+
+    const qid = typeof out.outboundQueueId === 'string' ? out.outboundQueueId : null
+    const q = qid ? queueById.get(qid) : undefined
+    if (q) {
+      if (q.syncStatus === 'SUCCESS') delivery = { state: 'delivered', detail: q.syncedAt ? `synced ${q.syncedAt.toISOString()}` : null }
+      else if (q.syncStatus === 'PENDING' || q.syncStatus === 'IN_PROGRESS') delivery = { state: 'pending', detail: 'queued — the drain worker has not settled this write yet' }
+      else if (q.syncStatus === 'SKIPPED' && q.errorCode === 'WRITE_GATE_DENIED') delivery = { state: 'refused', detail: q.errorMessage ?? 'the write gate declined this change after it was approved' }
+      else if (q.syncStatus === 'FAILED' || q.isDead) delivery = { state: 'failed', detail: q.errorMessage ?? (q.isDead ? 'dead-lettered after retries' : 'delivery failed') }
+      else delivery = { state: 'unknown', detail: `queue: ${q.syncStatus}` }
+    } else if (out.reachedAmazon === true || typeof out.externalTargetId === 'string') {
+      delivery = { state: 'delivered', detail: out.alreadyExisted === true ? 'already existed at Amazon' : null }
+    } else if (typeof out.confirmed === 'number' || typeof out.failedWrites === 'number') {
+      // HP1 wire result: per-destination outcomes with an overall verdict.
+      const failed = Number(out.failedWrites ?? 0)
+      delivery = failed > 0
+        ? { state: 'failed', detail: ar?.error ?? `${failed} creation(s) did not reach Amazon` }
+        : { state: 'delivered', detail: `${Number(out.confirmed ?? 0)} creation(s) confirmed` }
+    } else if (out.denied) {
+      const d = out.denied as { deniedAt?: string; reason?: string }
+      delivery = { state: 'refused', detail: d.reason ?? ar?.error ?? 'refused at the write gate' }
+    } else if (ar?.ok === false) {
+      delivery = { state: 'failed', detail: ar.error ?? null }
+    }
+
+    let undo: SuggestionUndo | null = null
+    if (it.decidedAt) {
+      const t = it.decidedAt.getTime()
+      const candidates = (logsByEntity.get(it.entityId) ?? []).filter(
+        (l) => l.createdAt.getTime() >= t - UNDO_MATCH_BEFORE_MS && l.createdAt.getTime() <= t + UNDO_MATCH_AFTER_MS,
+      )
+      // nearest to the decision wins — never join on a truncated timestamp (the KT.7 lesson)
+      candidates.sort((a, b) => Math.abs(a.createdAt.getTime() - t) - Math.abs(b.createdAt.getTime() - t))
+      const hit = candidates[0]
+      if (hit) undo = { actionLogId: hit.id, rolledBack: hit.rolledBackAt != null }
+    }
+
+    return { ...it, delivery, undo }
+  })
+}
+
+// ── SG.1 — scope resolution for the list + pricing routes ───────────────────
+/**
+ * Resolve the filter bar's scope grains to a campaign-id set, SERVER-side, so the grid, the
+ * money tiles and the pricing endpoint all describe the same rows. `null` = unscoped.
+ *
+ * The line join is the /advertising/scope-options picker's own (Product parent → children →
+ * AdProductAd → adGroup.campaignId) — never a parallel definition of "the line's campaigns",
+ * or the picker and the filter drift. Precedence is most-specific-wins: campaign ⊃ portfolio ⊃
+ * line (a campaign has at most one portfolio, so combining them is redundant or contradictory).
+ */
+export async function scopeCampaignIds(q: { campaign?: string; portfolio?: string; line?: string }): Promise<Set<string> | null> {
+  if (q.campaign) return new Set([q.campaign])
+  if (q.portfolio) {
+    const rows = await prisma.campaign.findMany({ where: { portfolioId: q.portfolio }, select: { id: true } })
+    return new Set(rows.map((r) => r.id))
+  }
+  if (q.line) {
+    const children = await prisma.product.findMany({
+      where: { OR: [{ id: q.line }, { parentId: q.line }] },
+      select: { id: true },
+    })
+    const ads = children.length
+      ? await prisma.adProductAd.findMany({
+        where: { productId: { in: children.map((c) => c.id) } },
+        select: { adGroup: { select: { campaignId: true } } },
+      })
+      : []
+    return new Set(ads.map((a) => a.adGroup?.campaignId).filter((x): x is string => !!x))
+  }
+  return null
+}
+
+// ── SG.0 — lifecycle sweep ───────────────────────────────────────────────────
+//
+// The queue holds the engine's CURRENT opinion, not a history. Two moves, both driven by
+// `lastSeenAt` (the newest evaluation that still proposes the change):
+//
+//   EXPIRE      pending, and the engine has stopped re-proposing it for the rule's window
+//               → status 'expired', decidedBy 'system:stale'. The data moved on, the rule was
+//               disabled, or the rule was deleted — either way the row is no longer anyone's
+//               current opinion and must not sit in the operator's queue looking actionable.
+//   RE-PROPOSE  a decided row the engine STILL proposes (lastSeenAt > decidedAt):
+//               'expired' rows return to pending immediately — expiry is a system state, not a
+//               veto. 'dismissed' rows return only after REPROPOSE_AFTER_MS and only when the
+//               decision was the operator's plain dismiss — 'operator:paused' rows stay out
+//               (the operator paused the underlying target; re-nagging them is noise).
+//
+// Ridden by the rule-evaluator tick (no new cron); every call is cheap and idempotent.
+
+const DAY_MS = 24 * 3600 * 1000
+export const DEFAULT_EXPIRE_MS = 3 * DAY_MS
+export const REPROPOSE_AFTER_MS = 7 * DAY_MS
+
+/**
+ * How long a pending row may go un-re-proposed before it expires, for one rule.
+ * Engine rules evaluate every tick, so 3 days of silence means the data moved on. A builder rule
+ * carries a schedule and may legitimately be silent for its whole interval — a weekly rule must
+ * not false-expire on day 3 — so its window is 2× the interval, floored at the default.
+ * Builder schedule shape (RuleBuilder.tsx): { frequency: 'Hourly'|'Daily'|'Weekly'|'Monthly'|'Custom',
+ * everyN, interval: 'Days'|'Weeks'|'Months' }.
+ */
+export function expiryWindowMs(rule: { actions: unknown } | null | undefined): number {
+  const actions = Array.isArray(rule?.actions) ? (rule.actions as Array<Record<string, unknown>>) : []
+  let intervalMs = 0
+  for (const a of actions) {
+    const sched = a?.schedule as { frequency?: string; everyN?: number | string; interval?: string } | undefined
+    if (!sched?.frequency) continue
+    const f = String(sched.frequency).toLowerCase()
+    let ms = 0
+    if (f === 'hourly') ms = 3600 * 1000
+    else if (f === 'daily') ms = DAY_MS
+    else if (f === 'weekly') ms = 7 * DAY_MS
+    else if (f === 'monthly') ms = 30 * DAY_MS
+    else if (f === 'custom') {
+      const n = Math.max(1, Number(sched.everyN) || 1)
+      const unit = String(sched.interval ?? 'Days').toLowerCase()
+      ms = n * (unit === 'months' ? 30 * DAY_MS : unit === 'weeks' ? 7 * DAY_MS : DAY_MS)
+    }
+    intervalMs = Math.max(intervalMs, ms)
+  }
+  return Math.max(DEFAULT_EXPIRE_MS, 2 * intervalMs)
+}
+
+export async function sweepSuggestionLifecycle(now = new Date()): Promise<{ expired: number; reproposed: number }> {
+  try {
+    // Group the rules that still exist by their expiry window; a deleted rule's rows fall into
+    // the default group (its lastSeenAt stopped moving the moment it was deleted, which is the
+    // honest clock for them).
+    const openRuleIds = (
+      await prisma.adsRuleSuggestion.findMany({ where: { status: 'pending' }, select: { ruleId: true }, distinct: ['ruleId'] })
+    ).map((r) => r.ruleId)
+    const rules = openRuleIds.length
+      ? await prisma.automationRule.findMany({ where: { id: { in: openRuleIds } }, select: { id: true, actions: true } })
+      : []
+    const windowByRule = new Map(rules.map((r) => [r.id, expiryWindowMs(r)]))
+    const byWindow = new Map<number, string[]>()
+    for (const id of openRuleIds) {
+      const w = windowByRule.get(id) ?? DEFAULT_EXPIRE_MS
+      byWindow.set(w, [...(byWindow.get(w) ?? []), id])
+    }
+    let expired = 0
+    for (const [windowMs, ids] of byWindow) {
+      const res = await prisma.adsRuleSuggestion.updateMany({
+        where: { status: 'pending', ruleId: { in: ids }, lastSeenAt: { lt: new Date(now.getTime() - windowMs) } },
+        data: { status: 'expired', decidedAt: now, decidedBy: 'system:stale' },
+      })
+      expired += res.count
+    }
+
+    // Re-propose needs a column-to-column comparison (lastSeenAt > decidedAt), which Prisma's
+    // updateMany cannot express — raw SQL, parameterised.
+    const backToPending = await prisma.$executeRaw`
+      UPDATE "AdsRuleSuggestion"
+      SET "status" = 'pending', "decidedAt" = NULL, "decidedBy" = NULL
+      WHERE ("status" = 'expired' AND "lastSeenAt" > "decidedAt")
+         OR ("status" = 'dismissed' AND "decidedBy" = 'operator'
+             AND "decidedAt" < ${new Date(now.getTime() - REPROPOSE_AFTER_MS)}
+             AND "lastSeenAt" > "decidedAt")`
+    return { expired, reproposed: Number(backToPending) }
+  } catch (e) {
+    logger.warn('[ads-suggestions] lifecycle sweep failed', { error: (e as Error).message })
+    return { expired: 0, reproposed: 0 }
+  }
 }

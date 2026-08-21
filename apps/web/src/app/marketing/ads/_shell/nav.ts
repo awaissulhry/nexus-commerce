@@ -7,7 +7,7 @@
  * and Rules (H10's wand-with-stars = WandSparkles, not in 0.263 → Wand2, near-identical).
  */
 import {
-  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, ListChecks, Lightbulb, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck, Bot,
+  LayoutGrid, Gauge, BadgeDollarSign, FileSpreadsheet, Atom, ListChecks, HeartPulse, BarChart3, Table, Briefcase, Wand2, Users, PieChart, History, HelpCircle, Settings, ShoppingBag, ShieldCheck, Bot,
   type LucideIcon } from 'lucide-react'
 
 export const ADS_BASE = '/marketing/ads'
@@ -54,7 +54,7 @@ export const ADS_NAV: NavItem[] = [
   { label: 'Budget Manager', route: 'budget-manager', Icon: BadgeDollarSign },
   { label: 'AI Advertising', route: 'ai-advertising', Icon: Atom },
   { label: 'Suggestions', route: 'suggestions', Icon: ListChecks },
-  { label: 'Recommendations', route: 'recommendations', Icon: Lightbulb },
+  // SG.4 — Recommendations is the Suggestions page's 7th tab; the route redirects there.
   { label: 'Alerts & Health', route: 'health', Icon: HeartPulse },
   // AX-VT.6 — "does Nexus match Amazon right now". Sits beside Alerts & Health because it answers
   // the neighbouring question: Health is about our own machinery, Trust is about whether the

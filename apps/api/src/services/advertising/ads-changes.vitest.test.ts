@@ -23,6 +23,20 @@ describe('HX.4 parseActor — source + origin from the actor string', () => {
     expect(parseActor('automation:rule-r42').origin).toMatchObject({ kind: 'rule', id: 'r42' })
   })
 
+  it('SG.0 — classifies the UNPREFIXED rule actor RULE_ACTOR actually writes (automation:<cuid>)', () => {
+    // automation-action-handlers.ts writes `automation:<ruleId>` with no 'rule-' prefix, so every
+    // rule write (including operator-approved suggestion applies) parsed as an anonymous job.
+    const r = parseActor('automation:cmehif9xk0001s6mvabcd1234')
+    expect(r.source).toBe('automation')
+    expect(r.origin).toMatchObject({ kind: 'rule', id: 'cmehif9xk0001s6mvabcd1234' })
+    // resolveOrigins demotes a bare-cuid 'rule' back to 'job' when no such rule exists.
+  })
+
+  it('SG.0 — a short or non-cuid tail is still a standing job', () => {
+    expect(parseActor('automation:auto-harvest').origin.kind).toBe('job')
+    expect(parseActor('automation:budget-manager-cron').origin.kind).toBe('job')
+  })
+
   it('treats a standing job as automation with no per-instance id', () => {
     const r = parseActor('automation:ads-write-reconcile')
     expect(r.source).toBe('automation')

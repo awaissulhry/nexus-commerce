@@ -57,9 +57,19 @@ export interface ProposalPricing {
   top: PricedProposal[]
 }
 
-/** How much of a target's trailing spend each action type puts in play. */
+/**
+ * How much of a target's trailing spend each action type puts in play.
+ *
+ * 🔴 SG.0 — switch on the action TYPE, never on `proposedKey`. The key is `type[:op][:value]`
+ * (`budget_apply:decPct:20`), so a switch on the whole key silently sent the entire `*_apply`
+ * family — which is what the builder emits and what the page displays — down the default branch,
+ * where `action.value` (a percent) was read as if it were `action.percent`. The legacy engine
+ * actions (`bid_down`, `adjust_ad_budget`) carry no op/value parts, so their keys equalled their
+ * types and they were priced correctly, which is what kept the defect invisible.
+ */
 function stakeFraction(proposedKey: string, action: Record<string, unknown>): { frac: number; direction: ProposalDirection } {
-  switch (proposedKey) {
+  const type = String((action as { type?: unknown }).type ?? proposedKey.split(':')[0])
+  switch (type) {
     case 'lower_bid_to_floor':
       // Bid to ~5¢ stops the target serving in practice, so all of its spend is in play.
       return { frac: 1, direction: 'reduce' }
@@ -68,6 +78,8 @@ function stakeFraction(proposedKey: string, action: Record<string, unknown>): { 
       return { frac: Math.min(1, Math.max(0, pct / 100)), direction: 'reduce' }
     }
     case 'add_negative_exact':
+    case 'add_negative_phrase':
+    case 'sync_negatives_across_campaigns':
     case 'harvest_and_negate':
       return { frac: 1, direction: 'structural' }
     case 'promote_to_exact':
@@ -75,6 +87,18 @@ function stakeFraction(proposedKey: string, action: Record<string, unknown>): { 
     case 'adjust_ad_budget': {
       const pct = Number(action.percent ?? 0)
       return { frac: Math.min(1, Math.abs(pct) / 100), direction: pct >= 0 ? 'increase' : 'reduce' }
+    }
+    // The builder's op family: { op: 'incPct' | 'decPct' | 'setValue', value }. A setValue
+    // REPLACES the number, so the trailing spend is context rather than a computable delta —
+    // 'structural' keeps it out of the reduce/increase money totals instead of inventing one.
+    case 'bid_apply':
+    case 'budget_apply':
+    case 'placement_apply': {
+      const op = String(action.op ?? '')
+      const v = Number(action.value ?? 0)
+      if (op === 'decPct' && Number.isFinite(v)) return { frac: Math.min(1, Math.abs(v) / 100), direction: 'reduce' }
+      if (op === 'incPct' && Number.isFinite(v)) return { frac: Math.min(1, Math.abs(v) / 100), direction: 'increase' }
+      return { frac: 1, direction: 'structural' }
     }
     default: {
       const pct = Number(action.percent ?? action.value ?? 0)

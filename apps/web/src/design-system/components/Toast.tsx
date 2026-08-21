@@ -11,7 +11,9 @@ interface ToastItem {
 }
 
 export interface ToastApi {
-  toast: (message: ReactNode, tone?: Tone) => void
+  /** `opts.duration` overrides the provider default for ONE toast — a toast carrying an
+   *  interactive verb (an Undo) needs more time on screen than a plain receipt. */
+  toast: (message: ReactNode, tone?: Tone, opts?: { duration?: number }) => void
 }
 
 const ToastCtx = createContext<ToastApi | null>(null)
@@ -27,10 +29,10 @@ export function ToastProvider({ children, duration = 4000 }: { children: ReactNo
   useEffect(() => setMounted(true), [])
 
   const toast = useCallback(
-    (message: ReactNode, tone: Tone = 'info') => {
+    (message: ReactNode, tone: Tone = 'info', opts?: { duration?: number }) => {
       const id = nextId++
       setItems((xs) => [...xs, { id, message, tone }])
-      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), duration)
+      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), opts?.duration ?? duration)
     },
     [duration],
   )

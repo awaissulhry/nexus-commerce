@@ -1,6 +1,12 @@
 'use client'
 
 /**
+ * ⛔ PARKED (SG.7, operator decision 2026-08-21) — imported by nothing live. The Recommendations
+ * feed moved onto the Suggestions page's shared anatomy and this panel was parked with it (only
+ * the equally-parked RecommendationsClient still references it). KEEP: it is an ACR.6 roadmap
+ * surface — AI Advertising is where plans are operated today; re-home it there when that page
+ * grows an account-plan slot.
+ *
  * ACR.6 (R3) — the account plan: one north star, one readable plan, one apply.
  *
  * Every card below this panel is a single action you accept or dismiss. This is the other altitude:

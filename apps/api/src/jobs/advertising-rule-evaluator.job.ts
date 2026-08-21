@@ -1376,6 +1376,17 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     totalFailed += r.failed
   }
 
+  // SG.0 — the suggestion lifecycle sweep rides the tick (no separate cron): AFTER the passes,
+  // so a change every rule just re-proposed carries a fresh `lastSeenAt` before expiry is judged.
+  // The sweep swallows its own failures — hygiene must never fail the evaluation it rides.
+  try {
+    const { sweepSuggestionLifecycle } = await import('../services/advertising/ads-suggestions.service.js')
+    const swept = await sweepSuggestionLifecycle()
+    if (swept.expired > 0 || swept.reproposed > 0) {
+      logger.info('[ads-rule-evaluator] suggestion lifecycle sweep', swept)
+    }
+  } catch { /* never fail the tick for queue hygiene */ }
+
   const summary: TickSummary = {
     fbaAgeContexts: fbaAge.length,
     profitabilityContexts: profitability.length,

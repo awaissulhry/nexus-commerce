@@ -3,23 +3,56 @@
    layout lives here. Tokenised — no raw hex. */
 .h10-sug { padding: 0 24px 40px; }
 
-/* Status tabs + keyboard hint (S.6) */
-.h10-sug-tabs { margin-top: 8px; }
-.h10-sug-kbd { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 14px 2px 0; font-size: 12px; color: var(--h10-text-3); }
+/* SG.1 — the type-view row: H10's page-level tab bar (DS Tabs size="lg" — bold labels, count
+   pills, 3px indicator) with the cursor StaleBanner on its baseline. The bar takes the row;
+   the banner sits at its end without breaking the underline. */
+.h10-sug-views { display: flex; align-items: flex-end; gap: 12px; margin-top: 10px; }
+.h10-sug-views > .h10-ds-tabs { flex: 1; min-width: 0; overflow-x: auto; }
+.h10-sug-views > .h10-bd-stale { margin-bottom: 8px; flex: none; }
+
+/* SG.1 — the bulk outcome report. OUTSIDE the selection popover so a partial result survives
+   it (a success used to unmount its own refusal list — the W2 lesson). Amber: refusals are
+   governed stops, never failures, and must not wear the failure red. */
+.h10-sug-report { margin-top: 12px; padding: 10px 14px; border: 1px solid #f0dcbe; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 12.5px; }
+.h10-sug-report b { display: block; font-weight: 800; margin-bottom: 4px; }
+.h10-sug-report ul { margin: 0 0 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.h10-sug-report .nm { font-weight: 700; }
+.h10-sug-repacts { display: inline-flex; gap: 14px; }
+
+/* Inline links inside empty states / notices */
+.h10-sug-lnk { color: var(--h10-text-link); font-weight: 600; text-decoration: none; }
+.h10-sug-lnk:hover { text-decoration: underline; }
+
+/* The status-tab row is GONE too (SG.2e) — Status is a select in the Filters card, H10's
+   own placement. The keyboard shortcuts still work; they are documented in the column tips. */
 .h10-sug-applied { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--h10-text-3); }
 
-/* toolbar-right cluster (Live chip + Refresh) */
+/* SG.2e — the summary band is REMOVED (operator, twice). Nothing sits between the type
+   tabs and Filters, which is H10's own shape. */
+
+/* toolbar-right cluster (Refresh; the SSE "Live" chip is gone — the cursor poll's StaleBanner
+   replaced it, because the bus it listened to carries 0.21% of writes) */
 .h10-sug-toolbar { display: inline-flex; align-items: center; gap: 12px; }
-.h10-sug-live { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: var(--h10-live); }
 
 /* Source cell — entity Tag + deep-link breadcrumb */
-.h10-sug-src { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
-.h10-sug-src .lnk { color: var(--h10-text-link); text-decoration: none; min-width: 0; }
+/* ONE line, always (operator 2026-08-21: the wrapping crumb was inflating row heights).
+   The breadcrumb never wraps; ancestors ellipsize FIRST (shrink 999) so the leaf — the term
+   the decision is about — stays readable longest. Cap is 100% of the cell, never px; the
+   full path lives in the link title and the hover facts. */
+.h10-sug .h10-am-grid td.nm.fz { overflow: hidden; }
+.h10-sug-src { display: flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; }
+.h10-sug-src .h10-ds-tag { flex: none; }
+/* The hover anchor is a flex ITEM between the cell and the link — without min-width:0 it
+   refuses to shrink (min-width:auto) and the whole chain overflows the frozen cell. */
+.h10-sug-src .h10-hc-anchor { display: inline-flex; min-width: 0; overflow: hidden; }
+.h10-sug-src .lnk { color: var(--h10-text-link); text-decoration: none; min-width: 0; display: inline-flex; overflow: hidden; }
 .h10-sug-src .lnk:hover { text-decoration: underline; }
 .h10-sug-src .lnk.dead { color: var(--h10-text-3); cursor: default; text-decoration: none; }
-.h10-sug-src .crumb { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.h10-sug-src .crumb { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
 .h10-sug-src .crumb .seg { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.h10-sug-src .crumb .seg:not(:last-child) { flex-shrink: 999; }
 .h10-sug-src .crumb .anc { color: var(--h10-text-2); }
+.h10-sug-src .crumb .anc, .h10-sug-src .crumb .leaf { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .h10-sug-src .crumb .leaf { font-weight: 600; }
 .h10-sug-src .crumb .sep { color: var(--h10-text-3); flex: none; }
 
@@ -42,13 +75,74 @@
 .h10-sug-group { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--h10-text-2); }
 .h10-sug-group > span { font-weight: 600; }
 
-/* Bulk-action progress (grid selectionActions) + Toast undo */
-.h10-sug-prog { align-self: center; font-size: 12px; font-weight: 600; color: var(--h10-text-2); font-variant-numeric: tabular-nums; }
-.h10-sug-undo { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; cursor: pointer; }
-
-/* When + Actions */
+/* When + the decision icon columns (H10's ✓ / ✕ / ⏸ treatment) */
 .h10-sug-when { color: var(--h10-text-2); font-size: 12.5px; }
 .h10-sug-acts { display: inline-flex; gap: 8px; justify-content: flex-end; }
+/* Explicit box — an icon inside a padded pill collapses to width 0 in a narrow column
+   (the NEG.5 delete-button lesson), so the button owns its geometry outright. */
+.h10-sug-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border: 1px solid var(--h10-border); border-radius: 7px; background: var(--h10-surface); color: var(--h10-text-2); cursor: pointer; }
+.h10-sug-iconbtn:hover { border-color: var(--h10-text-3); color: var(--h10-text); }
+.h10-sug-iconbtn.ok:hover { border-color: var(--h10-success-strong); color: var(--h10-success-strong); background: var(--h10-success-soft); }
+.h10-sug-iconbtn.no:hover { border-color: var(--h10-danger-strong); color: var(--h10-danger-strong); background: var(--h10-danger-soft); }
+.h10-sug-iconbtn:disabled { opacity: .55; cursor: default; }
+/* the pause verb is ARMED by its first click (3.5s) — the second click is the real write */
+.h10-sug-iconbtn.pz:hover { border-color: #c68a2e; color: #8a5316; background: #fff6e8; }
+.h10-sug-iconbtn.pz.armed { border-color: #c68a2e; color: #8a5316; background: #fdeed5; box-shadow: 0 0 0 2px #f0dcbe; }
+
+/* SG.2 — metric + value cells */
+.h10-sug-num { font-variant-numeric: tabular-nums; }
+.h10-sug-nd { color: var(--h10-text-3); }
+.h10-sug-sugval { font-weight: 700; color: var(--h10-text); font-variant-numeric: tabular-nums; }
+
+/* SG.2b — the staged verbs: the FILL is the staged state (H10's blue-boxed ✓/✕) */
+.h10-sug-iconbtn.ok.on { background: #1f6fde; border-color: #1f6fde; color: #fff; }
+.h10-sug-iconbtn.no.on { background: #8a5316; border-color: #8a5316; color: #fff; }
+
+/* Discard Changes uses the app-wide `.h10-am-link` idiom (ads.css) — the button-vocabulary
+   ratchet is at zero new idioms, and a link-style verb already has one class. */
+
+/* SG.2b — the staging buffer input (H10's per-row editable Current Bid) */
+.h10-sug-buf { display: inline-flex; align-items: center; gap: 4px; }
+.h10-sug-buf .cur { color: var(--h10-text-3); font-size: 12px; }
+.h10-sug-buf input { width: 74px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--h10-text); background: var(--h10-surface); border: 1px solid var(--h10-border); border-radius: 7px; padding: 4px 8px; }
+.h10-sug-buf input:read-only { background: transparent; border-color: transparent; }
+.h10-sug-buf.on input { border-color: #1f6fde; background: #f2f7ff; }
+.h10-sug-buf.on.edited input { border-color: #c68a2e; background: #fff6e8; }
+.h10-sug-buf input:disabled { color: var(--h10-text-3); background: transparent; border-color: transparent; }
+.h10-sug-buf .rv { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--h10-text-2); cursor: pointer; }
+.h10-sug-buf .rv:hover { background: var(--h10-surface-sunken); color: var(--h10-text); }
+
+/* SG.2b — Suggested Change: new value + colored delta arrow (H10's "$0.52 $0.07 ↓") */
+.h10-sug-change { display: inline-flex; align-items: baseline; gap: 7px; }
+.h10-sug-change .d { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.h10-sug-change .d.down { color: var(--h10-danger-strong); }
+.h10-sug-change .d.up { color: var(--h10-success-strong); }
+.h10-sug-pausechg { font-size: 12.5px; font-weight: 600; color: var(--h10-text-2); white-space: nowrap; }
+
+/* SG.2b — the ACoS traffic light vs the campaign's target */
+.h10-sug-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 6px; vertical-align: middle; }
+.h10-sug-dot.g { background: var(--h10-success-strong); }
+.h10-sug-dot.a { background: #c68a2e; }
+.h10-sug-dot.r { background: var(--h10-danger-strong); }
+
+/* SG.2b — the circular match-type badge before the term (E/B/P/A) */
+.h10-sug-mt { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: none; border-radius: 50%; font-size: 10.5px; font-weight: 800; font-style: normal; color: #fff; }
+.h10-sug-mt.mt-e { background: #067d62; }
+.h10-sug-mt.mt-b { background: #0ea5c6; }
+.h10-sug-mt.mt-p { background: #7c5cff; }
+.h10-sug-mt.mt-a { background: #1f6fde; }
+.h10-sug-mt.mt-n { background: #8a5316; }
+
+/* SG.2b — Reason (criteria) + Destinations cells */
+.h10-sug-reason { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--h10-text-2); }
+.h10-sug-destn { font-size: 12.5px; font-weight: 600; color: var(--h10-text-link); cursor: default; }
+
+/* SG.2b — the empty-state Create Rule button (h10-am-btn is the idiom; this only spaces it) */
+.h10-sug-ctawrap { display: inline-block; }
+.h10-sug-cta { margin-top: 12px; display: inline-flex; }
+
+/* H10's master verbs — permanent residents of the grid toolbar */
+.h10-sug-applybar { display: inline-flex; align-items: center; gap: 8px; margin-right: 10px; }
 
 /* ── Detail drawer (S.5) ─────────────────────────────────────────── */
 .h10-sug-dh { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -108,3 +202,60 @@
    qualifies every count and tile above it: when the server has more rows than it sent, the
    page is describing a prefix. Not a toast — it is true for as long as the list is capped. */
 .h10-sug-trunc { display: inline-flex; align-items: center; padding: 4px 10px; margin-right: 12px; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+/* ── SG.2f — the approve-hover card (H10's "Rule: Add New Keywords" popover). Portaled to
+   body (the ✓ lives in a right-pinned sticky cell) and it stays open under the pointer so
+   Edit Suggestion is clickable. */
+.h10-sug-ahwrap { display: inline-flex; }
+.h10-sug-ahover { position: fixed; z-index: 320; width: min(720px, calc(100vw - 32px)); background: var(--h10-surface); border: 1px solid var(--h10-border); border-radius: 12px; box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16); padding: 14px 16px 12px; }
+.h10-sug-ahover .ti { display: block; font-size: 13.5px; font-weight: 800; color: var(--h10-text); }
+.h10-sug-ahover .sub { margin: 3px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--h10-text-2); }
+.h10-sug-ahover .tbl { border: 1px solid var(--h10-border-subtle); border-radius: 8px; overflow: hidden; }
+.h10-sug-ahover .hd, .h10-sug-ahover .rw { display: grid; grid-template-columns: 130px 70px 1fr 1fr 100px; gap: 10px; align-items: center; padding: 7px 12px; }
+.h10-sug-ahover .hd { background: var(--h10-surface-sunken); font-size: 11px; font-weight: 700; text-transform: none; color: var(--h10-text-3); }
+.h10-sug-ahover .rw { border-top: 1px solid var(--h10-border-subtle); font-size: 12.5px; color: var(--h10-text); }
+.h10-sug-ahover .rw .ty { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+.h10-sug-ahover .rw .bd { font-variant-numeric: tabular-nums; }
+.h10-sug-ahover .rw .cp { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-sug-ahover .rw .ag { color: var(--h10-text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-sug-ahover .rw .nt { color: var(--h10-text-2); }
+.h10-sug-ahover .ft { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+/* negative match badge (dark red, H10's NegativeExact circle) + the SP/SB/SD pill */
+.h10-sug-mt.mt-ne { background: #b3282d; }
+.h10-sug-adp { display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 1px 5px; border: 1px solid var(--h10-border); border-radius: 4px; font-size: 10px; font-weight: 800; font-style: normal; color: var(--h10-text-2); background: var(--h10-surface); }
+
+/* the Ad Group column's open-in-new-tab link (Bids). The wrapper carries the class; the anchor
+   inside is unclassed — the button-vocabulary ratchet counts labelled interactive idioms. */
+.h10-sug-agx { display: inline-flex; min-width: 0; }
+.h10-sug-agx a { display: inline-flex; align-items: center; gap: 5px; color: var(--h10-text-link); text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h10-sug-agx a:hover { text-decoration: underline; }
+
+/* Lookback cell */
+.h10-sug-lb { font-size: 12.5px; color: var(--h10-text-2); white-space: nowrap; }
+
+/* SG.2f — breathing room: the type tabs and the Filters card read as ONE component without a
+   gap (operator, with the H10 reference). The bar's underline ends, air, then the card. */
+.h10-sug .h10-am-fpanel { margin-top: 18px; }
+
+/* ── SG.7 — the Recommendations tab on the page's one anatomy ─────────────────
+   The first (frozen) column: severity chip + one-line title. Same shrink rules as the
+   suggestion Source cell — cap at 100%, ellipsize, never px (the frozen-column overflow trap:
+   td.nm.fz above already clips). The chip itself is recommendations.css's rec-sevchip. */
+.h10-sug-recsrc { display: flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; }
+.h10-sug-recsrc .rec-sevchip { flex: none; }
+.h10-sug-recsrc .ttl { font-weight: 600; color: var(--h10-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Detail column — the recommendation's own sentence, one line, full text in the title tip. */
+.h10-sug-recdet { display: inline-block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--h10-text-2); }
+
+/* ── SG.3 — the Delivery chip: an approve is ENQUEUED; this is the write's actual fate.
+   Refused is amber, never red — a governed stop is not a failure. */
+.h10-sug-dl { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.h10-sug-dl.ok { background: #e6f6f1; color: #067d62; }
+.h10-sug-dl.pd { background: var(--h10-surface-sunken); color: var(--h10-text-2); }
+.h10-sug-dl.rf { background: #fff6e8; color: #8a5316; }
+.h10-sug-dl.fl { background: #fdeceb; color: var(--h10-danger-strong); }
+.h10-sug-dl.uk { background: transparent; color: var(--h10-text-3); }
+.h10-sug-dlblock { border: 1px solid var(--h10-border-subtle); border-radius: 10px; padding: 12px 14px; background: var(--h10-surface-sunken); }
+.h10-sug-dlblock h4 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--h10-text-2); }
+.h10-sug-dlblock p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--h10-text-2); }

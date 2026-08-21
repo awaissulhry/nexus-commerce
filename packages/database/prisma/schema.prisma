@@ -13109,14 +13109,20 @@ model AdsRuleSuggestion {
   // Stable dedup key for the change kind (e.g. 'budget_apply:decPct:20') — one pending row per.
   proposedKey    String
 
-  status        String    @default("pending") // pending | applied | dismissed
+  status        String    @default("pending") // pending | applied | dismissed | expired (SG.0)
   createdAt     DateTime  @default(now())
+  // SG.0 — the newest evaluation that still proposes this change. Stamped on every upsert
+  // (create AND refresh); `createdAt` stays the FIRST sighting. The lifecycle sweep expires
+  // pending rows the engine has stopped re-proposing and resurrects decided rows it still
+  // proposes (see ads-suggestions.service.ts sweepSuggestionLifecycle).
+  lastSeenAt    DateTime  @default(now())
   decidedAt     DateTime?
-  decidedBy     String?
+  decidedBy     String? // 'operator' | 'operator:paused' | 'system:stale'
   appliedResult Json?
 
   @@unique([ruleId, entityId, proposedKey], map: "AdsRuleSuggestion_dedupe_key")
   @@index([status, createdAt(sort: Desc)])
+  @@index([status, lastSeenAt])
   @@index([ruleId, createdAt(sort: Desc)])
 }
 
@@ -15279,6 +15285,12 @@ model AdsAutomationState {
   // account ad spend in the trailing hour, or automation actions/hour, exceed.
   maxHourlySpendCentsEur Int?
   maxActionsPerHour      Int?
+
+  // SG.5 — the account default ACoS target, INTEGER percent (30 = 30% — never a
+  // fraction; the 0.3-vs-30 encoding trap is live in this codebase). ONE reader:
+  // bid_apply's targetAcos/curBidTargetAcos ops fall back to it when the rule
+  // itself carries no target. Null = no default; those ops refuse as before.
+  defaultTargetAcosPct Int?
 
   // Last anomaly-guard evaluation, for observability.
   lastCheckedAt DateTime?
