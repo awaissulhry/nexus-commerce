@@ -949,9 +949,10 @@ export function ApplyRulesClient() {
     // ── AR.S1 — this page's own governance columns ────────────────────────────────────────────
     {
       key: 'managed',
-      // C2 — "Automation", singular, because that is what the Ad Manager's column carrying the
-      // identical fact is called. One name, one cell, two pages.
-      label: 'Automation',
+      // C2 — the same name as the Ad Manager's column carrying the identical fact.
+      // One name, one cell, two pages. Renamed with it 2026-08-22: "Automation" collided with
+      // the inert "Bid Automation" column on BOTH grids. See CampaignsGrid's ALL_COLS.
+      label: 'Automation Access',
       metric: false,
       tip: 'The write gate\'s verdict, which is the most useful sentence on this grid: MANAGED means armed automation can write to this campaign; OFF-LIMITS means rules still match it and every write is refused at campaign_allowlist. Resuming a paused campaign does NOT re-open the gate.',
       sortValue: (r) => (r.managed ? 1 : 0),

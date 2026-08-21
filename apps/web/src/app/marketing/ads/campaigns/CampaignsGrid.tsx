@@ -167,7 +167,17 @@ const ALL_COLS: ColDef[] = [
   // ACR.1.6 — what automation is allowed to do to this campaign, beside what actually
   // reached Amazon. The two belong together: "Amazon Delivery" answers whether our last
   // write landed, this answers whether the next one is even permitted to be attempted.
-  { key: 'automation', label: 'Automation' },
+  //
+  // 🔴 Named "Automation" until 2026-08-22, three columns away from "Bid Automation" — and it
+  // was the WRONG one of the pair that read like a switch. This column is the write gate
+  // (`liveBidWritesEnabled`, 67 references across apps/api, honoured by the bid optimizer and
+  // autopilot); `bidAutomation` beside it has ZERO engine readers and is false on 220 of 220.
+  // The operator could not tell which mattered, and the previous fix was a tooltip explaining
+  // the field "because the label cannot" — which is a label problem answered everywhere except
+  // the label. "Access" says it is a permission, not an activity, and reads with the values:
+  // Automation Access → Managed / Off-limits. The `key` stays `automation` so stored column
+  // preferences and the SETTINGS_KEYS set keep working.
+  { key: 'automation', label: 'Automation Access' },
   { key: 'bidAlgorithm', label: 'Bid Algorithm' },
   { key: 'status', label: 'Status' },
   { key: 'minMaxBudget', label: 'Min/Max Budget' },
@@ -1423,6 +1433,14 @@ export function CampaignsGrid() {
   // The whole cost of fixing that is being willing to say so. Computed from the
   // selected range with the same pure module the API uses, so the page and any
   // rule can never disagree about what is settled.
+  //
+  // WHERE IT IS SAID. This used to be a banner above the page header, and it was
+  // on permanently: `ruleSafe` only turns true once EVERY day in the window is
+  // 15+ days old, so the default 7-day range — and any range touching this week —
+  // tripped it 100% of the time. A warning that never turns off is wallpaper, and
+  // it trained the eye to skip the header. The sentence now rides the "Latest
+  // Report" footer, which already talks about data freshness, and only appends
+  // itself when the selected window actually contains unsettled days.
   // Keyed on `dateRange`, NOT `rangePreset`. The header's picker writes
   // dateRange and that is what drives `load()`; rangePreset is legacy and now
   // only feeds AdManagerGraph. Reading the preset here would have described a
@@ -1441,33 +1459,12 @@ export function CampaignsGrid() {
     return describeWindow(asUtcDay(dateRange.start), asUtcDay(dateRange.end))
   }, [dateRange])
 
-  // AX2.1 — the account-level truth, stated once at the top. Without this an
-  // operator in sandbox sees every edit "save" and none of them reach Amazon.
-  const blockedMarkets = (delivery?.connections ?? []).filter((c) => !c.writable).map((c) => c.marketplace)
-  const neverWritten = (delivery?.connections ?? []).filter((c) => c.writable && !c.everWritten).map((c) => c.marketplace)
-
   return (
     <div className="h10-am">
       {delivery?.sandbox && (
         <div className="h10-pill bad" style={{ display: 'block', margin: '0 0 10px', padding: '8px 12px', lineHeight: 1.45 }} role="status">
           <b>Sandbox mode — nothing on this page reaches Amazon.</b> Edits are written locally and audited, but no
           Amazon call is made. Set <code>NEXUS_AMAZON_ADS_MODE=live</code> to push for real.
-        </div>
-      )}
-      {!delivery?.sandbox && blockedMarkets.length > 0 && (
-        <div className="h10-pill warn" style={{ display: 'block', margin: '0 0 10px', padding: '8px 12px', lineHeight: 1.45 }} role="status">
-          <b>{blockedMarkets.length} marketplace(s) cannot receive writes:</b> {blockedMarkets.join(', ')}.
-          Changes to campaigns in those markets stay local.
-          {neverWritten.length > 0 && <> {neverWritten.join(', ')} {neverWritten.length === 1 ? 'is' : 'are'} writable but {neverWritten.length === 1 ? 'has' : 'have'} never been written to.</>}
-        </div>
-      )}
-      {!vintage.ruleSafe && (
-        <div
-          className="h10-pill warn"
-          style={{ display: 'block', margin: '0 0 10px', padding: '8px 12px', lineHeight: 1.45 }}
-          role="status"
-        >
-          <b>These figures are still settling.</b> {vintage.summary}
         </div>
       )}
       <AdsPageHeader
@@ -1673,7 +1670,7 @@ export function CampaignsGrid() {
           <H10Select width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
-      <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time. <span className="lk">Learn More</span></div>
+      <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
       {mode === 'edit' && diffs.length > 0 && (

@@ -178,6 +178,13 @@ export function StatusCell({ status, name, onChange }: {
  *
  * Takes primitives, like every other shared cell — the two grids carry different row types, and a
  * cell that took a row would force one of them to adopt the other's.
+ *
+ * ── 2026-08-22 — both columns are now headed "Automation Access" ────────────────────────────────
+ * C2 gave the two grids one cell but left them the name "Automation", which sat three columns from
+ * "Bid Automation" — the inert one (zero engine readers, false on 220 of 220) — while THIS cell
+ * renders the write gate the optimizer and autopilot actually honour. Operators could not tell
+ * which of the two was the real switch, and the answer had been pushed into tooltips rather than
+ * the header. "Access" names it as a permission and reads with the values below.
  */
 export function AutomationCell({ managed, missing, pins, boundRuleNames, accountWideRules, suppressedAt, suppressedBy, minCents, maxCents }: {
   managed?: boolean

@@ -3123,7 +3123,17 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    What automation is ALLOWED to do to a campaign, beside "Amazon Delivery" which
    says whether our last write landed. Light only: this console pins itself light
    (`.h10-shell` sets color-scheme: light), so no `.dark` block here. */
-.h10-auto-cell { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+/* 🔴 NOT `flex-wrap: wrap`. Measured 2026-08-22 on the Ad Manager: the column is 110.6px wide
+   = 82.61px of content box after padding, and "Managed" + gap + the ↓ suppression arrow needs
+   82.63px. It missed by **0.024px**, so the arrow wrapped to a second line and made every
+   suppressed row 64px tall against 50px for the rest — 33 of 100 rows on page one, a third of
+   the grid visibly taller for a 24-thousandths-of-a-pixel shortfall.
+   `nowrap` keeps the arrow beside the pill and the row height uniform. Under the grid's
+   `table-layout: auto` the column absorbs the rounding by growing a fraction of a pixel.
+   ⚠️ If the pin badges (Plc/Bid/Bgt) or the bound-rule count ever become non-zero — both are
+   0 of 220 campaigns today — this column will GROW rather than wrap. That is the intended
+   trade: a wider column is visible, a silently clipped badge is not. */
+.h10-auto-cell { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
 
 .h10-auto-state {
   display: inline-block; font-size: 11px; font-weight: 600;
