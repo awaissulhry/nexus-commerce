@@ -170,6 +170,12 @@ createServer(async (req, res) => {
       const { getNegativesStrip } = await import('../src/services/advertising/negatives.service.js')
       return json(200, await getNegativesStrip())
     }
+    // BUD-PP — the draft-rule preview, served from the real service (engine, dryRun, no writes).
+    if (url === '/api/advertising/automation-rules/preview' && req.method === 'POST') {
+      const body = await readBody(req)
+      const { previewBudgetRule } = await import('../src/services/advertising/ads-rule-preview.service.js')
+      return json(200, await previewBudgetRule(body as never))
+    }
     // BUD-P4 — the Budget tab's strip, served from the real service against prod data.
     if (url === '/api/advertising/budget-rules/strip' && req.method === 'GET') {
       const { getBudgetRulesStrip } = await import('../src/services/advertising/budget-grid.service.js')

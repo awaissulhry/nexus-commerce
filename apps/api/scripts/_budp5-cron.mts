@@ -1,0 +1,10 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const rules = await prisma.automationRule.findMany({ where: { domain: 'advertising' }, select: { name: true, enabled: true, lastEvaluatedAt: true } })
+console.log('ALL advertising rules — lastEvaluatedAt:')
+for (const r of rules) console.log(`  ${r.enabled ? 'ON ' : 'off'} ${r.lastEvaluatedAt?.toISOString() ?? 'never'}  ${r.name}`)
+const runs = await prisma.cronRun.findMany({ where: { jobName: { contains: 'rule' } }, orderBy: { startedAt: 'desc' }, take: 5, select: { jobName: true, startedAt: true, status: true, outputSummary: true, errorMessage: true } }).catch(() => null)
+console.log(`\nRecent cron runs (jobName contains "rule"):`)
+if (runs) for (const c of runs) console.log(`  ${c.startedAt.toISOString()} ${c.jobName} ${c.status} ${JSON.stringify(c.outputSummary ?? c.errorMessage ?? '').slice(0,200)}`)
+console.log(`\nnow = ${new Date().toISOString()}`)
+await prisma.$disconnect()

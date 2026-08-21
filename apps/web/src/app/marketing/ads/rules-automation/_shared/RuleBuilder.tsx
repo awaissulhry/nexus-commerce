@@ -602,18 +602,74 @@ export function RuleBuilder({ slug }: { slug: string }) {
     document.addEventListener('keydown', k)
     return () => document.removeEventListener('keydown', k)
   }, [tmpl])
-  const [preview, setPreview] = useState<{ open: boolean; loading: boolean; terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null }> } | null>(null)
+  /**
+   * BUD-PP — ONE builder for what leaves this form. `submit` and the Preview both call these, so
+   * the preview cannot describe a rule different from the one Save would create. They were
+   * inlined in `submit` before; the preview then had to guess the payload, which is how a preview
+   * drifts from its rule.
+   */
+  const previewConditions = useCallback(() => (
+    groups.map((g) => ({ match: 'all', lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, conditions: g.conditions, ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '', ...(isPlacement ? { placeTarget: g.placeTarget ?? 'tos' } : {}) } } : {}) }))
+  ), [groups, slug, isCampaign, isPlacement])
+  const previewActions = useCallback(() => (
+    [{
+          type: slug, control, dedupe, negateInSource, bid: { mode: bidMode, value: bidValue }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: { frequency, everyN, interval, onDay, time, timezone },
+          ...(isNegative ? { protectConverting, protectDays: Math.max(0, Math.round(Number(protectDays) || 30)), negationLevel } : {}),
+          ...(isCampaign ? { campaigns: selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, targetingType: c.targetingType, dailyBudget: c.dailyBudget })) } : {}),
+          ...(isBudget ? { budgetFloor: Math.max(1, Number(budgetFloor) || 1), budgetCeiling: budgetCeiling.trim() ? Number(budgetCeiling) : null } : {}),
+          ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
+          ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
+          ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
+          ...(isBudget ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
+          mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
+        }]
+  ), [slug, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, protectDays, negationLevel, isCampaign, selCampaigns, isBudget, budgetFloor, budgetCeiling, isPlacement, placeFloor, placeCeiling, isBidLike, bidFloor, bidCeiling, isBid, lookbackDays, blocks])
+  const [preview, setPreview] = useState<{
+    open: boolean; loading: boolean
+    terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null; marketplace?: string | null; utilPct?: number | null; clamped?: boolean }>
+    /** BUD-PP — the server's own census of this draft: what it considered and what survived. */
+    budget?: { windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number } | null
+    error?: string
+  } | null>(null)
   // Live, read-only preview — budget shows current→proposed daily budgets, harvest converting terms, negative wasting terms.
   const runPreview = useCallback(async () => {
     setPreview({ open: true, loading: true, terms: [] })
     if (isBudget) {
-      const op = groups[0]?.budgetOp ?? 'set'
-      const v = Number(groups[0]?.budgetValue ?? '') || 0
-      const apply = (cur: number) => op === 'set' ? v : op === 'incPct' ? cur * (1 + v / 100) : op === 'decPct' ? cur * (1 - v / 100) : op === 'incAbs' ? cur + v : op === 'decAbs' ? cur - v : cur
-      const floor = Math.max(1, Number(budgetFloor) || 1) // €1 Amazon floor, never below
-      const ceil = budgetCeiling.trim() ? Number(budgetCeiling) : Infinity
-      const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
-      setPreview({ open: true, loading: false, terms: selCampaigns.map((c) => { const cur = c.dailyBudget ?? 0; return { term: c.name, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100 } }) })
+      /**
+       * 🔴 BUD-PP — this used to be arithmetic in the browser: every picked campaign, `groups[0]`'s
+       * op applied to its CURRENT budget. It ignored the criteria, the marketplace scope, multi-block
+       * selection and the context floor — and it used the wrong anchor, because `budget_apply`
+       * anchors relative ops to `budgetBaselineCents` (BUD.2), not to the current budget.
+       *
+       * A second implementation of "what will this rule do" is the two-formatters trap. The server
+       * now runs the ENGINE against this draft — real contexts, real scope, real conditions, the
+       * real handler in dryRun — and returns only the campaigns that actually match.
+       */
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/preview`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+          // 'all' is this form's word for UNSCOPED — `submit` omits the field entirely in that case,
+          // and sending the literal string makes the matcher compare 'all' to 'DE' and drop every row.
+          body: JSON.stringify({ actions: previewActions(), conditions: previewConditions(), scopeMarketplace: scopeMarket && scopeMarket !== 'all' ? scopeMarket : null }),
+        })
+        const j = await r.json().catch(() => null)
+        if (!r.ok || !j?.ok) {
+          setPreview({ open: true, loading: false, terms: [], budget: null, error: j?.untranslatable?.length
+            ? `No engine signal exists for: ${j.untranslatable.join(', ')}. Remove those conditions — the rule could not evaluate as written.`
+            : 'Preview is unavailable right now.' })
+          return
+        }
+        setPreview({
+          open: true, loading: false,
+          terms: (j.rows ?? []).map((x: { campaign: string; currentEur: number; proposedEur: number; marketplace: string | null; budgetUtilizationPct: number | null; clamped: boolean }) => ({
+            term: x.campaign, current: x.currentEur, proposed: x.proposedEur,
+            marketplace: x.marketplace, utilPct: x.budgetUtilizationPct, clamped: x.clamped,
+          })),
+          budget: { windowDays: j.windowDays, selected: j.selected, measurable: j.measurable, inScope: j.inScope, matched: j.matched, noChange: j.noChange },
+        })
+      } catch {
+        setPreview({ open: true, loading: false, terms: [], budget: null, error: 'Preview is unavailable right now.' })
+      }
       return
     }
     if (isPlacement) {
@@ -690,7 +746,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
         setPreview({ open: true, loading: false, terms: raw.slice(0, 100).map((t) => ({ term: String(t.query ?? t.searchTerm ?? t.term ?? ''), matchType: t.matchType ? String(t.matchType) : undefined, clicks: Number(t.totalClicks ?? t.clicks ?? 0) || undefined, spend: t.totalCostUnits != null ? Number(t.totalCostUnits) : (t.spendCents != null ? Number(t.spendCents) / 100 : (t.spend != null ? Number(t.spend) : undefined)) })).filter((t) => t.term) })
       }
     } catch { setPreview({ open: true, loading: false, terms: [] }) }
-  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, isRank, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling])
+  // 🔴 BUD-PP — `scopeMarket` and the two payload builders MUST be here. Without them this
+  // callback captured the market chosen when the form first rendered ('all'), so switching the
+  // scope to FR still previewed the DE campaigns — a stale closure producing a confident wrong
+  // answer, invisible to unit tests and to a direct API call. Found by driving the real form.
+  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, isRank, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, scopeMarket, previewActions, previewConditions])
   // Esc closes the Preview modal
   useEffect(() => {
     if (!preview?.open) return
@@ -812,18 +872,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
         // P2.1 — lookback/exclude store the TRUTH (the trigger's fixed window), never a select's
         // unread value. The engine evaluates over ruleWindowBounds regardless; these fields are
         // the record of what the author was told.
-        conditions: groups.map((g) => ({ match: 'all', lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, conditions: g.conditions, ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '', ...(isPlacement ? { placeTarget: g.placeTarget ?? 'tos' } : {}) } } : {}) })),
-        actions: [{
-          type: slug, control, dedupe, negateInSource, bid: { mode: bidMode, value: bidValue }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: { frequency, everyN, interval, onDay, time, timezone },
-          ...(isNegative ? { protectConverting, protectDays: Math.max(0, Math.round(Number(protectDays) || 30)), negationLevel } : {}),
-          ...(isCampaign ? { campaigns: selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, targetingType: c.targetingType, dailyBudget: c.dailyBudget })) } : {}),
-          ...(isBudget ? { budgetFloor: Math.max(1, Number(budgetFloor) || 1), budgetCeiling: budgetCeiling.trim() ? Number(budgetCeiling) : null } : {}),
-          ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
-          ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
-          ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
-          ...(isBudget ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
-          mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
-        }],
+        conditions: previewConditions(),
+        actions: previewActions(),
         // P2.2 — ceiling, write cap and market scope are sent for EVERY rule type. They used to be
         // budget-only, so every other builder rule was created account-wide with no way to scope
         // it from here, and with the maxWritesPerDay brake unset.
@@ -1422,10 +1472,16 @@ export function RuleBuilder({ slug }: { slug: string }) {
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
           <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
             <div className="ph"><b>{isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">{isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? 'Read-only: the new daily budget each selected campaign would get when this rule fires.' : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
+            <div className="psub">{isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? (preview?.budget && preview.budget.matched > 0
+              ? `Live, read-only: the ${preview.budget.matched} of ${preview.budget.selected} selected campaigns that ${preview.budget.matched === 1 ? 'matches' : 'match'} these criteria right now, and the daily budget each would get. Evaluated by the rule engine over the last ${preview.budget.windowDays} settled days.`
+              : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">{isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? 'Add campaigns above to preview their new budgets.' : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                : preview.terms.length === 0 ? <div className="pmsg">{isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? (preview.error ? preview.error
+                  : !preview.budget || preview.budget.selected === 0 ? 'Add campaigns above to preview their new budgets.'
+                  : preview.budget.measurable === 0 ? `${preview.budget.selected === 1 ? 'Your selected campaign has' : `None of your ${preview.budget.selected} selected campaigns has`} no ad spend in the last ${preview.budget.windowDays} settled days, so no budget rule can reach ${preview.budget.selected === 1 ? 'it' : 'them'} yet.`
+                  : preview.budget.inScope === 0 ? `${preview.budget.measurable} of your selected campaigns ${preview.budget.measurable === 1 ? 'has' : 'have'} spend in the window, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
+                  : `No campaign matches these criteria right now — ${preview.budget.inScope} campaign${preview.budget.inScope === 1 ? ' was' : 's were'} measured over the last ${preview.budget.windowDays} settled days. The rule is still valid; it will act when one does.`) : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
                 : isRank
                   ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Organic</span><span>Sponsored</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                 : isBidLike
@@ -1433,7 +1489,15 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 : isPlacement
                   ? (<div className="ptable bud"><div className="pthr"><span>Campaign</span><span>Current</span><span>New Modifier</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `${t.current}%` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `${t.proposed}%` : '—'}</span></div>))}</div>)
                 : isBudget
-                  ? (<div className="ptable bud"><div className="pthr"><span>Campaign</span><span>Current</span><span>New Budget</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
+                  ? (<>
+                    <div className="ptable budp"><div className="pthr"><span>Campaign</span><span>Market</span><span>Utilization</span><span>Current</span><span>New Budget</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.marketplace ?? '—'}</span><span>{t.utilPct != null ? `${t.utilPct}%` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
+                    {preview.budget && (
+                      <p className="pfoot">
+                        {preview.budget.selected} selected · {preview.budget.measurable} with spend in the window · {preview.budget.inScope} in scope · <b>{preview.budget.matched} match</b>
+                        {preview.budget.noChange > 0 ? <> · {preview.budget.noChange} of them sit at a guardrail, where this rule does nothing</> : null}
+                      </p>
+                    )}
+                  </>)
                   : isHarvest
                   ? (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Orders</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.orders ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)
                   : (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Match</span><span>Clicks</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span title={t.matchType}>{matchLabel(t.matchType)}</span><span>{t.clicks ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)}

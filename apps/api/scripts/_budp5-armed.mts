@@ -1,0 +1,21 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const r = await prisma.automationRule.findFirst({ where: { domain: 'advertising', name: { contains: 'Reclaim idle budget' } } })
+if (!r) { console.log('RULE NOT FOUND'); process.exit(1) }
+const a0 = (r.actions as Array<Record<string, unknown>>)[0]
+console.log(`RULE  "${r.name}"`)
+console.log(`  id=${r.id}`)
+console.log(`  enabled=${r.enabled}  autonomyLevel=${r.autonomyLevel}  trigger=${r.trigger}`)
+console.log(`  scopeMarketplace=${r.scopeMarketplace}  maxDailyAdSpendCentsEur=${r.maxDailyAdSpendCentsEur}  maxExecutionsPerDay=${r.maxExecutionsPerDay}`)
+console.log(`  actions[0].type=${a0.type}  windowDays=${a0.windowDays}  budgetFloor=${a0.budgetFloor}  campaigns=${(a0.campaigns as unknown[])?.length}`)
+console.log(`  conditions=${JSON.stringify(r.conditions)}`.slice(0, 300))
+const links = await prisma.campaignRuleAssignment.count({ where: { ruleId: r.id, kind: 'budget' } })
+const total = await prisma.campaignRuleAssignment.count()
+console.log(`\n🔴 BUD-P2 PROOF — CampaignRuleAssignment rows for this rule: ${links}  (table total: ${total})`)
+const { isEngineBudgetRule, builderBudgetCampaignIds, isBudgetRuleOfAnyShape } = await import('../src/services/advertising/ads-rule-adapter.service.js')
+console.log(`  isEngineBudgetRule=${isEngineBudgetRule(r.actions)}  (false = the OLD test would have missed it)`)
+console.log(`  isBudgetRuleOfAnyShape=${isBudgetRuleOfAnyShape(r.actions)}  governed ids=${builderBudgetCampaignIds(r.actions)?.length}`)
+const { reachForRules } = await import('../src/services/advertising/ads-rule-reach.service.js')
+const reach = await reachForRules([{ ...r, scopeProductId: r.scopeProductId }] as never)
+console.log(`  reachForRules -> ${JSON.stringify(reach.get(r.id))}`)
+await prisma.$disconnect()

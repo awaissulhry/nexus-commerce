@@ -630,7 +630,7 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
  */
 const BUDGET_RULE_WINDOW_DAYS = WINDOW('CAMPAIGN_PERFORMANCE_BUDGET')
 
-interface CampaignBudgetContext {
+export interface CampaignBudgetContext {
   trigger: 'CAMPAIGN_PERFORMANCE_BUDGET'
   marketplace: string | null
   campaign: {
@@ -648,7 +648,7 @@ interface CampaignBudgetContext {
  * (`actions[0].windowDays`), for the per-window passes in the tick; absent, the trigger's
  * default 7 settled days apply exactly as before. Mirrors BP.P4's bid mechanism.
  */
-async function buildCampaignBudgetContexts(overrideDays?: number): Promise<CampaignBudgetContext[]> {
+export async function buildCampaignBudgetContexts(overrideDays?: number): Promise<CampaignBudgetContext[]> {
   const windowDays = overrideDays ?? BUDGET_RULE_WINDOW_DAYS
   const { since, until } = ruleWindowBounds(windowDays) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
   const campaigns = await prisma.campaign.findMany({

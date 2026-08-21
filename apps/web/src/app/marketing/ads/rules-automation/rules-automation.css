@@ -5448,3 +5448,15 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-au-queueout .q { margin: 0 0 6px; font-size: 14px; color: var(--h10-text-1); }
 .h10-au-queueout .q b { font-weight: 800; }
 .h10-au-queueout .s { margin: 0 0 16px; max-width: 62ch; font-size: 12.5px; line-height: 1.6; color: var(--h10-text-2); }
+
+/* BUD-PP — the honest Budget Preview. Five columns (campaign · market · utilization · current ·
+   new budget) plus a census footer, because a preview that lists rows without saying what it
+   CONSIDERED is how the old one implied 86 budget changes for a rule that could make two.
+   The `.newb` colour is suppressed on a clamped row: a guardrail no-op is not a decrease. */
+.h10-rb-prev .ptable.budp .pthr span:not(:first-child),
+.h10-rb-prev .ptable.budp .ptr span:not(.term) { flex: 0 0 96px; }
+.h10-rb-prev .ptable.budp .pthr span:last-child,
+.h10-rb-prev .ptable.budp .ptr .newb { flex: 0 0 168px; }
+.h10-rb-prev .ptr .newb .pnote { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: #8a5316; }
+.h10-rb-prev .pfoot { margin: 0; padding: 12px 22px 16px; border-top: 1px solid #eef1f5; font-size: 12px; color: #5b6573; }
+.h10-rb-prev .pfoot b { color: #1c2530; font-weight: 800; }

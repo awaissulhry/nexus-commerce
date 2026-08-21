@@ -1462,6 +1462,23 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    * `/advertising/budget-rules/strip` appears nowhere else, and no `:param` route sits above
    * `/advertising/budget-rules` that could swallow it (a duplicate route is a boot crash).
    */
+  /**
+   * BUD-PP — preview a DRAFT budget rule: what it would do to which campaigns, right now.
+   *
+   * POST because the draft is a whole rule payload and must not sit in a URL. Nothing is written
+   * and nothing is stored; the handler runs with `dryRun`. `grep -a`ed first —
+   * `/advertising/automation-rules/preview` appears nowhere else, and it is registered BEFORE any
+   * `/advertising/automation-rules/:id` POST could shadow it (there is none today, but the static
+   * path must win if one is ever added).
+   */
+  fastify.post('/advertising/automation-rules/preview', async (request, reply) => {
+    const body = (request.body ?? {}) as { actions?: unknown; conditions?: unknown; scopeMarketplace?: string | null }
+    const { previewBudgetRule } = await import('../services/advertising/ads-rule-preview.service.js')
+    const out = await previewBudgetRule(body)
+    if (!out.ok) reply.code(400)
+    return out
+  })
+
   fastify.get('/advertising/budget-rules/strip', async () => {
     const { getBudgetRulesStrip } = await import('../services/advertising/budget-grid.service.js')
     return getBudgetRulesStrip()
