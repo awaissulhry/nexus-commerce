@@ -6576,34 +6576,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, dryRun: !!b.dryRun, clamped, perMarket }
   })
 
-  // SG.4 — the A.I. Bids tab reads the AUTOPILOT store, not AdsRuleSuggestion. Read-only by
-  // design: no decision approve/dismiss route exists yet (verified before building — the
-  // green-gates lesson), so the tab lists what is proposed and links to AI Advertising where
-  // the plan itself is operated. When an approval route ships, the verbs land here too.
-  fastify.get('/advertising/suggestions/ai-bids', async () => {
-    const rows = await prisma.autopilotDecision.findMany({
-      where: { status: 'PROPOSED', source: { not: 'rule-setting' } },
-      orderBy: { at: 'desc' },
-      take: 500,
-      include: { plan: { select: { id: true, name: true } } },
-    })
-    const campIds = [...new Set(rows.map((r) => r.campaignId).filter((x): x is string => !!x))]
-    const camps = campIds.length
-      ? await prisma.campaign.findMany({ where: { id: { in: campIds } }, select: { id: true, name: true } })
-      : []
-    const nameById = new Map(camps.map((c) => [c.id, c.name]))
-    return {
-      items: rows.map((r) => ({
-        id: r.id, at: r.at, module: r.module, cycle: r.cycle, action: r.action,
-        campaignId: r.campaignId,
-        campaignName: r.campaignId ? nameById.get(r.campaignId) ?? null : null,
-        before: r.before, after: r.after, reason: r.reason,
-        planId: r.planId, planName: r.plan?.name ?? null,
-      })),
-      total: rows.length,
-    }
-  })
-
+  /**
+   * SG.4's `GET /advertising/suggestions/ai-bids` is DELETED here (SG.8 close-out, 2026-08-21).
+   *
+   * It listed PROPOSED `AutopilotDecision` rows for the A.I. Bids tab back when that tab was
+   * read-only because no approve/dismiss route existed. SG.8 shipped the verbs and their own
+   * store-native list — `GET /advertising/ai-decisions?status=` in `advertising-ai.routes.ts`,
+   * which supersedes this one with a status axis — and the web block repointed. Grepped to zero
+   * callers before removing: a route no surface reads is the [[reference_fleet_stale_constant_class]]
+   * shape, and the next person to touch the A.I. tab would have had to work out which of two
+   * lists was the live one.
+   *
+   * `/suggestions/count` still returns `aiBids` — that count is the tab PILL's source and is
+   * read by SuggestionsClient. It stays.
+   */
   fastify.get('/advertising/suggestions', async (request) => {
     const q = request.query as {
       status?: string; limit?: string; family?: string; market?: string
