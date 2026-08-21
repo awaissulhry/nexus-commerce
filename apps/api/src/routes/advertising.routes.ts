@@ -6696,7 +6696,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       where: { id },
       select: {
         id: true, domain: true, name: true, enabled: true, dryRun: true,
-        createdAt: true, evaluationCount: true, matchCount: true, actions: true,
+        createdAt: true, evaluationCount: true, matchCount: true, actions: true, conditions: true,
       },
     })
     if (!rule || rule.domain !== 'advertising') return reply.code(404).send({ error: 'not_found' })
@@ -6712,10 +6712,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // PROPOSE until it has a retirement path, which is a design decision, not a
     // question of how much evidence has accumulated.
     const { graduationCeiling } = await import('../services/advertising/ads-graduation.js')
+    // BP.P1 — op-aware: a builder rule is judged by the actions its translation actually emits
+    // (a set/raise/lower Bid rule is reversible; only a Pause/Unpause one is structural).
+    const { producedActionTypes } = await import('../services/advertising/ads-rule-adapter.service.js')
     const protectionCount = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
     const ceiling = graduationCeiling({
-      actionTypes: (Array.isArray(rule.actions) ? rule.actions : [])
-        .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean),
+      actionTypes: producedActionTypes(rule),
       hasKeywordProtections: protectionCount > 0,
     })
     if (ceiling.maxLevel !== 'AUTO') {
@@ -7121,11 +7123,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      */
     const { reachForRules } = await import('../services/advertising/ads-rule-reach.service.js')
     const reach = await reachForRules(rules)
+    // BP.P1 — the ceiling is op-aware (see the PATCH route below): the toggle pre-disable this
+    // list feeds must agree with what that route will actually refuse.
+    const { producedActionTypes } = await import('../services/advertising/ads-rule-adapter.service.js')
 
     const items = rules.map((r) => {
       const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
         .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
-      const ceiling = graduationCeiling({ actionTypes, hasKeywordProtections: protectionCount > 0 })
+      const ceiling = graduationCeiling({ actionTypes: producedActionTypes(r), hasKeywordProtections: protectionCount > 0 })
       const week = weekBy.get(r.id) ?? {}
       return {
         id: r.id,
@@ -7432,14 +7437,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!isAutonomyLevel(body.level)) { reply.code(400); return { ok: false, error: 'level must be OFF | OBSERVE | PROPOSE | AUTO' } }
 
     const rule = await prisma.automationRule.findUnique({
-      where: { id }, select: { id: true, name: true, domain: true, actions: true },
+      where: { id }, select: { id: true, name: true, domain: true, actions: true, conditions: true },
     })
     if (!rule || rule.domain !== 'advertising') { reply.code(404); return { ok: false, error: 'not_found' } }
 
     const protectionCount = await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } })
+    // BP.P1 — op-aware ceiling: a builder Bid rule whose THEN sets/raises/lowers a bid produces
+    // only `bid_apply` and may reach AUTO; one whose THEN pauses produces `pause_target` and
+    // stays capped. Judged by the translation's own output, never by the slug's full repertoire.
+    const { producedActionTypes } = await import('../services/advertising/ads-rule-adapter.service.js')
     const ceiling = graduationCeiling({
-      actionTypes: (Array.isArray(rule.actions) ? rule.actions : [])
-        .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean),
+      actionTypes: producedActionTypes(rule),
       hasKeywordProtections: protectionCount > 0,
     })
     // The ceiling is not overridable from here. A structural rule stays gated because of

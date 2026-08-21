@@ -6,14 +6,17 @@
  * ─────────────────────────────────────────────────────────────────────────── */
 
 /* ============================ Create-Rule builder ========================== */
-.h10-rb { position: fixed; inset: 0; z-index: 130; background: #fff; display: flex; flex-direction: column; }
+/* BP.P3 — 13.5px base pins every `font: inherit` control to the console's content scale instead
+   of the shell's 16px root (the operator's typography report: the builder ran 16px chrome against
+   a 13–14px console; family was already Inter). Elements below state their own sizes on top. */
+.h10-rb { position: fixed; inset: 0; z-index: 130; background: #fff; display: flex; flex-direction: column; font-size: 13.5px; }
 
 .h10-rb-top { display: flex; align-items: center; justify-content: space-between; height: 56px; flex: 0 0 56px; padding: 0 18px; border-bottom: 1px solid #e6e9ee; }
 .h10-rb-top .l { display: flex; align-items: center; gap: 12px; }
 .h10-rb-top .x { border: 0; background: none; color: #5b6573; cursor: pointer; display: inline-flex; padding: 4px; border-radius: 7px; }
 .h10-rb-top .x:hover { background: #f1f4f8; color: #1c2530; }
 .h10-rb-top .ic { color: #111a27; }
-.h10-rb-top b { font-size: 16px; font-weight: 800; color: #1c2530; letter-spacing: -0.01em; }
+.h10-rb-top b { font-size: 15px; font-weight: 800; color: #1c2530; letter-spacing: -0.01em; } /* BP.P3: 16→15 */
 .h10-rb-top .r { display: flex; align-items: center; gap: 10px; }
 .h10-rb-top .learn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; font-weight: 600; color: #3a4452; background: #f1f4f8; border: 1px solid transparent; border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 .h10-rb-top .learn svg { color: #5b6573; }
@@ -23,14 +26,14 @@
 
 .h10-rb-body { flex: 1; overflow-y: auto; display: flex; align-items: flex-start; background: #fff; }
 .h10-rb-nav { position: sticky; top: 0; flex: 0 0 320px; padding: 68px 22px 22px 52px; display: flex; flex-direction: column; }
-.h10-rb-step { appearance: none; border: 0; background: transparent; font: inherit; font-size: 16px; font-weight: 500; color: #3f4754; text-align: left; padding: 11px 16px; border-radius: 9px; cursor: pointer; margin-bottom: 6px; }
+.h10-rb-step { appearance: none; border: 0; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: #3f4754; text-align: left; padding: 10px 15px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; } /* BP.P3: 16/500 → 14/600 */
 .h10-rb-step:hover { color: #1b2230; background: #f4f6f9; }
 .h10-rb-step.on { color: #1f6fde; font-weight: 700; background: #eaf2fe; }
 
 .h10-rb-main { flex: 1; min-width: 0; }
 .h10-rb-wrap { max-width: 1200px; padding: 72px 36px 90px 12px; }
 .h10-rb-sec { margin-bottom: 34px; scroll-margin-top: 24px; }
-.h10-rb-sec h2 { font-size: 20px; font-weight: 800; color: #1c2530; margin: 0 0 6px; letter-spacing: -0.01em; }
+.h10-rb-sec h2 { font-size: 18px; font-weight: 800; color: #1c2530; margin: 0 0 6px; letter-spacing: -0.01em; } /* BP.P3: 20→18, beside the AiGoal surface's 17px section heads */
 .h10-rb-desc { font-size: 13.5px; color: #5b6573; margin: 0 0 16px; line-height: 1.5; max-width: 920px; }
 .h10-rb-input { height: 40px; border: 1px solid #d8dde4; border-radius: 8px; padding: 0 13px; font: inherit; font-size: 13.5px; color: #1c2530; }
 .h10-rb-input.rn { width: 420px; max-width: 100%; }
@@ -91,7 +94,9 @@
 .h10-rb-card.crit .acts button:hover { color: #1f6fde; }
 .h10-rb-conds { padding: 6px 18px 16px; }
 .h10-rb-conds .cond { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.h10-rb-conds .pill { font-size: 11px; font-weight: 800; border-radius: 6px; padding: 5px 9px; letter-spacing: .3px; flex-shrink: 0; min-width: 38px; text-align: center; }
+/* BP.P3 — `position: relative` lifts the pills above the absolutely-positioned dashed connector
+   (a positioned ::before paints over non-positioned children), so the line passes BEHIND them. */
+.h10-rb-conds .pill { position: relative; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 5px 9px; letter-spacing: .3px; flex-shrink: 0; min-width: 38px; text-align: center; }
 .h10-rb-conds .pill.if { background: #efe7fd; color: #7c3aed; }
 .h10-rb-conds .pill.and { background: #eef1f5; color: #5b6573; }
 .h10-rb-conds .pill.then { background: #e7f0fd; color: #1f6fde; }
@@ -108,6 +113,13 @@
 .h10-rb-conds .cond.then { margin-top: 2px; margin-bottom: 0; }
 .h10-rb-conds .thentext { font-size: 13.5px; color: #3a4452; }
 .h10-rb-lookback { padding: 0 18px 18px; }
+/* BP.P4 — the rule-level Lookback control (Bid rules) + the multi-block order note. */
+.h10-rb-lookback.rulewide { padding: 14px 2px 0; }
+.h10-rb-blocknote { font-size: 12.5px; color: #5b6573; margin: 12px 2px 0; line-height: 1.5; }
+/* BP.P5 — the Apply Template modal's two groups + starter descriptions. */
+.h10-rb-tmpl-modal .tmgrp { font-size: 11.5px; font-weight: 700; color: #5f6875; text-transform: uppercase; letter-spacing: .04em; margin: 12px 0 6px; }
+.h10-rb-tmpl-modal .tmgrp:first-child { margin-top: 0; }
+.h10-rb-tmpl-modal .tmdesc { display: block; font-size: 11.5px; font-style: normal; color: #667080; margin-top: 2px; }
 .h10-rb-lookback label { display: block; font-size: 13px; font-weight: 700; color: #2b3440; margin-bottom: 6px; }
 .h10-rb-btn.addcrit { margin-top: 2px; }
 
@@ -5401,7 +5413,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* W5 — the noise-guard quick-add row in the rule builder's criteria card. Ghost buttons on
    purpose: they ADD conditions, they are not conditions, and must not read as chips already
    applied. */
-.h10-rb-noise { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+/* BP.P3 — indented 50px like `.h10-rb-addand` above it, so the IF→THEN dashed connector
+   (`.h10-rb-conds::before`, left 19px) passes in clear gutter instead of through the "Noise
+   guard" label — measured on prod 2026-08-21: line x=352 vs label x 351–422. */
+.h10-rb-noise { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 50px; flex-wrap: wrap; }
 .h10-rb-noise .lbl { font-size: 12px; font-weight: 700; color: #5f6875; }
 .h10-rb-noise button { display: inline-flex; align-items: center; gap: 4px; border: 1px dashed #c6cedb; background: none; color: #2b5aa7; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
 .h10-rb-noise button:hover { background: #f2f7ff; border-color: #9db8e0; }

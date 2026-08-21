@@ -38,6 +38,7 @@
  */
 import prisma from '../../db.js'
 import { graduationCeiling } from './ads-graduation.js'
+import { producedActionTypes } from './ads-rule-adapter.service.js'
 import { resolveAutonomy, type AutonomyLevel } from './ads-autonomy.js'
 
 /**
@@ -228,7 +229,7 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
       where: { domain: 'advertising' },
       select: {
         id: true, name: true, enabled: true, dryRun: true, autonomyLevel: true,
-        actions: true, lastExecutedAt: true,
+        actions: true, conditions: true, lastExecutedAt: true,
       },
       orderBy: { name: 'asc' },
     }),
@@ -242,7 +243,8 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
     .map((r) => {
       const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
         .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
-      return { r, actionTypes, ceiling: graduationCeiling({ actionTypes, hasKeywordProtections: protectionCount > 0 }) }
+      // BP.P1 — op-aware ceiling (a set/raise/lower Bid rule ≠ a Pause one); see the adapter.
+      return { r, actionTypes, ceiling: graduationCeiling({ actionTypes: producedActionTypes(r), hasKeywordProtections: protectionCount > 0 }) }
     })
     .filter((x) => resolveAutonomy(x.r) === 'PROPOSE')
 

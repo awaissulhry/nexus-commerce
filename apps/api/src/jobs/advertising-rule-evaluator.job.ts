@@ -39,7 +39,7 @@ import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-s
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
-import { TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
+import { BID_WINDOW_MAX, BID_WINDOW_MIN, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 
 /**
@@ -417,6 +417,13 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
   trigger: string,
   contexts: C[],
   forceDryRun = false,
+  /**
+   * BP.P4 — restricts WHICH rules this pass may evaluate. The per-rule-lookback passes use it:
+   * KEYWORD_HIGH_ACOS now runs once per DISTINCT window among the due Bid rules, each pass
+   * carrying contexts built over that window and admitting only the rules that chose it —
+   * without the filter, a 30-day rule would also run against the default 14-day contexts.
+   */
+  ruleFilter?: (r: { id: string; actions: unknown }) => boolean,
 ): Promise<{ evaluations: number; matches: number; capped: number; failed: number }> {
   let evaluations = 0
   let matches = 0
@@ -438,12 +445,26 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
    * Rules are fetched once per trigger; identity maps are built once from the contexts; the
    * per-context filter is pure (`ruleMatchesScope`).
    */
-  const rules = await prisma.automationRule.findMany({
+  const fetched = await prisma.automationRule.findMany({
     where: { domain: 'advertising', trigger, enabled: true },
     // D1 — `actions` joins the select so a BUDGET rule can be told apart from the rest. It is the
     // same test `loadBudgetRules` uses (an `adjust_ad_budget` action), kept as one definition.
-    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true, actions: true },
+    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true, actions: true, lastEvaluatedAt: true },
   })
+  /**
+   * BP.P2 — the stored schedule is HONOURED. A builder rule carries
+   * `actions[0].schedule` (Frequency · time · Timezone from the builder's Advanced Settings) and
+   * until now nothing read it: every rule ran on this cron's own 15-minute tick while the grid
+   * printed "Daily · 3:00 AM" as fact. A rule with a schedule now evaluates only when due —
+   * semantics and the lastEvaluatedAt caveat in `ads-rule-schedule.ts`. Engine-native rules
+   * store no schedule and keep the trigger cadence unchanged; `simulateOneRule` bypasses this
+   * gate on purpose (an explicit Simulate should answer now, not at 3 AM).
+   */
+  const { ruleStoredSchedule, scheduleIsDue } = await import('../services/advertising/ads-rule-schedule.js')
+  const nowForDue = new Date()
+  const rules = fetched
+    .filter((r) => scheduleIsDue(ruleStoredSchedule(r.actions), r.lastEvaluatedAt, nowForDue))
+    .filter((r) => (ruleFilter ? ruleFilter(r) : true))
   if (rules.length === 0) return { evaluations, matches, capped, failed }
 
   /**
@@ -828,19 +849,33 @@ function searchTermContext(
 // Keywords that DO convert but at an inefficient ACOS. Distinct from
 // KEYWORD_WASTED_SPEND (zero orders) and CAC_SPIKE (campaign-level): these are
 // profitable-but-leaky converters a rule can bid down toward target.
-async function buildHighAcosKeywordContexts() {
+/**
+ * BP.P4 — `overrideDays` builds the SAME contexts over a Bid rule's own lookback
+ * (`actions[0].windowDays`), for the per-window passes in the tick; absent, the trigger's
+ * default window applies exactly as before.
+ */
+async function buildHighAcosKeywordContexts(overrideDays?: number) {
   try {
-    const { since, until } = ruleWindowBounds(WINDOW('KEYWORD_HIGH_ACOS')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
+    const { since, until } = ruleWindowBounds(overrideDays ?? WINDOW('KEYWORD_HIGH_ACOS')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
       by: ['localEntityId', 'marketplace'],
       where: { entityType: 'AD_TARGET', date: { gte: since, lte: until } },
       _sum: { costMicros: true, sales7dCents: true, orders7d: true, clicks: true, impressions: true },
     })
-    return perf
+    const emitted = perf
       .map((p) => ({ p, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0, orders: p._sum.orders7d ?? 0 }))
       .filter((x) => x.orders > 0 && x.sales > 0 && x.spend >= 200 && x.spend / x.sales >= 0.2)
       .sort((a, b) => (b.spend / b.sales) - (a.spend / a.sales))
       .slice(0, 500)
+    // BP.P4 — the target's CURRENT bid joins the context ("Current Bid" is on H10's Bid metric
+    // list). One findMany over the emitted ids; null when the target row is missing, never 0.
+    const bids = new Map<string, number | null>()
+    const ids = emitted.map((x) => x.p.localEntityId).filter((v): v is string => v != null)
+    if (ids.length) {
+      const rows = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, bidCents: true } })
+      for (const r of rows) bids.set(r.id, r.bidCents)
+    }
+    return emitted
       .map(({ p, spend, sales, orders }) => {
         const clicks = p._sum.clicks ?? 0
         const impressions = p._sum.impressions ?? 0
@@ -856,6 +891,7 @@ async function buildHighAcosKeywordContexts() {
             ctr: impressions > 0 ? clicks / impressions : null,
             cvr: clicks > 0 ? orders / clicks : null,
             cpcCents: clicks > 0 ? Math.round(spend / clicks) : null,
+            bidCents: (p.localEntityId != null ? bids.get(p.localEntityId) : null) ?? null,
           },
         }
       })
@@ -1241,7 +1277,32 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   let totalMatches = 0
   let totalCapped = 0
   let totalFailed = 0
-  const passes: Array<[string, Array<{ marketplace: string | null }>]> = [
+
+  /**
+   * BP.P4 — per-rule lookback for Bid rules, honoured by the EMITTER.
+   *
+   * A builder Bid rule may carry its own `actions[0].windowDays` (the builder's Lookback select,
+   * clamped 7–90). Contexts are aggregates over a window, so a rule's window can only bind if
+   * its contexts are BUILT over it: the default pass keeps the trigger's 14 settled days and
+   * excludes window-choosing rules; each distinct chosen window gets its own pass with its own
+   * contexts and only its own rules. One extra groupBy per distinct window actually in use.
+   */
+  const bidRuleWindow = (actions: unknown): number | null => {
+    const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
+    if (a0?.type !== 'bid' || typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
+    const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
+    return clamped === WINDOW('KEYWORD_HIGH_ACOS') ? null : clamped
+  }
+  const bidWindowRules = await prisma.automationRule.findMany({
+    where: { domain: 'advertising', trigger: 'KEYWORD_HIGH_ACOS', enabled: true },
+    select: { actions: true },
+  })
+  const customWindows = [...new Set(bidWindowRules.map((r) => bidRuleWindow(r.actions)).filter((w): w is number => w != null))]
+  const highAcosByWindow = await Promise.all(customWindows.map(async (w) =>
+    [w, await buildHighAcosKeywordContexts(w)] as const))
+
+  type Pass = [string, Array<{ marketplace: string | null }>, ((r: { id: string; actions: unknown }) => boolean)?]
+  const passes: Pass[] = [
     ['FBA_AGE_THRESHOLD_REACHED', fbaAge],
     ['AD_SPEND_PROFITABILITY_BREACH', profitability],
     ['CAC_SPIKE', cacSpike],
@@ -1252,7 +1313,11 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['CVR_DROP', cvrDrop],
     ['KEYWORD_WASTED_SPEND', wastedKeyword],
     ['SEARCH_TERM_CONVERTING', searchTermConverting],
-    ['KEYWORD_HIGH_ACOS', highAcosKeyword],
+    // Default window — rules that chose their own lookback are excluded here and get their own
+    // pass below with contexts built over THEIR window.
+    ['KEYWORD_HIGH_ACOS', highAcosKeyword, (r) => bidRuleWindow(r.actions) == null],
+    ...highAcosByWindow.map(([w, ctxs]): Pass => (
+      ['KEYWORD_HIGH_ACOS', ctxs, (r) => bidRuleWindow(r.actions) === w])),
     ['KEYWORD_SCALE_OPPORTUNITY', scaleOpportunity],
     ['AD_GROUP_UNDERPERFORMING', adGroupUnderperform],
     ['NEW_TO_BRAND_WINNER', newToBrandWinner],
@@ -1264,8 +1329,8 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['KEYWORD_RANK_BID', keywordRankBid],
     ['SCHEDULE', scheduleContexts],
   ]
-  for (const [trigger, contexts] of passes) {
-    const r = await applyMarketplaceScope(trigger, contexts, forceDryRun)
+  for (const [trigger, contexts, ruleFilter] of passes) {
+    const r = await applyMarketplaceScope(trigger, contexts, forceDryRun, ruleFilter)
     totalEvaluations += r.evaluations
     totalMatches += r.matches
     totalCapped += r.capped

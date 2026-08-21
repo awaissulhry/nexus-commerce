@@ -77,6 +77,9 @@ const ADTARGET_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 
   CTR: { field: 'adTarget.ctr', conv: 'frac' },
   CVR: { field: 'adTarget.cvr', conv: 'frac' },
   CPC: { field: 'adTarget.cpcCents', conv: 'cents' },
+  // BP.P4 — H10's Bid metric list carries "Current Bid"; the KEYWORD_HIGH_ACOS context now
+  // carries adTarget.bidCents for it (one findMany over the emitted targets, in the emitter).
+  'Current Bid': { field: 'adTarget.bidCents', conv: 'cents' },
 }
 // SOV_BID context → the target's Share-of-Voice signal (from analyzeShareOfVoice, matched per keyword)
 // plus the carried-over perf metrics. SOV fields are fractions (0..1).
@@ -171,6 +174,19 @@ export interface TranslatedRule {
   /** Non-empty ⇒ the rule must NOT run: these builder metrics have no engine field. The
    *  evaluator treats it as no-match (fail closed); the save routes refuse it with a 400. */
   untranslatable?: string[]
+  /**
+   * BP.P4b — the rule's criteria BLOCKS, one per builder group, each with ITS OWN action.
+   *
+   * H10's semantics (and the builder's whole UI — "Criteria 1", "Criteria 2", per-block THEN):
+   * each block is an independent IF→THEN. The old translation flattened every group's conditions
+   * into ONE AND-list and executed only `groups[0].action` — a two-block rule was silently
+   * mangled into (all conditions of both blocks) → block 1's action, block 2's THEN discarded.
+   *
+   * The evaluator selects per context: blocks are checked IN ORDER and the first whose
+   * conditions match acts (stated in the builder UI). `conditions`/`actions` above mirror
+   * blocks[0] so every single-block consumer behaves exactly as before.
+   */
+  blocks?: Array<{ conditions: EngineLeaf[]; actions: Array<Record<string, unknown>> }>
 }
 
 /**
@@ -190,6 +206,34 @@ export const BUILDER_SLUG_ACTIONS: Record<string, string[]> = {
   'negative-targeting': ['add_negative_exact'],
   'keyword-harvesting': ['promote_to_exact', 'add_negative_exact'],
   'dayparting-schedule': ['dayparting_apply'],
+}
+
+/**
+ * BP.P1 (2026-08-21) — the engine action types a rule will ACTUALLY produce, op-aware.
+ *
+ * The graduation ceiling used to judge a builder rule by everything its SLUG could produce
+ * (`BUILDER_SLUG_ACTIONS`), so every Bid rule carried `pause_target` in its expansion and was
+ * capped at PROPOSE — including a plain "Decrease Bid by 15%" that can never write a status.
+ * A rule is judged by what IT does, and what it does is what the translation emits: this reads
+ * `maybeTranslateAdsRule` itself, so the judgement and the execution cannot drift.
+ *
+ * Falls back to the conservative slug expansion when the rule cannot translate (untranslatable
+ * conditions — those rules never run anyway), and to the raw types for engine-native rules.
+ */
+export function producedActionTypes(rule: { id?: string; actions?: unknown; conditions?: unknown }): string[] {
+  const raw = (Array.isArray(rule.actions) ? rule.actions : [])
+    .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
+  if (!isBuilderShapedAdsRule(rule)) return raw
+  const translated = maybeTranslateAdsRule({ id: String(rule.id ?? 'ceiling'), actions: rule.actions, conditions: rule.conditions })
+  if (!translated || translated.untranslatable?.length) {
+    return raw.flatMap((t) => BUILDER_SLUG_ACTIONS[t] ?? [t])
+  }
+  // BP.P4b — a multi-block rule is judged by EVERY block's action (a rule that bids in block 1
+  // and pauses in block 2 is structural), deduped for a stable answer.
+  const types = (translated.blocks ?? [{ conditions: translated.conditions, actions: translated.actions }])
+    .flatMap((b) => b.actions.map((a) => String(a.type ?? '')))
+    .filter(Boolean)
+  return [...new Set(types)]
 }
 
 /**
@@ -477,89 +521,118 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
   const groups = (Array.isArray(rule.conditions) ? rule.conditions : []) as BuilderGroup[]
   const slug = a0.type as string
 
+  /**
+   * BP.P4b — the three campaign-action families translate PER GROUP now. Each builder group is
+   * its own IF→THEN block (that is the builder's UI and H10's semantics); the old shape flattened
+   * every group's conditions into one AND-list and ran only `groups[0].action`, so a two-block
+   * rule was silently mangled. Selection is the evaluator's: first matched block acts.
+   */
   if (slug === 'budget') {
-    const act = groups[0]?.action ?? {}
-    const { leaves, unmapped } = translateConditions(groups, CAMPAIGN_METRIC, rule.id)
+    const blocks: NonNullable<TranslatedRule['blocks']> = []
+    const unmappedAll: string[] = []
+    for (const g of groups.length ? groups : [{} as BuilderGroup]) {
+      const act = g?.action ?? {}
+      const { leaves, unmapped } = translateConditions([g], CAMPAIGN_METRIC, rule.id)
+      unmappedAll.push(...unmapped)
+      blocks.push({
+        conditions: leaves,
+        actions: [{
+          type: 'budget_apply',
+          op: act.op ?? 'set',
+          value: num(act.value),
+          minEur: a0.budgetFloor != null ? num(a0.budgetFloor) : 1,
+          maxEur: a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
+          // 🔴 EA4 — the picker's campaigns were dropped here, so a Budget rule listing 12
+          // campaigns ran account-wide. `budget_apply` reads this now; empty = no restriction.
+          campaignIds: builderCampaignIds(a0),
+          reason: `Budget rule ${rule.id}`,
+        }],
+      })
+    }
     return {
-      conditions: leaves,
-      ...(unmapped.length ? { untranslatable: unmapped } : {}),
-      actions: [{
-        type: 'budget_apply',
-        op: act.op ?? 'set',
-        value: num(act.value),
-        minEur: a0.budgetFloor != null ? num(a0.budgetFloor) : 1,
-        maxEur: a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
-        // 🔴 EA4 — the picker's campaigns were dropped here, so a Budget rule listing 12 campaigns
-        // ran account-wide. `budget_apply` reads this now; empty still means "no restriction".
-        campaignIds: builderCampaignIds(a0),
-        reason: `Budget rule ${rule.id}`,
-      }],
+      conditions: blocks[0].conditions,
+      actions: blocks[0].actions,
+      blocks,
+      ...(unmappedAll.length ? { untranslatable: unmappedAll } : {}),
     }
   }
 
   if (slug === 'placement') {
-    const act = groups[0]?.action ?? {}
-    const { leaves, unmapped } = translateConditions(groups, CAMPAIGN_METRIC, rule.id)
+    const blocks: NonNullable<TranslatedRule['blocks']> = []
+    const unmappedAll: string[] = []
+    for (const g of groups.length ? groups : [{} as BuilderGroup]) {
+      const act = g?.action ?? {}
+      const { leaves, unmapped } = translateConditions([g], CAMPAIGN_METRIC, rule.id)
+      unmappedAll.push(...unmapped)
+      blocks.push({
+        conditions: leaves,
+        actions: [{
+          type: 'placement_apply',
+          placement: PLACEMENT_ENUM[act.placeTarget ?? 'tos'] ?? 'PLACEMENT_TOP',
+          op: act.op ?? 'set',
+          value: num(act.value),
+          minPct: a0.placeFloor != null ? num(a0.placeFloor) : 0,
+          maxPct: a0.placeCeiling != null ? num(a0.placeCeiling) : 900,
+          campaignIds: builderCampaignIds(a0), // EA4 — as budget above
+          reason: `Placement rule ${rule.id}`,
+        }],
+      })
+    }
     return {
-      conditions: leaves,
-      ...(unmapped.length ? { untranslatable: unmapped } : {}),
-      actions: [{
-        type: 'placement_apply',
-        placement: PLACEMENT_ENUM[act.placeTarget ?? 'tos'] ?? 'PLACEMENT_TOP',
-        op: act.op ?? 'set',
-        value: num(act.value),
-        minPct: a0.placeFloor != null ? num(a0.placeFloor) : 0,
-        maxPct: a0.placeCeiling != null ? num(a0.placeCeiling) : 900,
-        campaignIds: builderCampaignIds(a0), // EA4 — as budget above
-        reason: `Placement rule ${rule.id}`,
-      }],
+      conditions: blocks[0].conditions,
+      actions: blocks[0].actions,
+      blocks,
+      ...(unmappedAll.length ? { untranslatable: unmappedAll } : {}),
     }
   }
 
   // Bid · SOV · Keyword Tracker are all keyword-bid-adjustment rules → the bid_apply handler. They
   // differ only in which signal their criteria gate on (perf vs SOV vs rank) → the metric map.
   if (slug === 'bid' || slug === 'sov' || slug === 'keyword-tracker') {
-    const act = groups[0]?.action ?? {}
     const map = slug === 'sov' ? SOV_METRIC : slug === 'keyword-tracker' ? RANK_METRIC : ADTARGET_METRIC
     const label = slug === 'sov' ? 'SOV bid rule' : slug === 'keyword-tracker' ? 'Keyword Tracker bid rule' : 'Bid rule'
-    const { leaves, unmapped } = translateConditions(groups, map, rule.id)
-
-    /**
-     * C2 — a THEN of Pause/Unpause is a STATUS write, not a bid write, so it emits its own action
-     * type rather than becoming a `bid_apply` op.
-     *
-     * Keeping one handler to one job is the point: `bid_apply` computes and clamps a bid, and
-     * teaching it to sometimes write a status instead would make its floor, ceiling and
-     * `applyBuilderOp` all dead code on half its calls — the kind of handler whose behaviour you
-     * can only predict by reading it. The campaign allowlist is carried across because a pause
-     * must respect the builder's picker exactly as a bid does.
-     */
-    if (act.op === 'pauseTarget' || act.op === 'enableTarget') {
-      return {
-        conditions: leaves,
-        ...(unmapped.length ? { untranslatable: unmapped } : {}),
-        actions: [{
+    const blocks: NonNullable<TranslatedRule['blocks']> = []
+    const unmappedAll: string[] = []
+    for (const g of groups.length ? groups : [{} as BuilderGroup]) {
+      const act = g?.action ?? {}
+      const { leaves, unmapped } = translateConditions([g], map, rule.id)
+      unmappedAll.push(...unmapped)
+      /**
+       * C2 — a THEN of Pause/Unpause is a STATUS write, not a bid write, so it emits its own
+       * action type rather than becoming a `bid_apply` op.
+       *
+       * Keeping one handler to one job is the point: `bid_apply` computes and clamps a bid, and
+       * teaching it to sometimes write a status instead would make its floor, ceiling and
+       * `applyBuilderOp` all dead code on half its calls. The campaign allowlist is carried
+       * across because a pause must respect the builder's picker exactly as a bid does.
+       */
+      const action = (act.op === 'pauseTarget' || act.op === 'enableTarget')
+        ? {
           type: act.op === 'pauseTarget' ? 'pause_target' : 'enable_target',
           campaignIds: builderCampaignIds(a0),
           reason: `${label} ${rule.id}`,
-        }],
-      }
+        }
+        : {
+          type: 'bid_apply',
+          op: act.op ?? 'set',
+          value: num(act.value),
+          // SK1 stores bid guardrails as bidFloor/bidCeiling (fall back to the legacy budget*
+          // fields); the handler still enforces a €0.05 floor regardless.
+          minEur: a0.bidFloor != null ? num(a0.bidFloor) : a0.budgetFloor != null ? num(a0.budgetFloor) : null,
+          maxEur: a0.bidCeiling != null ? num(a0.bidCeiling) : a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
+          campaignIds: builderCampaignIds(a0),
+          // BP.P4 — the rule's own lookback (Bid rules; `windowDays` on the stored action) rides
+          // into the handler so computed ops measure over the window the operator chose.
+          ...(typeof a0.windowDays === 'number' ? { windowDays: a0.windowDays } : {}),
+          reason: `${label} ${rule.id}`,
+        }
+      blocks.push({ conditions: leaves, actions: [action] })
     }
-
     return {
-      conditions: leaves,
-      ...(unmapped.length ? { untranslatable: unmapped } : {}),
-      actions: [{
-        type: 'bid_apply',
-        op: act.op ?? 'set',
-        value: num(act.value),
-        // SK1 stores bid guardrails as bidFloor/bidCeiling (fall back to the legacy budget* fields); the
-        // handler still enforces a €0.05 floor regardless.
-        minEur: a0.bidFloor != null ? num(a0.bidFloor) : a0.budgetFloor != null ? num(a0.budgetFloor) : null,
-        maxEur: a0.bidCeiling != null ? num(a0.bidCeiling) : a0.budgetCeiling != null ? num(a0.budgetCeiling) : null,
-        campaignIds: builderCampaignIds(a0),
-        reason: `${label} ${rule.id}`,
-      }],
+      conditions: blocks[0].conditions,
+      actions: blocks[0].actions,
+      blocks,
+      ...(unmappedAll.length ? { untranslatable: unmappedAll } : {}),
     }
   }
 

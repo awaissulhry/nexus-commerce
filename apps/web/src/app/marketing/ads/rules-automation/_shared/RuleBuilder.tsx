@@ -9,15 +9,15 @@
  * Create Rule) + a left scroll-spy step nav + a single scrolling content pane whose sections
  * are the steps (Rule Name · {Setup} · Criteria · Search Terms · Advanced Settings · Control).
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock} from 'lucide-react'
+import { X, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock} from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
-import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
+import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 import { emitAdsChange } from './adsBus'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
@@ -31,6 +31,46 @@ const OPERATORS = PC_OPERATORS
 // P2.1 — the Lookback/Exclude selects are gone: nothing ever read their value (each trigger
 // evaluates over its own fixed window). `PcWindowNote` states the real window instead.
 const FREQUENCY = ['Custom', 'Daily', 'Weekly', 'Monthly', 'Hourly'].map((f) => ({ value: f, label: f }))
+// BP.P4 — the Bid rule's lookback options (H10 offers Previous Day…90; ours start at 7 because
+// the two settling days are always excluded and a sub-week window over settled data is noise).
+const LOOKBACK_DAYS = ['7', '14', '30', '60', '90'].map((d) => ({ value: d, label: `Last ${d} Days` }))
+
+/**
+ * BP.P5 — STARTER templates, shipped in code (H10 ships "Helium 10 Ads Default"; the research's
+ * Tier-2 finding: named archetypes get adopted, blank builders don't). They apply through the
+ * SAME `applyTemplate` path as saved templates — ordinary criteria the operator edits before
+ * creating — and every one carries a noise guard so a thin-data keyword cannot trip it.
+ * Bid only for now; other slugs add their own lists when their sessions take them up.
+ */
+const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payload: { conditions: Array<{ conditions: Condition[]; action: { op: string; value: string } }> } }>> = {
+  bid: [
+    {
+      name: 'Cut bids on high ACoS',
+      desc: 'ACoS > 35% with ≥10 clicks → lower the bid 15%',
+      payload: { conditions: [{ conditions: [{ metric: 'ACOS', op: 'gt', value: '35' }, { metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'decPct', value: '15' } }] },
+    },
+    {
+      name: 'Scale winners',
+      desc: 'ACoS < 20% with ≥2 orders → raise the bid 10%',
+      payload: { conditions: [{ conditions: [{ metric: 'ACOS', op: 'lt', value: '20' }, { metric: 'Orders', op: 'gte', value: '2' }], action: { op: 'incPct', value: '10' } }] },
+    },
+    {
+      name: 'Floor zero-sale spenders',
+      desc: '≥€5 spend, ≥10 clicks, no sales → set the bid to €0.05',
+      payload: { conditions: [{ conditions: [{ metric: 'Spend', op: 'gte', value: '5' }, { metric: 'Clicks', op: 'gte', value: '10' }, { metric: 'Sales', op: 'eq', value: '0' }], action: { op: 'set', value: '0.05' } }] },
+    },
+    {
+      name: 'Converge to 25% ACoS',
+      desc: '≥10 clicks → bid = CPC × (25% ÷ actual ACoS)',
+      payload: { conditions: [{ conditions: [{ metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'targetAcos', value: '25' } }] },
+    },
+    {
+      name: 'Bid break-even',
+      desc: 'ACoS > 30% with ≥10 clicks → bid = revenue per click',
+      payload: { conditions: [{ conditions: [{ metric: 'ACOS', op: 'gt', value: '30' }, { metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'revPerClick', value: '' } }] },
+    },
+  ],
+}
 // Budget rule marketplace scope (best-in-class) — limit a rule to one EU market.
 const MARKETS = [{ value: 'all', label: 'All markets' }, ...([['DE', 'Germany'], ['IT', 'Italy'], ['FR', 'France'], ['ES', 'Spain'], ['NL', 'Netherlands'], ['BE', 'Belgium'], ['SE', 'Sweden'], ['PL', 'Poland']] as const).map(([v, n]) => ({ value: v, label: `${n} (${v})` }))]
 const INTERVAL = ['Days', 'Weeks', 'Months'].map((i) => ({ value: i, label: i }))
@@ -66,6 +106,15 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
    */
   { value: 'targetAcos', label: 'Set Bid to CPC × (Target ACoS / Actual ACoS)', unit: 'pct' },
   { value: 'setCpc', label: 'Set Bid to CPC', unit: 'none' },
+  /**
+   * BP.P4 (2026-08-21) — the last two of H10's computed Bid actions (§5.3 of the reference
+   * study). `revPerClick` bids what a click has actually been worth (attributed sales ÷ clicks
+   * — the break-even bid at 100% ACoS); `curBidTargetAcos` is the CURRENT-BID variant of the
+   * ratio action above. Both compute in `bid_apply` from the same measured window and refuse,
+   * named, when the signal is missing.
+   */
+  { value: 'revPerClick', label: 'Set Bid to Revenue per Click', unit: 'none' },
+  { value: 'curBidTargetAcos', label: 'Set Bid to Current Bid × (Target ACoS / Actual ACoS)', unit: 'pct' },
   /**
    * C2 (2026-08-20) — the status verbs. These do NOT move a bid: the adapter emits
    * `pause_target` / `enable_target` instead of `bid_apply`, so one handler keeps one job.
@@ -315,7 +364,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
    */
   const [locked, setLocked] = useState<{ level: 'criteria' | 'meta'; blockers: string[]; actionSummary: string[] } | null>(null)
   const rt = ruleTypeBySlug(slug)
-  const steps = STEPS_FOR(slug)
+  /**
+   * BP.P3 — memoised. `STEPS_FOR(slug)` returned a NEW array every render, so the scroll-spy
+   * effect below (deps `[steps]`) detached and re-attached its scroll listener on every
+   * keystroke and every `setActive` — churn that also kept cancelling the nav's smooth scroll
+   * mid-animation (measured on prod: `scrollTo({behavior:'smooth'})` moved ~6px and died, so
+   * the left nav was inert).
+   */
+  const steps = useMemo(() => STEPS_FOR(slug), [slug])
   const setup = setupFor(slug)
   const isHarvest = slug === 'keyword-harvesting' // harvest-only features (bid · negate-in-source · Preview) gate on this
   const surface = setup.surface ?? 'search-terms'
@@ -350,9 +406,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [interval, setInterval] = useState('Weeks')
   const [onDay, setOnDay] = useState('Monday')
   const [time, setTime] = useState('00:00')
-  const [timezone, setTimezone] = useState('pst')
+  // BP.P2 — Europe/Rome, not H10's PST: the schedule is honoured by the engine now, so the
+  // default timezone must be the one the account trades in.
+  const [timezone, setTimezone] = useState('cet')
   const [dedupe, setDedupe] = useState(true)
   const [control, setControl] = useState<'manual' | 'automate'>('manual')
+  /**
+   * BP.P1 — what the Control radio said when an EDIT opened. Saving re-arms the rule's level only
+   * when the operator CHANGED the radio this session: a name edit on a rule someone deliberately
+   * disabled on Automations must not silently re-enable it, while a changed radio is an explicit
+   * instruction and applies on save. Null until an edit hydrates (create mode always arms).
+   */
+  const initialControl = useRef<'manual' | 'automate' | null>(null)
   // ── ad-group mapping blocks (H3): Harvest can hold multiple source→target mappings; Negative
   //    always has one. Each block carries its own selected ad groups + per-group target types. ──
   const [blocks, setBlocks] = useState<MapBlock[]>([{ id: 1, groups: [] }])
@@ -381,8 +446,15 @@ export function RuleBuilder({ slug }: { slug: string }) {
   // ── B5 guardrails (budget) ──
   const [budgetFloor, setBudgetFloor] = useState('1') // Amazon €1 daily-budget minimum
   const [budgetCeiling, setBudgetCeiling] = useState('')
-  const [maxAdSpend, setMaxAdSpend] = useState('')
+  /**
+   * BP.P2 — prefilled with the REAL server defaults, because they apply whether or not this form
+   * mentions them: a blank spend ceiling used to render the placeholder "No cap" while the create
+   * route stored €100/day (`maxDailyAdSpendCentsEur ?? 10000`), and `maxExecutionsPerDay` (10)
+   * was surfaced nowhere at all. What the input shows is now what the rule stores.
+   */
+  const [maxAdSpend, setMaxAdSpend] = useState('100')
   const [maxWrites, setMaxWrites] = useState('')
+  const [maxExecs, setMaxExecs] = useState('10')
   const [scopeMarket, setScopeMarket] = useState('all')
   // ── Placement guardrails (P4) — % modifier caps (Amazon allows 0–900%) ──
   const [placeFloor, setPlaceFloor] = useState('0')
@@ -391,6 +463,12 @@ export function RuleBuilder({ slug }: { slug: string }) {
   //    Floor defaults to the bid_apply execution floor (€0.05); Amazon's hard minimum is €0.02. ──
   const [bidFloor, setBidFloor] = useState('0.05')
   const [bidCeiling, setBidCeiling] = useState('')
+  /**
+   * BP.P4 — the Bid rule's own lookback (H10 carries one per criteria card; ours is per RULE —
+   * one evaluation window — and says so). Stored as `actions[0].windowDays`, clamped 7–90 by
+   * both engine readers (the context emitter and targetPerformance).
+   */
+  const [lookbackDays, setLookbackDays] = useState('14')
   // ── B3: rule templates (Budget) ──
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; payload?: unknown }>>([])
   const [tmpl, setTmpl] = useState<{ mode: 'save' | 'apply' } | null>(null)
@@ -555,9 +633,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
   }, [steps])
 
   const goto = (id: string) => {
-    const node = document.getElementById(`rb-${id}`)
-    const el = scrollRef.current
-    if (node && el) el.scrollTo({ top: node.offsetTop - 24, behavior: 'smooth' })
+    /**
+     * BP.P3 — instant `scrollIntoView`, not a smooth `scrollTo`. Two defects lived here:
+     * `node.offsetTop` is measured from `.h10-rb` (the offset parent), not from the scroll
+     * container, so the target landed ~56px low; and the smooth animation was cancelled by
+     * the scroll-spy's re-render churn (see the `steps` memo above) — clicking a step moved
+     * the pane ~6px and stopped. `.h10-rb-sec` carries `scroll-margin-top: 24px` for the gap.
+     */
+    document.getElementById(`rb-${id}`)?.scrollIntoView({ block: 'start' })
   }
 
   // criteria mutations
@@ -623,6 +706,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         }
         if (maxAdSpend.trim()) partial.maxDailyAdSpendCentsEur = Math.round(Number(maxAdSpend) * 100)
         if (maxWrites.trim()) partial.maxWritesPerDay = Math.max(1, Math.round(Number(maxWrites)))
+        if (maxExecs.trim()) partial.maxExecutionsPerDay = Math.max(1, Math.round(Number(maxExecs)))
         if (scopeMarket !== 'all') partial.scopeMarketplace = scopeMarket
         const rp = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${ruleId}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(partial),
@@ -648,6 +732,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           ...(isBudget ? { budgetFloor: Math.max(1, Number(budgetFloor) || 1), budgetCeiling: budgetCeiling.trim() ? Number(budgetCeiling) : null } : {}),
           ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
           ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
+          ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types })) })),
         }],
         // P2.2 — ceiling, write cap and market scope are sent for EVERY rule type. They used to be
@@ -655,16 +740,43 @@ export function RuleBuilder({ slug }: { slug: string }) {
         // it from here, and with the maxWritesPerDay brake unset.
         maxDailyAdSpendCentsEur: maxAdSpend.trim() ? Math.round(Number(maxAdSpend) * 100) : undefined,
         maxWritesPerDay: maxWrites.trim() ? Math.max(1, Math.round(Number(maxWrites))) : undefined,
+        // BP.P2 — surfaced (default 10 server-side); blank falls back to that same default.
+        maxExecutionsPerDay: maxExecs.trim() ? Math.max(1, Math.round(Number(maxExecs))) : undefined,
         scopeMarketplace: scopeMarket === 'all' ? undefined : scopeMarket,
       }
       const base = `${getBackendUrl()}/api/advertising/automation-rules`
       const r = await fetch(isEdit ? `${base}/${ruleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json().catch(() => ({}))
-      if (r.ok && j?.error == null) router.push(`/marketing/ads/rules-automation/${ownTab}`)
+      if (r.ok && j?.error == null) {
+        /**
+         * BP.P1 — the Control step is REAL. The create route stores every rule `enabled:false`
+         * (a safe default for API callers), and `resolveAutonomy` never reads `actions[0].control`
+         * — so before this, a rule authored here did NOTHING until someone found the Automations
+         * page, whatever the radio said. The level now applies through the ONE mode write route:
+         * Manual → PROPOSE (enabled; every action queues on the Suggestions page), Automate →
+         * AUTO (enabled; acts on its own inside its caps and the write gate). A 409 is the
+         * graduation ceiling — a pausing Bid rule may not reach AUTO — and falls back to PROPOSE
+         * so the rule still runs; the pause action's own hover copy already says exactly this.
+         * On EDIT the level is re-applied only when the radio was changed this session (see
+         * `initialControl`).
+         */
+        const savedId = isEdit ? ruleId : (j?.rule?.id != null ? String(j.rule.id) : null)
+        if (savedId && (!isEdit || initialControl.current !== control)) {
+          const patchLevel = (level: string) => fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${savedId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }),
+          })
+          try {
+            const want = control === 'automate' ? 'AUTO' : 'PROPOSE'
+            const res = await patchLevel(want)
+            if (!res.ok && res.status === 409 && want === 'AUTO') await patchLevel('PROPOSE')
+          } catch { /* the save landed; the grid's toggle and off chip report the true mode */ }
+        }
+        router.push(`/marketing/ads/rules-automation/${ownTab}`)
+      }
       // RT.1 — a saved rule moves every tab badge and every page's rule section.
       emitAdsChange('ads.rule.changed')
     } finally { setCreating(false) }
-  }, [valid, creating, locked, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, locked, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, maxExecs, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, lookbackDays, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -693,6 +805,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
           if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
           if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
+          if (rule.maxExecutionsPerDay != null) setMaxExecs(String(rule.maxExecutionsPerDay))
           setLocked({ level: bv.editLevel === 'criteria' ? 'criteria' : 'meta', blockers: bv.blockers ?? [], actionSummary: bv.actionSummary ?? [] })
           return
         }
@@ -701,6 +814,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         if (conds.length) setGroups(conds.map((c: { conditions?: Condition[]; lookback?: string; exclude?: string; action?: { op?: string; value?: string; placeTarget?: string } }) => ({ id: ++_cid, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '', placeTarget: c.action?.placeTarget ?? 'tos' })))
         const a = (Array.isArray(rule.actions) ? rule.actions[0] : null) ?? {}
         setControl(a.control === 'automate' ? 'automate' : 'manual')
+        initialControl.current = a.control === 'automate' ? 'automate' : 'manual'
         setDedupe(a.dedupe !== false)
         if (typeof a.protectConverting === 'boolean') setProtectConverting(a.protectConverting)
         if (a.protectDays != null) setProtectDays(String(a.protectDays))
@@ -714,6 +828,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         // controls below that are no longer budget-only.
         if (rule.maxDailyAdSpendCentsEur != null) setMaxAdSpend(String(rule.maxDailyAdSpendCentsEur / 100))
         if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
+        if (rule.maxExecutionsPerDay != null) setMaxExecs(String(rule.maxExecutionsPerDay))
         if (rule.scopeMarketplace) setScopeMarket(rule.scopeMarketplace)
         if (isPlacement) {
           if (a.placeFloor != null) setPlaceFloor(String(a.placeFloor))
@@ -722,6 +837,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
         if (isBidLike) {
           if (a.bidFloor != null) setBidFloor(String(a.bidFloor))
           if (a.bidCeiling != null) setBidCeiling(String(a.bidCeiling))
+          if (a.windowDays != null) setLookbackDays(String(a.windowDays))
         }
         if (Array.isArray(a.searchTerms)) setSearchTerms(a.searchTerms)
         const s = a.schedule ?? {}
@@ -748,7 +864,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
           <b>{isEdit ? 'Edit' : 'Create'} Rule - {rt?.label ?? 'Rule'}</b>
         </div>
         <div className="r">
-          <button type="button" className="learn"><Video size={15} /> Learn</button>
+          {/* BP (2026-08-21) — H10's "Learn" video pill was here as a dead placeholder (no
+              handler since the builder shipped); the operator chose removal over wiring it. */}
           <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
           <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
         </div>
@@ -867,7 +984,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       <div className="cond" key={i}>
                         <span className={`pill ${i === 0 ? 'if' : 'and'}`}>{i === 0 ? 'IF' : 'AND'}</span>
                         {isPlacement && <H10Select width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => setCond(g.id, i, { scope: v })} ariaLabel="Placement scope" />}
-                        <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
+                        <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
                         <H10Select width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
                           <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
@@ -889,7 +1006,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         about. A guard whose metric this rule type does not offer, or that the
                         group already carries, is simply not offered. */}
                     {(() => {
-                      const opts = new Set((isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : METRICS).map((o) => o.value))
+                      const opts = new Set((isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS).map((o) => o.value))
                       const guards = [
                         { metric: 'Clicks', value: '10', label: 'Clicks ≥ 10' },
                         { metric: 'Spend', value: '5', label: 'Spend ≥ €5' },
@@ -922,13 +1039,17 @@ export function RuleBuilder({ slug }: { slug: string }) {
                               `isBidLike` — as it was on the first cut — the branch is unreachable and a screen
                               reader announces "Bid amount" over a field that takes a target ACoS percentage.
                               Measured on prod: the visible % suffix made it look right to a sighted operator. */
-                          aria-label={g.budgetOp === 'targetAcos' ? 'Target ACoS percentage' : isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : 'Budget amount'} />
+                          aria-label={g.budgetOp === 'targetAcos' || g.budgetOp === 'curBidTargetAcos' ? 'Target ACoS percentage' : isPlacement ? 'Placement modifier' : isBidLike ? 'Bid amount' : 'Budget amount'} />
                           {u === 'pct' && <span className="sf">%</span>}
                         </span>
                         )}
                         {isBidLike && <HoverCard text={
                           g.budgetOp === 'targetAcos'
                             ? 'The bid becomes the target’s own measured cost-per-click, scaled by how far its ACoS is from the figure you type here. A keyword at 50% ACoS against a 25% target has its bid halved; one already at 12.5% has it doubled — bounded by the rule’s min/max bid.'
+                            : g.budgetOp === 'curBidTargetAcos'
+                              ? 'The bid becomes its CURRENT value, scaled by how far the target’s ACoS is from the figure you type here — the same ratio as the CPC variant, anchored to the bid you set rather than the measured cost-per-click. Bounded by the rule’s min/max bid.'
+                            : g.budgetOp === 'revPerClick'
+                              ? 'The bid becomes what a click on this target has actually been worth: attributed sales ÷ clicks over the rule’s window — the break-even bid at 100% ACoS. Refuses, named, when the target has no attributed sales. No value to set.'
                             : g.budgetOp === 'setCpc'
                               ? 'The bid becomes the target’s own measured cost-per-click over the rule’s window — what it has actually been paying per click, with no adjustment. No value to set.'
                               : g.budgetOp === 'pauseTarget'
@@ -941,7 +1062,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       </div>
                     ) })()}
                   </div>
-                  {(surface === 'search-terms' || isBidLike) && (
+                  {(surface === 'search-terms' || (isBidLike && !isBid)) && (
                   <div className="h10-rb-lookback">
                     <label>Measurement window</label>
                     <PcWindowNote slug={slug} />
@@ -950,6 +1071,22 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 </div>
               ))}
               <button type="button" className="h10-rb-btn primary addcrit" onClick={addGroup}><Plus size={14} /> Criteria</button>
+              {/* BP.P4b — multi-block selection is real now, and its law is stated where the
+                  blocks are made: first matched block acts. */}
+              {isCampaign && groups.length > 1 && (
+                <p className="h10-rb-blocknote">Criteria blocks are checked in order — on each {isBidLike ? 'keyword' : 'campaign'}, the first block whose conditions match acts; the rest are skipped.</p>
+              )}
+              {/* BP.P4 — the Bid rule's lookback, honoured by the engine (per-window context
+                  passes + computed ops). One window per rule, stated as such. */}
+              {isBid && (
+                <div className="h10-rb-lookback rulewide">
+                  <label>Lookback period</label>
+                  <div className="lbrow">
+                    <H10Select width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
+                    <span className="exc">Applies to every criteria block. The most recent 2 days are still settling and are always excluded.</span>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* ── Search Terms (term-based surfaces only; Budget has none) ── */}
@@ -1001,7 +1138,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 )}
                 <div className="advblock">
                   <b>Frequency</b>
-                  <p>Set how often the rule should check the criteria</p>
+                  {/* BP.P2 — the schedule is real now (the evaluator holds the rule until it is
+                      due), so the copy states the one deviation: a fresh rule's first check. */}
+                  <p>Set how often the rule should check the criteria. The first check runs within 15 minutes of creating the rule; after that, on this schedule.</p>
                   <div className="freqrow">
                     <H10Select width={150} options={FREQUENCY} value={frequency} onChange={setFrequency} ariaLabel="Frequency" />
                     {frequency === 'Custom' && (<>
@@ -1040,12 +1179,17 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     with no control ever offered. */}
                 <div className="advblock">
                   <b>Spend ceiling &amp; write cap</b>
-                  <p>Refuse further work past the ceiling; past the write cap the rule keeps proposing but stops writing</p>
+                  {/* BP.P2 — the two server defaults are stated and prefilled, because they apply
+                      whether or not this form mentions them: a blank spend ceiling still stores
+                      €100/day, and a blank run cap still stores 10. "No cap" was false copy. */}
+                  <p>Refuse further work past the ceiling; past the write cap the rule keeps proposing but stops writing. Every rule carries a €100/day spend ceiling and a 10-runs-per-day cap unless you change them here.</p>
                   <div className="freqrow">
                     <span className="lbl">Max daily ad spend</span>
-                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="No cap" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} aria-label="Max daily ad spend" /></span>
+                    <span className="h10-rb-val bidv"><span className="pf">€</span><input inputMode="decimal" placeholder="100 (default)" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} aria-label="Max daily ad spend" /></span>
                     <span className="lbl">Max writes per day</span>
                     <span className="h10-rb-val bidv"><input inputMode="numeric" placeholder="No cap" value={maxWrites} onChange={(e) => setMaxWrites(e.target.value)} aria-label="Max writes per day" /></span>
+                    <span className="lbl">Max runs per day</span>
+                    <span className="h10-rb-val bidv"><input inputMode="numeric" placeholder="10 (default)" value={maxExecs} onChange={(e) => setMaxExecs(e.target.value)} aria-label="Max rule runs per day" /></span>
                   </div>
                 </div>
                 <div className="advblock">
@@ -1102,7 +1246,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
             {/* ── Control ── */}
             <section id="rb-control" className="h10-rb-sec">
               <h2>Control</h2>
-              <p className="h10-rb-desc">Determine the level of control over the actions of this rule</p>
+              {/* BP.P1 — the second sentence is the round-trip honesty line: the radio ARMS the
+                  rule on save now (level via the autonomy route), so the copy must say so. */}
+              <p className="h10-rb-desc">
+                Determine the level of control over the actions of this rule.
+                {isEdit
+                  ? ' Changing the mode here applies when you save.'
+                  : ' The rule is live at the mode you choose as soon as you create it — Manual queues every action on the Suggestions page for your approval; Automate applies them on its own, inside the rule’s caps and the write gate.'}
+              </p>
               <div className="h10-rb-card control">
                 {surface === 'search-terms' && (<div className="h10-rb-dedupe">
                   <button type="button" className={`h10-bktoggle ${dedupe ? 'on' : ''}`} role="switch" aria-checked={dedupe} aria-label="Do not suggest existing search terms" onClick={() => setDedupe((v) => !v)}><span /></button>
@@ -1177,6 +1328,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
               </div>
             ) : (
               <div className="tmbody">
+                {/* BP.P5 — starter templates first (code-shipped archetypes), then the operator's
+                    own saved ones. Both apply through the same path and stay fully editable. */}
+                {(STARTER_TEMPLATES[slug] ?? []).length > 0 && (<>
+                  <div className="tmgrp">Starter templates</div>
+                  <div className="tmlist">{(STARTER_TEMPLATES[slug] ?? []).map((t) => (
+                    <div className="tmrow" key={t.name}>
+                      <span className="tmn" title={t.name}>{t.name}<em className="tmdesc">{t.desc}</em></span>
+                      <button type="button" className="h10-rb-btn ghost sm" onClick={() => applyTemplate(t)}>Apply</button>
+                    </div>
+                  ))}</div>
+                  <div className="tmgrp">Saved templates</div>
+                </>)}
                 {templates.length === 0 ? <div className="tmempty">No saved templates yet. Build a rule and choose &ldquo;Save Template&rdquo; to reuse it later.</div>
                   : <div className="tmlist">{templates.map((t) => (
                       <div className="tmrow" key={t.id}>

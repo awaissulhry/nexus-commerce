@@ -9,7 +9,7 @@
  *      behaviour dropped the condition, and a dropped AND-condition makes a rule LOOSER.
  */
 import { describe, it, expect } from 'vitest'
-import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage } from './ads-rule-adapter.service.js'
+import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes } from './ads-rule-adapter.service.js'
 
 const rule = (slug: string, metrics: string[], action: Record<string, unknown> = {}) => ({
   id: 'test-rule',
@@ -261,5 +261,90 @@ describe('EA5 — conditionsForStorage', () => {
       [{ match: 'all', conditions: [{ metric: 'ACOS', op: 'gte', value: '45' }] }],
     )
     expect(back.conditions).toEqual([{ field: 'adTarget.acos', op: 'gte', value: 0.45 }])
+  })
+})
+
+/**
+ * BP.P1 — producedActionTypes: the ceiling judges a rule by what its translation EMITS.
+ *
+ * The slug expansion (`BUILDER_SLUG_ACTIONS.bid` = bid_apply + pause_target + enable_target)
+ * describes the slug's whole repertoire; a stored rule produces exactly one of those, decided by
+ * its THEN op. Judging by the repertoire capped every Bid rule at PROPOSE — including a plain
+ * "Decrease Bid by 15%" that can never write a status.
+ */
+describe('BP.P1 — producedActionTypes is op-aware', () => {
+  const bidRule = (op: string) => ({
+    id: 'bp1',
+    actions: [{ type: 'bid' }],
+    conditions: [{ match: 'all', conditions: [{ metric: 'ACOS', op: 'gt', value: '30' }], action: { op, value: '15' } }],
+  })
+
+  it('a value-moving Bid rule produces only bid_apply', () => {
+    for (const op of ['set', 'incPct', 'decPct', 'incAbs', 'decAbs', 'setCpc', 'targetAcos']) {
+      expect(producedActionTypes(bidRule(op)), op).toEqual(['bid_apply'])
+    }
+  })
+
+  it('a pausing Bid rule produces the structural status action', () => {
+    expect(producedActionTypes(bidRule('pauseTarget'))).toEqual(['pause_target'])
+    expect(producedActionTypes(bidRule('enableTarget'))).toEqual(['enable_target'])
+  })
+
+  it('an engine-native rule passes its raw types through', () => {
+    expect(producedActionTypes({ id: 'x', actions: [{ type: 'bid_down' }, { type: 'notify' }], conditions: [] }))
+      .toEqual(['bid_down', 'notify'])
+  })
+
+  it('an untranslatable builder rule falls back to the conservative slug expansion', () => {
+    const bad = { id: 'y', actions: [{ type: 'bid' }], conditions: [{ match: 'all', conditions: [{ metric: 'No Such Metric', op: 'gt', value: '1' }] }] }
+    expect(producedActionTypes(bad)).toEqual(BUILDER_SLUG_ACTIONS.bid)
+  })
+})
+
+/**
+ * BP.P4b — multi-block translation. Each builder group is its own IF→THEN block; the old shape
+ * flattened every group's conditions into one AND-list and ran only groups[0].action.
+ */
+describe('BP.P4b — each criteria block translates to its own conditions + action', () => {
+  const twoBlockBid = {
+    id: 'bp4b',
+    actions: [{ type: 'bid', bidFloor: 0.1, bidCeiling: 2 }],
+    conditions: [
+      { match: 'all', conditions: [{ metric: 'ACOS', op: 'gt', value: '40' }], action: { op: 'decPct', value: '15' } },
+      { match: 'all', conditions: [{ metric: 'ACOS', op: 'lt', value: '15' }, { metric: 'Orders', op: 'gte', value: '2' }], action: { op: 'incPct', value: '10' } },
+    ],
+  }
+
+  it('a two-block Bid rule yields two blocks, each with its own conditions and op', () => {
+    const t = maybeTranslateAdsRule(twoBlockBid)!
+    expect(t.blocks).toHaveLength(2)
+    expect(t.blocks![0].conditions).toHaveLength(1)
+    expect(t.blocks![1].conditions).toHaveLength(2)
+    expect(t.blocks![0].actions[0].op).toBe('decPct')
+    expect(t.blocks![1].actions[0].op).toBe('incPct')
+    // top level mirrors block 0 so single-block consumers behave exactly as before
+    expect(t.conditions).toEqual(t.blocks![0].conditions)
+    expect(t.actions).toEqual(t.blocks![0].actions)
+  })
+
+  it('a rule that bids in one block and pauses in another produces BOTH action types (→ structural ceiling)', () => {
+    const mixed = {
+      id: 'bp4b2',
+      actions: [{ type: 'bid' }],
+      conditions: [
+        { match: 'all', conditions: [{ metric: 'ACOS', op: 'gt', value: '40' }], action: { op: 'decPct', value: '15' } },
+        { match: 'all', conditions: [{ metric: 'ACOS', op: 'gt', value: '80' }], action: { op: 'pauseTarget' } },
+      ],
+    }
+    expect(producedActionTypes(mixed).sort()).toEqual(['bid_apply', 'pause_target'])
+  })
+
+  it('a Bid rule with windowDays carries it into the bid_apply action', () => {
+    const windowed = {
+      id: 'bp4c',
+      actions: [{ type: 'bid', windowDays: 30 }],
+      conditions: [{ match: 'all', conditions: [{ metric: 'ACOS', op: 'gt', value: '40' }], action: { op: 'decPct', value: '15' } }],
+    }
+    expect(maybeTranslateAdsRule(windowed)!.actions[0].windowDays).toBe(30)
   })
 })

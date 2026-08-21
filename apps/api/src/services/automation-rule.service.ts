@@ -554,8 +554,25 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       }
     }
     if (translated) {
-      rule.conditions = translated.conditions as never
-      rule.actions = translated.actions as never
+      /**
+       * BP.P4b — multi-block rules select PER CONTEXT: blocks are checked in the builder's own
+       * order and the FIRST block whose conditions match this context acts — its action, not
+       * `groups[0]`'s. (The old translation flattened every block's conditions into one AND-list
+       * and always ran block 1's action, so a two-block rule was silently mangled.) When no
+       * block matches, the first block's conditions are installed and the shared no-match path
+       * below reports it — correct by construction, since "no block matched" implies block 1
+       * did not. Stated in the builder UI beside "+ Criteria".
+       */
+      if (translated.blocks && translated.blocks.length > 1) {
+        const { evaluateConditions: evalBlock } = await import('./automation/conditions-tree.js')
+        const chosen = translated.blocks.find((b) => evalBlock((b.conditions ?? null) as never, args.context))
+          ?? translated.blocks[0]
+        rule.conditions = chosen.conditions as never
+        rule.actions = chosen.actions as never
+      } else {
+        rule.conditions = translated.conditions as never
+        rule.actions = translated.actions as never
+      }
     }
   }
 

@@ -39,11 +39,14 @@
  *    so a 500 looked exactly like "no rules yet" — the operator's standing law that "never ran"
  *    and "nothing to do" must never render the same. The error is now its own state, and the
  *    skeleton (`loading`) covers the fetch so the empty state is only ever the truth.
- * ③ **The Automation toggle WRITES, for BOTH rule shapes.** A builder rule's mode is
- *    `actions[0].control` ('automate' | 'manual'), PATCHed on `/automation-rules/:id`. An engine
- *    rule has no such field — its mode is `autonomyLevel` — so it goes through
- *    `PATCH /advertising/autonomy/rules/:id` instead, the same route the Automations page's mode
- *    dial uses. Both are optimistic and revert on failure.
+ * ③ **The Automation toggle WRITES THE LEVEL, for BOTH rule shapes** (BP.P1, 2026-08-21). The
+ *    mode is `autonomyLevel` + `enabled` — `resolveAutonomy` reads nothing else — so both shapes
+ *    go through `PATCH /advertising/autonomy/rules/:id`, the same route the Automations page's
+ *    mode dial uses. A builder rule ADDITIONALLY keeps its `actions[0].control` belt in step
+ *    (belt first when arming, rolled back on a 409), because control='manual' forces the propose
+ *    path at any level. The pre-P1 builder branch wrote `control` alone — a field the engine's
+ *    mode never consults — so on the shape every rule now takes (post-W7, all rules are
+ *    builder-authored) the toggle rendered On and armed nothing. Optimistic, reverts on failure.
  *
  *    🔴 Until 2026-08-19 the engine branch did not exist: the toggle rendered `disabled` and
  *    called that honesty. It was not — **zero builder rules exist in this account** (measured on
@@ -82,8 +85,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
-import { isLegacyRule } from '@nexus/shared/ads-rule-legacy'
+import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { ruleLookback, ACTION_WINDOW, HARVEST_DEFAULTS, type RuleLookback } from '@nexus/shared/ads-rule-window'
 import {
   RULE_TAB_THRESHOLDS, THRESHOLD_SPEC, readThreshold, readThresholds, thresholdClauses, defaultClauses, eur,
@@ -133,9 +135,6 @@ interface RuleRow {
   freqTime: string
   /** B2 — the window this rule actually reads, derived; see `@nexus/shared/ads-rule-window`. */
   look: RuleLookback
-  /** W1 — created before the 2026-08-20 cutover, i.e. not authored by the operator. A label,
-   *  never a behaviour: see `@nexus/shared/ads-rule-legacy`. */
-  legacy: boolean
 }
 
 /**
@@ -352,13 +351,24 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
       : a.op === 'enableTarget' ? 'Unpause the target'
       : a.op === 'setCpc' ? 'Set bid to measured CPC'
       : a.op === 'targetAcos' ? `Set bid to CPC × (${v}% ÷ actual ACoS)`
+      // BP.P4 — the two computed ops that joined H10's grammar; both read as sentences, never enums.
+      : a.op === 'revPerClick' ? 'Set bid to revenue per click'
+      : a.op === 'curBidTargetAcos' ? `Set bid to current bid × (${v}% ÷ actual ACoS)`
       : a.op === 'set'
       ? (pctType ? `Set ${v}%` : `Set €${v}`)
       : pctOp ? `${ACTION_VERB[a.op]}${v}%`
       : `${ACTION_VERB[a.op] ?? a.op}${v}`
+    /**
+     * BP.P4b — a multi-block rule says so. The cell summarises the FIRST block (the one the
+     * engine checks first); pretending it is the whole rule hid every later block's IF→THEN.
+     */
+    const extra = conds.length > 1 ? ` · +${conds.length - 1} more` : ''
+    const blocksWhy = conds.length > 1
+      ? ` This rule has ${conds.length} criteria blocks, checked in order — the first block whose conditions match acts. Open the rule to see the others.`
+      : ''
     return {
-      text: ifs ? `${ifs} → ${then}` : then,
-      why: ifs ? `This rule fires when ${ifs}, and then: ${then}.` : `This rule states no conditions, so it applies "${then}" to everything in its scope every time it runs.`,
+      text: (ifs ? `${ifs} → ${then}` : then) + extra,
+      why: (ifs ? `This rule fires when ${ifs}, and then: ${then}.` : `This rule states no conditions, so it applies "${then}" to everything in its scope every time it runs.`) + blocksWhy,
     }
   }
 
@@ -436,7 +446,6 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
    * would have printed an empty Order Threshold on a rule that harvests at ≥2 orders.
    */
   const tabAction = tabActionOf(rule, tabKey)
-  const builder = isBuilderRule(rule)
   const s = a?.schedule
   let freqDay = ''
   let freqTime = ''
@@ -457,9 +466,17 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
   return {
     id: String(rule.id),
     name: String(rule.name ?? 'Untitled'),
-    // Builder rule: the mode IS actions[0].control. Engine rule: the mode is autonomyLevel, and a
-    // disabled rule is off whatever its level says.
-    automation: builder ? a?.control === 'automate' : rule.enabled !== false && rule.autonomyLevel === 'AUTO',
+    /**
+     * BP.P1 — ONE truth for both shapes: "on" means the rule will actually WRITE — enabled, at
+     * AUTO, and (for a builder rule) not belted to Manual. The old builder read was
+     * `actions[0].control === 'automate'` alone, and `control` is a field the engine's mode
+     * derivation never consults (`resolveAutonomy` reads `enabled` + `autonomyLevel`): a rule
+     * created with "Automate" rendered On while stored disabled at PROPOSE — it armed nothing.
+     * `control === 'manual'` still belts a rule at any level (the evaluator forces the propose
+     * path), so it keeps a say in the OFF direction only.
+     */
+    automation: rule.enabled !== false && rule.autonomyLevel === 'AUTO'
+      && (a as { control?: string } | null)?.control !== 'manual',
     level: String(rule.autonomyLevel ?? ''),
     enabled: rule.enabled !== false,
     criteria: crit.text,
@@ -480,7 +497,6 @@ function ruleToRow(rule: Record<string, unknown>, tabKey: string): RuleRow {
      * Measured on prod 2026-08-20, 1 of 5 rows. The fix is the map entry, not this call site.
      */
     look: ruleLookback(String(rule.trigger ?? ''), orderedActionTypes(rule, tabKey), tunableWindowDays(rule, tabKey)),
-    legacy: isLegacyRule(rule as { createdAt?: string | null }),
   }
 }
 
@@ -551,25 +567,6 @@ const ENGINE_OFF_LEVEL = 'PROPOSE'
 const LEVEL_WORD: Record<string, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
 
 type BulkKind = 'automation' | 'delete'
-
-/**
- * W1 — the one filter every rule tab shares. "Legacy" = created before the 2026-08-20 cutover
- * (seeded or machine-created; none authored by the operator) — see `@nexus/shared/ads-rule-legacy`.
- * A single collapsed select rather than a filter bar: the H10 shape these tabs follow has no
- * filter chrome, so the panel stays shut until asked for.
- */
-const PROVENANCE_FILTERS: GridFilter[] = [{
-  key: 'provenance',
-  label: 'Provenance',
-  kind: 'select',
-  placeholder: 'All rules',
-  options: [
-    { value: 'legacy', label: 'Legacy', title: 'Created before 2026-08-20 — seeded or machine-created, not by you' },
-    { value: 'current', label: 'Created by you', title: 'Created on or after 2026-08-20' },
-  ],
-  value: (row: unknown) => ((row as RuleRow).legacy ? 'legacy' : 'current'),
-  tip: 'Every rule that predates 2026-08-20 was machine-created. The label changes nothing about how a rule runs.',
-}]
 
 /** B4 — one rule's real output, from `GET /advertising/automation-rules/activity`. */
 export interface RuleActivity {
@@ -752,36 +749,54 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     setNotice(null)
     setPending((s) => new Set(s).add(id))
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, automation: on } : r)))
+    /** BP.P1 — a builder rule's Manual/Automate belt, kept in step with the level below. */
+    const patchControl = async (control: 'manual' | 'automate'): Promise<Array<Record<string, unknown>>> => {
+      const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) =>
+        (i === 0 ? { ...a, control } : a))
+      const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
+      })
+      if (!res.ok) throw new Error(`Could not change Automation (${res.status}).`)
+      return actions
+    }
     try {
-      let next: Record<string, unknown>
-      if (builder) {
-        const actions = (rule.actions as Array<Record<string, unknown>>).map((a, i) =>
-          (i === 0 ? { ...a, control: on ? 'automate' : 'manual' } : a))
-        const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
-        })
-        if (!res.ok) throw new Error(`Could not change Automation (${res.status}).`)
-        next = { ...rule, actions }
-      } else {
-        const level = on ? 'AUTO' : ENGINE_OFF_LEVEL
-        const res = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }),
-        })
-        const j = (await res.json().catch(() => ({}))) as
-          { ok?: boolean; error?: string; message?: string; rule?: Record<string, unknown> }
-        if (!res.ok || j.ok === false) {
-          // 409 is the ceiling, and the route puts its reason on `message`. Reading `error` first
-          // would have printed the enum `above_ceiling` at an operator forever.
-          throw new Error(res.status === 409
-            ? (j.message ?? `“${rule.name ?? id}” cannot be set to Auto — it is above this rule’s ceiling.`)
-            : (j.error ?? `Could not change Automation (${res.status}).`))
-        }
-        next = {
-          ...rule,
-          autonomyLevel: j.rule?.autonomyLevel ?? level,
-          enabled: j.rule?.enabled ?? true,
-          dryRun: j.rule?.dryRun ?? level !== 'AUTO',
-        }
+      /**
+       * BP.P1 — ONE write path for BOTH shapes: the level IS the mode.
+       *
+       * The old builder branch PATCHed `actions[0].control` and stopped — a field
+       * `resolveAutonomy` never reads — so on the shape every rule now takes (post-W7, all rules
+       * are builder-authored) the toggle rendered On and armed nothing. Both shapes now write
+       * `PATCH /advertising/autonomy/rules/:id { level }` — the ONE mode route, which also keeps
+       * `enabled`/`dryRun` in step and enforces the graduation ceiling with a 409.
+       *
+       * A builder rule additionally keeps its `control` belt in step: belt FIRST when arming
+       * (AUTO must never coexist with a manual belt — the evaluator would silently propose while
+       * the toggle says On), and rolled back if the level write is refused. On the OFF path the
+       * belt write is best-effort: once the level is PROPOSE the rule already only proposes.
+       */
+      let nextActions = rule.actions as Array<Record<string, unknown>>
+      if (builder && on) nextActions = await patchControl('automate')
+      const level = on ? 'AUTO' : ENGINE_OFF_LEVEL
+      const res = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }),
+      })
+      const j = (await res.json().catch(() => ({}))) as
+        { ok?: boolean; error?: string; message?: string; rule?: Record<string, unknown> }
+      if (!res.ok || j.ok === false) {
+        if (builder && on) await patchControl('manual').catch(() => { /* belt rollback is best-effort */ })
+        // 409 is the ceiling, and the route puts its reason on `message`. Reading `error` first
+        // would have printed the enum `above_ceiling` at an operator forever.
+        throw new Error(res.status === 409
+          ? (j.message ?? `“${rule.name ?? id}” cannot be set to Auto — it is above this rule’s ceiling.`)
+          : (j.error ?? `Could not change Automation (${res.status}).`))
+      }
+      if (builder && !on) nextActions = await patchControl('manual').catch(() => nextActions)
+      const next: Record<string, unknown> = {
+        ...rule,
+        actions: nextActions,
+        autonomyLevel: j.rule?.autonomyLevel ?? level,
+        enabled: j.rule?.enabled ?? true,
+        dryRun: j.rule?.dryRun ?? level !== 'AUTO',
       }
       setRaw((m) => { const n = new Map(m); n.set(id, next); return n })
       // Re-derive the whole row from what was stored, not just the switch: an engine rule that
@@ -807,9 +822,14 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     }
   }, [raw, tabKey])
 
-  /** Held below AUTO by the graduation ceiling — so Automation can be turned off, never on. */
+  /**
+   * Held below AUTO by the graduation ceiling — so Automation can be turned off, never on.
+   * BP.P1 — applies to BOTH shapes now: builder rules live in the same table, the ceiling board
+   * covers them, and since the ceiling went op-aware a pausing Bid rule is capped while a
+   * value-moving one is not. The old `!isBuilderRule` exclusion predates the unified toggle.
+   */
   const isCapped = useCallback((id: string): boolean =>
-    !isBuilderRule(raw.get(id)) && (ceilings.get(id)?.ceiling ?? 'AUTO') !== 'AUTO', [raw, ceilings])
+    (ceilings.get(id)?.ceiling ?? 'AUTO') !== 'AUTO', [ceilings])
 
   const applyBulk = async (kind: BulkKind, ids: string[], payload?: { on?: boolean }) => {
     setBulk(null)
@@ -977,18 +997,17 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     {
       key: 'automation', label: 'Automation', metric: false, sortable: false,
       render: (r) => {
-        const builder = isBuilderRule(raw.get(r.id))
         const cap = ceilings.get(r.id)
-        const capped = !builder && !!cap && cap.ceiling !== 'AUTO'
+        // BP.P1 — the ceiling binds both shapes (op-aware server-side); no builder exclusion.
+        const capped = !!cap && cap.ceiling !== 'AUTO'
         // HELD, not disabled. A capped rule can still be turned OFF — the ceiling refuses reaching
         // AUTO, not leaving it — so only the ON direction is held.
         const held = capped && !r.automation
         const busy = pending.has(r.id)
+        // BP.P1 — one sentence for both shapes, because the toggle now means one thing.
         const why = held
           ? `${cap!.reason} Its ceiling is ${LEVEL_WORD[cap!.ceiling] ?? cap!.ceiling}, so Automation cannot be turned on here. That is policy about what this rule DOES, not a setting — it is raised in the engine's graduation rules, not on this page.`
-          : builder
-            ? 'On = Automate (the rule applies its own actions). Off = Manual (it proposes them for approval).'
-            : `On = Auto (it acts on its own, inside its daily cap and the write gate). Off = Propose (it queues suggestions; nothing reaches Amazon until you accept them). Currently ${LEVEL_WORD[r.level] ?? (r.level || 'unset')}.${r.enabled ? '' : ' This rule is disabled — turning Automation on will also enable it.'}`
+          : `On = Auto (it acts on its own, inside its daily cap and the write gate). Off = Propose (it queues its actions on the Suggestions page; nothing reaches Amazon until you accept them). Currently ${LEVEL_WORD[r.level] ?? (r.level || 'unset')}.${r.enabled ? '' : ' This rule is disabled — turning Automation on will also enable it.'}`
         return (
           <button
             type="button"
@@ -1155,12 +1174,6 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         {!r.enabled && (
           <span className="h10-bd7-posture off" title="This rule is disabled — it is never evaluated, whatever its Automation mode says. Enable it on the Automations page.">off</span>
         )}
-        {/* W1 — provenance, not behaviour: every rule that predates 2026-08-20 was machine-created
-            (template seeder or an earlier build session), none by the operator. The chip marks
-            them for triage; it changes nothing about how the rule runs. */}
-        {r.legacy && (
-          <span className="h10-bd7-posture legacy" title="Legacy — this rule predates 2026-08-20 and was not created by you (seeded or machine-created). It runs exactly as configured; the label is for triage only.">legacy</span>
-        )}
         <span className="h10-nt-acts">
           <a className="h10-nt-open" href={href} onClick={overlay}><ExternalLink size={11} /> Open</a>
           <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
@@ -1215,8 +1228,6 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         searchable
         searchPlaceholder="Search rules…"
         searchValue={(r) => r.name}
-        filters={PROVENANCE_FILTERS}
-        filtersDefaultOpen={false}
         pagerCentered
         defaultSort={{ key: '__first', dir: 'asc' }}
         emptyNode={emptyNode}

@@ -263,3 +263,42 @@ Operator reports, closed:
 
 Deferred, named: the "~2¢" hardcoded floor copy in Next 24 hours (the payload carries no floor
 field; needs an API addition), and the drawer confirm's focus trap.
+
+## BP — Bid page + builder perfection, P1–P6 (2026-08-21, LOCAL — the per-subpage programme's first target)
+
+Study + build record: `docs/2026-08-21-bp-bid-perfection.md`. Operator approved the P1–P6 plan
+("Go ahead"); everything LOCAL and uncommitted per the session's local-first instruction; batch
+commit+push on the operator's word. Two new operator laws recorded: new components go INTO the
+design system; **100% round-trip honesty** (displayed = real reading; changed = reaches Amazon).
+
+- **P1** — the arming path made real: a builder rule's Control step and the grid toggle now write
+  `autonomyLevel` through the ONE mode route (Manual → PROPOSE+enabled · Automate → AUTO+enabled,
+  409 → PROPOSE in the server's words); the ceiling went OP-AWARE (`producedActionTypes` — a
+  set/raise/lower Bid rule reaches AUTO, a pausing one stays PROPOSE; pre-P1 the slug expansion
+  capped EVERY bid rule). E2E-proven against the real policy code via `_bp-verify-stub.mts`.
+- **P2** — the stored schedule is HONOURED (`ads-rule-schedule.ts` due-gate in the evaluator;
+  B6's deferral premise died with W7); timezone default → Rome; the €100/day + 10-runs server
+  defaults surfaced and prefilled ("No cap" was false copy). Learn button REMOVED (operator, same day).
+- **P3** — noise guard indented clear of the IF→THEN connector; step-nav scroll fixed (memoised
+  steps + instant scrollIntoView; the un-memoised array had been cancelling smooth scrolls at
+  ~6px); builder typography to the console scale (13.5 base · 14 steps · 18 h2 · 15 title).
+- **P4** — H10 bid grammar completed: Current Bid metric, Revenue-per-Click +
+  CurrentBid×TargetACoS/ACoS actions, per-rule Lookback (7–90d, honoured by per-window context
+  passes AND targetPerformance, declared once in `ACTION_WINDOW.bid`). **P4b: multi-block rules
+  made TRUE** — the adapter emitted one AND-flattened block running only groups[0].action; now
+  per-block conditions+action with first-matched-block-acts selection, stated in the UI.
+  (Harvest/negative group-flattening left for their sessions — it only tightens.)
+- **P5** — five starter Bid templates (code-shipped, editable, noise-guarded) above Saved templates.
+- **P6** — dead W1 provenance filter + legacy chip removed from RulesGrid (they could never light
+  post-W7); the `__ea manual` orphan suggestion DELETED on prod same day (operator's word; re-verified 0 pending).
+
+Gates: api 4,943 ✓ (6 red = SG's uncommitted `add_negative_exact` hunk, not BP's) · web 922 ✓ ·
+shared 41 ✓ · both tsc ✓ · button-vocab 286 · silent-disabled 27 · help-cursor 0 · DS ✓ · P3 ✓.
+⚠ Shared-file coordination for commit day: `advertising.routes.ts`,
+`automation-action-handlers.ts` and `advertising-rule-evaluator.job.ts` carry the SG session's
+uncommitted hunks beside BP's — blob-split or sequence with them before `--only`.
+⚠ Chrome note: current Chrome's Local Network Access policy blocks cross-port loopback
+POST/PATCH regardless of CORS headers — the 2026-08-20 stub recipe's allow-methods fix no longer
+suffices in hand-Chrome; local write-path verification runs through Playwright route
+interception (`apps/web/scripts/_bp-e2e-local.mjs`) — and for HAND-driven Chrome, `next.config.js`
+gained an env-gated `rewrites()` (`NEXT_DEV_STUB_PROXY`) proxying /api/* same-origin to the stub.

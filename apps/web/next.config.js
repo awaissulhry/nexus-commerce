@@ -19,6 +19,18 @@ const nextConfig = {
   // Guaranteed, not flaky: any overlap fails. Unset in prod and on Vercel, so behaviour there is
   // byte-identical to before.
   distDir: process.env.NEXT_DIST_DIR || (process.env.NEXT_DEV_ISOLATED === '1' ? '.next-dev' : '.next'),
+  // BP (2026-08-21) — local-first verification proxy. Current Chrome's Local Network Access
+  // policy blocks cross-port loopback POST/PATCH regardless of the target's CORS headers
+  // (measured: simple GETs pass, everything else dies before the wire), so a verify stub on
+  // :8099 can never receive writes from a hand-driven browser. With NEXT_DEV_STUB_PROXY set
+  // (local dev only), /api/* is rewritten SERVER-SIDE to the stub — same-origin in the browser,
+  // so no CORS and no LNA apply. Pair with NEXT_PUBLIC_API_URL=http://localhost:<dev-port>.
+  // Unset everywhere real (prod, Vercel, the pre-push build) → zero rewrites, zero change.
+  async rewrites() {
+    const stub = process.env.NEXT_DEV_STUB_PROXY
+    if (!stub) return []
+    return [{ source: '/api/:path*', destination: `${stub}/api/:path*` }]
+  },
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],
   // PERF — client-side Router Cache. Next 15 defaults staleTimes.dynamic to 0,

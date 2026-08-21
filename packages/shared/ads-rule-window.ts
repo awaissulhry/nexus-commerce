@@ -86,6 +86,14 @@ export const TOS_WINDOW_MIN = 7
 export const TOS_WINDOW_MAX = 90
 
 /**
+ * BP.P4 — the bounds of a Bid rule's own lookback (`actions[0].windowDays`), enforced by BOTH
+ * readers: the KEYWORD_HIGH_ACOS context emitter and `targetPerformance` (computed bid ops).
+ * Declared here so the grid's Lookback cell, the builder's select and the engine agree.
+ */
+export const BID_WINDOW_MIN = 7
+export const BID_WINDOW_MAX = 90
+
+/**
  * P1 — the thresholds `harvest_and_negate` falls back to when a rule sets none of its own.
  *
  * 🔴 These are the **handler's** defaults (`automation-action-handlers.ts`), which imports them
@@ -220,6 +228,22 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     source: 'automation-action-handlers.ts harvest_and_negate → ads-harvest.service.ts previewHarvest',
     tunable: {},
     caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through ruleWindowBounds. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans.',
+  },
+  /**
+   * BP.P4 — a builder Bid rule's lookback is ITS OWN (`actions[0].windowDays`, the builder's
+   * "Lookback period" select), defaulting to the KEYWORD_HIGH_ACOS trigger's 14 settled days.
+   *
+   * The key is the builder SLUG, because that is the action type a stored builder rule carries
+   * (`actions[0].type = 'bid'`) — the grid reads STORED actions, never the translation. Both
+   * engine readers honour the same number: the context emitter builds this rule's contexts over
+   * its window (`advertising-rule-evaluator.job.ts`, per-window passes), and `targetPerformance`
+   * measures computed ops (Set to CPC · the two ratio actions · Revenue per Click) over it.
+   * Settled: both readers go through `ruleWindowBounds`, which drops the two attributing days.
+   */
+  bid: {
+    kind: 'window', days: 14, settled: true,
+    source: 'advertising-rule-evaluator.job.ts buildHighAcosKeywordContexts + targetPerformance (both via ruleWindowBounds)',
+    tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
 }
 

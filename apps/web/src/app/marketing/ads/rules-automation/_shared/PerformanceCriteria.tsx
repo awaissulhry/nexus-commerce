@@ -64,7 +64,7 @@ export function PcWindowNote({ slug }: { slug: string }) {
   )
 }
 export const PC_METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
-  Sales: 'eur', Spend: 'eur', CPC: 'eur',
+  Sales: 'eur', Spend: 'eur', CPC: 'eur', 'Current Bid': 'eur',
   ACOS: 'pct', CTR: 'pct', CVR: 'pct',
   ROAS: '', Clicks: '', Impressions: '', 'PPC Orders': '', Orders: '',
   'Budget Utilization': 'pct',
@@ -72,6 +72,9 @@ export const PC_METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
   'Organic Rank': '', 'Sponsored Rank': '', 'Rank Change': '', 'Search Volume': '',
 }
 const METRICS_BASE = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders']
+// BP.P4 — H10's Bid list carries "Current Bid" (the target's live bid, in €). Bid rules only:
+// the KEYWORD_HIGH_ACOS context is the one that carries adTarget.bidCents.
+const METRICS_BID = [...METRICS_BASE, 'Current Bid']
 // P2.1 — 'Organic Share' and 'Sponsored Share' are REMOVED: no signal source exists anywhere
 // (analyzeShareOfVoice reports sovPct/topCampaignSharePct only), so a condition on either could
 // never match and the adapter now refuses rather than drops. Re-offer them when a source ships.
@@ -80,11 +83,12 @@ const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search V
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
 export const PC_METRICS = METRICS_BASE.map((m) => ({ value: m, label: m }))
+export const PC_METRICS_BID = METRICS_BID.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_SOV = METRICS_SOV.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_RANK = METRICS_RANK.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_PLACEMENT = METRICS_PLACEMENT.map((m) => ({ value: m, label: m }))
 export const pcMetricsFor = (slug: string): Array<{ value: string; label: string }> =>
-  (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : METRICS_BASE).map((m) => ({ value: m, label: m }))
+  (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : slug === 'bid' ? METRICS_BID : METRICS_BASE).map((m) => ({ value: m, label: m }))
 export const pcDefaultCondition = (slug: string): Condition =>
   slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '1' }
     : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' }
