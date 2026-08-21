@@ -36,8 +36,15 @@ describe('applyBidOptimization', () => {
       ],
       actor: 'automation:bid-optimizer',
       reason: 'AX.8 target-ACOS optimization',
+      // SG.10 — the batch's change-set id. `null` here is the CORRECT value for a caller that
+      // passes none: only the autopilot bid branch groups its writes into one reversible set,
+      // and everyone else keeps a set per write. Asserted exactly rather than through
+      // objectContaining, because pinning this call's whole shape is what this suite is for.
+      changeSetId: null,
     })
-    expect(out).toEqual({ applied: 2, dryRun: false })
+    // SG.10 — the receipts this function used to discard. Empty here because the mocked bulk
+    // outcome carries no rows; the autopilot path reads actionLogIds[0] as its undo handle.
+    expect(out).toEqual({ applied: 2, dryRun: false, actionLogIds: [], outboundQueueIds: [] })
   })
 
   it('passes a user: actor through untouched', async () => {
@@ -53,6 +60,7 @@ describe('applyBidOptimization', () => {
       changes: [{ targetId: 't1', proposedBidCents: 30 }],
       dryRun: true,
     })
+    // the dry-run path returns BEFORE the bulk call, so it carries no receipts at all
     expect(out).toEqual({ applied: 0, dryRun: true })
     expect(bulk).not.toHaveBeenCalled()
   })
