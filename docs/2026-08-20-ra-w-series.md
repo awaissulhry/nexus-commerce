@@ -310,13 +310,18 @@ suffices in hand-Chrome; local write-path verification runs through Playwright r
 interception (`apps/web/scripts/_bp-e2e-local.mjs`) — and for HAND-driven Chrome, `next.config.js`
 gained an env-gated `rewrites()` (`NEXT_DEV_STUB_PROXY`) proxying /api/* same-origin to the stub.
 
-## Unit HP — Keyword Harvest perfection (2026-08-21, HP1–HP4 BUILT; LOCAL/UNCOMMITTED)
+## Unit HP — Keyword Harvest perfection (2026-08-21 — SHIPPED `1639282ed` + `cb20ac7fb`)
 
 Study + build record: `docs/2026-08-21-hp-keyword-harvest-perfection.md`. Programme target 2
 (after BP). Operator approved HP1–HP6; 1–5 built; the operator delegated the two decisions
-("I leave it up to you") — **HP5 decided RETIRE (code done), HP6 decided
-propose-path-only/no-bulk-push (deploy-day runbook, doc §7)**. Everything below is LOCAL —
-batch commit on the operator's command.
+("I leave it up to you") — **HP5 decided RETIRE (shipped), HP6 decided
+propose-path-only/no-bulk-push (doc §7)**. Shipped 2026-08-21 as `1639282ed` (39 files,
+three shared files blob-split so the SG session's WIP stayed out) + `cb20ac7fb` (a one-line
+help-cursor removal at HEAD in reporting.css — the ratchet-blocking line RPT's tree had
+already fixed but not committed; convergent subset, coordinate with RPT). Pushed from a tip
+worktree: the shared tree was +2 over the button-vocab baseline from sibling WIP, so the
+pre-push gate ran against the exact commit content (APFS-cloned node_modules; shared/database
+dists built in the worktree).
 
 - **HP1 — the wire is WHOLE.** The harvest builder collected H10's full form while the engine
   honoured a fraction. New `ads-harvest-wire.ts` (normaliser + pure predicates, 11 tests);
@@ -337,9 +342,14 @@ batch commit on the operator's command.
 - **HP5 — one engine.** The rule-less nightly `ads-auto-harvest` cron RETIRED end-to-end
   (schedule, registry, route, Automation Hub card, ACR lever + mappings, foresight row, HV
   Actors engine row, the service file) with every surface/comment that named it made truthful;
-  history keeps its actor stamp. HP6 armed through the honest path only: one starter rule at
-  PROPOSE post-deploy, approvals through the real gate (82/86 ENABLED campaigns allowlisted),
-  152 local-only backlog NOT mass-pushed — `pushExistingKeyword` heals re-earned terms.
+  history keeps its actor stamp. Deploy-verified: the route 404s, the boot log schedules
+  every neighbour and not it. **HP6 EXECUTED on prod**: rule `cmt2une4c00rwqk01hbgjt6mg`
+  "Harvest proven winners — GALE DE" at PROPOSE (DE; look-only 3×auto+broad → E in GALE
+  EXACT DE; the five groups share one 18-product set), created through the deployed builder
+  and verified in the grid + AGV pathway chips. 152 local-only backlog NOT mass-pushed —
+  `pushExistingKeyword` heals re-earned terms. (Builder fact: `targetsValid` requires ≥1
+  mapped group — per-family mapped rules are the shape; popover defaults look+P+E, shape
+  the ticks.)
 - **HP4 — the loop closes.** Graduation-ceiling sentence on Control BEFORE save; 3 guarded
   harvest starters; Apply/Save Template extended to harvest; live cohort strip on the rules
   view (219 harvested · 9 served · 152 local-only) linking to Suggestions; absent-not-fabricated
@@ -351,3 +361,33 @@ five ratchets at baseline. E2E: `_hp-e2e-local.mjs` over the `NEXT_DEV_STUB_PROX
 stub log shows CREATE→LEVEL(PROPOSE)→3×PATCH[actions]. ⚠ Commit day: blob-split
 `automation-action-handlers.ts` (SG scope-flip ~1076) and `rules-automation.css` (SG.1 moves);
 diff-audit shared files WITH `grep -a`; tip-worktree tsc before push.
+
+## Unit NEG-P — Negative Targeting perfection (2026-08-21 — P1–P3 BUILT, this commit)
+
+Study + build record: `docs/2026-08-21-negp-negative-perfection.md`. Programme target 3 (after
+BP, HP). Operator approved the phase plan ("go ahead"); P1–P3 built, **P4 (arming) executed on
+prod post-deploy per the same delegation pattern as HP6**.
+
+- **P1 — the wire.** The adapter's negative branch carries the WHOLE form via
+  `normalizeHarvestWire` (`action.negative` + `levels`); `'both'` writes BOTH levels (the old
+  `NEG_SCOPE.both → CAMPAIGN` silent lie is deleted); the handler's mapped path mirrors
+  `promote_to_exact` (look-gate → term/brand filters → protectConverting → destinations ×
+  ticked types incl. NEGATIVE_PHRASE and negative PRODUCT targets for ASIN-shaped terms →
+  per-level dedupe → local mirror + audit on every landed write → loud failures; sandbox and
+  id-less results are NOT landed). 15 new tests; real-data dry-run: 38 IT candidates, 37 gated
+  by look-set, 1 would negate, zero writes.
+- **P2 — floor honesty.** `WASTING_FLOOR` (spend ≥ €3 ∧ clicks ≥ 5, top 300/tick) declared once
+  in `@nexus/shared/ads-rule-window`, read by the emitter, the builder's window note
+  (interpolated) and the strip. Default criteria = the pair `Sales = 0 AND Clicks ≥ 5`
+  (`pcDefaultGroup`, one source). Negation Level copy states the landing rate (ad-group ~99% ·
+  campaign 0 of 20 ever). Dedupe copy is negative-aware.
+- **P3 — starters + strip.** Three guarded negative starters (bare-blacklist REFUSED — recipe
+  documented instead); Apply/Save Template extended to negative; the tab's strip from
+  `GET /advertising/negatives/strip` (2,062 negatives · 947 blocking · 55 candidates €464.51/30d
+  · Suggestions + Guardrails links), absent-not-fabricated. `_neg1-endpoint.mts` enters git with
+  its evidence assertion as a ≥3 floor (the 0-pin read NEG.X's improvement as a failure).
+
+Gates: api 5,009 ✓ (SG's updated protect-converting suite green beside the new wire tests) ·
+web 922 ✓ · both tsc ✓ · five ratchets at baseline · link-targets ✓ · Playwright smoke all-pass.
+⚠ Blob-split this commit: `automation-action-handlers.ts` (SG scope hunk) and
+`advertising-rule-evaluator.job.ts` (SG sweep hunk) — both carry my hunks beside theirs.

@@ -1074,6 +1074,145 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
     const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
     if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
     if (!externalCampaignId) return { type: action.type, ok: false, error: 'No externalCampaignId in context' }
+
+    /**
+     * NEG-P1 — the mapped wire path. A builder negative rule carries `action.negative`
+     * (normalizeHarvestWire's shape — same stored form as harvest) plus `levels` from the
+     * Negation Level select. The look-set gates which contexts may act; the create-ticks decide
+     * what is created where (E → negative exact, P → negative phrase, product → negative product
+     * target when the term IS an ASIN); the term/brand filters and dedupe are honoured; every
+     * write that does not land at Amazon is a FAILURE naming its gate, and every landed write is
+     * mirrored locally with an audit row (createNegative alone leaves no local record — the
+     * NEG.X defect this path must not reintroduce). Rules without the wire (every engine-native
+     * caller) take the legacy single-scope path below, byte-for-byte.
+     */
+    const wire = (action.negative ?? null) as import('./ads-harvest-wire.js').HarvestWire | null
+    if (wire) {
+      const marketplace = (context as any)?.marketplace as string | undefined
+      if (!marketplace) return { type: action.type, ok: false, error: 'No marketplace in context — the write gate cannot resolve a connection, so this negation cannot be checked against the protected terms' }
+      const srcExt = (action.externalAdGroupId as string | undefined) ?? (context as any)?.searchTerm?.externalAdGroupId
+      if (!srcExt) return { type: action.type, ok: false, error: 'No source ad group in context to check the mappings against' }
+      const src = await prisma.adGroup.findFirst({ where: { externalAdGroupId: srcExt }, select: { id: true } })
+      if (!src) return { type: action.type, ok: false, error: `No local ad group for externalAdGroupId=${srcExt}` }
+      const { matchedBlocks, termPassesFilters } = await import('./ads-harvest-wire.js')
+
+      // 1 — is this term's source ad group inside the rule's mappings?
+      const blocks = matchedBlocks(wire.blocks, src.id)
+      if (blocks !== 'account-wide' && blocks.length === 0) {
+        return { type: action.type, ok: true, output: { skipped: 'source-ad-group-not-in-mappings', keyword, sourceAdGroupId: src.id } }
+      }
+
+      // 2 — term/brand/competitor filters. Same predicate as harvest; the direction matches:
+      // brandExclude = never negate your own brand terms, competitorOnly = own ASINs pass through.
+      const looksLikeAsin = /^b0[a-z0-9]{8}$/i.test(keyword.trim())
+      const isOwnAsin = wire.filters.competitorOnly && looksLikeAsin
+        ? (await prisma.adProductAd.count({ where: { asin: { equals: keyword.trim(), mode: 'insensitive' } } })) > 0
+        : false
+      const filt = termPassesFilters(keyword, wire.filters, isOwnAsin)
+      if (filt.pass === false) return { type: action.type, ok: true, output: { skipped: 'term-filter', reason: filt.reason, keyword } }
+
+      // 3 — the account protections (NEG.0a), before any write and before the dry-run return.
+      const guard = await checkProtectConverting({ terms: [keyword], config: protectConvertingConfig(action) })
+      const decision = guard.get(normaliseNegTerm(keyword))
+      if (decision && !decision.allowed) {
+        logger.warn(`[${action.type}] refused by protectConverting`, { ruleId: meta.ruleId, keyword, evidence: decision.evidence })
+        return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword } }
+      }
+
+      // 4 — the negation set: mapped destinations × ticked types; account-wide negates the source.
+      const targets = blocks === 'account-wide'
+        ? [{ adGroupId: src.id, types: ['EXACT' as const] }]
+        : (() => {
+          const seen = new Map<string, Set<string>>()
+          for (const b of blocks) for (const c of b.create) {
+            const s = seen.get(c.adGroupId) ?? new Set<string>()
+            for (const t of c.types) s.add(t)
+            seen.set(c.adGroupId, s)
+          }
+          return [...seen.entries()].map(([adGroupId, types]) => ({ adGroupId, types: [...types] as Array<'PHRASE' | 'EXACT' | 'ASIN'> }))
+        })()
+      const levels = Array.isArray(action.levels) && (action.levels as unknown[]).length > 0
+        ? (action.levels as unknown[]).map(String).filter((l) => l === 'AD_GROUP' || l === 'CAMPAIGN')
+        : ['AD_GROUP']
+
+      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+      const { createNegative } = await import('./ads-negative-kw.service.js')
+      const { mirrorNegativeKeywordLocal, createNegativeKeywordCampaignLocal, createNegativeProductTargetLocal } = await import('./ads-create.service.js')
+
+      const outcomes: Array<Record<string, unknown>> = []
+      let confirmed = 0
+      let failedWrites = 0
+      const campaignsDone = new Set<string>() // one campaign-level write per campaign, however many destinations share it
+      for (const target of targets) {
+        const dst = await prisma.adGroup.findFirst({
+          where: { id: target.adGroupId },
+          select: { id: true, externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true } } },
+        })
+        if (!dst?.externalAdGroupId || !dst.campaign?.externalCampaignId) {
+          failedWrites += 1
+          outcomes.push({ adGroupId: target.adGroupId, refused: 'destination ad group has no Amazon ids — it cannot receive a negative' })
+          continue
+        }
+        for (const t of target.types) {
+          // product circle → a negative PRODUCT target; only an ASIN-shaped term can be one.
+          if (t === 'ASIN') {
+            if (!looksLikeAsin) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', skipped: 'negative product target needs an ASIN-shaped term — keyword types on this mapping were still processed' }); continue }
+            if (meta.dryRun) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', wouldCreate: true }); continue }
+            const r = await createNegativeProductTargetLocal({ adGroupId: dst.id, asin: keyword.trim() })
+            if (r.externalTargetId != null) { confirmed += 1; outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', externalTargetId: r.externalTargetId, reachedAmazon: true }) }
+            else { failedWrites += 1; outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', adTargetId: r.id, reachedAmazon: false, refused: `negative product target did not land (mode=${r.mode}) — gate or connection` }) }
+            continue
+          }
+          const matchType = t === 'PHRASE' ? 'NEGATIVE_PHRASE' as const : 'NEGATIVE_EXACT' as const
+          for (const level of levels) {
+            if (level === 'CAMPAIGN' && campaignsDone.has(dst.campaignId)) continue
+            // dedupe — "already negated with this match type in this scope" is a skip, not a write
+            if (wire.dedupe) {
+              const exists = await prisma.adTarget.findFirst({
+                where: {
+                  isNegative: true, status: 'ENABLED',
+                  expressionType: { in: [matchType, t] },
+                  expressionValue: { equals: keyword, mode: 'insensitive' },
+                  ...(level === 'AD_GROUP'
+                    ? { adGroupId: dst.id, negativeLevel: { not: 'CAMPAIGN' } }
+                    : { negativeLevel: 'CAMPAIGN', adGroup: { campaignId: dst.campaignId } }),
+                },
+                select: { id: true },
+              })
+              if (exists) { outcomes.push({ adGroupId: dst.id, matchType, level, skipped: 'dedupe — the term is already negated at this level with this match type' }); continue }
+            }
+            if (meta.dryRun) { outcomes.push({ adGroupId: dst.id, matchType, level, wouldCreate: true }); if (level === 'CAMPAIGN') campaignsDone.add(dst.campaignId); continue }
+            const res = await createNegative({
+              profileId: conn?.profileId ?? '', externalCampaignId: dst.campaign.externalCampaignId,
+              ...(level === 'AD_GROUP' ? { externalAdGroupId: dst.externalAdGroupId } : {}),
+              keywordText: keyword, matchType, scope: level as 'AD_GROUP' | 'CAMPAIGN', marketplace,
+            })
+            if (level === 'CAMPAIGN') campaignsDone.add(dst.campaignId)
+            if (res.denied) { failedWrites += 1; outcomes.push({ adGroupId: dst.id, matchType, level, reachedAmazon: false, refused: `write gate denied at ${res.denied.deniedAt}: ${res.denied.reason}` }); continue }
+            if (res.alreadyExisted) { outcomes.push({ adGroupId: dst.id, matchType, level, skipped: 'already negated (existing row found at create time)' }); continue }
+            if (res.mode !== 'live' || res.externalNegativeKeywordId == null) {
+              // NEG.X lesson: a sandbox stub or an id-less success is NOT a landed negative.
+              failedWrites += 1
+              outcomes.push({ adGroupId: dst.id, matchType, level, reachedAmazon: false, refused: res.mode !== 'live' ? `no Amazon call was made (mode=${res.mode})` : 'Amazon accepted the create but returned no id — not counting it as landed' })
+              continue
+            }
+            // 5 — mirror the landed write locally, with its audit row (create_negative_keyword).
+            if (level === 'AD_GROUP') await mirrorNegativeKeywordLocal({ adGroupId: dst.id, keywordText: keyword, matchType, externalTargetId: res.externalNegativeKeywordId })
+            else await createNegativeKeywordCampaignLocal({ externalCampaignId: dst.campaign.externalCampaignId, keywordText: keyword, matchType: t, externalTargetId: res.externalNegativeKeywordId })
+            confirmed += 1
+            outcomes.push({ adGroupId: dst.id, matchType, level, externalTargetId: res.externalNegativeKeywordId, reachedAmazon: true })
+          }
+        }
+      }
+      return {
+        type: action.type,
+        // Skips are policy working; a write that did not land is a failure. All-skips is a clean run.
+        ok: failedWrites === 0,
+        error: failedWrites > 0 ? `${failedWrites} negation${failedWrites === 1 ? '' : 's'} did not reach Amazon — see outcomes` : undefined,
+        output: { keyword, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes },
+      }
+    }
+
     /**
      * HP1 — a negate-at-source coupled to a MAPPED harvest rule must not fire outside the
      * mapping. The paired `promote_to_exact` skips terms whose source ad group is not in the

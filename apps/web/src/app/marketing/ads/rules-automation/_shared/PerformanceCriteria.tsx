@@ -7,6 +7,7 @@
  * (Config lifted verbatim from RuleBuilder.tsx; the THEN-action lives with each caller.)
  */
 import { X, Plus } from 'lucide-react'
+import { WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import { H10Select } from '../../campaigns/FilterDropdown'
 
 export interface Condition {
@@ -63,6 +64,9 @@ export function PcWindowNote({ slug }: { slug: string }) {
       {/* HP1 — the invisible floor, made visible: the emitter only surfaces terms already at
           ≥2 orders, so conditions can tighten that bar but never lower it. */}
       {slug === 'keyword-harvesting' && ' Search terms surface only once they have at least 2 orders in the window — conditions can raise that bar, never lower it.'}
+      {/* NEG-P2 — the same honesty for the wasting emitter; the numbers come from the SAME
+          declaration the emitter reads (WASTING_FLOOR), so this sentence cannot drift. */}
+      {slug === 'negative-targeting' && ` Search terms surface only once they have zero orders on at least ${WASTING_FLOOR.minClicks} clicks and €${(WASTING_FLOOR.minSpendCents / 100).toFixed(0)} of spend in the window — conditions can raise that bar, never lower it.`}
     </p>
   )
 }
@@ -101,7 +105,15 @@ export const pcDefaultCondition = (slug: string): Condition =>
         : slug === 'keyword-tracker' ? { metric: 'Organic Rank', op: 'gt', value: '' }
           : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' }
             : { metric: 'Sales', op: 'eq', value: '0' }
-export const pcDefaultGroup = (slug: string): CriteriaGroup => ({ conditions: [pcDefaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE })
+export const pcDefaultGroup = (slug: string): CriteriaGroup => ({
+  // NEG-P2 — H10's negative default is a PAIR ("Sales = 0 AND Clicks >= 20"); ours pairs the
+  // zero with the emitter's own click floor so the default rule is exactly satisfiable.
+  conditions: slug === 'negative-targeting'
+    ? [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '5' }]
+    : [pcDefaultCondition(slug)],
+  lookback: pcWindowLabel(slug),
+  exclude: PC_TRUTH_EXCLUDE,
+})
 
 /** The criteria rows (metric · operator · value+unit, AND-joined) + lookback/exclude windows. */
 export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvesting' }: { value: CriteriaGroup; onChange: (g: CriteriaGroup) => void; slug?: string }) {

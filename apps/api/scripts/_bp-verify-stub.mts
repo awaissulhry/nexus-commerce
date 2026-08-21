@@ -166,6 +166,10 @@ createServer(async (req, res) => {
       const { listHarvestPathways } = await import('../src/services/advertising/harvest-pathways.service.js')
       return json(200, await listHarvestPathways())
     }
+    if (url === '/api/advertising/negatives/strip' && req.method === 'GET') {
+      const { getNegativesStrip } = await import('../src/services/advertising/negatives.service.js')
+      return json(200, await getNegativesStrip())
+    }
     if (url === '/api/advertising/harvest-cohort' && req.method === 'GET') {
       const { getHarvestCohort } = await import('../src/services/advertising/harvest-cohort.service.js')
       return json(200, await getHarvestCohort({ market: 'all', outcome: null, actor: null, since: null, q: null } as never))

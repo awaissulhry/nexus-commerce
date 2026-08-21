@@ -39,7 +39,7 @@ import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-s
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
-import { BID_WINDOW_MAX, BID_WINDOW_MIN, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
+import { BID_WINDOW_MAX, BID_WINDOW_MIN, TRIGGER_WINDOW, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 
 /**
@@ -1014,9 +1014,11 @@ async function buildSearchTermWastingContexts() {
     })
     return terms
       .map((t) => ({ t, spend: microsToCents(t._sum.costMicros), clicks: t._sum.clicks ?? 0 }))
-      .filter((x) => x.spend >= 300 && x.clicks >= 5)
+      // NEG-P3 — the floor comes from the shared declaration the builder's note and the tab's
+      // strip also read; a literal here would let the three drift apart silently.
+      .filter((x) => x.spend >= WASTING_FLOOR.minSpendCents && x.clicks >= WASTING_FLOOR.minClicks)
       .sort((a, b) => b.spend - a.spend)
-      .slice(0, 300)
+      .slice(0, WASTING_FLOOR.topPerTick)
       .map(({ t, spend, clicks }) => searchTermContext('SEARCH_TERM_WASTING', t.marketplace, {
         query: t.query, externalCampaignId: t.campaignId, externalAdGroupId: t.adGroupId,
         spendCents: spend, clicks, orders: 0, impressions: t._sum.impressions ?? 0,

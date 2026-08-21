@@ -101,7 +101,9 @@ const RANK_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 'pla
   ACOS: { field: 'adTarget.acos', conv: 'frac' },
   Spend: { field: 'adTarget.spendCents', conv: 'cents' },
 }
-const NEG_SCOPE: Record<string, string> = { adgroup: 'AD_GROUP', campaign: 'CAMPAIGN', both: 'CAMPAIGN' }
+// NEG-P1 — the builder's Negation Level, honoured in FULL. 'both' used to map to CAMPAIGN
+// silently; now every selected level is written. First entry doubles as the display scope.
+const NEG_LEVELS: Record<string, string[]> = { adgroup: ['AD_GROUP'], campaign: ['CAMPAIGN'], both: ['AD_GROUP', 'CAMPAIGN'] }
 
 interface BuilderCond {
   metric?: string
@@ -647,10 +649,23 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
    * across blocks, so first-match IS the OR).
    */
   if (slug === 'negative-targeting') {
-    // SEARCH_TERM_WASTING context carries the query + campaign/adgroup; conditions gate on its metrics.
+    /**
+     * NEG-P1 — the WHOLE form rides into execution, exactly HP1's move one tab over. The stored
+     * shape is the harvest wire's shape, so `normalizeHarvestWire` reads it verbatim: the ad-group
+     * mapping matrix (look-set gates which contexts may act; create-ticks decide what is created
+     * where — E → negative exact, P → negative phrase, product → negative product target), the
+     * Search Terms contains-filters, the brand/competitor filters ("never negate your own brand
+     * terms" is a WRITE-PATH promise now, not copy) and dedupe. `levels` honours the Negation
+     * Level select including 'both' (previously a silent CAMPAIGN). Default = adgroup, matching
+     * the builder's default and the measured landing rate (ad-group 99% vs campaign 0 of 20).
+     */
+    const wire = normalizeHarvestWire(a0)
+    const levels = NEG_LEVELS[String(a0.negationLevel ?? 'adgroup')] ?? ['AD_GROUP']
     const actions: Array<Record<string, unknown>> = [{
       type: 'add_negative_exact',
-      scope: NEG_SCOPE[(a0.negationLevel as string) ?? 'campaign'] ?? 'CAMPAIGN',
+      scope: levels[0],
+      levels,
+      negative: wire,
       protectConverting: a0.protectConverting !== false,
       protectDays: a0.protectDays != null ? num(a0.protectDays) : 30,
       reason: `Negative rule ${rule.id}`,

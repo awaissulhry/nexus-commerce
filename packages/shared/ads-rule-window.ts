@@ -107,6 +107,15 @@ export const BID_WINDOW_MAX = 90
  */
 export const HARVEST_DEFAULTS = { windowDays: 60, minSpendCents: 1000, minOrders: 2 } as const
 
+/**
+ * NEG-P3 — the SEARCH_TERM_WASTING emitter's floor, declared ONCE. Three readers: the
+ * evaluator's context builder (the floor itself), the builder's window note (the sentence that
+ * states it), and the Negative Targeting strip (the candidate count an operator sees). Before
+ * this the numbers lived as literals in the evaluator, and any copy stating them was one edit
+ * away from lying.
+ */
+export const WASTING_FLOOR = { minSpendCents: 300, minClicks: 5, topPerTick: 300 } as const
+
 /** Amazon's still-settling tail, re-exported so a caller needs one import to explain a window. */
 export { PROVISIONAL_DAYS }
 

@@ -21,10 +21,12 @@
  * UI removes no protection — but it does remove the place the operator edits the whitelist from
  * this page, which is why the register names Control Room as its home rather than "later".
  */
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
+import { getBackendUrl } from '@/lib/backend-url'
 
 const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
@@ -32,6 +34,19 @@ export function NegativeRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
   const market = params.get('market') || 'all'
+  // NEG-P3 — the HP4-pattern strip: the account's negation posture from the server's own census
+  // (never recomposed client-side). On a failed read the strip is ABSENT, never fabricated.
+  const [strip, setStrip] = useState<{ negatives: number; blocking: number; candidates: number; wastedCents: number } | null>(null)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const j = await fetch(`${getBackendUrl()}/api/advertising/negatives/strip`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
+        if (alive && j && typeof j.negatives === 'number') setStrip(j)
+      } catch { /* absent, not fabricated */ }
+    })()
+    return () => { alive = false }
+  }, [])
 
   return (
     <div className="h10-rules-page">
@@ -52,6 +67,13 @@ export function NegativeRulesClient() {
         showChangeLog
       />
       <RulesTabs active="negative-targeting" />
+      {strip && (
+        <p className="h10-hv-cohortline">
+          <b>{strip.negatives.toLocaleString('en-IE')}</b> negatives · <b>{strip.blocking.toLocaleString('en-IE')}</b> actually blocking
+          {strip.candidates > 0 && <> · <b>{strip.candidates.toLocaleString('en-IE')}</b> wasting terms at the rule floor (€{(strip.wastedCents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in 30d)</>}
+          {' '}· rule output queues on <a className="h10-nt-open" href="/marketing/ads/suggestions">Suggestions</a> · protected terms live on <a className="h10-nt-open" href="/marketing/ads/rules-automation/control-room?tab=guardrails">Guardrails</a>
+        </p>
+      )}
       <RulesGrid
         tabKey="negative-targeting"
         noun="Negative Targeting Rule"

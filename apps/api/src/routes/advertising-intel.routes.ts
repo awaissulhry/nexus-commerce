@@ -387,6 +387,13 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // One call carries the resolved scope, the census over the FULL filtered set, the facet counts,
   // and the rows — so the page can state what it is showing without a second fetch, and no count
   // it renders is ever computed from a page of rows.
+  // NEG-P3 — the Negative Targeting tab's one-line strip. `grep -a`ed this file first:
+  // `/advertising/negatives/strip` appears nowhere else (a duplicate route is a boot crash).
+  fastify.get('/advertising/negatives/strip', async () => {
+    const { getNegativesStrip } = await import('../services/advertising/negatives.service.js')
+    return getNegativesStrip()
+  })
+
   fastify.get('/advertising/negatives', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     // `all` is accepted here and refused on the Keyword Tracker: everything this page counts is a

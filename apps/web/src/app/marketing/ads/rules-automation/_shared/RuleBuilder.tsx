@@ -17,7 +17,7 @@ import { ruleTypeBySlug } from './ruleTypes'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
-import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
+import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 import { emitAdsChange } from './adsBus'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
@@ -58,6 +58,27 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
       name: 'Volume harvest, noise-guarded',
       desc: '≥2 orders with ≥10 clicks — enough evidence before a new target spends',
       payload: { conditions: [{ conditions: [{ metric: 'PPC Orders', op: 'gte', value: '2' }, { metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'set', value: '' } }] },
+    },
+  ],
+  // NEG-P3 — every negative starter pairs its zero with an evidence floor, and none ships a
+  // bare contains-list: a "blacklist" starter with an empty terms box would negate everything
+  // the emitter surfaces. The blacklist RECIPE is: add your terms under Search Terms (contains)
+  // and keep any starter's criteria — the wire honours the list end-to-end since NEG-P1.
+  'negative-targeting': [
+    {
+      name: 'Wasted spend',
+      desc: 'Zero orders on ≥5 clicks and ≥€3 spend — the floor at which terms surface, negated as they appear',
+      payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '5' }, { metric: 'Spend', op: 'gte', value: '3' }], action: { op: 'set', value: '' } }] },
+    },
+    {
+      name: 'High-evidence bleeders',
+      desc: 'Zero orders on ≥10 clicks and ≥€10 spend — proven waste before any block',
+      payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '10' }, { metric: 'Spend', op: 'gte', value: '10' }], action: { op: 'set', value: '' } }] },
+    },
+    {
+      name: 'Click sink, no sales',
+      desc: 'Zero orders on ≥20 clicks — H10’s own default bar (Sales = 0, Clicks ≥ 20)',
+      payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '20' }], action: { op: 'set', value: '' } }] },
     },
   ],
   bid: [
@@ -271,7 +292,9 @@ let _bid = 1
 interface CriteriaGroup { id: number; conditions: Condition[]; lookback: string; exclude: string; budgetOp?: string; budgetValue?: string; placeTarget?: string } // placeTarget = placement THEN target
 let _cid = 1
 const defaultCondition = pcDefaultCondition
-const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, conditions: [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
+// NEG-P2 — the default rows come from pcDefaultGroup (one source): negative-targeting starts as
+// the PAIR "Sales = 0 AND Clicks ≥ 5" (H10's default is a pair too; ours pairs the emitter floor).
+const newGroup = (slug: string): CriteriaGroup => ({ id: _cid++, ...pcDefaultGroup(slug), budgetOp: 'set', budgetValue: '', placeTarget: 'tos' })
 
 // per-type Rule Setup config — Negative vs Positive/Harvest differ in heading, copy,
 // targets-panel title, and whether Harvest's "Ad Group Mapping" button + info banner show.
@@ -510,14 +533,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const clearCampaigns = () => setSelCampaigns([])
   // load saved templates for this rule type (backend may not be live yet — fail soft)
   useEffect(() => {
-    if (!isCampaign && !isHarvest) return
+    if (!isCampaign && !isHarvest && !isNegative) return
     let alive = true
     ;(async () => {
       try { const j = await fetch(`${getBackendUrl()}/api/advertising/rule-templates?type=${slug}`).then((r) => r.json())
         if (alive && Array.isArray(j?.items)) setTemplates(j.items) } catch { /* templates backend not live yet */ }
     })()
     return () => { alive = false }
-  }, [isCampaign, isHarvest, slug])
+  }, [isCampaign, isHarvest, isNegative, slug])
   // Bid keeps lookback per-criteria (group[0] is canonical for the template); Budget keeps its global lookback.
   const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, schedule: { frequency, everyN, interval, onDay, time, timezone } })
   const saveTemplate = async () => {
@@ -1008,7 +1031,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             <section id="rb-criteria" className={`h10-rb-sec${locked?.level === 'meta' ? ' held' : ''}`} {...(locked?.level === 'meta' ? { inert: '' as unknown as boolean, 'aria-disabled': true } : {})}>
               <div className="h10-rb-crit-hd">
                 <div className="t"><h2>Criteria</h2><p className="h10-rb-desc">Set up the performance criteria and actions</p></div>
-                {(isCampaign || isHarvest) && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> Apply Template</button>}
+                {(isCampaign || isHarvest || isNegative) && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> Apply Template</button>}
               </div>
 
               {groups.map((g, gi) => (
@@ -1267,7 +1290,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 {isNegative && (
                 <div className="advblock">
                   <b>Negation Level</b>
-                  <p>Where to place the negative keyword / product target when this rule fires</p>
+                  {/* NEG-P2 — the landing rate is a measured fact, not a preference: ad-group
+                      negatives confirm at Amazon ~99%; campaign-level ones have historically
+                      confirmed 0 of 20. The select stays free; the fact rides beside it. */}
+                  <p>Where to place the negative keyword / product target when this rule fires. Ad-group negatives are the ones that demonstrably land at Amazon in this account; campaign-level negatives have historically never confirmed.</p>
                   <H10Select width={280} options={[{ value: 'adgroup', label: 'Ad Group' }, { value: 'campaign', label: 'Campaign' }, { value: 'both', label: 'Ad Group + Campaign' }]} value={negationLevel} onChange={(v) => setNegationLevel(v as 'adgroup' | 'campaign' | 'both')} ariaLabel="Negation level" />
                 </div>
                 )}
@@ -1311,7 +1337,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <div className="h10-rb-card control">
                 {surface === 'search-terms' && (<div className="h10-rb-dedupe">
                   <button type="button" className={`h10-bktoggle ${dedupe ? 'on' : ''}`} role="switch" aria-checked={dedupe} aria-label="Do not suggest existing search terms" onClick={() => setDedupe((v) => !v)}><span /></button>
-                  <span>Select to NOT suggest any search terms that already exist with the same match type in the campaigns from this rule group</span>
+                  {/* NEG-P2 — one toggle, two truths: for a negative rule the duplicate being
+                      skipped is an existing NEGATIVE at the chosen level, not a keyword. */}
+                  <span>{isNegative
+                    ? 'Select to NOT re-negate any search term that is already negated with the same match type at the chosen level in the ad groups from this rule group'
+                    : 'Select to NOT suggest any search terms that already exist with the same match type in the campaigns from this rule group'}</span>
                 </div>)}
                 {isNegative && (
                 <div className="h10-rb-dedupe">
@@ -1340,7 +1370,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             <div className="h10-rb-foot">
               <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
               <span className="grow" />
-              {(isCampaign || isHarvest) && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
+              {(isCampaign || isHarvest || isNegative) && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
               <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
             </div>
           </div>

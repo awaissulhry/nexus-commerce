@@ -47,6 +47,7 @@
  */
 
 import prisma from '../../db.js'
+import { WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 // One normalisation for a term across the whole codebase — the same function NEG.0's protection
 // compares with, so "the term this page shows" and "the term the gate protects" cannot drift.
 import { normaliseNegTerm } from './ads-protect-converting.js'
@@ -950,4 +951,30 @@ export async function getTermContext(req: TermContextRequest): Promise<TermConte
       scopeIsWholeAccount,
     },
   }
+}
+
+/**
+ * NEG-P3 — the Negative Targeting tab's strip: the account's negation posture in one line.
+ * `candidates` counts terms at the SAME floor the SEARCH_TERM_WASTING emitter applies
+ * (WASTING_FLOOR — one declaration, three readers), so the number the operator sees is exactly
+ * the number a new rule could act on. Cheap by construction: two counts + one groupBy.
+ */
+export async function getNegativesStrip(): Promise<{ negatives: number; blocking: number; candidates: number; wastedCents: number }> {
+  const since = new Date(Date.now() - 32 * 864e5)
+  const until = new Date(Date.now() - 2 * 864e5)
+  const [negatives, blocking, terms] = await Promise.all([
+    prisma.adTarget.count({ where: { isNegative: true } }),
+    // "blocking" = the intersection the census pinned: target ENABLED ∧ campaign ENABLED ∧ confirmed at Amazon.
+    prisma.adTarget.count({ where: { isNegative: true, status: 'ENABLED', externalTargetId: { not: null }, adGroup: { campaign: { status: 'ENABLED' } } } }),
+    prisma.amazonAdsSearchTerm.groupBy({
+      by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
+      where: { date: { gte: since, lte: until } },
+      _sum: { orders7d: true, clicks: true, costMicros: true },
+      having: { orders7d: { _sum: { equals: 0 } } },
+    }),
+  ])
+  const cands = terms
+    .map((t) => ({ spend: Math.round(Number(t._sum.costMicros ?? 0) / 10000), clicks: t._sum.clicks ?? 0 }))
+    .filter((x) => x.spend >= WASTING_FLOOR.minSpendCents && x.clicks >= WASTING_FLOOR.minClicks)
+  return { negatives, blocking, candidates: cands.length, wastedCents: cands.reduce((s, c) => s + c.spend, 0) }
 }

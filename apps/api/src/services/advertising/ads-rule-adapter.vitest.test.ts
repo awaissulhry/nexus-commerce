@@ -416,6 +416,50 @@ describe('HP1 — the harvest builder form survives into execution', () => {
     expect((t.actions[0] as Record<string, unknown>).scope).toBe('AD_GROUP')
   })
 
+  // ── NEG-P1 — the negative rule carries its WHOLE form ──────────────────────
+  const negativeRule = (a0: Record<string, unknown> = {}) => ({
+    id: 'negp1',
+    actions: [{
+      type: 'negative-targeting',
+      negationLevel: 'adgroup',
+      protectConverting: true,
+      protectDays: 30,
+      dedupe: true,
+      searchTerms: [{ term: 'moto', op: 'contains' }],
+      filters: { brandExclude: ['xavia'], competitorOnly: false },
+      mappings: [{ groups: [
+        { id: 'src1', look: true, types: { P: false, E: false, product: false } },
+        { id: 'dst1', look: false, types: { P: true, E: true, product: false } },
+      ] }],
+      ...a0,
+    }],
+    conditions: [{ match: 'all', conditions: [{ metric: 'Sales', op: 'eq', value: '0' }] }],
+  })
+
+  it('the negative action carries the wire: mappings, term/brand filters and dedupe', () => {
+    const t = maybeTranslateAdsRule(negativeRule())!
+    const neg = t.actions[0] as Record<string, unknown>
+    expect(neg.type).toBe('add_negative_exact')
+    const wire = neg.negative as { blocks: unknown; filters: Record<string, unknown>; dedupe: boolean }
+    expect(wire.blocks).toEqual([{ look: ['src1'], create: [{ adGroupId: 'dst1', types: ['PHRASE', 'EXACT'] }] }])
+    expect(wire.filters).toEqual({ containsAny: ['moto'], notContains: [], brandExclude: ['xavia'], competitorOnly: false })
+    expect(wire.dedupe).toBe(true)
+    expect(neg.protectConverting).toBe(true)
+  })
+
+  it("every Negation Level is honoured — 'both' writes BOTH (it used to silently become CAMPAIGN)", () => {
+    expect((maybeTranslateAdsRule(negativeRule())!.actions[0] as Record<string, unknown>).levels).toEqual(['AD_GROUP'])
+    expect((maybeTranslateAdsRule(negativeRule({ negationLevel: 'campaign' }))!.actions[0] as Record<string, unknown>).levels).toEqual(['CAMPAIGN'])
+    const both = maybeTranslateAdsRule(negativeRule({ negationLevel: 'both' }))!.actions[0] as Record<string, unknown>
+    expect(both.levels).toEqual(['AD_GROUP', 'CAMPAIGN'])
+    expect(both.scope).toBe('AD_GROUP') // display scope = the first level
+  })
+
+  it("an absent Negation Level defaults to AD_GROUP — the builder's default and the level that lands", () => {
+    const t = maybeTranslateAdsRule(negativeRule({ negationLevel: undefined }))!
+    expect((t.actions[0] as Record<string, unknown>).levels).toEqual(['AD_GROUP'])
+  })
+
   it('an unmapped rule stays account-wide (blocks null) and fixed bids still ride', () => {
     const t = maybeTranslateAdsRule(harvestRule({ mappings: [], bid: { mode: 'fixed', value: '0.65' } }))!
     const promote = t.actions[0] as Record<string, unknown>
