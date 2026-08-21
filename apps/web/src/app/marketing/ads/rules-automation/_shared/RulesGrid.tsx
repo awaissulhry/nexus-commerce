@@ -91,6 +91,7 @@ import {
   RULE_TAB_THRESHOLDS, THRESHOLD_SPEC, readThreshold, readThresholds, thresholdClauses, defaultClauses, eur,
   columnedConditionIndexes, type ThresholdKey, type ThresholdRead, type RuleCondition,
 } from './ruleThresholds'
+import { PC_METRIC_UNIT } from './PerformanceCriteria'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { RULE_TYPES } from './ruleTypes'
@@ -220,14 +221,35 @@ const asPercent = (n: number): string => {
 }
 const isRatioField = (raw: string) => /acos|ctr|cvr|utilization|roas/i.test(raw)
 
-/** One stored condition → one readable clause, in the units the field is stored in. */
+/**
+ * One stored condition → one readable clause, in the units the field is stored in.
+ *
+ * 🔴 A BUILDER leaf names its metric ("Spend"), not a field path ("adTarget.spendCents"), so the
+ * path-shaped tests below cannot read its unit: `/Cents$/` misses, `isRatioField` misses, and the
+ * clause printed a bare number — measured on prod 2026-08-21 as **"Spend ≥ 5"** on the armed budget
+ * pilot, beside a correctly-suffixed "Budget Utilization ≤ 10%" (that one only works because
+ * `isRatioField` happens to match the word "utilization"). Sales, CPC and Current Bid were wrong
+ * the same way. A number on screen in no unit is exactly what the operator has ruled out.
+ *
+ * `PC_METRIC_UNIT` is the builder's OWN map (metric → 'eur' | 'pct' | ''), so the cell and the input
+ * the operator typed into cannot disagree.
+ *
+ * ⚠ Builder values are stored in DISPLAY units — "5" means €5, "10" means 10% — while `money()` is
+ * the grid's ONE euro formatter and takes CENTS. So a builder euro is multiplied by 100 on the way
+ * in rather than formatted separately: the first cut of this fix printed **"Spend ≥ €0.05"**, which
+ * is a different wrong answer from the missing "€" it replaced. `asPercent` needs no conversion —
+ * it already reads a number above 1 as a whole percent.
+ */
 function clause(c: { field?: string; metric?: string; op?: string; value?: unknown }): string {
   const raw = String(c.field ?? c.metric ?? '')
   if (!raw) return ''
   const label = FIELD_LABEL[raw] ?? raw.split('.').pop() ?? raw
   const n = typeof c.value === 'number' ? c.value : Number(c.value)
+  const builderUnit = c.metric != null && c.field == null ? PC_METRIC_UNIT[String(c.metric)] : undefined
   const v = Number.isFinite(n)
-    ? (/Cents$/i.test(raw) ? money(n)
+    ? (builderUnit !== undefined
+      ? (builderUnit === 'eur' ? money(Math.round(n * 100)) : builderUnit === 'pct' ? asPercent(n) : String(n))
+      : /Cents$/i.test(raw) ? money(n)
       : /roas/i.test(raw) ? String(n)
       : isRatioField(raw) ? asPercent(n)
       : String(n))
