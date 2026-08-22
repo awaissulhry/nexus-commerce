@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock} from 'lucide-react'
+import { X, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock, AlertTriangle} from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -665,6 +665,61 @@ export function RuleBuilder({ slug }: { slug: string }) {
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
         }]
   ), [slug, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, protectDays, negationLevel, isCampaign, selCampaigns, isBudget, budgetFloor, budgetCeiling, isPlacement, placeFloor, placeCeiling, isBidLike, bidFloor, bidCeiling, isBid, lookbackDays, blocks])
+  /**
+   * ── KT-P1 (2026-08-22) — the rank feed's own state, because a Keyword Tracker rule is inert
+   * without it ───────────────────────────────────────────────────────────────────────────────
+   *
+   * `KeywordRank` is EMPTY on production (0 rows; its only writer is a manual import route that
+   * nothing calls), so `buildKeywordRankBidContexts` returns `[]` on every tick and this rule type
+   * has produced 0 contexts and 0 executions in the account's history. The builder nonetheless
+   * opened on `IF Organic Rank > __` and stated a settling window over the number.
+   *
+   * This is a live reading, not a constant: the moment a feed lands, the banner disappears and the
+   * rule becomes creatable with no code change. `null` = not asked yet, and the banner does not
+   * render until the answer is in — an empty feed and an unanswered fetch must not look alike.
+   */
+  const [rankFeed, setRankFeed] = useState<{ rows: number; keywords: number; markets: number; newestCapturedAt: string | null; coveredTargets: number; totalTargets: number } | null>(null)
+  /** Set when the held Create button is clicked, so a control that refuses can say why. */
+  const [rankHeldNote, setRankHeldNote] = useState(false)
+  const rankNoteRef = useRef<HTMLParagraphElement>(null)
+  /**
+   * 🔴 KT-P1 — scroll to the ANSWER, and only once it exists.
+   *
+   * The first cut called `scrollIntoView` on the Control section inside the click handler. Measured
+   * on the rig: the note rendered at y=2491 in a 962px viewport and the scroller moved 41px, so
+   * clicking the top Create button looked like it did NOTHING — the button greyed, nothing moved,
+   * and the explanation sat 2,500px below the fold. Two reasons, and both had to go: the handler
+   * runs BEFORE React has rendered the note, and the target was a different element from the one
+   * the operator needs to read.
+   *
+   * An effect keyed on the flag runs after commit, so the node is guaranteed to exist, and it
+   * targets the note itself. `block: 'center'` rather than `end` because the footer button is
+   * already beside it — a refusal must never be a control that appears to do nothing.
+   *
+   * 🔴 `behavior: 'auto'`, deliberately, and do not "improve" it back to `'smooth'`. Measured on
+   * the rig against this exact node: inside `.h10-rb-body` (the builder's own `overflow: auto`
+   * scroller) a SMOOTH `scrollIntoView` is a silent no-op — `scrollTop` stayed at 0 across a
+   * 1.2s wait, while the same call with the default behaviour moved it to 1735.5 immediately.
+   * `prefers-reduced-motion` is off and `scroll-behavior` computes to `auto`, so nothing on the
+   * page explains it; it simply does not happen here. A refusal that depends on an animation
+   * which silently declines to run is a control that appears to do nothing — the defect this
+   * effect exists to fix.
+   */
+  useEffect(() => {
+    if (!rankHeldNote) return
+    rankNoteRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' })
+  }, [rankHeldNote])
+  useEffect(() => {
+    if (!isRank) return
+    let live = true
+    fetch(`${getBackendUrl()}/api/advertising/keyword-tracker/feed-health`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live && j && typeof j.rows === 'number') setRankFeed(j) })
+      .catch(() => { /* leave null — silence is not "empty" */ })
+    return () => { live = false }
+  }, [isRank])
+  /** 🔴 No rank has ever been ingested ⇒ any rule built here would match nothing, forever. */
+  const rankBlocked = isRank && rankFeed != null && rankFeed.rows === 0
   const [preview, setPreview] = useState<{
     open: boolean; loading: boolean
     terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null; marketplace?: string | null; utilPct?: number | null; clamped?: boolean
@@ -673,6 +728,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
       concentrationPct?: number | null
       /** The handler REFUSED this one, naming the signal it lacked. A refusal is a row, not an omission. */
       refused?: string
+      /** KT-P2 — rank rows. null = never observed; NEVER rendered as 0. */
+      rankDelta?: number | null
       /**
        * 'flag' = carries `suppressedFromBidCents`; 'bid' = ≤3¢ with no flag. Both are off-switches.
        *
@@ -698,6 +755,17 @@ export function RuleBuilder({ slug }: { slug: string }) {
       eligible: number; notEnabled: number; selectedTargets: number
       suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
       periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string }>
+    } | null
+    /**
+     * KT-P2 — the rank census, plus the two facts only this tab has to state: the state of the
+     * FEED (so "nothing matched" and "nothing was measured" can be told apart) and how many of the
+     * matched keywords are deliberately suppressed (`bid_apply` has no suppression guard).
+     */
+    rank?: {
+      windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
+      suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
+      feed: { rows: number; keywords: number; markets: number; newestCapturedAt: string | null; coveredTargets: number; totalTargets: number }
+      readAt: string
     } | null
     error?: string
   } | null>(null)
@@ -804,6 +872,70 @@ export function RuleBuilder({ slug }: { slug: string }) {
       }
       return
     }
+    /**
+     * 🔴 KT-P2 (2026-08-22) — Keyword Tracker previews by RUNNING THE ENGINE, not by arithmetic.
+     *
+     * What the browser-side branch below rendered for `IF Organic Rank > 50 THEN Set Bid €0.80`
+     * over 70 campaigns, measured on prod: **100 rows, every one a green €0.80**, against a true
+     * match count of **zero**. It applied no criteria; 90 of those 100 rows were entity kinds a
+     * rank rule can never touch (65 ASIN product targets, 15 auto-targeting expressions, audiences
+     * and categories — the context selects `kind: 'KEYWORD'`); deliberately suppressed €0.02
+     * targets were shown being raised 40× with no warning; and its feed truncated at 1,500 of
+     * 5,218 targets while reporting `count` as the page size.
+     *
+     * `/automation-rules/preview` runs the real contexts, the real scope, the real translation, the
+     * real first-matching-block selection and `bid_apply` itself in dryRun — the same five stages
+     * Budget, Placement and SOV go through ([[reference_preview_must_run_the_engine]]).
+     */
+    if (isRank) {
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actions: previewActions(), conditions: previewConditions(), scopeMarketplace: scopeMarket && scopeMarket !== 'all' ? scopeMarket : null }),
+        })
+        const j = await r.json().catch(() => null)
+        if (!r.ok || !j?.ok) {
+          setPreview({ open: true, loading: false, terms: [], rank: null, error: j?.untranslatable?.length
+            ? `No engine signal exists for: ${j.untranslatable.join(', ')}. Remove those conditions — the rule could not evaluate as written.`
+            : 'Preview is unavailable right now.' })
+          return
+        }
+        setPreview({
+          open: true, loading: false,
+          terms: (j.rows ?? []).map((x: { keyword: string; marketplace: string | null; organicRank: number | null; sponsoredRank: number | null; rankDelta: number | null; currentEur: number; proposedEur: number; suppressed: 'flag' | 'bid' | null; campaignSuppressed: boolean }) => ({
+            term: x.keyword, marketplace: x.marketplace,
+            organicRank: x.organicRank, sponsoredRank: x.sponsoredRank, rankDelta: x.rankDelta,
+            current: x.currentEur, proposed: x.proposedEur,
+            suppressed: x.suppressed, campaignSuppressed: x.campaignSuppressed,
+          })),
+          rank: {
+            windowDays: j.windowDays, selected: j.selected, measurable: j.measurable, inScope: j.inScope,
+            matched: j.matched, noChange: j.noChange, suppressedMatched: j.suppressedMatched,
+            suppressedUnflaggedMatched: j.suppressedUnflaggedMatched,
+            campaignSuppressedMatched: j.campaignSuppressedMatched, feed: j.feed, readAt: j.readAt,
+          },
+        })
+      } catch {
+        setPreview({ open: true, loading: false, terms: [], rank: null, error: 'Preview is unavailable right now.' })
+      }
+      return
+    }
+    /**
+     * 🔴 SOV-P2 — Share of Voice joins Budget, Placement and Keyword Tracker on the server preview,
+     * and leaves the browser-arithmetic path below for the same reasons KT-P1 documents above.
+     *
+     * Clicked on prod before this change, on `DE_Auto_Close` with `IF Share of Voice < 5% → Set Bid
+     * €0.75`, the old path showed FOUR rows — SEARCH_CLOSE_MATCH, SEARCH_LOOSE_MATCH,
+     * PRODUCT_COMPLEMENTS, PRODUCT_SUBSTITUTES — every one of them `kind: 'AUTO'`, which
+     * `buildSovBidContexts` can never select, three of them PAUSED; and it omitted both of the
+     * campaign's real KEYWORD targets because `/advertising/targets` has no `orderBy` and 1,655 of
+     * the account's 3,155 positive targets fall outside its 1,500-row page. It applied no criteria
+     * and read only `groups[0]`.
+     *
+     * `/automation-rules/preview` runs the real contexts, scope, translation, first-matching-block
+     * selection and `bid_apply` in dryRun ([[reference_preview_must_run_the_engine]]).
+     */
     if (isBidLike) {
       // Real keyword-level preview: pull the positive targets in the selected campaigns and show
       // the new bid each would get when the rule fires (THEN op + guardrail clamp). Read-only.
@@ -814,27 +946,30 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const floor = Math.max(0.02, Number(bidFloor) || 0.05) // never below Amazon's €0.02 hard minimum
       const ceil = bidCeiling.trim() ? Number(bidCeiling) : Infinity
       const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
+      /**
+       * KT-P2 — the rank half of this branch is GONE, not left inert.
+       *
+       * Keyword Tracker returns above, through the engine, so the `isRank` fetch of
+       * `/keyword-ranks`, the `rankMap` join and the two rank columns built here were unreachable
+       * code that still described a second way of answering the same question. Leaving them would
+       * have re-created the drift the engine-backed preview exists to prevent, and the next reader
+       * would not know which one ran ([[reference_preview_must_run_the_engine]]).
+       *
+       * ⚠ What remains is BID and SOV, and it still carries the defects KT-P2 measured: no criteria
+       * are applied, and 90% of the rows on this account are entity kinds a keyword rule cannot
+       * touch. Those two tabs belong to their own sessions; recorded, not silently half-fixed.
+       */
       try {
         const selIds = new Set(selCampaigns.map((c) => c.id))
-        // Keyword Tracker also shows each keyword's current organic/paid rank beside the bid — pull
-        // the latest ranks (KeywordRank backend) in parallel and match by keyword text + marketplace.
-        const [targetsJson, ranksJson] = await Promise.all([
-          fetch(`${getBackendUrl()}/api/advertising/targets?limit=1500`).then((r) => r.json()).catch(() => ({})),
-          isRank ? fetch(`${getBackendUrl()}/api/advertising/keyword-ranks?limit=2000`).then((r) => r.json()).catch(() => ({})) : Promise.resolve({}),
-        ])
+        const targetsJson = await fetch(`${getBackendUrl()}/api/advertising/targets?limit=1500`).then((r) => r.json()).catch(() => ({}))
         const raw = (Array.isArray(targetsJson?.rows) ? targetsJson.rows : []) as Array<Record<string, unknown>>
         const mine = raw.filter((t) => selIds.has(String(t.campaignId)))
-        const rankMap = new Map<string, { organicRank: number | null; sponsoredRank: number | null }>()
-        if (isRank) for (const it of (Array.isArray(ranksJson?.items) ? ranksJson.items : []) as Array<Record<string, unknown>>) {
-          rankMap.set(`${String(it.keyword ?? '').trim().toLowerCase()}|${String(it.marketplace ?? '')}`, { organicRank: it.organicRank != null ? Number(it.organicRank) : null, sponsoredRank: it.sponsoredRank != null ? Number(it.sponsoredRank) : null })
-        }
         // Auto-targeting rows carry no keyword text but still have a bid the rule adjusts — label by
         // match type / kind so they're not silently dropped.
         const label = (t: Record<string, unknown>) => String(t.text ?? '').trim() || String(t.matchType ?? '').trim() || (t.kind ? `${String(t.kind)} target` : 'Target')
         setPreview({ open: true, loading: false, terms: mine.slice(0, 100).map((t) => {
           const cur = Number(t.bidCents ?? 0) / 100
-          const rk = isRank ? rankMap.get(`${String(t.text ?? '').trim().toLowerCase()}|${String(t.marketplace ?? '')}`) : undefined
-          return { term: label(t), matchType: t.matchType ? String(t.matchType) : undefined, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100, organicRank: rk?.organicRank ?? null, sponsoredRank: rk?.sponsoredRank ?? null }
+          return { term: label(t), matchType: t.matchType ? String(t.matchType) : undefined, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100 }
         }) })
       } catch { setPreview({ open: true, loading: false, terms: [] }) }
       return
@@ -953,6 +1088,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
   // ── create the rule (POST /advertising/automation-rules — starts disabled + dry-run) ──
   const submit = useCallback(async () => {
     if (!valid || creating) return
+    // KT-P1 — the button is `held` rather than disabled, so the refusal is enforced here too.
+    if (rankBlocked) { setRankHeldNote(true); return }
     setCreating(true)
     try {
       /**
@@ -1035,7 +1172,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       // RT.1 — a saved rule moves every tab badge and every page's rule section.
       emitAdsChange('ads.rule.changed')
     } finally { setCreating(false) }
-  }, [valid, creating, locked, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, maxExecs, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, lookbackDays, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
+  }, [valid, creating, rankBlocked, locked, ruleName, rt, slug, groups, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, isHarvest, isNegative, isBudget, isBid, isBidLike, isPlacement, isCampaign, advLookback, selCampaigns, budgetFloor, budgetCeiling, maxAdSpend, maxWrites, maxExecs, scopeMarket, placeFloor, placeCeiling, bidFloor, bidCeiling, lookbackDays, protectConverting, protectDays, negationLevel, searchTerms, frequency, everyN, interval, onDay, time, timezone, blocks, isEdit, ruleId, router])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -1136,7 +1273,13 @@ export function RuleBuilder({ slug }: { slug: string }) {
           {/* BP (2026-08-21) — H10's "Learn" video pill was here as a dead placeholder (no
               handler since the builder shipped); the operator chose removal over wiring it. */}
           <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
-          <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+          <button
+            type="button"
+            className={`h10-rb-create${rankBlocked ? ' held' : ''}`}
+            disabled={!rankBlocked && (!valid || creating)}
+            {...(rankBlocked ? { 'aria-disabled': true } : {})}
+            onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
+          >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
         </div>
       </header>
 
@@ -1199,6 +1342,24 @@ export function RuleBuilder({ slug }: { slug: string }) {
               </div>
               <p className="h10-rb-desc">{setup.desc}</p>
               {setup.banner && <div className="h10-rb-banner"><Info size={16} /><span>{setup.banner}</span></div>}
+              {/* 🔴 KT-P1 — the feed, stated before the operator fills in a rule that cannot run.
+                  Numbers are live (`/keyword-tracker/feed-health`); nothing here is a constant. */}
+              {rankBlocked && (
+                <div className="h10-rb-banner warn" role="status">
+                  <AlertTriangle size={16} />
+                  <span>
+                    <b>No keyword rank has ever been recorded, so this rule could not act.</b>{' '}
+                    Organic and paid rank come from the keyword-rank feed, and it is empty — 0 observations
+                    across 0 keywords, against {rankFeed?.totalTargets.toLocaleString('en-GB')} keyword targets
+                    in your campaigns. Amazon publishes no organic-position API, so this feed is filled by
+                    import; until it is, a Keyword Tracker rule would match nothing on every run.{' '}
+                    <b>Spend and ACOS are real</b> — but they reach this rule only through a keyword that has
+                    a rank observation, so today they cannot be used here either. A Bid rule measures the
+                    same two directly.
+                  </span>
+                </div>
+              )}
+
 
               {surface === 'search-terms' && !setupCollapsed && blocks.map((block, bi) => (
                 <MappingBlock
@@ -1578,28 +1739,62 @@ export function RuleBuilder({ slug }: { slug: string }) {
               </div>
             </section>
 
+            {/* KT-P1 — a held control that has been clicked must answer it.
+                🔴 ABOVE the footer, not inside it. Rendered as a flex item in `.h10-rb-foot`
+                (`display:flex; align-items:center`) it consumed the row and wrapped both buttons
+                onto two lines each — "Save / Template" and "Create / Rule" — so the refusal broke
+                the very controls it was explaining. Measured on the rig, not read from the diff. */}
+            {rankHeldNote && rankBlocked && (
+              <p className="h10-rb-heldnote ktp" role="status" ref={rankNoteRef}>
+                <AlertTriangle size={13} aria-hidden />
+                <span>
+                  This rule is not saved because it could never act: the keyword-rank feed holds no
+                  observations, so every run would match nothing. Nothing you can change on this form
+                  fixes that — the feed has to be filled first. To move bids on the evidence that{' '}
+                  <i>does</i> exist today, build a <b>Bid</b> rule (ACoS, spend, clicks, CPC, current
+                  bid) or a <b>Share of Voice</b> rule.
+                </span>
+              </p>
+            )}
             {/* footer */}
             <div className="h10-rb-foot">
               <button type="button" className="h10-rb-btn ghost" onClick={close}>Cancel</button>
               <span className="grow" />
               {(isCampaign || isHarvest || isNegative) && <button type="button" className="h10-rb-btn ghost" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</button>}
-              <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
+              <button
+            type="button"
+            className={`h10-rb-create${rankBlocked ? ' held' : ''}`}
+            disabled={!rankBlocked && (!valid || creating)}
+            {...(rankBlocked ? { 'aria-disabled': true } : {})}
+            onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
+          >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</button>
             </div>
           </div>
         </main>
       </div>
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
-          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isSov ? 'Share of Voice preview' : isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
+          <div className={`h10-rb-prev${isRank ? ' ktp' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isRank ? 'Keyword Tracker preview' : isSov ? 'Share of Voice preview' : isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
             <div className="ph"><b>{isSov ? 'Share of Voice Preview — current → proposed' : isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">{isSov ? (preview?.sov && preview.sov.matched > 0
+            <div className="psub">{isRank ? (preview?.rank && preview.rank.matched > 0
+              ? `Live, read-only: the ${preview.rank.matched} keyword${preview.rank.matched === 1 ? '' : 's'} in your ${preview.rank.selected} selected campaign${preview.rank.selected === 1 ? '' : 's'} that ${preview.rank.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against the latest rank observation for each keyword.`
+              : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isSov ? (preview?.sov && preview.sov.matched > 0
               ? `Live, read-only: the ${preview.sov.matched} keyword${preview.sov.matched === 1 ? '' : 's'} in your ${preview.sov.selected} selected campaign${preview.sov.selected === 1 ? '' : 's'} that ${preview.sov.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against Amazon’s own market share for each keyword.`
               : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? (preview?.budget && preview.budget.matched > 0
               ? `Live, read-only: the ${preview.budget.matched} of ${preview.budget.selected} selected campaigns that ${preview.budget.matched === 1 ? 'matches' : 'match'} these criteria right now, and the daily budget each would get. Evaluated by the rule engine over the last ${preview.budget.windowDays} settled days.`
               : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">{isSov ? (preview.error ? preview.error
+                : preview.terms.length === 0 ? <div className="pmsg">{isRank ? (preview.error ? preview.error
+                  /* 🔴 KT-P2 — five different reasons for an empty rank preview, and only one of
+                     them is "your criteria are too tight". Collapsing them into one sentence is
+                     what let a builder over an EMPTY FEED read as a working rule with no matches. */
+                  : !preview.rank || preview.rank.selected === 0 ? 'Add campaigns above to preview their keyword bids.'
+                  : preview.rank.feed.rows === 0 ? `No keyword rank has ever been recorded, so this rule matches nothing — and would match nothing on every run. The feed holds 0 observations against ${preview.rank.feed.totalTargets.toLocaleString('en-GB')} keyword targets in your campaigns. This is not a problem with your criteria.`
+                  : preview.rank.feed.coveredTargets === 0 ? `The rank feed holds ${preview.rank.feed.rows.toLocaleString('en-GB')} observation${preview.rank.feed.rows === 1 ? '' : 's'} across ${preview.rank.feed.keywords} keyword${preview.rank.feed.keywords === 1 ? '' : 's'}, but none of them matches a keyword you are bidding on, so no rule can reach any of your targets yet.`
+                  : preview.rank.measurable === 0 ? `${preview.rank.feed.coveredTargets} of your keyword targets have a rank observation, but none is in the campaigns you selected.`
+                  : preview.rank.inScope === 0 ? `${preview.rank.measurable} of your keywords have a rank observation, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
+                  : `No keyword matches these criteria right now — ${preview.rank.inScope} keyword${preview.rank.inScope === 1 ? ' was' : 's were'} measured against the latest rank observation. The rule is still valid; it will act when one does.`) : isSov ? (preview.error ? preview.error
                   /* 🔴 Five different reasons for an empty SOV preview, and only one of them is
                      "your criteria are too tight". "Never offered" and "considered and rejected"
                      must never share a sentence. */
@@ -1613,7 +1808,35 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   : preview.budget.inScope === 0 ? `${preview.budget.measurable} of your selected campaigns ${preview.budget.measurable === 1 ? 'has' : 'have'} spend in the window, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
                   : `No campaign matches these criteria right now — ${preview.budget.inScope} campaign${preview.budget.inScope === 1 ? ' was' : 's were'} measured over the last ${preview.budget.windowDays} settled days. The rule is still valid; it will act when one does.`) : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
                 : isRank
-                  ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Organic</span><span>Sponsored</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
+                  ? (<>
+                    {/* 🔴 KT-P2 — every rank cell is null-safe by construction: the context OMITS an
+                        unmeasured rank rather than sending 0, and `—` is the only thing a missing
+                        observation may render as. A `#0` or a `0` here would be a fabricated
+                        position ([[reference_sov_zero_vs_rounding]]). */}
+                    <div className="ptable ktp"><div className="pthr"><span>Keyword</span><span>Market</span><span>Organic</span><span>Sponsored</span><span>Δ</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}{t.suppressed ? <em className="pnote sup" title={t.suppressed === 'flag' ? 'This target carries a suppression flag — it was deliberately switched off, and this rule would switch it back on.' : 'This target bids at or under 3¢, this account’s convention for switching delivery off. It carries no flag, so only the bid says so.'}>{t.suppressed === 'flag' ? 'suppressed' : 'suppressed (2¢)'}</em> : null}</span><span>{t.marketplace ?? '—'}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span className={t.rankDelta != null ? (t.rankDelta > 0 ? 'up' : t.rankDelta < 0 ? 'down' : '') : ''}>{t.rankDelta != null ? (t.rankDelta > 0 ? `+${t.rankDelta}` : String(t.rankDelta)) : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>
+                    {preview.rank && (
+                      <p className="pfoot">
+                        {preview.rank.selected} campaign{preview.rank.selected === 1 ? '' : 's'} selected · {preview.rank.measurable} keyword{preview.rank.measurable === 1 ? '' : 's'} with a rank observation · {preview.rank.inScope} in scope · <b>{preview.rank.matched} match</b>
+                        {preview.rank.noChange > 0 ? <> · {preview.rank.noChange} of them already {preview.rank.noChange === 1 ? 'bids' : 'bid'} this, where this rule does nothing</> : null}
+                        {/* 🔴 The suppression warning. `bid_apply` carries NO suppression guard and
+                            its floor is €0.05, so it cannot write ≤3¢ — every op on a suppressed
+                            target switches delivery back on for traffic somebody switched off. The
+                            preview reports what would REALLY happen rather than filtering these
+                            out, because a preview that disagrees with the engine is the defect this
+                            whole path exists to remove. Counted in two, never merged: the flag is
+                            evidence and ≤3¢ is a convention, and merging them hides the ones the
+                            flag does not know about ([[reference_ads_suppression_by_low_bid]]). */}
+                        {preview.rank.suppressedMatched > 0 && (
+                          <span className="pwarn">⚠ {preview.rank.suppressedMatched} of the {preview.rank.matched} {preview.rank.suppressedMatched === 1 ? 'is' : 'are'} deliberately suppressed
+                            {preview.rank.suppressedUnflaggedMatched > 0 ? ` (${preview.rank.suppressedUnflaggedMatched} of those ${preview.rank.suppressedUnflaggedMatched === 1 ? 'carries' : 'carry'} no suppression flag — only a ≤3¢ bid says so)` : ''}
+                            . This rule would raise {preview.rank.suppressedMatched === 1 ? 'it' : 'them'} above €0.05 and switch delivery back on: the bid action has no suppression guard.
+                            {preview.rank.campaignSuppressedMatched > 0 ? ` ${preview.rank.campaignSuppressedMatched} sit${preview.rank.campaignSuppressedMatched === 1 ? 's' : ''} in a campaign whose bids are suppressed right now, where the next resume would overwrite the change anyway.` : ''}
+                          </span>
+                        )}
+                        <span className="phour">Bids read at {new Date(preview.rank.readAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Rank is the latest observation per keyword, not an average.</span>
+                      </p>
+                    )}
+                  </>)
                 : isSov
                   ? (<>
                     {/* Share of Voice is a COLUMN: it is the number that decided the row, and a
