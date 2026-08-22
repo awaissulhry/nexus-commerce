@@ -54,6 +54,7 @@
  * "current → proposed" row with neither is a number that will be false within the hour.
  */
 import prisma from '../../db.js'
+import { HIGH_ACOS_FLOOR } from '@nexus/shared/ads-rule-window'
 import { logger } from '../../utils/logger.js'
 import { ruleMatchesScope } from '../automation-rule-scope.js'
 import { maybeTranslateAdsRule, builderBudgetCampaignIds, builderDraftCampaignIds } from './ads-rule-adapter.service.js'
@@ -735,5 +736,209 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
     campaignSuppressedMatched: rows.filter((r) => r.campaignSuppressed).length,
     feed,
     readAt,
+  }
+}
+
+/**
+ * ── BID-P (2026-08-22) — the LAST client-side preview, and the one that mattered most ─────────
+ *
+ * The Bid builder's Preview was browser arithmetic: fetch `/advertising/targets?limit=1500`, keep
+ * the rows whose `campaignId` is in the picker, apply `groups[0]`'s THEN op to each current bid,
+ * clamp, render. Measured on prod before this change, and it was wrong in five ways at once — the
+ * four Budget's own header lists, plus one that is Bid's alone and worse than the rest:
+ *
+ *  1. 🔴 **six of the eleven THEN actions rendered "no change" on EVERY row.** `apply()` handles
+ *     `set` / `incPct` / `decPct` / `incAbs` / `decAbs` and falls through to `: cur` for the four
+ *     COMPUTED actions BP.P4 shipped as headline features (`setCpc`, `targetAcos`, `revPerClick`,
+ *     `curBidTargetAcos`) and for the two status verbs, which do not move a bid at all — so a
+ *     "New Bid" column was the wrong display for them entirely. An operator building
+ *     `Set Bid to CPC × (Target ACoS / Actual ACoS)` saw a tidy table of unchanged bids and
+ *     concluded their thresholds were too tight;
+ *  2. **the trigger's floor was invisible.** `KEYWORD_HIGH_ACOS` emits only keywords with orders,
+ *     sales, ≥€2 spend and ≥20% ACoS (`HIGH_ACOS_FLOOR`) — **8 of the account's 3,155 positive ad
+ *     targets** clear it. The panel listed up to 1,500;
+ *  3. **kind ignored** — 1,025 of 3,155 are kinds no keyword-bid rule can select;
+ *  4. **criteria and multi-block ignored** — every listed target appeared to match, on `groups[0]`;
+ *  5. **an arbitrary population** — `limit=1500`, no `orderBy`, filtered client-side.
+ *
+ * 🔴 **Refusals are ROWS here, both kinds.** `bid_apply` refuses two different ways and a preview
+ * that drops either lists fewer keywords than it matched and never says why:
+ *   · `ok: false` with a named error — the computed ops, when the signal is missing. Measured over
+ *     14 settled days, 237 of 259 clicked targets have spend and no attributed sales, so the ratio
+ *     ops refuse on them by name. Dropping those would hide the majority of what the rule does.
+ *   · `ok: true` with `output.skipped` — KT-P6's suppression guard, which returns before `dryRun`.
+ * `campaign-not-selected` stays silent: the operator chose that list.
+ */
+export interface BidPreviewRow {
+  targetId: string
+  keyword: string
+  matchType: string | null
+  campaign: string
+  marketplace: string | null
+  /** The numbers that made the row match — a bid pair with the deciding metric off-screen is uncheckable. */
+  acosPct: number | null
+  spendEur: number
+  currentEur: number
+  proposedEur: number
+  clamped: boolean
+  /** The handler's own sentence when it refused — never paraphrased. */
+  refused?: string
+  suppressed: 'flag' | 'bid' | null
+  campaignSuppressed: boolean
+}
+
+export interface BidPreviewResult {
+  ok: boolean
+  error?: string
+  /** The rule's OWN lookback (`actions[0].windowDays`, clamped 7–90), not the trigger's default. */
+  windowDays: number
+  selected: number
+  /** Every positive target in the picked campaigns, including kinds a bid rule can never select. */
+  selectedTargets: number
+  /** Of the picked campaigns, how many targets cleared the trigger's floor and became contexts. */
+  measurable: number
+  inScope: number
+  matched: number
+  noChange: number
+  /** Matched targets the handler REFUSED for a missing signal (the computed ops), by name. */
+  refusedNoSignal: number
+  suppressedMatched: number
+  suppressedUnflaggedMatched: number
+  campaignSuppressedMatched: number
+  /** The bar a keyword must clear before ANY bid rule can see it — read from the emitter's own constant. */
+  floor: { minOrders: number; minSpendEur: number; minAcosPct: number; topPerTick: number }
+  rows: BidPreviewRow[]
+  untranslatable?: string[]
+}
+
+export async function previewBidRule(draft: BudgetPreviewDraft): Promise<BidPreviewResult> {
+  const floor = {
+    minOrders: HIGH_ACOS_FLOOR.minOrders,
+    minSpendEur: HIGH_ACOS_FLOOR.minSpendCents / 100,
+    minAcosPct: HIGH_ACOS_FLOOR.minAcos * 100,
+    topPerTick: HIGH_ACOS_FLOOR.topPerTick,
+  }
+  const empty = (extra: Partial<BidPreviewResult> = {}): BidPreviewResult => ({
+    ok: true, windowDays: 14, selected: 0, selectedTargets: 0, measurable: 0, inScope: 0,
+    matched: 0, noChange: 0, refusedNoSignal: 0,
+    suppressedMatched: 0, suppressedUnflaggedMatched: 0, campaignSuppressedMatched: 0,
+    floor, rows: [], ...extra,
+  })
+
+  const a0 = Array.isArray(draft.actions) ? (draft.actions[0] as Record<string, unknown> | undefined) : undefined
+  const picked = Array.isArray(a0?.campaigns)
+    ? (a0!.campaigns as Array<{ id?: unknown }>).map((c) => String(c?.id ?? '')).filter(Boolean)
+    : []
+  if (!picked.length) return empty()
+
+  // Straight from the DB: a context that was never built cannot count itself, and "never offered"
+  // must not read as "considered and rejected".
+  const selectedTargets = await prisma.adTarget.count({
+    where: { isNegative: false, adGroup: { campaignId: { in: picked } } },
+  })
+
+  interface BidCtx {
+    marketplace: string | null
+    campaign: { id: string; name: string; [k: string]: unknown }
+    adTarget: { id: string; acos?: number | null; spendCents?: number; [k: string]: unknown }
+  }
+
+  const { buildHighAcosKeywordContexts } = await import('../../jobs/advertising-rule-evaluator.job.js')
+  const run = await runDraftPreview<BidCtx>(draft, {
+    slug: 'bid',
+    handler: 'bid_apply',
+    // BP.P4 — a Bid rule chooses its own lookback; `runDraftPreview` reads it off the action and
+    // clamps it exactly as the emitter and `targetPerformance` do, then hands it here.
+    defaultWindowDays: 14,
+    buildContexts: (windowDays) => buildHighAcosKeywordContexts(windowDays) as unknown as Promise<unknown[]>,
+    entityId: (ctx) => ({ key: 'adTargetId', value: ctx.adTarget.id }),
+  })
+
+  const c = run.census
+  if (!run.ok) {
+    return { ...empty({ windowDays: c.windowDays, selected: picked.length, selectedTargets }), ok: false, error: run.error, ...(run.untranslatable ? { untranslatable: run.untranslatable } : {}) }
+  }
+
+  const SKIP_REASON: Record<string, string> = {
+    suppressed_flag: 'left alone — deliberately suppressed, and the bid action will not switch delivery back on',
+    suppressed_by_bid: 'left alone — bids at or under 3¢, this account’s suppression convention',
+    campaign_suppressed: 'left alone — this campaign’s bids are suppressed, so a write here would be undone',
+  }
+
+  interface Parsed { ctx: BidCtx; currentCents: number; proposedCents: number; refused?: string; noSignal?: boolean }
+  const parsed: Parsed[] = []
+  let noChange = 0
+  for (const { ctx, res } of run.settled) {
+    const out = res?.output ?? {}
+    // A named refusal from a computed op. `output.adTargetId` is present but no bid pair is, so the
+    // current bid comes from the context rather than from a sentence the handler did not write.
+    if (res && res.ok === false) {
+      parsed.push({ ctx, currentCents: 0, proposedCents: 0, refused: res.error ?? 'refused', noSignal: true })
+      continue
+    }
+    if (out.noChange) { noChange += 1; continue }
+    const skipped = String(out.skipped ?? '')
+    if (skipped) {
+      if (SKIP_REASON[skipped]) parsed.push({ ctx, currentCents: Number(out.bidCents ?? 0), proposedCents: Number(out.bidCents ?? 0), refused: SKIP_REASON[skipped] })
+      continue
+    }
+    const m = /^(-?\d+)¢\s*→\s*(-?\d+)¢$/.exec(String(out.wouldChange ?? ''))
+    if (!m) continue
+    parsed.push({ ctx, currentCents: Number(m[1]), proposedCents: Number(m[2]) })
+  }
+
+  const ids = [...new Set(parsed.map((p) => p.ctx.adTarget.id))]
+  const [targets, suppressedCampaigns] = ids.length
+    ? await Promise.all([
+      prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, kind: true, expressionValue: true, expressionType: true, bidCents: true, suppressedFromBidCents: true } }),
+      prisma.campaign.findMany({ where: { id: { in: [...new Set(parsed.map((p) => p.ctx.campaign.id))] }, bidsSuppressedAt: { not: null } }, select: { id: true } }),
+    ])
+    : [[], []]
+  const byId = new Map(targets.map((t) => [t.id, t]))
+  const suppressedCampaignIds = new Set(suppressedCampaigns.map((x) => x.id))
+
+  const rows: BidPreviewRow[] = parsed.map((p) => {
+    const t = byId.get(p.ctx.adTarget.id)
+    const cur = p.noSignal ? (t?.bidCents ?? 0) : p.currentCents
+    return {
+      targetId: p.ctx.adTarget.id,
+      /**
+       * KEYWORD_HIGH_ACOS selects on AD_TARGET performance and does NOT filter by kind, so an auto
+       * or product target with spend is emitted too and `bid_apply` really can move its bid. Those
+       * carry no keyword text, and rendering them blank would hide rows the rule genuinely acts on
+       * — label them by what they are instead (the old client-side preview's one good idea).
+       */
+      keyword: (t?.expressionValue ?? '').trim() || (t?.expressionType ? String(t.expressionType) : t?.kind ? `${String(t.kind)} target` : 'Target'),
+      matchType: t?.expressionType ?? null,
+      campaign: p.ctx.campaign.name,
+      marketplace: p.ctx.marketplace,
+      acosPct: typeof p.ctx.adTarget.acos === 'number' ? p.ctx.adTarget.acos * 100 : null,
+      spendEur: (p.ctx.adTarget.spendCents ?? 0) / 100,
+      currentEur: cur / 100,
+      proposedEur: p.refused ? cur / 100 : p.proposedCents / 100,
+      clamped: !p.refused && p.currentCents === p.proposedCents,
+      ...(p.refused ? { refused: p.refused } : {}),
+      suppressed: t?.suppressedFromBidCents != null ? 'flag' : cur <= KT_SUPPRESSION_CENTS ? 'bid' : null,
+      campaignSuppressed: suppressedCampaignIds.has(p.ctx.campaign.id),
+    }
+  })
+  rows.sort((a, b) => Math.abs(b.proposedEur - b.currentEur) - Math.abs(a.proposedEur - a.currentEur)
+    || a.keyword.localeCompare(b.keyword))
+
+  return {
+    ok: true,
+    windowDays: c.windowDays,
+    selected: picked.length,
+    selectedTargets,
+    measurable: c.measurable,
+    inScope: c.inScope,
+    matched: c.matched,
+    noChange,
+    refusedNoSignal: parsed.filter((p) => p.noSignal).length,
+    suppressedMatched: rows.filter((r) => r.suppressed !== null).length,
+    suppressedUnflaggedMatched: rows.filter((r) => r.suppressed === 'bid').length,
+    campaignSuppressedMatched: rows.filter((r) => r.campaignSuppressed).length,
+    floor,
+    rows,
   }
 }

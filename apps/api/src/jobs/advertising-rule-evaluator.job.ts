@@ -39,7 +39,7 @@ import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-s
 import { microsToCents } from '../services/ads-core/metrics-math.js'
 import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
-import { BID_WINDOW_MAX, BID_WINDOW_MIN, TRIGGER_WINDOW, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
+import { BID_WINDOW_MAX, BID_WINDOW_MIN, HIGH_ACOS_FLOOR, TRIGGER_WINDOW, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 // PLC-P7 — the report-label join and the three lane enums, from the leaf module that owns them.
 import { REPORT_LABEL_TO_PLACEMENT, PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from '../services/advertising/ads-placement-math.js'
@@ -998,7 +998,9 @@ function searchTermContext(
  * (`actions[0].windowDays`), for the per-window passes in the tick; absent, the trigger's
  * default window applies exactly as before.
  */
-async function buildHighAcosKeywordContexts(overrideDays?: number) {
+/** Exported for the draft preview, exactly as `buildCampaignBudgetContexts` and the SOV/rank
+ *  emitters are: a preview that re-implements the emitter checks its own copy. */
+export async function buildHighAcosKeywordContexts(overrideDays?: number) {
   try {
     const { since, until } = ruleWindowBounds(overrideDays ?? WINDOW('KEYWORD_HIGH_ACOS')) // AX-ZD.5 — excludes the provisional tail (D-0/D-1)
     const perf = await prisma.amazonAdsDailyPerformance.groupBy({
@@ -1008,24 +1010,51 @@ async function buildHighAcosKeywordContexts(overrideDays?: number) {
     })
     const emitted = perf
       .map((p) => ({ p, spend: microsToCents(p._sum.costMicros), sales: p._sum.sales7dCents ?? 0, orders: p._sum.orders7d ?? 0 }))
-      .filter((x) => x.orders > 0 && x.sales > 0 && x.spend >= 200 && x.spend / x.sales >= 0.2)
+      // BID-P — the floor is DECLARED, not inline: the draft preview's census and the builder's
+      // window note read the same constant, so what the operator is told cannot drift from what
+      // this filter does. Numbers unchanged (orders>0 · sales>0 · >=EUR2 · ACoS>=20%).
+      .filter((x) => x.orders >= HIGH_ACOS_FLOOR.minOrders && x.sales >= HIGH_ACOS_FLOOR.minSalesCents
+        && x.spend >= HIGH_ACOS_FLOOR.minSpendCents && x.spend / x.sales >= HIGH_ACOS_FLOOR.minAcos)
       .sort((a, b) => (b.spend / b.sales) - (a.spend / a.sales))
-      .slice(0, 500)
+      .slice(0, HIGH_ACOS_FLOOR.topPerTick)
     // BP.P4 — the target's CURRENT bid joins the context ("Current Bid" is on H10's Bid metric
     // list). One findMany over the emitted ids; null when the target row is missing, never 0.
     const bids = new Map<string, number | null>()
+    /**
+     * 🔴 BID-P — the campaign and ad-group IDS, which this context has never carried.
+     *
+     * This is P2.3's defect, fixed for the SOV and rank emitters at the time and missed here. A
+     * context with no `campaign` makes `contextIdentity()` resolve campaign/portfolio/product
+     * EMPTY, so a Bid rule scoped to any grain but market matches zero contexts forever — it looks
+     * armed and never fires. It also made a draft preview impossible: the picker filter has nothing
+     * to match on, so every Bid preview would render 0 rows however many keywords qualified.
+     *
+     * `bid_apply`'s own `campaignIds` allowlist is unaffected either way — it re-reads the target's
+     * campaign from the DB at write time — so this changes what a rule can SEE, never what it may
+     * touch. One findMany, already being made for `bidCents`, now selects two more columns.
+     */
+    const owner = new Map<string, { campaignId: string | null; adGroupId: string | null }>()
     const ids = emitted.map((x) => x.p.localEntityId).filter((v): v is string => v != null)
     if (ids.length) {
-      const rows = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, bidCents: true } })
-      for (const r of rows) bids.set(r.id, r.bidCents)
+      const rows = await prisma.adTarget.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, bidCents: true, adGroup: { select: { id: true, campaignId: true } } },
+      })
+      for (const r of rows) {
+        bids.set(r.id, r.bidCents)
+        owner.set(r.id, { campaignId: r.adGroup?.campaignId ?? null, adGroupId: r.adGroup?.id ?? null })
+      }
     }
     return emitted
       .map(({ p, spend, sales, orders }) => {
         const clicks = p._sum.clicks ?? 0
         const impressions = p._sum.impressions ?? 0
+        const own = p.localEntityId != null ? owner.get(p.localEntityId) : undefined
         return {
           trigger: 'KEYWORD_HIGH_ACOS' as const,
           marketplace: p.marketplace,
+          ...(own?.campaignId ? { campaign: { id: own.campaignId } } : {}),
+          ...(own?.adGroupId ? { adGroup: { id: own.adGroupId } } : {}),
           adTarget: {
             id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: spend / sales,
             clicks, impressions,

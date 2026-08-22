@@ -1507,6 +1507,13 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       if (!out.ok) reply.code(400)
       return out
     }
+    // BID-P — the fifth and last consumer. Bid was the only slug still computing its preview in
+    // the browser; with this branch every draft preview on every tab runs the real engine.
+    if (slug === 'bid') {
+      const out = await svc.previewBidRule(body)
+      if (!out.ok) reply.code(400)
+      return out
+    }
     if (slug === 'sov') {
       const { previewSovRule } = await import('../services/advertising/ads-sov-preview.service.js')
       const out = await previewSovRule(body)

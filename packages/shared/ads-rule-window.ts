@@ -116,6 +116,26 @@ export const HARVEST_DEFAULTS = { windowDays: 60, minSpendCents: 1000, minOrders
  */
 export const WASTING_FLOOR = { minSpendCents: 300, minClicks: 5, topPerTick: 300 } as const
 
+/**
+ * BID-P — the KEYWORD_HIGH_ACOS emitter's floor, declared ONCE, for the same reason
+ * `WASTING_FLOOR` above is.
+ *
+ * 🔴 A Bid rule cannot act on a keyword that does not clear this bar, and until now nothing on
+ * screen said so. Measured on prod 2026-08-22: of 3,155 positive ad targets, **8** clear it — the
+ * trigger is called KEYWORD_HIGH_*ACOS* and it selects only keywords that already convert at bad
+ * efficiency. A zero-sales waster is not offered to a Bid rule at all, which is the opposite of
+ * what "adjust keyword bids" reads like.
+ *
+ * Three readers, and that is the point: the emitter (the floor itself), the draft preview's census
+ * and empty state, and the builder's window note. A floor that only the emitter knows is the
+ * fabricated-cell class ([[reference_fleet_stale_constant_class]]) — the surface then describes a
+ * population the engine never had.
+ *
+ * `minAcos` is a FRACTION to match `adTarget.acos`; `topPerTick` is the emitter's own slice, kept
+ * here so a census can say what it dropped instead of implying it considered everything.
+ */
+export const HIGH_ACOS_FLOOR = { minOrders: 1, minSalesCents: 1, minSpendCents: 200, minAcos: 0.2, topPerTick: 500 } as const
+
 /** Amazon's still-settling tail, re-exported so a caller needs one import to explain a window. */
 export { PROVISIONAL_DAYS }
 

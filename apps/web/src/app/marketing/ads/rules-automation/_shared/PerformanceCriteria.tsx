@@ -7,7 +7,7 @@
  * (Config lifted verbatim from RuleBuilder.tsx; the THEN-action lives with each caller.)
  */
 import { X, Plus } from 'lucide-react'
-import { WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
+import { HIGH_ACOS_FLOOR, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import { H10Select } from '../../campaigns/FilterDropdown'
 
 export interface Condition {
@@ -128,6 +128,10 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
           declaration the emitter reads (WASTING_FLOOR), so this sentence cannot drift. */}
       {slug === 'negative-targeting' && ` Search terms surface only once they have zero orders on at least ${WASTING_FLOOR.minClicks} clicks and €${(WASTING_FLOOR.minSpendCents / 100).toFixed(0)} of spend in the window — conditions can raise that bar, never lower it.`}
       {/* BUD-P1 — the budget context's floor + H10's Budget Utilization formula, stated. */}
+      {/* BID-P — the bar a keyword must clear before ANY bid rule sees it, from the emitter's own
+          constant so this sentence cannot drift from the filter. Measured: 8 of 3,155 positive
+          targets clear it. The tab never said so. */}
+      {slug === 'bid' && ` Keywords surface only once they have at least ${HIGH_ACOS_FLOOR.minOrders} order, €${(HIGH_ACOS_FLOOR.minSpendCents / 100).toFixed(2)} of spend and ${HIGH_ACOS_FLOOR.minAcos * 100}% ACoS in the window — the trigger's own bar; conditions can raise it, never lower it.`}
       {slug === 'budget' && ' Enabled campaigns surface only once they have ad spend inside the window. Budget Utilization = average daily spend in the window ÷ the campaign’s CURRENT daily budget, so it reads above 100% where the budget has since been lowered.'}
     </p>
   )

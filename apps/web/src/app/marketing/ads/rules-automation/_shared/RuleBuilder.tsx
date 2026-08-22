@@ -789,6 +789,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
   const [preview, setPreview] = useState<{
     open: boolean; loading: boolean
     terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null; marketplace?: string | null; utilPct?: number | null; clamped?: boolean
+      /** BID-P — the numbers that decided a bid row: a pair with the deciding metric off-screen is uncheckable. */
+      acosPct?: number | null
       /** SOV-P2 — the number that decided the row, and our own cannibalisation beside it. */
       sovPct?: number
       concentrationPct?: number | null
@@ -823,6 +825,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
      * without them "23 of 135" reads as "112 were considered and rejected", when most were never
      * offered at all.
      */
+    /**
+     * BID-P — the Bid draft's census. `floor` is the bar the KEYWORD_HIGH_ACOS trigger applies
+     * before any rule sees a keyword; without it "3 of 240" reads as "237 were considered and
+     * rejected" when almost none were ever offered.
+     */
+    bid?: {
+      windowDays: number; selected: number; selectedTargets: number
+      measurable: number; inScope: number; matched: number; noChange: number
+      refusedNoSignal: number
+      suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
+      floor: { minOrders: number; minSpendEur: number; minAcosPct: number; topPerTick: number }
+    } | null
     sov?: {
       windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
       eligible: number; notEnabled: number; selectedTargets: number
@@ -1037,42 +1051,60 @@ export function RuleBuilder({ slug }: { slug: string }) {
      * `/automation-rules/preview` runs the real contexts, scope, translation, first-matching-block
      * selection and `bid_apply` in dryRun ([[reference_preview_must_run_the_engine]]).
      */
-    if (isBidLike) {
-      // Real keyword-level preview: pull the positive targets in the selected campaigns and show
-      // the new bid each would get when the rule fires (THEN op + guardrail clamp). Read-only.
-      const g0 = groups[0]
-      const op = g0?.budgetOp ?? 'set'
-      const v = Number(g0?.budgetValue ?? '') || 0
-      const apply = (cur: number) => op === 'set' ? v : op === 'incPct' ? cur * (1 + v / 100) : op === 'decPct' ? cur * (1 - v / 100) : op === 'incAbs' ? cur + v : op === 'decAbs' ? cur - v : cur
-      const floor = Math.max(0.02, Number(bidFloor) || 0.05) // never below Amazon's €0.02 hard minimum
-      const ceil = bidCeiling.trim() ? Number(bidCeiling) : Infinity
-      const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
-      /**
-       * KT-P2 — the rank half of this branch is GONE, not left inert.
-       *
-       * Keyword Tracker returns above, through the engine, so the `isRank` fetch of
-       * `/keyword-ranks`, the `rankMap` join and the two rank columns built here were unreachable
-       * code that still described a second way of answering the same question. Leaving them would
-       * have re-created the drift the engine-backed preview exists to prevent, and the next reader
-       * would not know which one ran ([[reference_preview_must_run_the_engine]]).
-       *
-       * ⚠ What remains is BID and SOV, and it still carries the defects KT-P2 measured: no criteria
-       * are applied, and 90% of the rows on this account are entity kinds a keyword rule cannot
-       * touch. Those two tabs belong to their own sessions; recorded, not silently half-fixed.
-       */
+    /**
+     * 🔴 BID-P (2026-08-22) — the LAST client-side preview, replaced rather than patched.
+     *
+     * What stood here was browser arithmetic over `/advertising/targets?limit=1500`, and it was
+     * wrong in five ways at once — the four its Budget/Placement/SOV siblings each documented, plus
+     * one that was Bid's alone: `apply()` handled five of the ELEVEN THEN actions and fell through
+     * to `: cur` for the rest, so the four COMPUTED actions BP.P4 shipped as headline features
+     * (`setCpc`, `targetAcos`, `revPerClick`, `curBidTargetAcos`) and the two status verbs all
+     * rendered "no change" on every row. An operator building
+     * `Set Bid to CPC × (Target ACoS / Actual ACoS)` saw a table of unchanged bids and concluded
+     * their thresholds were too tight.
+     *
+     * It also never showed the trigger's floor: `KEYWORD_HIGH_ACOS` emits only keywords with
+     * orders, sales, ≥€2 spend and ≥20% ACoS, which is **8 of the account's 3,155 positive ad
+     * targets**. The panel listed up to 1,500.
+     *
+     * `isSov` and `isRank` already returned above, so `bid` was this branch's last consumer —
+     * which is why this is a DELETION and not a fourth special case. Every draft preview on every
+     * tab now runs the real engine ([[reference_preview_must_run_the_engine]]).
+     */
+    if (isBid) {
       try {
-        const selIds = new Set(selCampaigns.map((c) => c.id))
-        const targetsJson = await fetch(`${getBackendUrl()}/api/advertising/targets?limit=1500`).then((r) => r.json()).catch(() => ({}))
-        const raw = (Array.isArray(targetsJson?.rows) ? targetsJson.rows : []) as Array<Record<string, unknown>>
-        const mine = raw.filter((t) => selIds.has(String(t.campaignId)))
-        // Auto-targeting rows carry no keyword text but still have a bid the rule adjusts — label by
-        // match type / kind so they're not silently dropped.
-        const label = (t: Record<string, unknown>) => String(t.text ?? '').trim() || String(t.matchType ?? '').trim() || (t.kind ? `${String(t.kind)} target` : 'Target')
-        setPreview({ open: true, loading: false, terms: mine.slice(0, 100).map((t) => {
-          const cur = Number(t.bidCents ?? 0) / 100
-          return { term: label(t), matchType: t.matchType ? String(t.matchType) : undefined, current: cur, proposed: Math.round(clamp(apply(cur)) * 100) / 100 }
-        }) })
-      } catch { setPreview({ open: true, loading: false, terms: [] }) }
+        const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actions: previewActions(), conditions: previewConditions(), scopeMarketplace: scopeMarket && scopeMarket !== 'all' ? scopeMarket : null }),
+        })
+        const j = await r.json().catch(() => null)
+        if (!r.ok || !j?.ok) {
+          setPreview({ open: true, loading: false, terms: [], bid: null, error: j?.untranslatable?.length
+            ? `No engine signal exists for: ${j.untranslatable.join(', ')}. Remove those conditions — the rule could not evaluate as written.`
+            : 'Preview is unavailable right now.' })
+          return
+        }
+        setPreview({
+          open: true, loading: false,
+          terms: (j.rows ?? []).map((x: { keyword: string; matchType: string | null; marketplace: string | null; acosPct: number | null; spendEur: number; currentEur: number; proposedEur: number; clamped: boolean; refused?: string; suppressed: 'flag' | 'bid' | null; campaignSuppressed: boolean }) => ({
+            term: x.keyword, matchType: x.matchType ?? undefined, marketplace: x.marketplace,
+            current: x.currentEur, proposed: x.proposedEur, clamped: x.clamped,
+            acosPct: x.acosPct, spend: x.spendEur, refused: x.refused,
+            suppressed: x.suppressed, campaignSuppressed: x.campaignSuppressed,
+          })),
+          bid: {
+            windowDays: j.windowDays, selected: j.selected, selectedTargets: j.selectedTargets,
+            measurable: j.measurable, inScope: j.inScope, matched: j.matched, noChange: j.noChange,
+            refusedNoSignal: j.refusedNoSignal,
+            suppressedMatched: j.suppressedMatched, suppressedUnflaggedMatched: j.suppressedUnflaggedMatched,
+            campaignSuppressedMatched: j.campaignSuppressedMatched,
+            floor: j.floor,
+          },
+        })
+      } catch {
+        setPreview({ open: true, loading: false, terms: [], bid: null, error: 'Preview is unavailable right now.' })
+      }
       return
     }
     try {
@@ -1912,7 +1944,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
               : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">{isRank ? (preview.error ? preview.error
+                : preview.terms.length === 0 ? <div className="pmsg">{isBid ? (preview.error ? preview.error
+                  /* 🔴 The trigger's floor is the commonest reason a Bid preview is empty, and the
+                     old panel never mentioned it. "Never offered" and "considered and rejected"
+                     are different facts and must not share a sentence. */
+                  : !preview.bid || preview.bid.selected === 0 ? 'Add campaigns above to preview their keyword bids.'
+                  : preview.bid.measurable === 0 ? `None of the ${preview.bid.selectedTargets} target${preview.bid.selectedTargets === 1 ? '' : 's'} in your selected campaigns clears the bar a bid rule needs: at least ${preview.bid.floor.minOrders} order, €${preview.bid.floor.minSpendEur.toFixed(2)} of spend and ${preview.bid.floor.minAcosPct}% ACoS over the last ${preview.bid.windowDays} settled days. This is not a problem with your criteria — those keywords are never offered to a bid rule at all.`
+                  : preview.bid.inScope === 0 ? `${preview.bid.measurable} of your keywords clear that bar, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
+                  : `No keyword matches these criteria right now — ${preview.bid.inScope} ${preview.bid.inScope === 1 ? 'was' : 'were'} measured. The rule is still valid; it will act when one does.`) : isRank ? (preview.error ? preview.error
                   /* 🔴 KT-P2 — five different reasons for an empty rank preview, and only one of
                      them is "your criteria are too tight". Collapsing them into one sentence is
                      what let a builder over an EMPTY FEED read as a working rule with no matches. */
@@ -2007,6 +2046,31 @@ export function RuleBuilder({ slug }: { slug: string }) {
                             : 'No market has a complete week of Amazon search-query data right now.'}
                           {preview.sov.periods.some((x) => x.refused) ? ` ${preview.sov.periods.filter((x) => x.refused).map((x) => x.marketplace).join('/')} skipped — Amazon has not published a complete week, and a partial one would move bids on a denominator that is still being filled.` : ''}
                         </span>
+                      </p>
+                    )}
+                  </>)
+                : isBid
+                  ? (<>
+                    {/* ACoS and spend are COLUMNS: they are what selected the row and what the
+                        criteria read, and a current → proposed pair with them off-screen cannot be
+                        checked by the operator. */}
+                    <div className="ptable budp"><div className="pthr"><span>Keyword</span><span>Market</span><span>ACoS</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.marketplace ?? '—'}</span><span title={t.spend != null ? `€${t.spend.toFixed(2)} spend in the window` : undefined}>{t.acosPct != null ? `${t.acosPct.toFixed(0)}%` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}{t.suppressed ? <em className="pnote" title={t.suppressed === 'flag' ? 'This target carries a suppression flag.' : 'At or under 3¢ with no flag — this account’s suppression convention.'}> suppressed</em> : null}</span><span className={`newb ${t.refused || t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.refused ? <em className="pnote" title={t.refused}> no change — refused</em> : t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{!t.refused && t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
+                    {preview.bid && (
+                      <p className="pfoot">
+                        {preview.bid.selectedTargets} target{preview.bid.selectedTargets === 1 ? '' : 's'} selected · {preview.bid.measurable} clear the bid trigger’s bar · {preview.bid.inScope} in scope · <b>{preview.bid.matched} match</b>
+                        {preview.bid.noChange > 0 ? <> · {preview.bid.noChange} of them sit at a guardrail, where this rule does nothing</> : null}
+                        {/* 🔴 The floor, always. It is the difference between "your criteria are
+                            tight" and "these keywords are never offered to a bid rule". */}
+                        <span className="phour">A bid rule only ever sees keywords with at least {preview.bid.floor.minOrders} order, €{preview.bid.floor.minSpendEur.toFixed(2)} of spend and {preview.bid.floor.minAcosPct}% ACoS over the last {preview.bid.windowDays} settled days — the KEYWORD_HIGH_ACOS trigger’s own bar, applied before any rule runs.</span>
+                        {preview.bid.refusedNoSignal > 0 && (
+                          <span className="pwarn">⚠ {preview.bid.refusedNoSignal} of the {preview.bid.matched} matched {preview.bid.refusedNoSignal === 1 ? 'keyword was' : 'keywords were'} <b>refused by the bid action</b>, not left unchanged — a computed bid needs a signal those {preview.bid.refusedNoSignal === 1 ? 'target lacks' : 'targets lack'} in the window. Each row carries the handler’s own reason; hover the refusal to read it.</span>
+                        )}
+                        {preview.bid.suppressedMatched > 0 && (
+                          <span className="pwarn">⚠ {preview.bid.suppressedMatched} of the {preview.bid.matched} matched {preview.bid.suppressedMatched === 1 ? 'keyword is' : 'keywords are'} deliberately suppressed, so the bid action <b>leaves {preview.bid.suppressedMatched === 1 ? 'it' : 'them'} alone</b>.
+                            {preview.bid.suppressedUnflaggedMatched > 0 ? ` ${preview.bid.suppressedUnflaggedMatched} of those carry no suppression flag — only a ≤3¢ bid says so.` : ''}
+                            {preview.bid.campaignSuppressedMatched > 0 ? ` ${preview.bid.campaignSuppressedMatched} sit${preview.bid.campaignSuppressedMatched === 1 ? 's' : ''} in a campaign whose bids are suppressed right now.` : ''}
+                          </span>
+                        )}
                       </p>
                     )}
                   </>)
