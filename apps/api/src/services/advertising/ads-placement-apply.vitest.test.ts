@@ -119,7 +119,7 @@ describe('a refusal carries the gate’s own sentence', () => {
   })
 })
 
-describe('PLC-P4 changed nothing about dryRun or no-change (that is a separate unit)', () => {
+describe('dryRun and no-change (D-PLC-3, fixed after PLC-P4 deferred it)', () => {
   it('dryRun still returns wouldChange and writes nothing', async () => {
     profile([{ placement: TOP, percentage: 30 }])
     const r = await run({ placement: TOP, op: 'set', value: 50 }, true)
@@ -137,16 +137,31 @@ describe('PLC-P4 changed nothing about dryRun or no-change (that is a separate u
   })
 
   /**
-   * 🔴 The ordering PLC-P4 must NOT change (operator decision D-PLC-3): the dryRun return sits
-   * BEFORE the noChange check, so a rule proposing no change still emits `wouldChange: "50% → 50%"`
-   * and reaches the suggestion queue. That is a real defect, shared with `budget_apply`, and it is
-   * its own cross-cutting unit — this test pins the CURRENT behaviour so P4 cannot silently fix
-   * half of it here and leave Budget behind.
+   * 🔴 D-PLC-3, now FIXED (operator decision 2026-08-22) — and fixed in BOTH handlers together,
+   * which is why it was deferred out of P4 rather than done there.
+   *
+   * A dry run that would change nothing now says `noChange`, so `recordSuggestions` skips it: a
+   * rule proposing a no-op no longer files a suggestion. `wouldChange` is kept ALONGSIDE it,
+   * because the builder's preview parses that sentence both to render "current → proposed" and to
+   * count the rows a guardrail absorbed — returning one without the other would have fixed the
+   * queue and silently zeroed the preview's census.
    */
-  it('records that a dryRun no-op still reports wouldChange — deliberately unfixed here', async () => {
+  it('🔴 a dryRun no-op reports noChange, so it never reaches the suggestion queue', async () => {
+    profile([{ placement: TOP, percentage: 50 }])
+    const r = await run({ placement: TOP, op: 'set', value: 50 }, true)
+    expect(r.output?.noChange).toBe(true)
+  })
+
+  it('…and still reports wouldChange, because the preview counts guardrail rows from it', async () => {
     profile([{ placement: TOP, percentage: 50 }])
     const r = await run({ placement: TOP, op: 'set', value: 50 }, true)
     expect(r.output?.wouldChange).toBe('50% → 50%')
+  })
+
+  it('a dryRun that WOULD change is untouched — no noChange flag on it', async () => {
+    profile([{ placement: TOP, percentage: 30 }])
+    const r = await run({ placement: TOP, op: 'set', value: 50 }, true)
+    expect(r.output?.wouldChange).toBe('30% → 50%')
     expect(r.output?.noChange).toBeUndefined()
   })
 })

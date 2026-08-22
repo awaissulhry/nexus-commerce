@@ -181,7 +181,7 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
   placement: [
     {
       name: 'Stop overpaying Rest of Search on zero-sale clicks',
-      desc: 'No sales at all on ≥20 clicks → cut the Rest of Search modifier 30%. Matches 12 campaigns today, 9 of which carry a Rest of Search multiplier to cut',
+      desc: 'No sales at all on ≥20 clicks → cut the Rest of Search modifier 30%. A cut only bites where the lane carries a value, and the rank engine moves the bias between lanes through the day — preview it to see which campaigns it would reach right now',
       payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '20' }], action: { op: 'decPct', value: '30', placeTarget: 'ros' } }] },
     },
     {
@@ -199,7 +199,7 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
     },
     {
       name: 'Stop paying for a placement that is seen and ignored',
-      desc: 'CTR ≤ 0.3% on ≥500 impressions → set Rest of Search to 0%. Impressions without clicks are a placement problem, not a bid problem; matches 20 campaigns today',
+      desc: 'CTR ≤ 0.3% on ≥500 impressions → set Rest of Search to 0%. Impressions without clicks are a placement problem, not a bid problem. On a campaign the rank engine governs it will be undone within the hour — the preview marks those rows',
       payload: { conditions: [{ conditions: [{ metric: 'CTR', op: 'lte', value: '0.3' }, { metric: 'Impressions', op: 'gte', value: '500' }], action: { op: 'set', value: '0', placeTarget: 'ros' } }] },
     },
   ],

@@ -7881,6 +7881,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { ok: false, error: 'above_ceiling', maxLevel: ceiling.maxLevel, message: ceiling.reason, blockedBy: ceiling.blockedBy }
     }
 
+    /**
+     * D-PLC-2 — a Placement rule may not be armed to AUTO against the rank engine.
+     *
+     * Not a ceiling: the ceiling judges what a rule DOES, and this judges who else is already
+     * writing the same field on the same campaigns. `ad-rank-defend` made 7,818 lane writes across
+     * 34 campaigns in 7 days, so on Auto such a rule sets a modifier and has it reverted within the
+     * hour, forever. Refused with the same 409 shape the ceiling uses, so the grid renders it
+     * through the path it already has (`message`).
+     *
+     * 🔴 Product Pages is exempt — the engine wrote it twice in 30 days against 12,197 on Top of
+     * Search. Blocking that lane would forbid the one placement automation that works on the
+     * governed half of the account. See `ads-placement-autonomy.ts`.
+     */
+    const { checkPlacementAutoAllowed } = await import('../services/advertising/ads-placement-autonomy.js')
+    const placementVerdict = await checkPlacementAutoAllowed(rule, body.level, producedActionTypes(rule))
+    if (placementVerdict.blocked) {
+      reply.code(409)
+      return { ok: false, error: 'contested_by_rank_engine', maxLevel: 'PROPOSE', message: placementVerdict.message, blockedBy: placementVerdict.lanes }
+    }
+
     // `enabled` remains the on/off, and dryRun is kept in step so the two cannot disagree
     // about whether this rule acts.
     const updated = await prisma.automationRule.update({

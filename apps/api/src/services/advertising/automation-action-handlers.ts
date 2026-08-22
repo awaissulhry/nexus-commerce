@@ -1686,8 +1686,11 @@ ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResu
   const maxEur = action.maxEur != null ? Number(action.maxEur) : null
   const next = Math.round(clampRange(applyBuilderOp(action.op as string, anchor, Number(action.value) || 0), minEur, maxEur) * 100) / 100
   const delta = Math.max(0, Math.round((next - current) * 100))
+  // D-PLC-3 — the same ordering defect, and the same fix: `noChange` is added beside
+  // `wouldChange`, never instead of it (the Budget preview parses the sentence for its census).
   if (meta.dryRun) {
-    return { type: action.type, ok: true, estimatedValueCentsEur: delta, output: { dryRun: true, campaignId: id, wouldChange: `€${current.toFixed(2)} → €${next.toFixed(2)}` } }
+    const same = next === current
+    return { type: action.type, ok: true, estimatedValueCentsEur: same ? 0 : delta, output: { dryRun: true, campaignId: id, wouldChange: `€${current.toFixed(2)} → €${next.toFixed(2)}`, ...(same ? { noChange: true } : {}) } }
   }
   if (next === current) return { type: action.type, ok: true, estimatedValueCentsEur: 0, output: { campaignId: id, noChange: true } }
   const cap = await checkDailySpendCap(meta.ruleId, delta)
@@ -1712,8 +1715,22 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
   const minPct = Math.max(0, Number(action.minPct ?? 0))
   const maxPct = Math.min(900, Number(action.maxPct ?? 900))
   const next = Math.round(clampRange(applyBuilderOp(action.op as string, current, Number(action.value) || 0), minPct, maxPct))
+  /**
+   * 🔴 D-PLC-3 — a dry run that would change NOTHING says so, and still says what it read.
+   *
+   * The `dryRun` return used to sit ABOVE the `next === current` check, so a rule proposing no
+   * change emitted `wouldChange: "50% → 50%"` and reached the suggestion queue —
+   * `recordSuggestions` skips on `output.noChange`, which this branch never set. That is the
+   * class ADX A2.1 removed once already: of 227 pending rows, 48 were results that explicitly
+   * reported changing nothing.
+   *
+   * `noChange` is ADDED, not swapped in: `wouldChange` stays, because the builder's preview parses
+   * it to render "current → proposed" and to count the rows a guardrail absorbed. Returning one
+   * without the other fixes the queue and silently zeroes the preview's census.
+   */
   if (meta.dryRun) {
-    return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, placement, wouldChange: `${current}% → ${next}%` } }
+    const same = next === current
+    return { type: action.type, ok: true, output: { dryRun: true, campaignId: id, placement, wouldChange: `${current}% → ${next}%`, ...(same ? { noChange: true } : {}) } }
   }
   if (next === current) return { type: action.type, ok: true, output: { campaignId: id, placement, noChange: true } }
   const { updatePlacementBidding } = await import('./ads-create.service.js')

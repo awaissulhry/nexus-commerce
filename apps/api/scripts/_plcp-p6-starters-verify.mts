@@ -53,8 +53,24 @@ for (const s of STARTERS) {
   check('it reads the window the starter chose', out.windowDays === (s.windowDays ?? 7), `${out.windowDays} days`)
   check('🔴 it MATCHES something today', out.matched > 0, `${out.matched} of ${out.inScope} in scope match`)
   check('every row targets the lane the starter names', out.rows.every((r) => r.placement === LANE_ENUM[s.lane]), `${out.rows.length} rows on ${LANE_ENUM[s.lane]}`)
+  /**
+   * 🔴 NOT an assertion — a REPORT, and the difference matters.
+   *
+   * "at least one row moves" was asserted here and it failed at 11:46 having passed at 03:00:
+   * `ad-rank-defend` had dropped Rest of Search 45→0 across the account at 08:15 ("snap to 75%
+   * Placement"), so a cut starter on that lane became a no-op. Nothing regressed — the preview was
+   * correctly reporting a lane that is genuinely at zero right now.
+   *
+   * A check that fails on the hour is worse than no check: it trains you to ignore a red. What IS
+   * hour-independent is that the criteria match, and that every row carrying a value moves. Both
+   * are asserted; the count that moves is printed with the hour beside it.
+   */
   const moving = out.rows.filter((r) => !r.clamped).length
-  check('at least one row actually CHANGES a value', moving > 0, `${moving} of ${out.rows.length} rows move; ${out.rows.length - moving} sit at a guardrail`)
+  const carrying = out.rows.filter((r) => r.currentPct > 0)
+  const carryingMoves = carrying.filter((r) => !r.clamped).length
+  console.log(`      ${moving} of ${out.rows.length} rows move at ${new Date().toLocaleTimeString('en-GB')} — the lane's value is a clock reading`)
+  check('every row that CARRIES a value moves (hour-independent)', carryingMoves === carrying.length,
+    `${carryingMoves} of ${carrying.length} rows with a non-zero lane move`)
   if (out.rows.length) {
     const ex = out.rows[0]
     console.log(`      e.g. ${ex.campaign}: ${ex.currentPct}% → ${ex.proposedPct}% (${ex.placementLabel})${ex.governed ? ' · engine-managed' : ''}`)
