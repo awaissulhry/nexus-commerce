@@ -48,6 +48,20 @@ export const RETENTION_DAYS = {
   actionLog: 730,
   /** Resolved drift only. An OPEN drift row is a live finding at any age and is never pruned. */
   driftResolved: 90,
+  /**
+   * ADM-P6 — budget-usage readings. Pruned on `lastSeenAt`, never `usageUpdatedAt`: the second is
+   * AMAZON's clock and a redelivered old reading would otherwise be born prunable.
+   *
+   * 90 days, matching Amazon's own report-retention wall, and far outside anything that reads
+   * these: the hour columns look at the CURRENT budget day only, so today's readings are the only
+   * ones with a consumer. History is kept anyway because neither source can be backfilled — an
+   * hour thrown away here can never be recovered from Amazon, unlike almost everything else in
+   * this file, which can be re-fetched.
+   *
+   * Rate measured 2026-08-22: ~43 rows/hour across 200 campaigns, so ~1,000/day and ~90k at
+   * steady state under this window.
+   */
+  budgetUsageSample: 90,
 } as const
 
 /**
@@ -138,6 +152,14 @@ export async function runAdsRetentionOnce(opts: { dryRun?: boolean } = {}): Prom
     () => prisma.advertisingActionLog.count({ where: { createdAt: { lt: cutoff(RETENTION_DAYS.actionLog) } } }),
     (ids) => prisma.advertisingActionLog.deleteMany({ where: { id: { in: ids } } }).then((r) => r.count),
     () => prisma.advertisingActionLog.findMany({ where: { createdAt: { lt: cutoff(RETENTION_DAYS.actionLog) } }, select: { id: true }, take: BATCH }),
+  )
+
+  // ── ADM-P6: sampled budget-usage readings ──────────────────────────────────
+  await sweep(
+    'adBudgetUsageSample',
+    () => prisma.adBudgetUsageSample.count({ where: { lastSeenAt: { lt: cutoff(RETENTION_DAYS.budgetUsageSample) } } }),
+    (ids) => prisma.adBudgetUsageSample.deleteMany({ where: { id: { in: ids } } }).then((r) => r.count),
+    () => prisma.adBudgetUsageSample.findMany({ where: { lastSeenAt: { lt: cutoff(RETENTION_DAYS.budgetUsageSample) } }, select: { id: true }, take: BATCH }),
   )
 
   // ── Drift: resolved only ───────────────────────────────────────────────────
