@@ -362,11 +362,20 @@ stub log shows CREATE→LEVEL(PROPOSE)→3×PATCH[actions]. ⚠ Commit day: blob
 `automation-action-handlers.ts` (SG scope-flip ~1076) and `rules-automation.css` (SG.1 moves);
 diff-audit shared files WITH `grep -a`; tip-worktree tsc before push.
 
-## Unit NEG-P — Negative Targeting perfection (2026-08-21 — P1–P3 BUILT, this commit)
+## Unit NEG-P — Negative Targeting perfection (2026-08-21 — SHIPPED `09751db79` + `6e13e3614`; P4 ARMED)
 
 Study + build record: `docs/2026-08-21-negp-negative-perfection.md`. Programme target 3 (after
-BP, HP). Operator approved the phase plan ("go ahead"); P1–P3 built, **P4 (arming) executed on
-prod post-deploy per the same delegation pattern as HP6**.
+BP, HP). Operator approved the phase plan ("go ahead"); P1–P3 shipped `09751db79`, plus
+`6e13e3614`: 🔴 both strips' links were INVISIBLE — `.h10-nt-open` is the grid's hover-reveal
+pill (opacity 0 until row hover) and textContent probes read hidden words fine; found only by
+READING THE SCREEN on prod; fixed with a scoped in-strip override (#1a61c6 for AA).
+**P4 ARMED on prod**: rule `cmt30doi7016go401v9vf9n9h` "Stop wasted spend — GALE IT" — PROPOSE,
+IT, Wasted-spend starter, look ✓ + negative-E only on IT_Auto_Substitute/Close/Loose + GALE
+BROAD IT (one verified 18-product family; GALE EXACT IT deliberately excluded — it is harvest's
+destination and a negative there would block future graduations). Dry-run vs live contexts:
+38 → 37 look-gated → 1 would negate ("giubbotto moto") as 4 ad-group negatives, queueing on
+Suggestions. ⚠ The popover search is FUZZY ("IT_Auto_" matched Misano/Moss too) — add rows
+individually on fuzzy results, never Add All.
 
 - **P1 — the wire.** The adapter's negative branch carries the WHOLE form via
   `normalizeHarvestWire` (`action.negative` + `levels`); `'both'` writes BOTH levels (the old
