@@ -8311,8 +8311,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       id: latest.id, keyword: latest.keyword, marketplace: latest.marketplace, asin: latest.asin,
       organicRank: latest.organicRank, sponsoredRank: latest.sponsoredRank, searchVolume: latest.searchVolume,
       capturedAt: latest.capturedAt, source: latest.source,
-      // delta: prior - latest (rank improving means the number went DOWN, so a +ve delta = better)
-      rankDelta: prior?.organicRank != null && latest.organicRank != null ? prior.organicRank - latest.organicRank : 0,
+      /**
+       * KT-P3 — `null`, never `0`. A `0` here means "rank did not change", and this endpoint feeds
+       * the Keyword Tracker builder's preview, where a fabricated zero renders as a real reading in
+       * the Δ column. The engine-side twin of this line lives in `buildKeywordRankBidContexts`,
+       * where the value must be ABSENT rather than null because `applyOperator` coerces `null` to
+       * `0` — see the note there. On the wire, `null` is correct and the client renders it as "—".
+       */
+      rankDelta: prior?.organicRank != null && latest.organicRank != null ? prior.organicRank - latest.organicRank : null,
     }))
     reply.header('Cache-Control', 'private, max-age=60')
     return { count: items.length, items }

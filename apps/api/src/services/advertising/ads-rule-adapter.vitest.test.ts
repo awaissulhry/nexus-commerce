@@ -25,7 +25,9 @@ const OFFERED: Record<string, string[]> = {
   'keyword-harvesting': ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'],
   'negative-targeting': ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'],
   sov: ['Share of Voice', 'Campaign Concentration', 'ACOS', 'Spend', 'Sales', 'Orders'],
-  'keyword-tracker': ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend'],
+  // KT-P3 — 'Share of Voice' removed: it named `adTarget.sovPct`, which the rank context never
+  // emits, and its only source runs NEGATIVELY against Amazon's real per-query share.
+  'keyword-tracker': ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'ACOS', 'Spend'],
 }
 
 describe('every offered metric translates for its slug', () => {
@@ -37,6 +39,39 @@ describe('every offered metric translates for its slug', () => {
       expect(t!.conditions).toHaveLength(metrics.length)
     })
   }
+})
+
+/**
+ * 🔴 KT-P3 — the removal, pinned so it cannot drift back.
+ *
+ * `RANK_METRIC` used to map 'Share of Voice' → `adTarget.sovPct`, a field
+ * `buildKeywordRankBidContexts` does not emit — so the condition compared against `undefined` and
+ * silently never matched. It is not held like the four rank metrics, because the only source that
+ * could fill it is measured to be ANTI-CORRELATED with Amazon's real per-query share
+ * (Spearman ρ = −0.2445, negative in all four markets): once bound, the rule would act backwards.
+ *
+ * The coverage test above cannot catch a re-add on its own — adding the metric back to BOTH the
+ * mirror and the map would make it pass again. This asserts the direction.
+ */
+describe('KT-P3 — Keyword Tracker does not offer Share of Voice', () => {
+  it('is absent from the offered list', () => {
+    expect(OFFERED['keyword-tracker']).not.toContain('Share of Voice')
+  })
+
+  it('refuses a rule that asks for it, rather than silently never matching', () => {
+    const t = maybeTranslateAdsRule(rule('keyword-tracker', ['Organic Rank', 'Share of Voice']))
+    expect(t).not.toBeNull()
+    expect(t!.untranslatable).toContain('Share of Voice')
+  })
+
+  it('still maps every metric the rank context actually emits', () => {
+    const t = maybeTranslateAdsRule(rule('keyword-tracker', ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'ACOS', 'Spend']))
+    expect(t!.untranslatable ?? []).toEqual([])
+    expect(t!.conditions.map((c) => (c as { field: string }).field)).toEqual([
+      'adTarget.organicRank', 'adTarget.sponsoredRank', 'adTarget.rankDelta',
+      'adTarget.searchVolume', 'adTarget.acos', 'adTarget.spendCents',
+    ])
+  })
 })
 
 describe('an unmapped metric refuses the rule instead of loosening it', () => {

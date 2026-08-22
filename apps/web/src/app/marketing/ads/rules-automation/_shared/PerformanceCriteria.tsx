@@ -86,10 +86,38 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
       </p>
     )
   }
+  /**
+   * 🔴 KT-P1 — the sentence this replaces was the tab's cardinal-sin defect.
+   *
+   * It read "Rank is the latest snapshot; spend and ACOS cover the last 30 days. The most recent 2
+   * days are still settling and are excluded." — a precise, confident measurement regime asserted
+   * over a quantity that has never been measured once. `KeywordRank` holds 0 rows on prod, its only
+   * writer is a manual import route nothing calls, and the KEYWORD_RANK_BID trigger has produced 0
+   * contexts and 0 executions in the account's history.
+   *
+   * The LIVE numbers belong to the banner above (which reads `/keyword-tracker/feed-health`); this
+   * says the shape, exactly as the SOV branch does. Two things it must state that the old one hid:
+   * where a rank comes from, and what happens to a keyword that has none.
+   */
+  if (slug === 'keyword-tracker') {
+    return (
+      <p className="h10-pc-winnote">
+        <b>Organic Rank</b>, <b>Sponsored Rank</b>, <b>Rank Change</b> and <b>Search Volume</b> are read
+        from the keyword-rank feed — the latest observation for each keyword in its own marketplace,
+        not an average over a window. <b>Rank Change</b> compares that observation with the previous
+        one for the same product; a keyword observed only once has no change and is left alone rather
+        than counted as “unchanged”.{' '}
+        Spend and ACOS cover the last 30 days, excluding the 2 still settling.{' '}
+        🔴 <b>A keyword with no rank observation is skipped entirely.</b> It is not treated as ranking
+        last, so a rule reading “Organic Rank &gt; 50” will not reach the keywords you have never
+        ranked for — which are usually the ones such a rule is meant to find.
+      </p>
+    )
+  }
   return (
     <p className="h10-pc-winnote">
       {d == null
-        ? 'Rank is the latest snapshot; spend and ACOS cover the last 30 days. The most recent 2 days are still settling and are excluded.'
+        ? 'Rank is the latest observation; spend and ACOS cover the last 30 days. The most recent 2 days are still settling and are excluded.'
         : days != null
           ? `Measured over the last ${d} days — this rule's own lookback. The most recent 2 days are still settling and are excluded.`
           : `Measured over the last ${d} days — this trigger's fixed window. The most recent 2 days are still settling and are excluded.`}
@@ -132,7 +160,14 @@ const METRICS_BID = [...METRICS_BASE, 'Current Bid']
 // was. 'Share of Voice' itself keeps its name because it is now Amazon's own per-query market
 // share (`ads-sov-keyword-share.service.ts`) rather than our account-wide impression mix.
 const METRICS_SOV = ['Share of Voice', 'Campaign Concentration', 'ACOS', 'Spend', 'Sales', 'Orders']
-const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend']
+// KT-P3 — 'Share of Voice' removed: it named `adTarget.sovPct`, which the rank context never emits,
+// and its only source is measured to run NEGATIVELY against Amazon's real per-query share
+// (ρ = −0.2445, all four markets). See the note in `ads-rule-adapter.service.ts`'s RANK_METRIC.
+// The four rank metrics stay — they are held, not removed, because they are real capabilities
+// awaiting a feed. `KEYWORD_RANK_METRICS` is the held set, and the builder reads it.
+const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'ACOS', 'Spend']
+/** KT-P1 — the metrics with no ingested source today. One declaration, read by the builder's banner. */
+export const KEYWORD_RANK_METRICS = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume']
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
 export const PC_METRICS = METRICS_BASE.map((m) => ({ value: m, label: m }))

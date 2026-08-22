@@ -58,6 +58,10 @@ import { logger } from '../../utils/logger.js'
 import { ruleMatchesScope } from '../automation-rule-scope.js'
 import { maybeTranslateAdsRule, builderBudgetCampaignIds, builderDraftCampaignIds } from './ads-rule-adapter.service.js'
 import { PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from './ads-placement-math.js'
+// KT-P2 — the ≤3¢ suppression convention has ONE declaration, in the KT.6 blast radius that
+// already refuses on it. Restating the number here would let the preview and the guarded write
+// path disagree about what "suppressed" means.
+import { KT6_SUPPRESSION_CENTS as KT_SUPPRESSION_CENTS } from './kt6-bid-action.js'
 
 export interface BudgetPreviewRow {
   campaignId: string
@@ -476,5 +480,232 @@ export async function previewPlacementRule(draft: BudgetPreviewDraft): Promise<P
     governedMatched: rows.filter((r) => r.governed).length,
     readAt,
     rows,
+  }
+}
+/**
+ * ── KT-P2 (2026-08-22) — the Keyword Tracker preview, and why it is the third consumer ─────────
+ *
+ * The Keyword Tracker builder's Preview was browser arithmetic with the same defects Budget and
+ * Placement had, plus two of its own. Measured on prod before this change, with a draft reading
+ * `IF Organic Rank > 50 THEN Set Bid to €0.80` over 70 campaigns, it rendered **100 rows, every one
+ * with a green €0.80** — against a true match count of **zero**:
+ *
+ *   1. **criteria ignored** — it fetched targets and clamped all of them, filtering only by campaign;
+ *   2. 🔴 **90 of the 100 rows were entity kinds this rule can never touch** — measured live:
+ *      KEYWORD 10 · PRODUCT 65 · AUTO 15 · the rest audiences and categories. The context selects
+ *      `kind: 'KEYWORD', isNegative: false`, so auto-targeting expressions and ASIN product targets
+ *      are not candidates at all;
+ *   3. 🔴 **deliberately suppressed targets were shown being RAISED**, with no warning and no count.
+ *      Four €0.02 rows sat in the first screenful. Account-wide, 561 of the 1,004 positive keyword
+ *      targets in write-enabled campaigns are suppressed and 141 of those carry no flag;
+ *   4. **the feed was silently truncated** — `/advertising/targets?limit=1500` returns 1,500 of
+ *      5,218 rows and reports `count` as the page size, so nothing downstream could detect it;
+ *   5. 🔴 **the rank columns printed "—" on every row while the bid column stayed confident.** The
+ *      rank feed is EMPTY (`KeywordRank`, 0 rows), so the honest answer was always "nothing".
+ *
+ * This runs the engine instead, through the same five stages as Budget and Placement — the only
+ * differences are the ones `runDraftPreview` already takes as parameters: the context builder
+ * (`buildKeywordRankBidContexts`, the rule's own producer) and `adTargetId` in place of `campaignId`.
+ *
+ * Two things it reports that the others do not, because they are this tab's honesty problem:
+ *
+ * · **`feed`** — the state of `KeywordRank` itself. When a rank rule matches nothing, "no keyword
+ *   met your criteria" and "no rank has ever been ingested" are completely different facts, and
+ *   only the second one is true today. The surface must be able to tell them apart.
+ * · **`suppressedMatched` / `suppressedUnflaggedMatched`** — `bid_apply` carries no suppression
+ *   guard and its floor is `max(0.05, minEur)`, so it CANNOT write ≤3¢: every op on a suppressed
+ *   target un-suppresses it. The preview's job is to report what would really happen, so these are
+ *   counted and surfaced rather than quietly filtered out — filtering would make the preview
+ *   disagree with the engine, which is the defect this file exists to prevent. Refusing them is
+ *   KT-P6's decision, in the handler, where the engine would honour it too.
+ */
+export interface KeywordTrackerPreviewRow {
+  targetId: string
+  /** the keyword text, as Amazon holds it */
+  keyword: string
+  campaignId: string
+  marketplace: string | null
+  /** null = never observed. NEVER 0 — a rank of 0 does not exist. */
+  organicRank: number | null
+  sponsoredRank: number | null
+  rankDelta: number | null
+  currentEur: number
+  proposedEur: number
+  /** 'flag' = carries `suppressedFromBidCents`; 'bid' = at or under 3¢ with no flag. */
+  suppressed: 'flag' | 'bid' | null
+  /** the campaign is bid-suppressed right now, so the next resume would overwrite this write */
+  campaignSuppressed: boolean
+}
+
+export interface KeywordTrackerPreviewResult {
+  ok: boolean
+  error?: string
+  untranslatable?: string[]
+  windowDays: number
+  selected: number
+  measurable: number
+  inScope: number
+  matched: number
+  noChange: number
+  rows: KeywordTrackerPreviewRow[]
+  suppressedMatched: number
+  suppressedUnflaggedMatched: number
+  campaignSuppressedMatched: number
+  /** 🔴 The rank feed itself — the difference between "nothing matched" and "nothing was measured". */
+  feed: {
+    rows: number
+    keywords: number
+    markets: number
+    newestCapturedAt: string | null
+    /** positive keyword targets whose text+market appears in the feed at all */
+    coveredTargets: number
+    totalTargets: number
+  }
+  readAt: string
+}
+
+/** The rank feed's own census. Exported because the builder's banner states it before any draft exists. */
+export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResult['feed']> {
+  const [rows, totalTargets] = await Promise.all([
+    prisma.keywordRank.count(),
+    prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false } }),
+  ])
+  if (rows === 0) {
+    return { rows: 0, keywords: 0, markets: 0, newestCapturedAt: null, coveredTargets: 0, totalTargets }
+  }
+  const [agg, distinct, covered] = await Promise.all([
+    prisma.keywordRank.aggregate({ _max: { capturedAt: true } }),
+    prisma.$queryRawUnsafe<Array<{ keywords: number; markets: number }>>(
+      `SELECT count(DISTINCT lower(trim("keyword")))::int AS keywords, count(DISTINCT "marketplace")::int AS markets FROM "KeywordRank"`,
+    ),
+    prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT count(*)::int AS n
+         FROM "AdTarget" t
+         JOIN "AdGroup" g ON g.id = t."adGroupId"
+         JOIN "Campaign" c ON c.id = g."campaignId"
+        WHERE t.kind = 'KEYWORD' AND t."isNegative" = false AND t."expressionValue" IS NOT NULL
+          AND EXISTS (SELECT 1 FROM "KeywordRank" k
+                       WHERE lower(trim(k."keyword")) = lower(trim(t."expressionValue"))
+                         AND k."marketplace" = c."marketplace")`,
+    ),
+  ])
+  return {
+    rows,
+    keywords: distinct[0]?.keywords ?? 0,
+    markets: distinct[0]?.markets ?? 0,
+    newestCapturedAt: agg._max.capturedAt ? agg._max.capturedAt.toISOString() : null,
+    coveredTargets: covered[0]?.n ?? 0,
+    totalTargets,
+  }
+}
+
+export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Promise<KeywordTrackerPreviewResult> {
+  const readAt = new Date().toISOString()
+  const feed = await keywordRankFeedHealth()
+  const empty = (extra: Partial<KeywordTrackerPreviewResult> = {}): KeywordTrackerPreviewResult => ({
+    ok: true, windowDays: 30, selected: 0, measurable: 0, inScope: 0, matched: 0, noChange: 0,
+    rows: [], suppressedMatched: 0, suppressedUnflaggedMatched: 0, campaignSuppressedMatched: 0,
+    feed, readAt, ...extra,
+  })
+
+  interface RankCtx {
+    marketplace: string | null
+    campaign: { id: string; name: string; [k: string]: unknown }
+    adTarget: { id: string; organicRank?: number; sponsoredRank?: number; rankDelta?: number; [k: string]: unknown }
+  }
+
+  const { buildKeywordRankBidContexts } = await import('../../jobs/advertising-rule-evaluator.job.js')
+  const run = await runDraftPreview<RankCtx>(draft, {
+    slug: 'keyword-tracker',
+    handler: 'bid_apply',
+    // KEYWORD_RANK_BID is a `snapshot` trigger: rank is the latest reading and the perf metrics
+    // beside it cover 30 settled days. The builder offers no lookback, so this is not a choice.
+    defaultWindowDays: 30,
+    buildContexts: () => buildKeywordRankBidContexts() as unknown as Promise<unknown[]>,
+    entityId: (ctx) => ({ key: 'adTargetId', value: ctx.adTarget.id }),
+  })
+
+  const c = run.census
+  if (!run.ok) {
+    return {
+      ...empty({ windowDays: c.windowDays }),
+      ok: false,
+      error: run.error,
+      ...(run.untranslatable ? { untranslatable: run.untranslatable } : {}),
+    }
+  }
+
+  // ── the handler's own sentence is the only source of the numbers ──
+  interface Parsed { ctx: RankCtx; currentCents: number; proposedCents: number }
+  const parsed: Parsed[] = []
+  let noChange = 0
+  for (const { ctx, res } of run.settled) {
+    if (!res?.ok) continue
+    if (res.output?.noChange) { noChange += 1; continue }
+    const m = /^(-?\d+)¢\s*→\s*(-?\d+)¢$/.exec(String(res.output?.wouldChange ?? ''))
+    if (!m) continue
+    parsed.push({ ctx, currentCents: Number(m[1]), proposedCents: Number(m[2]) })
+  }
+
+  // ── who among the matched is deliberately switched off ──
+  //
+  // Both tests, counted separately, exactly as `kt6-bid-action.ts` counts them: the flag is
+  // evidence and ≤3¢ is the house convention, and merging them hides the 141 targets the flag does
+  // not know about ([[reference_ads_suppression_by_low_bid]]).
+  const ids = [...new Set(parsed.map((p) => p.ctx.adTarget.id))]
+  const [targets, suppressedCampaigns] = ids.length
+    ? await Promise.all([
+      prisma.adTarget.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, expressionValue: true, suppressedFromBidCents: true },
+      }),
+      prisma.campaign.findMany({
+        where: { id: { in: [...new Set(parsed.map((p) => p.ctx.campaign.id))] }, bidsSuppressedAt: { not: null } },
+        select: { id: true },
+      }),
+    ])
+    : [[], []]
+  const byId = new Map(targets.map((t) => [t.id, t]))
+  const suppressedCampaignIds = new Set(suppressedCampaigns.map((x) => x.id))
+
+  const rows: KeywordTrackerPreviewRow[] = parsed.map((p) => {
+    const t = byId.get(p.ctx.adTarget.id)
+    const suppressed: 'flag' | 'bid' | null = t?.suppressedFromBidCents != null
+      ? 'flag'
+      : p.currentCents <= KT_SUPPRESSION_CENTS ? 'bid' : null
+    const num = (v: unknown) => (typeof v === 'number' ? v : null)
+    return {
+      targetId: p.ctx.adTarget.id,
+      keyword: t?.expressionValue ?? '',
+      campaignId: p.ctx.campaign.id,
+      marketplace: p.ctx.marketplace,
+      // absent in the context means never observed — rendered as "—", never as 0
+      organicRank: num(p.ctx.adTarget.organicRank),
+      sponsoredRank: num(p.ctx.adTarget.sponsoredRank),
+      rankDelta: num(p.ctx.adTarget.rankDelta),
+      currentEur: p.currentCents / 100,
+      proposedEur: p.proposedCents / 100,
+      suppressed,
+      campaignSuppressed: suppressedCampaignIds.has(p.ctx.campaign.id),
+    }
+  })
+
+  rows.sort((a, b) => Math.abs(b.proposedEur - b.currentEur) - Math.abs(a.proposedEur - a.currentEur)
+    || a.keyword.localeCompare(b.keyword))
+
+  return {
+    ok: true,
+    windowDays: c.windowDays,
+    selected: c.selected,
+    measurable: c.measurable,
+    inScope: c.inScope,
+    matched: c.matched,
+    noChange,
+    rows,
+    suppressedMatched: rows.filter((r) => r.suppressed !== null).length,
+    suppressedUnflaggedMatched: rows.filter((r) => r.suppressed === 'bid').length,
+    campaignSuppressedMatched: rows.filter((r) => r.campaignSuppressed).length,
+    feed,
+    readAt,
   }
 }

@@ -5580,3 +5580,84 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* The held-Create answer, above the footer row. Full width, and its own margin so it does not
    ride the footer's border-top. */
 .h10-rb-heldnote.ktp { margin: 18px 0 0; }
+/* ── KT-P1 / KT-P2 — Keyword Tracker ─────────────────────────────────────────────────────────
+   Source order beats specificity, so these sit at the END and override the shared builder rules
+   without raising selector weight ([[reference_css_source_order_beats_specificity]]). */
+
+/* The feed banner. `.h10-rb-banner` is the blue informational box; `.warn` re-tones it to amber,
+   because "this rule cannot act" is not the same register as "here is how this step works".
+   Both are declared explicitly — a transparent background would borrow whatever sits behind it. */
+.h10-rb-banner.warn { background: #fdf3e3; color: #4a3b23; }
+.h10-rb-banner.warn svg { color: #8a5316; } /* 5.3:1 on the amber ground; #b06f12 measured 3.73 */
+.h10-rb-banner.warn b { color: #2f2513; font-weight: 800; }
+
+/* A HELD Create button. Deliberately NOT `:disabled` — a disabled button renders no tooltip and
+   answers no click, so the reason would land where nobody can read it. It stays focusable and
+   keeps a pointer cursor because it still does something: it explains itself.
+   🔴 The question-mark cursor is banned account-wide (ratchet baseline 0) — and the ratchet greps
+   this file as text, so do not name it here either. Keep the default; the note carries the why. */
+.h10-rb-create.held { background: #eef1f5; color: #8a93a1; box-shadow: inset 0 0 0 1px #dfe4ea; }
+.h10-rb-create.held:hover { background: #e7ebf1; color: #6f7885; }
+
+/* The rank preview is SEVEN columns where budget is five, so it gets its own width. At the shared
+   640px the six fixed columns ate 494px and left the keyword 128px — measured on the rig, two of
+   four keywords clipped mid-word ("motorradjacke he…"). The keyword is the row's identity; it is
+   the last thing that may be trimmed. Width is capped in vw so the dialog never overflows a narrow
+   viewport ([[reference_grid_name_cell_content_cap]] — cap at 100%, never at a px). */
+.h10-rb-prev.ktp { width: 900px; max-width: calc(100vw - 48px); }
+.h10-rb-prev .ptable.ktp .pthr span:not(:first-child),
+.h10-rb-prev .ptable.ktp .ptr span:not(.term) { flex: 0 0 74px; }
+/* Market and Δ hold 2–3 characters; Sponsored and New Bid hold the longest values. */
+.h10-rb-prev .ptable.ktp .pthr span:nth-child(2),
+.h10-rb-prev .ptable.ktp .ptr span:nth-child(2) { flex: 0 0 58px; }
+.h10-rb-prev .ptable.ktp .pthr span:nth-child(5),
+.h10-rb-prev .ptable.ktp .ptr span:nth-child(5) { flex: 0 0 54px; }
+.h10-rb-prev .ptable.ktp .pthr span:last-child,
+.h10-rb-prev .ptable.ktp .ptr .newb { flex: 0 0 96px; }
+/* The keyword takes everything left over and wraps rather than clipping. */
+.h10-rb-prev .ptable.ktp .pthr span:first-child,
+.h10-rb-prev .ptable.ktp .ptr .term { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+/* Δ direction. A rank that improved is a SMALLER number, so a positive delta is the good one —
+   the colours follow the meaning, not the sign of the arithmetic. */
+.h10-rb-prev .ptable.ktp .ptr span.up { color: #1a7f47; font-weight: 700; }
+.h10-rb-prev .ptable.ktp .ptr span.down { color: #b0341d; font-weight: 700; }
+/* The per-row suppression tag, under the keyword it belongs to. */
+.h10-rb-prev .ptr .term .pnote.sup {
+  display: block; font-style: normal; font-weight: 700; font-size: 10.5px; color: #8a5316;
+}
+/* The census warning. Amber, block-level, and above the timestamp line. */
+.h10-rb-prev .pfoot .pwarn {
+  display: block; margin-top: 8px; padding: 8px 10px;
+  border: 1px solid #f0dcb8; border-radius: 7px; background: #fdf6e9;
+  color: #5c4620; line-height: 1.55;
+}
+
+/* The held-Create answer, above the footer row. Full width, and its own margin so it does not
+   ride the footer's border-top. */
+.h10-rb-heldnote.ktp { margin: 18px 0 0; }
+
+/* The tab's one-line census strip, matching the harvest/negative cohort line exactly. */
+.h10-ktp-strip {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;
+  margin: 0 0 14px; padding: 11px 14px;
+  border: 1px solid #e7ebf0; border-radius: 9px; background: #fbfcfd;
+  font-size: 12.5px; line-height: 1.5; color: #4a5462;
+}
+.h10-ktp-strip b { color: #1c2530; font-weight: 800; }
+.h10-ktp-strip .warn { color: #8a5316; font-weight: 700; }
+.h10-ktp-strip .sep { color: #c3cad3; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .h10-rb-banner.warn { background: #33280f; color: #e8dcc4; }
+  :root:not([data-theme="light"]) .h10-rb-banner.warn svg { color: #e0a33c; }
+  :root:not([data-theme="light"]) .h10-rb-banner.warn b { color: #f6efe0; }
+  :root:not([data-theme="light"]) .h10-ktp-strip { background: #171a1f; border-color: #262b33; color: #b7c0cc; }
+  :root:not([data-theme="light"]) .h10-ktp-strip b { color: #eef2f7; }
+  :root:not([data-theme="light"]) .h10-ktp-strip .warn { color: #e0a33c; }
+}
+:root[data-theme="dark"] .h10-rb-banner.warn { background: #33280f; color: #e8dcc4; }
+:root[data-theme="dark"] .h10-rb-banner.warn svg { color: #e0a33c; }
+:root[data-theme="dark"] .h10-rb-banner.warn b { color: #f6efe0; }
+:root[data-theme="dark"] .h10-ktp-strip { background: #171a1f; border-color: #262b33; color: #b7c0cc; }
+:root[data-theme="dark"] .h10-ktp-strip b { color: #eef2f7; }
+:root[data-theme="dark"] .h10-ktp-strip .warn { color: #e0a33c; }

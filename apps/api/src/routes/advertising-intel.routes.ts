@@ -1507,10 +1507,38 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       if (!out.ok) reply.code(400)
       return out
     }
+    /**
+     * KT-P2 — the Keyword Tracker branch, and the only one that must also report the state of its
+     * FEED. A rank rule matching nothing has two completely different causes — "no keyword met your
+     * criteria" and "no rank has ever been ingested" — and today it is always the second, so the
+     * result carries `feed` alongside the census and the surface can tell them apart.
+     */
+    if (slug === 'keyword-tracker') {
+      const { previewKeywordTrackerRule } = await import('../services/advertising/ads-rule-preview.service.js')
+      const out = await previewKeywordTrackerRule(body)
+      if (!out.ok) reply.code(400)
+      return out
+    }
     const { previewBudgetRule } = await import('../services/advertising/ads-rule-preview.service.js')
     const out = await previewBudgetRule(body)
     if (!out.ok) reply.code(400)
     return out
+  })
+
+  /**
+   * KT-P1 — the rank feed's own census, read before any draft exists.
+   *
+   * The Keyword Tracker tab and its builder both have to state whether a rank rule can do anything
+   * at all, and that is a property of `KeywordRank`, not of a draft. Served here rather than as a
+   * field on the rules list so the builder can ask for it with nothing filled in yet.
+   *
+   * `grep -a`ed for collisions: `/advertising/keyword-tracker` and `/advertising/keyword-tracker/term`
+   * are the only neighbours and both are static, so no `:param` route can shadow this one.
+   */
+  fastify.get('/advertising/keyword-tracker/feed-health', async (_request, reply) => {
+    const { keywordRankFeedHealth } = await import('../services/advertising/ads-rule-preview.service.js')
+    reply.header('Cache-Control', 'private, max-age=60')
+    return keywordRankFeedHealth()
   })
 
   // SOV-P3 — the Share of Voice tab's one-line census, from the same call the engine makes.

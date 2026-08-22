@@ -118,7 +118,30 @@ const RANK_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 'pla
   'Sponsored Rank': { field: 'adTarget.sponsoredRank', conv: 'plain' },
   'Rank Change': { field: 'adTarget.rankDelta', conv: 'plain' },
   'Search Volume': { field: 'adTarget.searchVolume', conv: 'plain' },
-  'Share of Voice': { field: 'adTarget.sovPct', conv: 'frac' },
+  /**
+   * 🔴 KT-P3 (2026-08-22) — 'Share of Voice' REMOVED, and it is the one metric on this tab that had
+   * to go rather than be held.
+   *
+   * It named `adTarget.sovPct`, which `buildKeywordRankBidContexts` never emits — the exact defect
+   * this file's own header forbids two screens up, so the condition compared against `undefined`
+   * and silently never matched.
+   *
+   * The fix is removal, not wiring, because the only available source points the WRONG WAY.
+   * `analyzeShareOfVoice`'s `sovPct` is this query's impressions ÷ our own account's total
+   * impressions across every query and all four marketplaces — an account mix share, not a share of
+   * any market. Measured on prod 2026-08-22 (SOV-P): median 0.0026%, so `"< 50%"` matches 1000 of
+   * 1000 rows; and against Amazon's own per-query share it runs at Spearman ρ = −0.2445, negative in
+   * all four markets (DE −0.3454 · ES −0.3516 · IT −0.1735 · FR −0.5667). A rescale would not fix
+   * it — the error's sign flips across the head queries, and the damage is in the TAIL, which is
+   * where a rank rule lives: our five strongest real positions all read 0.000x%.
+   *
+   * So this is NOT the [[feedback_keep_placeholder_controls]] case. The four rank metrics above are
+   * HELD (visible, with the reason, awaiting a feed) because they are real capabilities with no
+   * source yet. This one had a source that would have made the rule act backwards.
+   *
+   * If a per-keyword market share is wanted here, the honest source is `SearchQueryPerformance`
+   * (Σ impressionsBrand ÷ MAX impressionsTotal, never SUM) — proposed as KT-P4.
+   */
   ACOS: { field: 'adTarget.acos', conv: 'frac' },
   Spend: { field: 'adTarget.spendCents', conv: 'cents' },
 }
