@@ -552,17 +552,33 @@ async function ingestCampaignRows(
       select: { id: true },
     })
 
-    // Per-adProduct attribution mapping. Phase G: SB v3 reports return
-    // unsuffixed `sales`/`purchases` (same shape as SD v3) rather than
-    // the v2 attributedSales14d/attributedConversions14d names. Store
-    // SB sales in sales14dCents to preserve the original 14d-window
-    // semantic; analytics sums both fields anyway.
+    // Per-adProduct attribution mapping. Phase G: SB v3 reports return unsuffixed
+    // `sales`/`purchases` (same shape as SD v3) rather than the v2
+    // attributedSales14d/attributedConversions14d names.
+    /**
+     * 🔴 ADM-P6/DC — the HEADLINE column, for every ad product without exception.
+     *
+     * Sponsored Brands used to be routed into `sales14dCents` instead, on the reasoning below
+     * ("analytics sums both fields anyway"). That sum was the defect: it made `sales14dCents` mean
+     * the SB headline to fourteen readers AND the 14-day window to the ingest, so the moment a
+     * real 14-day figure was written for a Sponsored Products row, those rows were summed with
+     * themselves — EUR 18,953 of ad sales shown against EUR 9,483 true, every affected ACoS halved.
+     *
+     * SD already reported here. SB now does too, which costs nothing: there has never been a single
+     * SB row in this account (measured all-time, all entity types), so there is no migration and no
+     * existing number changes. See `ads-core/ad-sales.ts` for the contract.
+     */
     const sales7dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
       : job.adProduct === 'SPONSORED_DISPLAY' ? toCents(r.sales)
+      : job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.sales)
       : 0
-    const sales14dCents =
-      job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.sales) : 0
+    /**
+     * ADM-P6/DC — the 14-day attribution WINDOW, and nothing else. Never the headline, never summed
+     * with `sales7dCents`. It is 0 until an ingest requests a real 14-day figure, and once one does
+     * (SPC.1's widened report), populating it for any product is safe — which was not true before.
+     */
+    const sales14dCents = 0
     const orders7d =
       job.adProduct === 'SPONSORED_PRODUCTS' ? (r.purchases7d ?? 0)
       : job.adProduct === 'SPONSORED_DISPLAY' ? (r.purchases ?? 0)

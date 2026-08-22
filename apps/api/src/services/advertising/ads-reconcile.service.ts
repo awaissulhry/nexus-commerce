@@ -17,6 +17,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { microsToCents, toEurCents } from '../ads-core/metrics-math.js'
 import { getFxRate } from '../fx-rate.service.js'
+import { adSalesCents } from '../ads-core/ad-sales.js'
 
 // A.3 — Amazon ad report data keeps restating for up to ~72h: impressions/
 // clicks/cost firm up as invalid-traffic validation runs (up to 3 days) and
@@ -127,7 +128,7 @@ export async function reconcileAdMetrics(
       const cid = r.localEntityId
       if (!cid || !storedSpend.has(cid)) continue
       const liveSpend = microsToCents(r._sum.costMicros)
-      const liveSales = (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      const liveSales = adSalesCents(r._sum)
       storedSpendDriftCentsBefore += Math.abs((storedSpend.get(cid) ?? 0) - liveSpend)
       await prisma.campaign.update({
         where: { id: cid },

@@ -73,6 +73,9 @@ import {
   computeRebalance,
 } from '../services/advertising/budget-pool-rebalancer.service.js'
 import { randomBytes, createHash } from 'node:crypto'
+// ADM-P6/DC — THE definition of ad-attributed sales. Fourteen readers open-coded it as
+// sales7dCents + sales14dCents, which double-counted the moment the 14-day window was populated.
+import { adSalesCents } from '../services/ads-core/ad-sales.js'
 // AX-IE.2 — the bulksheet grammar. Shared with apps/web so the browser's
 // pre-validation and this server-side gate cannot drift apart.
 import {
@@ -338,7 +341,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const cu = curUsage.get(it.id) ?? { state: 'unknown' as const, fraction: null, budgetCents: null, asOf: null }
         const uh = usageHours.get(it.id) ?? { observed: 0, outOfBudget: 0, actBid: 0, supported: false }
         const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
-        const salesCents = n(a?.sales7dCents) + n(a?.sales14dCents) + n(b?.sales7dCents) + n(b?.sales14dCents)
+        const salesCents = adSalesCents(a) + adSalesCents(b)
         return {
           ...it,
           impressions: n(a?.impressions) + n(b?.impressions),
@@ -574,7 +577,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // Allocate the ad-group total across its ads (Σ ads == ad group).
     const adShareOf = (a: { id: string }) => {
       const m = metByAd.get(a.id)
-      return { impr: m?._sum.impressions ?? 0, clicks: m?._sum.clicks ?? 0, micros: Number(m?._sum.costMicros ?? 0n), salesCents: (m?._sum.sales7dCents ?? 0) + (m?._sum.sales14dCents ?? 0), orders: m?._sum.orders7d ?? 0 }
+      return { impr: m?._sum.impressions ?? 0, clicks: m?._sum.clicks ?? 0, micros: Number(m?._sum.costMicros ?? 0n), salesCents: adSalesCents(m?._sum), orders: m?._sum.orders7d ?? 0 }
     }
     const adAlloc = allocateMetricsAcross(agMetrics, adGroup.productAds, adShareOf)
     const ads = adGroup.productAds.map((a, i) => {
@@ -590,7 +593,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }).sort((a, b) => b.spendCents - a.spendCents)
 
     // Allocate the ad-group total across dates (Σ trend == ad group → chart == KPI).
-    const trendShareOf = (r: { _sum: { impressions: number | null; clicks: number | null; costMicros: bigint | null; sales7dCents: number | null; sales14dCents: number | null; orders7d: number | null } }) => ({ impr: r._sum.impressions ?? 0, clicks: r._sum.clicks ?? 0, micros: Number(r._sum.costMicros ?? 0n), salesCents: (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0), orders: r._sum.orders7d ?? 0 })
+    const trendShareOf = (r: { _sum: { impressions: number | null; clicks: number | null; costMicros: bigint | null; sales7dCents: number | null; sales14dCents: number | null; orders7d: number | null } }) => ({ impr: r._sum.impressions ?? 0, clicks: r._sum.clicks ?? 0, micros: Number(r._sum.costMicros ?? 0n), salesCents: adSalesCents(r._sum), orders: r._sum.orders7d ?? 0 })
     const trendAlloc = allocateMetricsAcross(agMetrics, trendRaw, trendShareOf)
     const trend = trendRaw.map((r, i) => ({ date: r.date.toISOString().slice(0, 10), spendCents: trendAlloc[i]!.spendCents, salesCents: trendAlloc[i]!.salesCents, impressions: trendAlloc[i]!.impressions, clicks: trendAlloc[i]!.clicks, orders: trendAlloc[i]!.orders }))
 
@@ -2694,7 +2697,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const clicks = r._sum.clicks ?? 0
       const costMicros = r._sum.costMicros ?? 0n
       const costUnits = Number(costMicros) / 1_000_000
-      const salesCents = (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      const salesCents = adSalesCents(r._sum)
       const orders = r._sum.orders7d ?? 0
       const units = r._sum.units7d ?? 0
       const acos = salesCents > 0 ? (costUnits * 100) / salesCents : null
@@ -2811,9 +2814,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const campaignData = campaigns.map((c) => {
       const perf = c.externalCampaignId ? perfByExtId.get(c.externalCampaignId) : undefined
       const spendMicros  = Number(perf?._sum.costMicros ?? 0n)
-      const adSalesCents = (perf?._sum.sales7dCents ?? 0) + (perf?._sum.sales14dCents ?? 0)
+      const attributedSalesCents = adSalesCents(perf?._sum)
       const spendCents   = Math.round(spendMicros / 10_000)
-      const acos = adSalesCents > 0 ? (spendCents / adSalesCents) * 100 : null
+      const acos = attributedSalesCents > 0 ? (spendCents / attributedSalesCents) * 100 : null
       return {
         id: c.id,
         externalCampaignId: c.externalCampaignId,
@@ -2825,7 +2828,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         clicks:        perf?._sum.clicks ?? 0,
         orders:        perf?._sum.orders7d ?? 0,
         spendCents,
-        adSalesCents,
+        adSalesCents: attributedSalesCents,
         currencyCode:  perf?.currencyCode ?? 'EUR',
         acos:          acos != null ? Math.round(acos * 10) / 10 : null,
         hasV1Data:     perf != null,
@@ -2846,7 +2849,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const searchTerms = searchTermRows.map((r) => {
       const spendMicros  = Number(r._sum.costMicros ?? 0n)
-      const adSalesCents = r._sum.sales7dCents ?? 0
+      const attributedSalesCents = adSalesCents(r._sum)
       const spendCents   = Math.round(spendMicros / 10_000)
       return {
         query:       r.query,
@@ -2857,8 +2860,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         clicks:      r._sum.clicks ?? 0,
         orders:      r._sum.orders7d ?? 0,
         spendCents,
-        adSalesCents,
-        acos: adSalesCents > 0 ? Math.round((spendCents / adSalesCents) * 1000) / 10 : null,
+        adSalesCents: attributedSalesCents,
+        acos: attributedSalesCents > 0 ? Math.round((spendCents / attributedSalesCents) * 1000) / 10 : null,
       }
     })
 
@@ -3525,15 +3528,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const campRows: CampRow[] = perfByCampaign.map((r) => {
       const spendMicros  = Number(r._sum.costMicros ?? 0n)
-      const adSalesCents = (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      const attributedSalesCents = adSalesCents(r._sum)
       const spendCents   = spendMicros / 10_000
-      const acos = adSalesCents > 0 ? (spendCents / adSalesCents) * 100 : 999
+      const acos = attributedSalesCents > 0 ? (spendCents / attributedSalesCents) * 100 : 999
       return {
         entityId:    r.entityId,
         adProduct:   r.adProduct ?? 'UNKNOWN',
         marketplace: r.marketplace,
         spendEur:    spendMicros / 1_000_000,
-        adSalesCents,
+        adSalesCents: attributedSalesCents,
         acos,
         impressions: r._sum.impressions ?? 0,
         name:        nameMap.get(r.entityId) ?? r.entityId,
@@ -3720,12 +3723,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const spendMicros = Number(p._sum.costMicros ?? 0n)
       const adSpendCents = spendMicros / 10_000          // micros → cents
       // SP/SD 7d + SB 14d — avoid double-counting by using only one window
-      const adSalesCents = (p._sum.sales7dCents ?? 0) + (p._sum.sales14dCents ?? 0)
+      const attributedSalesCents = adSalesCents(p._sum)
       const rev = revenueMap.get(dateKey)
       const totalRevenueCents = rev?.revenueCents ?? 0
 
-      const acos  = adSalesCents > 0
-        ? (adSpendCents / adSalesCents) * 100 : null
+      const acos  = attributedSalesCents > 0
+        ? (adSpendCents / attributedSalesCents) * 100 : null
       const tacos = totalRevenueCents > 0
         ? (adSpendCents / totalRevenueCents) * 100 : null
       const ctr = (p._sum.impressions ?? 0) > 0
@@ -3737,7 +3740,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         clicks:           p._sum.clicks       ?? 0,
         orders:           p._sum.orders7d     ?? 0,
         adSpendCents:     Math.round(adSpendCents),
-        adSalesCents,
+        adSalesCents: attributedSalesCents,
         totalRevenueCents,
         acos:             acos  != null ? Math.round(acos  * 100) / 100 : null,
         tacos:            tacos != null ? Math.round(tacos * 100) / 100 : null,
@@ -3779,7 +3782,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       })
       previous = summarize(
         Math.round(Number(prev._sum.costMicros ?? 0n) / 10_000),
-        (prev._sum.sales7dCents ?? 0) + (prev._sum.sales14dCents ?? 0),
+        adSalesCents(prev._sum),
         prev._sum.impressions ?? 0,
         prev._sum.clicks ?? 0,
         prev._sum.orders7d ?? 0,
@@ -4042,7 +4045,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       existing.clicks += r._sum.clicks ?? 0
       existing.costMicros += r._sum.costMicros ?? 0n
       // Use whichever attribution window has data (SP/SD = 7d, SB = 14d)
-      existing.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      existing.salesCents += adSalesCents(r._sum)
       existing.orders += r._sum.orders7d ?? 0
       byCurrency.set(r.currencyCode, existing)
     }

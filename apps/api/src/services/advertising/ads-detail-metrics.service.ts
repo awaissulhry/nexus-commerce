@@ -12,6 +12,7 @@
 import prisma from '../../db.js'
 import { allocate, microsToCents } from '../ads-core/metrics-math.js'
 import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
+import { adSalesCents } from '../ads-core/ad-sales.js'
 
 export interface AllocatedMetrics {
   impressions: number
@@ -69,7 +70,7 @@ export async function computeCampaignDetailMetrics(opts: {
   let campImpr = cagg._sum.impressions ?? 0
   let campClicks = cagg._sum.clicks ?? 0
   let campSpend = microsToCents(cagg._sum.costMicros)
-  let campSales = (cagg._sum.sales7dCents ?? 0) + (cagg._sum.sales14dCents ?? 0)
+  let campSales = adSalesCents(cagg._sum)
   let campOrders = cagg._sum.orders7d ?? 0
 
   // DR.3 — intraday overlay. Daily performance is T+1, so when the range
@@ -120,7 +121,7 @@ export async function computeCampaignDetailMetrics(opts: {
       cur.impr += r._sum.impressions ?? 0
       cur.clicks += r._sum.clicks ?? 0
       cur.micros += Number(r._sum.costMicros ?? 0n)
-      cur.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      cur.salesCents += adSalesCents(r._sum)
       cur.orders += r._sum.orders7d ?? 0
     }
   }

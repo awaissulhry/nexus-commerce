@@ -43,6 +43,7 @@ import { BID_WINDOW_MAX, BID_WINDOW_MIN, HIGH_ACOS_FLOOR, TRIGGER_WINDOW, WASTIN
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 // PLC-P7 — the report-label join and the three lane enums, from the leaf module that owns them.
 import { REPORT_LABEL_TO_PLACEMENT, PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from '../services/advertising/ads-placement-math.js'
+import { adSalesCents } from '../services/ads-core/ad-sales.js'
 
 /**
  * B2 (2026-08-20) — each trigger's window now comes from `@nexus/shared/ads-rule-window`, which
@@ -776,7 +777,7 @@ export async function buildCampaignBudgetContexts(overrideDays?: number): Promis
     const p = byId.get(c.id)
     const spendCents = microsToCents(p?._sum.costMicros)
     if (spendCents === 0) continue
-    const salesCents = (p?._sum.sales7dCents ?? 0) + (p?._sum.sales14dCents ?? 0)
+    const salesCents = adSalesCents(p?._sum)
     const impressions = p?._sum.impressions ?? 0
     const clicks = p?._sum.clicks ?? 0
     const orders = p?._sum.orders7d ?? 0
@@ -1182,7 +1183,7 @@ async function buildCampaignNoSalesContexts() {
     const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
     return campaigns
       .map((c) => ({ c, p: byId.get(c.id) }))
-      .filter((x) => { if (!x.p) return false; const spend = microsToCents(x.p._sum.costMicros); const sales = (x.p._sum.sales7dCents ?? 0) + (x.p._sum.sales14dCents ?? 0); return spend >= 1000 && sales === 0 })
+      .filter((x) => { if (!x.p) return false; const spend = microsToCents(x.p._sum.costMicros); const sales = adSalesCents(x.p._sum); return spend >= 1000 && sales === 0 })
       .slice(0, 200)
       .map(({ c, p }) => ({
         trigger: 'CAMPAIGN_NO_SALES' as const,
