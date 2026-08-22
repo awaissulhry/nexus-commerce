@@ -661,3 +661,45 @@ defer — re-sourcing KT from SQP would now duplicate SOV) · a campaign-status 
 2,130** KT targets sit in a PAUSED campaign; no sibling builder does this) · `bid_up` /
 `raise_bids_for_rank_defense` share the un-suppression hole in principle · the execution-status
 reader · the Bid tab's client-side preview.
+
+## BID-P — the last client-side preview (2026-08-22, session nexus-commerce-7c) — SHIPPED `da8a4fa1c`
+
+Bid was the only slug still computing its preview in the browser. `isSov` and `isRank` already
+returned before it, so this was a **deletion** of the client arithmetic path rather than a fourth
+special case: every draft preview on every tab now runs the real engine.
+
+🔴 **Six of the ELEVEN THEN actions rendered "no change" on every row.** `apply()` handled
+set/incPct/decPct/incAbs/decAbs and fell through to `: cur` for the four COMPUTED actions BP.P4
+shipped as headline features and the two status verbs. Verified after: `Set Bid to CPC ×
+(Target ACoS / Actual ACoS)` takes DE "motorrad jacke" (129 % ACoS) from **€0.78 → €0.15**, and
+`revPerClick` takes ES "chaqueta moto hombre" from **€0.63 → €2.63**. The old panel showed both as
+no change, so an operator concluded their thresholds were too tight.
+
+🔴 **The engine fix underneath it: `KEYWORD_HIGH_ACOS` carried no campaign or ad-group id.** P2.3's
+defect, fixed for the SOV and rank emitters at the time and missed here. `contextIdentity()`
+therefore resolved campaign/portfolio/product EMPTY, so **a Bid rule scoped to any grain but market
+matches zero contexts forever — armed-looking and inert.** It also made a preview impossible: the
+picker filter had nothing to match on (measured: 8 contexts, **0** campaigns; after, 8 across 7).
+`bid_apply`'s own `campaignIds` allowlist is unaffected — it re-reads the campaign at write time —
+so this changes what a rule can SEE, never what it may touch. 0 bid rules exist, so nothing live moved.
+
+**The trigger's floor is now declared and stated.** `HIGH_ACOS_FLOOR` sits in `ads-rule-window.ts`
+beside `WASTING_FLOOR` and is READ by the emitter, the preview census and the builder's Criteria
+note. It admits **8 of 3,155 positive ad targets** (orders · sales · ≥€2 · ≥20 % ACoS, cap 500) and
+nothing on screen had ever said so — the panel listed up to 1,500.
+
+**Refusals are ROWS, both kinds:** `ok:false` from a computed op with no signal (237 of 259 clicked
+targets have spend and no attributed sales over 14 settled days, so the ratio ops refuse by name),
+and `ok:true` + `output.skipped` from KT-P6's suppression guard. `campaign-not-selected` stays
+silent — the operator chose that list. Auto and product targets are emitted here and ARE actionable,
+so they are labelled by what they are rather than left blank.
+
+⚠️ **Two traps this unit walked into, both worth the next session's attention.** `git commit --only`
+was impossible again, so every file was rebuilt as `git show origin/main:<file>` + only my edits and
+diffed back with a foreign-marker grep. And the zsh `path` trap KT-P warned about bit within the
+hour: naming a loop variable `path` ties it to `PATH`, `git` becomes "command not found", and twelve
+`update-index` calls silently do nothing. **Count the staged files against what you intended, every
+time** — `git diff --cached --stat` in the same breath as the commit.
+
+Verified as a commit in a detached worktree at its parent: tsc clean both apps, api 401 files /
+5,218 tests, web 985, five ratchets at baseline, five preview shapes driven against prod, 0 writes.
