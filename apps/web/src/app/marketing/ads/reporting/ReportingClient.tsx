@@ -148,12 +148,16 @@ export function ReportingClient() {
       staleAfterDays: d.staleAfterDays,
       // A report opens only when the engine has a spec for it AND there is something to
       // show: "Not ingested" and "Blocked" would open an empty grid.
-      runnable: isPipeline || (RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(d.state)),
-      href: isPipeline
-        ? '/marketing/ads/reporting/pipeline'
-        : RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(d.state)
-          ? `/marketing/ads/reporting/${entry.id}`
-          : null,
+      // NAV.1 — a report that lives elsewhere is openable on its own terms: it has a
+      // destination, so the "is there a spec and is there data" test does not apply.
+      runnable: !!entry.externalHref || isPipeline
+        || (RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(d.state)),
+      href: entry.externalHref
+        ?? (isPipeline
+          ? '/marketing/ads/reporting/pipeline'
+          : RUNNABLE_REPORT_IDS.includes(entry.id) && !UNAVAILABLE.has(d.state)
+            ? `/marketing/ads/reporting/${entry.id}`
+            : null),
       // A report we never request from Amazon has no measurement — not a measurement of
       // zero. The coverage row exists and reads `rows: 0`, but rendering that as "0 rows"
       // says we looked and found nothing, when nobody ever looked. Same rule the engine
@@ -318,6 +322,10 @@ export function ReportingClient() {
               {r.href
                 ? <Link href={r.href} className="rpt-open">{r.entry.title}</Link>
                 : <span className="rpt-open is-off">{r.entry.title}</span>}
+              {/* NAV.1 — say where it goes BEFORE the click, not after. A row that
+                  silently navigates out of Reporting is the surprise this label exists
+                  to remove. */}
+              {r.entry.livesIn && <span className="rpt-elsewhere">↗ {r.entry.livesIn}</span>}
               {/* Source, grain, cadence and the standing caveat live here rather than on the
                   row: true, occasionally needed, and not worth the vertical space until asked. */}
               <HoverCard

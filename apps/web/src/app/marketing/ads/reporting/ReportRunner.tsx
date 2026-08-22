@@ -41,6 +41,7 @@ import { DeliveriesModal, type DeliveriesView } from './DeliveriesModal'
 import { ReportSummary } from './ReportSummary'
 import { BusinessContextPanel } from './BusinessContextPanel'
 import { IncrementalityPanel } from './IncrementalityPanel'
+import { BrandMetricsPanel } from './BrandMetricsPanel'
 import { fetchSummary, type CompareMode, type SummaryResult } from './summary-api'
 import {
   defaultRange,
@@ -450,6 +451,20 @@ export function ReportRunner({ reportId }: { reportId: string }) {
         compare={compare}
         onCompare={setCompare}
       />
+
+      {/* BM.1 — the category benchmarks, in the slot this page already uses for
+          report-specific panels (see the campaign report's business context and
+          incrementality below the grid). It sits ABOVE the grid rather than below
+          because on this report it IS the headline: Amazon has been sending a
+          category median and a top-performer figure for thirteen metrics since
+          June and nothing has ever rendered one. The grid underneath is unchanged. */}
+      {reportId === 'brand-metrics' && (
+        <BrandMetricsPanel
+          params={params}
+          markets={result?.options.marketplaces ?? []}
+          onPickMarket={(m) => patch({ marketplaces: [m] })}
+        />
+      )}
 
       {/* CBN.3 — toolbar + grid + pager are ONE card, exactly as the Ad Manager
           renders them. The row count lives on the left of the toolbar and the

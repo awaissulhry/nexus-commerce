@@ -16,6 +16,9 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { fetchReport, type ClientContext } from './ads-api-client.js'
+// One definition of the percentage-vs-fraction normalisation, shared with the
+// campaign ingest. Two copies is how the two tables start disagreeing about a unit.
+import { toImpressionShareFraction } from './ads-reports.service.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 
@@ -73,9 +76,8 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
       const dateStr = String(r.date ?? '').slice(0, 10)
       const v = r.topOfSearchImpressionShare
       if (!cid || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || v == null || v === '') continue
-      const num = Number(v)
-      if (!Number.isFinite(num) || num < 0) continue
-      const frac = num > 1 ? num / 100 : num // Amazon may return % (12.34) or fraction (0.1234) — normalise to 0–1
+      const frac = toImpressionShareFraction(v)
+      if (frac === null) continue
       local.withIS++
       const res = await prisma.amazonAdsPlacementReport.updateMany({
         where: { campaignId: cid, date: new Date(dateStr), placement: TOP_REPORT_PLACEMENT },

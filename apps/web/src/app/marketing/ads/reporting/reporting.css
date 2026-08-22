@@ -729,3 +729,264 @@ select.rpt-input { height: 32px; }
 .rpt-iro-b.br { background: #ede9fe; color: #6d28d9; }
 .rpt-iro-b.nb { background: #e0f2fe; color: #0369a1; }
 .rpt-iro-note { margin: 10px 0 0; font-size: 11.5px; color: rgb(var(--text-tertiary)); line-height: 1.55; }
+
+/* ── BM.1 · category benchmarks ──────────────────────────────────────────────
+   The card is deliberately small and repeated: fourteen of them read as one
+   instrument panel, where fourteen full-width panels would read as a list.
+
+   🔴 Every surface/border/text token below is `rgb(var(--x))` — see the header
+   note. `--color-primary` and the `--status-*-strong` tokens are real hex and
+   are used bare. Getting that backwards is silent: the declaration is dropped
+   and the element renders with no background and a zero-width border. */
+
+.rpt-bm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  border: 1px solid rgb(var(--border-subtle));
+  border-radius: 10px;
+  background: rgb(var(--surface-card));
+}
+
+.rpt-bm-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rpt-bm-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: rgb(var(--text-primary));
+}
+/* The category path is not decoration — it names which of the seven nodes these
+   numbers belong to, which is the difference between a correct figure and one
+   counted seven times. */
+.rpt-bm-node {
+  font-size: 12px;
+  color: rgb(var(--text-secondary));
+}
+.rpt-bm-head svg { color: rgb(var(--text-tertiary)); }
+.rpt-bm-scope {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgb(var(--text-tertiary));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rpt-bm-why {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgb(var(--text-secondary));
+}
+.rpt-bm-why b { color: rgb(var(--text-primary)); font-weight: 650; }
+
+.rpt-bm-markets { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.rpt-bm-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgb(var(--text-tertiary));
+}
+.rpt-bm-sub svg { color: rgb(var(--text-tertiary)); }
+
+.rpt-bm-grid {
+  display: grid;
+  /* auto-fill, not auto-fit: with auto-fit a row holding three cards stretches
+     them across the full width and the last row looks like a different component.
+     Fixed-width tracks keep every card identical wherever it lands. */
+  /* 174px is measured, not chosen: the widest card content is "Median: 5.33%" +
+     "Top: 22.33%" at 149px plus 24px of padding = 173px. Below that the scale row
+     compresses and the two figures collide. Fitting nine across would need a 160px
+     track, so the partly-filled last row is the correct outcome at this width
+     rather than something to engineer away by clipping real numbers. */
+  grid-template-columns: repeat(auto-fill, minmax(174px, 1fr));
+  gap: 10px;
+}
+
+.rpt-bm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 12px 10px;
+  border: 1px solid rgb(var(--border-subtle));
+  border-radius: 8px;
+  background: rgb(var(--surface-sunken));
+  min-width: 0;
+}
+
+.rpt-bm-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgb(var(--text-secondary));
+  min-height: 30px;
+}
+.rpt-bm-label svg { flex: 0 0 auto; color: rgb(var(--text-tertiary)); }
+
+.rpt-bm-value {
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.1;
+  color: rgb(var(--text-primary));
+  font-variant-numeric: tabular-nums;
+  /* A band reads "0–5%" and must not wrap mid-range. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Always present, so a card with no bar is the same height as one with a bar.
+   Height matches .rpt-bm-bar exactly. */
+.rpt-bm-track { height: 6px; }
+
+.rpt-bm-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgb(var(--border-subtle));
+  overflow: hidden;
+}
+.rpt-bm-bar .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: 3px;
+  background: rgb(var(--text-tertiary));
+}
+/* Ahead of the category median or behind it — the one comparison worth carrying
+   in colour rather than leaving to the reader to compute from two numbers.
+   `is-level` and `is-unknown` deliberately have no rule and keep the neutral
+   fill: sitting exactly ON the median is not an achievement, and an absent
+   figure is not a result. */
+.rpt-bm-bar.is-ahead .fill { background: var(--status-success-strong); }
+.rpt-bm-bar.is-behind .fill { background: var(--status-warning-strong); }
+
+/* The median's position on the same 0→top scale. `overflow:hidden` on the bar
+   clips it at both ends, so a median sitting at 100% still reads as a tick. */
+.rpt-bm-bar .tick {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  display: block;
+  background: rgb(var(--text-primary));
+  opacity: .55;
+}
+
+.rpt-bm-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: rgb(var(--text-tertiary));
+  font-variant-numeric: tabular-nums;
+}
+.rpt-bm-scale b {
+  font-weight: 600;
+  color: rgb(var(--text-secondary));
+}
+
+/* NAV.1 — "this report lives on another page". Quiet on purpose: it is a
+   wayfinding note, not a status, and must not compete with the state pill. */
+.rpt-elsewhere {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: rgb(var(--text-tertiary));
+  white-space: nowrap;
+}
+
+/* ── BM.2 · the customer journey ─────────────────────────────────────────────
+   Three stages across, matching the shape operators already know from Amazon's
+   own console — but carrying an INDEX, not a percentile. See BrandFunnel.tsx. */
+
+.rpt-bm-funnel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1px;
+  background: rgb(var(--border-subtle));
+  border: 1px solid rgb(var(--border-subtle));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* auto-fit here, unlike the benchmark grid: there are exactly three stages and
+   they should always divide the full width between them. */
+.rpt-bm-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px 14px;
+  background: rgb(var(--surface-card));
+}
+
+.rpt-bm-stage-hd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgb(var(--text-tertiary));
+}
+.rpt-bm-stage-hd svg { flex: 0 0 auto; }
+
+.rpt-bm-stage-val {
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.05;
+  color: rgb(var(--text-primary));
+  font-variant-numeric: tabular-nums;
+}
+
+/* The index bar's track IS its full domain (0–1), so it takes the primary accent
+   rather than the ahead/behind ramp — there is no median to be ahead of. */
+.rpt-bm-bar.is-index .fill { background: var(--color-primary); }
+
+.rpt-bm-stage-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 16px;
+  margin: 3px 0 0;
+}
+.rpt-bm-stage-counts > div { display: flex; align-items: baseline; gap: 5px; }
+.rpt-bm-stage-counts dt {
+  margin: 0;
+  font-size: 11px;
+  color: rgb(var(--text-tertiary));
+}
+.rpt-bm-stage-counts dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgb(var(--text-secondary));
+  font-variant-numeric: tabular-nums;
+}
+
+/* A standing caveat under a surface, in the console's own footnote register:
+   small, secondary, and always present rather than appearing only when wrong. */
+.rpt-bm-foot {
+  margin: 0;
+  max-width: 92ch;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: rgb(var(--text-tertiary));
+}
+.rpt-bm-foot b { color: rgb(var(--text-secondary)); font-weight: 650; }

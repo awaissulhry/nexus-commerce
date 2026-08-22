@@ -73,6 +73,23 @@ export interface ReportEntry {
   adProducts?: string[]
   /** A standing caveat that is true regardless of the live numbers. */
   note?: string
+  /**
+   * NAV.1 — a report that lives on another page.
+   *
+   * The library's job is choosing a report, and it was listing only the ones the
+   * runner happens to execute. Market share and page-one coverage are reports by
+   * any operator's definition; they simply live under Analytics, because the
+   * standing split puts data here and meaning there. An operator who does not
+   * already know that has no way to find them from the page whose whole purpose
+   * is finding them.
+   *
+   * So the row links OUT rather than the page moving in. Setting this makes the
+   * row openable and marks where it goes; nothing is relocated and no route
+   * changes. See `livesIn` for the label.
+   */
+  externalHref?: string
+  /** Section name shown on the row, e.g. `Analytics`. Only with `externalHref`. */
+  livesIn?: string
 }
 
 export const REPORT_CATALOGUE: ReportEntry[] = [
@@ -214,6 +231,23 @@ export const REPORT_CATALOGUE: ReportEntry[] = [
     group: 'Economics',
     cadence: 'snapshot',
     coverageKey: 'ebay-economics',
+  },
+
+  // NAV.1 — lives under Analytics, listed here because it is a report and this is
+  // where reports are chosen. It reads the same Brand Analytics feed as Search
+  // Query Performance above, so its freshness is measured rather than asserted.
+  {
+    id: 'coverage',
+    title: 'Coverage — page-one share',
+    answers: 'How much of page one we hold on a keyword, against the whole market.',
+    source: 'Brand Analytics · search query performance',
+    grain: 'keyword × week × market',
+    group: 'Market & brand',
+    cadence: 'weekly',
+    coverageKey: 'sqp',
+    externalHref: '/marketing/ads/analytics',
+    livesIn: 'Analytics',
+    note: 'Amazon reports on a fraction of our ASINs’ queries — coverage is 12.8% in IT and 4.4% in FR — so this answers for the terms it can see, not for every term we bid on.',
   },
 
   // ── Pipeline ──────────────────────────────────────────────────────────────
