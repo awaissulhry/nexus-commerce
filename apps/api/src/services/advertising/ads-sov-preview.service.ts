@@ -100,7 +100,11 @@ export interface SovPreviewResult {
   matched: number
   /** Matched targets whose proposed bid equals the current one. */
   noChange: number
-  /** Of the matched, how many are deliberately suppressed — and how many only a ≤3¢ bid says so. */
+  /**
+   * Of the matched, how many the bid action REFUSES as deliberately suppressed — and how many of
+   * those only a ≤3¢ bid says so. Since KT-P6 these are refusals the engine makes, not raises it
+   * would perform: the copy must say "left alone", never "would raise".
+   */
   suppressedMatched: number
   suppressedUnflaggedMatched: number
   campaignSuppressedMatched: number
@@ -121,6 +125,20 @@ export interface SovPreviewResult {
   periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string }>
   rows: SovPreviewRow[]
   untranslatable?: string[]
+}
+
+/**
+ * The three ways `bid_apply` refuses a deliberately suppressed target, in the operator's words.
+ *
+ * Kept as three rather than one because the two tests mean different things and merging them hides
+ * the ones the flag does not know about — measured at KT-P6's commit time the account read flagged
+ * 0 · campaign-suppressed 0 · low-and-unflagged 141, so a guard on the flag alone would have
+ * protected nothing at that instant ([[reference_ads_suppression_by_low_bid]]).
+ */
+const SUPPRESSION_REFUSALS: Record<string, string> = {
+  suppressed_flag: 'left alone — this target carries a suppression flag, and the bid action refuses to raise a deliberately suppressed target back into delivery',
+  suppressed_by_bid: 'left alone — at or under 3¢ with no flag, which this account treats as a suppression; the bid action refuses to raise it back into delivery',
+  campaign_suppressed: 'left alone — this campaign’s bids are suppressed right now, and the next resume would overwrite any write anyway',
 }
 
 /** `"49¢ → 75¢"` → `[49, 75]`. The handler's own sentence is the only source of the pair. */
@@ -251,7 +269,34 @@ export async function previewSovRule(draft: BudgetPreviewDraft): Promise<SovPrev
       })
       continue
     }
-    if (typeof out.skipped === 'string') continue // campaign-not-selected — already excluded above
+    /**
+     * 🔴 KT-P6 (`cba86dc11`) changed what a suppressed target returns, and this preview had to
+     * change with it. `bid_apply` now refuses a deliberately suppressed target BEFORE its `dryRun`
+     * return, so those rows arrive as `skipped` with no `wouldChange`.
+     *
+     * They were being `continue`d — silently dropped. Measured on prod: 141 enabled keyword targets
+     * currently sit at ≤3¢ unflagged, and `bid_apply` answers one of them
+     * `{"skipped":"suppressed_by_bid","bidCents":2}`. So the panel listed fewer keywords than
+     * `matched` claimed and never said why, and the suppression warning — computed from `rows` —
+     * could never fire again. A preview that drops the rows the engine refuses is the same class of
+     * defect as one that invents rows the engine cannot reach.
+     *
+     * A refusal is a ROW. `campaign-not-selected` stays silent because the operator chose that list.
+     */
+    if (typeof out.skipped === 'string') {
+      const why = SUPPRESSION_REFUSALS[out.skipped]
+      if (!why) continue
+      rows.push({
+        adTargetId: t.id, keyword: t.keyword ?? '', matchType: t.matchType ?? null,
+        campaign: s.ctx.campaign.name, marketplace: s.ctx.marketplace, status: t.status ?? null,
+        sovPct: t.sovPct, concentrationPct: t.topSharePct,
+        currentEur: (t.bidCents ?? 0) / 100, proposedEur: (t.bidCents ?? 0) / 100, deltaEur: 0,
+        clamped: false, refused: why,
+        suppressed: out.skipped === 'suppressed_flag' ? 'flag' : out.skipped === 'suppressed_by_bid' ? 'bid' : null,
+        campaignSuppressed: out.skipped === 'campaign_suppressed',
+      })
+      continue
+    }
     const pair = parseWouldChange(out.wouldChange)
     if (!pair) continue
     const [curCents, nextCents] = pair
