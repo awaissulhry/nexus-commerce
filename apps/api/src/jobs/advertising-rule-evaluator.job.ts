@@ -207,7 +207,8 @@ interface ProfitabilityContext {
     name: string
     spendCents: number
     salesCents: number
-    acos: number | null
+    /** KT-P/C1 — OPTIONAL, not nullable: a null ACoS reads as 0 to `applyOperator`. */
+    acos?: number
     trueProfitCents: number
   }
   profit: {
@@ -271,7 +272,8 @@ async function buildProfitabilityContexts(): Promise<ProfitabilityContext[]> {
         name: c.name,
         spendCents,
         salesCents: Math.round(Number(c.sales) * 100),
-        acos: c.acos != null ? Number(c.acos) : null,
+        // KT-P/C1 — absent, not null: a null ACoS reads as 0 to `applyOperator` and matches `lte`.
+        ...measured({ acos: c.acos != null ? Number(c.acos) : null }),
         trueProfitCents: c.trueProfitCents,
       },
       profit: { trueProfitCents30d, netCents },
@@ -291,7 +293,8 @@ interface CacSpikeContext {
     name: string
     spendCents: number
     salesCents: number
-    acos: number | null
+    /** KT-P/C1 — OPTIONAL, not nullable: a null ACoS reads as 0 to `applyOperator`. */
+    acos?: number
   }
 }
 
@@ -322,7 +325,8 @@ async function buildCacSpikeContexts(): Promise<CacSpikeContext[]> {
         name: c.name,
         spendCents: Math.round(Number(c.spend) * 100),
         salesCents: Math.round(Number(c.sales) * 100),
-        acos: c.acos != null ? Number(c.acos) : null,
+        // KT-P/C1 — absent, not null (see EMPTY_TARGET_PERF).
+        ...measured({ acos: c.acos != null ? Number(c.acos) : null }),
       },
     }))
 }
@@ -664,10 +668,16 @@ export interface CampaignBudgetContext {
   campaign: {
     id: string; externalCampaignId: string | null; name: string
     dailyBudgetCents: number; spendCents: number; salesCents: number
-    acos: number | null; roas: number | null
     impressions: number; clicks: number; orders: number
-    ctr: number | null; cvr: number | null; cpcCents: number | null
-    avgDailySpendCents: number; budgetUtilization: number | null
+    avgDailySpendCents: number
+    /**
+     * KT-P/C1 — OPTIONAL, not nullable. An unmeasurable ratio is absent, so every operator refuses
+     * it; a `null` here reads as 0 to the engine. Same shape as `PlacementLaneMetrics` above.
+     * The counting fields stay required — a measured 0 is a measurement.
+     */
+    acos?: number; roas?: number
+    ctr?: number; cvr?: number; cpcCents?: number
+    budgetUtilization?: number
   }
   /**
    * PLC-P7 — the three SP placement lanes, each measured on its own, from
@@ -778,16 +788,26 @@ export async function buildCampaignBudgetContexts(overrideDays?: number): Promis
       campaign: {
         id: c.id, externalCampaignId: c.externalCampaignId, name: c.name,
         dailyBudgetCents, spendCents, salesCents,
-        acos: salesCents > 0 ? spendCents / salesCents : null,
-        roas: spendCents > 0 ? salesCents / spendCents : null,
-        // Ratios are null (never 0) when the denominator is 0 — a null fails a condition, which
-        // is the honest reading for "not measurable"; a fabricated 0 would MATCH every `lt`.
         impressions, clicks, orders,
-        ctr: impressions > 0 ? clicks / impressions : null,
-        cvr: clicks > 0 ? orders / clicks : null,
-        cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
         avgDailySpendCents,
-        budgetUtilization: dailyBudgetCents > 0 ? avgDailySpendCents / dailyBudgetCents : null,
+        /**
+         * 🔴 KT-P/C1 — the comment that stood here said "a null fails a condition, which is the
+         * honest reading for 'not measurable'". **That was false, and it is why this survived.**
+         * `applyOperator` coerces with `Number()`, and `Number(null)` is `0` — so a null ratio
+         * MATCHED every `lt`/`lte`, which is the exact failure the old comment believed it was
+         * preventing. Only an ABSENT key fails, because `Number(undefined)` is `NaN`.
+         *
+         * Measured on prod 2026-08-22: **38 of the 46 campaigns emitting a budget context have no
+         * ACoS** (spend, no sales) and all 38 satisfied `ACOS <= 25%`.
+         */
+        ...measured({
+          acos: salesCents > 0 ? spendCents / salesCents : null,
+          roas: spendCents > 0 ? salesCents / spendCents : null,
+          ctr: impressions > 0 ? clicks / impressions : null,
+          cvr: clicks > 0 ? orders / clicks : null,
+          cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
+          budgetUtilization: dailyBudgetCents > 0 ? avgDailySpendCents / dailyBudgetCents : null,
+        }),
       },
       // PLC-P7 — the builder's own lane keys, so `scope: 'tos'` resolves without a second map.
       placement: {
@@ -949,11 +969,14 @@ function searchTermContext(
     marketplace,
     searchTerm: {
       ...base,
-      acos: base.salesCents > 0 ? base.spendCents / base.salesCents : null,
-      roas: base.spendCents > 0 ? base.salesCents / base.spendCents : null,
-      ctr: base.impressions > 0 ? base.clicks / base.impressions : null,
-      cvr: base.clicks > 0 ? base.orders / base.clicks : null,
-      cpcCents: base.clicks > 0 ? Math.round(base.spendCents / base.clicks) : null,
+      // KT-P/C1 — every ratio absent when its denominator is 0, so `lt`/`lte` refuse it.
+      ...measured({
+        acos: base.salesCents > 0 ? base.spendCents / base.salesCents : null,
+        roas: base.spendCents > 0 ? base.salesCents / base.spendCents : null,
+        ctr: base.impressions > 0 ? base.clicks / base.impressions : null,
+        cvr: base.clicks > 0 ? base.orders / base.clicks : null,
+        cpcCents: base.clicks > 0 ? Math.round(base.spendCents / base.clicks) : null,
+      }),
     },
   }
 }
@@ -1005,14 +1028,24 @@ async function buildHighAcosKeywordContexts(overrideDays?: number) {
           marketplace: p.marketplace,
           adTarget: {
             id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: spend / sales,
-            // P2.1 — the builder's full metric list (ROAS/CTR/CVR/CPC/Clicks/Impressions)
-            // translates now; ratios are null when the denominator is 0, never a fabricated 0.
-            roas: spend > 0 ? sales / spend : null,
             clicks, impressions,
-            ctr: impressions > 0 ? clicks / impressions : null,
-            cvr: clicks > 0 ? orders / clicks : null,
-            cpcCents: clicks > 0 ? Math.round(spend / clicks) : null,
-            bidCents: (p.localEntityId != null ? bids.get(p.localEntityId) : null) ?? null,
+            /**
+             * 🔴 KT-P/C1 — the old comment here claimed "ratios are null when the denominator is 0,
+             * never a fabricated 0". A null IS a fabricated 0 to this engine: `applyOperator`
+             * coerces with `Number()`. Absent is the only value that refuses every operator.
+             *
+             * ⚠️ `acos` above is deliberately NOT wrapped: it is `spend / sales`, which is
+             * `Infinity` on a zero-sales target rather than null. Infinity fails `lte` and matches
+             * `gte`, which is the honest reading for a target burning spend with no sales — and
+             * changing it would narrow which targets a live high-ACoS rule matches. Left as-is.
+             */
+            ...measured({
+              roas: spend > 0 ? sales / spend : null,
+              ctr: impressions > 0 ? clicks / impressions : null,
+              cvr: clicks > 0 ? orders / clicks : null,
+              cpcCents: clicks > 0 ? Math.round(spend / clicks) : null,
+              bidCents: (p.localEntityId != null ? bids.get(p.localEntityId) : null) ?? null,
+            }),
           },
         }
       })
@@ -1063,7 +1096,8 @@ async function buildAdGroupUnderperformContexts() {
       .map(({ p, spend, sales, orders }) => ({
         trigger: 'AD_GROUP_UNDERPERFORMING' as const,
         marketplace: p.marketplace,
-        adGroup: { id: p.localEntityId, spendCents: spend, salesCents: sales, orders, acos: sales > 0 ? spend / sales : null },
+        // KT-P/C1 — absent, not null (see EMPTY_TARGET_PERF).
+        adGroup: { id: p.localEntityId, spendCents: spend, salesCents: sales, orders, ...measured({ acos: sales > 0 ? spend / sales : null }) },
       }))
   } catch (e) { logger.warn('[ads-rule-evaluator] buildAdGroupUnderperformContexts failed', { error: (e as Error).message }); return [] }
 }
@@ -1312,7 +1346,10 @@ export async function buildSovBidContexts() {
              *   `SOV_METRIC` in the same change, so nothing compares against undefined.
              */
             sovPct: s.sharePct,
-            topSharePct: concentration.get(key) ?? null,
+            // KT-P/C1 — absent where we ran no ads on the query in the window. As a null it read
+            // as 0 and satisfied `Campaign Concentration < 60%`, which is the opposite of what a
+            // missing concentration means (SOV-P measured 86 of 793 null, 4 matched).
+            ...measured({ topSharePct: concentration.get(key) ?? null }),
             ...(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }
@@ -1323,7 +1360,34 @@ export async function buildSovBidContexts() {
 
 // P2.3 — shared 30d perf aggregate for the SOV/RANK context builders. Same fields and null
 // semantics as the KEYWORD_HIGH_ACOS context, so one metric map serves all three.
-const EMPTY_TARGET_PERF = { spendCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0, acos: null as number | null, roas: null as number | null, ctr: null as number | null, cvr: null as number | null, cpcCents: null as number | null }
+/**
+ * ── KT-P/C1 (2026-08-22) — an unmeasurable ratio is ABSENT, never null ────────────────────────
+ *
+ * 🔴 `applyOperator` (`automation-rule.service.ts:87`) coerces with `Number()`, and `Number(null)`
+ * is **0** while `Number(undefined)` is `NaN`. Every comparison against `NaN` is false. So:
+ *
+ * | `adTarget.acos` | `<= 20%` | `>= 40%` |
+ * |---|---|---|
+ * | `null` (before) | **true** | false |
+ * | key absent      | false    | false |
+ *
+ * A target with spend and ZERO SALES has no ACoS. As `null` it satisfied `ACOS <= 20%` and read as
+ * a 0%-ACoS winner — so a Bid rule "ACoS ≤ 20% → raise bid" would have RAISED the bid on the
+ * account's worst performers. Measured on prod 2026-08-22 over Bid's own 14 settled days:
+ * **197 of 435 keyword targets with performance rows have spend and no sales, 196 of them in
+ * write-enabled campaigns, carrying €713.47 of spend.**
+ *
+ * The fix is here rather than in `applyOperator`, which also serves fulfillment routing and
+ * customer segments — changing the comparator moves every domain at once with no way to measure
+ * per-surface. Omitting at the producer is the same correction, one builder at a time, and it is
+ * the shape `PlacementLaneMetrics` above already uses.
+ *
+ * ⚠️ The counting fields stay 0, because a measured zero IS a measurement: 0 clicks means we know
+ * there were none. Only the RATIOS — which are undefined rather than zero when their denominator
+ * is 0 — become absent.
+ */
+const EMPTY_TARGET_PERF: { spendCents: number; salesCents: number; orders: number; clicks: number; impressions: number; acos?: number; roas?: number; ctr?: number; cvr?: number; cpcCents?: number } =
+  { spendCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0 }
 async function targetPerfMap(targetIds: string[], windowDays: number) {
   const map = new Map<string, typeof EMPTY_TARGET_PERF>()
   if (!targetIds.length) return map
@@ -1341,11 +1405,15 @@ async function targetPerfMap(targetIds: string[], windowDays: number) {
     const impressions = p._sum.impressions ?? 0
     map.set(p.localEntityId!, {
       spendCents, salesCents, orders, clicks, impressions,
-      acos: salesCents > 0 ? spendCents / salesCents : null,
-      roas: spendCents > 0 ? salesCents / spendCents : null,
-      ctr: impressions > 0 ? clicks / impressions : null,
-      cvr: clicks > 0 ? orders / clicks : null,
-      cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
+      // KT-P/C1 — `measured()` drops each ratio whose denominator was 0, so it is ABSENT rather
+      // than a null the comparator reads as zero. See EMPTY_TARGET_PERF's note.
+      ...measured({
+        acos: salesCents > 0 ? spendCents / salesCents : null,
+        roas: spendCents > 0 ? salesCents / spendCents : null,
+        ctr: impressions > 0 ? clicks / impressions : null,
+        cvr: clicks > 0 ? orders / clicks : null,
+        cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
+      }),
     })
   }
   return map
