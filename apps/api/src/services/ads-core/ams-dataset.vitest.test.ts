@@ -84,6 +84,48 @@ describe('budget-usage — a percentage stream, not a boolean', () => {
     expect(readBudgetUsage({})).toBeNull()
     expect(readBudgetUsage({ budgetUsagePercent: 'lots' })).toBeNull()
   })
+
+  /**
+   * ADM-P6/B2 — the two fields persistence needs. Until this feed opens, its record shape is a
+   * candidate rather than an observation (0 records in 117,802 poll runs), so the parser accepts
+   * both conventions Amazon uses elsewhere and the tests pin both.
+   */
+  describe('the fields persistence needs', () => {
+    it('reads the pull API spelling', () => {
+      const ev = readBudgetUsage({ budgetUsagePercent: 61, campaignId: 'c1', usageUpdatedTimestamp: '2026-08-22T10:22:53Z', budget: 3.2 })!
+      expect(ev.asOf?.toISOString()).toBe('2026-08-22T10:22:53.000Z')
+      expect(ev.budgetCents).toBe(320)
+    })
+
+    it('reads the performance-dataset spelling', () => {
+      const ev = readBudgetUsage({ budget_usage_percent: 61, campaign_id: 'c1', time_window_start: '2026-08-22T10:00:00Z', budget_value: 1.74 })!
+      expect(ev.asOf?.toISOString()).toBe('2026-08-22T10:00:00.000Z')
+      expect(ev.budgetCents).toBe(174)
+    })
+
+    /**
+     * 🔴 Null is a real answer, not a parse failure. A reading with no timestamp cannot be placed
+     * in a budget day, and the persister must refuse it rather than stamp it with our own clock —
+     * the pull API proved what a misplaced reading costs (27.2% stamped the previous evening still
+     * read plausible hours after the reset).
+     */
+    it('returns a null instant rather than inventing one', () => {
+      const ev = readBudgetUsage({ budgetUsagePercent: 100, campaignId: 'c1' })!
+      expect(ev.asOf).toBeNull()
+      expect(ev.budgetUsagePercent).toBe(100)   // the percentage still parsed
+      expect(ev.exhausted).toBe(true)
+    })
+
+    it('returns a null budget rather than a fabricated zero', () => {
+      expect(readBudgetUsage({ budgetUsagePercent: 40, campaignId: 'c1' })!.budgetCents).toBeNull()
+      expect(readBudgetUsage({ budgetUsagePercent: 40, campaignId: 'c1', budget: 0 })!.budgetCents).toBe(0)
+    })
+
+    it('rejects an unparseable timestamp instead of passing an Invalid Date through', () => {
+      expect(readBudgetUsage({ budgetUsagePercent: 40, campaignId: 'c1', usageUpdatedTimestamp: 'yesterday' })!.asOf).toBeNull()
+    })
+  })
+
 })
 
 describe('routeRecords — three families, three consumers', () => {

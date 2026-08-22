@@ -104,6 +104,12 @@ export interface BudgetIngestResult {
   exhausted: number
   warning: number
   skipped: number
+  /** ADM-P6/B2 — readings written down. This used to be structurally impossible. */
+  stored: number
+  /** Readings that arrived with no usable timestamp, so no budget day could hold them. */
+  undatable: number
+  /** Readings for a campaign this account does not have locally. */
+  unmatched: number
 }
 
 /**
@@ -114,8 +120,33 @@ export interface BudgetIngestResult {
  * is inherent to the stream, and pretending otherwise ("out of budget at
  * 14:32:07") would be inventing precision Amazon never sent.
  */
+/**
+ * ADM-P6/B2 — write the budget-usage stream down.
+ *
+ * 🔴 What this used to be is the cautionary tale the whole of ADM-P6 was built around: it parsed
+ * correctly, counted correctly, logged a warning above 95%, and **stored nothing**. It was wired
+ * into a cron that had run 117,802 times. A feed with no persistence is not an ingest, and the
+ * three columns that depended on it read `not measured` on 220 of 220 rows for as long as it
+ * existed.
+ *
+ * It now lands in `AdBudgetUsageSample` — the SAME table the pull sampler writes, distinguished
+ * only by `source`. One table, two producers, one set of readers: whichever source holds the
+ * freshest reading for a campaign wins, and neither can drift from the other's definition of what
+ * a reading means.
+ *
+ * Two refusals, both counted rather than silent:
+ *   · **no timestamp** → the reading cannot be placed in a budget day. Substituting our receipt
+ *     clock would put OUR time on AMAZON's number, and the pull API already proved how much that
+ *     matters (a stale percentage still reads plausible hours after the reset).
+ *   · **no local campaign** → nothing to attach it to.
+ */
 export async function ingestBudgetUsage(records: Array<Record<string, unknown>>): Promise<BudgetIngestResult> {
-  const out: BudgetIngestResult = { received: records.length, exhausted: 0, warning: 0, skipped: 0 }
+  const out: BudgetIngestResult = { received: records.length, exhausted: 0, warning: 0, skipped: 0, stored: 0, undatable: 0, unmatched: 0 }
+  const now = new Date()
+  // Resolved once per batch: a burst from one campaign crossing several 5% buckets is the normal
+  // shape of this feed, and that would otherwise be one lookup per bucket.
+  const localCache = new Map<string, { id: string; marketplace: string } | null>()
+
   for (const rec of records) {
     const ev = readBudgetUsage(rec)
     if (!ev || !ev.campaignId) { out.skipped++; continue }
@@ -126,6 +157,43 @@ export async function ingestBudgetUsage(records: Array<Record<string, unknown>>)
       logger.warn('[AX-ZD.2] budget consumption', {
         campaignId: ev.campaignId, percent: ev.budgetUsagePercent, exhausted: ev.exhausted,
       })
+    }
+
+    if (!ev.asOf) { out.undatable++; continue }
+
+    let local = localCache.get(ev.campaignId)
+    if (local === undefined) {
+      local = await prisma.campaign
+        .findFirst({ where: { externalCampaignId: ev.campaignId }, select: { id: true, marketplace: true } })
+        .catch(() => null)
+      localCache.set(ev.campaignId, local)
+    }
+    if (!local) { out.unmatched++; continue }
+
+    try {
+      // The unique key is (campaign, source, reading instant), so a redelivered record refreshes
+      // the span it was observed over rather than duplicating the reading — the same shape the
+      // pull sampler relies on to count hours.
+      await prisma.adBudgetUsageSample.upsert({
+        where: { campaignId_source_usageUpdatedAt: { campaignId: local.id, source: 'stream', usageUpdatedAt: ev.asOf } },
+        create: {
+          campaignId: local.id,
+          externalCampaignId: ev.campaignId,
+          profileId: 'ams-stream',
+          marketplace: local.marketplace,
+          percent: ev.budgetUsagePercent,
+          budgetCents: ev.budgetCents,
+          usageUpdatedAt: ev.asOf,
+          firstSeenAt: now,
+          lastSeenAt: now,
+          source: 'stream',
+        },
+        update: { lastSeenAt: now },
+      })
+      out.stored++
+    } catch (e) {
+      logger.warn('[ADM-P6/B2] budget-usage persist failed', { campaignId: ev.campaignId, error: (e as Error).message })
+      out.skipped++
     }
   }
   return out

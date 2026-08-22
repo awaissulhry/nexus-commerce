@@ -8217,8 +8217,48 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const b = request.body as Record<string, unknown>
     const messages = Array.isArray((b as { messages?: unknown[] })?.messages) ? (b as { messages: unknown[] }).messages : [b]
+    /**
+     * 🔴 ADM-P6/B1 — this handed EVERY record to the performance ingest, which skips anything whose
+     * dataset is not sp/sb/sd traffic or conversion. So on the live path, change and budget records
+     * were dropped one function call before the consumers that exist for them.
+     *
+     * And this IS the live path. `ams-sqs-poll` — which has routed by family since AX-ZD.2 — took
+     * **12 records in 24 hours** while **1,009 hourly rows** were created, measured 2026-08-22: the
+     * queue is drained by the operator's own forwarder, which posts here. The routing lived only in
+     * the half of the pipeline that carries almost nothing.
+     *
+     * Consequence beyond P6: the entity change-streams are the ONLY push signal that someone edited
+     * in Seller Central, and they would have been discarded here too.
+     */
     const { ingestMarketingStream } = await import('../services/advertising/ads-marketing-stream.service.js')
-    try { return await ingestMarketingStream(messages as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    const { routeRecords } = await import('../services/ads-core/ams-dataset.js')
+    const { ingestEntityChanges, ingestBudgetUsage } = await import('../services/advertising/ads-stream-change.service.js')
+    try {
+      const routed = routeRecords(messages as Array<Record<string, unknown>>)
+      const perf = routed.performance.length ? await ingestMarketingStream(routed.performance as never) : null
+      const change = routed.change.length ? await ingestEntityChanges(routed.change) : null
+      const budget = routed.budget.length ? await ingestBudgetUsage(routed.budget) : null
+      if (routed.unknown.length) {
+        // Visible, not invisible: an unrecognised dataset means Amazon added one, and we should
+        // learn it from a log rather than from a hole in the data months later.
+        request.log.warn({ count: routed.unknown.length }, '[ADM-P6/B1] unrecognised AMS dataset(s) received')
+      }
+      // The performance shape is preserved at the top level so the forwarder and every existing
+      // caller keep reading the same keys they always have.
+      return {
+        received: messages.length,
+        upserted: perf?.upserted ?? 0,
+        skipped: perf?.skipped ?? 0,
+        routed: {
+          performance: routed.performance.length,
+          change: routed.change.length,
+          budget: routed.budget.length,
+          unknownDataset: routed.unknown.length,
+        },
+        ...(change ? { change } : {}),
+        ...(budget ? { budget } : {}),
+      }
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AME.9: Amazon Marketing Stream subscription management ───────────

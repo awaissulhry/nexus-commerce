@@ -3351,8 +3351,10 @@ model AdBudgetUsageSample {
 
   /// As Amazon sends it: 0-100+, a PERCENT and not a fraction. Above 100 is normal.
   percent     Float
-  /// Amazon's own budget for this campaign at the moment of the reading.
-  budgetCents Int
+  /// Amazon's own budget for this campaign at the moment of the reading. NULL when the source did
+  /// not carry one — the pull API always does, the stream's shape is unverified (ADM-P6/B2), and a
+  /// fabricated 0 would make the denominator a lie rather than an absence.
+  budgetCents Int?
 
   /// Amazon's usageUpdatedTimestamp. Compare against the 00:00 UTC budget-day start.
   usageUpdatedAt DateTime

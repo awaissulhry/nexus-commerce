@@ -107,6 +107,19 @@ export interface BudgetUsageEvent {
   exhausted: boolean
   /** Approaching exhaustion — the last actionable bucket. */
   warning: boolean
+  /**
+   * ADM-P6/B2 — when Amazon says the reading was taken. **Null is a real answer**: a reading that
+   * cannot be placed in a budget day cannot be rendered as today's utilization, and the pull API
+   * taught that lesson expensively (a percentage stamped the previous evening still read 27.2%
+   * hours after the reset). The persister refuses a reading without one rather than substituting
+   * our own receipt clock, which would be our timestamp on Amazon's number.
+   */
+  asOf: Date | null
+  /**
+   * The budget the percentage is a percentage OF, in cents, when the record carries one.
+   * Null-tolerated on purpose — see the shape note on `readBudgetUsage`.
+   */
+  budgetCents: number | null
 }
 
 /**
@@ -125,12 +138,40 @@ export function readBudgetUsage(rec: Record<string, unknown>): BudgetUsageEvent 
   const campaignId = typeof rec.campaignId === 'string' ? rec.campaignId
     : typeof rec.campaign_id === 'string' ? rec.campaign_id
       : undefined
+  const stamp = firstString(rec, ['usageUpdatedTimestamp', 'usage_updated_timestamp', 'time_window_start', 'timeWindowStart'])
+  const parsed = stamp ? new Date(stamp) : null
+  const budget = firstNumber(rec, ['budget', 'budget_value', 'budgetValue', 'budgetAmount'])
   return {
     budgetUsagePercent: pct,
     campaignId,
     exhausted: pct >= 100,
     warning: pct >= 95 && pct < 100,
+    asOf: parsed && !Number.isNaN(parsed.getTime()) ? parsed : null,
+    budgetCents: budget != null ? Math.round(budget * 100) : null,
   }
+}
+
+/**
+ * 🔴 THE FIELD NAMES BELOW ARE UNVERIFIED, and that is stated rather than hidden.
+ *
+ * The `budget-usage` subscription has never existed on this account, so not one record has ever
+ * arrived: measured 2026-08-22, 0 of 117,802 SQS poll runs saw one. Every spelling here is
+ * therefore a candidate, not an observation — Amazon's own pull API uses `usageUpdatedTimestamp`
+ * and `budget`, and the performance datasets use `time_window_start`, so both conventions are
+ * tried. `amsDebugSnapshot()` captures the first raw budget records so the real shape can be READ
+ * off production the day the feed opens, instead of being guessed at again.
+ *
+ * A record whose fields none of these match still persists its percentage; it simply arrives
+ * without a timestamp, and the persister then refuses it and says so in the summary rather than
+ * inventing one.
+ */
+function firstString(rec: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) { const v = rec[k]; if (typeof v === 'string' && v) return v }
+  return null
+}
+function firstNumber(rec: Record<string, unknown>, keys: string[]): number | null {
+  for (const k of keys) { const v = rec[k]; const n = typeof v === 'number' ? v : Number(v); if (v != null && Number.isFinite(n)) return n }
+  return null
 }
 
 // ── change events ─────────────────────────────────────────────────────────
