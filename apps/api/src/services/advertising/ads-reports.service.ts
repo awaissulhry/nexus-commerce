@@ -63,11 +63,45 @@ export interface ReportSpec {
 // the report type returns 400 "configuration format". These are the
 // minimal viable sets for campaign-level daily performance.
 
+/**
+ * SPC.1 — the Sponsored Products campaign column list, 10 → 38.
+ *
+ * Amazon offers 47 on this report (excluding the five KDP/e-book columns this
+ * account can never use); we asked for ten. Every column below arrives on the SAME
+ * request, the same job and the same quota — the only thing that changed is that we
+ * named them. The set was enumerated live from Amazon's own 400 on 2026-08-20 by
+ * sending one invalid column, so nothing here is inferred from documentation.
+ *
+ * The nine we still decline, each for a reason:
+ *   · `acosClicks14d`, `roasClicks14d`, `clickThroughRate`, `costPerClick`, `spend`
+ *     — Amazon's own arithmetic. Storing them would create a second definition of
+ *     ACOS beside the metric registry's, which is the one thing that registry
+ *     exists to prevent. SPC.6 diffs them once and then stops asking.
+ *   · `retailer` — the constant "Amazon" here. A column that never varies is not
+ *     information.
+ *   · `startDate` / `endDate` — the report window echoed back, meaningful only when
+ *     `timeUnit=SUMMARY`. We run DAILY and `date` already carries the day.
+ *   · `campaignBudgetCurrencyCode` — the row already carries `currencyCode` from the
+ *     profile. A second currency column that CAN disagree with the first is a bug
+ *     waiting for a non-EUR market.
+ */
 export const CAMPAIGN_COLUMNS: Record<AdProduct, string[]> = {
   SPONSORED_PRODUCTS: [
     'date', 'campaignId', 'campaignName', 'campaignStatus',
     'impressions', 'clicks', 'cost',
-    'sales7d', 'purchases7d', 'unitsSoldClicks7d',
+    // all four attribution windows, not just 7d
+    'sales1d', 'sales7d', 'sales14d', 'sales30d',
+    'purchases1d', 'purchases7d', 'purchases14d', 'purchases30d',
+    'unitsSoldClicks1d', 'unitsSoldClicks7d', 'unitsSoldClicks14d', 'unitsSoldClicks30d',
+    // did the ad sell the product it advertised, or something else of ours?
+    'attributedSalesSameSku1d', 'attributedSalesSameSku7d', 'attributedSalesSameSku14d', 'attributedSalesSameSku30d',
+    'purchasesSameSku1d', 'purchasesSameSku7d', 'purchasesSameSku14d', 'purchasesSameSku30d',
+    'unitsSoldSameSku1d', 'unitsSoldSameSku7d', 'unitsSoldSameSku14d', 'unitsSoldSameSku30d',
+    // bid-limited or volume-limited, per campaign
+    'topOfSearchImpressionShare',
+    // the campaign's settings as at that day, free on a row we already fetch
+    'campaignBudgetAmount', 'campaignBudgetType', 'campaignBiddingStrategy',
+    'campaignRuleBasedBudgetAmount', 'campaignApplicableBudgetRuleId', 'campaignApplicableBudgetRuleName',
   ],
   SPONSORED_DISPLAY: [
     // Phase G fix: v3 SD reports rejected viewableImpressions. The v3
@@ -412,6 +446,36 @@ interface ReportRow {
   sales7d?: number
   purchases7d?: number
   unitsSoldClicks7d?: number
+  // SPC.1 — the other three windows, the same-SKU split, impression share and the
+  // campaign's settings for that day. All Sponsored Products, all on the same row.
+  sales1d?: number
+  sales14d?: number
+  sales30d?: number
+  purchases1d?: number
+  purchases14d?: number
+  purchases30d?: number
+  unitsSoldClicks1d?: number
+  unitsSoldClicks14d?: number
+  unitsSoldClicks30d?: number
+  attributedSalesSameSku1d?: number
+  attributedSalesSameSku7d?: number
+  attributedSalesSameSku14d?: number
+  attributedSalesSameSku30d?: number
+  purchasesSameSku1d?: number
+  purchasesSameSku7d?: number
+  purchasesSameSku14d?: number
+  purchasesSameSku30d?: number
+  unitsSoldSameSku1d?: number
+  unitsSoldSameSku7d?: number
+  unitsSoldSameSku14d?: number
+  unitsSoldSameSku30d?: number
+  topOfSearchImpressionShare?: number
+  campaignBudgetAmount?: number
+  campaignBudgetType?: string
+  campaignBiddingStrategy?: string
+  campaignRuleBasedBudgetAmount?: number
+  campaignApplicableBudgetRuleId?: string
+  campaignApplicableBudgetRuleName?: string
   // SD specific
   sales?: number
   purchases?: number
@@ -440,6 +504,48 @@ function toMicros(amount: number | undefined): bigint {
 function toCents(amount: number | undefined): number {
   if (amount == null) return 0
   return Math.round(amount * 100)
+}
+
+/**
+ * SPC.1 — the nullable converters, and why they are separate from the two above.
+ *
+ * `toCents`/`toMicros` fold an absent value to 0, which is right for the columns
+ * that carry `@default(0)` and are always requested. It is WRONG for everything
+ * added in SPC.1: those columns exist precisely so that "Amazon sent nothing" and
+ * "Amazon sent zero" stop being the same value. Anything that reaches them goes
+ * through these instead.
+ */
+const centsOrNull = (v: number | undefined | null): number | null =>
+  v == null ? null : Math.round(v * 100)
+const intOrNull = (v: number | undefined | null): number | null =>
+  v == null ? null : Math.round(v)
+const strOrNull = (v: string | number | undefined | null): string | null =>
+  v == null || v === '' ? null : String(v)
+
+/**
+ * 🔴 Top-of-search impression share, normalised to a 0–1 fraction.
+ *
+ * Amazon is INCONSISTENT about this field's unit — it returns a percentage
+ * (`62.5`) on some rows and a fraction (`0.09`) on others, in the same report.
+ * `ads-tos-is-ingest.service.ts` has always known this and normalised on the way
+ * in, which is why `AmazonAdsPlacementReport.topOfSearchIS` spans exactly 0.0000
+ * to 1.0000 across 1,247 rows.
+ *
+ * SPC.1 stored the raw value for one ingest and the column immediately spanned
+ * 0 to 62.5. Joining the two tables on the same campaign-day proved it: campaign
+ * 279134427833119 on 2026-08-18 read 62.5000 here and 0.6102 there — the same
+ * quantity, two units, in two columns that anything comparing them would treat as
+ * comparable.
+ *
+ * So there is now ONE definition and both writers call it. The `> 1` test is the
+ * only discriminator available: a share cannot exceed 100%, so a value above 1
+ * must be a percentage.
+ */
+export function toImpressionShareFraction(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  if (!Number.isFinite(n) || n < 0) return null
+  return n > 1 ? n / 100 : n
 }
 
 export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
@@ -552,21 +658,19 @@ async function ingestCampaignRows(
       select: { id: true },
     })
 
-    // Per-adProduct attribution mapping. Phase G: SB v3 reports return unsuffixed
-    // `sales`/`purchases` (same shape as SD v3) rather than the v2
-    // attributedSales14d/attributedConversions14d names.
+    // Per-adProduct attribution mapping. Phase G: SB v3 reports return
+    // unsuffixed `sales`/`purchases` (same shape as SD v3) rather than
+    // the v2 attributedSales14d/attributedConversions14d names. Store
+    // SB sales in sales14dCents to preserve the original 14d-window
+    // semantic; analytics sums both fields anyway.
     /**
      * 🔴 ADM-P6/DC — the HEADLINE column, for every ad product without exception.
      *
-     * Sponsored Brands used to be routed into `sales14dCents` instead, on the reasoning below
-     * ("analytics sums both fields anyway"). That sum was the defect: it made `sales14dCents` mean
-     * the SB headline to fourteen readers AND the 14-day window to the ingest, so the moment a
-     * real 14-day figure was written for a Sponsored Products row, those rows were summed with
-     * themselves — EUR 18,953 of ad sales shown against EUR 9,483 true, every affected ACoS halved.
-     *
-     * SD already reported here. SB now does too, which costs nothing: there has never been a single
-     * SB row in this account (measured all-time, all entity types), so there is no migration and no
-     * existing number changes. See `ads-core/ad-sales.ts` for the contract.
+     * Sponsored Brands used to be routed into `sales14dCents` instead, which made that column mean
+     * the SB headline to fourteen readers AND the 14-day window to this ingest. The moment a real
+     * 14-day figure was written for a Sponsored Products row, those rows were summed with
+     * themselves: EUR 18,953 of ad sales shown against EUR 9,483 true, every affected ACoS halved.
+     * See `ads-core/ad-sales.ts`.
      */
     const sales7dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
@@ -574,11 +678,29 @@ async function ingestCampaignRows(
       : job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.sales)
       : 0
     /**
-     * ADM-P6/DC — the 14-day attribution WINDOW, and nothing else. Never the headline, never summed
-     * with `sales7dCents`. It is 0 until an ingest requests a real 14-day figure, and once one does
-     * (SPC.1's widened report), populating it for any product is safe — which was not true before.
+     * 🔴 SPC.1 — this read `SPONSORED_BRANDS ? toCents(r.sales) : 0`, and that
+     * trailing `: 0` is a live trap now. Sponsored Products rows were writing a
+     * hard 0 into `sales14dCents` on EVERY ingest, so the moment SPC.1 starts
+     * requesting a real `sales14d`, that 0 would have overwritten it — and any
+     * later null-out of the legacy columns would be undone by the next nightly
+     * cron. Each ad product now writes its own window and nothing else writes 0.
      */
-    const sales14dCents = 0
+    /**
+     * The 14-day attribution WINDOW, and nothing else — never the headline, never summed.
+     *
+     * 🔴 MERGE NOTE (ADM-P6/DC + SPC.1). SPC.1 wrote this as
+     *   `SP ? centsOrNull(r.sales14d) : SB ? centsOrNull(r.sales) : null`
+     * which was correct under the OLD contract, where the SB branch WAS Sponsored Brands' headline.
+     * That branch is gone: SB's headline now lives in `sales7dCents` with every other product, and
+     * duplicating it here would record one figure in two columns for no reader.
+     *
+     * SPC.1's real contribution survives intact — Sponsored Products now carries a genuine 14-day
+     * window, which is precisely what could not be done safely before, because the readers summed
+     * it into the headline.
+     */
+    const sales14dCents =
+      job.adProduct === 'SPONSORED_PRODUCTS' ? centsOrNull(r.sales14d)
+      : null
     const orders7d =
       job.adProduct === 'SPONSORED_PRODUCTS' ? (r.purchases7d ?? 0)
       : job.adProduct === 'SPONSORED_DISPLAY' ? (r.purchases ?? 0)
@@ -586,6 +708,57 @@ async function ingestCampaignRows(
       : 0
     const units7d = r.unitsSoldClicks7d ?? 0
     const viewableImpressions = r.viewableImpressions ?? 0
+
+    /**
+     * SPC.1 — everything the widened request now brings back.
+     *
+     * Spread into BOTH create and update from one object, so a field can never be
+     * written on insert and silently skipped on the re-ingest that follows every
+     * gap-fill. Sponsored Products only: SB and SD have their own vocabulary and
+     * offer none of these, and writing nulls for them would be indistinguishable
+     * from a failed parse.
+     */
+    const sp = job.adProduct === 'SPONSORED_PRODUCTS'
+    const extra = sp ? {
+      sales1dCents: centsOrNull(r.sales1d),
+      sales30dCents: centsOrNull(r.sales30d),
+      orders1d: intOrNull(r.purchases1d),
+      orders14d: intOrNull(r.purchases14d),
+      orders30d: intOrNull(r.purchases30d),
+      units1d: intOrNull(r.unitsSoldClicks1d),
+      units14d: intOrNull(r.unitsSoldClicks14d),
+      units30d: intOrNull(r.unitsSoldClicks30d),
+
+      salesSameSku1dCents: centsOrNull(r.attributedSalesSameSku1d),
+      salesSameSku7dCents: centsOrNull(r.attributedSalesSameSku7d),
+      salesSameSku14dCents: centsOrNull(r.attributedSalesSameSku14d),
+      salesSameSku30dCents: centsOrNull(r.attributedSalesSameSku30d),
+      ordersSameSku1d: intOrNull(r.purchasesSameSku1d),
+      ordersSameSku7d: intOrNull(r.purchasesSameSku7d),
+      ordersSameSku14d: intOrNull(r.purchasesSameSku14d),
+      ordersSameSku30d: intOrNull(r.purchasesSameSku30d),
+      unitsSameSku1d: intOrNull(r.unitsSoldSameSku1d),
+      unitsSameSku7d: intOrNull(r.unitsSoldSameSku7d),
+      unitsSameSku14d: intOrNull(r.unitsSoldSameSku14d),
+      unitsSameSku30d: intOrNull(r.unitsSoldSameSku30d),
+
+      // Normalised, NOT raw — Amazon mixes percentages and fractions in one report.
+      topOfSearchIS: toImpressionShareFraction(r.topOfSearchImpressionShare),
+
+      campaignBudgetCents: centsOrNull(r.campaignBudgetAmount),
+      campaignBudgetType: strOrNull(r.campaignBudgetType),
+      campaignBiddingStrategy: strOrNull(r.campaignBiddingStrategy),
+      campaignRuleBasedBudgetCents: centsOrNull(r.campaignRuleBasedBudgetAmount),
+      campaignBudgetRuleId: strOrNull(r.campaignApplicableBudgetRuleId),
+      campaignBudgetRuleName: strOrNull(r.campaignApplicableBudgetRuleName),
+    } : {}
+
+    // Requested since Phase 4 and discarded on arrival until now. Every ad product
+    // sends a name; only SP sends a status.
+    const identity = {
+      entityName: strOrNull(r.campaignName),
+      entityStatus: strOrNull(r.campaignStatus),
+    }
 
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
@@ -605,6 +778,7 @@ async function ingestCampaignRows(
           impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
           costMicros: toMicros(r.cost), currencyCode,
           sales7dCents, sales14dCents, orders7d, units7d, viewableImpressions,
+          ...extra, ...identity,
           reportRunId: job.id, reportedAt: new Date(),
         },
         update: {
@@ -612,6 +786,7 @@ async function ingestCampaignRows(
           impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
           costMicros: toMicros(r.cost), currencyCode,
           sales7dCents, sales14dCents, orders7d, units7d, viewableImpressions,
+          ...extra, ...identity,
           reportRunId: job.id, reportedAt: new Date(),
         },
       })

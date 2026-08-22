@@ -3254,12 +3254,75 @@ model AmazonAdsDailyPerformance {
   currencyCode String
 
   // Attribution windows (available varies per adProduct)
+  //
+  // 🔴 SPC.1 — the four `sales*Cents` and the two 7d counters below carry
+  // `@default(0)`, and that default is why 1d/14d/30d could never be read: nothing
+  // ever requested them, so every row said 0, and 0 is ALSO the correct answer for
+  // a campaign-day that sold nothing. Every column ADDED from here down is
+  // deliberately nullable with NO default — NULL means "not requested for this
+  // row", 0 means "Amazon said zero". The same conflation in `rowsIngested` cost
+  // Italy seven days of data before anyone could see it.
   sales1dCents  Int? @default(0)
   sales7dCents  Int? @default(0)
   sales14dCents Int? @default(0)
   sales30dCents Int? @default(0)
   orders7d      Int? @default(0)
   units7d       Int? @default(0)
+
+  // SPC.1 — the other three attribution windows, as counts. The sales side of
+  // these already existed above; the orders and units did not.
+  orders1d  Int?
+  orders14d Int?
+  orders30d Int?
+  units1d   Int?
+  units14d  Int?
+  units30d  Int?
+
+  // SPC.1 — same-SKU attribution: did the ad sell the product it advertised, or
+  // something else of ours? `sales7dCents` counts both and cannot tell them apart,
+  // so harvest and negation currently run on a blended number.
+  //
+  // Amazon offers no otherSku column at campaign grain — halo is derived as
+  // (total − sameSku) at read time, which is a subtraction of two sums and stays
+  // correct at every grouping.
+  salesSameSku1dCents  Int?
+  salesSameSku7dCents  Int?
+  salesSameSku14dCents Int?
+  salesSameSku30dCents Int?
+  ordersSameSku1d      Int?
+  ordersSameSku7d      Int?
+  ordersSameSku14d     Int?
+  ordersSameSku30d     Int?
+  unitsSameSku1d       Int?
+  unitsSameSku7d       Int?
+  unitsSameSku14d      Int?
+  unitsSameSku30d      Int?
+
+  // SPC.1 — Amazon's own top-of-search impression share at THIS grain. We already
+  // capture it per placement; per campaign it answers whether a flat campaign is
+  // bid-limited or volume-limited. Same type as AmazonAdsPlacementReport's.
+  topOfSearchIS Decimal? @db.Decimal(8, 4)
+
+  // SPC.1 — the campaign's configuration AS IT WAS ON THAT DAY, which arrives free
+  // on a row we already fetch. `campaignBudgetCents` beside that day's spend makes
+  // budget utilisation and days-capped computable over history for the first time;
+  // today we can only compare today's spend against today's budget. The two rule
+  // fields record when one of Amazon's own native budget rules moved the number —
+  // a writer our audit chain cannot otherwise see.
+  campaignBudgetCents          Int?
+  campaignBudgetType           String?
+  campaignBiddingStrategy      String?
+  campaignRuleBasedBudgetCents Int?
+  campaignBudgetRuleId         String?
+  campaignBudgetRuleName       String?
+
+  // SPC.1 — the name and status Amazon sent, as at that day. Both were ALREADY
+  // being requested and thrown away on arrival: the name on screen comes from a
+  // join to our own Campaign table, which is why 659 of 4,822 campaign rows (13.7%)
+  // render a raw Amazon id. Named for the entity rather than the campaign so the
+  // later targeting and product-ad reports can fill the same two columns.
+  entityName   String?
+  entityStatus String?
 
   // New-to-brand (SB/SD only)
   ntbOrders14d     Int? @default(0)
