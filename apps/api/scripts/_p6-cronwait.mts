@@ -1,0 +1,5 @@
+const { default: prisma } = await import('../src/db.js')
+const runs = await prisma.cronRun.findMany({ where: { jobName: 'budget-usage-sample' }, orderBy: { startedAt: 'desc' }, take: 3, select: { startedAt: true, status: true, outputSummary: true, errorMessage: true } })
+for (const r of runs) console.log(`${r.startedAt.toISOString()} ${r.status} ${r.errorMessage ? 'ERR ' + r.errorMessage.slice(0,90) : (r.outputSummary ?? '')}`)
+if (!runs.length) console.log('PENDING')
+await prisma.$disconnect()

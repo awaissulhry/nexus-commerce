@@ -1,0 +1,5 @@
+const { default: prisma } = await import('../src/db.js')
+const camps = await prisma.campaign.findMany({ where: { adProduct: 'SPONSORED_PRODUCTS' }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true } })
+const sampled = new Set((await prisma.adBudgetUsageSample.findMany({ select: { campaignId: true }, distinct: ['campaignId'] })).map(r => r.campaignId))
+for (const c of camps) if (!sampled.has(c.id)) console.log(`   UNKNOWN: ${c.name} · ${c.marketplace} · ${c.status} · externalCampaignId=${c.externalCampaignId ?? 'NULL'}`)
+await prisma.$disconnect()
