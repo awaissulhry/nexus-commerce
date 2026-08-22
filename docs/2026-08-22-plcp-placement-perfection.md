@@ -3,8 +3,9 @@
 **Unit:** the RA perfection programme's Placement page — `/marketing/ads/rules-automation/placement`
 (`PlacementRulesClient`) and its builder at `/builder/placement` (`_shared/RuleBuilder` slug
 `placement`).
-**Status:** Phase 0 COMPLETE, read-only. No application code written. Awaiting approval of the
-phase plan in §5.
+**Status:** ✅ **COMPLETE AND PUSHED 2026-08-22** — `e1e78d6d9` · `6a091e7fe` · `7d2fc3387` ·
+`dcfb4f2e3`. All seven phases and all four decisions shipped. The per-phase logs below were
+written as each phase was built and say "not pushed"; §8 records what actually landed and when.
 **Measured:** 2026-08-22, 00:19–00:22 Europe/Rome, against prod (Neon) and
 `https://nexus-commerce-three.vercel.app`.
 **Probes:** `apps/api/scripts/_plcp-p0-census{,2,3,4}.mts` (read-only; they write nothing).
@@ -800,3 +801,48 @@ both directions (media query + `[data-theme="dark"]`).
 
 **Gates for P5–P7:** tsc api 0 · web 0 · shared build ✓ · **api vitest 5,169 / 5,169** · web vitest
 985 · five ratchets at baseline.
+
+---
+
+## 8. What actually shipped — the ship record
+
+Every §7 log below was written while the phase was still local; they say "not pushed" and that is
+now false. This section is the register.
+
+| commit | what |
+|---|---|
+| `e1e78d6d9` | P1–P7 **engine half** — 36 files. Verified as a commit in a detached worktree: api 5,142/0, web 985, tsc 0/0. |
+| `6a091e7fe` | 🔴 the fix for a gap in the commit above — a bad hunk filter dropped the preview route's placement branch, so `previewPlacementRule` shipped with **no caller**. Invisible to tsc, to 5,142 tests, and to the worktree build; found by the SOV session grepping the committed route. |
+| `7d2fc3387` | the **builder half** — REBUILT from HEAD, not filtered from the tree, because three sessions interleave in `RuleBuilder.tsx` inside single expressions. Every lifted slice ran through a guard refusing it if it carried a peer marker; it fired once, correctly. |
+| `dcfb4f2e3` | **D-PLC-2 + D-PLC-3**, and the starter-copy fix the clock forced. |
+
+### The decisions, as answered
+
+| | answer |
+|---|---|
+| **D-PLC-1** | (c) then (a): the scope control was held in P3 with a reason, and made live in P7 once the lane contexts existed. Both shipped. |
+| **D-PLC-2** | Refuse at AUTO — but only for a **contested** lane. Product Pages got 2 engine writes in 30 days against 12,197 on Top of Search, so a Product Pages rule holds and is allowed. PROPOSE is never refused. |
+| **D-PLC-3** | Fixed in both handlers. `noChange` **added beside** `wouldChange`, never swapped for it — the preview parses that sentence for its guardrail census. |
+| **D-PLC-4** | One real rule at PROPOSE, live on prod: `Trim Top of Search on zero-sale clicks — GALE BROAD IT` (`cmt3lf6h6005jsd01wzv5hcad`). |
+| **the comparator** | Fixed by the Keyword Tracker session in `1cf7869ca` (a `measured()` helper across eight context builders). PLC-P's 64 tests and the live lane probe verified green after it. |
+
+### Two defects of my own, recorded because they were mine
+
+1. 🔴 **A verification probe changed production data.** `_plcp-p4-refusal-live.mts` ran a
+   `dryRun: false` handler expecting a gate denial; `checkAdsWriteGate` short-circuits to
+   `allowed: true` in sandbox *before* the allowlist, so it wrote `PLACEMENT_TOP` 43→25 on a paused
+   campaign. Amazon was never contacted. Reverted through `updatePlacementBidding` so the ledger
+   carries both halves. → `reference_local_handler_writes_prod_db`.
+2. 🔴 **A starter description quoted a clock reading** — "9 of which carry a Rest of Search
+   multiplier" — and the account disproved it the same morning: the engine dropped Rest of Search
+   45→0 account-wide at 08:15, and Top of Search went from non-zero on 16 campaigns to 48. The same
+   reading turned my own verify script red at 11:46 having passed at 03:00. **A check that fails on
+   the hour teaches you to ignore a red**; it now asserts only what is hour-independent.
+
+### Still open, deliberately
+
+- `.h10-dd-btn.held` lives in `rules-automation.css`; its DS home is `ads.css`. Left there because
+  another session was editing that file and both users of `held` are in this section. Move it when
+  `ads.css` is quiet.
+- The parked four (`PlacementClient` · `PlcInspector` · `PlcBulkPanel` · `PlacementScopeBar`) stay
+  parked, and the PLC.3 write path stays served. R1–R4 in §3 are unchanged decisions.
