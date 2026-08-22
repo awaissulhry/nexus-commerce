@@ -435,3 +435,84 @@ Gates: api **5,072** ✓ · web **954** ✓ · both tsc ✓ · five ratchets at 
 pass / 0) · contrast 4.78–9.18 measured on own backgrounds · `cursor:help` 0. Verified on a local
 rig (`_bsp-verify-stub.mts`) whose `hourly-performance` and `/context` run the REAL SQL against prod.
 Not armed: prod still has 0 schedules — creating the first is an operator action.
+
+## SOV-P — Share of Voice perfection (2026-08-22, session nexus-commerce-7c) — P1/P3/P4 SHIPPED `0e7e59996` + `5314d796b`, prod-verified; P2 HELD
+
+Study `docs/2026-08-22-sovp-share-of-voice-perfection.md`. Probes `apps/api/scripts/_sovp-*.mts`.
+
+🔴 **The headline: the builder's "Share of Voice" was not a share of voice.** `analyzeShareOfVoice`
+divides a query's impressions by our OWN account's total across every query and all four
+marketplaces — an impression MIX. Median 0.0026%, so `Share of Voice < 50%` matched **1000 of 1000**
+rows and `< 1%` matched 986: every threshold an operator could type was a no-op. Against Amazon's own
+per-query share (607 market×query pairs) **Spearman ρ = −0.2445, negative in all four markets**. On
+the head the two numbers sit within an order of magnitude and the error CHANGES SIGN — which is why a
+rescale could not have fixed it. The damage is in the tail: our five strongest real positions (IT
+"giubbotto moto uomo nero", 15.11% of its market) all read ≈0.000x%, so "raise the bid where Share of
+Voice is low" bid up hardest where we already held most.
+
+⚠ **A correction the register should carry:** the Phase 0 draft reported ρ = −0.4453 and 5.3×–73×
+gaps. That probe SUMMED `impressionsTotal` across a query's ASIN rows; the market total is one number
+REPEATED per row, so the aggregation is **Σ brand ÷ MAX total** (`share-of-voice.service.ts:666` has
+always done it; 135 multi-ASIN query-weeks, 0 disagreeing). Corrected everywhere and to KT-P, who had
+already written the wrong figure down.
+
+**P1 — the metric tells the truth.** New `ads-sov-keyword-share.service.ts`: Amazon's own per-query
+market share, on the week the SHARED `chooseViewPeriod` gate picks (`SQP_COMPLETENESS_RATIO`
+imported, never lowered). **A market whose newest week is TRUNCATED contributes no contexts at all** —
+a page may render a partial week loudly; an engine may not bid on a denominator still being filled.
+`impressionSharePct` DELETED (it was assigned `s.sovPct`, so two builder metrics were byte-identical);
+`'Impression Share'` removed and now REFUSED by name; `'Top Campaign Share'` → **`'Campaign
+Concentration'`**, computed PER MARKET (was cross-contaminating 69 of 1,178 joins) with **no `limit`**
+(the 1,000-row slice of a 2,379-query aggregate silently dropped 102 targets). `TRIGGER_WINDOW.SOV_BID`
+moved `W(30)` → `snapshot`; the builder's "the most recent 2 days are excluded" was true of
+`targetPerfMap` and FALSE of the share, which had no upper bound. After: 793 contexts, every offered
+metric defined on 793/793, 0 fabricated zeros, 0 cross-market contamination, `< 1%` now matches 26.7%.
+
+**A narrowing the honest preview forced:** with status finally on screen the panel was offering a bid
+on `motorradjacke herren [EXACT] ARCHIVED`. The emitter now filters `status: 'ENABLED'`, matching
+`buildUnderperformContexts` — 183 ARCHIVED + 42 PAUSED leave, 972 → 793. An archived target cannot
+serve, so that bid was a write that could never take effect and still spent the rule's caps.
+
+**P3 — the tab states its own basis.** `GET /advertising/sov/strip` + the shared
+`.h10-hv-cohortline`. 🔴 Caught by driving the market selector: the counts were ACCOUNT-WIDE beside
+one market's week. Now per market (DE reads 111 of 275, median 0.74%).
+
+**P4 — starters sized to the measured distribution**, which could not have existed before P1.
+🔴 One of three was PULLED the same night (`5314d796b`): `Campaign Concentration < 60% AND Spend ≥ €5`
+matched 4 targets with real spend (two ES at €119.75 / €123.93) whose concentration is null, because
+**the engine answers `null lt 0.6` with TRUE** (measured). See the shared finding below.
+
+**🔴 P2 is BUILT AND VERIFIED BUT DELIBERATELY NOT COMMITTED.** A server preview that runs the engine
+(`ads-sov-preview.service.ts` + a `slug === 'sov'` dispatch + the builder's `isSov` branch). It needs
+`runDraftPreview` (PLC-P's) and `preview.terms[].suppressed` (KT-P's), **neither of which exists at
+HEAD** — committing it would have swept two live sessions' half-finished code into my commit, the
+`ba4cad608` failure. It lands the moment they commit.
+⚠ **The trap this leaves:** the working-tree copies of `RuleBuilder.tsx` and
+`advertising-intel.routes.ts` still hold my P2 wiring, which CALLS the untracked
+`ads-sov-preview.service.ts`. A `git commit --only` on either commits callers without the callee →
+Railway red. Both sessions warned; KT-P has logged it as a blocking precondition.
+
+What P2 fixes, for whoever lands it: clicked on prod, `DE_Auto_Close` + `IF Share of Voice < 5% → Set
+Bid €0.75` showed **four `AUTO` rows** getting €0.75 — a kind `buildSovBidContexts` can never select,
+three of them PAUSED — and omitted both real KEYWORD targets, because `/advertising/targets` has no
+`orderBy` and 1,655 of 3,155 positive targets fall outside its 1,500-row page. It applied **no IF
+conditions** and read only `groups[0]`. **The same client path still serves `bid`** with all four
+defects — not SOV's to fix, worth its own unit.
+
+**Method note worth reusing.** `git commit --only` was impossible: my lines sat INSIDE PLC-P's and
+KT-P's hunks in five files. What worked — reconstruct each shared file as `git show HEAD:<file>` plus
+only my own edits, then **`git diff --no-index` the reconstruction against HEAD and grep the additions
+for other programmes' markers.** That caught **two of KT-P's lines** swept in by a block lift whose
+end-delimiter was one comment too far. Then temp-index plumbing + 3-arg `update-ref`, `git reset -q
+HEAD -- <paths>` to resync the shared index, and **push from a detached worktree at the new sha** so
+the pre-push hook gated the COMMIT, not the shared tree holding two sessions' WIP. Also: a programme's
+marker string appears in OTHER programmes' comments — ownership is the hunk's first added line.
+
+**🔴 Shared finding — a not-measurable value passes `lt`/`lte`, on three context builders.** Found
+independently by three sessions the same day: budget 38 of 46 contexts `acos: null` (PLC-P) · SOV
+concentration 86 of 793 (this unit) · **bid 197 of 435 keyword targets have spend and ZERO sales, 196
+of them in write-enabled campaigns carrying €713.47** (KT-P) — where `ACoS ≤ 20% → raise bid` reads
+all 196 as perfect performers and raises bids on the account's worst spenders. Latent today (no bid
+rule armed), which is why it is the cheap moment to decide it. Argued fix: **in the CONTEXT BUILDERS,
+omit an unmeasurable value — not in `applyOperator`**, which is read by fulfillment routing and
+customer segments too. An AND-guard protects only when structurally tied to the same absence.
