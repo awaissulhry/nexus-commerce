@@ -253,6 +253,10 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'tos-is-ingest': () => import('./ads-tos-is-ingest.job.js').then(m => m.runTosIsIngestCron()),
   // Apex B.1 — drain the AMS SQS queue (hourly SP/SD/SB stream) into hourly perf.
   'ams-sqs-poll': () => runAmsSqsPoll(),
+  // ADM-P6 — sample Amazon's own per-campaign budget-usage percentage. Read-only,
+  // five calls a tick; it is the ONLY source of Out-of-Budget / Actively Bidding
+  // hours, and every tick missed is an hour that cannot be measured later.
+  'budget-usage-sample': () => import('./ads-budget-usage.job.js').then(m => m.runBudgetUsageSample()),
   // Apex E.1 — ingest Brand Analytics Search Query Performance (competitive share).
   'sqp-ingest': () => runSqpIngestOnce(),
   // SQP.2 — the collect half; manually triggerable so an operator can drain the queue on demand.

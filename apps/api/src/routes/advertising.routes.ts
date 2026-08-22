@@ -260,9 +260,41 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       ])
       const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
       const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
+      /**
+       * ADM-P6 — Current Budget Utilization, and the two hour columns beside it.
+       *
+       * The Ad Manager rendered `not measured` on 220 of 220 rows for all three, and the sentence
+       * behind that was true when it was written: no source held today's spend-so-far, and the
+       * Marketing Stream's budget-usage percentage is received, counted, logged and never stored.
+       *
+       * There was a third source. `POST /sp/campaigns/budget/usage` answers synchronously for
+       * every Sponsored Products campaign — 200 of 200, measured 2026-08-22 — with Amazon's OWN
+       * percentage, Amazon's OWN budget as the denominator, and `usageUpdatedTimestamp`, the age
+       * of the reading itself. `budget-usage-sample` records it every five minutes; this reads
+       * what was recorded.
+       *
+       * Read from OUR samples, never called inline: this response is cached for 300s, and an
+       * outbound Amazon call inside a cached read would be both slow and a lie about its own
+       * freshness — what is fresh is the reading's timestamp, not the fetch.
+       *
+       * Two queries, both on indexed columns, and only on the windowed path the Ad Manager uses.
+       * Callers that pass no date params keep the fast stored-column path exactly as it was.
+       */
+      const { readCurrentBudgetUsage, readBudgetUsageHours, budgetUsageSamplingSince } =
+        await import('../services/advertising/ads-budget-usage.service.js')
+      const usageInput = base.map((c) => ({ id: c.id, adProduct: c.adProduct, dailyBudget: c.dailyBudget }))
+      const [curUsage, usageHours, usageSince] = await Promise.all([
+        readCurrentBudgetUsage(usageInput),
+        readBudgetUsageHours(usageInput),
+        budgetUsageSamplingSince(),
+      ])
+      const usageSinceIso = usageSince ? usageSince.toISOString() : null
+
       const items = base.map((it) => {
         const a = mapL.get(it.id)
         const b = it.externalCampaignId ? mapE.get(it.externalCampaignId) : undefined
+        const cu = curUsage.get(it.id) ?? { state: 'unknown' as const, fraction: null, budgetCents: null, asOf: null }
+        const uh = usageHours.get(it.id) ?? { observed: 0, outOfBudget: 0, actBid: 0, supported: false }
         const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
         const salesCents = n(a?.sales7dCents) + n(a?.sales14dCents) + n(b?.sales7dCents) + n(b?.sales14dCents)
         return {
@@ -274,6 +306,28 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           acos: salesCents > 0 ? spendCents / salesCents : null,
           roas: spendCents > 0 ? salesCents / spendCents : null,
           ppcOrders: n(a?.orders7d) + n(b?.orders7d),
+          // ADM-P6 — TODAY's utilization, as a FRACTION, and null whenever the state is not a
+          // reading: `silent` (Amazon has reported nothing since the 00:00 UTC reset),
+          // `unsupported` (SD/SB — the SP endpoint does not cover them), `unknown` (never
+          // sampled). A 0 here would answer a question nobody can answer, which is precisely the
+          // defect this column was built to end.
+          curBudgetUtil: cu.fraction,
+          curBudgetUtilState: cu.state,
+          // Amazon's usageUpdatedTimestamp — the age of the READING. Not of our poll, and not of
+          // this response.
+          curBudgetUtilAsOf: cu.asOf,
+          // The denominator that fraction actually used, in euros: Amazon's own budget for a
+          // `live` reading, ours for a `derived` one. They can disagree — on 3 of 200 campaigns
+          // they do — so the cell names the one it divided by.
+          curBudgetUtilBudget: cu.budgetCents != null ? cu.budgetCents / 100 : null,
+          // ADM-P6 — hours of the current budget day, counted from observation SPANS rather than
+          // from a count of samples. Null, never 0, for a campaign this source cannot answer for.
+          oobHours: uh.supported ? uh.outOfBudget : null,
+          actBidHours: uh.supported ? uh.actBid : null,
+          hoursObserved: uh.supported ? uh.observed : null,
+          // Neither Amazon feed can be backfilled, so both hour columns are bounded by the moment
+          // sampling began, and have to say so.
+          usageSince: usageSinceIso,
         }
       })
       return { items, count: items.length, range: { startDate: range.sinceStr, endDate: range.untilStr, preset: range.preset } }

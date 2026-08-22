@@ -1517,6 +1517,11 @@ async function start() {
       startStructuralReconcileCron();
       const { startTosIsIngestCron } = await import('./jobs/ads-tos-is-ingest.job.js');
       startTosIsIngestCron();
+      // ADM-P6 — the budget-usage sampler. Default ON (NEXUS_DISABLE_BUDGET_USAGE_CRON
+      // stops it): Out-of-Budget and Actively Bidding hours can only count hours that
+      // were actually watched, and neither Amazon feed can be backfilled.
+      const { startBudgetUsageCron } = await import('./jobs/ads-budget-usage.job.js');
+      startBudgetUsageCron();
       markCronStep('ads:schedules registered');
       // Redis-dependent BullMQ worker LAST + non-blocking: a hung/failed Redis
       // connect must not freeze the crons above (which is what happened — the

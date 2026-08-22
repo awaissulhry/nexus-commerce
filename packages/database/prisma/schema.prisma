@@ -3322,6 +3322,54 @@ model AmazonAdsHourlyPerformance {
   @@index([marketplace, date, hour, adProduct], map: "AmazonAdsHourlyPerformance_mkt_date_hour_idx")
 }
 
+// ADM-P6 — Amazon's OWN per-campaign budget-usage reading, sampled.
+//
+// `POST /sp/campaigns/budget/usage` answers for every Sponsored Products campaign
+// (measured 2026-08-22: 200 of 200; the 19 it refuses are all SD/SB, which the SP
+// endpoint does not cover). It returns three things and each one matters:
+//   percent        Amazon's own consumption figure, NOT derived by us
+//   budgetCents    the budget THAT reading was a percentage of — it moves intraday
+//   usageUpdatedAt Amazon's usageUpdatedTimestamp: the age of the READING itself
+//
+// 🔴 The timestamp is load-bearing, not decoration. Amazon does not zero the
+// percentage at the daily reset; it simply stops updating it. Measured the same day:
+// DE_Auto_Close read 27.2% stamped 19:59Z the PREVIOUS day, hours after the 00:00Z
+// reset. A reading older than the current budget day describes yesterday, and
+// rendering it as today's utilization would be a confident lie with a fresh look.
+//
+// One row per distinct reading, not per poll: `firstSeenAt`/`lastSeenAt` bracket the
+// span over which that reading was continuously observed. That is what makes the
+// hour columns possible at all — an hour is out-of-budget if a >=100% reading was
+// observed across it, and an hour is observed only if some reading spans it. Storing
+// one row per poll instead would be 57,600 rows a day to say the same thing.
+model AdBudgetUsageSample {
+  id                 String @id @default(cuid())
+  campaignId         String // local Campaign.id
+  externalCampaignId String
+  profileId          String
+  marketplace        String
+
+  /// As Amazon sends it: 0-100+, a PERCENT and not a fraction. Above 100 is normal.
+  percent     Float
+  /// Amazon's own budget for this campaign at the moment of the reading.
+  budgetCents Int
+
+  /// Amazon's usageUpdatedTimestamp. Compare against the 00:00 UTC budget-day start.
+  usageUpdatedAt DateTime
+  /// When WE first saw this reading, and when we last saw it still current.
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+
+  /// 'pull' = the budget-usage API. 'stream' = AMS budget-usage (Track B), same table.
+  source String @default("pull")
+
+  createdAt DateTime @default(now())
+
+  @@unique([campaignId, source, usageUpdatedAt], map: "AdBudgetUsageSample_reading_key")
+  @@index([campaignId, usageUpdatedAt], map: "AdBudgetUsageSample_campaign_reading_idx")
+  @@index([lastSeenAt], map: "AdBudgetUsageSample_lastSeenAt_idx")
+}
+
 // Search terms that triggered ads. High-cardinality; 90-day rolling
 // delete enforced by a separate cleanup job. Used for negative keyword
 // mining and "what queries are we actually winning" analytics.
