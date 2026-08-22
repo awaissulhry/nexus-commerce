@@ -125,7 +125,7 @@ export function FilterDropdown({
 // The popover is portaled to <body> with fixed positioning so it's never clipped by
 // a scrolling modal body or the grid's overflow, and flips up near the viewport
 // bottom. Shares the .h10-dd-* styling so it stays consistent with FilterDropdown.
-export function H10Select({ options, value, onChange, ariaLabel, width, searchable, searchPlaceholder = 'Search…' }: {
+export function H10Select({ options, value, onChange, ariaLabel, width, searchable, searchPlaceholder = 'Search…', held, onHeld }: {
   options: Opt[]
   value: string
   onChange: (v: string) => void
@@ -134,6 +134,20 @@ export function H10Select({ options, value, onChange, ariaLabel, width, searchab
   /** Force the in-popover search box. Otherwise it auto-shows past SEARCH_THRESHOLD options. */
   searchable?: boolean
   searchPlaceholder?: string
+  /**
+   * PLC-P3 — the select is LOCKED to its current value, and says so when you try to change it.
+   *
+   * 🔴 Deliberately NOT the `disabled` attribute. A disabled button takes no focus, no click and
+   * renders no tooltip, so the reason for the refusal lands on the one element in the DOM that
+   * cannot deliver it — the defect `scripts/check-silent-disabled.mjs` exists to stop, measured on
+   * 14 toggles across this section. Held keeps the control live: it focuses, it answers Enter, and
+   * `onHeld` is what it answers WITH.
+   *
+   * Additive and optional: all 45 existing call sites are byte-identical in behaviour.
+   */
+  held?: boolean
+  /** Called instead of opening the popover. Give the operator the reason here. */
+  onHeld?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number; width: number; up: boolean } | null>(null)
@@ -153,7 +167,7 @@ export function H10Select({ options, value, onChange, ariaLabel, width, searchab
     setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, width: r.width, up })
   }
   const close = () => { setOpen(false); setQ(''); setActive(0) }
-  const toggle = () => { if (!open) { place(); setQ(''); setActive(0) } ; setOpen((o) => !o) }
+  const toggle = () => { if (held) { onHeld?.(); return } ; if (!open) { place(); setQ(''); setActive(0) } ; setOpen((o) => !o) }
   const pick = (v: string) => { onChange(v); close() }
   // Type to narrow, ↑/↓ to move, Enter to take the highlighted row, Esc to back out.
   const onKey = (e: React.KeyboardEvent) => {
@@ -172,7 +186,7 @@ export function H10Select({ options, value, onChange, ariaLabel, width, searchab
   }, [])
   return (
     <div className="h10-dd" style={width != null ? { width } : undefined}>
-      <button ref={btnRef} type="button" className={`h10-dd-btn ${open ? 'open' : ''}`} onClick={toggle} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}>
+      <button ref={btnRef} type="button" className={`h10-dd-btn ${open ? 'open' : ''}${held ? ' held' : ''}`} onClick={toggle} aria-haspopup="listbox" aria-expanded={open} aria-disabled={held || undefined} aria-label={ariaLabel}>
         <span>{selected?.label ?? ''}</span><ChevronDown size={14} />
       </button>
       {open && pos && createPortal(<>

@@ -46,7 +46,26 @@ createServer(async (req, res) => {
   try {
     // ── simulated rule store ─────────────────────────────────────────────────
     if (url === '/api/advertising/automation-rules' && req.method === 'GET') {
-      return json(200, { rules: [...mem.values()] })
+      /**
+       * PLC-P3 — the REAL rules, plus whatever this session has simulated.
+       *
+       * It used to return only the in-memory store, which is right for verifying a CREATE flow and
+       * useless for verifying how an EXISTING rule renders: a local dev server cannot read the
+       * prod rules API at all (it is RBAC-gated and the session cookie does not cross from
+       * `localhost` to the Railway host), so a grid change had nothing real to render.
+       *
+       * The shape matches the live route exactly — `{ items, count }`, ordered
+       * `enabled desc, name asc` — because the grid reads `items` and a stub that answers a
+       * different shape verifies the stub rather than the page. (`rules` is kept alongside for the
+       * older callers this stub already served.)
+       */
+      const real = await prisma.automationRule.findMany({
+        where: { domain: 'advertising' },
+        orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
+      })
+      const items = [...real, ...mem.values()]
+      log(`RULES → ${real.length} real + ${mem.size} simulated`)
+      return json(200, { items, count: items.length, rules: items })
     }
     if (url === '/api/advertising/automation-rules' && req.method === 'POST') {
       const b = await readBody(req)
@@ -170,16 +189,26 @@ createServer(async (req, res) => {
       const { getNegativesStrip } = await import('../src/services/advertising/negatives.service.js')
       return json(200, await getNegativesStrip())
     }
-    // BUD-PP — the draft-rule preview, served from the real service (engine, dryRun, no writes).
+    // BUD-PP / PLC-P2 — the draft-rule preview, served from the real service (engine, dryRun, no
+    // writes), dispatched on the draft's slug exactly as the route does.
     if (url === '/api/advertising/automation-rules/preview' && req.method === 'POST') {
       const body = await readBody(req)
-      const { previewBudgetRule } = await import('../src/services/advertising/ads-rule-preview.service.js')
-      return json(200, await previewBudgetRule(body as never))
+      const slug = String((Array.isArray(body.actions) ? (body.actions[0] as { type?: unknown })?.type : '') ?? '')
+      const svc = await import('../src/services/advertising/ads-rule-preview.service.js')
+      const out = slug === 'placement' ? await svc.previewPlacementRule(body as never) : await svc.previewBudgetRule(body as never)
+      log(`PREVIEW ${slug} → ok=${out.ok} matched=${'matched' in out ? out.matched : '?'} rows=${out.rows?.length ?? 0}`)
+      return json(200, out)
     }
     // BUD-P4 — the Budget tab's strip, served from the real service against prod data.
     if (url === '/api/advertising/budget-rules/strip' && req.method === 'GET') {
       const { getBudgetRulesStrip } = await import('../src/services/advertising/budget-grid.service.js')
       return json(200, await getBudgetRulesStrip())
+    }
+    // PLC-P1 — the Placement tab's strip, served from the real service against prod data.
+    // Must be handled here rather than falling through to the proxy: the route is not deployed yet.
+    if (url === '/api/advertising/placement-rules/strip' && req.method === 'GET') {
+      const { getPlacementRulesStrip } = await import('../src/services/advertising/placement-grid.service.js')
+      return json(200, await getPlacementRulesStrip())
     }
     if (url === '/api/advertising/harvest-cohort' && req.method === 'GET') {
       const { getHarvestCohort } = await import('../src/services/advertising/harvest-cohort.service.js')

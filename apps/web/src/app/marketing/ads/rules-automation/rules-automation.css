@@ -5519,3 +5519,64 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    gives it room and keeps the footnote on the same type scale as the line chart's. */
 .h10-bsp-heat { padding: 4px 2px 0; }
 .h10-bsp-heat .h10-bsp-hourfoot { margin-top: 10px; }
+
+/* ── PLC-P2 — the honest Placement preview ─────────────────────────────────────────────────────
+   Four columns (campaign · lane · current · new modifier), because the LANE is what makes one
+   placement rule different from another and the old three-column table left it out entirely.
+   `.plcp` rather than reusing `.budp`: that variant is sized for five columns and money, and a
+   shared class whose two callers need different widths is a fork waiting to happen.
+   Appended at the END on purpose — source order beats specificity in this stylesheet. */
+.h10-rb-prev .ptable.plcp .pthr span:not(:first-child),
+.h10-rb-prev .ptable.plcp .ptr span:not(.term) { flex: 0 0 104px; }
+.h10-rb-prev .ptable.plcp .pthr span:nth-child(2),
+.h10-rb-prev .ptable.plcp .ptr .lane { flex: 0 0 124px; text-align: left; color: #1c2530; font-weight: 600; }
+.h10-rb-prev .ptable.plcp .pthr span:last-child,
+.h10-rb-prev .ptable.plcp .ptr .newb { flex: 0 0 150px; }
+/* The engine marker sits UNDER the current value, in the same amber the guardrail note uses —
+   both say "this number is not what you think it is". #8a5316 is 5.31:1 on white. */
+.h10-rb-prev .ptr span .pnote.eng { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: #8a5316; }
+/* The hour + governance sentence: its own line under the census, never inline with it. It
+   qualifies every row above, so it must not read as one more count. */
+.h10-rb-prev .pfoot .phour { display: block; margin-top: 7px; color: #626c7c; line-height: 1.55; }
+
+/* ── PLC-P3 — a locked control that can still explain itself ───────────────────────────────────
+   The IF placement-scope select is HELD, never `disabled`: a disabled button takes no focus, no
+   click and renders no tooltip, so the reason for the refusal would land on the one element that
+   cannot deliver it (`scripts/check-silent-disabled.mjs`). Held keeps it live — it focuses, it
+   answers Enter, and clicking it opens the note below.
+   Dimmed enough to read as "not yours to change" and no dimmer: #626c7c is 5.31:1 on the control's
+   own #fff, so the locked value stays legible rather than becoming decoration. */
+/* ⚠ `.h10-dd-btn` lives in `ads.css` (14 rules) — that is this control's DS home, and the `held`
+   variant belongs there so every H10Select gets it, not only this section's. Left here because
+   ads.css is being edited by another session right now and both current users of `held` are in
+   this section. Move it when ads.css is quiet. */
+.h10-dd-btn.held { background: #f4f6f9; border-color: #e2e7ee; color: #626c7c; cursor: default; }
+.h10-dd-btn.held:hover { background: #eef1f6; border-color: #d8dde4; }
+.h10-dd-btn.held svg { opacity: .45; }
+/* The answer itself. A block under the conditions it belongs to, not a tooltip: the operator asked
+   a question by clicking, and an answer that vanishes on mouse-out is not an answer. */
+.h10-rb-heldnote {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin: 8px 0 0; padding: 9px 12px;
+  border: 1px solid #dbe6f6; border-radius: 8px; background: #f2f7ff;
+  font-size: 12px; line-height: 1.55; color: #3a4452;
+}
+.h10-rb-heldnote svg { flex: 0 0 auto; margin-top: 2px; color: #1a61c6; }
+.h10-rb-heldnote b { color: #1c2530; font-weight: 700; }
+/* Dark, in both directions — the media query for the system default and the attribute for an
+   explicit toggle. Reported by the Keyword Tracker session, which reused this element: it was the
+   only light-blue panel in the builder with no dark variant, so it read as a pasted-in box beside
+   `.h10-rb-banner.warn` and `.h10-ktp-strip`, which both have one. Readable either way (9.17:1),
+   but inconsistent is its own defect. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .h10-rb-heldnote { background: #111a26; border-color: #1e3252; color: #b7c0cc; }
+  :root:not([data-theme="light"]) .h10-rb-heldnote b { color: #eef2f7; }
+  :root:not([data-theme="light"]) .h10-rb-heldnote svg { color: #5b9bf0; }
+}
+:root[data-theme="dark"] .h10-rb-heldnote { background: #111a26; border-color: #1e3252; color: #b7c0cc; }
+:root[data-theme="dark"] .h10-rb-heldnote b { color: #eef2f7; }
+:root[data-theme="dark"] .h10-rb-heldnote svg { color: #5b9bf0; }
+
+/* The held-Create answer, above the footer row. Full width, and its own margin so it does not
+   ride the footer's border-top. */
+.h10-rb-heldnote.ktp { margin: 18px 0 0; }

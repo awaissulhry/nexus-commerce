@@ -135,6 +135,12 @@ interface BuilderCond {
    * Present only on a round-trip; a freshly-built condition has none and resolves by metric.
    */
   field?: string
+  /**
+   * PLC-P7 — which PLACEMENT LANE this condition measures: 'campaign' (the default, and every
+   * non-placement rule) or one of 'tos' | 'pdp' | 'ros'. Written by the Placement builder on every
+   * condition since it shipped, and read by nothing until PLC-P7 — see `placementScopedField`.
+   */
+  scope?: string
 }
 interface BuilderGroup { conditions?: BuilderCond[]; action?: { op?: string; value?: string | number; placeTarget?: string } }
 interface EngineLeaf { field: string; op: string; value: number }
@@ -194,6 +200,25 @@ export function builderBudgetCampaignIds(actions: unknown): string[] | null {
   return builderCampaignIds(a0)
 }
 
+/**
+ * PLC-P2 — the picker list of ANY builder draft, keyed by the slug the caller expects.
+ *
+ * `builderBudgetCampaignIds` above refuses anything that is not a budget rule, which is right for
+ * its callers (the assignment column, `reachForRules`) — they are asking a question about budget
+ * governance specifically. The draft PREVIEW asks a different question: "which campaigns did the
+ * operator put in this rule's picker", and it asks it of budget and placement drafts alike.
+ *
+ * Deliberately NOT a loosening of the function above: a `null` from that one means "not
+ * assignment-governed", a distinction three call sites depend on. This one returns `null` only
+ * when the draft is not the slug asked for or carries no picker array at all.
+ */
+export function builderDraftCampaignIds(actions: unknown, slug: string): string[] | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as Record<string, unknown> | undefined) : undefined
+  if (!a0 || String(a0.type ?? '') !== slug) return null
+  if (!Array.isArray(a0.campaigns) && !Array.isArray(a0.campaignIds)) return null
+  return builderCampaignIds(a0)
+}
+
 /** True for a budget rule of EITHER shape — the catalogue test the column should have used. */
 export function isBudgetRuleOfAnyShape(actions: unknown): boolean {
   return isEngineBudgetRule(actions) || builderBudgetCampaignIds(actions) != null
@@ -207,6 +232,29 @@ const convert = (raw: unknown, conv: 'frac' | 'cents' | 'plain'): number =>
 // and skipped the condition, and because groups are flattened AND-only, every skip made the rule
 // LOOSER — a rule saying "negate at ACOS > 80%" would have negated at any ACOS. Unmapped metrics
 // are collected and returned; the caller fails the whole rule closed and names them.
+/**
+ * PLC-P7 — a `campaign.<metric>` field re-pointed at one lane's copy of the same metric.
+ *
+ * Returns the field UNCHANGED for the campaign scope, an unknown scope, or a field that is not
+ * campaign-shaped. That conservatism is the point: this runs inside the one function every rule
+ * type's conditions pass through, and the failure direction to avoid is a stray `scope` key
+ * silently moving a Bid or Harvest rule's condition to a field nothing emits — which evaluates as
+ * `undefined` and never matches, the exact defect this fixes.
+ */
+const PLACEMENT_SCOPE_KEYS = new Set(['tos', 'pdp', 'ros'])
+export function placementScopedField(field: string, scope: string | undefined): string {
+  if (!scope || !PLACEMENT_SCOPE_KEYS.has(scope)) return field
+  if (!field.startsWith('campaign.')) return field
+  const metric = field.slice('campaign.'.length)
+  // Only metrics a lane actually carries. `budgetUtilization`, `dailyBudgetCents` and
+  // `avgDailySpendCents` are campaign facts with no per-lane meaning — a lane has no budget — so a
+  // scoped condition on one stays campaign-wide rather than pointing at a field that is never
+  // emitted.
+  const LANE_METRICS = new Set(['impressions', 'clicks', 'orders', 'spendCents', 'salesCents', 'acos', 'roas', 'ctr', 'cvr', 'cpcCents'])
+  if (!LANE_METRICS.has(metric)) return field
+  return `placement.${scope}.${metric}`
+}
+
 function translateConditions(groups: BuilderGroup[], map: typeof CAMPAIGN_METRIC, ruleId: string): { leaves: EngineLeaf[]; unmapped: string[] } {
   const leaves: EngineLeaf[] = []
   const unmapped: string[] = []
@@ -233,7 +281,26 @@ function translateConditions(groups: BuilderGroup[], map: typeof CAMPAIGN_METRIC
         if (c.metric) { unmapped.push(c.metric); logger.warn('[ads-rule-adapter] unmapped metric — rule will be refused, not loosened', { ruleId, metric: c.metric }) }
         continue
       }
-      leaves.push({ field: m.field, op: c.op, value: convert(c.value, m.conv) })
+      /**
+       * 🔴 PLC-P7 — the condition's own SCOPE, honoured at last.
+       *
+       * The Placement builder writes `scope` on every condition ('campaign' | 'tos' | 'pdp' |
+       * 'ros') and this function read `metric`, `op` and `value` only — so "IF Top of Search ·
+       * ACoS > 40%" evaluated the CAMPAIGN's ACoS. A stored-but-unread control on the one dropdown
+       * that separates a Placement rule from a Budget one, and the cardinal sin of this section.
+       *
+       * The rewrite is deliberately narrow: it applies ONLY where the map's field is already a
+       * `campaign.*` field and the scope names one of the three lanes. Anything else — a
+       * `searchTerm.*` map, `scope: 'campaign'`, an unknown scope — falls through unchanged, so no
+       * other rule type can be moved by a stray key.
+       *
+       * `PLACEMENT_SCOPE_FIELD` is not a second metric map: it re-points the same metric at the
+       * same shape one level down (`campaign.acos` → `placement.tos.acos`), which is exactly how
+       * `buildCampaignBudgetContexts` emits it. The conversion (percent → fraction, euros → cents)
+       * still comes from the metric, because that is a property of the metric and not of the lane.
+       */
+      const field = placementScopedField(m.field, c.scope)
+      leaves.push({ field, op: c.op, value: convert(c.value, m.conv) })
     }
   }
   return { leaves, unmapped }

@@ -1717,9 +1717,65 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
   }
   if (next === current) return { type: action.type, ok: true, output: { campaignId: id, placement, noChange: true } }
   const { updatePlacementBidding } = await import('./ads-create.service.js')
-  const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
-  const res = await updatePlacementBidding({ campaignId: id, adjustments: [...others, { placement, percentage: next }], actor: `automation:rule-${meta.ruleId}`, reason: `rule ${action.type}: ${current}% \u2192 ${next}%` })
-  return { type: action.type, ok: res.ok !== false, output: { campaignId: id, placement, percentage: next, mode: res.mode } }
+  const { buildManualAdjustments } = await import('./ads-placement-manual.js')
+  const { MANAGED_PLACEMENTS } = await import('./ads-placement-math.js')
+  /**
+   * 🔴 PLC-P4 — a lane this system does not manage REFUSES rather than writing.
+   *
+   * `buildManualAdjustments` owns the three managed lanes and emits exactly those (plus any
+   * non-managed placement it found, untouched). Handed a fourth lane as the TARGET it would build
+   * a payload that does not contain it — a write that silently does nothing, reported as success.
+   * The adapter can only ever emit the three (`PLACEMENT_ENUM`), so this is unreachable from the
+   * builder; an engine-native rule carrying something else is what it guards.
+   */
+  if (!(MANAGED_PLACEMENTS as readonly string[]).includes(placement)) {
+    return { type: action.type, ok: false, error: `“${placement}” is not a placement this system manages (Top of Search · Rest of Search · Product Pages), so this rule cannot write it`, output: { campaignId: id, placement } }
+  }
+  /**
+   * PLC-P4 — ONE implementation of the merge.
+   *
+   * `updatePlacementBidding` writes `placementBidding` WHOLESALE, so a one-lane payload erases the
+   * other two — 88 of 88 two-lane campaigns would have lost one. This handler used to rebuild the
+   * payload inline (`others` + the target); `buildManualAdjustments` (14 tests) is the helper that
+   * exists for exactly this, and a second implementation of the one rule whose failure is silent
+   * and account-wide is not worth the eight characters it saved.
+   *
+   * Equivalence was MEASURED before converging, not assumed: `_plcp-p4-merge-equiv.mts` built both
+   * payloads for all 220 campaign profiles × 3 lanes × 6 values and found **3,960 of 3,960**
+   * agreeing on the set of value-carrying lanes. The 24 byte differences are all one kind — the
+   * helper omits an untouched lane that is already 0, which Amazon reads identically to absent and
+   * which writes no history row (that filter reads the NEW array). The helper additionally clamps
+   * every lane rather than only the target, dedupes a doubled lane, and preserves non-managed
+   * placements explicitly.
+   */
+  const res = await updatePlacementBidding({
+    campaignId: id,
+    adjustments: buildManualAdjustments(db.placementBidding, placement as never, next),
+    actor: `automation:rule-${meta.ruleId}`,
+    reason: `rule ${action.type}: ${current}% \u2192 ${next}%`,
+  })
+  /**
+   * 🔴 PLC-P4 — a refusal carries the gate's own sentence.
+   *
+   * `updatePlacementBidding` returns `{ ok:false, mode:'blocked', reason, deniedAt }` — PLC.3 added
+   * those two fields for precisely this — and this handler used to discard both, returning a bare
+   * `ok:false` with no `error`. The suggestion correctly stayed pending and the operator was shown
+   * "refused" with nothing after it, while `actionResults` recorded a failure that named no cause.
+   * `bid_apply` has always passed its `res.error` through; placement did not.
+   *
+   * `reason` is the gate's verbatim sentence and is never paraphrased. `deniedAt` names WHICH gate
+   * (authority_pin · campaign_allowlist · automation_halted …) so a surface can link to the control
+   * that clears it.
+   */
+  if (res.ok === false) {
+    return {
+      type: action.type,
+      ok: false,
+      error: res.reason ?? `the write gate declined this placement change${res.deniedAt ? ` (${res.deniedAt})` : ''}`,
+      output: { campaignId: id, placement, percentage: next, mode: res.mode, ...(res.deniedAt ? { deniedAt: res.deniedAt } : {}) },
+    }
+  }
+  return { type: action.type, ok: true, output: { campaignId: id, placement, percentage: next, mode: res.mode } }
 }
 
 // bid_apply (EA2) — Set/Increase/Decrease a keyword/target bid (adTarget.bidCents), clamped to

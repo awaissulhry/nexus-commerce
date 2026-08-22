@@ -41,6 +41,8 @@ import cron from 'node-cron'
 import { ruleWindowBounds } from '@nexus/shared/data-vintage'
 import { BID_WINDOW_MAX, BID_WINDOW_MIN, TRIGGER_WINDOW, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
+// PLC-P7 — the report-label join and the three lane enums, from the leaf module that owns them.
+import { REPORT_LABEL_TO_PLACEMENT, PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from '../services/advertising/ads-placement-math.js'
 
 /**
  * B2 (2026-08-20) — each trigger's window now comes from `@nexus/shared/ads-rule-window`, which
@@ -630,6 +632,32 @@ async function applyMarketplaceScope<C extends { marketplace: string | null }>(
  */
 const BUDGET_RULE_WINDOW_DAYS = WINDOW('CAMPAIGN_PERFORMANCE_BUDGET')
 
+/**
+ * PLC-P7 — one lane's own performance, over the same window as the campaign beside it.
+ *
+ * 🔴 UNDEFINED where not measurable — not null, and not 0. The distinction is load-bearing and it
+ * cost this unit a failing test to find:
+ *
+ *     applyOperator('lte', lhs, rhs)  →  Number(lhs) <= Number(rhs)
+ *     Number(null)      === 0    →  null  <= 0.003  is TRUE
+ *     Number(undefined) === NaN  →  undefined <= 0.003  is FALSE
+ *
+ * So a `null` behaves exactly like the fabricated zero it was meant to avoid: it MATCHES every
+ * `lt`/`lte`. Measured — a lane-scoped "CTR ≤ 99%" draft matched 53 campaigns when only 51 had a
+ * measurable Product Pages CTR. With `undefined`, every relational comparison against an
+ * unmeasured lane is false, which is the honest reading of "we have never seen this lane".
+ *
+ * ⚠ The campaign-level ratios one level up are still `null` and therefore still behave as zeros
+ * for `lt`/`lte`. That is a live cross-cutting defect in the shared comparator, not this type's to
+ * fix unilaterally — see the PLC-P7 note in the ship log.
+ */
+export interface PlacementLaneMetrics {
+  impressions?: number; clicks?: number; orders?: number
+  spendCents?: number; salesCents?: number
+  acos?: number; roas?: number
+  ctr?: number; cvr?: number; cpcCents?: number
+}
+
 export interface CampaignBudgetContext {
   trigger: 'CAMPAIGN_PERFORMANCE_BUDGET'
   marketplace: string | null
@@ -641,6 +669,18 @@ export interface CampaignBudgetContext {
     ctr: number | null; cvr: number | null; cpcCents: number | null
     avgDailySpendCents: number; budgetUtilization: number | null
   }
+  /**
+   * PLC-P7 — the three SP placement lanes, each measured on its own, from
+   * `AmazonAdsPlacementReport` over the SAME window as `campaign` above.
+   *
+   * 🔴 Additive by design. Budget rules share this trigger and these contexts and reference none of
+   * these fields, so their behaviour is unchanged; the Placement builder's IF scope selector is
+   * what reads them (`scope: 'tos' | 'pdp' | 'ros'` → `placement.<key>.<metric>`). Putting them on
+   * the EXISTING context rather than in a new family is what lets one rule mix a campaign-wide
+   * condition with a lane-scoped one, and keeps the evaluator's passes, the preview and the
+   * assignment logic working untouched.
+   */
+  placement: { tos: PlacementLaneMetrics; pdp: PlacementLaneMetrics; ros: PlacementLaneMetrics }
 }
 
 /**
@@ -664,6 +704,63 @@ export async function buildCampaignBudgetContexts(overrideDays?: number): Promis
     _sum: { costMicros: true, sales7dCents: true, sales14dCents: true, impressions: true, clicks: true, orders7d: true },
   })
   const byId = new Map(perf.map((p) => [p.localEntityId!, p]))
+
+  /**
+   * PLC-P7 — the same window, per PLACEMENT LANE, from Amazon's placement report.
+   *
+   * 🔴 Two joins go wrong silently here and both have cost this programme time before:
+   *   · `AmazonAdsPlacementReport.placement` holds Amazon's REPORT LABELS
+   *     ("Top of Search on-Amazon"), never the bidding enums — matching on an enum returns a clean
+   *     zero that reads exactly like "this lane does not deliver". `REPORT_LABEL_TO_PLACEMENT` is
+   *     the single join, shared with the placement page.
+   *   · the report's `campaignId` is Amazon's EXTERNAL id. `localCampaignId` is the local one and
+   *     is now fully populated (0 nulls in 30 days, measured 2026-08-22) — but it is nullable, so
+   *     rows without it are skipped rather than mis-attributed.
+   *
+   * One grouped query per context build, over the campaigns already selected.
+   */
+  const laneRows = await prisma.amazonAdsPlacementReport.groupBy({
+    by: ['localCampaignId', 'placement'],
+    where: { localCampaignId: { in: campaigns.map((c) => c.id) }, date: { gte: since, lte: until } },
+    _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
+  })
+  /** local campaign id → bidding enum → the summed row. */
+  const lanesByCampaign = new Map<string, Map<string, typeof laneRows[number]>>()
+  for (const r of laneRows) {
+    if (!r.localCampaignId) continue
+    const enumKey = REPORT_LABEL_TO_PLACEMENT[r.placement]
+    if (!enumKey) continue // an unrecognised fourth label is dropped, never folded into another
+    const m = lanesByCampaign.get(r.localCampaignId) ?? new Map()
+    m.set(enumKey, r)
+    lanesByCampaign.set(r.localCampaignId, m)
+  }
+  /**
+   * A lane with no rows in the window is NOT MEASURABLE, and every field is null.
+   *
+   * 🔴 Never 0. A fabricated zero ACoS or CTR matches every `lte` condition, so a rule written to
+   * cut a lane that is performing badly would cut every lane it has never seen — the loudest
+   * possible failure direction, and the same reasoning that makes the campaign ratios null.
+   */
+  const EMPTY_LANE: PlacementLaneMetrics = {}
+  const laneMetrics = (row: typeof laneRows[number] | undefined): PlacementLaneMetrics => {
+    if (!row) return EMPTY_LANE
+    const impressions = row._sum.impressions ?? 0
+    const clicks = row._sum.clicks ?? 0
+    const orders = row._sum.orders7d ?? 0
+    const spendCents = microsToCents(row._sum.costMicros)
+    const salesCents = row._sum.sales7dCents ?? 0
+    return {
+      impressions, clicks, orders, spendCents, salesCents,
+      // undefined, never null — see PlacementLaneMetrics. A ratio with no denominator is not
+      // measurable, and `Number(null)` is 0, which matches every `lte`.
+      ...(salesCents > 0 ? { acos: spendCents / salesCents } : {}),
+      ...(spendCents > 0 ? { roas: salesCents / spendCents } : {}),
+      ...(impressions > 0 ? { ctr: clicks / impressions } : {}),
+      ...(clicks > 0 ? { cvr: orders / clicks } : {}),
+      ...(clicks > 0 ? { cpcCents: Math.round(spendCents / clicks) } : {}),
+    }
+  }
+
   const out: CampaignBudgetContext[] = []
   for (const c of campaigns) {
     const p = byId.get(c.id)
@@ -691,6 +788,12 @@ export async function buildCampaignBudgetContexts(overrideDays?: number): Promis
         cpcCents: clicks > 0 ? Math.round(spendCents / clicks) : null,
         avgDailySpendCents,
         budgetUtilization: dailyBudgetCents > 0 ? avgDailySpendCents / dailyBudgetCents : null,
+      },
+      // PLC-P7 — the builder's own lane keys, so `scope: 'tos'` resolves without a second map.
+      placement: {
+        tos: laneMetrics(lanesByCampaign.get(c.id)?.get(PLACEMENT_TOP)),
+        pdp: laneMetrics(lanesByCampaign.get(c.id)?.get(PLACEMENT_PRODUCT)),
+        ros: laneMetrics(lanesByCampaign.get(c.id)?.get(PLACEMENT_REST)),
       },
     })
   }
@@ -1251,16 +1354,81 @@ async function targetPerfMap(targetIds: string[], windowDays: number) {
 // ── KEYWORD_RANK_BID (SK4) — keyword bid adjustment driven by organic/paid rank. For each positive
 // keyword target, attach the latest KeywordRank (matched by lowercased text + marketplace) so a rule
 // can e.g. raise the bid where organic rank is poor. Empty until rank data is ingested (SK3 backend).
-async function buildKeywordRankBidContexts() {
+/**
+ * 🔴 KT-P3 (2026-08-22) — "not measurable" must OMIT THE KEY. `null` is not enough, and that is not
+ * a style point: it is the difference between the rule refusing and the rule firing on everything.
+ *
+ * `applyOperator` (`automation-rule.service.ts:87`) coerces with `Number()`, and **`Number(null)` is
+ * `0`**. So a `null` reading is byte-identical to a real zero for every numeric operator:
+ *
+ * | `adTarget.rankDelta` | `<= 0` | `>= 0` | `= 0` | `< 5` |
+ * |---|---|---|---|---|
+ * | `0` (the original)   | true | true | true | true |
+ * | `null`               | **true** | **true** | **true** | **true** |
+ * | key absent           | false | false | false | false |
+ *
+ * `Number(undefined)` is `NaN` and every comparison against `NaN` is false, so an ABSENT key is the
+ * only value meaning "this rule cannot judge this target". The original defect was `rankDelta: … : 0`,
+ * which told every `<= 0` rule that rank had held steady on a keyword we have never observed twice.
+ * Nulling it would have compiled, reviewed and diffed clean — and changed nothing.
+ *
+ * ⚠ **The same trap is still live one layer out, and it is NOT KT's to fix.** `EMPTY_TARGET_PERF` and
+ * `targetPerfMap` set `acos/roas/ctr/cvr/cpcCents` to `null`, so a target with spend and ZERO SALES
+ * satisfies `ACOS <= 20%` and would have its bid RAISED as a 0%-ACoS winner. That map is shared with
+ * the Bid and SOV tabs, where rules can actually fire, so changing it moves live bids and needs its
+ * own operator decision (raised alongside KT-P6). Here the perf spread goes through `measured()` so
+ * the KEYWORD_RANK_BID context is correct on its own terms; KT has 0 rules and 0 executions, so this
+ * diverges from Bid/SOV in principle and from nothing in practice.
+ */
+const measured = <T extends Record<string, unknown>>(o: T): Partial<T> => {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(o)) if (v !== null && v !== undefined) out[k] = v
+  return out as Partial<T>
+}
+
+/**
+ * KT-P3 — the scan cap is age-based, not alphabetical.
+ *
+ * `orderBy: [keyword asc, marketplace asc, capturedAt desc] take: 8000` meant that once the table
+ * passed 8,000 rows, keywords late in the ALPHABET were dropped from every evaluation entirely — a
+ * coverage cliff with no symptom, excluding a slice of the account from a rule that then reported
+ * success. Ordering by `capturedAt desc` makes a truncation drop the OLDEST observations instead,
+ * degrading one delta rather than removing keywords wholesale, and it says so when it binds.
+ */
+const KEYWORD_RANK_SCAN_CAP = 8000
+
+export async function buildKeywordRankBidContexts() {
   try {
-    const ranks = await prisma.keywordRank.findMany({ orderBy: [{ keyword: 'asc' }, { marketplace: 'asc' }, { capturedAt: 'desc' }], take: 8000 })
+    const ranks = await prisma.keywordRank.findMany({ orderBy: [{ capturedAt: 'desc' }], take: KEYWORD_RANK_SCAN_CAP })
     if (!ranks.length) return []
-    // collapse to latest + prior per (keyword, marketplace) — same as GET /advertising/keyword-ranks
-    const latest = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
+    if (ranks.length === KEYWORD_RANK_SCAN_CAP) {
+      logger.warn('[ads-rule-evaluator] KeywordRank scan hit its cap — the oldest observations were not read', { cap: KEYWORD_RANK_SCAN_CAP })
+    }
+    /**
+     * 🔴 KT-P3 — `prior` must come from the SAME ASIN as `latest`, or the delta is not a delta.
+     *
+     * `KeywordRank` carries an `asin`, but the collapse keyed on (keyword, marketplace) alone — so
+     * with two ASINs tracked for one keyword, `latest` and `prior` were just the two newest rows
+     * ACROSS ASINs, and `rankDelta` became *ASIN A's rank minus ASIN B's rank*: a cross-product
+     * difference wearing a rank-change label, and largest exactly where we advertise one term on
+     * several products.
+     *
+     * Rows arrive newest-first, so the first row seen per (keyword, marketplace, asin) is that
+     * ASIN's latest and the second is its prior. The lookup stays per (keyword, marketplace) —
+     * a target knows its keyword and market, not which ASIN was tracked — so the ASIN whose latest
+     * observation is newest represents the pair, and its own prior travels with it.
+     */
+    const perAsin = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
     for (const r of ranks) {
-      const k = `${r.keyword.trim().toLowerCase()} ${r.marketplace}`
-      const e = latest.get(k)
-      if (!e) latest.set(k, { r }); else if (!e.prior) e.prior = r
+      const k = `${r.keyword.trim().toLowerCase()} ${r.marketplace} ${r.asin ?? ''}`
+      const e = perAsin.get(k)
+      if (!e) perAsin.set(k, { r }); else if (!e.prior) e.prior = r
+    }
+    const latest = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
+    for (const [k, e] of perAsin) {
+      const pairKey = k.slice(0, k.lastIndexOf(' '))
+      const held = latest.get(pairKey)
+      if (!held || e.r.capturedAt > held.r.capturedAt) latest.set(pairKey, e)
     }
     const targets = await prisma.adTarget.findMany({
       where: { kind: 'KEYWORD', isNegative: false },
@@ -1277,6 +1445,8 @@ async function buildKeywordRankBidContexts() {
         const e = kw ? latest.get(`${kw} ${mkt}`) : undefined
         if (!e) return null // no rank snapshot for this keyword → skip
         const cur = e.r, prior = e.prior
+        // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing.
+        const rankDelta = prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : undefined
         return {
           trigger: 'KEYWORD_RANK_BID' as const,
           marketplace: mkt || null,
@@ -1284,10 +1454,8 @@ async function buildKeywordRankBidContexts() {
           adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
-            organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume,
-            // +ve delta = rank improved (number went down)
-            rankDelta: prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : 0,
-            ...(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
+            ...measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume, rankDelta }),
+            ...measured(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }
       })
@@ -1394,10 +1562,19 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   const highAcosByWindow = await Promise.all(customWindows.map(async (w) =>
     [w, await buildHighAcosKeywordContexts(w)] as const))
 
-  // BUD-P3 — the same per-window mechanism for Budget rules (actions[0].windowDays, 7–90).
-  const budgetRuleWindow = (actions: unknown): number | null => {
+  /**
+   * BUD-P3 · PLC-P5 — the per-window mechanism for BOTH `CAMPAIGN_PERFORMANCE_BUDGET` builders.
+   *
+   * Budget and Placement share this trigger and share `buildCampaignBudgetContexts`, so they share
+   * one helper. It used to test `a0.type !== 'budget'`, which meant a `windowDays` stored on a
+   * placement rule was read by nobody and every placement rule silently rode the default 7-day
+   * pass — the stored-but-unread class, one layer below the UI where it is hardest to see.
+   */
+  const CAMPAIGN_WINDOW_SLUGS = new Set(['budget', 'placement'])
+  const campaignRuleWindow = (actions: unknown): number | null => {
     const a0 = Array.isArray(actions) ? (actions[0] as { type?: string; windowDays?: unknown } | undefined) : undefined
-    if (a0?.type !== 'budget' || typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
+    if (!a0 || !CAMPAIGN_WINDOW_SLUGS.has(String(a0.type ?? ''))) return null
+    if (typeof a0.windowDays !== 'number' || !Number.isFinite(a0.windowDays)) return null
     const clamped = Math.max(BID_WINDOW_MIN, Math.min(BID_WINDOW_MAX, Math.round(a0.windowDays)))
     return clamped === WINDOW('CAMPAIGN_PERFORMANCE_BUDGET') ? null : clamped
   }
@@ -1405,7 +1582,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     where: { domain: 'advertising', trigger: 'CAMPAIGN_PERFORMANCE_BUDGET', enabled: true },
     select: { actions: true },
   })
-  const budgetWindows = [...new Set(budgetWindowRules.map((r) => budgetRuleWindow(r.actions)).filter((w): w is number => w != null))]
+  const budgetWindows = [...new Set(budgetWindowRules.map((r) => campaignRuleWindow(r.actions)).filter((w): w is number => w != null))]
   const budgetByWindow = await Promise.all(budgetWindows.map(async (w) =>
     [w, await buildCampaignBudgetContexts(w)] as const))
 
@@ -1415,11 +1592,11 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     ['AD_SPEND_PROFITABILITY_BREACH', profitability],
     ['CAC_SPIKE', cacSpike],
     ['AD_TARGET_UNDERPERFORMING', underperform],
-    // Default window — Budget rules that chose their own lookback are excluded here and get
-    // their own pass below with contexts built over THEIR window (BUD-P3, mirrors bid's).
-    ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget, (r) => budgetRuleWindow(r.actions) == null],
+    // Default window — Budget AND Placement rules that chose their own lookback are excluded here
+    // and get their own pass below with contexts built over THEIR window (BUD-P3 · PLC-P5).
+    ['CAMPAIGN_PERFORMANCE_BUDGET', campaignBudget, (r) => campaignRuleWindow(r.actions) == null],
     ...budgetByWindow.map(([w, ctxs]): Pass => (
-      ['CAMPAIGN_PERFORMANCE_BUDGET', ctxs, (r) => budgetRuleWindow(r.actions) === w])),
+      ['CAMPAIGN_PERFORMANCE_BUDGET', ctxs, (r) => campaignRuleWindow(r.actions) === w])),
     ['KEYWORD_ZERO_IMPRESSIONS', zeroImpression],
     ['KEYWORD_LOW_CTR', lowCtr],
     ['CVR_DROP', cvrDrop],

@@ -94,6 +94,7 @@ import {
 import { PC_METRIC_UNIT } from './PerformanceCriteria'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
+import { placementThenSentence } from './placementLanes'
 import { RULE_TYPES } from './ruleTypes'
 import { RuleTypeModal } from './RuleTypeModal'
 import { NoDataIllus } from './NoDataIllus'
@@ -257,7 +258,13 @@ function clause(c: { field?: string; metric?: string; op?: string; value?: unkno
   return `${label} ${OP_SYM[String(c.op)] ?? String(c.op ?? '')} ${v}`.trim()
 }
 
-interface BuilderGroup { conditions?: Array<{ metric?: string; op?: string; value?: string }>; action?: { op?: string; value?: string; target?: string } }
+/**
+ * 🔴 PLC-P3 — `placeTarget`, not `target`. The declared field name did not exist on the stored
+ * shape (the builder writes `conditions[].action.placeTarget`), so it was unreadable by
+ * construction — a typed field that can never hold anything is worse than an absent one, because
+ * it reads as "already handled".
+ */
+interface BuilderGroup { conditions?: Array<{ metric?: string; op?: string; value?: string }>; action?: { op?: string; value?: string; placeTarget?: string } }
 
 /**
  * The Criteria cell — one line for either shape, the way H10 truncates it ("PPC Orders>=1, S…").
@@ -369,6 +376,14 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
      * at all, so falling through to the generic branch would have printed a bare "setCpc" beside
      * an empty string — the raw-enum cell this file has fixed twice before.
      */
+    /**
+     * 🔴 PLC-P3 — a placement THEN NAMES ITS LANE, and reads as a sentence.
+     *
+     * `Set 50%` was rendered for all three lanes, so "Top of Search Set to 50%", "Product Pages
+     * Set to 50%" and "Rest of Search Set to 50%" were one indistinguishable cell. The lane is not
+     * a detail of a placement rule — it IS the rule. (The API's own `describeAction` had been
+     * printing it all along; the two disagreed.)
+     */
     const then = a.op === 'pauseTarget' ? 'Pause the target'
       : a.op === 'enableTarget' ? 'Unpause the target'
       : a.op === 'setCpc' ? 'Set bid to measured CPC'
@@ -376,8 +391,10 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
       // BP.P4 — the two computed ops that joined H10's grammar; both read as sentences, never enums.
       : a.op === 'revPerClick' ? 'Set bid to revenue per click'
       : a.op === 'curBidTargetAcos' ? `Set bid to current bid × (${v}% ÷ actual ACoS)`
+      : pctType
+      ? placementThenSentence(a.op, v, a.placeTarget)
       : a.op === 'set'
-      ? (pctType ? `Set ${v}%` : `Set €${v}`)
+      ? `Set €${v}`
       : pctOp ? `${ACTION_VERB[a.op]}${v}%`
       : `${ACTION_VERB[a.op] ?? a.op}${v}`
     /**

@@ -19,6 +19,35 @@ export const PLACEMENT_REST = 'PLACEMENT_REST_OF_SEARCH'
 export const PLACEMENT_PRODUCT = 'PLACEMENT_PRODUCT_PAGE'
 // The three placements the rank engine manages (Amazon Sponsored Products).
 export const MANAGED_PLACEMENTS = [PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT] as const
+
+/**
+ * 🔴 Amazon's REPORT label → the bidding-API enum. THE two-vocabulary join, in one place.
+ *
+ * `AmazonAdsPlacementReport.placement` holds Amazon's report strings; `dynamicBidding.
+ * placementBidding` is keyed by the bidding enums. Matching the report on an enum returns nothing —
+ * not an error, a clean zero — and a clean zero reads exactly like "this lane does not deliver".
+ * This programme has already produced one wrong hypothesis that way.
+ *
+ * Exactly three distinct labels exist in this account (verified 2026-08-11, and again 2026-08-22
+ * over 4,075 rows). An unrecognised fourth is DROPPED rather than guessed at — a new Amazon label
+ * must surface as missing spend a reader can count, never as a lane silently folded into another.
+ *
+ * PLC-P7 moved this out of `placement-grid.service.ts` (which now imports it) so the parked
+ * placement page and the rule engine's lane-scoped criteria cannot disagree about which report row
+ * is which lane.
+ */
+export const REPORT_LABEL_TO_PLACEMENT: Record<string, string> = {
+  'Top of Search on-Amazon': PLACEMENT_TOP,
+  'Other on-Amazon': PLACEMENT_REST,
+  'Detail Page on-Amazon': PLACEMENT_PRODUCT,
+}
+
+/** The builder's own words for the three lanes (`conditions[].scope`, `action.placeTarget`). */
+export const PLACEMENT_BY_BUILDER_KEY: Record<string, string> = {
+  tos: PLACEMENT_TOP,
+  pdp: PLACEMENT_PRODUCT,
+  ros: PLACEMENT_REST,
+}
 const isManaged = (p: string): boolean => (MANAGED_PLACEMENTS as readonly string[]).includes(p)
 
 /**

@@ -908,6 +908,23 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  /**
+   * PLC-P1 — the Placement tab's one-line strip: what a placement rule can reach, and what
+   * already rewrites those lanes.
+   *
+   * `grep -a`ed BOTH route files first (the ugrep-returns-nothing trap — a duplicate registration
+   * is a boot crash, not a warning): `/advertising/placement-rules` appears in neither. It cannot
+   * be swallowed by a `:param` route either — the only neighbours are `/advertising/placements`
+   * and `/advertising/placements/:campaignId/lane`, a different first segment.
+   *
+   * No `Cache-Control`: the numbers this returns decide whether an operator arms a rule, and a
+   * cached census is one that cannot notice the rank engine taking a campaign over.
+   */
+  fastify.get('/advertising/placement-rules/strip', async () => {
+    const { getPlacementRulesStrip } = await import('../services/advertising/placement-grid.service.js')
+    return getPlacementRulesStrip()
+  })
+
   // ── PLC.0 — the Placement page's one read ───────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1, BID.S0 and HV.1 are:

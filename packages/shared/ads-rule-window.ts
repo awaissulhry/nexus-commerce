@@ -277,6 +277,29 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via ruleWindowBounds)',
     tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
   },
+  /**
+   * PLC-P5 — a builder Placement rule may choose its own lookback, exactly as Budget may.
+   *
+   * Same trigger, same contexts, same clamp: Placement and Budget are both
+   * `CAMPAIGN_PERFORMANCE_BUDGET` and both read `buildCampaignBudgetContexts`, so one mechanism
+   * serves both and the evaluator's per-window helper now tests for either slug.
+   *
+   * 🔴 The absence of this entry was a two-sided lie. The grid's Lookback cell fell through to the
+   * trigger and printed a flat "7 days" for every placement rule — true only while no placement
+   * rule could choose otherwise — and the evaluator's `budgetRuleWindow` tested
+   * `a0.type !== 'budget'`, so a `windowDays` stored on a placement rule was read by nobody. The
+   * builder never offered the control, which is the only reason that never became a live defect.
+   *
+   * It matters more here than on Budget. A placement rule's criteria are campaign-wide today, but
+   * PLC-P7's lane-scoped criteria are measured per campaign×lane, and over 7 days only 16 of 122
+   * campaign×lane cells clear 20 clicks against 51 of 123 over 30 (measured 2026-08-22). Without a
+   * widenable window a lane-scoped rule cannot be evidenced at all.
+   */
+  placement: {
+    kind: 'window', days: 7, settled: true,
+    source: 'advertising-rule-evaluator.job.ts buildCampaignBudgetContexts (via ruleWindowBounds)',
+    tunable: { clamp: [BID_WINDOW_MIN, BID_WINDOW_MAX] },
+  },
 }
 
 export interface RuleLookback extends RuleWindowSpec {

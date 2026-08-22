@@ -47,7 +47,7 @@
  */
 
 import prisma from '../../db.js'
-import { PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from './ads-placement-math.js'
+import { PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT, REPORT_LABEL_TO_PLACEMENT } from './ads-placement-math.js'
 import { resolveScopeReach } from './ads-scope-reach.js'
 import { resolveRange, type RangePreset } from '../ads-core/date-range.js'
 // 🔴 The engine's own band, and the engine's own strategy headroom. Both IMPORTED. A second copy
@@ -120,11 +120,10 @@ export const KEY_BY_LANE: Record<PlcLane, PlcLaneKey> = {
  * dropped rather than guessed at, and the script counts what was dropped so a new Amazon label
  * shows up as a number instead of as missing spend.
  */
-export const REPORT_TO_BID_KEY: Record<string, PlcLane> = {
-  'Top of Search on-Amazon': PLACEMENT_TOP,
-  'Other on-Amazon': PLACEMENT_REST,
-  'Detail Page on-Amazon': PLACEMENT_PRODUCT,
-}
+// PLC-P7 — DERIVED, not retyped. The map moved to `ads-placement-math.ts` when the rule engine
+// gained lane-scoped criteria and needed the same join; two copies of these three strings is how
+// a page and an engine start disagreeing about which report row is which lane.
+export const REPORT_TO_BID_KEY: Record<string, PlcLane> = REPORT_LABEL_TO_PLACEMENT as Record<string, PlcLane>
 
 export type PlcSortKey =
   | 'campaign' | 'market' | 'status' | 'lane' | 'multiplier'
@@ -1458,5 +1457,138 @@ export async function previewPlacementBulk(req: PlcPreviewRequest): Promise<PlcP
     rows,
     note: 'Amazon placement multipliers are 0–900% and one-directional: a lane cannot be bid DOWN. '
       + 'A correction is always “raise the other lane” or “zero this one”.',
+  }
+}
+
+/**
+ * ── PLC-P1 — the Placement tab's one-line strip ────────────────────────────────────────────────
+ *
+ * The rules grid answers "what is configured". It cannot answer the question an operator asks
+ * BEFORE configuring anything on this tab, which is **"and would any of it hold?"**
+ *
+ * 🔴 That question has a different answer here than on any other rules tab, and the difference is
+ * the whole reason this line exists. Measured on prod 2026-08-22: `ad-rank-defend` wrote **7,818**
+ * placement-lane changes across **34** campaigns in seven days ("snap to 45% Placement · dropping
+ * Top 75→0"), against **6** human lane writes in thirty. A placement rule armed on one of those
+ * campaigns is undone within the hour — and on the tab as it stands, arming a doomed rule looks
+ * exactly like arming one that will hold.
+ *
+ * Shaped exactly like `getBudgetRulesStrip`: server-censused over the FULL account (never
+ * recomposed from the grid's rows, which are a page), and **absent rather than fabricated** on a
+ * failed read — the client renders nothing if this does not return. A zero here would read as
+ * "nothing is governed" and "no engine touches these lanes", which are the two claims the line
+ * exists to disprove.
+ *
+ * ⚠ Deliberately carries NO current multiplier. "N campaigns carry a placement multiplier" is a
+ * time-of-day reading (the same query returned 167 at 13:00 and 145 at 02:56), so it cannot go in
+ * a sentence with no hour attached. Every number below is either a standing fact (enabled, gate,
+ * governed) or a windowed count. `engineLastWriteAt` is a timestamp and says so.
+ */
+export interface PlacementRulesStrip {
+  /** The trigger's own window, read from the shared map — never a literal 7. */
+  windowDays: number
+  enabledCampaigns: number
+  /** Of the enabled, how many emit a context at all: spend > 0 in the settled window. */
+  measurable: number
+  /** Of the measurable, how many the per-campaign live-write allowlist admits. */
+  gateOpen: number
+  /** Of those, how many an enabled AdSchedule governs — the rank engine's forward-looking reach. */
+  governed: number
+  /** gateOpen − governed. The campaigns where a placement rule's write is the last word. */
+  durable: number
+  /** OBSERVED, not planned: automation lane writes in the last 7 days, and over how many campaigns. */
+  engineWrites7d: number
+  engineCampaigns7d: number
+  engineLastWriteAt: string | null
+  /** Automation writes that came from a RULE (`automation:rule-…`) rather than the rank loop. */
+  ruleWrites7d: number
+  /** Human lane writes in 30 days. Small on purpose — it is the contrast that carries the line. */
+  humanWrites30d: number
+}
+
+export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
+  const { TRIGGER_WINDOW } = await import('@nexus/shared/ads-rule-window')
+  const { ruleWindowBounds } = await import('@nexus/shared/data-vintage')
+  /**
+   * A Placement rule is triggered by CAMPAIGN_PERFORMANCE_BUDGET (`TRIGGER_BY_SLUG.placement`),
+   * so its reach is that trigger's context set — the same one `buildCampaignBudgetContexts`
+   * builds. Read from the shared map so this line cannot drift from the window the engine uses.
+   */
+  const spec = TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET
+  const windowDays = spec && spec.kind === 'window' && spec.days != null ? spec.days : 7
+  const { since, until } = ruleWindowBounds(windowDays)
+  const writesSince = new Date(Date.now() - 7 * 864e5)
+  const humanSince = new Date(Date.now() - 30 * 864e5)
+
+  const [enabled, schedules, perf, engineRows, humanWrites30d] = await Promise.all([
+    prisma.campaign.findMany({
+      where: { status: 'ENABLED' },
+      select: { id: true, liveBidWritesEnabled: true },
+    }),
+    prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true } }),
+    prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['localEntityId'],
+      where: { entityType: 'CAMPAIGN', date: { gte: since, lte: until } },
+      _sum: { costMicros: true },
+    }),
+    /**
+     * The lane ledger, not the action log. `CampaignBidHistory.field` is the Amazon ENUM
+     * (`PLACEMENT_TOP` · `PLACEMENT_REST_OF_SEARCH` · `PLACEMENT_PRODUCT_PAGE`), one row per lane
+     * actually moved — whereas one `update_placement_bidding` audit row covers a whole payload.
+     * The per-lane grain is what makes "rewrote these lanes N times" a true sentence.
+     */
+    prisma.campaignBidHistory.findMany({
+      where: {
+        changedAt: { gte: writesSince },
+        field: { startsWith: 'PLACEMENT' },
+        changedBy: { startsWith: 'automation:' },
+      },
+      select: { campaignId: true, changedBy: true, changedAt: true },
+    }),
+    prisma.campaignBidHistory.count({
+      where: {
+        changedAt: { gte: humanSince },
+        field: { startsWith: 'PLACEMENT' },
+        changedBy: { startsWith: 'user:' },
+      },
+    }),
+  ])
+
+  const spendIds = new Set(
+    perf.filter((p) => p.localEntityId != null && microsToCents(p._sum.costMicros) > 0)
+      .map((p) => p.localEntityId as string),
+  )
+  const governedIds = new Set(schedules.map((s) => s.campaignId))
+
+  // The funnel, in the order the engine applies it. Each step is a filter on the one before, so
+  // the numbers nest — a reader can subtract them and be right.
+  const measurable = enabled.filter((c) => spendIds.has(c.id))
+  const gateOpen = measurable.filter((c) => c.liveBidWritesEnabled)
+  const governed = gateOpen.filter((c) => governedIds.has(c.id))
+
+  const engineCampaigns = new Set<string>()
+  let ruleWrites7d = 0
+  let lastAt: Date | null = null
+  for (const w of engineRows) {
+    if (w.campaignId) engineCampaigns.add(w.campaignId)
+    // `placement_apply` writes as `automation:rule-<ruleId>`; the rank loop as
+    // `automation:rank-defend-<scheduleId>`. Splitting them is the point of the line — "these
+    // lanes moved 7,818 times and no rule did any of it".
+    if (w.changedBy.startsWith('automation:rule-')) ruleWrites7d++
+    if (!lastAt || w.changedAt > lastAt) lastAt = w.changedAt
+  }
+
+  return {
+    windowDays,
+    enabledCampaigns: enabled.length,
+    measurable: measurable.length,
+    gateOpen: gateOpen.length,
+    governed: governed.length,
+    durable: gateOpen.length - governed.length,
+    engineWrites7d: engineRows.length,
+    engineCampaigns7d: engineCampaigns.size,
+    engineLastWriteAt: lastAt ? lastAt.toISOString() : null,
+    ruleWrites7d,
+    humanWrites30d,
   }
 }
