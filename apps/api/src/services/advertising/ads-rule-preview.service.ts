@@ -535,6 +535,8 @@ export interface KeywordTrackerPreviewRow {
   suppressed: 'flag' | 'bid' | null
   /** the campaign is bid-suppressed right now, so the next resume would overwrite this write */
   campaignSuppressed: boolean
+  /** KT-P6 — the handler REFUSED this one, in its own words. A refusal is a row, not an omission. */
+  refused?: string
 }
 
 export interface KeywordTrackerPreviewResult {
@@ -551,6 +553,8 @@ export interface KeywordTrackerPreviewResult {
   suppressedMatched: number
   suppressedUnflaggedMatched: number
   campaignSuppressedMatched: number
+  /** KT-P6 — of the matched, how many the engine REFUSED because they are switched off. */
+  refusedSuppressed: number
   /** 🔴 The rank feed itself — the difference between "nothing matched" and "nothing was measured". */
   feed: {
     rows: number
@@ -604,7 +608,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
   const feed = await keywordRankFeedHealth()
   const empty = (extra: Partial<KeywordTrackerPreviewResult> = {}): KeywordTrackerPreviewResult => ({
     ok: true, windowDays: 30, selected: 0, measurable: 0, inScope: 0, matched: 0, noChange: 0,
-    rows: [], suppressedMatched: 0, suppressedUnflaggedMatched: 0, campaignSuppressedMatched: 0,
+    rows: [], suppressedMatched: 0, suppressedUnflaggedMatched: 0, campaignSuppressedMatched: 0, refusedSuppressed: 0,
     feed, readAt, ...extra,
   })
 
@@ -636,12 +640,34 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
   }
 
   // ── the handler's own sentence is the only source of the numbers ──
-  interface Parsed { ctx: RankCtx; currentCents: number; proposedCents: number }
+  /**
+   * 🔴 KT-P6 — a REFUSAL is a row, not an omission.
+   *
+   * Since KT-P6 `bid_apply` skips a deliberately suppressed target instead of raising it, and the
+   * skip happens BEFORE the `dryRun` return — so it lands here as `output.skipped` with no
+   * `wouldChange`. Dropping those would make the preview quietly list fewer keywords than matched
+   * and never say why, which is the omission this whole path exists to remove. They are surfaced
+   * as rows carrying their reason, exactly as the SOV preview surfaces its own refusals.
+   */
+  interface Parsed { ctx: RankCtx; currentCents: number; proposedCents: number; refused?: string }
   const parsed: Parsed[] = []
   let noChange = 0
+  const SKIP_REASON: Record<string, string> = {
+    suppressed_flag: 'deliberately suppressed — this rule will not switch delivery back on',
+    suppressed_by_bid: 'bids at or under 3¢, this account’s suppression convention — left alone',
+    campaign_suppressed: 'its campaign’s bids are suppressed right now — a write here would be undone',
+  }
   for (const { ctx, res } of run.settled) {
     if (!res?.ok) continue
     if (res.output?.noChange) { noChange += 1; continue }
+    const skipped = String(res.output?.skipped ?? '')
+    if (skipped) {
+      // `campaign-not-selected` is not a refusal the operator needs to see — they chose the list.
+      if (SKIP_REASON[skipped]) {
+        parsed.push({ ctx, currentCents: Number(res.output?.bidCents ?? 0), proposedCents: Number(res.output?.bidCents ?? 0), refused: SKIP_REASON[skipped] })
+      }
+      continue
+    }
     const m = /^(-?\d+)¢\s*→\s*(-?\d+)¢$/.exec(String(res.output?.wouldChange ?? ''))
     if (!m) continue
     parsed.push({ ctx, currentCents: Number(m[1]), proposedCents: Number(m[2]) })
@@ -687,6 +713,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
       proposedEur: p.proposedCents / 100,
       suppressed,
       campaignSuppressed: suppressedCampaignIds.has(p.ctx.campaign.id),
+      ...(p.refused ? { refused: p.refused } : {}),
     }
   })
 
@@ -702,6 +729,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
     matched: c.matched,
     noChange,
     rows,
+    refusedSuppressed: rows.filter((r) => r.refused != null).length,
     suppressedMatched: rows.filter((r) => r.suppressed !== null).length,
     suppressedUnflaggedMatched: rows.filter((r) => r.suppressed === 'bid').length,
     campaignSuppressedMatched: rows.filter((r) => r.campaignSuppressed).length,

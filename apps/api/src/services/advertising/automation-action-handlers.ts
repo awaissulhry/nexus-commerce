@@ -33,6 +33,8 @@
 
 import { ACTION_HANDLERS, type ActionResult, getFieldPath } from '../automation-rule.service.js'
 import prisma from '../../db.js'
+// KT-P6 — the ≤3¢ suppression convention has ONE declaration, in the KT.6 blast radius.
+import { KT6_SUPPRESSION_CENTS } from './kt6-bid-action.js'
 import { logger } from '../../utils/logger.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
 // P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
@@ -1801,12 +1803,56 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
 ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.adTargetId as string | undefined) ?? (getFieldPath(context, 'adTarget.id') as string | undefined)
   if (!id) return { type: action.type, ok: false, error: 'No adTarget.id in context' }
-  const t = await prisma.adTarget.findUnique({ where: { id }, select: { bidCents: true, adGroup: { select: { campaignId: true } } } })
+  const t = await prisma.adTarget.findUnique({
+    where: { id },
+    select: { bidCents: true, suppressedFromBidCents: true, adGroup: { select: { campaignId: true, campaign: { select: { bidsSuppressedAt: true } } } } },
+  })
   if (!t) return { type: action.type, ok: false, error: 'AdTarget not found' }
   const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
   if (allow.length && t.adGroup?.campaignId && !allow.includes(t.adGroup.campaignId)) {
     return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', adTargetId: id } }
   }
+
+  /**
+   * ── KT-P6 (2026-08-22) — the engine never un-suppresses ───────────────────────────────────────
+   *
+   * 🔴 This handler's floor is `max(0.05, minEur)`, so it **cannot write ≤3¢**. Every op it
+   * performs on a deliberately suppressed target therefore switches delivery back ON for traffic
+   * somebody switched off — silently, with an automation's actor on the row.
+   *
+   * The house rule is *no pause — suppress with a ~2¢ bid* ([[feedback_no_pause_use_low_bids]]),
+   * so a low bid here is an off-switch, not a cheap bid. Measured on prod 2026-08-22 across the
+   * **1,004** positive keyword targets in the 82 write-enabled campaigns the gate lets through:
+   * **561 are suppressed (56%)**, **141 of them carry no flag at all**, and **420 sit in a campaign
+   * that is `bidsSuppressedAt` right now**.
+   *
+   * Three separate tests, counted separately and never merged — the flag is EVIDENCE, ≤3¢ is a
+   * CONVENTION, and merging them hides the 141 the flag does not know about
+   * ([[reference_ads_suppression_by_low_bid]]). The threshold is imported from the KT.6 blast
+   * radius rather than restated, so the engine and the operator-driven path cannot disagree about
+   * what "suppressed" means.
+   *
+   * A skip, not a failure: the target was never a candidate, so the execution row should say it was
+   * passed over and why — the same shape `campaign-not-selected` above uses. And this runs BEFORE
+   * the `dryRun` return, so a preview reports the refusal instead of promising a raise that the
+   * live run would not perform.
+   *
+   * ⚠️ Re-checked HERE, at write time, never at plan time: `suppressedFromBidCents` is another
+   * engine's state machine and a 2¢ bid is a clock reading — the suppressed set turns over within
+   * the hour ([[reference_ads_suppression_state_machine]]).
+   */
+  if (t.suppressedFromBidCents != null) {
+    return { type: action.type, ok: true, output: { skipped: 'suppressed_flag', adTargetId: id, suppressedFromCents: t.suppressedFromBidCents } }
+  }
+  if (t.bidCents != null && t.bidCents <= KT6_SUPPRESSION_CENTS) {
+    return { type: action.type, ok: true, output: { skipped: 'suppressed_by_bid', adTargetId: id, bidCents: t.bidCents } }
+  }
+  if (t.adGroup?.campaign?.bidsSuppressedAt != null) {
+    // Writing into a bid-suppressed campaign is not a write: the next resume restores every target
+    // from its remembered bid and overwrites this, with the engine's actor on the row.
+    return { type: action.type, ok: true, output: { skipped: 'campaign_suppressed', adTargetId: id, campaignId: t.adGroup.campaignId } }
+  }
+
   const currentEur = (t.bidCents ?? 0) / 100
   const floorEur = Math.max(0.05, action.minEur != null ? Number(action.minEur) : 0.05)
   const ceilEur = action.maxEur != null ? Number(action.maxEur) : null

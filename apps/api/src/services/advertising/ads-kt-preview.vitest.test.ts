@@ -56,11 +56,23 @@ beforeEach(() => {
   db.campaign.findMany.mockResolvedValue([] as never)
 })
 
-/** bid_apply reads the target's own bid; give each id a bid + suppression state. */
-const targetsAre = (rows: Array<{ id: string; bidCents: number; suppressedFromBidCents?: number | null; text?: string }>) => {
+/**
+ * `bid_apply` reads the target's own bid AND its suppression state — this mock must return the
+ * exact shape the handler selects, or the KT-P6 guard is never exercised and these tests pass
+ * vacuously. (It nearly did: the first version of this helper omitted `suppressedFromBidCents`
+ * and `adGroup.campaign`, so the flag branch was unreachable while the assertions still went
+ * green off the row-decoration query.)
+ */
+const targetsAre = (rows: Array<{ id: string; bidCents: number; suppressedFromBidCents?: number | null; text?: string; campaignSuppressed?: boolean }>) => {
   db.adTarget.findUnique.mockImplementation(async ({ where }: never) => {
     const r = rows.find((x) => x.id === (where as { id: string }).id)
-    return r ? { bidCents: r.bidCents, adGroup: { campaignId: 'c1' } } : null
+    return r
+      ? {
+        bidCents: r.bidCents,
+        suppressedFromBidCents: r.suppressedFromBidCents ?? null,
+        adGroup: { campaignId: 'c1', campaign: { bidsSuppressedAt: r.campaignSuppressed ? new Date() : null } },
+      }
+      : null
   })
   db.adTarget.findMany.mockResolvedValue(rows.map((r) => ({
     id: r.id, expressionValue: r.text ?? r.id, suppressedFromBidCents: r.suppressedFromBidCents ?? null,
@@ -86,6 +98,34 @@ describe('previewKeywordTrackerRule', () => {
     expect(out.measurable).toBe(1)
     expect(out.matched).toBe(0)
     expect(out.rows).toEqual([])
+  })
+
+  it('REFUSES a suppressed target rather than raising it, and says so on the row', async () => {
+    ctxs.push(ctx('flagged', 80), ctx('lowbid', 80), ctx('normal', 80))
+    targetsAre([
+      { id: 'flagged', bidCents: 40, suppressedFromBidCents: 55 },
+      { id: 'lowbid', bidCents: 2 },
+      { id: 'normal', bidCents: 40 },
+    ])
+    const out = await previewKeywordTrackerRule(draft)
+
+    const by = Object.fromEntries(out.rows.map((r) => [r.targetId, r]))
+    // 🔴 KT-P6 — the engine skips both kinds, so the preview must NOT promise a new bid for them
+    expect(by.flagged.refused).toMatch(/deliberately suppressed/)
+    expect(by.lowbid.refused).toMatch(/3¢/)
+    expect(by.normal.refused).toBeUndefined()
+    expect(by.normal.proposedEur).toBe(0.8)
+    // a refusal is a ROW, not an omission — all three are still listed
+    expect(out.rows).toHaveLength(3)
+    expect(out.refusedSuppressed).toBe(2)
+  })
+
+  it('REFUSES a target whose campaign is bid-suppressed right now', async () => {
+    ctxs.push(ctx('t1', 80))
+    targetsAre([{ id: 't1', bidCents: 40, campaignSuppressed: true }])
+    const out = await previewKeywordTrackerRule(draft)
+    expect(out.rows[0].refused).toMatch(/campaign/)
+    expect(out.refusedSuppressed).toBe(1)
   })
 
   it('counts suppressed targets in TWO, never merged, and still shows them', async () => {

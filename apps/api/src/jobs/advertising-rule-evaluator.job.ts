@@ -1034,10 +1034,19 @@ async function buildHighAcosKeywordContexts(overrideDays?: number) {
              * never a fabricated 0". A null IS a fabricated 0 to this engine: `applyOperator`
              * coerces with `Number()`. Absent is the only value that refuses every operator.
              *
-             * ⚠️ `acos` above is deliberately NOT wrapped: it is `spend / sales`, which is
-             * `Infinity` on a zero-sales target rather than null. Infinity fails `lte` and matches
-             * `gte`, which is the honest reading for a target burning spend with no sales — and
-             * changing it would narrow which targets a live high-ACoS rule matches. Left as-is.
+             * ⚠️ `acos` above is deliberately NOT wrapped, and the reason is stronger than it
+             * first looked. It is `spend / sales`, and **this emitter's own filter requires
+             * `orders > 0 && sales > 0`** (see the `.filter` above), so the denominator can never
+             * be zero: `acos` here is always a finite, measured number. There is no null and no
+             * Infinity to omit.
+             *
+             * 🔴 The generalisable point, and it corrects an earlier reading of mine: a trigger's
+             * own floor can make a whole class of nulls UNREACHABLE. Before believing a null hazard
+             * on any context, read the emitter's `where`/`filter` first — the 197 zero-sales
+             * keyword targets on this account are real, but they never become KEYWORD_HIGH_ACOS
+             * contexts, so no Bid rule can read them as 0%-ACoS winners. The emitters that do NOT
+             * filter — the budget context (38 of 46) and the SOV context (772 of 793) — are where
+             * the hazard actually lived. Credit: SOV-P caught this.
              */
             ...measured({
               roas: spend > 0 ? sales / spend : null,

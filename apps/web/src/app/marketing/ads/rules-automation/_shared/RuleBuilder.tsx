@@ -837,6 +837,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
     rank?: {
       windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
       suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
+      refusedSuppressed: number
       feed: { rows: number; keywords: number; markets: number; newestCapturedAt: string | null; coveredTargets: number; totalTargets: number }
       readAt: string
     } | null
@@ -1002,17 +1003,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
         }
         setPreview({
           open: true, loading: false,
-          terms: (j.rows ?? []).map((x: { keyword: string; marketplace: string | null; organicRank: number | null; sponsoredRank: number | null; rankDelta: number | null; currentEur: number; proposedEur: number; suppressed: 'flag' | 'bid' | null; campaignSuppressed: boolean }) => ({
+          terms: (j.rows ?? []).map((x: { keyword: string; marketplace: string | null; organicRank: number | null; sponsoredRank: number | null; rankDelta: number | null; currentEur: number; proposedEur: number; suppressed: 'flag' | 'bid' | null; campaignSuppressed: boolean; refused?: string }) => ({
             term: x.keyword, marketplace: x.marketplace,
             organicRank: x.organicRank, sponsoredRank: x.sponsoredRank, rankDelta: x.rankDelta,
             current: x.currentEur, proposed: x.proposedEur,
-            suppressed: x.suppressed, campaignSuppressed: x.campaignSuppressed,
+            suppressed: x.suppressed, campaignSuppressed: x.campaignSuppressed, refused: x.refused,
           })),
           rank: {
             windowDays: j.windowDays, selected: j.selected, measurable: j.measurable, inScope: j.inScope,
             matched: j.matched, noChange: j.noChange, suppressedMatched: j.suppressedMatched,
             suppressedUnflaggedMatched: j.suppressedUnflaggedMatched,
-            campaignSuppressedMatched: j.campaignSuppressedMatched, feed: j.feed, readAt: j.readAt,
+            campaignSuppressedMatched: j.campaignSuppressedMatched, refusedSuppressed: j.refusedSuppressed,
+            feed: j.feed, readAt: j.readAt,
           },
         })
       } catch {
@@ -1942,7 +1944,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         unmeasured rank rather than sending 0, and `—` is the only thing a missing
                         observation may render as. A `#0` or a `0` here would be a fabricated
                         position ([[reference_sov_zero_vs_rounding]]). */}
-                    <div className="ptable ktp"><div className="pthr"><span>Keyword</span><span>Market</span><span>Organic</span><span>Sponsored</span><span>Δ</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}{t.suppressed ? <em className="pnote sup" title={t.suppressed === 'flag' ? 'This target carries a suppression flag — it was deliberately switched off, and this rule would switch it back on.' : 'This target bids at or under 3¢, this account’s convention for switching delivery off. It carries no flag, so only the bid says so.'}>{t.suppressed === 'flag' ? 'suppressed' : 'suppressed (2¢)'}</em> : null}</span><span>{t.marketplace ?? '—'}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span className={t.rankDelta != null ? (t.rankDelta > 0 ? 'up' : t.rankDelta < 0 ? 'down' : '') : ''}>{t.rankDelta != null ? (t.rankDelta > 0 ? `+${t.rankDelta}` : String(t.rankDelta)) : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>
+                    <div className="ptable ktp"><div className="pthr"><span>Keyword</span><span>Market</span><span>Organic</span><span>Sponsored</span><span>Δ</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}{t.suppressed ? <em className="pnote sup" title={t.suppressed === 'flag' ? 'This target carries a suppression flag — it was deliberately switched off, and the bid action refuses to switch it back on.' : 'This target bids at or under 3¢, this account’s convention for switching delivery off. It carries no flag, so only the bid says so.'}>{t.suppressed === 'flag' ? 'suppressed' : 'suppressed (2¢)'}</em> : null}</span><span>{t.marketplace ?? '—'}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span className={t.rankDelta != null ? (t.rankDelta > 0 ? 'up' : t.rankDelta < 0 ? 'down' : '') : ''}>{t.rankDelta != null ? (t.rankDelta > 0 ? `+${t.rankDelta}` : String(t.rankDelta)) : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.refused ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.refused ? '—' : t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{t.refused ? <em className="pnote"> {t.refused}</em> : null}</span></div>))}</div>
                     {preview.rank && (
                       <p className="pfoot">
                         {preview.rank.selected} campaign{preview.rank.selected === 1 ? '' : 's'} selected · {preview.rank.measurable} keyword{preview.rank.measurable === 1 ? '' : 's'} with a rank observation · {preview.rank.inScope} in scope · <b>{preview.rank.matched} match</b>
@@ -1958,8 +1960,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         {preview.rank.suppressedMatched > 0 && (
                           <span className="pwarn">⚠ {preview.rank.suppressedMatched} of the {preview.rank.matched} {preview.rank.suppressedMatched === 1 ? 'is' : 'are'} deliberately suppressed
                             {preview.rank.suppressedUnflaggedMatched > 0 ? ` (${preview.rank.suppressedUnflaggedMatched} of those ${preview.rank.suppressedUnflaggedMatched === 1 ? 'carries' : 'carry'} no suppression flag — only a ≤3¢ bid says so)` : ''}
-                            . This rule would raise {preview.rank.suppressedMatched === 1 ? 'it' : 'them'} above €0.05 and switch delivery back on: the bid action has no suppression guard.
-                            {preview.rank.campaignSuppressedMatched > 0 ? ` ${preview.rank.campaignSuppressedMatched} sit${preview.rank.campaignSuppressedMatched === 1 ? 's' : ''} in a campaign whose bids are suppressed right now, where the next resume would overwrite the change anyway.` : ''}
+                            {' '}and {preview.rank.suppressedMatched === 1 ? 'is' : 'are'} <b>left alone</b>: delivery there was switched off on purpose, and the bid action refuses to switch it back on. Un-suppressing is a separate decision, not a side effect of a bid rule.
+                            {preview.rank.campaignSuppressedMatched > 0 ? ` A further ${preview.rank.campaignSuppressedMatched} sit${preview.rank.campaignSuppressedMatched === 1 ? 's' : ''} in a campaign whose bids are suppressed right now, where a write would be undone by the next resume — also skipped.` : ''}
                           </span>
                         )}
                         <span className="phour">Bids read at {new Date(preview.rank.readAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Rank is the latest observation per keyword, not an average.</span>
