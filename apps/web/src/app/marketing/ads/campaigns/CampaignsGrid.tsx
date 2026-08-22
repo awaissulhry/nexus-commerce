@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
-import { TargetAcosCell, MinMaxBidCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS } from '../_shared/RuleColumnCells'
+import { TargetAcosCell, MinMaxBidCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
@@ -51,6 +51,22 @@ interface Camp {
   minBidCents?: number | null
   maxBidCents?: number | null
   minMaxBudget?: { min: number | null; max: number | null } | null
+  // ADM-P6 — TODAY's utilization, from Amazon's own budget-usage reading, sampled every five
+  // minutes by `budget-usage-sample`. A FRACTION (0.5 = 50%), and null whenever the state is not
+  // a reading — the API classifies it against the 00:00 UTC reset so the cell never has to guess.
+  curBudgetUtil?: number | null
+  curBudgetUtilState?: BudgetUsageState
+  /** Amazon's usageUpdatedTimestamp — the age of the READING, never of this response. */
+  curBudgetUtilAsOf?: string | null
+  /** The denominator that fraction used, in euros: Amazon's own budget for a `live` reading. */
+  curBudgetUtilBudget?: number | null
+  // ADM-P6 — hours of the current budget day (00:00 UTC onwards), counted from observation spans.
+  // `hoursObserved` is the denominator that makes the other two honest on a part-watched day.
+  oobHours?: number | null
+  actBidHours?: number | null
+  hoursObserved?: number | null
+  /** When sampling began. Nothing before it was watched, and neither Amazon feed backfills. */
+  usageSince?: string | null
 }
 type Mode = 'metrics' | 'edit'
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
@@ -287,6 +303,11 @@ function metricVal(c: Camp, key: string): number {
   switch (key) {
     case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales ? spend / sales : 0); return a <= 1 ? a * 100 : a }
     case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
+    // ADM-P6 — -1 for every absence, so a row with no reading sorts below a real 0%, which IS a
+    // reading. The three states that carry no number are not "the smallest number".
+    case 'curBudgetUtil': return c.curBudgetUtil != null ? c.curBudgetUtil * 100 : -1
+    case 'oobHours': return c.oobHours ?? -1
+    case 'actBidHours': return c.actBidHours ?? -1
     case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
     case 'cpc': return clicks ? spend / clicks : 0; case 'ctr': return impr ? (clicks / impr) * 100 : 0
     case 'cvr': return clicks ? (orders / clicks) * 100 : 0; case 'impressions': return impr; case 'dailyBudget': return num(c.dailyBudget)
@@ -1380,7 +1401,37 @@ export function CampaignsGrid() {
         }
         return ed(c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', 'dailyBudget')
       }
-      case 'curBudgetUtil':
+      /**
+       * 🔴 ADM-P6 — this column rendered `not measured` on 220 of 220 rows, and before that a
+       * hard-coded zero-width bar. The sentence behind "not measured" was true when written: no
+       * source held today's spend-so-far, and the Marketing Stream's budget-usage percentage is
+       * received, counted, logged and never stored.
+       *
+       * There was a third source. `POST /sp/campaigns/budget/usage` answers synchronously for
+       * every Sponsored Products campaign — 200 of 200, measured 2026-08-22 — with Amazon's OWN
+       * percentage, Amazon's OWN budget as the denominator, and `usageUpdatedTimestamp`, the age
+       * of the reading itself.
+       *
+       * The cell never computes the day boundary and never renders 0 in place of an absence: the
+       * API sends a state, and each state has its own sentence.
+       */
+      case 'curBudgetUtil': return (
+        <BudgetUtilCell
+          fraction={c.curBudgetUtil}
+          current={{
+            state: c.curBudgetUtilState ?? 'unknown',
+            asOf: c.curBudgetUtilAsOf,
+            budget: c.curBudgetUtilBudget,
+          }}
+        />
+      )
+      // ADM-P6 — one component, two readings of the SAME observation spans. Counted apart, the
+      // two columns would be free to disagree about the day they were counted from.
+      case 'oobHours': return <UsageHoursCell kind="oob" hours={c.oobHours} observed={c.hoursObserved} since={c.usageSince} />
+      case 'actBidHours': return <UsageHoursCell kind="actbid" hours={c.actBidHours} observed={c.hoursObserved} since={c.usageSince} />
+      // ⛔ Average Budget Utilization is deliberately UNCHANGED. It is a hard-coded zero-width bar
+      // and it is dishonest, but it is one of the 45 columns ADM-H already rewired in work that is
+      // not landed; fixing it here would fork theirs. Named rather than quietly left.
       case 'avgBudgetUtil': return <span className="h10-util" aria-hidden><span className="uf" style={{ width: '0%' }} /></span>
       default: return '—'
     }

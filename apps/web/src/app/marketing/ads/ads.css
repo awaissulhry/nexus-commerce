@@ -749,6 +749,25 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-gear:hover { color: #5b6573; }
 .h10-util { display: inline-block; width: 64px; height: 7px; background: #eef1f5; border-radius: 999px; overflow: hidden; vertical-align: middle; }
 .h10-util .uf { display: block; height: 100%; background: #1f6fde; border-radius: 999px; }
+/* ADM-H P2 — the bar now travels with its number. It used to be the whole cell, aria-hidden and
+   pinned at 0% width on every row: a gauge with no reading. `nowrap` matters more than it looks —
+   the bar and the value are two inline children in a narrow cell, and letting them wrap adds a
+   second line to a subset of rows, which is the flex-wrap sub-pixel row-height trap in miniature. */
+.h10-utilcell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.h10-utilcell .uv { color: #2b3440; font-weight: 600; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.h10-utilcell .h10-util .uf { background: #1f6fde; }
+/* ADM-P6 — the age of a reading, and the "of Nh watched" denominator on the hour columns.
+   Muted but NOT italic: this stylesheet reserves italic for an ABSENCE of data, and both of
+   these are readings. #6b7383 measures 4.77:1 on the grid's #ffffff rows — the same value
+   .h10-rc-word carries, because it is the same class of statement. */
+.h10-utilcell .h10-utilage,
+.h10-rc-word .h10-utilage { color: #6b7383; font-weight: 400; font-size: 11px; font-variant-numeric: tabular-nums; }
+/* ADM-H P5/P7 — a muted token for a WORD that is a real reading rather than an absence (e.g. ACoS
+   "no sales"). Non-italic, because this stylesheet already reserves italic for absence; #6b7383 is
+   the same 4.77:1 grey `.h10-rc-owner` uses, so it is readable at body size — unlike
+   `.h10-rc-none`'s #8a93a1, which the note above measures at 3.10:1. */
+.h10-rc-word { font-size: 12px; color: #6b7383; white-space: nowrap; }
+
 
 /* CBN.2e.2 — sortable column headers (⇅ / ↑ / ↓) */
 .h10-am-grid th .sortable { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
