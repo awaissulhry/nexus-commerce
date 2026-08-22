@@ -1177,7 +1177,6 @@ export function ApplyRulesClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '' })}
-        showLearn={false}
         showDataSync={false}
         /* No date control. This grid has no metric column, so nothing on the page would change when
            the range moved — a control earns its place only if some pixel changes when you move it.

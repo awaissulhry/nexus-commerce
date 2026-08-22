@@ -527,7 +527,6 @@ export function KeywordTrackerClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m })}
-        showLearn={false}
         showDataSync={false}
         /* SQP is weekly and paid data is daily. One range control over both would be two
            vocabularies wearing one label, so this page carries no date control at all: each

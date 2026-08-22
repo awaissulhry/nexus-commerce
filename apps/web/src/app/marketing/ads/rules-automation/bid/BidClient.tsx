@@ -774,7 +774,6 @@ export function BidClient() {
         /* 🔴 The header's picker is the ONLY market control on this page. `showMarket` does not
            exist; the scope bar below renders three grains and never a fourth for market. */
         onMarketChange={(m) => push({ market: m, campaign: '' })}
-        showLearn={false}
         showDataSync={false}
         /* The metric window rides the grid toolbar, next to the grid it changes. The header's date
            picker would be a second control for the same fact, two rows apart. */

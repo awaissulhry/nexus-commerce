@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video, AlertTriangle } from 'lucide-react'
+import { X, AlertTriangle } from 'lucide-react'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
@@ -241,7 +241,6 @@ export function RankGoalBuilder() {
           {toggle}
         </div>
         <div className="r">
-          <button type="button" className="learn"><Video size={15} /> Learn</button>
           <button type="button" className="h10-rb-create" disabled={!planStatus.valid || planStatus.busy} onClick={() => void create()}>{createLabel}</button>
         </div>
       </header>

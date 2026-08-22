@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { X, Video, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search, Sparkles, Eye, AlertTriangle, CopyPlus } from 'lucide-react'
+import { X, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search, Sparkles, Eye, AlertTriangle, CopyPlus } from 'lucide-react'
 import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
 import { CampaignSection, type SchedCampaign } from './CampaignSection'
 import { MetricSelect } from './MetricSelect'
@@ -378,7 +378,12 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
             .filter((r) => r.start.trim() !== '' && r.end.trim() !== '')
             .map((r) => ({ start: mdyToIso(r.start), end: mdyToIso(r.end) })),
         }
-        const payload = { name: name.trim(), kind: 'budget', type, campaigns, windows: wins, chartPrefs: { metric1, metric2, groupBy, daysFilter }, ...dates }
+        // BSP-B5 sweep — `kind` is NOT sent. The route hardcodes `kind: 'BUDGET'` and ignores the
+        // body, so sending the lowercase 'budget' was a value that looked authoritative and was
+        // discarded — and a latent trap: the day anyone made the route respect it, every schedule
+        // would store 'budget' and the executor's `where: { kind: 'BUDGET' }` would silently stop
+        // matching. One writer of that field, and it is the route.
+        const payload = { name: name.trim(), type, campaigns, windows: wins, chartPrefs: { metric1, metric2, groupBy, daysFilter }, ...dates }
         const base = `${getBackendUrl()}/api/advertising/budget-schedules`
         const r = await fetch(isEdit ? `${base}/${scheduleId}` : base, { method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         const j = await r.json().catch(() => ({})); ok = r.ok && j?.error == null
@@ -405,7 +410,6 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
           {modeToggle}
         </div>
         <div className="r">
-          <button type="button" className="learn"><Video size={15} /> Learn</button>
           <button type="button" className="h10-rb-create" disabled={!valid || creating} onClick={submit}>{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : cfg.createLabel)}</button>
         </div>
       </header>

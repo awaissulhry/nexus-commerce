@@ -15,7 +15,7 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Video, RefreshCw, ChevronDown, History } from 'lucide-react'
+import { RefreshCw, ChevronDown, History } from 'lucide-react'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 import { MarketSelect } from './MarketSelect'
@@ -50,7 +50,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
-  showLearn = true, showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
+  showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
   allowAllMarkets = true, marketValues, onMarketValuesChange,
 }: {
   title: string; subtitle: string
@@ -84,7 +84,7 @@ export function AdsPageHeader({
   dateRange?: { start: Date; end: Date }
   // CBN — per-page header tailoring (Rules & Automation hides Learn/Data-Sync/Date
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
-  showLearn?: boolean; showDataSync?: boolean; showDateRange?: boolean
+  showDataSync?: boolean; showDateRange?: boolean
   /**
    * RA.SPINE S5 (additive; defaults `true`, so every existing page is byte-identical).
    *
@@ -152,7 +152,6 @@ export function AdsPageHeader({
         <p>{subtitle}</p>
       </div>
       <div className="h10-hdr-r">
-        {showLearn && <button type="button" className="h10-hbtn"><Video size={15} /> Learn</button>}
         {/* Channel-aware: the eBay console has its own complete change log, and sending an eBay
             operator to the Amazon one would be worse than showing nothing. Hidden when you are
             already there. Navigates in place rather than a new tab — this is top-level console

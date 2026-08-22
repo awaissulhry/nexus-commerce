@@ -68,7 +68,6 @@ export function BudgetRulesClient() {
           const q = next.toString()
           router.replace(q ? `?${q}` : '?', { scroll: false })
         }}
-        showLearn={false}
         showDataSync={false}
         showDateRange={false}
         showChangeLog

@@ -361,7 +361,6 @@ export function ReportRunner({ reportId }: { reportId: string }) {
         markets={[]}
         market="all"
         onMarketChange={() => {}}
-        showLearn={false}
         showDataSync
         syncing={loading}
         onDataSync={() => setParams((p) => ({ ...p }))}

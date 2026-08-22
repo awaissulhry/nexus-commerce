@@ -764,7 +764,6 @@ export function BudgetClient() {
         /* 🔴 The header's picker is the ONLY market control on this page. `showMarket` does not
            exist; the scope bar below renders three grains and never a fourth for market. */
         onMarketChange={(m) => push({ market: m, campaign: '', portfolio: '' })}
-        showLearn={false}
         showDataSync={false}
         /* The window rides the grid toolbar, next to the grid it changes. The header's date picker
            would be a second control for the same fact, two rows apart. */

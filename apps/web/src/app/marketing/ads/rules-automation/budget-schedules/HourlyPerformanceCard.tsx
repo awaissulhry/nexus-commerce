@@ -38,6 +38,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Search } from 'lucide-react'
+import { DaypartingHeatmap, type MetricUnit } from '../_schedule/DaypartingHeatmap'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface HourPoint {
@@ -74,6 +75,18 @@ const fmt = (m: string, v: number) =>
  *  can never drift into disagreeing about what a gap means. */
 const fmtOrNone = (m: string, v: number | null) => (v == null ? (isPct(m) ? 'no sales' : 'no data') : fmt(m, v))
 
+/**
+ * The metrics dense enough to colour a 7×24 grid. Deliberately NOT the ratios: see the `cell`
+ * branch below for why a per-cell ACoS on this account would be noise wearing a gradient.
+ */
+const HEATMAP_METRIC: Record<string, { key: keyof HourPoint; unit: MetricUnit } | undefined> = {
+  Spend: { key: 'spend', unit: 'eur' },
+  Sales: { key: 'sales', unit: 'eur' },
+  Clicks: { key: 'clicks', unit: 'int' },
+  Impressions: { key: 'impressions', unit: 'int' },
+  Orders: { key: 'orders', unit: 'int' },
+}
+
 const hourLabel = (h: number) => (h === 0 ? '12AM' : h === 12 ? '12PM' : h < 12 ? `${h}AM` : `${h - 12}PM`)
 /** BSP-P5 — Postgres DOW (0=Sun) → the MON-first names the rest of this section uses. */
 const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -88,7 +101,7 @@ const valueAt = (p: HourPoint, key: keyof HourPoint | null): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
-export function HourlyPerformanceCard({ metric1, metric2, market, groupBy = 'hour' }: { metric1: string; metric2: string; market?: string; groupBy?: 'hour' | 'weekday' }) {
+export function HourlyPerformanceCard({ metric1, metric2, market, groupBy = 'hour' }: { metric1: string; metric2: string; market?: string; groupBy?: 'hour' | 'weekday' | 'cell' }) {
   const [data, setData] = useState<{ hasData: boolean; timezone: string; series: HourPoint[]; windowStart: string; windowEnd: string } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const scope = market && market !== 'all' ? market : null
@@ -183,6 +196,45 @@ export function HourlyPerformanceCard({ metric1, metric2, market, groupBy = 'hou
             ? `No hourly performance has been reported for ${scope} between ${data.windowStart} and ${data.windowEnd}.`
             : `No hourly performance has been reported for this account between ${data.windowStart} and ${data.windowEnd}.`}
         </span>
+      </div>
+    )
+  }
+
+  /**
+   * BSP-B3 — the 7×24 view, and the consumer the `cell` grain was missing.
+   *
+   * `DaypartingHeatmap` is used UNCHANGED: its own header states it is decoupled from its data
+   * source, so this passes cells and nothing about the Rank & Dayparting page is touched.
+   *
+   * 🔴 It is coloured by a COUNTABLE metric only. Over the honest window this account has ~60
+   * attributed orders spread across 168 cells, so a per-cell ACoS or CVR is one order wide and a
+   * heatmap of it would be a picture of noise with the authority of a gradient. Spend and clicks
+   * are dense enough to mean something; the card says so rather than quietly plotting the rest.
+   */
+  if (groupBy === 'cell') {
+    const readable = HEATMAP_METRIC[metric1]
+    if (!readable) {
+      return (
+        <div className="h10-sb-nodata">
+          <span className="ill"><Search size={26} /></span>
+          <span className="t">
+            {metric1} is not shown per weekday-hour: {series.length} cells share about 60 attributed
+            orders, so each cell&rsquo;s {metric1} would rest on roughly one order. Choose Spend, Clicks or
+            Impressions to colour the grid.
+          </span>
+        </div>
+      )
+    }
+    const cells = series
+      .filter((p) => p.dow != null && p.hour != null)
+      .map((p) => ({ dow: p.dow as number, hour: p.hour as number, value: Number(p[readable.key]) || 0 }))
+    return (
+      <div className="h10-bsp-heat">
+        <DaypartingHeatmap cells={cells} unit={readable.unit} />
+        <p className="h10-bsp-hourfoot">
+          <b>{metric1}</b> by weekday × hour, {data.timezone || 'account timezone'} · {scope ?? 'all markets'} · {data.windowStart} to {data.windowEnd}
+          {' · '}<i>coloured by {metric1.toLowerCase()} because it is countable; ACoS and CVR are one order wide at this grain and are not offered here.</i>
+        </p>
       </div>
     )
   }

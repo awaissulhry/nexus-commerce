@@ -62,7 +62,7 @@ export function EbayAutomationHub() {
         title="eBay Rules & Automation"
         subtitle="Rules propose; you approve — or grant autopilot within hard margin guardrails. Everything is audited and reversible."
         markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}}
-        showLearn={false} showDataSync={false} showDateRange={false}
+        showDataSync={false} showDateRange={false}
         primaryAction={{ label: 'Evaluate now', onClick: () => void act(() => postEbayAds('/automation/evaluate', {}), 'evaluation run') }}
       />
       <SandboxBanner mode={writeMode} />

@@ -46,7 +46,6 @@ export function PlacementRulesClient() {
           const q = next.toString()
           router.replace(q ? `?${q}` : '?', { scroll: false })
         }}
-        showLearn={false}
         showDataSync={false}
         /* No date control: a rule list carries no windowed metric. The parked lane grid owned the
            date range, and it went with it. */

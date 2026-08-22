@@ -138,7 +138,7 @@ export function EbayProductsRollup() {
         markets={EBAY_MARKETS.map((x) => x.id)}
         market={market}
         onMarketChange={setMarket}
-        showLearn={false} showDataSync={false} showDateRange={false}
+        showDataSync={false} showDateRange={false}
       />
       <SandboxBanner mode={writeMode} />
       {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={reload}>Retry</button></div>}

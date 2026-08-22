@@ -113,7 +113,7 @@ export function SchedulesSection({ market }: { market?: string }) {
    * distinct days, so a 60-day window carries ~8.6 per weekday. Shares `GROUP_BY` with the builder
    * so the two cannot offer different words for the same thing.
    */
-  const [groupBy, setGroupBy] = useState<'hour' | 'weekday'>('hour')
+  const [groupBy, setGroupBy] = useState<'hour' | 'weekday' | 'cell'>('hour')
   const [chartOpen, setChartOpen] = useState(true)
   const [total, setTotal] = useState(0)
   const [deleteErr, setDeleteErr] = useState<string | null>(null)
@@ -329,9 +329,19 @@ export function SchedulesSection({ market }: { market?: string }) {
           <div className="bd">
             <div className="controls">
               <MetricSelect value={metric1} onChange={setMetric1} dot="#0b2447" label="Metric 1" />
-              <H10Select width={168} options={GROUP_BY} value={groupBy} onChange={(v) => setGroupBy(v === 'weekday' ? 'weekday' : 'hour')} ariaLabel="Group by" />
+              {/* BSP-B3 — "Weekday × Hour" is the 7×24 grid, and the consumer the `cell` grain
+                  was missing. Shares GROUP_BY with the builder plus this tab's own third option. */}
+              <H10Select
+                width={190}
+                options={[...GROUP_BY, { value: 'cell', label: 'Weekday × Hour' }]}
+                value={groupBy}
+                onChange={(v) => setGroupBy(v === 'weekday' ? 'weekday' : v === 'cell' ? 'cell' : 'hour')}
+                ariaLabel="Group by"
+              />
               <span className="grow" />
-              <MetricSelect value={metric2} onChange={setMetric2} dot="#1f6fde" label="Metric 2" />
+              {/* A grid is a single-metric view: Metric 2 has nowhere to go on a heatmap, so it is
+                  hidden rather than left showing a value the picture does not contain. */}
+              {groupBy !== 'cell' && <MetricSelect value={metric2} onChange={setMetric2} dot="#1f6fde" label="Metric 2" />}
             </div>
             {/* U8 — was the constant "Hourly data is not available for this marketplace." with two
                 metric pickers that changed nothing. The card reads the endpoint now; that sentence

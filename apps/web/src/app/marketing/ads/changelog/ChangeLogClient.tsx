@@ -347,7 +347,7 @@ export function ChangeLogClient() {
         title="Change Log"
         subtitle="Every change Nexus made to this Amazon account — what changed, what caused it, and whether it reached Amazon."
         markets={[]} market="all" onMarketChange={() => {}}
-        showLearn={false} showDataSync={false} showDateRange={false}
+        showDataSync={false} showDateRange={false}
         primaryAction={{ label: 'Add note', icon: <StickyNote size={15} />, onClick: () => { setNoteOpen(true); setNoteMsg('') } }}
       />
 

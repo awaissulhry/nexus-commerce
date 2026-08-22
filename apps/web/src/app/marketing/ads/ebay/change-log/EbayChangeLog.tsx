@@ -78,7 +78,7 @@ export function EbayChangeLog() {
         title="eBay Change Log"
         subtitle="Every write Nexus made to eBay — immutable, account-wide. Automation, operator and accepted external changes, each traceable to its actor."
         markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}}
-        showLearn={false} showDataSync={false} showDateRange={false}
+        showDataSync={false} showDateRange={false}
       />
       {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={() => load()}>Retry</button></div>}
 

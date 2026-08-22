@@ -190,7 +190,7 @@ export function EbayCampaignsGrid() {
         markets={EBAY_MARKETS.map((x) => x.id)}
         market={market}
         onMarketChange={setMarket}
-        showLearn={false} showDateRange={false}
+        showDateRange={false}
         onDataSync={() => void dataSync()} syncing={syncing}
       />
       <SandboxBanner mode={writeMode} />

@@ -315,7 +315,6 @@ export function BudgetSchedulesClient() {
         // Changing market clears the campaign: a campaign belongs to one marketplace, so keeping the
         // selection would hold a scope that resolves to nothing and read as missing data.
         onMarketChange={(m) => push({ market: m, campaign: '' })}
-        showLearn={false}
         showDataSync={false}
         showDateRange={false}
         showChangeLog

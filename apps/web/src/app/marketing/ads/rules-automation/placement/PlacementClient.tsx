@@ -722,7 +722,6 @@ export function PlacementClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '' })}
-        showLearn={false}
         showDataSync={false}
         /* 🔴 Unlike Keyword Tracker, this page KEEPS the date control: spend, ROAS, CPC, CVR and
            the impression-share average all move when you move it. There is exactly one date

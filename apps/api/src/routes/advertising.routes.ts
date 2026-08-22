@@ -9043,7 +9043,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // BSP.2 (§2.2) — only an ARRAY of ranges is a blackout list. The old `?? []` let the
       // builder's boolean `false` through into a Json column documented as `[{start,end}]`.
       neverExpire: b.neverExpire !== false, excludeDates: Array.isArray(b.excludeDates) ? b.excludeDates : [],
-      autoRefill: b.autoRefill === true,
+      /**
+       * 🔴 BSP-B5 sweep — `autoRefill` is NOT read from the body any more.
+       *
+       * The column has zero readers: `ad-budget-schedule.job.ts` never consults it, the builder
+       * never sends it, and BSP.2 removed its grid column for exactly that reason. Accepting a
+       * value the system cannot honour is the same false wiring one layer down — an API caller
+       * could set it, see it echoed back, and reasonably believe something would refill. The
+       * column stays (dropping it is a destructive migration and H10 does have the feature), but
+       * it is now writable only by a future executor that actually implements it.
+       */
     } })
     // BSP.2 (§2.6) — the schedule's own edit history was unrecorded (unlike the rank side's
     // RankScheduleVersion). One audit row per CRUD; best-effort, never fails the write.
@@ -9117,7 +9126,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = (request.body ?? {}) as Record<string, unknown>
     const data: Record<string, unknown> = {}
-    for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'autoRefill', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
+    // BSP-B5 sweep — `autoRefill` dropped from the accepted set for the reason given in POST above.
+    for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
     // BSP.2 (§2.2) — same sanitisation as create: an array or nothing.
     if (data.excludeDates !== undefined && !Array.isArray(data.excludeDates)) data.excludeDates = []
     if (b.startDate !== undefined) data.startDate = b.startDate ? new Date(String(b.startDate)) : null

@@ -70,7 +70,6 @@ export function KeywordHarvestRulesClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m === 'all' ? '' : m })}
-        showLearn={false}
         showDataSync={false}
         showDateRange={false}
         showChangeLog

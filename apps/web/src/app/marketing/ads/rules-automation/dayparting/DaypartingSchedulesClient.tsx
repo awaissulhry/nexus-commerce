@@ -153,7 +153,6 @@ function DaypartingSchedulesBody() {
         // The rank schedules are the origin of almost every recorded change, so this is the page
         // where the account log is worth one click away.
         showChangeLog
-        showLearn={false}
         showDataSync={false}
         // FB.3d — the shared range picker, ON and CONTROLLED from the URL. It drives the hourly
         // grid and the coverage window below; writes go through `ymdLocal` (a UTC slice shifts

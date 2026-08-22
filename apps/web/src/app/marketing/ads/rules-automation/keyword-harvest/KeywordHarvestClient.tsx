@@ -583,7 +583,6 @@ export function KeywordHarvestClient() {
          */
         marketValues={market === 'all' ? [] : market.split(',').filter(Boolean)}
         onMarketValuesChange={(codes) => push({ market: codes.length ? codes.join(',') : 'all', campaign: '', adGroup: '' })}
-        showLearn={false}
         showDataSync={false}
         /* No date range. The window is a harvest parameter (30/60/90), not a report range, and it
            belongs to the threshold controls in HV.2 — two controls for one fact is what sank the

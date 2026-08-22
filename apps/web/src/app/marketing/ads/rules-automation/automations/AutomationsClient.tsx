@@ -768,7 +768,6 @@ export function AutomationsClient() {
         markets={markets}
         market={market}
         onMarketChange={setMarket}
-        showLearn={false}
         showDataSync={false}
         showDateRange={false}
         showChangeLog

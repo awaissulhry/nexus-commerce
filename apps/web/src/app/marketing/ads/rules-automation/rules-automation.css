@@ -5515,3 +5515,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-sb-starters .h10-rb-btn[aria-disabled="true"] { opacity: .5; }
 .h10-sb-startnote { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.5; color: #626c7c; }
 
+/* BSP-B3 — the 7×24 grid on the tab. `DaypartingHeatmap` brings its own dayparting.css; this only
+   gives it room and keeps the footnote on the same type scale as the line chart's. */
+.h10-bsp-heat { padding: 4px 2px 0; }
+.h10-bsp-heat .h10-bsp-hourfoot { margin-top: 10px; }

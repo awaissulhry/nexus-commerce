@@ -51,7 +51,7 @@ export function EbayDashboard() {
         markets={EBAY_MARKETS.map((m) => m.id)}
         market={market}
         onMarketChange={setMarket}
-        showLearn={false} showDataSync={false}
+        showDataSync={false}
         showDateRange onDateRange={(start, end) => setRange({ start, end })}
       />
 

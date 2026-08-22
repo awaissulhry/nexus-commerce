@@ -110,7 +110,7 @@ export function TrustClient() {
         title="Trust"
         subtitle="Does Nexus match Amazon right now — and when was that last actually checked?"
         markets={['All markets']} market="All markets" onMarketChange={() => {}}
-        showLearn={false} showDataSync={false} showDateRange={false}
+        showDataSync={false} showDateRange={false}
         actions={[]}
       />
 

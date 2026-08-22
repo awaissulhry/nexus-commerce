@@ -718,7 +718,6 @@ export function ShareOfVoiceClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m })}
-        showLearn={false}
         showDataSync={false}
         /* No date range. Brand Analytics is WEEKLY and the paid feed is daily, and they are 15 days
            apart — one range control over both would be two vocabularies wearing one label. The

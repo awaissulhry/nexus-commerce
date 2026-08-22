@@ -1782,9 +1782,6 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-aig-top .sep { width: 1px; height: 22px; background: #e0e4ea; }
 .h10-aig-top .crumb { font-size: 13px; color: #5b6573; }
 .h10-aig-top .grow { flex: 1; }
-.h10-aig-top .learn { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: #3a4452; cursor: pointer; padding: 7px 10px; border-radius: 8px; }
-.h10-aig-top .learn:hover { background: #f1f4f8; }
-.h10-aig-top .learn svg { color: #5b6573; }
 .h10-aig-top .launch { border: none; background: #e7eaee; color: #9aa3af; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 18px; border-radius: 8px; cursor: not-allowed; }
 
 .h10-aig-body { flex: 1; min-height: 0; overflow-y: auto; }

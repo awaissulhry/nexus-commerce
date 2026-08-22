@@ -257,7 +257,6 @@ export function ReportingClient() {
         markets={[]}
         market="all"
         onMarketChange={() => {}}
-        showLearn={false}
         showDataSync
         syncing={loading}
         onDataSync={reload}

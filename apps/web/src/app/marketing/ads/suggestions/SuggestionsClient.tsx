@@ -1850,7 +1850,6 @@ function SuggestionsInner() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => writeUrl({ market: m })}
-        showLearn={false}
         showDataSync={false}
         /* Suggestions are point-in-time proposals, not a time series — no date range. */
         showDateRange={false}

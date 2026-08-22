@@ -451,7 +451,6 @@ export function NegativeTargetingClient() {
         markets={MARKETS}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '', adGroup: '' })}
-        showLearn={false}
         showDataSync={false}
         /* A negative has no date range. Every row states when it was added, and the two dated
            facts on this page — added, last synced — are per-row, not per-view. */

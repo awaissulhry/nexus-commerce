@@ -21,7 +21,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Video, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
+import { X, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icons'
 import { InfoTip } from '../../campaigns/InfoTip'
@@ -196,7 +196,6 @@ export function AiGoalBuilder() {
         <span className="sep" />
         <span className="crumb">New Product Goal</span>
         <span className="grow" />
-        <button type="button" className="learn"><Video size={15} /> Learn</button>
         <button type="button" className="launch" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</button>
       </header>
 
