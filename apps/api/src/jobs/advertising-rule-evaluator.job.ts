@@ -1508,7 +1508,21 @@ export async function buildKeywordRankBidContexts() {
       if (!held || e.r.capturedAt > held.r.capturedAt) latest.set(pairKey, e)
     }
     const targets = await prisma.adTarget.findMany({
-      where: { kind: 'KEYWORD', isNegative: false },
+      /**
+       * KT-P/C2 — `status: 'ENABLED'`, matching the convention every sibling builder already keeps
+       * (`buildUnderperformContexts` always has; `buildSovBidContexts` since SOV-P1). A rule that
+       * computes a bid for an archived or paused target is doing arithmetic nothing can deliver.
+       *
+       * Measured on prod 2026-08-22 over the 2,130 positive keyword targets this walked:
+       * **ENABLED 1,777 · ARCHIVED 234 · PAUSED 119** — so 353 dead targets were being priced.
+       *
+       * ⚠️ Deliberately NOT filtering on the CAMPAIGN's status, though **1,228 of the 2,130 sit in a
+       * PAUSED campaign** (901 in an enabled one). That is a larger population than the target
+       * filter removes and arguably just as dead — but it is a different decision, it is not what
+       * any sibling builder does, and quietly extending the convention here would make this builder
+       * disagree with the other eleven. Raised for the operator separately rather than taken.
+       */
+      where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED' },
       // P2.3 — ids for contextIdentity (see buildSovBidContexts) + perf from the daily table,
       // never AdTarget's unpopulated metric columns.
       select: { id: true, expressionValue: true, adGroup: { select: { id: true, campaign: { select: { id: true, marketplace: true } } } } },

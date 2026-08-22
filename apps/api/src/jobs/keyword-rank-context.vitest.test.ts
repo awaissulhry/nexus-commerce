@@ -133,6 +133,17 @@ describe('buildKeywordRankBidContexts', () => {
     expect(applyOperator('lte', ctx.adTarget.acos, 0.2)).toBe(false)
   })
 
+  it('asks only for ENABLED targets — an archived or paused one cannot deliver a bid', async () => {
+    db.keywordRank.findMany.mockResolvedValue([rank()] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    await buildKeywordRankBidContexts()
+
+    // 🔴 Asserted on the QUERY, not on the result: the mock returns whatever it is given, so a test
+    // that only checked the emitted contexts would pass with no filter at all.
+    const where = (db.adTarget.findMany.mock.calls[0]?.[0] as { where?: Record<string, unknown> })?.where
+    expect(where).toMatchObject({ kind: 'KEYWORD', isNegative: false, status: 'ENABLED' })
+  })
+
   it('skips a keyword with no rank snapshot rather than inventing one', async () => {
     db.keywordRank.findMany.mockResolvedValue([rank({ keyword: 'something else' })] as never)
     db.adTarget.findMany.mockResolvedValue([target()] as never)
