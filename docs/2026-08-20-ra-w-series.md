@@ -537,3 +537,127 @@ all 196 as perfect performers and raises bids on the account's worst spenders. L
 rule armed), which is why it is the cheap moment to decide it. Argued fix: **in the CONTEXT BUILDERS,
 omit an unmeasurable value — not in `applyOperator`**, which is read by fulfillment routing and
 customer segments too. An AND-guard protects only when structurally tied to the same absence.
+
+---
+
+## KT-P — Keyword Tracker perfection · Phase 0 study (2026-08-22, session nexus-commerce-30)
+
+**Read-only. Nothing implemented, nothing committed, no prod state changed.**
+Full study: `docs/2026-08-22-ktp-keyword-tracker-perfection.md`.
+
+🔴 **Headline: the Keyword Tracker rule gates on an EMPTY TABLE.** `KeywordRank` = **0 rows on
+prod**; its only writer is a manual `POST /advertising/keyword-ranks` that nothing calls. So
+`buildKeywordRankBidContexts` returns `[]` every tick — **0 contexts, 0 executions, 0 KT rules ever**.
+The builder nonetheless opens on `IF Organic Rank > __` and states *"Rank is the latest snapshot;
+… the most recent 2 days are still settling and are excluded"* — a settling window asserted over a
+metric with zero readings. Five of the seven KT metrics have no source. Not fixable by re-pointing:
+Amazon publishes no organic-SERP-position API, and `docs/2026-08-04-competitor-deep-dives.md` §5.3
+already recorded the operator-level answer — **"C now, B if C proves insufficient, and A not at all."**
+
+🔴 **The builder Preview is fiction, clicked on prod.** `Organic Rank > 50 → Set Bid €0.80`, 70
+campaigns → 100 rows, Organic/Sponsored **"—" on every row**, New Bid **€0.80 on every row**; true
+answer **zero**. The criteria are never applied; **90 of 100 rows are entity kinds the rule cannot
+touch** (KEYWORD 10 · PRODUCT 65 · AUTO 15 · rest 10, measured live); suppressed €0.02 targets are
+shown being raised with no count; and `/advertising/targets?limit=1500` returns 1,500 of 5,218 with
+`count` = the page size. **Third occurrence of "a preview must RUN the engine" — Bid · SOV · KT all
+still re-implement it client-side.**
+
+🔴 **The tab bypasses its own hardened write path.** KT.6/KT.7's `kt6-bid-action` + `kt7-apply` refuse
+suppressed targets (flag AND ≤3¢, counted separately), `bidsSuppressedAt` campaigns, ceiling breaches
+and changed target sets. The RULE path is `bid_apply`, which has only the campaign allowlist and the
+clamp — and `checkAdsWriteGate` does not check suppression either. Measured: of the **1,004** positive
+keyword targets in the **82 write-enabled** campaigns, **561 (56%) are suppressed, 141 unflagged, 420
+in a campaign that is `bidsSuppressedAt` right now**. `bid_apply`'s floor is `max(0.05, minEur)`, so
+every op on a suppressed target **un-suppresses it**. ⚠ **This is live on the Bid and SOV tabs today.**
+
+**Also confirmed:** `'Share of Voice'` in `RANK_METRIC` names `adTarget.sovPct`, which the rank
+context never emits (SOV-P measured ρ = −0.2445 against Amazon's real per-query share — it would
+point the wrong way once bound; they cleared `RANK_METRIC` + `METRICS_RANK` as KT-P's lines).
+`rankDelta` fabricates `0` in **both** producers; the latest/prior collapse ignores `asin`; `take:
+8000` truncates alphabetically. And `KeywordTrackerClient` + 5 children (**2,453 lines**) have **zero
+importers** — U4's deliberate parking, correctly executed; the tab is 67 lines.
+
+**Recoverable:** Brand Analytics SQP covers **946 of 2,130** positive keyword targets on the latest
+week (IT 732/1551 · DE 191/398 · ES 23/33 · FR 0/148), with `searchQueryRank` + `searchQueryVolume`
+on all 16,253 rows. Proposed as the honest re-source.
+
+**Proposed phases (await approval):** P1 tell the truth (M) · P2 preview runs the engine (M) ·
+P3 wire truth — drop SoV, null-not-0, asin key, take (S) · **P4 OPERATOR DECISION: re-source from
+SQP / buy a feed / retire (L)** · P5 H10 criteria shape + starters (M) · **P6 separate approval:
+`bid_apply` suppression guard, cross-tab (M)**. P1+P3 alone remove every false statement.
+
+Probes: `apps/api/scripts/_ktp-p0-{census,sources,exposure,gate}.mts` (all read-only).
+
+### KT-P1 + KT-P2 + KT-P3 — SHIPPED 2026-08-22 (`76d112b2a` API+tab · `d4ead4a38` builder)
+
+Operator approved the plan. Built the three phases needing no further decision; **P4 (the data
+choice) and P6 (the cross-tab `bid_apply` suppression guard) deliberately NOT built.**
+
+🔴 **A phase changed mid-build: `null` is byte-identical to `0` for this engine.** `applyOperator`
+coerces with `Number()` and `Number(null) === 0`, so the approved "`rankDelta` null-not-0" fix would
+have compiled, reviewed and diffed clean **and changed nothing**. Only an **absent key** refuses
+(`Number(undefined)` is `NaN`). ⚠ The same trap is live one layer out on a map **Bid and SOV share**:
+`EMPTY_TARGET_PERF` nulls `acos`, so a **zero-sales target satisfies `ACOS <= 20%`** and would have
+its bid RAISED. Raised for decision with KT-P6; not changed unilaterally.
+
+**Shipped:** SoV removed from `RANK_METRIC`/`METRICS_RANK` (now *refuses* a draft) · rankDelta
+omitted-not-nulled · latest/prior keyed on `(keyword, marketplace, asin)` · `take:8000` reordered to
+`capturedAt desc` (truncation drops the oldest, not the alphabet's tail) · new
+`GET /advertising/keyword-tracker/feed-health` · live census strip on the tab · amber banner +
+**Create Rule `held`** (aria-disabled, focusable, answers the click) · `PcWindowNote` stops asserting
+a settling window over a metric with zero readings · **the preview now runs the engine**
+(`previewKeywordTrackerRule` reusing SOV-P2's `runDraftPreview` hooks — no fork), reporting the feed
+and suppression counted in two. The dead `isRank` branch in `isBidLike` was removed, not left inert.
+
+**Prod-verified read-only:** the draft that rendered 100 rows of green €0.80 now returns
+`selected 70 · measurable 0 · matched 0 · rows 0`.
+
+🔴 **Four defects found by reading the screen:** the refusal was invisible (note at y=2491, scroller
+moved 41px — `scrollIntoView` ran before React rendered it); **`behavior:'smooth'` is a silent no-op
+in `.h10-rb-body`** (0 vs 1735.5 with the default); the note broke the footer's button layout; and
+copy read as rendered — "thatdoes", "1 of those carry", "1 of them already bid this", plus a keyword
+column clipping at 128px in a 640px modal.
+
+**Gates:** tsc 0/0 · api vitest 398 files / 5,169 tests **0 FAIL** · web 985 (8 Playwright = baseline)
+· five ratchets pass. ⚠ api vitest **exits non-zero on a flaky harness teardown race** that lands on
+a different unrelated file each run — judge by FAIL count. ⚠ `check-help-cursor` greps comments too.
+
+Rig: `apps/api/scripts/_ktp-verify-stub.mts` (port 8098, separate from BUD-P's 8099; reads proxy
+prod, the two new endpoints come from the real services, nothing writes). Its `?ktpFixture=1` mode
+renders the rank table/Δ/suppression tags/census that an empty feed can never produce — all four copy
+and layout defects came from it. No fixture code in the repo's web source.
+
+### KT-P complete — five commits, all ancestry-verified
+
+| commit | unit |
+|---|---|
+| `76d112b2a` | KT-P1/P2/P3 — the API and the tab |
+| `d4ead4a38` | KT-P1/P2 — the builder half (held one commit: three sessions were interleaved in `RuleBuilder.tsx`) |
+| `1cf7869ca` | **C1** — eight context builders OMIT an unmeasurable metric instead of nulling it |
+| `cba86dc11` | **P6** — `bid_apply` never un-suppresses; the preview reports refusals as rows |
+| `a01d0fa03` | **C2** — the KT context asks only for `status: 'ENABLED'` targets |
+
+**C1, measured before → after on prod contexts:** budget `ACoS ≤ 25%` **38 phantom matches → 7 real**
+· SOV `Concentration < 60%` sheds its 86 unmeasured · SOV ACoS absent on 772 of 793. The one armed
+rule gating on a risky leaf still matches exactly **1** campaign — unchanged. Three comments in the
+evaluator asserted "a null fails a condition"; `Number(null)` is `0`, and that belief is why it
+survived.
+
+**P6's decisive measurement:** at commit time the account read **flagged 0 · campaign-suppressed 0 ·
+low-and-unflagged 141**, with `suppressedFromBidCents` at **420** earlier the same day. A guard on
+the flag alone would have protected nothing at that instant — which is why the two tests are counted
+separately and must never be merged.
+
+🔴 **Two corrections this unit made to its own claims**, both after a peer checked them:
+· the **197/435 zero-sales Bid figure is NOT exposure** — `KEYWORD_HIGH_ACOS`'s emitter filters
+  `orders > 0 && sales > 0`, so those targets never become contexts. *Read the emitter's own
+  `where`/`filter` before believing a null hazard* (SOV-P).
+· the **green-execution-row finding is a READER problem, not a data problem** — `actionResults` is
+  persisted beside `status`, so the skips survive; a surface reading the wrong field is the whole of
+  it, and no cross-domain status change is needed.
+
+**Still open, all stated in code and raised rather than taken:** the P4 data decision (recommended:
+defer — re-sourcing KT from SQP would now duplicate SOV) · a campaign-status filter (**1,228 of
+2,130** KT targets sit in a PAUSED campaign; no sibling builder does this) · `bid_up` /
+`raise_bids_for_rank_defense` share the un-suppression hole in principle · the execution-status
+reader · the Bid tab's client-side preview.

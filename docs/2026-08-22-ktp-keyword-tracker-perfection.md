@@ -654,3 +654,54 @@ the working-tree copy and would commit callers without the callee — a Railway 
 lines (`isRank` · `rankFeed` · `rankBlocked` · `rankHeldNote` · `rankNoteRef`; and in the routes
 file, the `slug === 'keyword-tracker'` branch + the `/keyword-tracker/feed-health` route), prove with
 `git diff --no-index -a`, and coordinate ordering with SOV-P.
+
+
+---
+
+# CORRECTION + steps 2–4 shipped (2026-08-22)
+
+## 🔴 A figure I gave the operator was wrong, and the corrected rule is sharper
+
+I reported **197 of 435 keyword targets with spend and zero sales, 196 write-enabled, €713.47** as
+Bid-tab exposure to the null-ACoS hole. **The population is real; the exposure is not.**
+`KEYWORD_HIGH_ACOS`'s own emitter filters `orders > 0 && sales > 0`, so `adTarget.acos` is always
+defined in that context and those targets never become contexts at all. No builder Bid rule could
+have read them as 0%-ACoS winners. Caught by SOV-P; verified in the emitter's `.filter` before
+accepting.
+
+**The corrected, more useful rule: a trigger's own floor can make a whole class of nulls
+UNREACHABLE — read the emitter's `where`/`filter` before believing a null hazard.** It says which
+emitters to audit instead of implying all of them. What stands unchanged is the budget instance
+(**38 of 46**) and the SOV concentration instance (**86 of 793**) — precisely the emitters that do
+NOT filter. The case for fixing it at the producers is unchanged and arguably strengthened: the
+emitters that already filter are doing the right thing, and the fix makes the others match.
+
+## Shipped
+
+| commit | what |
+|---|---|
+| `76d112b2a` | KT-P1/P2/P3 — API + tab |
+| `d4ead4a38` | KT-P1/P2 — the builder half |
+| `1cf7869ca` | **C1** — eight context builders omit an unmeasurable metric instead of nulling it |
+| `cba86dc11` | **P6** — `bid_apply` never un-suppresses; the preview reports refusals as rows |
+| `a01d0fa03` | **C2** — the KT context asks only for ENABLED targets |
+
+**P6's sharpest measurement:** re-read at commit time, the account showed **flagged: 0** and
+**in-a-suppressed-campaign: 0**, while **low-and-unflagged held at 141**. `suppressedFromBidCents`
+was 420 earlier the same day. **A guard on the flag alone would have protected nothing at that
+instant; the ≤3¢ convention is what protects the 141.** That is the strongest possible argument for
+counting the two separately rather than merging them.
+
+**P6 forced a copy change, and that is the point.** Before the guard the honest warning was "this
+rule WOULD raise them and switch delivery back on". After it, that wording promises an action the
+engine no longer takes — the same class of falsehood pointing the other way. A surface that
+describes engine behaviour has to change when the engine does.
+
+## Still open
+
+| | |
+|---|---|
+| **KT-P4** | the data decision — recommended: defer (B1 would duplicate SOV, which is now SQP-sourced) |
+| Campaign-status filter | **1,228 of 2,130** KT targets sit in a PAUSED campaign; no sibling builder filters on campaign status, so it is a convention change, not a fix |
+| `bid_up` / `raise_bids_for_rank_defense` | share the un-suppression hole in principle; their percentage math cannot lift a 2¢ bid past 3¢, so the risk is far lower — not changed |
+| Bid tab's preview | the last tab still computing client-side |
