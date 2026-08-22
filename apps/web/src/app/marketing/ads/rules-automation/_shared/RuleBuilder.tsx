@@ -85,11 +85,21 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
       desc: 'At or above 3% of the market on ≥€10 spend — take the bid down and keep the position',
       payload: { conditions: [{ conditions: [{ metric: 'Share of Voice', op: 'gte', value: '3' }, { metric: 'Spend', op: 'gte', value: '10' }], action: { op: 'decPct', value: '10' } }] },
     },
-    {
-      name: 'Stop bidding against yourself',
-      desc: 'Under 60% campaign concentration — several of your own campaigns are competing for the same term',
-      payload: { conditions: [{ conditions: [{ metric: 'Campaign Concentration', op: 'lt', value: '60' }, { metric: 'Spend', op: 'gte', value: '5' }], action: { op: 'decPct', value: '10' } }] },
-    },
+    /**
+     * 🔴 A third starter, "Stop bidding against yourself" (`Campaign Concentration < 60%`), was
+     * shipped in `0e7e59996` and PULLED the same night. `topSharePct` is null wherever we ran no
+     * ads on that query in the window — 86 of 793 contexts — and the engine's comparator answers
+     * `null < 0.6` with **true** (measured, `_sovp-p4-nullcheck.mts`). So the starter matched 4
+     * targets carrying real spend whose concentration is not measurable at all, and cut their bids
+     * on the stated reasoning that several of our campaigns compete for the term — which is the
+     * opposite of what a null means there.
+     *
+     * The metric itself stays offered: an operator choosing it deliberately is a different thing
+     * from a one-click starter that mis-fires silently. The real fix is cross-cutting — a
+     * not-measurable value must fail EVERY operator, not just `gte` — and it moves every rule in
+     * the account, so it belongs to that unit and not to this list. Caught by KT-P, who spotted
+     * that a spend guard cannot exclude a null share.
+     */
   ],
   // NEG-P3 — every negative starter pairs its zero with an evidence floor, and none ships a
   // bare contains-list: a "blacklist" starter with an empty terms box would negate everything

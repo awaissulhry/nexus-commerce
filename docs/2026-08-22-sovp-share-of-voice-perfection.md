@@ -476,3 +476,37 @@ only my own edits, then diffed back against HEAD and checked for foreign markers
 hunks. Two of KT-P's lines were caught being swept in by a too-wide block lift and removed; the
 check that caught them was `git diff --no-index` + a grep for other programmes' markers, and it is
 worth running on every reconstruction rather than trusting the boundaries.
+
+
+---
+
+## 8. A starter PULLED the same night — the null comparator
+
+`0e7e59996` shipped three SOV starters. The third, **"Stop bidding against yourself"**
+(`Campaign Concentration < 60% AND Spend ≥ €5`), was removed hours later.
+
+KT-P pointed out that a spend guard cannot exclude a *null* metric, and asked whether `sovPct` could
+be null in the re-sourced context. Measured (`_sovp-p4-nullcheck.mts`), on the 793 live contexts:
+
+| | |
+|---|---|
+| `sovPct` null | **0 of 793** — starters 1 and 2 are safe by construction: a context exists only where a real share does |
+| `topSharePct` null | **86 of 793** — null wherever we ran no ads on that query in the window |
+| null AND spend ≥ €5 (the starter's exposure) | **4 targets**, incl. two ES targets carrying €119.75 and €123.93 |
+| engine comparator: `null lt 0.6` | **true** |
+| engine comparator: `0.5 lt 0.6` / `0.9 lt 0.6` | true / false |
+
+So the starter matched four targets with real spend whose concentration is *not measurable*, and cut
+their bids on the stated reasoning that several of our campaigns compete for the term — the opposite
+of what a null means there.
+
+**The metric stays offered.** An operator choosing `Campaign Concentration` deliberately is a
+different thing from a one-click starter that mis-fires silently. The real fix is cross-cutting —
+**a not-measurable value must fail every operator, not just `gte`** — and it moves every rule in the
+account, so it belongs to that unit (KT-P is taking it to the operator with PLC-P's budget
+comparator finding) rather than to this list.
+
+Worth generalising: **an AND-guard only protects against a null if the guard is structurally tied to
+the same absence.** `CTR ≤ x AND Impressions ≥ 500` is safe because `ctr` is null exactly when
+impressions are 0. `Campaign Concentration < x AND Spend ≥ y` is not, because spend and
+concentration come from different sources and one can exist without the other.
