@@ -1664,8 +1664,24 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <label>Lookback period</label>
                   <div className="lbrow">
                     <H10Select width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
-                    <span className="exc">Applies to every criteria block. The most recent 2 days are still settling and are always excluded.</span>
+                    {/* The settling-tail half of this sentence moved into the note below rather
+                        than being said twice a line apart. */}
+                    <span className="exc">Applies to every criteria block.</span>
                   </div>
+                  {/**
+                   * 🔴 BID-P — the trigger's floor, on screen at last.
+                   *
+                   * Bid is the one bid-like surface that does NOT render `PcWindowNote` (the
+                   * per-criteria note is gated `isBidLike && !isBid`, because Bid states its window
+                   * once here instead). So the floor sentence added to that component for `bid` was
+                   * a string nothing displayed — a stored-but-unread control, caught by driving the
+                   * deployed page rather than by reading the diff. It renders HERE, beside the
+                   * window it qualifies, reading the same `HIGH_ACOS_FLOOR` the emitter filters on.
+                   *
+                   * Measured: 8 of the account's 3,155 positive ad targets clear this bar. A Bid
+                   * rule cannot act on a zero-sales waster at all.
+                   */}
+                  <PcWindowNote slug="bid" days={Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14))} />
                 </div>
               )}
             </section>
