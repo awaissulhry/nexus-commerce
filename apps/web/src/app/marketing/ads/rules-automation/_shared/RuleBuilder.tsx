@@ -673,6 +673,17 @@ export function RuleBuilder({ slug }: { slug: string }) {
       concentrationPct?: number | null
       /** The handler REFUSED this one, naming the signal it lacked. A refusal is a row, not an omission. */
       refused?: string
+      /**
+       * 'flag' = carries `suppressedFromBidCents`; 'bid' = ≤3¢ with no flag. Both are off-switches.
+       *
+       * Declared for EVERY keyword-bid preview, not just this one: `bid_apply`'s floor is
+       * `max(0.05, minEur)`, so it cannot write ≤3¢ — every op on a suppressed target switches
+       * delivery back on for traffic somebody deliberately switched off
+       * ([[reference_ads_suppression_by_low_bid]]). The rank preview renders the same two fields
+       * when its client half lands; this is the shared declaration, not a SOV-only one.
+       */
+      suppressed?: 'flag' | 'bid' | null
+      campaignSuppressed?: boolean
       }>
     /** BUD-PP — the server's own census of this draft: what it considered and what survived. */
     budget?: { windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number } | null
@@ -685,6 +696,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
     sov?: {
       windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
       eligible: number; notEnabled: number; selectedTargets: number
+      suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
       periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string }>
     } | null
     error?: string
@@ -772,15 +784,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
         }
         setPreview({
           open: true, loading: false,
-          terms: (j.rows ?? []).map((x: { keyword: string; matchType: string | null; marketplace: string | null; sovPct: number; concentrationPct: number | null; currentEur: number; proposedEur: number; clamped: boolean; refused?: string }) => ({
+          terms: (j.rows ?? []).map((x: { keyword: string; matchType: string | null; marketplace: string | null; sovPct: number; concentrationPct: number | null; currentEur: number; proposedEur: number; clamped: boolean; refused?: string; suppressed: 'flag' | 'bid' | null; campaignSuppressed: boolean }) => ({
             term: x.keyword, matchType: x.matchType ?? undefined, marketplace: x.marketplace,
             current: x.currentEur, proposed: x.proposedEur, clamped: x.clamped,
             sovPct: x.sovPct, concentrationPct: x.concentrationPct, refused: x.refused,
+            suppressed: x.suppressed, campaignSuppressed: x.campaignSuppressed,
           })),
           sov: {
             windowDays: j.windowDays, selected: j.selected, measurable: j.measurable, inScope: j.inScope,
             matched: j.matched, noChange: j.noChange, eligible: j.eligible, notEnabled: j.notEnabled,
             selectedTargets: j.selectedTargets,
+            suppressedMatched: j.suppressedMatched, suppressedUnflaggedMatched: j.suppressedUnflaggedMatched,
+            campaignSuppressedMatched: j.campaignSuppressedMatched,
             periods: j.periods ?? [],
           },
         })
@@ -1604,20 +1619,25 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {/* Share of Voice is a COLUMN: it is the number that decided the row, and a
                         current → proposed pair with the deciding metric off-screen is a cell the
                         operator cannot check. */}
-                    <div className="ptable budp"><div className="pthr"><span>Keyword</span><span>Market</span><span>Share of Voice</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.marketplace ?? '—'}</span><span title={t.concentrationPct != null ? `${(t.concentrationPct * 100).toFixed(0)}% of the impressions you took on this term came from one campaign` : 'You ran no ads on this term in the last 30 days, so there is no campaign concentration'}>{t.sovPct != null ? (t.sovPct > 0 && t.sovPct < 0.0001 ? '<0.01%' : `${(t.sovPct * 100).toFixed(2)}%`) : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.refused ? '' : t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.refused ? <em className="pnote"> refused</em> : t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{!t.refused && t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
+                    <div className="ptable budp"><div className="pthr"><span>Keyword</span><span>Market</span><span>Share of Voice</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.marketplace ?? '—'}</span><span title={t.concentrationPct != null ? `${(t.concentrationPct * 100).toFixed(0)}% of the impressions you took on this term came from one campaign` : 'You ran no ads on this term in the last 30 days, so there is no campaign concentration'}>{t.sovPct != null ? (t.sovPct > 0 && t.sovPct < 0.0001 ? '<0.01%' : `${(t.sovPct * 100).toFixed(2)}%`) : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}{t.suppressed ? <em className="pnote" title={t.suppressed === 'flag' ? 'This target carries a suppression flag — it was deliberately taken out of delivery.' : 'Nothing but the bid says so: at or under 3¢ with no suppression flag.'}> suppressed</em> : null}</span><span className={`newb ${t.refused ? '' : t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.refused ? <em className="pnote"> refused</em> : t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{!t.refused && t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
                     {preview.sov && (
                       <p className="pfoot">
                         {preview.sov.selectedTargets} target{preview.sov.selectedTargets === 1 ? '' : 's'} selected · {preview.sov.eligible} enabled keyword{preview.sov.eligible === 1 ? '' : 's'}
                         {preview.sov.notEnabled > 0 ? <> ({preview.sov.notEnabled} paused or archived, which this rule skips)</> : null}
                         {' '}· {preview.sov.measurable} carry a market share · {preview.sov.inScope} in scope · <b>{preview.sov.matched} match</b>
                         {preview.sov.noChange > 0 ? <> · {preview.sov.noChange} of them sit at a guardrail, where this rule does nothing</> : null}
-                        {/* ⏳ The suppression warning — which targets this rule would raise OUT of a
-                            deliberate suppression — lands in the follow-up. `suppressed` and
-                            `campaignSuppressed` on the row type belong to the Keyword Tracker
-                            preview that introduced them, and are being committed by that session;
-                            re-declaring them here would collide. The SERVER already returns
-                            suppressedMatched / suppressedUnflaggedMatched / campaignSuppressedMatched,
-                            so this is one render away. */}
+                        {/* 🔴 `bid_apply`'s floor is max(0.05, minEur), so it CANNOT write ≤3¢:
+                            every op on a suppressed target switches delivery back on for traffic
+                            somebody deliberately switched off. Two counts, never merged — the flag
+                            is evidence, ≤3¢ is a convention, and merging them hides the ones the
+                            flag does not know about. */}
+                        {preview.sov.suppressedMatched > 0 && (
+                          <span className="pwarn">⚠ {preview.sov.suppressedMatched} of the {preview.sov.matched} {preview.sov.suppressedMatched === 1 ? 'is' : 'are'} deliberately suppressed
+                            {preview.sov.suppressedUnflaggedMatched > 0 ? ` (${preview.sov.suppressedUnflaggedMatched} of those carry no suppression flag — only a ≤3¢ bid says so)` : ''}
+                            . This rule would raise {preview.sov.suppressedMatched === 1 ? 'it' : 'them'} above €0.05 and switch delivery back on: the bid action has no suppression guard.
+                            {preview.sov.campaignSuppressedMatched > 0 ? ` ${preview.sov.campaignSuppressedMatched} sit${preview.sov.campaignSuppressedMatched === 1 ? 's' : ''} in a campaign whose bids are suppressed right now, where the next resume would overwrite the change anyway.` : ''}
+                          </span>
+                        )}
                         {/* The week, always — a share is a reading from a dated report, not a
                             setting, and its age is Amazon's to decide. */}
                         <span className="phour">
