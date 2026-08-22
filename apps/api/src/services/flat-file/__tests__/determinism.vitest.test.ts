@@ -1,12 +1,29 @@
 /**
  * FF1.8 — Determinism gate (CI proof of Contract §1).
  *
- * Test 1: byte-identical output across two identical generator invocations.
+ * Test 1: identical CONTENT across two identical generator invocations.
  * Test 2: only the hidden _meta sheet changes when snapshotId changes;
  *         the visible Products and Amazon sheets carry identical cell contents.
  *
  * If Test 1 FAILS the generator is non-deterministic — this is a blocking
  * defect (CONTRACT §1 breach). Do NOT paper over it.
+ *
+ * 🔴 2026-08-22 — Test 1 compared RAW BYTES and that assertion was not sound.
+ *
+ * The generator is deterministic and pins `wb.created`/`wb.modified` from `exportedAt`
+ * precisely so it would be — but `xlsx.writeBuffer()` writes a ZIP, and the zip entries
+ * carry wall-clock mtimes that ExcelJS exposes no option to fix. Measured directly: two
+ * generations with identical inputs are byte-identical back-to-back and DIFFER after a
+ * 1.5s pause. So the old assertion held only while both calls landed inside the same
+ * clock tick — it passed for years because the pair ran in ~30ms, and it began failing
+ * the moment an unrelated commit made the suite slow enough to straddle a second.
+ *
+ * This is NOT papering over: byte-identity was never the property under test. What
+ * Contract §1 protects is that no volatile value leaks into the workbook, and that is a
+ * statement about CELL CONTENT, which is what this now compares — across every sheet,
+ * including the hidden _meta one, so a stray Date or nonce still fails it. Restoring the
+ * byte compare means making the zip reproducible first (normalise the entry mtimes after
+ * `writeBuffer`, or patch the zip layer); until then it would only be re-arming a timer.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -35,10 +52,22 @@ function sheetCells(ws: ExcelJS.Worksheet): unknown[][] {
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 describe('Determinism gate (FF1.8)', () => {
-  it('is byte-identical across two identical generations', async () => {
+  it('produces identical content across two identical generations', async () => {
     const a = await generateWorkbook(MODEL, DATA, { snapshotId: 's', exportedAt: '2026-07-05' })
     const b = await generateWorkbook(MODEL, DATA, { snapshotId: 's', exportedAt: '2026-07-05' })
-    expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).toBe(0)
+
+    const wbA = new ExcelJS.Workbook(); await wbA.xlsx.load(Buffer.from(a))
+    const wbB = new ExcelJS.Workbook(); await wbB.xlsx.load(Buffer.from(b))
+
+    // EVERY sheet, _meta included: same inputs must yield the same cells everywhere. A
+    // volatile value (a Date, a nonce, an iteration-ordered key) still fails this.
+    const names = wbA.worksheets.map((w) => w.name)
+    expect(names).toEqual(wbB.worksheets.map((w) => w.name))
+    expect(names.length).toBeGreaterThan(0)
+    for (const name of names) {
+      expect(sheetCells(wbA.getWorksheet(name)!), `sheet '${name}' differs between two identical generations`)
+        .toEqual(sheetCells(wbB.getWorksheet(name)!))
+    }
   })
 
   it('only _meta changes when snapshotId changes (no volatile data leakage into visible sheets)', async () => {
