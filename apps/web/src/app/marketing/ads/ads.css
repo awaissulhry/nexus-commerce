@@ -770,8 +770,18 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    Nothing below 85% is coloured — see `utilBand.ts` for why there is no green band. */
 .h10-utilcell.b-capped .h10-util .uf { background: var(--h10-danger, #e5484d); }
 .h10-utilcell.b-capped .uv { color: #c11208; }
-.h10-utilcell.b-nearly .h10-util .uf { background: var(--h10-warning, #b87503); }
-.h10-utilcell.b-nearly .uv { color: #9a6700; }
+/* ADM-P6c — a REAL yellow, and it needed a different technique rather than a different hex.
+   Yellow is intrinsically light: #f2c200 measures 1.44:1 against this #eef1f5 track, so a fill
+   bright enough to read yellow cannot carry the bar's shape on its own, and every yellow dark
+   enough to do so (#a88400 at 3.11:1) is the olive-gold that read as brown in the first place.
+   So the EDGE carries the shape and the FILL carries the colour: a #a88400 border clears 3:1
+   against the track by itself, which is what WCAG's non-text rule actually asks of a boundary,
+   and the interior stays properly yellow. Measured, not read off the hex. */
+.h10-utilcell.b-nearly .h10-util .uf { background: #f2c200; box-shadow: inset 0 0 0 1px #a88400; }
+/* The NUMBER stays the neutral dark. Yellow text cannot reach 4.5:1 on white until #8a6d00,
+   which is olive — the same brown, arrived at from the other direction. The band is carried by
+   the bar beside it, and by the tooltip, so nothing depends on colour alone. Red keeps its
+   coloured number because red CAN pass (#c11208 at 6.25:1). */
 .h10-rc-word.b-capped { color: #c11208; font-weight: 600; }
 /* ADM-P6 — the age of a reading, and the "of Nh watched" denominator on the hour columns.
    Muted but NOT italic: this stylesheet reserves italic for an ABSENCE of data, and both of
