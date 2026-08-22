@@ -1494,13 +1494,19 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
      * SOV-P2 — dispatched on the draft's OWN slug (`actions[0].type`, the type a stored rule
      * carries), so the dispatch key is the rule's identity rather than a second contract.
      *
-     * ⚠️ `previewPlacementRule` exists in the service but has NO caller at HEAD — grep -a'ed every
-     * routes file. Its dispatch branch is still uncommitted, so a placement draft currently falls
-     * through to `previewBudgetRule` and comes back `not_a_budget_draft`. That branch is the
-     * Placement session's to land; this comment is here so the gap is visible rather than
-     * rediscovered.
+     * 🔴 PLC-P2's placement branch is below. It was dropped by a bad hunk-filter in `e1e78d6d9`,
+     * which shipped `previewPlacementRule` with NO caller — a placement draft fell through to
+     * `previewBudgetRule` and came back `not_a_budget_draft`. Caught by the SOV session reading
+     * the committed route rather than the working tree, which is the only place the gap was
+     * visible: it is a missing BRANCH, so nothing in tsc or the test suite could see it.
      */
     const slug = String((Array.isArray(body.actions) ? (body.actions[0] as { type?: unknown })?.type : '') ?? '')
+    const svc = await import('../services/advertising/ads-rule-preview.service.js')
+    if (slug === 'placement') {
+      const out = await svc.previewPlacementRule(body)
+      if (!out.ok) reply.code(400)
+      return out
+    }
     if (slug === 'sov') {
       const { previewSovRule } = await import('../services/advertising/ads-sov-preview.service.js')
       const out = await previewSovRule(body)
@@ -1514,13 +1520,11 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
      * result carries `feed` alongside the census and the surface can tell them apart.
      */
     if (slug === 'keyword-tracker') {
-      const { previewKeywordTrackerRule } = await import('../services/advertising/ads-rule-preview.service.js')
-      const out = await previewKeywordTrackerRule(body)
+      const out = await svc.previewKeywordTrackerRule(body)
       if (!out.ok) reply.code(400)
       return out
     }
-    const { previewBudgetRule } = await import('../services/advertising/ads-rule-preview.service.js')
-    const out = await previewBudgetRule(body)
+    const out = await svc.previewBudgetRule(body)
     if (!out.ok) reply.code(400)
     return out
   })
