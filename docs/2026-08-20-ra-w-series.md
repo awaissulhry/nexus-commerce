@@ -703,3 +703,35 @@ time** — `git diff --cached --stat` in the same breath as the commit.
 
 Verified as a commit in a detached worktree at its parent: tsc clean both apps, api 401 files /
 5,218 tests, web 985, five ratchets at baseline, five preview shapes driven against prod, 0 writes.
+
+## ACCEPTANCE — the first rule-driven write reaches Amazon (2026-08-22)
+
+The eleven-tab programme is complete, but until today **no automated change had ever reached
+Amazon**: every rule sat at PROPOSE and the queue was never drained by a human. This is the
+acceptance test for the whole thing, run end to end on prod.
+
+**Subject** — the smallest reversible proposal in the queue: `Reclaim idle budget — DE` proposing
+`DE_Exact_3_Keywords` **€15.00 → €11.25** (the campaign was using ~€3.12/day of its €15, so the new
+budget still clears its actual spend). Chosen over the harvest promotions because it creates
+nothing, and over `GALE PHRASE DE` (−€20.00) because a first live write should be the cheap one.
+
+**The chain, each link verified rather than assumed:**
+
+| link | evidence |
+|---|---|
+| rule fired | `AutomationRule` last run 07:30, suggestion queued with its own evidence row |
+| the page told the truth | staged card read `€11.25 To Campaign DE_Exact_3_Keywords · from €15.00`; Spend €21.84 · Sales €166.38 · ACoS 13.13% on the row |
+| operator approved | `AdsRuleSuggestion.status=applied`, `decidedBy=operator` |
+| local write + audit | `AdvertisingActionLog AD_BUDGET_UPDATE`, before `dailyBudget:15` → after `11.25` |
+| queued, NOT delivered | `OutboundSyncQueue syncStatus=PENDING`, `amazonResponseStatus=PENDING`, `syncedAt=null` — the state the law exists for |
+| worker + write gate | drained ~4 min later: `syncStatus=SUCCESS`, no error, `syncedAt` set |
+| **Amazon agrees** | `POST /sp/campaigns/list` → `274979860749057 … budget=11.25 DAILY` |
+
+🔴 **The middle row is the point.** For four minutes the write was `ok:true` locally and had not
+reached Amazon. Any surface reporting delivery at that moment would have been lying, and every
+earlier version of this system did exactly that. `scripts/_readback-amazon.mts` (added here,
+read-only) is the check that settles it: it asks Amazon and compares, and prints a refusal to
+report delivery on a mismatch.
+
+**Still queued after this**: 1 budget (`GALE PHRASE DE` −€20.00), 2 harvest promotions (DE),
+1 placement trim (IT), plus the Suggestions session's own labelled test row.
