@@ -75,7 +75,9 @@ interface Camp {
 type Mode = 'metrics' | 'edit'
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
 const eur = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const pct = (v: unknown) => { if (v == null || v === '') return '—'; const n = Number(v); return Number.isFinite(n) ? `${(n <= 1 ? n * 100 : n).toFixed(2)}%` : '—' }
+// ADM-P6/AC — `pct()` removed with its only call site. It guessed whether a number was a fraction
+// or a percentage by MAGNITUDE, which cannot be right for a value that legitimately crosses 1. If a
+// percentage helper is needed again, it must be told the unit, never infer it.
 const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 /**
  * AX2.1 — PATCH and report what ACTUALLY happened.
@@ -279,7 +281,29 @@ function renderCol(c: Camp, key: string): ReactNode {
   switch (key) {
     case 'spend': return eur(spend)
     case 'sales': return eur(sales)
-    case 'acos': { const a = pct(c.acos); return a !== '—' ? a : (sales ? `${((spend / sales) * 100).toFixed(2)}%` : '—') }
+    /**
+     * 🔴 ADM-P6/AC — this ran through `pct()`, which GUESSED the unit: `n <= 1 ? n * 100 : n`.
+     *
+     * `/advertising/campaigns` documents `acos` as a FRACTION, so the guess is only ever right by
+     * coincidence — and it inverts precisely where it matters most. A campaign at 204% ACoS arrives
+     * as 2.04, fails the `<= 1` test, and renders **2.04%**: money spent at twice what it earns,
+     * displayed as the single best number on the page.
+     *
+     * ADM-H found it latent (0 of 220 on the page's default 7-day window) and it is not latent any
+     * more. The double-count fix in `8ebf4893b` corrected ad sales downward, which raised true ACoS
+     * and moved campaigns INTO the failing band — measured over 30 days, 1 before that fix and 3
+     * after: GALE | IT | Phrase | Category 204.1%, GALE | IT | PAT 113.9%, GALE EXACT IT 106.9%.
+     *
+     * No magnitude test survives here. The unit is known, so it is applied.
+     */
+    case 'acos': {
+      const frac = c.acos != null ? Number(c.acos) : (sales > 0 ? spend / sales : NaN)
+      // '—' for both absences rather than distinguishing "spent, zero attributed sales". ADM-H has
+      // a `NO_SALES` token for exactly that, uncommitted, and re-creating it here would fork theirs
+      // — the magnitude guess is the bug; the richer empty state is theirs to land.
+      if (!Number.isFinite(frac)) return '—'
+      return `${(frac * 100).toFixed(2)}%`
+    }
     case 'roas': { const r = c.roas != null ? Number(c.roas) : (spend ? sales / spend : NaN); return Number.isFinite(r) ? r.toFixed(2) : '—' }
     case 'impressions': return impr.toLocaleString()
     case 'clicks': return clicks.toLocaleString()
@@ -305,7 +329,11 @@ const RANGE_FIELDS: Array<{ key: string; label: string; unit: '%' | '€' | '' }
 function metricVal(c: Camp, key: string): number {
   const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders ?? c.orders)
   switch (key) {
-    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales ? spend / sales : 0); return a <= 1 ? a * 100 : a }
+    // 🔴 The same guess lived here, and this is the half that HIDES rather than misleads:
+    // `metricVal` feeds the FILTER and the SORT, so 2.037 compared as "2.04" means a filter of
+    // `ACoS > 50` silently EXCLUDES the three worst campaigns in the account. A wrong number
+    // invites a second look; a wrong filter never does.
+    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales > 0 ? spend / sales : 0); return a * 100 }
     case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
     // ADM-P6 — -1 for every absence, so a row with no reading sorts below a real 0%, which IS a
     // reading. The three states that carry no number are not "the smallest number".
