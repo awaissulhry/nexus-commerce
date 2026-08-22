@@ -18,6 +18,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
 import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_BUDGET, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
+import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
@@ -42,7 +43,7 @@ const LOOKBACK_DAYS = ['7', '14', '30', '60', '90'].map((d) => ({ value: d, labe
  * creating — and every one carries a noise guard so a thin-data keyword cannot trip it.
  * Bid only for now; other slugs add their own lists when their sessions take them up.
  */
-const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payload: { conditions: Array<{ conditions: Condition[]; action: { op: string; value: string } }> } }>> = {
+const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payload: { windowDays?: number; conditions: Array<{ conditions: Condition[]; action: { op: string; value: string; placeTarget?: string } }> } }>> = {
   'keyword-harvesting': [
     {
       name: 'Harvest proven winners',
@@ -152,6 +153,54 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
       name: 'Reclaim idle budget',
       desc: 'Under 10% of budget consumed on ≥€5 spend → cut the daily budget 25%, freeing headroom for the capped winners above',
       payload: { conditions: [{ conditions: [{ metric: 'Budget Utilization', op: 'lte', value: '10' }, { metric: 'Spend', op: 'gte', value: '5' }], action: { op: 'decPct', value: '25' } }] },
+    },
+  ],
+  /**
+   * PLC-P6 — placement starters, and every one of the three is shaped by a measurement rather than
+   * by what sounds sensible. Measured on prod 2026-08-22 across the reachable set (enabled ∧ spend
+   * in the settled window ∧ past the write gate):
+   *
+   *   · 🔴 **`ACoS ≥ 40%` matches ZERO campaigns** over 7 settled days, and two over 30. The
+   *     obvious "trim the bleeders" starter every other tab ships would be inert here, so none of
+   *     these uses a high-ACoS bar. What this account actually has is spend with NO sales at all,
+   *     where ACoS is `null` rather than large — and a null fails every comparison, which is why
+   *     the zero-sale starters test `Sales = 0` instead.
+   *   · **The lane has to have something to cut.** Of the 12 campaigns matching
+   *     `Sales = 0 AND Clicks ≥ 20`, Rest of Search already carries a multiplier on **9** and Top
+   *     of Search on **2** — so the cut starters name Rest of Search. A decrease on a lane sitting
+   *     at 0 clamps to 0 and does nothing; honest, but useless as a starting point.
+   *   · 🔴 **Product Pages is the one lane no engine contests.** `ad-rank-defend` wrote
+   *     `PLACEMENT_TOP` 12,197 times and `PLACEMENT_REST_OF_SEARCH` 11,075 times in 30 days, and
+   *     `PLACEMENT_PRODUCT_PAGE` **twice**. On the 25 of 43 reachable campaigns a schedule governs,
+   *     a Top-of-Search rule is undone within the hour and a Product Pages rule holds. That is why
+   *     the one starter that RAISES a bid raises Product Pages.
+   *   · **The window is part of the starter.** `ACoS ≤ 25% AND Orders ≥ 2` matches 3 campaigns
+   *     over 7 settled days and 11 over 30, so the raise starter ships `windowDays: 30` (PLC-P5)
+   *     rather than looking broken on the default.
+   */
+  placement: [
+    {
+      name: 'Stop overpaying Rest of Search on zero-sale clicks',
+      desc: 'No sales at all on ≥20 clicks → cut the Rest of Search modifier 30%. Matches 12 campaigns today, 9 of which carry a Rest of Search multiplier to cut',
+      payload: { conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '20' }], action: { op: 'decPct', value: '30', placeTarget: 'ros' } }] },
+    },
+    {
+      name: 'Back proven converters where the rank engine won’t undo it',
+      desc: 'ACoS ≤ 25% with ≥2 orders over 30 days → set Product Pages to 25% — the only lane the rank engine leaves alone (2 writes in 30 days, against 12,197 on Top of Search)',
+      /**
+       * 🔴 `set`, not `incPct`, and the preview is why. Of the 11 campaigns this matches, Product
+       * Pages sits at **0 on 8 of them** — and increasing 0 by 25% is 0. Shipped as a raise, the
+       * starter moved 3 rows and reported "sits at a guardrail" on the other 8: arithmetically
+       * honest, useless as a starting point. `Set to` works from the cold start most matches are
+       * actually in. It can lower a lane an operator had put higher, which is why this rule
+       * proposes rather than writes — every row is shown current → proposed before anyone accepts.
+       */
+      payload: { windowDays: 30, conditions: [{ conditions: [{ metric: 'ACOS', op: 'lte', value: '25' }, { metric: 'Orders', op: 'gte', value: '2' }], action: { op: 'set', value: '25', placeTarget: 'pdp' } }] },
+    },
+    {
+      name: 'Stop paying for a placement that is seen and ignored',
+      desc: 'CTR ≤ 0.3% on ≥500 impressions → set Rest of Search to 0%. Impressions without clicks are a placement problem, not a bid problem; matches 20 campaigns today',
+      payload: { conditions: [{ conditions: [{ metric: 'CTR', op: 'lte', value: '0.3' }, { metric: 'Impressions', op: 'gte', value: '500' }], action: { op: 'set', value: '0', placeTarget: 'ros' } }] },
     },
   ],
   bid: [
@@ -272,11 +321,9 @@ const PLACEMENT_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit 
   { value: 'decPct', label: 'Decrease by', unit: 'pct' },
 ]
 // SP placement targets (Amazon: Top of Search / Product Pages / Rest of Search).
-const PLACEMENTS = [
-  { value: 'tos', label: 'Top of Search' },
-  { value: 'pdp', label: 'Product Pages' },
-  { value: 'ros', label: 'Rest of Search' },
-]
+// PLC-P3 — imported, not retyped: the rules grid's Criteria cell names the same three lanes, and
+// two label lists for one lane is how a grid and a builder start describing different rules.
+const PLACEMENTS = PLACEMENT_LANES.map((l) => ({ value: l.value as string, label: l.label }))
 // IF placement-scope (which placement's metric to evaluate) — Campaign-wide or a single placement.
 const PLACEMENT_SCOPES = [{ value: 'campaign', label: 'Campaign' }, ...PLACEMENTS]
 const METRICS_PLACEMENT = PC_METRICS_PLACEMENT
@@ -597,7 +644,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
    */
   // BUD-P3 — the default is each trigger's own fixed window (bid 14 · budget 7), so an untouched
   // select stores the same number the engine would have used anyway.
-  const [lookbackDays, setLookbackDays] = useState(slug === 'budget' ? '7' : '14')
+  // PLC-P5 — placement joins budget at the trigger's 7 settled days; bid-like keep 14.
+  const [lookbackDays, setLookbackDays] = useState(slug === 'budget' || slug === 'placement' ? '7' : '14')
   // ── B3: rule templates (Budget) ──
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; payload?: unknown }>>([])
   const [tmpl, setTmpl] = useState<{ mode: 'save' | 'apply' } | null>(null)
@@ -627,9 +675,25 @@ export function RuleBuilder({ slug }: { slug: string }) {
     } finally { setTmpl(null); setTmplName('') }
   }
   const applyTemplate = (t: { payload?: unknown }) => {
-    const p = (t.payload ?? {}) as { conditions?: Array<{ conditions?: Condition[]; action?: { op?: string; value?: string } }>; lookback?: string; exclude?: string; schedule?: Record<string, string> }
-    // P2.1 — a template's stored lookback/exclude are ignored: the trigger's window is fixed.
-    if (Array.isArray(p.conditions) && p.conditions.length) setGroups(p.conditions.map((c) => ({ id: _cid++, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '' })))
+    const p = (t.payload ?? {}) as { conditions?: Array<{ conditions?: Condition[]; action?: { op?: string; value?: string; placeTarget?: string } }>; lookback?: string; exclude?: string; windowDays?: number; schedule?: Record<string, string> }
+    /**
+     * 🔴 PLC-P6 — `placeTarget` is carried. It was dropped here, and on a Placement rule the lane
+     * IS the rule: every template would have silently landed on Top of Search whatever it said,
+     * so a starter named "…Product Pages" would have configured something else. Nothing caught it
+     * because no placement template existed until this unit.
+     */
+    if (Array.isArray(p.conditions) && p.conditions.length) setGroups(p.conditions.map((c) => ({ id: _cid++, conditions: Array.isArray(c.conditions) && c.conditions.length ? c.conditions : [defaultCondition(slug)], lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: c.action?.op ?? 'set', budgetValue: c.action?.value ?? '', ...(isPlacement ? { placeTarget: c.action?.placeTarget ?? 'tos' } : {}) })))
+    /**
+     * PLC-P5/P6 — a template may now choose the rule's LOOKBACK, on the slugs that have one. The
+     * note this replaces read "a template's stored lookback/exclude are ignored: the trigger's
+     * window is fixed" (P2.1) — true then, not now. It matters for the starters: `ACoS ≤ 25% AND
+     * Orders ≥ 2` matches 3 reachable campaigns over 7 settled days and 11 over 30, so a raise
+     * starter on the default window would look broken. `lookback`/`exclude` stay ignored: those
+     * are display strings, not the engine's window.
+     */
+    if (advLookback && typeof p.windowDays === 'number' && Number.isFinite(p.windowDays)) {
+      setLookbackDays(String(Math.max(7, Math.min(90, Math.round(p.windowDays)))))
+    }
     const s = p.schedule ?? {}
     if (s.frequency) setFrequency(s.frequency)
     if (s.time) setTime(s.time)
@@ -661,7 +725,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
           ...(isPlacement ? { placeFloor: Math.max(0, Number(placeFloor) || 0), placeCeiling: placeCeiling.trim() ? Number(placeCeiling) : 900 } : {}),
           ...(isBidLike ? { bidFloor: Math.max(0.02, Number(bidFloor) || 0.05), bidCeiling: bidCeiling.trim() ? Number(bidCeiling) : null } : {}),
           ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
-          ...(isBudget ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
+          ...((isBudget || isPlacement) ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
         }]
   ), [slug, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, protectDays, negationLevel, isCampaign, selCampaigns, isBudget, budgetFloor, budgetCeiling, isPlacement, placeFloor, placeCeiling, isBidLike, bidFloor, bidCeiling, isBid, lookbackDays, blocks])
@@ -720,6 +784,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
   }, [isRank])
   /** 🔴 No rank has ever been ingested ⇒ any rule built here would match nothing, forever. */
   const rankBlocked = isRank && rankFeed != null && rankFeed.rows === 0
+  /** PLC-P3 — which criteria block's locked scope control has been clicked, so it can answer. */
+  const [scopeNote, setScopeNote] = useState<number | null>(null)
   const [preview, setPreview] = useState<{
     open: boolean; loading: boolean
     terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null; marketplace?: string | null; utilPct?: number | null; clamped?: boolean
@@ -728,6 +794,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
       concentrationPct?: number | null
       /** The handler REFUSED this one, naming the signal it lacked. A refusal is a row, not an omission. */
       refused?: string
+      /** PLC-P2 — placement rows only. The lane IS the rule's identity, so it is a column. */
+      lane?: string
+      /** 🔴 The rank engine governs this campaign: `current` is a clock reading, not a setting. */
+      governed?: boolean
+      lastEngineWriteAt?: string | null
       /** KT-P2 — rank rows. null = never observed; NEVER rendered as 0. */
       rankDelta?: number | null
       /**
@@ -744,6 +815,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
       }>
     /** BUD-PP — the server's own census of this draft: what it considered and what survived. */
     budget?: { windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number } | null
+    /** PLC-P2 — the same census for a placement draft, plus the two facts Budget does not need. */
+    place?: { windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number; governedMatched: number; readAt: string } | null
     /**
      * SOV-P2 — the SOV draft's census. `eligible` / `notEnabled` / `selectedTargets` exist because a
      * SOV rule can only see ENABLED keyword targets whose query Amazon reported a market total for:
@@ -811,15 +884,41 @@ export function RuleBuilder({ slug }: { slug: string }) {
       return
     }
     if (isPlacement) {
-      const g0 = groups[0]
-      const target = g0?.placeTarget ?? 'tos'
-      const op = g0?.budgetOp ?? 'set'
-      const v = Number(g0?.budgetValue ?? '') || 0
-      const apply = (cur: number) => op === 'set' ? v : op === 'incPct' ? cur * (1 + v / 100) : op === 'decPct' ? cur * (1 - v / 100) : cur
-      const floor = Math.max(0, Number(placeFloor) || 0)
-      const ceil = placeCeiling.trim() ? Number(placeCeiling) : 900
-      const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
-      setPreview({ open: true, loading: false, terms: selCampaigns.map((c) => { const cur = c.placements?.[target as 'tos' | 'pdp' | 'ros'] ?? 0; return { term: c.name, current: cur, proposed: Math.round(clamp(apply(cur))) } }) })
+      /**
+       * 🔴 PLC-P2 — this used to be arithmetic in the browser, and it was wrong in the same five
+       * ways BUD-PP had just fixed for Budget. Measured on prod before the change: a draft reading
+       * `IF Campaign ACOS > 9999%` listed 70 of 70 campaigns as changing to 50%, and the same
+       * draft scoped to Germany still listed every Italian and French campaign.
+       *
+       * The server now runs the ENGINE against this draft — real contexts, real scope, real
+       * conditions, `placement_apply` in dryRun — and returns only the campaigns that match.
+       * Nothing in this branch computes a multiplier.
+       */
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/preview`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+          // 'all' is this form's word for UNSCOPED — see the Budget branch above; sending the
+          // literal makes the matcher compare 'all' to 'DE' and drop every row.
+          body: JSON.stringify({ actions: previewActions(), conditions: previewConditions(), scopeMarketplace: scopeMarket && scopeMarket !== 'all' ? scopeMarket : null }),
+        })
+        const j = await r.json().catch(() => null)
+        if (!r.ok || !j?.ok) {
+          setPreview({ open: true, loading: false, terms: [], place: null, error: j?.untranslatable?.length
+            ? `No engine signal exists for: ${j.untranslatable.join(', ')}. Remove those conditions — the rule could not evaluate as written.`
+            : 'Preview is unavailable right now.' })
+          return
+        }
+        setPreview({
+          open: true, loading: false,
+          terms: (j.rows ?? []).map((x: { campaign: string; placementLabel: string; currentPct: number; proposedPct: number; marketplace: string | null; clamped: boolean; governed: boolean; lastEngineWriteAt: string | null }) => ({
+            term: x.campaign, lane: x.placementLabel, current: x.currentPct, proposed: x.proposedPct,
+            marketplace: x.marketplace, clamped: x.clamped, governed: x.governed, lastEngineWriteAt: x.lastEngineWriteAt,
+          })),
+          place: { windowDays: j.windowDays, selected: j.selected, measurable: j.measurable, inScope: j.inScope, matched: j.matched, noChange: j.noChange, governedMatched: j.governedMatched, readAt: j.readAt },
+        })
+      } catch {
+        setPreview({ open: true, loading: false, terms: [], place: null, error: 'Preview is unavailable right now.' })
+      }
       return
     }
     /**
@@ -1413,7 +1512,15 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {g.conditions.map((c, i) => (
                       <div className="cond" key={i}>
                         <span className={`pill ${i === 0 ? 'if' : 'and'}`}>{i === 0 ? 'IF' : 'AND'}</span>
-                        {isPlacement && <H10Select width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => setCond(g.id, i, { scope: v })} ariaLabel="Placement scope" />}
+                        {/* PLC-P7 — the lane a condition MEASURES, and it is read now.
+                            `translateConditions` took metric/op/value only and the context carried
+                            no per-lane fields, so "IF Top of Search · ACoS > 40%" evaluated the
+                            CAMPAIGN's ACoS. `buildCampaignBudgetContexts` now emits
+                            `placement.{tos,pdp,ros}` from Amazon's placement report and
+                            `placementScopedField` re-points the condition at it. Choosing a lane
+                            opens the note below, because lane data is thinner than campaign data
+                            and the window is usually why a lane rule matches nothing. */}
+                        {isPlacement && <H10Select width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => { setCond(g.id, i, { scope: v }); if (v !== 'campaign') setScopeNote(g.id) }} ariaLabel="Placement scope" />}
                         <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
                         <H10Select width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
@@ -1426,6 +1533,16 @@ export function RuleBuilder({ slug }: { slug: string }) {
                         <button type="button" className="rm" aria-label="Remove condition" onClick={() => removeCondition(g.id, i)}><X size={16} /></button>
                       </div>
                     ))}
+                    {/* PLC-P7 — a lane-scoped condition is measured from Amazon's placement report,
+                        which is thinner than campaign-wide data. Said once per block, when a lane is
+                        chosen, because the honest answer to "why did my rule match nothing" is
+                        usually the window rather than the threshold. */}
+                    {scopeNote === g.id && g.conditions.some((x) => x.scope && x.scope !== 'campaign') && (
+                      <p className="h10-rb-heldnote" role="status">
+                        <Info size={13} aria-hidden />
+                        <span>A lane-scoped condition is measured from Amazon&rsquo;s <b>placement report</b> — that one lane&rsquo;s own impressions, clicks, spend and sales — not the campaign&rsquo;s totals. Lane data is thinner: over 7 settled days only <b>16 of 122</b> campaign-and-lane combinations in this account carry 20+ clicks, against <b>51 of 123</b> over 30. A lane with no data in the window is <b>not measured as zero</b> — it is left alone. Widen the <b>Lookback period</b> in Advanced Settings if a lane rule matches nothing.</span>
+                      </p>
+                    )}
                     <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> AND</button>
                     {/* W5 (2026-08-20) — Pacvue's "noise guard", as one-click AND conditions.
                         Every rules platform in the research ships a minimum-evidence bar (min
@@ -1565,12 +1682,18 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   <b>Measurement window</b>
                   {/* BUD-P3 — Budget rules choose their own lookback (H10 keeps it in Advanced
                       Settings); the note then states the CHOSEN window, not the default. */}
-                  {isBudget && (
+                  {/* PLC-P5 — Placement chooses its own lookback too. Same trigger, same contexts,
+                      same 7–90 clamp as Budget, and the evaluator builds a per-window context pass
+                      for either slug (`campaignRuleWindow`). Before this the block rendered a fixed
+                      7-day sentence and the operator had no way to widen it — which matters most
+                      for the lane-scoped criteria PLC-P7 adds, since over 7 days only 16 of 122
+                      campaign×lane cells clear 20 clicks against 51 of 123 over 30. */}
+                  {advLookback && (
                     <div className="lbrow">
                       <H10Select width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
                     </div>
                   )}
-                  <PcWindowNote slug={slug} {...(isBudget ? { days: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {})} />
+                  <PcWindowNote slug={slug} {...(advLookback ? { days: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {})} />
                 </div>
                 )}
                 <div className="advblock">
@@ -1780,7 +1903,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
               ? `Live, read-only: the ${preview.rank.matched} keyword${preview.rank.matched === 1 ? '' : 's'} in your ${preview.rank.selected} selected campaign${preview.rank.selected === 1 ? '' : 's'} that ${preview.rank.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against the latest rank observation for each keyword.`
               : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isSov ? (preview?.sov && preview.sov.matched > 0
               ? `Live, read-only: the ${preview.sov.matched} keyword${preview.sov.matched === 1 ? '' : 's'} in your ${preview.sov.selected} selected campaign${preview.sov.selected === 1 ? '' : 's'} that ${preview.sov.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against Amazon’s own market share for each keyword.`
-              : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? (preview?.budget && preview.budget.matched > 0
+              : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? (preview?.place && preview.place.matched > 0
+              ? `Live, read-only: the ${preview.place.matched} of ${preview.place.selected} selected campaigns that ${preview.place.matched === 1 ? 'matches' : 'match'} these criteria right now, and the placement modifier each would get. Evaluated by the rule engine over the last ${preview.place.windowDays} settled days.`
+              : 'Live, read-only: the campaigns that match these criteria right now, and the placement modifier each would get.') : isBudget ? (preview?.budget && preview.budget.matched > 0
               ? `Live, read-only: the ${preview.budget.matched} of ${preview.budget.selected} selected campaigns that ${preview.budget.matched === 1 ? 'matches' : 'match'} these criteria right now, and the daily budget each would get. Evaluated by the rule engine over the last ${preview.budget.windowDays} settled days.`
               : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
@@ -1802,7 +1927,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
                   : preview.sov.eligible === 0 ? `None of the ${preview.sov.selectedTargets} target${preview.sov.selectedTargets === 1 ? '' : 's'} in your selected campaigns is an enabled keyword, and a Share of Voice rule can only act on those. This is not a problem with your criteria.`
                   : preview.sov.measurable === 0 ? `Amazon has not reported a market share for any of your ${preview.sov.eligible} enabled keyword${preview.sov.eligible === 1 ? '' : 's'} in these campaigns, so no Share of Voice rule can reach ${preview.sov.eligible === 1 ? 'it' : 'them'} yet.`
                   : preview.sov.inScope === 0 ? `${preview.sov.measurable} of your keywords carry a market share, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
-                  : `No keyword matches these criteria right now — ${preview.sov.inScope} ${preview.sov.inScope === 1 ? 'was' : 'were'} measured against Amazon’s latest complete week. The rule is still valid; it will act when one does.`) : isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? (preview.error ? preview.error
+                  : `No keyword matches these criteria right now — ${preview.sov.inScope} ${preview.sov.inScope === 1 ? 'was' : 'were'} measured against Amazon’s latest complete week. The rule is still valid; it will act when one does.`) : isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? (preview.error ? preview.error
+                  : !preview.place || preview.place.selected === 0 ? 'Add campaigns above to preview their new placement modifiers.'
+                  : preview.place.measurable === 0 ? `${preview.place.selected === 1 ? 'Your selected campaign has' : `None of your ${preview.place.selected} selected campaigns has`} no ad spend in the last ${preview.place.windowDays} settled days, so no placement rule can reach ${preview.place.selected === 1 ? 'it' : 'them'} yet.`
+                  : preview.place.inScope === 0 ? `${preview.place.measurable} of your selected campaigns ${preview.place.measurable === 1 ? 'has' : 'have'} spend in the window, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
+                  : `No campaign matches these criteria right now — ${preview.place.inScope} campaign${preview.place.inScope === 1 ? ' was' : 's were'} measured over the last ${preview.place.windowDays} settled days. The rule is still valid; it will act when one does.`) : isBudget ? (preview.error ? preview.error
                   : !preview.budget || preview.budget.selected === 0 ? 'Add campaigns above to preview their new budgets.'
                   : preview.budget.measurable === 0 ? `${preview.budget.selected === 1 ? 'Your selected campaign has' : `None of your ${preview.budget.selected} selected campaigns has`} no ad spend in the last ${preview.budget.windowDays} settled days, so no budget rule can reach ${preview.budget.selected === 1 ? 'it' : 'them'} yet.`
                   : preview.budget.inScope === 0 ? `${preview.budget.measurable} of your selected campaigns ${preview.budget.measurable === 1 ? 'has' : 'have'} spend in the window, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
@@ -1875,7 +2004,29 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 : isBidLike
                   ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                 : isPlacement
-                  ? (<div className="ptable bud"><div className="pthr"><span>Campaign</span><span>Current</span><span>New Modifier</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `${t.current}%` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `${t.proposed}%` : '—'}</span></div>))}</div>)
+                  ? (<>
+                    {/* 🔴 Lane is a COLUMN, not a subtitle. On a multi-block rule the lane is
+                        decided per campaign by whichever block matched, so one lane named up top
+                        would be wrong on some rows — and "Set 50%" with no lane is the cell that
+                        makes three different placement rules read identically. */}
+                    <div className="ptable plcp"><div className="pthr"><span>Campaign</span><span>Lane</span><span>Current</span><span>New Modifier</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span className="lane">{t.lane ?? '—'}</span><span>{t.current != null ? `${t.current}%` : '—'}{t.governed ? <em className="pnote eng" title={t.lastEngineWriteAt ? `The rank engine last rewrote this lane at ${new Date(t.lastEngineWriteAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}.` : 'An enabled schedule governs this campaign, though this lane has not moved in the last 7 days.'}>engine-managed</em> : null}</span><span className={`newb ${t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `${t.proposed}%` : '—'}{t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
+                    {preview.place && (
+                      <p className="pfoot">
+                        {preview.place.selected} selected · {preview.place.measurable} with spend in the window · {preview.place.inScope} in scope · <b>{preview.place.matched} match</b>
+                        {preview.place.noChange > 0 ? <> · {preview.place.noChange} of them sit at a guardrail, where this rule does nothing</> : null}
+                        {/* 🔴 The hour, always. `placement_apply` reads the current multiplier from
+                            the campaign at execution time, and on a governed campaign that field is
+                            rewritten on a clock — so "current" is a reading with a timestamp, not a
+                            setting. Stating it is the difference between an honest preview and one
+                            that is quietly false an hour later. */}
+                        <span className="phour">Current values read at {new Date(preview.place.readAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.
+                          {preview.place.governedMatched > 0
+                            ? ` ${preview.place.governedMatched} of the ${preview.place.matched} ${preview.place.governedMatched === 1 ? 'is' : 'are'} governed by the rank engine, which rewrites these lanes on a schedule — there, the current value is a reading rather than a setting, and a rule's write is undone on the engine's next pass.`
+                            : ' No matched campaign is governed by the rank engine, so these values hold until something changes them.'}
+                        </span>
+                      </p>
+                    )}
+                  </>)
                 : isBudget
                   ? (<>
                     <div className="ptable budp"><div className="pthr"><span>Campaign</span><span>Market</span><span>Utilization</span><span>Current</span><span>New Budget</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.marketplace ?? '—'}</span><span>{t.utilPct != null ? `${t.utilPct}%` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
