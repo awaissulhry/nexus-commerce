@@ -42,6 +42,10 @@
  *   campaign's budget (`lastMovedByKind === 'rule'` — true on 1 of 86), with the reach as context.
  */
 import { useEffect, useState } from 'react'
+import { utilBand, UTIL_CAPPED_PCT, UTIL_NEARLY_PCT, type UtilBand } from './utilBand'
+
+// ADM-P6b — re-exported so the cells and their consumers have one import site for the band.
+export { utilBand, UTIL_CAPPED_PCT, UTIL_NEARLY_PCT, type UtilBand } from './utilBand'
 import { Shuffle, Sparkles, User, Wallet } from 'lucide-react'
 
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
@@ -338,11 +342,37 @@ export function BudgetRuleCell({ assigned, staged, ruleHref }: {
  * Two utilization columns that drew their bars differently would be two instruments, and the
  * operator would have no way to tell a rendering difference from a real one.
  */
+const BAND_NOTE: Record<UtilBand, string> = {
+  capped: '\n🔴 At or above 100%: the budget is spent, and a campaign that has spent its budget stops serving for the rest of the day.',
+  nearly: '\n⚠ Above 85%: on course to spend the budget before the day ends, after which the campaign stops serving.',
+  normal: '',
+}
+
+/**
+ * ADM-P6b — the printed number, and it must never contradict the colour beside it.
+ *
+ * 🔴 `toFixed(0)` rounds 99.9 to "100", so a cell one tenth of a point BELOW the capped
+ * threshold printed **100%** while wearing the amber band — the number claiming the budget was
+ * spent and the colour saying it was not. Measured in the harness, not reasoned about. Banding on
+ * the rounded value instead would fix the contradiction the wrong way round: 99.6% would then
+ * print 100% in red and assert that a still-serving campaign had stopped.
+ *
+ * So the value keeps one decimal whenever it sits within a point of either threshold, which is
+ * the only place the rounding can lie. Everywhere else it stays a whole number.
+ */
+function utilLabel(pct: number): string {
+  if (pct > 0 && pct < 0.1) return '<0.1%'
+  const nearThreshold =
+    Math.abs(pct - UTIL_NEARLY_PCT) < 1 || Math.abs(pct - UTIL_CAPPED_PCT) < 1
+  return `${pct.toFixed(nearThreshold ? 1 : 0)}%`
+}
+
 function UtilGauge({ pct, title, suffix }: { pct: number; title: string; suffix?: string | null }) {
+  const band = utilBand(pct)
   return (
-    <span className="h10-utilcell" title={title}>
+    <span className={`h10-utilcell b-${band}`} title={title + BAND_NOTE[band]}>
       <span className="h10-util"><span className="uf" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></span>
-      <span className="uv">{pct < 0.1 && pct > 0 ? '<0.1%' : `${pct.toFixed(0)}%`}</span>
+      <span className="uv">{utilLabel(pct)}</span>
       {suffix ? <span className="h10-utilage">{suffix}</span> : null}
     </span>
   )
@@ -493,8 +523,11 @@ Counted from ${observed} hour${observed === 1 ? '' : 's'} actually watched, not 
     : `Hours of today's budget day in which this campaign was observed BELOW 100% of its budget — watched, and not budget-capped.
 Counted from ${observed} hour${observed === 1 ? '' : 's'} actually watched, not from 24. An hour with no reading is not counted either way.`
   const tail = since ? `\nSampling began ${utcStamp(since)}; nothing before that was watched, and neither Amazon feed can be backfilled.` : ''
+  // ADM-P6b — an hour out of budget is the same fact the gauge turns red for, so it wears the
+  // same red. ActBid hours never colour: "the campaign was bidding" is not an exception.
+  const capped = kind === 'oob' && hours > 0
   return (
-    <span className="h10-rc-word" title={why + tail}>
+    <span className={capped ? 'h10-rc-word b-capped' : 'h10-rc-word'} title={why + tail}>
       {hours}h <span className="h10-utilage">of {observed}h watched</span>
     </span>
   )

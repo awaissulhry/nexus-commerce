@@ -54,6 +54,10 @@ interface Camp {
   // ADM-P6 — TODAY's utilization, from Amazon's own budget-usage reading, sampled every five
   // minutes by `budget-usage-sample`. A FRACTION (0.5 = 50%), and null whenever the state is not
   // a reading — the API classifies it against the 00:00 UTC reset so the cell never has to guess.
+  // ADM-H P2 (restored) — Average Budget Utilization: each day's spend ÷ THAT day's budget, then
+  // averaged. A FRACTION, null when nothing was measurable, plus the days Amazon actually reported.
+  avgBudgetUtil?: number | null
+  avgBudgetUtilDays?: number
   curBudgetUtil?: number | null
   curBudgetUtilState?: BudgetUsageState
   /** Amazon's usageUpdatedTimestamp — the age of the READING, never of this response. */
@@ -306,6 +310,7 @@ function metricVal(c: Camp, key: string): number {
     // ADM-P6 — -1 for every absence, so a row with no reading sorts below a real 0%, which IS a
     // reading. The three states that carry no number are not "the smallest number".
     case 'curBudgetUtil': return c.curBudgetUtil != null ? c.curBudgetUtil * 100 : -1
+    case 'avgBudgetUtil': return c.avgBudgetUtil != null ? c.avgBudgetUtil * 100 : -1
     case 'oobHours': return c.oobHours ?? -1
     case 'actBidHours': return c.actBidHours ?? -1
     case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
@@ -1429,10 +1434,24 @@ export function CampaignsGrid() {
       // two columns would be free to disagree about the day they were counted from.
       case 'oobHours': return <UsageHoursCell kind="oob" hours={c.oobHours} observed={c.hoursObserved} since={c.usageSince} />
       case 'actBidHours': return <UsageHoursCell kind="actbid" hours={c.actBidHours} observed={c.hoursObserved} since={c.usageSince} />
-      // ⛔ Average Budget Utilization is deliberately UNCHANGED. It is a hard-coded zero-width bar
-      // and it is dishonest, but it is one of the 45 columns ADM-H already rewired in work that is
-      // not landed; fixing it here would fork theirs. Named rather than quietly left.
-      case 'avgBudgetUtil': return <span className="h10-util" aria-hidden><span className="uf" style={{ width: '0%' }} /></span>
+      /**
+       * 🔴 ADM-P6b — this rendered a hard-coded `width: '0%'` bar, aria-hidden, with no text, on
+       * every row of every page. That does not read as "no data": it reads as an instrument
+       * pegged at zero, which is a finding ("nothing here is budget-capped") the account never
+       * made. Measured over 7 days it is false on 25 of 83 readable campaigns — 17 of them
+       * average 100% or more.
+       *
+       * ADM-H diagnosed this and their fix was discarded from the shared tree before it landed.
+       * Restored here rather than left standing beside a working gauge, because two adjacent
+       * utilization columns where one is real and one is painted at zero is worse than either.
+       */
+      case 'avgBudgetUtil': return (
+        <BudgetUtilCell
+          fraction={c.avgBudgetUtil}
+          days={c.avgBudgetUtilDays}
+          measured={num(c.impressions) > 0 || num(c.clicks) > 0 || num(c.spend) > 0 || (c.avgBudgetUtilDays ?? 0) > 0}
+        />
+      )
       default: return '—'
     }
   }

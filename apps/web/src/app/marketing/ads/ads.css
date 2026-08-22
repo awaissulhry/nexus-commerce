@@ -756,6 +756,23 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-utilcell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .h10-utilcell .uv { color: #2b3440; font-weight: 600; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .h10-utilcell .h10-util .uf { background: #1f6fde; }
+/* ADM-P6b — the two exception bands. The BAR takes the DS tokens; a bar is a graphic and needs
+   3:1, which they clear. The NUMBER takes darker values already in this stylesheet (#c11208 on
+   .h10-menu button.danger, #9a6700 on .h10-pill.warn) because text needs 4.5:1 and
+   --h10-danger's #e5484d reaches only 3.5:1. Measured in the browser, not read off the hex.
+
+   🔴 The fallbacks are load-bearing. --h10-danger and --h10-warning are declared on `.h10-shell`
+   and `.app-rail-host`, NOT on `:root`, so a bare `var(--h10-danger)` resolves to nothing wherever
+   this cell renders outside that wrapper — and an unresolved background is TRANSPARENT, so the
+   bar silently disappears rather than falling back to blue. Caught by probing the computed value;
+   it is invisible in the source.
+
+   Nothing below 85% is coloured — see `utilBand.ts` for why there is no green band. */
+.h10-utilcell.b-capped .h10-util .uf { background: var(--h10-danger, #e5484d); }
+.h10-utilcell.b-capped .uv { color: #c11208; }
+.h10-utilcell.b-nearly .h10-util .uf { background: var(--h10-warning, #b87503); }
+.h10-utilcell.b-nearly .uv { color: #9a6700; }
+.h10-rc-word.b-capped { color: #c11208; font-weight: 600; }
 /* ADM-P6 — the age of a reading, and the "of Nh watched" denominator on the hour columns.
    Muted but NOT italic: this stylesheet reserves italic for an ABSENCE of data, and both of
    these are readings. #6b7383 measures 4.77:1 on the grid's #ffffff rows — the same value

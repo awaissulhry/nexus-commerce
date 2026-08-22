@@ -261,6 +261,47 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
       const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
       /**
+       * ADM-H P2, RESTORED — Average Budget Utilization.
+       *
+       * 🔴 The arithmetic is the whole point. Total spend ÷ average budget is WRONG and the Budget
+       * Manager already paid for that lesson: after a cut, an averaged denominator makes a EUR1.00
+       * campaign read 392% utilised. So this takes **each day's spend ÷ THAT day's budget, then
+       * averages the ratios** — `campaignBudgetCents` is what Amazon reported the budget to be on
+       * that date, so a mid-window budget change is handled by construction.
+       *
+       * `days` rides beside it because the window the operator picked and the days Amazon has
+       * actually reported are different numbers, and a cell saying "7-day average" over 4 days of
+       * data would be inventing three days.
+       *
+       * NULL, never 0, when nothing is measurable: a campaign with no report row was not served,
+       * which is not the same as spending none of its budget.
+       *
+       * Deliberately RAW rather than a Prisma groupBy: `campaignBudgetCents` is not in the
+       * committed schema (it belongs to SPC.1's uncommitted block), and raw SQL reads the column
+       * that is really there. That also keeps this free of a dependency on another session's
+       * unlanded work — which is how the original of this query came to be lost.
+       */
+      const avgUtilRows = ids.length
+        ? await prisma.$queryRaw<Array<{ cid: string; util: number | null; days: bigint }>>`
+            WITH d AS (
+              SELECT "localEntityId" AS cid, "date",
+                     SUM("costMicros") / 10000.0     AS spend_cents,
+                     MAX("campaignBudgetCents")::int AS budget_cents
+              FROM "AmazonAdsDailyPerformance"
+              WHERE "entityType" = 'CAMPAIGN'
+                AND "localEntityId" IN (${Prisma.join(ids)})
+                AND "date" >= ${range.since} AND "date" <= ${range.until}
+              GROUP BY 1, 2
+            )
+            SELECT cid,
+                   AVG(spend_cents / NULLIF(budget_cents, 0))::float8 AS util,
+                   COUNT(*) FILTER (WHERE budget_cents > 0)           AS days
+            FROM d GROUP BY cid
+          `
+        : []
+      const avgUtilById = new Map(avgUtilRows.map((r) => [r.cid, r]))
+
+      /**
        * ADM-P6 — Current Budget Utilization, and the two hour columns beside it.
        *
        * The Ad Manager rendered `not measured` on 220 of 220 rows for all three, and the sentence
@@ -293,6 +334,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const items = base.map((it) => {
         const a = mapL.get(it.id)
         const b = it.externalCampaignId ? mapE.get(it.externalCampaignId) : undefined
+        const au = avgUtilById.get(it.id)
         const cu = curUsage.get(it.id) ?? { state: 'unknown' as const, fraction: null, budgetCents: null, asOf: null }
         const uh = usageHours.get(it.id) ?? { observed: 0, outOfBudget: 0, actBid: 0, supported: false }
         const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
@@ -311,6 +353,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // `unsupported` (SD/SB — the SP endpoint does not cover them), `unknown` (never
           // sampled). A 0 here would answer a question nobody can answer, which is precisely the
           // defect this column was built to end.
+          // ADM-H P2 — a FRACTION (0.5 = 50%), and null when nothing was measurable. Deliberately
+          // not rounded here: the cell decides its own precision, and a rounded null is how a
+          // "no data" becomes a confident zero one layer up.
+          avgBudgetUtil: au && au.util != null && Number(au.days) > 0 ? au.util : null,
+          avgBudgetUtilDays: au ? Number(au.days) : 0,
           curBudgetUtil: cu.fraction,
           curBudgetUtilState: cu.state,
           // Amazon's usageUpdatedTimestamp — the age of the READING. Not of our poll, and not of
