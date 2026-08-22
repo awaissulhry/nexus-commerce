@@ -138,9 +138,30 @@ interface CampaignCtx {
 
 /**
  */
-async function runDraftPreview<C extends CampaignCtx>(
+/**
+ * SOV-P2 (2026-08-22) — EXPORTED, and given two optional hooks, additively.
+ *
+ * Budget and Placement both read campaign-grain contexts and write through `campaignId`. Share of
+ * Voice and Keyword Tracker need the IDENTICAL five stages at the AD-TARGET grain, through
+ * `bid_apply`, which wants `adTargetId`. That is the whole difference — two parameters, not a
+ * second pipeline. A parallel implementation would drift from this one exactly the way the
+ * client-side previews drifted from the engine ([[reference_preview_must_run_the_engine]]), which
+ * is the defect this function exists to end.
+ *
+ * `buildContexts` and `entityId` both DEFAULT to the campaign behaviour, so the `previewBudgetRule`
+ * and `previewPlacementRule` call sites below are byte-identical and cannot change meaning.
+ */
+export async function runDraftPreview<C extends CampaignCtx>(
   draft: BudgetPreviewDraft,
-  opts: { slug: string; handler: string; defaultWindowDays: number },
+  opts: {
+    slug: string
+    handler: string
+    defaultWindowDays: number
+    /** Defaults to the campaign-budget contexts — the grain Budget and Placement both read. */
+    buildContexts?: (windowDays: number) => Promise<unknown[]>
+    /** The id key + value the handler is called with. Defaults to `campaignId` = the campaign's id. */
+    entityId?: (ctx: C) => { key: string; value: string }
+  },
 ): Promise<DraftPreviewRun<C>> {
   const blank = (windowDays: number): DraftPreviewRun<C> => ({
     ok: true, census: { windowDays, selected: 0, measurable: 0, inScope: 0, matched: 0 }, settled: [],
@@ -172,7 +193,9 @@ async function runDraftPreview<C extends CampaignCtx>(
   const { ACTION_HANDLERS } = await import('../automation-rule.service.js')
   await import('./automation-action-handlers.js') // registers budget_apply / placement_apply / bid_apply
 
-  const contexts = await buildCampaignBudgetContexts(windowDays) as unknown as C[]
+  const contexts = (opts.buildContexts
+    ? await opts.buildContexts(windowDays)
+    : await buildCampaignBudgetContexts(windowDays)) as unknown as C[]
   const pickedSet = new Set(picked)
 
   // Only the picked campaigns can be touched — the same restriction `campaignAllowed` applies
@@ -211,10 +234,11 @@ async function runDraftPreview<C extends CampaignCtx>(
 
   const settled = await Promise.all(hits.map(async ({ ctx, action }) => {
     try {
-      const res = await handler({ ...action, campaignId: ctx.campaign.id }, ctx, { dryRun: true, ruleId: PREVIEW_RULE_ID })
+      const ent = opts.entityId ? opts.entityId(ctx) : { key: 'campaignId', value: ctx.campaign.id }
+      const res = await handler({ ...action, [ent.key]: ent.value }, ctx, { dryRun: true, ruleId: PREVIEW_RULE_ID })
       return { ctx, action, res }
     } catch (e) {
-      logger.warn('[ADS-RULE-PREVIEW] handler dryRun threw', { handler: opts.handler, campaignId: ctx.campaign.id, error: String(e) })
+      logger.warn('[ADS-RULE-PREVIEW] handler dryRun threw', { handler: opts.handler, entity: opts.entityId ? opts.entityId(ctx).value : ctx.campaign?.id, error: String(e) })
       return { ctx, action, res: null }
     }
   }))
