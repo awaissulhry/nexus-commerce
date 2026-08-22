@@ -482,7 +482,14 @@ one market's week. Now per market (DE reads 111 of 275, median 0.74%).
 matched 4 targets with real spend (two ES at €119.75 / €123.93) whose concentration is null, because
 **the engine answers `null lt 0.6` with TRUE** (measured). See the shared finding below.
 
-**🔴 P2 is BUILT AND VERIFIED BUT DELIBERATELY NOT COMMITTED.** A server preview that runs the engine
+**✅ P2 SHIPPED after all** — `7604c2c1d` (the shared `runDraftPreview` generalisation, landed on
+its own because KT-P's `previewKeywordTrackerRule` could not compile without it) + `8900512ed` (the
+SOV preview) + `7b3ba05db` (the suppression warning, deferred one commit while KT-P and I worked out
+which of us owned the `suppressed` row fields — neither of us could land `RuleBuilder.tsx` at the
+time, so I took them back and declared them for every keyword-bid preview). The paragraph below
+records why it was held for several hours, because the reasoning outlived the block:
+
+**🔴 P2 WAS BUILT AND VERIFIED BUT DELIBERATELY NOT COMMITTED.** A server preview that runs the engine
 (`ads-sov-preview.service.ts` + a `slug === 'sov'` dispatch + the builder's `isSov` branch). It needs
 `runDraftPreview` (PLC-P's) and `preview.terms[].suppressed` (KT-P's), **neither of which exists at
 HEAD** — committing it would have swept two live sessions' half-finished code into my commit, the
@@ -507,6 +514,11 @@ end-delimiter was one comment too far. Then temp-index plumbing + 3-arg `update-
 HEAD -- <paths>` to resync the shared index, and **push from a detached worktree at the new sha** so
 the pre-push hook gated the COMMIT, not the shared tree holding two sessions' WIP. Also: a programme's
 marker string appears in OTHER programmes' comments — ownership is the hunk's first added line.
+
+**✅ The placement-preview gap this unit flagged is CLOSED by its owner** (`6a091e7fe`) —
+`previewPlacementRule` shipped in `e1e78d6d9` with no caller, so a placement draft fell through to
+`previewBudgetRule` and returned `not_a_budget_draft`. Found by `grep -a`ing every routes file before
+adding the SOV branch; the restructured dispatch made their fix a three-line addition.
 
 **🔴 Shared finding — a not-measurable value passes `lt`/`lte`, on three context builders.** Found
 independently by three sessions the same day: budget 38 of 46 contexts `acos: null` (PLC-P) · SOV
