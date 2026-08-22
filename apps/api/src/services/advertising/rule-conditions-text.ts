@@ -63,7 +63,7 @@ const OPS: Record<string, string> = { gte: '≥', lte: '≤', gt: '>', lt: '<', 
 const BUILDER_UNITS: Record<string, 'eur' | 'pct' | ''> = {
   Sales: 'eur', Spend: 'eur', CPC: 'eur', 'Current Bid': 'eur',
   ACOS: 'pct', CTR: 'pct', CVR: 'pct', 'Budget Utilization': 'pct',
-  'Share of Voice': 'pct', 'Top Campaign Share': 'pct', 'Impression Share': 'pct',
+  'Share of Voice': 'pct', 'Campaign Concentration': 'pct',
 }
 const BUILDER_LABELS: Record<string, string> = { ACOS: 'ACoS' }
 

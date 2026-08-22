@@ -142,7 +142,6 @@ export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
   AD_GROUP_UNDERPERFORMING: W(14, 'buildAdGroupUnderperformContexts'),
   NEW_TO_BRAND_WINNER: W(14, 'buildNewToBrandWinnerContexts'),
   CAMPAIGN_NO_SALES: W(30, 'buildCampaignNoSalesContexts'),
-  SOV_BID: W(30, 'targetPerfMap via buildSovBidContexts'),
 
   // ── week-over-week comparisons, and NOT settled: each hand-rolls its own date maths and
   //    therefore counts today's partial day in the recent half ────────────────────────────────
@@ -158,6 +157,21 @@ export const TRIGGER_WINDOW: Record<string, RuleWindowSpec> = {
   AD_SPEND_PROFITABILITY_BREACH: { kind: 'stored', days: 30, settled: false, source: 'PROFITABILITY_WINDOW_DAYS' },
   /** Latest rank reading per keyword; its spend/ACOS side rides the 30-day `targetPerfMap`. */
   KEYWORD_RANK_BID: { kind: 'snapshot', days: 30, settled: true, source: 'buildKeywordRankBidContexts' },
+  /**
+   * 🔴 SOV-P1 (2026-08-22) — moved from `W(30, …)` to a SNAPSHOT, because it stopped being a span.
+   *
+   * The old entry declared 30 settled days. That was true of `targetPerfMap` (which does go through
+   * `ruleWindowBounds`) and FALSE of the share itself: `analyzeShareOfVoice` built `gte: now − 30d`
+   * with no upper bound and never called `ruleWindowBounds`, so the number the trigger is named
+   * after included the two days Amazon is still attributing. A `settled: true` covering both halves
+   * is the kind of averaged half-truth this table exists to stop.
+   *
+   * The share now comes from Amazon's own weekly search-query report, gated to the most recent
+   * COMPLETE week per market (`ads-sov-keyword-share.service.ts` → `chooseViewPeriod`). That is a
+   * reading, not a span, and its age is Amazon's publishing cadence rather than a constant — which
+   * is exactly what `snapshot` means here. `days: 30` continues to describe the spend/ACoS side.
+   */
+  SOV_BID: { kind: 'snapshot', days: 30, settled: true, source: 'keywordMarketShares + targetPerfMap via buildSovBidContexts' },
   /** Stock ageing, not advertising performance. */
   FBA_AGE_THRESHOLD_REACHED: { kind: 'none', days: null, settled: false, source: 'buildFbaAgeContexts' },
   /**
@@ -386,7 +400,12 @@ function describeTrigger(trigger: string, t: RuleWindowSpec, actionSuppliesWindo
     case 'stored':
       return `It is selected off the stored campaign columns (spend · sales · ACoS), whose window the sync does not record${t.days ? `, alongside a ${t.days}-day profit aggregate` : ''} — so how far back this rule looks is not a number this system knows.`
     case 'snapshot':
-      return `Rank is the latest reading rather than a span; the spend and ACoS beside it cover ${t.days} days.`
+      // Two triggers are snapshots and they snapshot different things. Branching on the trigger is
+      // the same move the `none` case makes for SCHEDULE: one sentence for two readings would have
+      // to say "rank" on a rule that reads a market share.
+      return trigger === 'SOV_BID'
+        ? `Share of Voice is a reading rather than a span — Amazon's most recent COMPLETE weekly search-query report for each market, so how old it is depends on when Amazon last published one, and a market with no complete week is skipped rather than measured on a partial one. The spend and ACoS beside it cover ${t.days} days.`
+        : `Rank is the latest reading rather than a span; the spend and ACoS beside it cover ${t.days} days.`
     case 'none':
       return trigger === 'SCHEDULE'
         ? '🔴 It runs on the clock and is handed no performance data at all — only the marketplace and its month-to-date spend. Nothing in this rule reads campaign or keyword history before it acts.'

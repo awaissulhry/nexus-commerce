@@ -1479,6 +1479,12 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return out
   })
 
+  // SOV-P3 — the Share of Voice tab's one-line census, from the same call the engine makes.
+  fastify.get('/advertising/sov/strip', async () => {
+    const { getSovStrip } = await import('../services/advertising/ads-sov-keyword-share.service.js')
+    return getSovStrip()
+  })
+
   fastify.get('/advertising/budget-rules/strip', async () => {
     const { getBudgetRulesStrip } = await import('../services/advertising/budget-grid.service.js')
     return getBudgetRulesStrip()

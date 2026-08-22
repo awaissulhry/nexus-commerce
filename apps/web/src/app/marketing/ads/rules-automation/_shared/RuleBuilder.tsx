@@ -60,6 +60,37 @@ const STARTER_TEMPLATES: Record<string, Array<{ name: string; desc: string; payl
       payload: { conditions: [{ conditions: [{ metric: 'PPC Orders', op: 'gte', value: '2' }, { metric: 'Clicks', op: 'gte', value: '10' }], action: { op: 'set', value: '' } }] },
     },
   ],
+  /**
+   * SOV-P4 — Share of Voice starters, sized to the REAL distribution rather than to round numbers.
+   *
+   * Measured on prod 2026-08-22 across the 793 enabled keywords that carry a share: median 2.40 %,
+   * 178 under 1 %, and the strongest position on any target 4.28 %. So "< 1 %" is the genuine tail
+   * (about a quarter of the measured population) and "≥ 3 %" is the top of it — thresholds picked
+   * from the data the tab's census strip prints, not invented.
+   *
+   * 🔴 These could not have existed before SOV-P1. On the old metric every one of these bars
+   * matched ~100 % of rows, so a starter would have shipped a rule that acted on everything.
+   *
+   * Every starter carries a spend floor: a share computed from a handful of impressions is noise,
+   * and a bid change is a real write.
+   */
+  sov: [
+    {
+      name: 'Claim the tail',
+      desc: 'Under 1% of the market with real spend behind it — where we are barely present and already paying',
+      payload: { conditions: [{ conditions: [{ metric: 'Share of Voice', op: 'lt', value: '1' }, { metric: 'Spend', op: 'gte', value: '5' }], action: { op: 'incPct', value: '15' } }] },
+    },
+    {
+      name: 'Stop overpaying where we already lead',
+      desc: 'At or above 3% of the market on ≥€10 spend — take the bid down and keep the position',
+      payload: { conditions: [{ conditions: [{ metric: 'Share of Voice', op: 'gte', value: '3' }, { metric: 'Spend', op: 'gte', value: '10' }], action: { op: 'decPct', value: '10' } }] },
+    },
+    {
+      name: 'Stop bidding against yourself',
+      desc: 'Under 60% campaign concentration — several of your own campaigns are competing for the same term',
+      payload: { conditions: [{ conditions: [{ metric: 'Campaign Concentration', op: 'lt', value: '60' }, { metric: 'Spend', op: 'gte', value: '5' }], action: { op: 'decPct', value: '10' } }] },
+    },
+  ],
   // NEG-P3 — every negative starter pairs its zero with an evidence floor, and none ships a
   // bare contains-list: a "blacklist" starter with an empty terms box would negate everything
   // the emitter surfaces. The blacklist RECIPE is: add your terms under Search Terms (contains)

@@ -24,7 +24,7 @@ const OFFERED: Record<string, string[]> = {
   bid: ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'],
   'keyword-harvesting': ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'],
   'negative-targeting': ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders'],
-  sov: ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'ACOS', 'Spend', 'Sales', 'Orders'],
+  sov: ['Share of Voice', 'Campaign Concentration', 'ACOS', 'Spend', 'Sales', 'Orders'],
   'keyword-tracker': ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend'],
 }
 

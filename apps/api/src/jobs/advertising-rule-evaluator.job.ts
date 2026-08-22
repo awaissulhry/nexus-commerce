@@ -1101,17 +1101,71 @@ async function buildRisingStarContexts() {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildRisingStarContexts failed', { error: (e as Error).message }); return [] }
 }
 
-// ── SOV_BID (SK4) — keyword bid adjustment driven by Share-of-Voice. For each positive keyword
-// target, attach the SOV of its matching query (analyzeShareOfVoice, matched by lowercased text)
-// so a rule can e.g. raise the bid where SOV is low. adTarget.id lets bid_apply act on the target.
-async function buildSovBidContexts() {
+// ── SOV_BID (SK4) — keyword bid adjustment driven by Share of Voice.
+//
+// 🔴 SOV-P1 (2026-08-22) — THE SHARE IS AMAZON'S NOW, NOT OURS.
+//
+// This builder used to take `sovPct` from `analyzeShareOfVoice()`, whose number is a query's
+// impressions ÷ our OWN account's total impressions over every query and every marketplace — an
+// impression MIX, not a share of any market. Measured on prod: median 0.0026 %, so
+// `Share of Voice < 50 %` matched 1000 of 1000 rows and `< 1 %` matched 986; and against Amazon's
+// own per-query share the two were NEGATIVELY rank-correlated (Spearman ρ = −0.2445 pooled,
+// negative in all four markets), because a head query is a big slice of us and a tiny slice of the
+// market while a tail query is the reverse. Our five strongest real positions all read ≈0.00x %,
+// so "raise the bid where Share of Voice is low" bid UP on every one of them.
+//
+// The share now comes from `SearchQueryPerformance` — Amazon Brand Analytics' own
+// `Σ impressionsBrand ÷ max impressionsTotal` per (marketplace × query), on the week the shared
+// `chooseViewPeriod` gate picks, refusing any market whose newest week is truncated. See
+// `ads-sov-keyword-share.service.ts` for the whole argument. Same thresholds now discriminate:
+// `< 1 %` matches 29.8 % of rows instead of 98.6 %.
+//
+// `adTarget.id` still lets `bid_apply` act on the target; nothing about the action changed.
+/**
+ * Exported for verification, exactly as `buildCampaignBudgetContexts` above is: a probe that
+ * re-implements the emitter to check it would be checking its own copy, which is how a verifier
+ * comes to pass on code the engine does not run.
+ */
+export async function buildSovBidContexts() {
   try {
+    const { keywordMarketShares, sovShareKey } = await import('../services/advertising/ads-sov-keyword-share.service.js')
     const { analyzeShareOfVoice } = await import('../services/advertising/ads-impression-share.service.js')
-    const sov = await analyzeShareOfVoice({ windowDays: 30, limit: 1000 })
-    if (!sov.rows.length) return []
-    const sovByQuery = new Map(sov.rows.map((r) => [r.query.trim().toLowerCase(), r]))
+    const shares = await keywordMarketShares()
+    if (!shares.byKey.size) return []
+
+    /**
+     * Campaign Concentration — how much of a query's impressions our single biggest campaign took.
+     * This one IS ours to compute (it is a fact about our own account), so it still comes from
+     * `analyzeShareOfVoice`, but with two corrections:
+     *   · PER MARKET — the single unscoped call summed four marketplaces into one aggregate and
+     *     handed a target the concentration of a query it never ran in (69 of 1,178 joins);
+     *   · NO `limit` — the 1,000-row slice of a 2,379-query aggregate silently dropped 102 targets.
+     */
+    const concentration = new Map<string, number>()
+    for (const marketplace of shares.measuredMarkets) {
+      const own = await analyzeShareOfVoice({ windowDays: 30, marketplace, limit: Number.MAX_SAFE_INTEGER })
+      for (const r of own.rows) concentration.set(sovShareKey(marketplace, r.query), r.topCampaignSharePct)
+    }
+
     const targets = await prisma.adTarget.findMany({
-      where: { kind: 'KEYWORD', isNegative: false },
+      /**
+       * 🔴 SOV-P2 — `status: 'ENABLED'` added, and it is a real narrowing.
+       *
+       * Without it this emitter offered ARCHIVED and PAUSED targets to the rule: measured on prod,
+       * 183 of the 1,178 it matched were ARCHIVED and 42 PAUSED. An archived target cannot serve
+       * and cannot be un-archived, so a bid written to one is a write that can never take effect —
+       * it spends the rule's daily write cap and its execution cap to change nothing.
+       *
+       * The honest P2 preview is what surfaced it. With the status finally on screen, the panel was
+       * offering a bid change on `motorradjacke herren [EXACT] ARCHIVED` — which is the preview
+       * doing its job: it showed what the engine would really do, and what the engine would really
+       * do was wrong.
+       *
+       * This matches the account's existing convention for target emitters —
+       * `buildUnderperformContexts` has always filtered `status: 'ENABLED'`; SOV was the departure.
+       * No live rule changes behaviour: 0 SOV rules exist.
+       */
+      where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED' },
       // P2.3 — carry the ad-group and campaign IDS. Without them contextIdentity() resolved
       // campaign/portfolio/product empty, so a SOV rule scoped to any grain but market silently
       // matched zero contexts forever — the rule looked armed and never fired.
@@ -1121,27 +1175,46 @@ async function buildSovBidContexts() {
     // P2.3 — perf comes from the daily table, never AdTarget's metric columns: those are
     // unpopulated account-wide (0 on all 2,129 keyword targets), so Spend/ACOS conditions could
     // never distinguish anything. 30-day window to match the SOV signal's own.
+    // 🔴 No silent cap. `take: 3000` above bounds the population; the old `.slice(0, 1000)` on the
+    // way out was a second, invisible bound on top of it. If the take itself ever binds, say so.
+    if (targets.length >= 3000) {
+      logger.warn('[ads-rule-evaluator] buildSovBidContexts hit its target cap — some keywords were not offered', { cap: 3000 })
+    }
     const perfByTarget = await targetPerfMap(targets.map((t) => t.id), 30)
     return targets
       .map((t) => {
-        const key = (t.expressionValue ?? '').trim().toLowerCase()
-        const s = key ? sovByQuery.get(key) : undefined
-        if (!s) return null // no SOV signal for this keyword → skip
+        const marketplace = t.adGroup?.campaign?.marketplace ?? null
+        if (!marketplace) return null // a target with no market cannot be matched to a market's share
+        const key = sovShareKey(marketplace, t.expressionValue)
+        const s = shares.byKey.get(key)
+        // No measured market share for this keyword IN ITS OWN MARKET → no context. Never a
+        // fabricated 0: "Amazon reported no market total" and "we hold none of this market" are
+        // different facts and this trigger must not collapse them.
+        if (!s) return null
         return {
           trigger: 'SOV_BID' as const,
-          marketplace: t.adGroup?.campaign?.marketplace ?? null,
+          marketplace,
           campaign: t.adGroup?.campaign?.id ? { id: t.adGroup.campaign.id } : undefined,
           adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
-            // sovPct / topSharePct are fractions (0..1); our within-account SOV IS impression share.
-            sovPct: s.sovPct, topSharePct: s.topCampaignSharePct, impressionSharePct: s.sovPct,
+            /**
+             * Fractions (0..1).
+             * · `sovPct` — Amazon's own share of THIS query's market that our ASINs took.
+             * · `topSharePct` — our biggest campaign's share of the impressions WE took on it
+             *   (cannibalisation). Null where we ran no ads on the query, which is a real state:
+             *   a query can have a market share and no campaign concentration.
+             * · `impressionSharePct` is GONE. It was assigned `s.sovPct` — the same number under a
+             *   second name, so two builder metrics were byte-identical. The metric is removed from
+             *   `SOV_METRIC` in the same change, so nothing compares against undefined.
+             */
+            sovPct: s.sharePct,
+            topSharePct: concentration.get(key) ?? null,
             ...(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
-      .slice(0, 1000)
   } catch (e) { logger.warn('[ads-rule-evaluator] buildSovBidContexts failed', { error: (e as Error).message }); return [] }
 }
 

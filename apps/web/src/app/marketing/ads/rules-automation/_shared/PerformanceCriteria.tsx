@@ -58,6 +58,34 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
   // BUD-P3 — a rule that chooses its own lookback (Bid, Budget) passes the chosen days so the
   // sentence states the window the engine will actually read, not the trigger's default.
   const d = days ?? PC_WINDOW_DAYS[slug]
+  /**
+   * 🔴 SOV-P1 — Share of Voice reads TWO windows and the generic sentence described neither.
+   *
+   * It used to render "Measured over the last 30 days … The most recent 2 days are still settling
+   * and are excluded." Verified false on prod 2026-08-22: the share came from `analyzeShareOfVoice`,
+   * which builds `gte: now − 30d` with no upper bound and never calls `ruleWindowBounds`, so D-1
+   * (19,536 impressions) was in. The sentence was true of the perf half and false of the half the
+   * rule is named after.
+   *
+   * Since P1 the share is Amazon's own weekly search-query report, gated to the most recent
+   * COMPLETE week per market — so its age is Amazon's to decide, not a number this form can state.
+   * The tab's census strip prints the actual week and its age per market; this says the shape.
+   */
+  if (slug === 'sov') {
+    return (
+      <p className="h10-pc-winnote">
+        <b>Share of Voice</b> is Amazon’s own measurement of how much of a search term’s market your
+        products took — read from the most recent <b>complete</b> weekly search-query report for each
+        market, so its age is whenever Amazon last published one. A market with no complete week is
+        skipped entirely rather than measured on a partial one.{' '}
+        <b>Campaign Concentration</b> is your biggest campaign’s share of the impressions <i>you</i>{' '}
+        took on that term, over the last 30 days including the 2 most recent.{' '}
+        Spend, Sales, Orders and ACOS cover the last 30 days, excluding the 2 still settling.{' '}
+        A keyword Amazon has not reported a market total for is not measured as zero — it is left
+        alone.
+      </p>
+    )
+  }
   return (
     <p className="h10-pc-winnote">
       {d == null
@@ -81,7 +109,7 @@ export const PC_METRIC_UNIT: Record<string, 'eur' | 'pct' | ''> = {
   ACOS: 'pct', CTR: 'pct', CVR: 'pct',
   ROAS: '', Clicks: '', Impressions: '', 'PPC Orders': '', Orders: '',
   'Budget Utilization': 'pct',
-  'Share of Voice': 'pct', 'Top Campaign Share': 'pct', 'Impression Share': 'pct',
+  'Share of Voice': 'pct', 'Campaign Concentration': 'pct',
   'Organic Rank': '', 'Sponsored Rank': '', 'Rank Change': '', 'Search Volume': '',
 }
 const METRICS_BASE = ['Sales', 'ACOS', 'ROAS', 'Clicks', 'Impressions', 'CVR', 'CTR', 'CPC', 'PPC Orders', 'Spend', 'Orders']
@@ -92,10 +120,18 @@ const METRICS_BUDGET = [...METRICS_BASE, 'Budget Utilization']
 // BP.P4 — H10's Bid list carries "Current Bid" (the target's live bid, in €). Bid rules only:
 // the KEYWORD_HIGH_ACOS context is the one that carries adTarget.bidCents.
 const METRICS_BID = [...METRICS_BASE, 'Current Bid']
-// P2.1 — 'Organic Share' and 'Sponsored Share' are REMOVED: no signal source exists anywhere
-// (analyzeShareOfVoice reports sovPct/topCampaignSharePct only), so a condition on either could
-// never match and the adapter now refuses rather than drops. Re-offer them when a source ships.
-const METRICS_SOV = ['Share of Voice', 'Top Campaign Share', 'Impression Share', 'ACOS', 'Spend', 'Sales', 'Orders']
+// P2.1 — 'Organic Share' and 'Sponsored Share' are REMOVED: no signal source exists anywhere,
+// so a condition on either could never match and the adapter now refuses rather than drops.
+// Re-offer them when a source ships.
+//
+// 🔴 SOV-P1 (2026-08-22) — two more changes, for the same reason one layer down. 'Impression Share'
+// is REMOVED because the context assigned it `s.sovPct`: it and 'Share of Voice' were the same
+// number under two names, so choosing between them changed nothing. 'Top Campaign Share' is now
+// 'Campaign Concentration' — the value is unchanged (our biggest campaign's share of the
+// impressions WE took on a query) but the old name read as a share of the market, which it never
+// was. 'Share of Voice' itself keeps its name because it is now Amazon's own per-query market
+// share (`ads-sov-keyword-share.service.ts`) rather than our account-wide impression mix.
+const METRICS_SOV = ['Share of Voice', 'Campaign Concentration', 'ACOS', 'Spend', 'Sales', 'Orders']
 const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'Share of Voice', 'ACOS', 'Spend']
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).

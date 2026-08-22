@@ -82,12 +82,33 @@ const ADTARGET_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 
   // carries adTarget.bidCents for it (one findMany over the emitted targets, in the emitter).
   'Current Bid': { field: 'adTarget.bidCents', conv: 'cents' },
 }
-// SOV_BID context → the target's Share-of-Voice signal (from analyzeShareOfVoice, matched per keyword)
-// plus the carried-over perf metrics. SOV fields are fractions (0..1).
+/**
+ * SOV_BID context → the target's share signals plus the carried-over perf metrics. Fractions (0..1).
+ *
+ * 🔴 SOV-P1 (2026-08-22) — two changes, both because a metric name must describe the number behind it.
+ *
+ * · **'Impression Share' REMOVED.** `buildSovBidContexts` assigned `impressionSharePct: s.sovPct`,
+ *   so it and 'Share of Voice' were byte-identical: two entries in the operator's metric list, one
+ *   value, and no way to tell from the builder that picking either changed nothing. Amazon's real
+ *   impression share does exist (`topOfSearchIS`) but it is CAMPAIGN-grain, and a campaign number
+ *   gating a keyword-grain action is a different metric wearing the same name — which is the defect
+ *   being removed, not a fix for it. Re-offer it when a keyword-grain source ships.
+ *
+ * · **'Top Campaign Share' → 'Campaign Concentration'.** The value is unchanged and correct: our
+ *   single biggest campaign's share of the impressions WE took on a query. The old name read as a
+ *   share of the market — it is a measure of our own cannibalisation. 769 of 1,000 queries sit at
+ *   exactly 100 % (one campaign), so `< 100 %` is the honest way to ask "are several of my campaigns
+ *   bidding against each other here?".
+ *
+ * 'Share of Voice' keeps its name because SOV-P1 made the name TRUE: it is now Amazon's own
+ * per-query market impression share (`ads-sov-keyword-share.service.ts`), not our impression mix.
+ *
+ * Safe to rename: 0 SOV rules exist on the account (W7 deleted the legacy 51 and none has been
+ * authored since), so no stored condition carries the old key.
+ */
 const SOV_METRIC: Record<string, { field: string; conv: 'frac' | 'cents' | 'plain' }> = {
   'Share of Voice': { field: 'adTarget.sovPct', conv: 'frac' },
-  'Top Campaign Share': { field: 'adTarget.topSharePct', conv: 'frac' },
-  'Impression Share': { field: 'adTarget.impressionSharePct', conv: 'frac' },
+  'Campaign Concentration': { field: 'adTarget.topSharePct', conv: 'frac' },
   ...ADTARGET_METRIC,
 }
 // KEYWORD_RANK_BID context → the target's organic/paid rank signal (from KeywordRank, latest per
