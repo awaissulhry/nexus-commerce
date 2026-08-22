@@ -16,6 +16,7 @@ vi.mock('../../db.js', () => ({
   default: {
     keywordRank: { count: vi.fn(), aggregate: vi.fn() },
     adTarget: { count: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    amazonAdsDailyPerformance: { aggregate: vi.fn() },
     campaign: { findMany: vi.fn() },
     $queryRawUnsafe: vi.fn(),
   },
@@ -76,6 +77,9 @@ const targetsAre = (rows: Array<{ id: string; bidCents: number; suppressedFromBi
   })
   db.adTarget.findMany.mockResolvedValue(rows.map((r) => ({
     id: r.id, expressionValue: r.text ?? r.id, suppressedFromBidCents: r.suppressedFromBidCents ?? null,
+    // KT-P6b — the refusal rows read their CURRENT bid from here; without it they render €0.00,
+    // which is the fabricated reading this panel exists to remove.
+    bidCents: r.bidCents,
   })) as never)
 }
 
@@ -118,6 +122,29 @@ describe('previewKeywordTrackerRule', () => {
     // a refusal is a ROW, not an omission — all three are still listed
     expect(out.rows).toHaveLength(3)
     expect(out.refusedSuppressed).toBe(2)
+  })
+
+  it('surfaces a NAMED refusal from a computed op as a row, with the real bid, never €0.00', async () => {
+    /**
+     * `BID_ACTIONS` is shared across the bid family and `isBidLike` includes rank, so a Keyword
+     * Tracker rule can select `Set Bid to CPC × (Target ACoS / Actual ACoS)`. On a target with
+     * spend and no attributed sales the handler refuses with `ok: false` and a sentence naming the
+     * missing signal — the majority outcome on a ratio op, not an edge case. It used to be
+     * `continue`d, so the panel listed a handful of rows out of hundreds and never said why.
+     */
+    ctxs.push(ctx('t1', 80))
+    targetsAre([{ id: 't1', bidCents: 44, text: 'motorradjacke' }])
+    const ratio = {
+      ...draft,
+      conditions: [{ conditions: [{ metric: 'Organic Rank', op: 'gt', value: '50' }], action: { op: 'targetAcos', value: '25' } }],
+    }
+    const out = await previewKeywordTrackerRule(ratio)
+
+    expect(out.rows).toHaveLength(1)
+    expect(out.rows[0].refused).toBeTruthy()
+    // 🔴 the real bid, never a fabricated zero — a €0.00 Current cell is the defect this panel exists to remove
+    expect(out.rows[0].currentEur).toBe(0.44)
+    expect(out.rows[0].proposedEur).toBe(0.44)
   })
 
   it('REFUSES a target whose campaign is bid-suppressed right now', async () => {

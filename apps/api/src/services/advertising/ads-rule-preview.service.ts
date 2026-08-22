@@ -652,14 +652,40 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
    */
   interface Parsed { ctx: RankCtx; currentCents: number; proposedCents: number; refused?: string }
   const parsed: Parsed[] = []
+  const refusedIds = new Map<string, string>()
   let noChange = 0
   const SKIP_REASON: Record<string, string> = {
     suppressed_flag: 'deliberately suppressed — this rule will not switch delivery back on',
     suppressed_by_bid: 'bids at or under 3¢, this account’s suppression convention — left alone',
     campaign_suppressed: 'its campaign’s bids are suppressed right now — a write here would be undone',
   }
+  /**
+   * 🔴 The invariant this loop keeps: **every matched context leaves as exactly one row or one
+   * `noChange`.** Nothing is dropped.
+   *
+   * Four shapes reach here and the first version handled two, so two vanished silently:
+   *   · `output.wouldChange` — the change
+   *   · `output.skipped`     — the suppression guard's refusal (KT-P6)
+   *   · `ok: false`          — a COMPUTED op naming the signal it lacked (KT-P6b, found by SOV-P)
+   *   · `res === null`       — the handler threw; `runDraftPreview` logs it and hands back null
+   *
+   * `BID_ACTIONS` is shared and `isBidLike` includes rank, so a rank rule can select `setCpc` /
+   * `targetAcos` / `revPerClick` / `curBidTargetAcos`, each of which refuses with `ok: false` and a
+   * sentence. Measured over 14 settled days: 237 of 259 clicked targets have spend and no
+   * attributed sales, so on a ratio op a refusal is the MAJORITY outcome — the panel would have
+   * listed a handful of rows out of hundreds and never said where the rest went.
+   */
   for (const { ctx, res } of run.settled) {
-    if (!res?.ok) continue
+    if (!res) {
+      refusedIds.set(String(ctx.adTarget.id), 'the bid action could not be evaluated for this target')
+      continue
+    }
+    if (res.ok === false) {
+      // The real bid is folded in below, where the decoration query has it — never a defaulted 0,
+      // because a €0.00 Current cell is the fabricated reading this panel exists to remove.
+      refusedIds.set(String(ctx.adTarget.id), res.error ?? 'the bid action refused this target')
+      continue
+    }
     if (res.output?.noChange) { noChange += 1; continue }
     const skipped = String(res.output?.skipped ?? '')
     if (skipped) {
@@ -679,12 +705,12 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
   // Both tests, counted separately, exactly as `kt6-bid-action.ts` counts them: the flag is
   // evidence and ≤3¢ is the house convention, and merging them hides the 141 targets the flag does
   // not know about ([[reference_ads_suppression_by_low_bid]]).
-  const ids = [...new Set(parsed.map((p) => p.ctx.adTarget.id))]
+  const ids = [...new Set([...parsed.map((p) => p.ctx.adTarget.id), ...refusedIds.keys()])]
   const [targets, suppressedCampaigns] = ids.length
     ? await Promise.all([
       prisma.adTarget.findMany({
         where: { id: { in: ids } },
-        select: { id: true, expressionValue: true, suppressedFromBidCents: true },
+        select: { id: true, expressionValue: true, suppressedFromBidCents: true, bidCents: true },
       }),
       prisma.campaign.findMany({
         where: { id: { in: [...new Set(parsed.map((p) => p.ctx.campaign.id))] }, bidsSuppressedAt: { not: null } },
@@ -693,6 +719,13 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
     ])
     : [[], []]
   const byId = new Map(targets.map((t) => [t.id, t]))
+  // The refusals join the rows here, where each one's REAL current bid is known.
+  for (const { ctx } of run.settled) {
+    const reason = refusedIds.get(String(ctx.adTarget.id))
+    if (!reason) continue
+    const cents = byId.get(String(ctx.adTarget.id))?.bidCents ?? 0
+    parsed.push({ ctx, currentCents: cents, proposedCents: cents, refused: reason })
+  }
   const suppressedCampaignIds = new Set(suppressedCampaigns.map((x) => x.id))
 
   const rows: KeywordTrackerPreviewRow[] = parsed.map((p) => {
