@@ -667,9 +667,26 @@ export function RuleBuilder({ slug }: { slug: string }) {
   ), [slug, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, protectDays, negationLevel, isCampaign, selCampaigns, isBudget, budgetFloor, budgetCeiling, isPlacement, placeFloor, placeCeiling, isBidLike, bidFloor, bidCeiling, isBid, lookbackDays, blocks])
   const [preview, setPreview] = useState<{
     open: boolean; loading: boolean
-    terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null; marketplace?: string | null; utilPct?: number | null; clamped?: boolean }>
+    terms: Array<{ term: string; orders?: number; spend?: number; clicks?: number; matchType?: string; current?: number; proposed?: number; organicRank?: number | null; sponsoredRank?: number | null; marketplace?: string | null; utilPct?: number | null; clamped?: boolean
+      /** SOV-P2 — the number that decided the row, and our own cannibalisation beside it. */
+      sovPct?: number
+      concentrationPct?: number | null
+      /** The handler REFUSED this one, naming the signal it lacked. A refusal is a row, not an omission. */
+      refused?: string
+      }>
     /** BUD-PP — the server's own census of this draft: what it considered and what survived. */
     budget?: { windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number } | null
+    /**
+     * SOV-P2 — the SOV draft's census. `eligible` / `notEnabled` / `selectedTargets` exist because a
+     * SOV rule can only see ENABLED keyword targets whose query Amazon reported a market total for:
+     * without them "23 of 135" reads as "112 were considered and rejected", when most were never
+     * offered at all.
+     */
+    sov?: {
+      windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
+      eligible: number; notEnabled: number; selectedTargets: number
+      periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string }>
+    } | null
     error?: string
   } | null>(null)
   // Live, read-only preview — budget shows current→proposed daily budgets, harvest converting terms, negative wasting terms.
@@ -723,6 +740,53 @@ export function RuleBuilder({ slug }: { slug: string }) {
       const ceil = placeCeiling.trim() ? Number(placeCeiling) : 900
       const clamp = (x: number) => Math.min(ceil, Math.max(floor, x))
       setPreview({ open: true, loading: false, terms: selCampaigns.map((c) => { const cur = c.placements?.[target as 'tos' | 'pdp' | 'ros'] ?? 0; return { term: c.name, current: cur, proposed: Math.round(clamp(apply(cur))) } }) })
+      return
+    }
+    /**
+     * 🔴 SOV-P2 — Share of Voice leaves the browser-arithmetic path below, for reasons measured on
+     * prod rather than reasoned about.
+     *
+     * Clicked on `DE_Auto_Close` with `IF Share of Voice < 5% → Set Bid €0.75`, the old path showed
+     * FOUR rows — SEARCH_CLOSE_MATCH, SEARCH_LOOSE_MATCH, PRODUCT_COMPLEMENTS, PRODUCT_SUBSTITUTES —
+     * every one `kind: 'AUTO'`, which `buildSovBidContexts` can never select, three of them PAUSED;
+     * and it omitted both of the campaign's real KEYWORD targets, because `/advertising/targets` has
+     * no `orderBy` and 1,655 of the account's 3,155 positive targets fall outside its 1,500-row page.
+     * It applied no criteria at all and read only `groups[0]`.
+     *
+     * `/automation-rules/preview` runs the real contexts, scope, translation, first-matching-block
+     * selection and `bid_apply` in dryRun ([[reference_preview_must_run_the_engine]]).
+     */
+    if (isSov) {
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actions: previewActions(), conditions: previewConditions(), scopeMarketplace: scopeMarket && scopeMarket !== 'all' ? scopeMarket : null }),
+        })
+        const j = await r.json().catch(() => null)
+        if (!r.ok || !j?.ok) {
+          setPreview({ open: true, loading: false, terms: [], sov: null, error: j?.untranslatable?.length
+            ? `No engine signal exists for: ${j.untranslatable.join(', ')}. Remove those conditions — the rule could not evaluate as written.`
+            : 'Preview is unavailable right now.' })
+          return
+        }
+        setPreview({
+          open: true, loading: false,
+          terms: (j.rows ?? []).map((x: { keyword: string; matchType: string | null; marketplace: string | null; sovPct: number; concentrationPct: number | null; currentEur: number; proposedEur: number; clamped: boolean; refused?: string }) => ({
+            term: x.keyword, matchType: x.matchType ?? undefined, marketplace: x.marketplace,
+            current: x.currentEur, proposed: x.proposedEur, clamped: x.clamped,
+            sovPct: x.sovPct, concentrationPct: x.concentrationPct, refused: x.refused,
+          })),
+          sov: {
+            windowDays: j.windowDays, selected: j.selected, measurable: j.measurable, inScope: j.inScope,
+            matched: j.matched, noChange: j.noChange, eligible: j.eligible, notEnabled: j.notEnabled,
+            selectedTargets: j.selectedTargets,
+            periods: j.periods ?? [],
+          },
+        })
+      } catch {
+        setPreview({ open: true, loading: false, terms: [], sov: null, error: 'Preview is unavailable right now.' })
+      }
       return
     }
     if (isBidLike) {
@@ -1511,20 +1575,60 @@ export function RuleBuilder({ slug }: { slug: string }) {
       </div>
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
-          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
-            <div className="ph"><b>{isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
-            <div className="psub">{isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? (preview?.budget && preview.budget.matched > 0
+          <div className="h10-rb-prev" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isSov ? 'Share of Voice preview' : isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
+            <div className="ph"><b>{isSov ? 'Share of Voice Preview — current → proposed' : isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><button type="button" onClick={() => setPreview(null)} aria-label="Close"><X size={18} /></button></div>
+            <div className="psub">{isSov ? (preview?.sov && preview.sov.matched > 0
+              ? `Live, read-only: the ${preview.sov.matched} keyword${preview.sov.matched === 1 ? '' : 's'} in your ${preview.sov.selected} selected campaign${preview.sov.selected === 1 ? '' : 's'} that ${preview.sov.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against Amazon’s own market share for each keyword.`
+              : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isRank ? 'Read-only: each keyword’s current organic / paid rank and the new bid it would get when this rule fires.' : isBidLike ? 'Read-only: the new bid each keyword/target in your selected campaigns would get when this rule fires.' : isPlacement ? `Read-only: the new ${(PLACEMENTS.find((p) => p.value === (groups[0]?.placeTarget ?? 'tos'))?.label ?? 'placement')} bid modifier each selected campaign would get when this rule fires.` : isBudget ? (preview?.budget && preview.budget.matched > 0
               ? `Live, read-only: the ${preview.budget.matched} of ${preview.budget.selected} selected campaigns that ${preview.budget.matched === 1 ? 'matches' : 'match'} these criteria right now, and the daily budget each would get. Evaluated by the rule engine over the last ${preview.budget.windowDays} settled days.`
               : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
-                : preview.terms.length === 0 ? <div className="pmsg">{isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? (preview.error ? preview.error
+                : preview.terms.length === 0 ? <div className="pmsg">{isSov ? (preview.error ? preview.error
+                  /* 🔴 Five different reasons for an empty SOV preview, and only one of them is
+                     "your criteria are too tight". "Never offered" and "considered and rejected"
+                     must never share a sentence. */
+                  : !preview.sov || preview.sov.selected === 0 ? 'Add campaigns above to preview their keyword bids.'
+                  : preview.sov.eligible === 0 ? `None of the ${preview.sov.selectedTargets} target${preview.sov.selectedTargets === 1 ? '' : 's'} in your selected campaigns is an enabled keyword, and a Share of Voice rule can only act on those. This is not a problem with your criteria.`
+                  : preview.sov.measurable === 0 ? `Amazon has not reported a market share for any of your ${preview.sov.eligible} enabled keyword${preview.sov.eligible === 1 ? '' : 's'} in these campaigns, so no Share of Voice rule can reach ${preview.sov.eligible === 1 ? 'it' : 'them'} yet.`
+                  : preview.sov.inScope === 0 ? `${preview.sov.measurable} of your keywords carry a market share, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
+                  : `No keyword matches these criteria right now — ${preview.sov.inScope} ${preview.sov.inScope === 1 ? 'was' : 'were'} measured against Amazon’s latest complete week. The rule is still valid; it will act when one does.`) : isBidLike ? 'Add campaigns above to preview their keyword bids.' : isPlacement ? 'Add campaigns above to preview their new placement modifiers.' : isBudget ? (preview.error ? preview.error
                   : !preview.budget || preview.budget.selected === 0 ? 'Add campaigns above to preview their new budgets.'
                   : preview.budget.measurable === 0 ? `${preview.budget.selected === 1 ? 'Your selected campaign has' : `None of your ${preview.budget.selected} selected campaigns has`} no ad spend in the last ${preview.budget.windowDays} settled days, so no budget rule can reach ${preview.budget.selected === 1 ? 'it' : 'them'} yet.`
                   : preview.budget.inScope === 0 ? `${preview.budget.measurable} of your selected campaigns ${preview.budget.measurable === 1 ? 'has' : 'have'} spend in the window, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
                   : `No campaign matches these criteria right now — ${preview.budget.inScope} campaign${preview.budget.inScope === 1 ? ' was' : 's were'} measured over the last ${preview.budget.windowDays} settled days. The rule is still valid; it will act when one does.`) : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
                 : isRank
                   ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Organic</span><span>Sponsored</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.organicRank != null ? `#${t.organicRank}` : '—'}</span><span>{t.sponsoredRank != null ? `#${t.sponsoredRank}` : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
+                : isSov
+                  ? (<>
+                    {/* Share of Voice is a COLUMN: it is the number that decided the row, and a
+                        current → proposed pair with the deciding metric off-screen is a cell the
+                        operator cannot check. */}
+                    <div className="ptable budp"><div className="pthr"><span>Keyword</span><span>Market</span><span>Share of Voice</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.marketplace ?? '—'}</span><span title={t.concentrationPct != null ? `${(t.concentrationPct * 100).toFixed(0)}% of the impressions you took on this term came from one campaign` : 'You ran no ads on this term in the last 30 days, so there is no campaign concentration'}>{t.sovPct != null ? (t.sovPct > 0 && t.sovPct < 0.0001 ? '<0.01%' : `${(t.sovPct * 100).toFixed(2)}%`) : '—'}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.refused ? '' : t.clamped ? '' : t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.refused ? <em className="pnote"> refused</em> : t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}{!t.refused && t.clamped ? <em className="pnote"> no change — guardrail</em> : null}</span></div>))}</div>
+                    {preview.sov && (
+                      <p className="pfoot">
+                        {preview.sov.selectedTargets} target{preview.sov.selectedTargets === 1 ? '' : 's'} selected · {preview.sov.eligible} enabled keyword{preview.sov.eligible === 1 ? '' : 's'}
+                        {preview.sov.notEnabled > 0 ? <> ({preview.sov.notEnabled} paused or archived, which this rule skips)</> : null}
+                        {' '}· {preview.sov.measurable} carry a market share · {preview.sov.inScope} in scope · <b>{preview.sov.matched} match</b>
+                        {preview.sov.noChange > 0 ? <> · {preview.sov.noChange} of them sit at a guardrail, where this rule does nothing</> : null}
+                        {/* ⏳ The suppression warning — which targets this rule would raise OUT of a
+                            deliberate suppression — lands in the follow-up. `suppressed` and
+                            `campaignSuppressed` on the row type belong to the Keyword Tracker
+                            preview that introduced them, and are being committed by that session;
+                            re-declaring them here would collide. The SERVER already returns
+                            suppressedMatched / suppressedUnflaggedMatched / campaignSuppressedMatched,
+                            so this is one render away. */}
+                        {/* The week, always — a share is a reading from a dated report, not a
+                            setting, and its age is Amazon's to decide. */}
+                        <span className="phour">
+                          {preview.sov.periods.filter((x) => !x.refused).length > 0
+                            ? `Amazon’s week: ${preview.sov.periods.filter((x) => !x.refused).map((x) => `${x.marketplace} ${x.week}${x.ageDays != null ? ` (${x.ageDays}d old)` : ''}`).join(' · ')}.`
+                            : 'No market has a complete week of Amazon search-query data right now.'}
+                          {preview.sov.periods.some((x) => x.refused) ? ` ${preview.sov.periods.filter((x) => x.refused).map((x) => x.marketplace).join('/')} skipped — Amazon has not published a complete week, and a partial one would move bids on a denominator that is still being filled.` : ''}
+                        </span>
+                      </p>
+                    )}
+                  </>)
                 : isBidLike
                   ? (<div className="ptable bud"><div className="pthr"><span>Keyword / Target</span><span>Current</span><span>New Bid</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.current != null ? `€${t.current.toFixed(2)}` : '—'}</span><span className={`newb ${t.proposed != null && t.current != null ? (t.proposed > t.current ? 'up' : t.proposed < t.current ? 'down' : '') : ''}`}>{t.proposed != null ? `€${t.proposed.toFixed(2)}` : '—'}</span></div>))}</div>)
                 : isPlacement

@@ -1490,6 +1490,23 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post('/advertising/automation-rules/preview', async (request, reply) => {
     const body = (request.body ?? {}) as { actions?: unknown; conditions?: unknown; scopeMarketplace?: string | null }
+    /**
+     * SOV-P2 — dispatched on the draft's OWN slug (`actions[0].type`, the type a stored rule
+     * carries), so the dispatch key is the rule's identity rather than a second contract.
+     *
+     * ⚠️ `previewPlacementRule` exists in the service but has NO caller at HEAD — grep -a'ed every
+     * routes file. Its dispatch branch is still uncommitted, so a placement draft currently falls
+     * through to `previewBudgetRule` and comes back `not_a_budget_draft`. That branch is the
+     * Placement session's to land; this comment is here so the gap is visible rather than
+     * rediscovered.
+     */
+    const slug = String((Array.isArray(body.actions) ? (body.actions[0] as { type?: unknown })?.type : '') ?? '')
+    if (slug === 'sov') {
+      const { previewSovRule } = await import('../services/advertising/ads-sov-preview.service.js')
+      const out = await previewSovRule(body)
+      if (!out.ok) reply.code(400)
+      return out
+    }
     const { previewBudgetRule } = await import('../services/advertising/ads-rule-preview.service.js')
     const out = await previewBudgetRule(body)
     if (!out.ok) reply.code(400)
