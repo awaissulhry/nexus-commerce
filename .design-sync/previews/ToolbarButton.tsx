@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { ToolbarButton, ToolbarDivider } from '@nexus/design-system'
 
 const Icon = ({ children }: { children: React.ReactNode }) => (
@@ -45,6 +46,19 @@ const RefreshIcon = () => (
   </Icon>
 )
 
+// The card harness clips overlays: `.ds-cell` (lib/emit.mjs) sets `overflow:hidden`,
+// so a tooltip that opens ABOVE its trigger — `.h10-ds-tooltip > .tip` is
+// `bottom: calc(100% + 8px)` — is cut off by the cell's top edge on hover. The
+// static capture never showed it because the tip only exists while hovered or
+// focused; it is visible to anyone browsing the card. Scoped to this component's
+// own page, so it cannot affect another card.
+if (typeof document !== 'undefined' && !document.getElementById('tbtn-overflow')) {
+  const st = document.createElement('style')
+  st.id = 'tbtn-overflow'
+  st.textContent = '.ds-cell{overflow:visible}'
+  document.head.appendChild(st)
+}
+
 const bar: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -85,3 +99,22 @@ export const WithBadge = () => (
     <ToolbarButton icon={<DownloadIcon />} label="Export" description="128 queued exports" badge={128} />
   </div>
 )
+
+/** The hover tooltip, held open so the card shows what a user actually sees.
+ *  ToolbarButton has a closed prop list — no `autoFocus` to forward — and its tip
+ *  is revealed by the DS's own `:focus-within` rule, so the preview moves focus on
+ *  mount rather than faking the tip with markup. */
+export const WithTooltip = () => {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>('button.h10-ds-tbtn')?.focus()
+  }, [])
+  return (
+    // The tip is centred on its trigger (`left:50%; translateX(-50%)`), so a
+    // trigger flush against the cell's left edge pushes it off-viewport. Indent.
+    <div ref={ref} style={{ ...bar, marginTop: 56, marginLeft: 96 }}>
+      <ToolbarButton icon={<FilterIcon />} label="Filter" description="Filter rows by condition" shortcut="⌘K" />
+      <ToolbarButton icon={<ColumnsIcon />} label="Columns" description="Show, hide and reorder columns" shortcut="⌘G" />
+    </div>
+  )
+}

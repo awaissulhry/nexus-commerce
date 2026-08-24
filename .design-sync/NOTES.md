@@ -282,3 +282,33 @@ document. Always open the default card before declaring an overlay component don
   Calling it twice in a row silently drops already-fixed components out of `cfg.dtsPropsFor`.
 - Grades live in the gitignored `.design-sync/.cache/`; the durable carry-forward is the
   uploaded `_ds_sync.json`. A fresh clone re-verifies only what the anchor says changed.
+
+## 🔴 The card harness clips every in-flow overlay
+
+`.ds-cell` in the generated card HTML (`lib/emit.mjs`) is
+`{... overflow:hidden; transform:translateZ(0)}`. Any overlay that escapes its trigger's box is
+cut off. **Only `InfoTip` survives it**, because InfoTip portals to `<body>`; every other DS
+overlay renders in-flow:
+
+- opens **ABOVE** (needs headroom): `.h10-ds-tooltip > .tip`, `.h10-ds-hovercard > .hc`
+- opens **BELOW**: `.h10-ds-menu`, `.h10-ds-ms-pop`, `.h10-ds-combo-pop`, `.h10-ds-dp-pop`,
+  `.h10-ds-taginput-menu`, `.h10-ds-acct-panel`
+
+**`cardMode: "single"` does NOT fix it** — that layout still wraps the story in `.ds-cell`.
+
+**The fix, in each affected preview:** inject `.ds-cell{overflow:visible}` at module scope. Each
+component is its own HTML document, so the override cannot reach another card. Applied to the
+eleven overlay components; verified no cell collides with a neighbour afterwards.
+
+Two things this cost, both worth remembering:
+
+- **Static captures cannot see it.** A tooltip exists only while hovered or focused, so every
+  screenshot graded `good` while the live card was cropping. The operator found it by *using* the
+  pane. Any overlay whose open state is not forced is ungraded, not verified.
+- **An overlay centred on its trigger clips sideways too.** `.h10-ds-tooltip > .tip` is
+  `left:50%; translateX(-50%)`, so a trigger flush against the cell's left edge pushes the bubble
+  off-viewport — fixed by indenting the trigger, not by more overflow.
+
+`ToolbarButton` has a **closed prop list** — no rest spread — so `autoFocus` is silently dropped.
+Its tip is revealed by the DS's own `:focus-within`, so its preview focuses the button on mount
+(`ref.current?.querySelector('button.h10-ds-tbtn')?.focus()`) rather than faking the tip in markup.
