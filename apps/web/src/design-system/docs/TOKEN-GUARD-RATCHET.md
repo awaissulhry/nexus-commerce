@@ -1,13 +1,54 @@
 # The token-guard ratchet — holding the line while Phase 9 runs
 
-**Status:** PROPOSAL — awaiting approval. Not a sub-phase: a **hard rail** that spans 9.1, 9.4
-and 9.5, and the thing that stops each of them leaking back. Slots into `MIGRATION.md` §"Hard
-rails (every sub-phase)".
+**Status:** PROPOSAL — awaiting approval.
+
+**Revised 2026-08-24: `scripts/ds-conformance-guard.mjs` already IS this ratchet.** The first draft
+described building one. It exists, it runs in pre-push, and it already counts two of the four
+checks. §0 replaces §4–§5; the real gap is three narrow extensions.
+
+Not a sub-phase: a **hard rail** that spans 9.1, 9.4 and 9.5, and the thing that stops each of them
+leaking back. Slots into `MIGRATION.md` §"Hard rails (every sub-phase)".
 
 **One sentence:** token adherence is 74.8% inside the design system and 5.5% in the ads console
 for tokens that exist and are reachable from both — the difference is that the DS is governed by
 `token-guard` and nothing else is, so every codemod Phase 9 runs will refill at the rate new code
 lands unless the guard grows a scope beyond `design-system/`.
+
+---
+
+## 0. 🔴 The ratchet already exists — this is an extension, not a build
+
+`scripts/ds-conformance-guard.mjs` (Wave 1, owner directive 2026-07-04) runs in `.githooks/pre-push`
+and already has every mechanism §4 below proposes: a committed baseline
+(`scripts/ds-conformance-baseline.json`, 39 sections), per-section counts, `--census` / `--baseline`
+/ `--check` / `--manifest <section>` modes, an allowlist, and the exact semantics —
+*"waves lower these, pushes may never raise them."*
+
+It already counts two of the four checks proposed here: **inline-style hex colours** and
+**inline-style `fontSize`** (plus native `<select>` and `<input type="date">`).
+
+So the genuine gap is three things, not a new tool:
+
+| # | gap | why it matters |
+|---|---|---|
+| 1 | **It scans `.tsx` only** (`p.endsWith('.tsx')`) | Inline styles are 477 of the 10,804 declaration-position hexes. **The other 10,327 are in `.css` files and are invisible to it.** This is the single biggest miss. |
+| 2 | **No spacing or radius check** | 4,961 + 1,619 lines. Radius is the 4%-adherence control group from §1. |
+| 3 | **`marketing/ads/` is allowlisted** (`ALLOW`, line 33) | That is where 14,493 of the 17,815 lines are — but it is a deliberate policy call ("the Amazon H10 pixel-match world"), not an oversight, and Phase 9.1 changes it anyway. **Do not quietly un-allowlist it.** |
+
+Rewrite §4 and §5 accordingly: extend the existing guard's file walk to `.css`, add two counters,
+and leave the allowlist policy to whoever owns Wave 1.
+
+### 0a. This guard and Phase 9.1 collide
+
+The `ebay.css ⊆ ads.css` palette check compares **literal hex sets**. Phase 9.1 rewrites `ads.css`
+to reference `var(--h10-*)` instead of hex — at which point the Amazon palette set empties and the
+check either passes vacuously or fails everything, depending on which file tokenizes first.
+Nobody has flagged this. It needs resolving as part of 9.1, not after.
+
+This coupling is already fragile: the split in `f4ba90df1` moved `#b87503` from `ads.css` into
+`_shared/shared-shell.css` and the guard failed the push, correctly — `ebay.css`'s conformance
+depended on which file a colour happened to live in. Fixed by reading the palette from both files,
+but the underlying design assumes hex literals forever.
 
 ---
 
