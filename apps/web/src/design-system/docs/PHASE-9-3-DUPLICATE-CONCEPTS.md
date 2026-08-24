@@ -349,6 +349,91 @@ and its 20 call sites inherit reorder from `AdsDataGrid`, so building it first i
 So it is cheap under two of three outcomes, not free of the decision — an earlier revision of this
 appendix claimed the latter and was wrong.
 
+### ✅ DECIDED 2026-08-25 — option 3, with a requirement attached
+
+The operator chose **promote the ads grid, retire the DS one**, and attached a requirement that is
+not satisfied by either grid today (see the next section). Two measurements taken before the call
+corrected this appendix and both pointed the same way.
+
+**Correction 1 — the "two-way merge" was overstated.** Of the three `Column<T>` fields this doc
+said `GridColumn<T>` lacks, **two are renames**:
+
+| DS `Column<T>` | ads `GridColumn<T>` | |
+|---|---|---|
+| `align` | `metric` — *"right-aligned numeric look (default true); false renders a left settings cell"* | same concept, DS's 3-value is richer than ads' boolean |
+| `stickyRight` | `freezeRight` — same `width` requirement | **identical** |
+| `sticky` (per-column left pin) | first column pinned positionally (`fzFirst`) | **the one genuine gap** |
+
+So the port is **one field plus widening `metric` → `align`**, not 43 props of new feature work.
+
+**Correction 2 — the DS grid is not the "simple table" its size suggests.** 10 of its 14 call sites
+already hand-roll the chrome the ads grid has built in: `SyncControlClient` carries 17 pager
+references, `SyncProductsGrid` and `HistoryClient` 11 each, `ProductsNextClient` hand-rolls toolbar,
+filters, pager *and* search. Only `stock/locations`, `stock/import`, `fleet/map/EntityListView` and
+`pricing/volume-pricing` are bare tables. Migration therefore **deletes** code at 10 of the 20 sites
+rather than burdening them.
+
+**A fourth option was considered and killed:** keep `DataGrid` as the primitive and layer the chrome
+on top. The divergence is not chrome, it is **cell-level** — every ads cell is
+`cellWithPencil(row, key, c.render(row))` with an edit-mode override, a `metric`-derived class and
+freeze styling, plus interleaved group rows and a distinct first-column concept. A `DataGrid` that
+grew all of that *is* `AdsDataGrid`, so option 4 collapses into option 2.
+
+**Two conditions on the promotion:** it lands in `patterns/`, not as a primitive — 967 lines is not
+a primitive, and the DS already has that layer — and it is **renamed**. Nothing about it is
+ads-specific except its vocabulary; `WorkspaceGrid` is what it actually is.
+
+### 🔴 The requirement: pinning must become an OPERATOR preference, not developer config
+
+Operator, 2026-08-25: *"I want the ability to be able to stick the column and lock the columns and
+positions… myself, or freeze them"*, and to arrange them by dragging or through the Customise
+dialog.
+
+**Nothing in the codebase does this today, on either side of the merge.** Measured: no surface
+anywhere exposes per-column pinning to the operator (the `togglePin` hits in the app are pinned
+notes, guardrail pins, the placement inspector and the nav rail — none is a column). What exists is:
+
+| | who decides | grain |
+|---|---|---|
+| DS `Column.sticky` / `.stickyRight` | **developer**, at the call site | per column |
+| ads `GridColumn.freezeRight` | **developer**, at the call site | per column |
+| `PreferencesValue.stickyFirstColumn` / `.stickyLastColumn` | operator | **first/last only**, on/off |
+
+So the operator can only say *"honour the pins the developer chose, or don't"*. They cannot say
+*"pin THIS column"*.
+
+**The model that satisfies it — three bands, one ordered list.** This is the same move `AdsDataGrid`
+already made for order and visibility (SGX3: *"order and stickiness are preferences here, not fixed
+component config"*), extended to one more axis:
+
+```
+[ left-pinned, operator order ] [ scrolling, operator order ] [ right-pinned, operator order ]
+```
+
+- The pref becomes one ordered array carrying all three facts per column —
+  `{ key, visible, pin: 'left' | 'right' | null }` — the natural extension of today's
+  `visibleColumns: string[]`, which already carries set AND order for exactly this reason.
+- In the dialog each row gets a pin control; setting a pin **moves the row into that band**, and
+  drag reorders **within** a band.
+- The developer's `sticky` / `stickyRight` / `freezeRight` become the **default** for that
+  preference rather than fixed config — the same demotion order and visibility already got.
+
+**The one hard part: sticky offsets need widths.** Both grids stack pinned columns by accumulating
+`width`, which presumes pinned columns are contiguous at an edge AND have a numeric width — the ads
+grid states it outright (*"fixed width in px — required with freezeRight"*). Once the operator can
+pin any column, a column with no declared `width` can be pinned, and the offset maths has nothing to
+add. Either pinning is offered only on columns declaring a width (honest, and the disabled control
+must say why — see [[reference_disabled_control_cannot_explain]]), or widths are measured at
+runtime. **Decide this before building**: it is the difference between a working feature and a
+silently misaligned header.
+
+**This supersedes the locking rule shipped on 2026-08-25.** `DataGrid`'s new `customizable` mode
+locks pinned columns out of the drag region, which was correct *only while* pinning was positional
+and developer-owned — a developer-pinned column dragged into the middle would pin over its
+neighbours. Under the band model a pinned column is draggable **within its band**, and `locked`
+narrows to its real meaning: structurally fixed columns, like the ads grid's first column or an
+actions cell.
+
 **Until it is decided**, `.design-sync/conventions.md` tells the claude.ai/design agent that
 `DataGrid` is the product-table workhorse and explicitly **not** the ads console's grid, so designs
 for that surface compose the missing affordances rather than assuming them.
