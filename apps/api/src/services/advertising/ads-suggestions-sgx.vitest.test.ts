@@ -140,3 +140,39 @@ describe('ruleWindowOf — the window that stops a Reason contradicting its own 
     expect(ruleWindowOf(null)).toBeNull()
   })
 })
+
+/**
+ * SGX — the Recommendations feed's own two honesty defects, measured on the live feed:
+ * CTR read "—" on all ten `graduate` rows while Impressions (131,620) and Clicks (257) sat on
+ * the same row, and every builder's figure shared one column labelled "estimated monthly impact".
+ */
+describe('recommendations — derived metrics and what the impact figure MEANS', () => {
+  it('derives a ratio whenever the primitives are on the row', async () => {
+    const { __test_withDerived: withDerived } = await import('./ads-recommendations.service.js')
+    // the exact prod graduate row that rendered CTR as "—"
+    expect(withDerived({ impressions: 131620, clicks: 257, spendCents: 20404, salesCents: 66553, orders: 8 }))
+      .toEqual({
+        impressions: 131620, clicks: 257, spendCents: 20404, salesCents: 66553, orders: 8,
+        ctr: 257 / 131620, cvr: 8 / 257, acos: 20404 / 66553, roas: 66553 / 20404,
+      })
+  })
+
+  it('keeps an unmeasurable ratio null rather than inventing a zero', async () => {
+    const { __test_withDerived: withDerived } = await import('./ads-recommendations.service.js')
+    const m = withDerived({ impressions: 0, clicks: 0, spendCents: 500, salesCents: 0, orders: 0 })
+    expect(m.ctr).toBeNull()   // no impressions — CTR has no denominator
+    expect(m.cvr).toBeNull()   // no clicks
+    expect(m.acos).toBeNull()  // spend with zero sales: the cell shows "— ●red", never a number
+    expect(m.roas).toBe(0)     // zero sales over real spend IS zero, and reads red
+  })
+
+  it('never overwrites a ratio a builder computed itself', async () => {
+    const { __test_withDerived: withDerived } = await import('./ads-recommendations.service.js')
+    expect(withDerived({ impressions: 100, clicks: 5, ctr: 0.42 }).ctr).toBe(0.42)
+  })
+
+  it('leaves absent primitives absent — a missing metric is not a zero', async () => {
+    const { __test_withDerived: withDerived } = await import('./ads-recommendations.service.js')
+    expect(withDerived({ spendCents: 100 })).toEqual({ spendCents: 100 })
+  })
+})

@@ -49,6 +49,8 @@ type RecSeverity = 'high' | 'medium' | 'low'
 interface Recommendation {
   id: string; category: RecCategory; severity: RecSeverity; title: string; detail: string
   estImpactCents: number; apply: { kind: string; payload: unknown } | null; metrics?: RecMetrics
+  /** SGX — how `estImpactCents` should be READ; the builders put five different things in it */
+  impactKind?: 'recoverable' | 'redirect' | 'atStake' | 'budgetShift' | 'estimate'
 }
 interface RecResult {
   generatedAt: string; windowDays: number; counts: Record<RecCategory, number>
@@ -259,12 +261,36 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
     { key: 'cat', label: 'Strategy', metric: false, sortable: true, tip: 'The engine that produced this recommendation.', sortValue: (r) => CAT_LABEL[r.category], render: (r) => <Tag tone="neutral">{CAT_LABEL[r.category]}</Tag> },
     { key: 'detail', label: 'Detail', metric: false, sortable: false, tip: 'The recommendation’s own explanation — the full text is on the row and in its drawer.', render: (r) => <span className="h10-sug-recdet" title={r.detail}>{r.detail}</span> },
     {
+      /**
+       * 🔴 SGX — one column, five different kinds of number. It used to render all of them as
+       * "estimated monthly € impact if applied", which is false for the largest of them: a
+       * `graduate` row's figure is the sales the term has ALREADY earned, so €665.53 read as
+       * "+€665.53/month" when graduating only moves that revenue into a managed target. The ♦
+       * and the per-row reading are the family tabs' StakeCell treatment, brought here.
+       */
       key: 'impact', label: 'Impact €/mo', metric: true, sortable: true,
-      tip: 'Estimated monthly € impact if applied — the feed is ranked by it. Share-of-voice signals carry no € estimate.',
+      tip: 'What this recommendation puts in play each month — and NOT all the same kind of number: ♦ marks spend that bought nothing (cutting it costs no revenue), a plain figure on a graduate row is revenue that already exists and would simply be taken over by a managed keyword, and the rest are spend that would be redirected or a modelled estimate. Hover any row for its own reading. Share-of-voice signals carry no € estimate.',
       sortValue: (r) => (r.category !== 'sov' && r.estImpactCents > 0 ? r.estImpactCents : null),
-      render: (r) => (r.category !== 'sov' && r.estImpactCents > 0
-        ? <span className="h10-sug-num h10-sug-sugval">{eur(r.estImpactCents)}</span>
-        : dash(r.category === 'sov' ? 'Share-of-voice recommendations carry no € estimate' : 'No € estimate for this recommendation')),
+      render: (r) => {
+        if (r.category === 'sov' || r.estImpactCents <= 0) {
+          return dash(r.category === 'sov' ? 'Share-of-voice recommendations carry no € estimate' : 'No € estimate for this recommendation')
+        }
+        const money = eur(r.estImpactCents)
+        const READ: Record<string, { cls: string; title: string }> = {
+          recoverable: { cls: 'waste', title: `${money} of spend that produced no sales at all — cutting it costs you nothing you are currently earning.` },
+          redirect: { cls: '', title: `${money} of spend this would REDIRECT, not save. It is currently earning, so moving it trades revenue along with the spend.` },
+          atStake: { cls: '', title: `${money} of sales this term ALREADY earns. Graduating it does not add that revenue — it moves it into a keyword you control, where you can bid it deliberately.` },
+          budgetShift: { cls: '', title: `${money} a month of budget this would move. Whether it earns anything depends on what the campaign does with it.` },
+          estimate: { cls: '', title: `${money} is a modelled estimate, not a measurement — treat it as a ranking weight rather than a forecast.` },
+        }
+        const k = READ[r.impactKind ?? ''] ?? { cls: '', title: `${money} a month, as the engine ranks it.` }
+        return (
+          <span className={`h10-sug-stake ${k.cls}`} title={k.title}>
+            {k.cls === 'waste' && <span className="dia" aria-label="pure waste">♦</span>}
+            {money}
+          </span>
+        )
+      },
     },
     { key: 'impr', label: 'Impressions', metric: true, sortable: true, tip: metricTip('Impressions'), sortValue: (r) => r.metrics?.impressions ?? null, render: (r) => rInt(r.metrics?.impressions) },
     { key: 'clicks', label: 'Clicks', metric: true, sortable: true, tip: metricTip('Clicks'), sortValue: (r) => r.metrics?.clicks ?? null, render: (r) => rInt(r.metrics?.clicks) },
@@ -459,7 +485,19 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
             {detail.category !== 'sov' && detail.estImpactCents > 0 && (
               <>
                 <span className="rec-fconn" />
-                <div className="rec-fnode"><span className="ey">Estimated impact</span><span className="ti">{eur2(detail.estImpactCents / 100)} <ChevronRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> potential / month</span></div>
+                {/* SGX — the eyebrow now names the KIND. "potential / month" was a promise the
+                    number could not keep on a graduate row, where it is revenue that already exists. */}
+                <div className="rec-fnode">
+                  <span className="ey">{{
+                    recoverable: 'Recoverable waste', redirect: 'Spend redirected',
+                    atStake: 'Revenue at stake', budgetShift: 'Budget moved', estimate: 'Estimated impact',
+                  }[detail.impactKind ?? 'estimate'] ?? 'Estimated impact'}</span>
+                  <span className="ti">{eur2(detail.estImpactCents / 100)} <ChevronRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> {{
+                    recoverable: 'spend that bought nothing', redirect: 'currently earning — moving it trades',
+                    atStake: 'already earned; this takes it over', budgetShift: 'per month of budget',
+                    estimate: 'modelled, not measured',
+                  }[detail.impactKind ?? 'estimate'] ?? 'potential / month'}</span>
+                </div>
               </>
             )}
           </div>

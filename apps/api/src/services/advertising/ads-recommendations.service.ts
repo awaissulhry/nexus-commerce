@@ -26,6 +26,28 @@ export interface RecMetrics {
   spendCents?: number; salesCents?: number; orders?: number
   acos?: number | null; roas?: number | null; cvr?: number | null
 }
+/**
+ * 🔴 SGX (2026-08-24) — what `estImpactCents` MEANS, per recommendation.
+ *
+ * The feed ranks on one number and the page renders it in one column labelled "Impact €/mo —
+ * estimated monthly € impact if applied". But the builders below put five different things in
+ * it, and one of them is not an impact at all: a `graduate` rec's figure is the sales the term
+ * has ALREADY earned in its auto campaign, so €665.53 on screen read as "+€665.53/month" when
+ * graduating only moves existing revenue into a managed target.
+ *
+ * The family tabs solved this exact problem years earlier — `StakeCell` marks pure waste with ♦
+ * and its tooltip says a redirect is "a trade, not a saving". This is that distinction, made
+ * available to the Recommendations tab so its one column can say which kind of number it is
+ * holding instead of flattening all five into a promise.
+ *
+ *   recoverable  spend that bought nothing — cutting it costs no revenue
+ *   redirect     spend that WOULD move; it is currently earning, so moving it trades
+ *   atStake      revenue already flowing that the change takes over rather than adds
+ *   budgetShift  a daily budget delta, annualised to a month
+ *   estimate     a modelled guess, not a measurement
+ */
+export type RecImpactKind = 'recoverable' | 'redirect' | 'atStake' | 'budgetShift' | 'estimate'
+
 export interface Recommendation {
   id: string
   category: RecCategory
@@ -33,8 +55,31 @@ export interface Recommendation {
   title: string
   detail: string
   estImpactCents: number // ranking weight (potential saved/earned)
+  /** SGX — how `estImpactCents` should be READ. Absent on rows that carry no figure. */
+  impactKind?: RecImpactKind
   apply: { kind: string; payload: unknown } | null
   metrics?: RecMetrics // supporting data that justifies the recommendation
+}
+
+/**
+ * 🔴 SGX — derive every ratio the primitives support, in ONE place.
+ *
+ * Each builder below hand-rolled its own metrics object and they disagreed about which ratios to
+ * bother with: `negative` computed `ctr`, `graduate` did not — so the CTR column read "—" on all
+ * ten graduate rows while Impressions (131,620) and Clicks (257) sat right beside it on the same
+ * row. That is a column claiming "not reported" about a number two cells away.
+ *
+ * Only ever COMPUTES what is missing, and reproduces the same honest null when the denominator is
+ * zero — an absent ratio and an unmeasurable one both render "—", but they must reach the page
+ * for the same reason.
+ */
+function withDerived(m: RecMetrics): RecMetrics {
+  const o: RecMetrics = { ...m }
+  if (o.ctr == null && o.impressions != null && o.clicks != null) o.ctr = o.impressions > 0 ? o.clicks / o.impressions : null
+  if (o.cvr == null && o.clicks != null && o.orders != null) o.cvr = o.clicks > 0 ? o.orders / o.clicks : null
+  if (o.acos == null && o.spendCents != null && o.salesCents != null) o.acos = o.salesCents > 0 ? o.spendCents / o.salesCents : null
+  if (o.roas == null && o.spendCents != null && o.salesCents != null) o.roas = o.spendCents > 0 ? o.salesCents / o.spendCents : null
+  return o
 }
 export interface RecommendationsResult {
   generatedAt: string
@@ -45,6 +90,10 @@ export interface RecommendationsResult {
   /** SG.9 — how many recommendations the operator has muted (the Muted view's pill) */
   mutedCount?: number
 }
+
+/** SGX — `withDerived` is pure and load-bearing for what every metric column shows; exported
+ *  under a test-only name so the suite can pin it without widening the service's real surface. */
+export const __test_withDerived = withDerived
 
 export async function buildRecommendations(opts: { windowDays?: number; targetAcos?: number; includeMuted?: boolean } = {}): Promise<RecommendationsResult> {
   const windowDays = opts.windowDays ?? 30
@@ -67,7 +116,10 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `${cut ? 'Lower' : 'Raise'} bid on “${p.expression}” (${p.matchType})`,
       detail: `${p.reason}. €${(p.currentBidCents / 100).toFixed(2)} → €${(p.proposedBidCents / 100).toFixed(2)}.`,
       estImpactCents: cut ? Math.abs(p.spendCents) : Math.round(p.salesCents * 0.1),
-      metrics: { clicks: p.clicks, spendCents: p.spendCents, salesCents: p.salesCents, acos: p.acos, roas: p.spendCents > 0 ? p.salesCents / p.spendCents : null },
+      // a cut on a target with NO sales is pure recovery; a cut on one that sells is a trade;
+      // a raise is a model's guess at what more spend would buy, and says so.
+      impactKind: cut ? (p.salesCents === 0 ? 'recoverable' : 'redirect') : 'estimate',
+      metrics: withDerived({ clicks: p.clicks, spendCents: p.spendCents, salesCents: p.salesCents, acos: p.acos }),
       apply: { kind: 'bid', payload: { changes: [{ targetId: p.targetId, proposedBidCents: p.proposedBidCents }] } },
     })
   }
@@ -80,7 +132,9 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `Negate wasteful search term “${n.query}”`,
       detail: `${n.clicks} clicks, ${n.orders} orders, €${(n.costCents / 100).toFixed(2)} spent with no return.`,
       estImpactCents: n.costCents,
-      metrics: { impressions: n.impressions, clicks: n.clicks, ctr: n.impressions > 0 ? n.clicks / n.impressions : null, spendCents: n.costCents, salesCents: n.salesCents, orders: n.orders, acos: n.salesCents > 0 ? n.costCents / n.salesCents : null },
+      // spend on a term the harvester judged wasteful — the one genuinely recoverable case
+      impactKind: n.salesCents > 0 ? 'redirect' : 'recoverable',
+      metrics: withDerived({ impressions: n.impressions, clicks: n.clicks, spendCents: n.costCents, salesCents: n.salesCents, orders: n.orders }),
       apply: { kind: 'harvest-negative', payload: { negatives: [n] } },
     })
   }
@@ -92,7 +146,10 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `Graduate converting term “${g.query}” to exact`,
       detail: `${g.orders} orders, €${(g.salesCents / 100).toFixed(2)} sales — promote to a managed exact-match keyword.`,
       estImpactCents: g.salesCents,
-      metrics: { impressions: g.impressions, clicks: g.clicks, spendCents: g.costCents, salesCents: g.salesCents, orders: g.orders, acos: g.salesCents > 0 ? g.costCents / g.salesCents : null, cvr: g.clicks > 0 ? g.orders / g.clicks : null },
+      // 🔴 NOT an incremental gain: this revenue already exists in the auto campaign. Graduating
+      // takes it over with a managed keyword — it does not add it.
+      impactKind: 'atStake',
+      metrics: withDerived({ impressions: g.impressions, clicks: g.clicks, spendCents: g.costCents, salesCents: g.salesCents, orders: g.orders }),
       apply: { kind: 'harvest-graduate', payload: { graduations: [g] } },
     })
   }
@@ -106,7 +163,8 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `${up ? 'Raise' : 'Cut'} budget for ${p.name}`,
       detail: `${p.reason}. €${(p.currentBudgetCents / 100).toFixed(2)} → €${(p.proposedBudgetCents / 100).toFixed(2)}/day.`,
       estImpactCents: Math.abs(p.proposedBudgetCents - p.currentBudgetCents) * 30,
-      metrics: { spendCents: p.spendCents, salesCents: p.salesCents, roas: p.roas, acos: p.salesCents > 0 ? p.spendCents / p.salesCents : null },
+      impactKind: 'budgetShift',
+      metrics: withDerived({ spendCents: p.spendCents, salesCents: p.salesCents, roas: p.roas }),
       apply: { kind: 'budget', payload: { changes: [{ campaignId: p.campaignId, proposedBudgetCents: p.proposedBudgetCents }] } },
     })
   }
@@ -120,7 +178,8 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `Likely outbid on “${r.query}”`,
       detail: `High CPC (€${((r.cpcCents ?? 0) / 100).toFixed(2)}) but low impressions — raise the bid or add the term where it isn't yet targeted.`,
       estImpactCents: r.costCents,
-      metrics: { impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, spendCents: r.costCents, orders: r.orders, cvr: r.cvr },
+      impactKind: 'redirect',
+      metrics: withDerived({ impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, spendCents: r.costCents, orders: r.orders, cvr: r.cvr }),
       apply: null,
     })
   }
@@ -132,7 +191,8 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       title: `${r.campaignCount} campaigns competing on “${r.query}”`,
       detail: `Consolidate or negate overlapping campaigns to stop bidding against yourself.`,
       estImpactCents: Math.round(r.costCents * 0.2),
-      metrics: { impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, spendCents: r.costCents, orders: r.orders },
+      impactKind: 'estimate',
+      metrics: withDerived({ impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, spendCents: r.costCents, orders: r.orders }),
       apply: null,
     })
   }
