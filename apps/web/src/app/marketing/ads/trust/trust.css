@@ -28,15 +28,15 @@
   background: rgb(var(--surface-card));
 }
 
-.h10-vt-verdict.t-success { border-left-color: rgb(var(--status-success-strong)); }
-.h10-vt-verdict.t-info    { border-left-color: rgb(var(--status-info-strong)); }
-.h10-vt-verdict.t-warning { border-left-color: rgb(var(--status-warning-strong)); }
-.h10-vt-verdict.t-danger  { border-left-color: rgb(var(--status-danger-strong)); }
+.h10-vt-verdict.t-success { border-left-color: var(--status-success-strong); }
+.h10-vt-verdict.t-info    { border-left-color: var(--status-info-strong); }
+.h10-vt-verdict.t-warning { border-left-color: var(--status-warning-strong); }
+.h10-vt-verdict.t-danger  { border-left-color: var(--status-danger-strong); }
 
-.h10-vt-verdict.t-success > svg { color: rgb(var(--status-success-strong)); }
-.h10-vt-verdict.t-info    > svg { color: rgb(var(--status-info-strong)); }
-.h10-vt-verdict.t-warning > svg { color: rgb(var(--status-warning-strong)); }
-.h10-vt-verdict.t-danger  > svg { color: rgb(var(--status-danger-strong)); }
+.h10-vt-verdict.t-success > svg { color: var(--status-success-strong); }
+.h10-vt-verdict.t-info    > svg { color: var(--status-info-strong); }
+.h10-vt-verdict.t-warning > svg { color: var(--status-warning-strong); }
+.h10-vt-verdict.t-danger  > svg { color: var(--status-danger-strong); }
 
 .h10-vt-verdict-body { flex: 1; min-width: 0; }
 
@@ -111,9 +111,9 @@
 }
 
 /* A non-zero count carries its tone; zero stays neutral so a healthy page is calm. */
-.h10-vt-stat.t-danger  .h10-vt-stat-v { color: rgb(var(--status-danger-strong)); }
-.h10-vt-stat.t-warning .h10-vt-stat-v { color: rgb(var(--status-warning-strong)); }
-.h10-vt-stat.t-info    .h10-vt-stat-v { color: rgb(var(--status-info-strong)); }
+.h10-vt-stat.t-danger  .h10-vt-stat-v { color: var(--status-danger-strong); }
+.h10-vt-stat.t-warning .h10-vt-stat-v { color: var(--status-warning-strong); }
+.h10-vt-stat.t-info    .h10-vt-stat-v { color: var(--status-info-strong); }
 
 .h10-vt-stat-l {
   font-size: 10px;
@@ -164,7 +164,7 @@
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
   text-decoration: none;
   margin-top: auto;
 }

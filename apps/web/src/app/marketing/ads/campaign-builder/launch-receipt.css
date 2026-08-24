@@ -119,8 +119,8 @@
 .h10-vt-want {
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgb(var(--status-success-soft));
-  color: rgb(var(--status-success-strong));
+  background: var(--status-success-soft);
+  color: var(--status-success-strong);
   font-variant-numeric: tabular-nums;
 }
 
@@ -129,8 +129,8 @@
 .h10-vt-got {
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgb(var(--status-danger-soft));
-  color: rgb(var(--status-danger-strong));
+  background: var(--status-danger-soft);
+  color: var(--status-danger-strong);
   font-variant-numeric: tabular-nums;
 }
 

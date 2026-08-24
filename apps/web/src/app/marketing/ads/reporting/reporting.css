@@ -47,20 +47,20 @@
   padding: 12px 14px;
   border: 1px solid rgb(var(--border-subtle));
   border-left-width: 3px;
-  border-left-color: rgb(var(--status-info-strong));
+  border-left-color: var(--status-info-strong);
   border-radius: 8px;
   background: rgb(var(--surface-card));
   font-size: 13px;
   line-height: 1.55;
   color: rgb(var(--text-secondary));
 }
-.rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: rgb(var(--status-info-strong)); }
+.rpt-lede > svg { flex: 0 0 auto; margin-top: 2px; color: var(--status-info-strong); }
 .rpt-lede b { color: rgb(var(--text-primary)); font-weight: 650; }
 
-.rpt-lede.is-error { border-left-color: rgb(var(--status-danger-strong)); }
-.rpt-lede.is-error > svg { color: rgb(var(--status-danger-strong)); }
-.rpt-lede.is-warn { border-left-color: rgb(var(--status-warning-strong)); }
-.rpt-lede.is-warn > svg { color: rgb(var(--status-warning-strong)); }
+.rpt-lede.is-error { border-left-color: var(--status-danger-strong); }
+.rpt-lede.is-error > svg { color: var(--status-danger-strong); }
+.rpt-lede.is-warn { border-left-color: var(--status-warning-strong); }
+.rpt-lede.is-warn > svg { color: var(--status-warning-strong); }
 .rpt-retry {
   display: inline-flex; align-items: center; gap: 4px;
   border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
@@ -68,7 +68,7 @@
   padding: 2px 8px; margin-left: 2px;
   font: inherit; font-size: 12px; color: rgb(var(--text-primary));
 }
-.rpt-retry:hover { border-color: rgb(var(--color-primary)); color: rgb(var(--color-primary)); }
+.rpt-retry:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .rpt-group { display: flex; flex-direction: column; gap: 10px; }
 .rpt-group-hd {
@@ -98,7 +98,7 @@
   display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px;
   border: 1px solid rgb(var(--border-subtle));
-  border-left: 3px solid rgb(var(--status-success-strong));
+  border-left: 3px solid var(--status-success-strong);
   border-radius: 8px;
   background: rgb(var(--surface-card));
 }
@@ -106,7 +106,7 @@
 .rpt-today .hd { display: flex; align-items: center; gap: 10px; }
 .rpt-today .lbl {
   font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: rgb(var(--status-success-strong));
+  text-transform: uppercase; color: var(--status-success-strong);
 }
 /* The stream lags about an hour. A total labelled "today" that hides that reads as a slump. */
 .rpt-today .thru { font-size: 11.5px; color: rgb(var(--text-tertiary)); }
@@ -114,10 +114,10 @@
   display: inline-flex; align-items: center; border: 0; background: transparent;
   cursor: pointer; padding: 2px; color: rgb(var(--text-tertiary)); border-radius: 4px;
 }
-.rpt-today .rf:hover { color: rgb(var(--color-primary)); background: rgb(var(--surface-sunken)); }
+.rpt-today .rf:hover { color: var(--color-primary); background: rgb(var(--surface-sunken)); }
 .rpt-today .open {
   display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
-  font-size: 12px; font-weight: 600; text-decoration: none; color: rgb(var(--color-primary));
+  font-size: 12px; font-weight: 600; text-decoration: none; color: var(--color-primary);
 }
 
 .rpt-today .figs { display: flex; flex-wrap: wrap; gap: 6px 26px; }
@@ -164,7 +164,7 @@
   display: inline-flex; flex: 0 0 auto; align-items: center;
   color: rgb(var(--text-tertiary));
 }
-.rpt-i:hover { color: rgb(var(--color-primary)); }
+.rpt-i:hover { color: var(--color-primary); }
 
 /* A report we cannot open should not read as an equal peer of one we can. */
 .rpt-open.is-off { color: rgb(var(--text-tertiary)); }
@@ -200,10 +200,10 @@
 .rpt-mkt .code { font-weight: 700; color: rgb(var(--text-secondary)); letter-spacing: .02em; }
 .rpt-mkt .lag { font-variant-numeric: tabular-nums; }
 .rpt-mkt.is-lagging {
-  border-color: rgb(var(--status-warning-strong));
-  color: rgb(var(--status-warning-strong));
+  border-color: var(--status-warning-strong);
+  color: var(--status-warning-strong);
 }
-.rpt-mkt.is-lagging .code { color: rgb(var(--status-warning-strong)); }
+.rpt-mkt.is-lagging .code { color: var(--status-warning-strong); }
 
 
 
@@ -223,7 +223,7 @@
   font-size: 12.5px; font-weight: 600; text-decoration: none;
   color: rgb(var(--text-secondary));
 }
-.rpt-back:hover { color: rgb(var(--color-primary)); }
+.rpt-back:hover { color: var(--color-primary); }
 
 .rpt-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .rpt-field > span {
@@ -261,13 +261,13 @@
   display: inline-flex; align-items: stretch;
   border: 1px solid rgb(var(--border-subtle)); border-radius: 6px; overflow: hidden;
 }
-.rpt-chip.on { border-color: rgb(var(--color-primary)); }
+.rpt-chip.on { border-color: var(--color-primary); }
 .rpt-chip-main {
   display: inline-flex; align-items: center; gap: 6px;
   border: 0; background: transparent; cursor: pointer;
   padding: 4px 9px; font: inherit; font-size: 12.5px; color: rgb(var(--text-primary));
 }
-.rpt-chip.on .rpt-chip-main { color: rgb(var(--color-primary)); font-weight: 600; }
+.rpt-chip.on .rpt-chip-main { color: var(--color-primary); font-weight: 600; }
 .rpt-chip-main .v { font-size: 10.5px; color: rgb(var(--text-tertiary)); font-variant-numeric: tabular-nums; }
 .rpt-chip-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -278,7 +278,7 @@
 
 .rpt-saved-err {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; color: rgb(var(--status-danger-strong));
+  font-size: 12px; color: var(--status-danger-strong);
 }
 .rpt-saved-err button { border: 0; background: transparent; cursor: pointer; color: inherit; padding: 0; }
 
@@ -294,7 +294,7 @@
   padding: 9px 11px;
   border: 1px solid rgb(var(--border-subtle)); border-radius: 6px;
 }
-.rpt-versions li.is-current { border-color: rgb(var(--status-success-strong)); }
+.rpt-versions li.is-current { border-color: var(--status-success-strong); }
 .rpt-versions .hd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgb(var(--text-primary)); }
 .rpt-versions .when { color: rgb(var(--text-tertiary)); font-size: 11.5px; }
 .rpt-versions .note { margin-top: 3px; font-size: 12px; line-height: 1.5; color: rgb(var(--text-secondary)); }
@@ -303,7 +303,7 @@
   border: 1px solid rgb(var(--border-subtle)); border-radius: 5px; background: transparent;
   cursor: pointer; padding: 2px 7px; font: inherit; font-size: 11.5px; color: rgb(var(--text-secondary));
 }
-.rpt-restore:hover { border-color: rgb(var(--color-primary)); color: rgb(var(--color-primary)); }
+.rpt-restore:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 /* ── RPT.6 · R6 · deliveries ─────────────────────────────────────────────────
    One modal holds scheduled email and share links, so the rows below are shared by both:
@@ -353,11 +353,11 @@
 }
 .rpt-sched-row .stale {
   display: inline-flex; align-items: center; gap: 4px;
-  color: rgb(var(--status-warning-strong));
+  color: var(--status-warning-strong);
 }
-.rpt-sched-row .err { color: rgb(var(--status-danger-strong)); }
+.rpt-sched-row .err { color: var(--status-danger-strong); }
 .rpt-sched-row .acts { display: inline-flex; gap: 6px; flex-shrink: 0; }
-.rpt-restore.danger:hover { border-color: rgb(var(--status-danger-strong)); color: rgb(var(--status-danger-strong)); }
+.rpt-restore.danger:hover { border-color: var(--status-danger-strong); color: var(--status-danger-strong); }
 
 .rpt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
 .rpt-form .rpt-field:first-child, .rpt-form .rpt-field:nth-child(2) { grid-column: 1 / -1; }
@@ -392,7 +392,7 @@ select.rpt-input { height: 32px; }
   padding: 4px 10px; font: inherit; font-size: 11.5px; color: rgb(var(--text-secondary));
 }
 .rpt-seg button + button { border-left: 1px solid rgb(var(--border-subtle)); }
-.rpt-seg button.on { background: rgb(var(--color-primary)); color: #fff; }
+.rpt-seg button.on { background: var(--color-primary); color: #fff; }
 
 .rpt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 8px; }
 
@@ -402,8 +402,8 @@ select.rpt-input { height: 32px; }
   border: 1px solid rgb(var(--border-subtle)); border-radius: 7px;
   background: transparent; font: inherit;
 }
-.rpt-kpi:hover { border-color: rgb(var(--color-primary)); }
-.rpt-kpi.on { border-color: rgb(var(--color-primary)); box-shadow: inset 0 0 0 1px rgb(var(--color-primary)); }
+.rpt-kpi:hover { border-color: var(--color-primary); }
+.rpt-kpi.on { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); }
 .rpt-kpi .lbl {
   display: flex; align-items: center; gap: 6px;
   font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
@@ -497,7 +497,7 @@ select.rpt-input { height: 32px; }
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px;
   font-size: 12.5px; color: rgb(var(--text-secondary));
 }
-.rpt-biz-waste .hd > svg { align-self: center; color: rgb(var(--status-warning-strong)); }
+.rpt-biz-waste .hd > svg { align-self: center; color: var(--status-warning-strong); }
 .rpt-biz-waste .amt {
   font-size: 18px; font-weight: 700; color: rgb(var(--text-primary));
   font-variant-numeric: tabular-nums;
@@ -528,7 +528,7 @@ select.rpt-input { height: 32px; }
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
   font-size: 12.5px; font-weight: 600; text-decoration: none; color: rgb(var(--text-secondary));
 }
-.rpt-back:hover { color: rgb(var(--color-primary)); }
+.rpt-back:hover { color: var(--color-primary); }
 
 /* Fields inside the console filter panel: same label treatment as .ffield. */
 
@@ -582,13 +582,13 @@ select.rpt-input { height: 32px; }
   background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
 }
 .rpt-cm-list .hd > button { margin-left: auto; }
-.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: rgb(var(--status-danger-strong)); }
+.rpt-cm-list .broken { margin-top: 3px; font-size: 11.5px; color: var(--status-danger-strong); }
 .rpt-cm-check {
   display: flex; align-items: center; gap: 5px;
   margin: 8px 0 0; font-size: 12px;
 }
-.rpt-cm-check.ok { color: rgb(var(--status-success-strong)); }
-.rpt-cm-check.bad { color: rgb(var(--status-danger-strong)); }
+.rpt-cm-check.ok { color: var(--status-success-strong); }
+.rpt-cm-check.bad { color: var(--status-danger-strong); }
 .rpt-cm-avail { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: rgb(var(--text-tertiary)); }
 .rpt-cm-avail code {
   font-size: 11px; padding: 1px 5px; margin-right: 4px; border-radius: 4px;
@@ -603,7 +603,7 @@ select.rpt-input { height: 32px; }
 
 .rpt-share-err {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: rgb(var(--status-danger-strong));
+  font-size: 12.5px; color: var(--status-danger-strong);
 }
 
 .rpt-share-form { display: flex; flex-direction: column; gap: 10px; }
@@ -621,7 +621,7 @@ select.rpt-input { height: 32px; }
 .rpt-share-minted { display: flex; flex-direction: column; gap: 8px; }
 .rpt-share-once {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12.5px; font-weight: 600; color: rgb(var(--status-warning-strong));
+  font-size: 12.5px; font-weight: 600; color: var(--status-warning-strong);
 }
 .rpt-share-copyrow { display: flex; gap: 8px; align-items: center; }
 .rpt-share-copyrow input {
@@ -654,7 +654,7 @@ select.rpt-input { height: 32px; }
 .rpt-iro-t svg.open { transform: rotate(180deg); }
 .rpt-iro-tag {
   display: inline-flex; align-items: center; gap: 4px;
-  color: rgb(var(--status-warning-strong)); opacity: 1;
+  color: var(--status-warning-strong); opacity: 1;
 }
 
 .rpt-iro {
@@ -673,7 +673,7 @@ select.rpt-input { height: 32px; }
   padding: 5px 10px; font-size: 11.5px; font-weight: 700; color: rgb(var(--text-secondary)); cursor: pointer;
 }
 .rpt-iro-seg button:last-child { border-right: 0; }
-.rpt-iro-seg button.on { background: rgb(var(--color-primary)); color: #fff; }
+.rpt-iro-seg button.on { background: var(--color-primary); color: #fff; }
 .rpt-iro-f { display: flex; flex-direction: column; gap: 3px; }
 .rpt-iro-f > span {
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
@@ -683,7 +683,7 @@ select.rpt-input { height: 32px; }
   border: 1px solid rgb(var(--border-default)); border-radius: 7px;
   padding: 5px 9px; font-size: 12.5px; color: rgb(var(--text-primary)); background: rgb(var(--surface-card)); width: 180px;
 }
-.rpt-iro-f input[type='range'] { width: 150px; accent-color: rgb(var(--color-primary)); }
+.rpt-iro-f input[type='range'] { width: 150px; accent-color: var(--color-primary); }
 .rpt-iro-csv {
   display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
   border: 1px solid rgb(var(--border-default)); border-radius: 7px; background: rgb(var(--surface-card));
@@ -699,12 +699,12 @@ select.rpt-input { height: 32px; }
 }
 /* "est." rides in the label itself — a modelled figure that only says so in a
    tooltip is a modelled figure nobody knows is modelled. */
-.rpt-iro-k .lbl i { font-style: normal; color: rgb(var(--status-warning-strong)); }
+.rpt-iro-k .lbl i { font-style: normal; color: var(--status-warning-strong); }
 .rpt-iro-k .val {
   font-size: 22px; font-weight: 700; line-height: 1.2;
   color: rgb(var(--text-primary)); font-variant-numeric: tabular-nums;
 }
-.rpt-iro-k .val.em { color: rgb(var(--status-info-strong)); }
+.rpt-iro-k .val.em { color: var(--status-info-strong); }
 .rpt-iro-k .sub { font-size: 11.5px; color: rgb(var(--text-secondary)); }
 
 .rpt-iro-scroll { overflow-x: auto; border: 1px solid rgb(var(--border-subtle)); border-radius: 8px; }
@@ -722,7 +722,7 @@ select.rpt-input { height: 32px; }
 .rpt-iro-tbl tbody tr:first-child td { border-top: 0; }
 .rpt-iro-tbl .nm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: rgb(var(--text-primary)); }
 .rpt-iro-tbl .dim { color: rgb(var(--text-tertiary)); }
-.rpt-iro-tbl .em { color: rgb(var(--status-info-strong)); }
+.rpt-iro-tbl .em { color: var(--status-info-strong); }
 .rpt-iro-tbl .em.b { font-weight: 700; }
 .rpt-iro-tbl .empty { text-align: center; padding: 26px 10px; color: rgb(var(--text-tertiary)); }
 .rpt-iro-b { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
@@ -872,8 +872,8 @@ select.rpt-input { height: 32px; }
    `is-level` and `is-unknown` deliberately have no rule and keep the neutral
    fill: sitting exactly ON the median is not an achievement, and an absent
    figure is not a result. */
-.rpt-bm-bar.is-ahead .fill { background: rgb(var(--status-success-strong)); }
-.rpt-bm-bar.is-behind .fill { background: rgb(var(--status-warning-strong)); }
+.rpt-bm-bar.is-ahead .fill { background: var(--status-success-strong); }
+.rpt-bm-bar.is-behind .fill { background: var(--status-warning-strong); }
 
 /* The median's position on the same 0→top scale. `overflow:hidden` on the bar
    clips it at both ends, so a median sitting at 100% still reads as a tick. */
@@ -958,7 +958,7 @@ select.rpt-input { height: 32px; }
 
 /* The index bar's track IS its full domain (0–1), so it takes the primary accent
    rather than the ahead/behind ramp — there is no median to be ahead of. */
-.rpt-bm-bar.is-index .fill { background: rgb(var(--color-primary)); }
+.rpt-bm-bar.is-index .fill { background: var(--color-primary); }
 
 .rpt-bm-stage-counts {
   display: flex;
