@@ -56,8 +56,12 @@ Tones are `neutral · info · success · warning · danger`. Sizes are `sm md lg
 
 ### Composition notes worth knowing
 
-- **`DataGrid`** is the workhorse. Columns are objects with `render(row)`, and
+- **`DataGrid`** is the workhorse for product tables. Columns are objects with `render(row)`, and
   support `sticky`, `align`, `sortable`, `total`. Pass `showTotals` for a totals row.
+  **It is not the advertising console's grid.** That console renders a separate, richer
+  component (`AdsDataGrid`, app-side) with a filters panel, a toolbar, a Customize popover, a
+  pinned Total row, per-column info tips and a pager. If you are designing an ads-console screen,
+  compose those affordances around `DataGrid` — do not assume it provides them.
 - **Fields have no `error` prop.** Compose validation: label above, message below
   in `var(--status-danger-strong)`, `aria-invalid` on the control.
 - **`Button` has no `loading` prop.** The house pattern is a disabled `Button`

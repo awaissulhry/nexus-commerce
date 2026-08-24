@@ -203,3 +203,81 @@ implementations because it lives in the right folder is how a design system lose
   callers, it goes into the DS. When it has *no* callers, it is deleted, not ported.
 - **Measure usage before porting any prop.** See §1.
 - One tranche per commit, `tsc` + guards + a rendered check on a real page each time.
+
+---
+
+## Appendix A — a thirteenth concept: the grid (added 2026-08-24)
+
+**Found by the operator reviewing the claude.ai/design cards**, not by a scan: the DataGrid card
+"doesn't look like the grid on the ad manager page." It doesn't, and `DataGrid` appears nowhere in
+the twelve above. This is the largest duplicate in the codebase by line count.
+
+| | `design-system/components/DataGrid` | `app/marketing/ads/campaigns/_grid/AdsDataGrid` |
+|---|---|---|
+| lines | 275 | **967** |
+| props | 18 | **49** |
+| call sites (JSX-parsed) | 20 in 14 files | **64 in 51 files** |
+| self-description | the DS table primitive | *"the ONE shared Helium-10 Ad-Manager grid"* |
+
+### Why this one is not a swap in either direction
+
+**Neither is a superset.** Unlike `Toast` — where the legacy side is simply richer — the two grids
+each hold capabilities the other lacks, in the column type itself:
+
+- **`Column<T>` (DS) has 3 fields `GridColumn<T>` does not:** `align`, `sticky`, `stickyRight`.
+- **`GridColumn<T>` (ads) has 5 the DS does not:** `metric`, `tip`, `defaultHidden`, `filterValue`,
+  `freezeRight`.
+
+So collapsing them is a two-way merge, not an adoption.
+
+### Same concept, different spelling — four traps
+
+These read as new API in a diff and are not. Every pair below is the same concept, and the first
+three have **identical types**:
+
+| ads | DS | |
+|---|---|---|
+| `rowId` | `rowKey` | `(row: T) => string` — identical |
+| `showTotal` | `showTotals` | `boolean` — identical, singular vs plural |
+| `defaultSort` | `initialSort` | `{ key, dir }` — identical |
+| `emptyLabel: string` + `emptyNode` | `emptyState: ReactNode` | **types differ**; ads splits it in two |
+
+### One real behavioural difference
+
+`onSortChange` is `(sort: {…} | null) => void` on the ads side and `(next: {…}) => void` on the DS
+side. The `| null` is not slack — it is *controlled-and-currently-unsorted*, which the DS `sort`
+prop documents as a real state but its callback cannot express. Any merge has to keep the nullable
+form or the ads console loses "back to the default order".
+
+### What the ads grid owns that the DS has no concept of
+
+`filters` (28 callers) · `selectionActions` (25) · `searchValue` / `searchPlaceholder` (27/23) ·
+`toolbarLeft` / `toolbarRight` (20/33) · `storageKey` (38) · `customizable` · `exportable` ·
+`editMode` · `groupBy` · `keyboardNav` · `server` · pager (`initialPage`/`onPageChange`) ·
+`reportLabel`. Roughly 43 props with no DS counterpart — a filters panel, a toolbar, a Customize
+popover, a pinned Total row, per-column info tips and a pager.
+
+Note `rows` · `rowId` · `noun` · `firstColLabel` · `renderFirst` · `firstSortValue` · `columns` are
+passed by **all 56** measured call sites: the ads grid's real required surface is seven props, not
+two, because the first column is a distinct concept there.
+
+### Decision needed
+
+Same shape as the `Toast` question in §3, with the extra wrinkle that neither side dominates:
+
+1. **Leave both.** Honest today, but it is the platform's most-used component existing twice.
+2. **Merge into the DS** — the DS grows the filters/toolbar/pager surface. Largest piece of DS
+   feature work in this phase by some distance.
+3. **Promote `AdsDataGrid` into the DS and retire the DS one** — 20 call sites migrate instead of
+   64, and the DS's `align`/`sticky`/`stickyRight` must be ported across.
+
+**Until it is decided**, `.design-sync/conventions.md` tells the claude.ai/design agent that
+`DataGrid` is the product-table workhorse and explicitly **not** the ads console's grid, so designs
+for that surface compose the missing affordances rather than assuming them.
+
+*Method note, per §1: the prop lists came from the named interfaces after confirming neither
+component declares props inline; call sites were parsed as JSX open tags with brace- and
+generic-aware scanning. A naive `<Name ...>` regex reported* **zero** *props for `AdsDataGrid`,
+because every call site uses generic syntax (`<AdsDataGrid<CampaignRow>`) and the regex terminated
+on the generic's `>`.*
+

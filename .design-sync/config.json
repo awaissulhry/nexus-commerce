@@ -16,7 +16,8 @@
   "componentSrcMap": {
     "FilterField": "../../apps/web/src/design-system/patterns/FilterPanel.tsx",
     "ToastProvider": "../../apps/web/src/design-system/components/Toast.tsx",
-    "ToolbarDivider": "../../apps/web/src/design-system/primitives/ToolbarButton.tsx"
+    "ToolbarDivider": "../../apps/web/src/design-system/primitives/ToolbarButton.tsx",
+    "ColumnCustomizer": null
   },
   "overrides": {
     "AppShell": {
@@ -49,10 +50,6 @@
     "PreferencesModal": {
       "cardMode": "single",
       "primaryStory": "CustomiseColumns"
-    },
-    "ColumnCustomizer": {
-      "cardMode": "single",
-      "primaryStory": "CustomizeColumns"
     },
     "Builder": {
       "cardMode": "single",
