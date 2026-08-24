@@ -1,0 +1,118 @@
+{
+  "projectId": "2438e9cc-a760-464d-b5b7-0fae698b18c9",
+  "shape": "package",
+  "pkg": "@nexus/design-system",
+  "globalName": "NexusDS",
+  "buildCmd": "node .design-sync/ds-pkg/build.mjs",
+  "srcDir": "../../apps/web/src/design-system",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "dist/ds.css",
+  "extraFonts": [
+    "fonts/fonts.css"
+  ],
+  "libOverrides": {
+    "source-kit.mjs": "keep 'components' as a group label — this DS's tiers are primitives/components/patterns"
+  },
+  "componentSrcMap": {
+    "FilterField": "../../apps/web/src/design-system/patterns/FilterPanel.tsx",
+    "ToastProvider": "../../apps/web/src/design-system/components/Toast.tsx",
+    "ToolbarDivider": "../../apps/web/src/design-system/primitives/ToolbarButton.tsx"
+  },
+  "overrides": {
+    "AppShell": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "DetailHeader": {
+      "cardMode": "column"
+    },
+    "FilterPanel": {
+      "cardMode": "column"
+    },
+    "FilterField": {
+      "cardMode": "column"
+    },
+    "FilterBar": {
+      "cardMode": "column"
+    },
+    "GridToolbar": {
+      "cardMode": "column"
+    },
+    "BulkActionBar": {
+      "cardMode": "column"
+    },
+    "EditModeBar": {
+      "cardMode": "column"
+    },
+    "PreferencesModal": {
+      "cardMode": "single",
+      "primaryStory": "CustomiseColumns"
+    },
+    "ColumnCustomizer": {
+      "cardMode": "single",
+      "primaryStory": "CustomizeColumns"
+    },
+    "Builder": {
+      "cardMode": "single",
+      "primaryStory": "RuleBuilder"
+    },
+    "Textarea": {
+      "cardMode": "column"
+    }
+  },
+  "dtsPropsFor": {
+    "AccountsPanel": "  /** Absolute base URL of the API, e.g. `getBackendUrl()`. */\n  apiBase: string;\n  /** Channels the page can start an OAuth flow for. Absent = no connect button. */\n  onConnect?: Partial<Record<string, () => void | Promise<void>>>;\n  /** Re-authorise ONE named account. Distinct from `onConnect`: it tells the server which connection the incoming grant belon */\n  onReconnect?: (account: { id: string; channel: string; managedBy: string; label: string; labelSource: 'accountLabel' | 'storeName' | 'displayName' | 'signInName' | 'sellerId' | 'channel'; labelIsPlaceholder: boolean; markets: string[]; health: ('ok' | 'warn' | 'error' | 'unknown'); healthReason: string | null; isPrimary: boolean; sortOrder?: number; externalAccountId?: string | null; accountColor?: string | null; tokenExpiresAt: string | null; lastSyncAt: string | null; lastSyncStatus: string | null; lastSyncError: string | null }) => void | Promise<void>;\n  /** Change this to force a refetch. The host owns the events that mean \"an account changed outside this panel\" — an OAuth po */\n  reloadSignal?: unknown;\n  /** The host app's confirm dialog. Falls back to a plain one when absent. */\n  confirm?: (opts: { title: string; description: string; confirmLabel: string; tone?: \"danger\" | \"warning\" | \"info\"; }) => Promise<boolean>;\n  className?: string;",
+    "AccountSwitcher": "  /** Absolute URL of `GET /api/accounts`. */\n  endpoint: string;\n  /** Where \"Manage channels\" goes. */\n  manageHref?: string;\n  className?: string;\n  /** Test seam — when provided, no fetch is performed. */\n  initialData?: { success: boolean; accounts: { id: string; channel: string; managedBy: string; label: string; labelSource: 'accountLabel' | 'storeName' | 'displayName' | 'signInName' | 'sellerId' | 'channel'; labelIsPlaceholder: boolean; markets: string[]; health: ('ok' | 'warn' | 'error' | 'unknown'); healthReason: string | null; isPrimary: boolean; sortOrder?: number; externalAccountId?: string | null; accountColor?: string | null; tokenExpiresAt: string | null; lastSyncAt: string | null; lastSyncStatus: string | null; lastSyncError: string | null }[]; notConnected: string[]; canSwitch: boolean };",
+    "AppShell": "  brand: { mark: React.ReactNode; name: React.ReactNode; };\n  nav: ({ id: string; label: React.ReactNode; icon: React.ReactNode; href?: string; active?: boolean; badge?: React.ReactNode; onClick?: () => void } | { id: string; label: React.ReactNode; icon: React.ReactNode; items: { id: string; label: React.ReactNode; href?: string; active?: boolean; onClick?: () => void }[]; defaultOpen?: boolean })[];\n  footer?: React.ReactNode;\n  children: React.ReactNode;\n  className?: string;",
+    "Badge": "  program: \"sp\" | \"sd\" | \"sb\" | \"auto\" | \"manual\";\n  className?: string;\n  children: React.ReactNode;",
+    "Banner": "  tone?: \"neutral\" | \"info\" | \"success\" | \"warning\" | \"danger\";\n  variant?: \"neutral\" | \"info\" | \"success\" | \"warning\" | \"danger\" | \"error\";\n  /** Bold lead line. */\n  title?: React.ReactNode;\n  /** Description body — the explanatory copy under the title. */\n  children?: React.ReactNode;\n  /** Override the default per-tone lucide icon. */\n  icon?: React.ReactNode;\n  /** Trailing action slot (e.g. a Button or link). */\n  action?: React.ReactNode;\n  /** Show a dismiss (×) control and call this when clicked. */\n  onDismiss?: () => void;\n  className?: string;",
+    "Builder": "  open: boolean;\n  onClose: () => void;\n  title: React.ReactNode;\n  sections: { id: string; label: React.ReactNode; title?: React.ReactNode; content: React.ReactNode }[];\n  primaryLabel?: React.ReactNode;\n  onPrimary?: () => void;\n  busy?: boolean;\n  className?: string;",
+    "BulkActionBar": "  count: number;\n  /** action buttons for the selection */\n  children: React.ReactNode;\n  onClear?: () => void;\n  /** noun after the count (default \"selected\") */\n  noun?: string;\n  className?: string;",
+    "BurnDownChart": "  data: { day: number; actual: number | null; expected: number; forecast: number | null }[];\n  /** Drawn as a horizontal threshold rule. Omit when the plan has no cap. */\n  capValue?: number;\n  capLabel?: string;\n  /** Formats every value — axis ticks, tooltip rows and the cap label. */\n  format: (v: number) => string;\n  height?: number;\n  /** Marks \"today\" with a faint vertical rule, so the actual/forecast handover is legible. */\n  todayDay?: number;\n  className?: string;",
+    "Button": "  /** `secondary` (white + border) is the base look; `primary` = blue fill; `ghost` = blue outline; `danger` = red fill for ir */\n  variant?: \"danger\" | \"primary\" | \"secondary\" | \"ghost\";\n  size?: \"md\" | \"sm\";\n  children?: React.ReactNode;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;",
+    "Card": "  /** padded body (ignored when `header` is set — header layout has its own padding) */\n  padded?: boolean;\n  /** resting card shadow */\n  elevated?: boolean;\n  /** optional header title; renders a bordered head + padded body */\n  header?: React.ReactNode;\n  /** optional right-aligned header slot (e.g. an action button) */\n  headerAction?: React.ReactNode;\n  children?: React.ReactNode;\n  className?: string;",
+    "Checkbox": "  label?: React.ReactNode;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;\n  children?: React.ReactNode;",
+    "ColumnCustomizer": "  open: boolean;\n  onClose: () => void;\n  columns: { key: string; label: React.ReactNode; visible: boolean; locked?: boolean }[];\n  onApply: (columns: { key: string; label: React.ReactNode; visible: boolean; locked?: boolean }[]) => void;\n  className?: string;",
+    "ColumnGroupModal": "  open: boolean;\n  onClose: () => void;\n  groups: { id: string; label: string; color: string; columns: string[]; visible: boolean }[];\n  onGroupsChange: (groups: { id: string; label: string; color: string; columns: string[]; visible: boolean }[]) => void;",
+    "Combobox": "  options: { value: string; label: string }[];\n  value?: string;\n  onChange: (value: string) => void;\n  placeholder?: string;\n  className?: string;",
+    "DataGrid": "  columns: { key: string; label: React.ReactNode; render: (row: any) => React.ReactNode; align?: 'left' | 'right' | 'center'; sortable?: boolean; sortValue?: (row: any) => number | string; sticky?: boolean; stickyRight?: boolean; width?: number; total?: React.ReactNode }[];\n  rows: any[];\n  rowKey: (row: any) => string;\n  selectable?: boolean;\n  selected?: Set<string>;\n  onSelectedChange?: (next: Set<string>) => void;\n  /** Per-row selection gate (additive): rows where this returns false render a disabled checkbox and are excluded from select */\n  rowSelectable?: (row: any) => boolean;\n  /** Tooltip/aria label for a disabled row checkbox. */\n  rowSelectableHint?: string;\n  /** SCT.1 — hover help for the select-all checkbox (what \"all\" means here). */\n  selectAllHint?: string;\n  /** SCT.1 — hover help for a row checkbox. */\n  selectRowHint?: string;\n  showTotals?: boolean;\n  emptyState?: React.ReactNode;\n  initialSort?: { key: string; dir: \"asc\" | \"desc\"; };\n  /** Controlled sort (NAF.SB.AS-S1R S1.e — additive, opt-in). Pass `sort` AND `onSortChange` to own the sort state yourself:  */\n  sort?: { key: string; dir: \"asc\" | \"desc\"; };\n  onSortChange?: (next: { key: string; dir: \"asc\" | \"desc\"; }) => void;\n  /** Per-row class (NAF.SB.M-S3 — additive, opt-in). For pages whose law is *filtering dims, it never removes*: the row stays */\n  rowClassName?: (row: any) => string | undefined;\n  /** cap height + scroll (sticky header/footer stay pinned) */\n  maxHeight?: string | number;\n  className?: string;",
+    "DateRangePicker": "  value: { start: Date; end: Date };\n  onChange: (range: { start: Date; end: Date }) => void;\n  className?: string;",
+    "DetailHeader": "  backLabel?: React.ReactNode;\n  onBack?: () => void;\n  /** leading badge slot (e.g. a targeting chip) */\n  badge?: React.ReactNode;\n  title: React.ReactNode;\n  actions?: React.ReactNode;",
+    "Drawer": "  open: boolean;\n  onClose: () => void;\n  title?: React.ReactNode;\n  /** EFX P6 — optional smaller line under the title. */\n  subtitle?: React.ReactNode;\n  footer?: React.ReactNode;\n  children?: React.ReactNode;\n  className?: string;\n  /** EFX P6 — panel width override. number = px, string = any CSS length. Defaults to the stylesheet's 420px; the panel never */\n  width?: string | number;\n  /** A modal surface rendered INSIDE the panel, covering header, body and footer. Drawers sit at z-61; the app's Modal/Confir */\n  overlay?: React.ReactNode;",
+    "EditModeBar": "  /** custom message; defaults to \"N unsaved change(s)\" from `count` */\n  message?: React.ReactNode;\n  count?: number;\n  onDiscard?: () => void;\n  onApply?: () => void;\n  applyLabel?: React.ReactNode;\n  busy?: boolean;",
+    "EmptyState": "  icon?: React.ReactNode;\n  title: React.ReactNode;\n  description?: React.ReactNode;\n  /** optional CTA (e.g. a Button) */\n  action?: React.ReactNode;\n  className?: string;",
+    "FileDropzone": "  /** Called with the validated files. */\n  onFiles: (files: File[]) => void;\n  /** Comma-separated extension list (e.g. '.csv,.tsv,.xlsx,.xls,.json'). Empty = any. */\n  accept?: string;\n  /** Client-side max size guard per file (bytes). */\n  maxBytes?: number;\n  /** Allow selecting more than one file. */\n  multiple?: boolean;\n  disabled?: boolean;\n  /** Secondary line — defaults to the accepted formats + size limit. */\n  hint?: React.ReactNode;\n  className?: string;",
+    "FilterBar": "  /** Panel title (default \"Filters\"). */\n  title?: React.ReactNode;\n  /** Declarative filter dimensions, rendered in order across the 6-col grid. */\n  dimensions: ({ key: string; label: React.ReactNode; kind: 'multiselect'; options: { value: string; label: string; count?: number }[]; value: string[]; onChange: (next: string[]) => void; placeholder?: string; wide?: boolean } | { key: string; label: React.ReactNode; kind: 'select'; options: { value: string; label: string; count?: number }[]; value: string; onChange: (next: string) => void; placeholder?: string; wide?: boolean } | { key: string; label: React.ReactNode; kind: 'range'; min: string; max: string; onChange: (min: string, max: string) => void; unit?: '€' | '%' | ''; wide?: boolean } | { key: string; label: React.ReactNode; kind: 'toggle'; value: boolean; onChange: (next: boolean) => void; wide?: boolean })[];\n  /** Optional preset chips row above the field grid. */\n  presets?: React.ReactNode;\n  /** Clear-all handler; renders the footer \"Clear\" button (disabled when inactive). */\n  onClear?: () => void;\n  /** Count of active filters; disables Clear at 0. */\n  activeCount?: number;\n  /** Initial open state (default true — matches the campaigns grid). */\n  defaultOpen?: boolean;",
+    "FilterField": "  label: React.ReactNode;\n  wide?: boolean;\n  children: React.ReactNode;",
+    "FilterPanel": "  title?: React.ReactNode;\n  /** preset buttons row */\n  presets?: React.ReactNode;\n  /** the field grid — compose `FilterField` children */\n  children: React.ReactNode;\n  onReset?: () => void;\n  onApply?: () => void;\n  /** Label for the reset button (default \"Reset\"; pass \"Clear\" to match the Ad Manager). */\n  resetLabel?: string;\n  /** Disable the reset button (e.g. when no filters are active). */\n  resetDisabled?: boolean;\n  /** extra left-aligned footer slot (e.g. \"Save to library\") */\n  footerExtra?: React.ReactNode;\n  defaultOpen?: boolean;",
+    "GridToolbar": "  /** Left-most count text, e.g. \"Viewing 1–16 of 16 products\". Bold the numbers with <b>. */\n  count?: React.ReactNode;\n  /** Left-aligned actions placed after the count (e.g. selection actions, search). */\n  children?: React.ReactNode;\n  /** Right-aligned actions (e.g. Customise, Export, density, Live). */\n  right?: React.ReactNode;",
+    "HoverCard": "  /** rich content shown on hover/focus */\n  card: React.ReactNode;\n  children: React.ReactNode;\n  className?: string;",
+    "ImageUpload": "  value: string;\n  onChange: (url: string | null) => void;\n  /** Upload transport — receives the validated File, resolves to the stored URL. */\n  onUpload: (file: File) => Promise<string>;\n  label?: string;\n  criteria?: { label: string; value: string }[];\n  /** Comma-separated accept list (default PNG/JPG). */\n  accept?: string;\n  /** Client-side max size guard (bytes). */\n  maxBytes?: number;\n  /** Minimum pixel dimensions (the image must be at least this big). */\n  minWidth?: number;\n  minHeight?: number;\n  /** CSS aspect-ratio for the preview/zone box (e.g. '1 / 1', '1200 / 628'). */\n  aspect?: string;\n  /** Optional \"Select from assets\" action (DAM browse). */\n  onSelectFromAssets?: () => void;\n  disabled?: boolean;\n  className?: string;",
+    "InfoTip": "  tip: string;\n  size?: number;\n  children?: React.ReactNode;",
+    "Input": "  /** leading glyph (e.g. a search icon) inside the field */\n  leadingIcon?: React.ReactNode;\n  /** shaded prefix adornment (e.g. `€`) */\n  prefix?: React.ReactNode;\n  /** shaded suffix adornment (e.g. `%`) */\n  suffix?: React.ReactNode;\n  /** class for the bordered field wrapper (the input itself takes `className`) */\n  fieldClassName?: string;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;\n  children?: React.ReactNode;",
+    "Kbd": "  className?: string;\n  children: React.ReactNode;",
+    "Listbox": "  options: { value: string; label: string; disabled?: boolean }[];\n  value?: string;\n  onChange: (value: string) => void;\n  placeholder?: string;\n  ariaLabel?: string;\n  className?: string;\n  disabled?: boolean;",
+    "Menu": "  /** trigger button content */\n  label: React.ReactNode;\n  items: { id: string; label: React.ReactNode; icon?: React.ReactNode; disabled?: boolean; onSelect?: () => void }[];\n  align?: \"left\" | \"right\";\n  triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;\n  className?: string;",
+    "MetricStrip": "  metrics: { label: React.ReactNode; value: React.ReactNode; delta?: { value: React.ReactNode; positive?: boolean } }[];\n  className?: string;",
+    "Modal": "  open: boolean;\n  onClose: () => void;\n  title?: React.ReactNode;\n  subtitle?: React.ReactNode;\n  /** footer slot, right-aligned (e.g. Cancel / Save buttons) */\n  footer?: React.ReactNode;\n  /** 440 / 560 / 660 / 920 px (H10 modal widths) */\n  size?: \"md\" | \"sm\" | \"lg\" | \"xl\";\n  children?: React.ReactNode;\n  className?: string;",
+    "MultiSelect": "  options: { value: string; label: React.ReactNode }[];\n  value: string[];\n  onChange: (next: string[]) => void;\n  /** label shown when nothing is selected (default \"All\") */\n  placeholder?: string;\n  className?: string;",
+    "PageHeader": "  eyebrow?: React.ReactNode;\n  title: React.ReactNode;\n  subtitle?: React.ReactNode;\n  /** right-aligned actions slot (buttons, selects, date range…) */\n  actions?: React.ReactNode;",
+    "PerformanceGraph": "  data: Record<string, string | number>[];\n  xKey: string;\n  left: { key: string; label: string; color: string; axis: 'left' | 'right'; format?: (v: number) => string };\n  right: { key: string; label: string; color: string; axis: 'left' | 'right'; format?: (v: number) => string };\n  height?: number;\n  className?: string;",
+    "Pill": "  /** Active→success · Paused→warning · Archived→neutral · Error→danger */\n  tone: \"neutral\" | \"info\" | \"success\" | \"warning\" | \"danger\";\n  className?: string;\n  children: React.ReactNode;",
+    "PreferencesModal": "  open: boolean;\n  onClose: () => void;\n  value: { visibleColumns: string[]; stickyFirstColumn: boolean; stickyLastColumn: boolean; pageSize: number; sortBy: string; sortDir: 'asc' | 'desc' };\n  onConfirm: (next: { visibleColumns: string[]; stickyFirstColumn: boolean; stickyLastColumn: boolean; pageSize: number; sortBy: string; sortDir: 'asc' | 'desc' }) => void;\n  /** Full column registry (visible + hidden + locked), in canonical order. */\n  allColumns: readonly { key: string; label: string; locked?: boolean }[];\n  /** The \"Reset\" target visible-columns list. */\n  defaultVisible: readonly string[];\n  /** Sort field options. Empty ⇒ the Sort section is hidden. */\n  sortFieldOptions?: readonly { value: string; label: string; }[];\n  /** Page-size choices. Empty ⇒ the Page-size section is hidden. */\n  pageSizeChoices?: number[];\n  /** Show the sticky first/last column toggles (default true). */\n  showSticky?: boolean;\n  /** Modal title (default \"Customise\"). */\n  title?: string;\n  /** Extra left-panel content (workspace-specific preferences). */\n  workspaceSlot?: React.ReactNode;",
+    "Radio": "  label?: React.ReactNode;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;\n  children?: React.ReactNode;",
+    "RadioCard": "  title: React.ReactNode;\n  description?: React.ReactNode;\n  /** Visual highlight (the `.on` state). Pair with the radio's checked state. */\n  selected?: boolean;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;\n  children?: React.ReactNode;",
+    "SegmentedControl": "  options: { value: string; label: React.ReactNode; icon?: React.ReactNode }[];\n  value: string;\n  onChange: (value: string) => void;\n  size?: \"md\" | \"sm\";\n  disabled?: boolean;\n  className?: string;",
+    "Select": "  children?: React.ReactNode;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;",
+    "Stepper": "  steps: { key: string; label: string }[];\n  /** Index of the active step (0-based). Earlier = done, later = upcoming. */\n  current: number;\n  className?: string;",
+    "Tabs": "  tabs: { id: string; label: React.ReactNode; count?: number | null; badge?: string; icon?: React.ReactNode }[];\n  active: string;\n  onChange: (id: string) => void;\n  className?: string;\n  /** SG.1 — 'lg' is the PAGE-level tab bar (H10's Suggestions/Analytics tabs: larger bolder labels, 3px indicator, count pill */\n  size?: \"md\" | \"lg\";",
+    "Tag": "  tone?: \"neutral\" | \"info\" | \"success\" | \"warning\" | \"danger\" | \"positive\";\n  className?: string;\n  children: React.ReactNode;",
+    "Textarea": "  className?: string;\n  id?: string;\n  style?: React.CSSProperties;\n  children?: React.ReactNode;",
+    "ToastProvider": "  children: React.ReactNode;\n  duration?: number;",
+    "Toggle": "  checked: boolean;\n  onChange?: (next: boolean) => void;\n  className?: string;\n  id?: string;\n  style?: React.CSSProperties;\n  children?: React.ReactNode;",
+    "ToolbarButton": "  icon: React.ReactNode;\n  /** aria-label + default tooltip heading */\n  label: string;\n  /** tooltip body text */\n  description?: string;\n  /** keyboard shortcut shown in tooltip, e.g. '⌘F' */\n  shortcut?: string;\n  onClick?: () => void;\n  disabled?: boolean;\n  /** pressed / highlighted state */\n  active?: boolean;\n  /** blue count badge top-right, capped at 99+ */\n  badge?: number;\n  className?: string;\n  /** override auto-generated tooltip content */\n  tooltipContent?: React.ReactNode;",
+    "Tooltip": "  /** tooltip text/content shown above the trigger on hover/focus */\n  label: React.ReactNode;\n  className?: string;\n  children: React.ReactNode;"
+  }
+}

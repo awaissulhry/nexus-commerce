@@ -1,0 +1,9 @@
+{
+  "name": "@nexus/design-system",
+  "version": "1.0.2",
+  "private": true,
+  "type": "module",
+  "description": "Nexus Design System (H10) — tokens, primitives, components, patterns.",
+  "types": "./dist/index.d.ts",
+  "module": "./index.ts"
+}
