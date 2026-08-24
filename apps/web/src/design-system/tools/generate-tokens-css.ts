@@ -13,6 +13,22 @@ import { cssVars, cssVarsDark } from '../tokens/css-vars'
 import type { CssVar } from '../tokens/css-vars'
 
 const OUT = resolve(__dirname, '../styles/tokens.css')
+const OUT_GLOBAL = resolve(__dirname, '../styles/tokens-global.css')
+
+/**
+ * The eleven names `globals.css` and `ads.css` ALSO define, as space-separated RGB channels
+ * for Tailwind's `rgb(var(--x) / <alpha-value>)`. They are emitted into `tokens.css` (which
+ * pages opt into) but NEVER into `tokens-global.css`, which the root layout loads on every
+ * route: defining them app-wide as colours would make `rgb(var(--border-default))` resolve to
+ * `rgb(#d8dde4)` — invalid, and every Tailwind utility built on them would die across 636
+ * files. Phase 9.0b removed the design system's own dependence on these, which is the only
+ * reason a global stylesheet is possible at all. See docs/PHASE-9-0B-TOKEN-FORM.md.
+ */
+const CONTESTED = new Set([
+  '--text-primary', '--text-secondary', '--text-tertiary', '--text-disabled', '--text-link',
+  '--surface-canvas', '--surface-card', '--surface-sunken',
+  '--border-default', '--border-subtle', '--border-strong',
+])
 
 const HEAD = `/**
  * GENERATED — do not edit by hand.
@@ -30,14 +46,32 @@ const emit = (rows: ReadonlyArray<CssVar>, indent = '  '): string =>
 
 const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark {\n${emit(cssVarsDark)}\n}\n`
 
+const GLOBAL_HEAD = `/**
+ * GENERATED — do not edit by hand.
+ * Source: tokens/css-vars.ts. Regenerate: \`npm run tokens:gen\`.
+ *
+ * tokens.css minus the platform-alias names the app also defines as RGB channels.
+ * This is the file the ROOT LAYOUT loads, so every route gets the --h10-* tiers and
+ * the design system's components render styled without each page importing anything.
+ * Anything needing the --text, --surface or --border aliases as COLOURS imports tokens.css.
+ */`
+
+const globalVars = cssVars.filter((r) => !CONTESTED.has(r.name))
+const cssGlobal = `${GLOBAL_HEAD}\n\n:root {\n${emit(globalVars)}\n}\n\n.dark {\n${emit(cssVarsDark)}\n}\n`
+
 if (process.argv.includes('--check')) {
-  const current = readFileSync(OUT, 'utf8')
-  if (current !== css) {
-    console.error('✗ tokens.css is stale vs tokens/css-vars.ts — run `npm run tokens:gen` and commit.')
-    process.exit(1)
+  let stale = false
+  for (const [file, want] of [[OUT, css], [OUT_GLOBAL, cssGlobal]] as const) {
+    if (readFileSync(file, 'utf8') !== want) {
+      console.error(`✗ ${file} is stale vs tokens/css-vars.ts — run \`npm run tokens:gen\` and commit.`)
+      stale = true
+    }
   }
-  console.log('✓ tokens.css is in sync with tokens/css-vars.ts')
+  if (stale) process.exit(1)
+  console.log('✓ tokens.css + tokens-global.css are in sync with tokens/css-vars.ts')
 } else {
   writeFileSync(OUT, css)
+  writeFileSync(OUT_GLOBAL, cssGlobal)
   console.log(`✓ wrote ${OUT} (${cssVars.length} vars + ${cssVarsDark.length} dark)`)
+  console.log(`✓ wrote ${OUT_GLOBAL} (${globalVars.length} vars — ${cssVars.length - globalVars.length} contested aliases withheld)`)
 }

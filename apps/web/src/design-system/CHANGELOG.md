@@ -4,6 +4,42 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [9.3-css] — 2026-08-24 — The design system is loaded once, for the whole app
+
+Until now the DS stylesheets arrived only where an individual file imported them:
+`primitives.css` reached 46 files and **`a11y.css` reached one**. A DS component rendered
+unstyled on any route where nothing happened to pull its sheet in — `.h10-ds-btn` did not
+resolve on `/design` at all. That is styling by coincidence of import graph, and it blocked
+every remaining 9.3 tranche (`Button` alone is 205 files needing `primitives.css`).
+
+- **`app/layout.tsx` now imports** `tokens-global.css` → `primitives.css` → `components.css`
+  → `patterns.css` → `a11y.css`. **Order is the cascade** in this system — `a11y.css` last so
+  its focus and reduced-motion rules win. Do not reorder.
+- **`tokens.css` is now generated in two variants** from the one source (`tokens/css-vars.ts`):
+  the full file, unchanged, for the 202 pages that opt in; and `tokens-global.css`, which is
+  the same **minus the 11 contested platform aliases**, for the root layout.
+- **Why withhold them:** publishing `--text-primary` app-wide as a colour would make Tailwind's
+  `rgb(var(--text-primary) / <alpha-value>)` resolve to `rgb(#1c2530)` — invalid — and kill the
+  utilities behind 636 files. **Phase 9.0b is what made this possible**, by removing the DS's
+  own dependence on those names.
+- `token-guard`'s `HEX_ALLOW` now covers both generated token files; `tokens:check` validates
+  both.
+
+**Verified** on `/sync-logs` and `/dashboard`, routes that import nothing themselves:
+`.h10-ds-btn` resolves (`padding: 7px 13px`, `radius: 8px`), and the DS `focus-visible` +
+reduced-motion rules are present for the first time.
+
+### 🔴 Found while verifying (pre-existing, not caused here)
+
+The app's semantic Tailwind utilities are **dead wherever DS `tokens.css` is loaded**. Measured
+on real elements on `/dashboard/overview`: `.text-secondary` computes `rgb(0,0,0)` instead of
+slate-600, `.border-default` computes black, `.bg-card` is transparent. Same mechanism as 9.0b
+in mirror image — the app reading the DS's colour tokens rather than the DS reading the app's
+channel tokens. `tailwind.config.ts` records that these utilities replaced 6,485 raw
+`text-slate-400` and 6,547 invisible borders; that migration is inert on those routes.
+Confirmed pre-existing by re-measuring with the new layout imports removed. Full account and
+proposed fix in `docs/PHASE-9-3-DUPLICATE-CONCEPTS.md` §3b.
+
 ## [9.3-t2] — 2026-08-24 — Card, EmptyState, Spinner, ProgressBar collapse onto the DS
 
 Four more of the twelve duplicate concepts retired. `components/ui/{Card,EmptyState,Spinner,

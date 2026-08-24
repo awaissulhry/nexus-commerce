@@ -2,6 +2,32 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+/**
+ * The design system, loaded once for the whole app (Phase 9.3).
+ *
+ * Until now these arrived only where an individual file imported them: `primitives.css`
+ * reached 46 files and `a11y.css` reached ONE, so a DS component rendered unstyled on any
+ * route where nothing happened to pull its stylesheet in — `.h10-ds-btn` did not resolve on
+ * /design at all. Styling that works by coincidence of import graph is the same defect as the
+ * Tailwind content-glob gap, and it blocked every remaining 9.3 tranche.
+ *
+ * ORDER IS THE CASCADE. This design system resolves conflicts by source order, not
+ * specificity: tokens → primitives → components → patterns → a11y, with a11y LAST so its
+ * focus-visible and reduced-motion rules win. Do not reorder these five lines.
+ *
+ * `tokens-global.css`, NOT `tokens.css`: the global file withholds the eleven platform-alias
+ * names (--text-*, --surface-*, --border-*) that globals.css also defines as RGB channels for
+ * Tailwind. Publishing those app-wide as colours would make `rgb(var(--border-default))`
+ * resolve to `rgb(#d8dde4)` — invalid — and kill the utilities behind 636 files. Pages that
+ * genuinely want them as colours import `tokens.css` themselves, as they already did.
+ * Phase 9.0b is what made this possible: see docs/PHASE-9-0B-TOKEN-FORM.md.
+ */
+import "@/design-system/styles/tokens-global.css";
+import "@/design-system/styles/primitives.css";
+import "@/design-system/styles/components.css";
+import "@/design-system/styles/patterns.css";
+import "@/design-system/styles/a11y.css";
+
 // P0 — Inter (variable) as the app body font, exposed as --font-sans.
 // `display: swap` keeps text visible during load; Inter is metrically
 // close to the old system stack so there's no layout shift.

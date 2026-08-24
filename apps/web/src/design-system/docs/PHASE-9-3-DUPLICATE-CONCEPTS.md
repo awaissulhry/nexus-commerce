@@ -119,6 +119,54 @@ unrelated sibling happens to import its stylesheet. It bit this tranche directly
 **Interim fix, applied:** each adapter imports the stylesheets its DS component needs, the way
 `AccountSwitcher` already did. Next dedupes them, so it costs nothing.
 
+### ✅ SHIPPED — the root layout now loads the design system
+
+`app/layout.tsx` imports, in this order and no other (**order is the cascade** in this system):
+`tokens-global.css` → `primitives.css` → `components.css` → `patterns.css` → `a11y.css`.
+
+`tokens.css` is **generated in two variants** from the one source (`tokens/css-vars.ts`):
+
+| file | contains | who loads it |
+|---|---|---|
+| `tokens.css` | everything, including the 11 contested platform aliases | pages that opt in (202 of them, unchanged) |
+| `tokens-global.css` | the same minus those 11 | the **root layout**, every route |
+
+Withholding the 11 is the whole point: publishing `--text-primary` app-wide as a colour would
+make Tailwind's `rgb(var(--text-primary) / <alpha-value>)` resolve to `rgb(#1c2530)` — invalid —
+and kill the utilities behind 636 files. **Phase 9.0b is what made a global stylesheet possible
+at all**, by removing the design system's own dependence on those names.
+
+Verified on `/sync-logs` and `/dashboard`, routes that import nothing themselves: `.h10-ds-btn`
+now resolves (`padding: 7px 13px`, `radius: 8px`), and the DS `focus-visible` + reduced-motion
+rules are present — `a11y.css` went from **one** importing file to every route.
+
+### 🔴 Found while verifying: the app's semantic Tailwind utilities are dead wherever DS tokens load
+
+Not caused by this change — confirmed by measuring with the layout imports temporarily removed,
+which gave identical results. But it is the largest styling defect found so far and it belongs
+on the record.
+
+On `/dashboard/overview`, measured on **real rendered elements**:
+
+| utility | intended | actual |
+|---|---|---|
+| `.text-secondary` | slate-600, ~7.5:1 | **`rgb(0,0,0)`** — pure black |
+| `.border-default` | slate-300 | **`rgb(0,0,0)`** — black |
+| `.bg-card` | white | **`rgba(0,0,0,0)`** — transparent |
+
+Cause: 202 files import DS `tokens.css`, which redefines `--text-*` / `--surface-*` /
+`--border-*` at `:root` as **colours**. Tailwind composes them as `rgb(var(--x) / <alpha-value>)`,
+so `rgb(#5b6573 / 1)` is invalid and the declaration is dropped. `tailwind.config.ts` says these
+utilities replaced "6,485 raw `text-slate-400`" and "6,547 invisible borders" — that entire
+migration is inert on every route where DS `tokens.css` is loaded.
+
+**This is 9.0b's mirror image**: 9.0b fixed the design system reading the app's channel tokens;
+this is the app reading the design system's colour tokens. The fix is the same shape — stop
+publishing contested names into a scope that already defines them — and `tokens-global.css` is
+the first half of it. The second half is auditing those 202 `tokens.css` imports and moving each
+to `tokens-global.css` unless it genuinely needs the aliases as colours. **That is its own
+phase**, and it should come before any further 9.3 tranche that touches text or borders.
+
 **The real fix is app-wide loading, and 9.0b is what makes it possible.** It could not be done
 before, because `tokens.css` publishes the platform-alias tier at `:root` and loading it
 globally would race `globals.css` for `--text-*` / `--surface-*` / `--border-*`. Now that DS

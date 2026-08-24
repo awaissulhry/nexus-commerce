@@ -29,7 +29,10 @@ const ROOT = 'apps/web/src/design-system'
 
 // A — raw hex literals
 const HEX = /#[0-9a-fA-F]{3,8}\b/
-const HEX_ALLOW = new Set(['styles/tokens.css'])
+// Both generated token files DEFINE the palette, so hex is their whole job.
+// `tokens-global.css` is `tokens.css` minus the contested platform aliases — it is what
+// the root layout loads app-wide (Phase 9.3). Adding a third token file? Allow it here.
+const HEX_ALLOW = new Set(['styles/tokens.css', 'styles/tokens-global.css'])
 const HEX_SCOPE = /^(primitives|components|patterns|styles)\//
 
 // B — raw NUMBERED primitive ramps reached from component stylesheets.
