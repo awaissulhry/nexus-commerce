@@ -349,6 +349,7 @@ function VolumePricingInner() {
       {
         key: 'actions',
         label: '',
+        prefsLabel: 'Actions',
         align: 'right',
         render: (r) => (
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -429,6 +430,8 @@ function VolumePricingInner() {
           </div>
         ) : (
           <DataGrid
+            customizable
+            storageKey="pricing.volume.columns"
             columns={columns}
             rows={promotions}
             rowKey={(r) => r.id}

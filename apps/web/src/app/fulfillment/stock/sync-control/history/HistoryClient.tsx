@@ -107,6 +107,8 @@ export default function HistoryClient() {
           </span>
         </GridToolbar>
         <DataGrid<AuditRow>
+          customizable
+          storageKey="stock.syncControl.history.columns"
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}

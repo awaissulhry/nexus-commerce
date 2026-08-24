@@ -306,6 +306,8 @@ export function ListView({
   return (
     <div className="sbm-listwrapper">
       <DataGrid
+        customizable
+        storageKey="fleet.map.list.columns"
         className="sbm-listgrid"
         columns={columns}
         rows={nodes}

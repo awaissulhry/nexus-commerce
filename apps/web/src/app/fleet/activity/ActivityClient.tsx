@@ -2435,6 +2435,8 @@ export function ActivityClient() {
                 holds the grid and nothing else. */}
             <div className="h10-ds-gridcard sba-gridcard">
               <DataGrid
+                customizable
+                storageKey="fleet.activity.columns"
                 columns={runColumns}
                 rows={events}
                 rowKey={(e) => e.id}

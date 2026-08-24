@@ -1,7 +1,11 @@
 'use client'
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { ChevronsUpDown, ChevronUp, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { ToolbarButton } from '../primitives'
+// The pattern FILE, not the `../patterns` barrel — see the note on the Modal
+// import inside PreferencesModal for why the barrel would be a cycle.
+import { PreferencesModal, type PreferencesValue } from '../patterns/PreferencesModal'
 
 export interface Column<T> {
   key: string
@@ -17,6 +21,13 @@ export interface Column<T> {
   width?: number
   /** value rendered in the totals row */
   total?: ReactNode
+  /**
+   * Plain-text name for the Customise dialog. Only needed when `label` is not a
+   * string — most grids here pass JSX (`<Hdr …/>`, `<TipText>…</TipText>`), and
+   * a dialog row reading "sku" instead of "SKU" is a worse lie than a verbose
+   * prop. Falls back to `label` when it is a string, then to `key`.
+   */
+  prefsLabel?: string
 }
 
 export interface DataGridProps<T> {
@@ -72,6 +83,34 @@ export interface DataGridProps<T> {
   /** cap height + scroll (sticky header/footer stay pinned) */
   maxHeight?: number | string
   className?: string
+  /**
+   * Column order + visibility as OPERATOR preferences (additive, opt-in).
+   *
+   * Omit it and nothing changes: `columns` renders in array order, exactly as
+   * every consumer before this. Pass it and the grid gains the same Customise
+   * dialog `AdsDataGrid` has had since SGX3 — the same `PreferencesModal`, so
+   * the product has one Customise UI rather than a second spelling of it.
+   *
+   * Pinned columns (`sticky` / `stickyRight`) are **locked**: reorderable in
+   * neither direction. The DS pins per column with offsets stacked by `width`,
+   * which presumes pinned columns sit contiguously at an edge; the dialog pins
+   * positionally. A developer-pinned column dragged into the middle would pin
+   * over its neighbours, so the dialog holds them at the ends instead.
+   */
+  customizable?: boolean
+  /**
+   * localStorage key for those preferences. Without it `customizable` still
+   * works, but the operator's order dies with the page — so pass it.
+   */
+  storageKey?: string
+  /**
+   * Controlled dialog state, for pages that already host their own Customise
+   * button in a toolbar. Omit both and the grid renders its own trigger.
+   */
+  customizeOpen?: boolean
+  onCustomizeOpenChange?: (open: boolean) => void
+  /** Dialog heading + trigger label (default "Customise"). */
+  customizeTitle?: string
 }
 
 /**
@@ -98,6 +137,11 @@ export function DataGrid<T>({
   rowClassName,
   maxHeight,
   className,
+  customizable,
+  storageKey,
+  customizeOpen,
+  onCustomizeOpenChange,
+  customizeTitle,
 }: DataGridProps<T>) {
   const [ownSort, setOwnSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
     initialSort ?? null,
@@ -106,6 +150,109 @@ export function DataGrid<T>({
   // and deliberately unsorted, which is not the same thing.
   const controlled = controlledSort !== undefined
   const sort = controlled ? controlledSort : ownSort
+
+  // ── Column preferences (inert unless `customizable`) ─────────────────────
+  const [ownPrefsOpen, setOwnPrefsOpen] = useState(false)
+  const prefsControlled = customizeOpen !== undefined
+  const prefsOpen = customizeOpen ?? ownPrefsOpen
+  const setPrefsOpen = (next: boolean) => {
+    onCustomizeOpenChange?.(next)
+    if (!prefsControlled) setOwnPrefsOpen(next)
+  }
+
+  // Pinned columns lead and trail; only the middle is draggable. Feeding the
+  // dialog `[...lead, ...movable, ...trail]` is what makes its own
+  // locked-leading / locked-trailing partition land on the right columns.
+  const { lockedLead, lockedTrail, movableKeys, prefsColumns } = useMemo(() => {
+    const lead = columns.filter((c) => c.sticky)
+    const trail = columns.filter((c) => c.stickyRight)
+    const movable = columns.filter((c) => !c.sticky && !c.stickyRight)
+    return {
+      lockedLead: lead,
+      lockedTrail: trail,
+      movableKeys: movable.map((c) => c.key),
+      prefsColumns: [...lead, ...movable, ...trail].map((c) => ({
+        key: c.key,
+        // An empty string is a string, and an actions column legitimately has
+        // `label: ''` — a blank draggable row the operator cannot identify (or
+        // restore once hidden) is worse than a key.
+        label: typeof c.label === 'string' && c.label.trim() ? c.label : c.prefsLabel ?? c.key,
+        locked: !!c.sticky || !!c.stickyRight,
+      })),
+    }
+  }, [columns])
+
+  const [prefs, setPrefs] = useState<PreferencesValue>(() => ({
+    visibleColumns: movableKeys,
+    stickyFirstColumn: true,
+    stickyLastColumn: true,
+    // This grid paginates nothing and sorts from its own headers, so these
+    // three are carried untouched and their dialog sections stay hidden — a
+    // Page-size control that changed nothing would be a lie.
+    pageSize: 100,
+    sortBy: '',
+    sortDir: 'desc',
+  }))
+
+  // Once per storageKey, never in the state initializer: the server renders the
+  // defaults, so seeding from localStorage during the first render is a
+  // hydration mismatch. The ref (not a dep list) is what makes it once — a call
+  // site that builds `columns` inline hands us a new array every render, and a
+  // dep-driven reload would overwrite the operator's in-session order forever.
+  const loadedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!customizable || !storageKey || loadedFor.current === storageKey) return
+    loadedFor.current = storageKey
+    let saved: Partial<PreferencesValue> | null = null
+    try {
+      const raw = window.localStorage.getItem(storageKey)
+      saved = raw ? (JSON.parse(raw) as Partial<PreferencesValue>) : null
+    } catch {
+      saved = null
+    }
+    if (!saved) return
+    const known = new Set(movableKeys)
+    const kept = (Array.isArray(saved.visibleColumns) ? saved.visibleColumns : []).filter((k) => known.has(k))
+    // A column shipped after this operator last opened the dialog is absent from
+    // their saved list. Appending it beats dropping it: dropping would hide
+    // every new column, permanently, from everyone who ever opened this grid.
+    const seen = new Set(kept)
+    setPrefs((prev) => ({
+      ...prev,
+      visibleColumns: [...kept, ...movableKeys.filter((k) => !seen.has(k))],
+      stickyFirstColumn: saved!.stickyFirstColumn !== false,
+      stickyLastColumn: saved!.stickyLastColumn !== false,
+    }))
+  }, [customizable, storageKey, movableKeys])
+
+  useEffect(() => {
+    if (!customizable || !storageKey || loadedFor.current !== storageKey) return
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(prefs))
+    } catch {
+      /* private mode / quota — the grid still works, the order just won't survive */
+    }
+  }, [prefs, customizable, storageKey])
+
+  // The operator's order IS the render order; a drag that did not move a column
+  // would lie. Untouched when `customizable` is absent.
+  const cols = useMemo(() => {
+    if (!customizable) return columns
+    const byKey = new Map(columns.map((c) => [c.key, c] as const))
+    const mid: Array<Column<T>> = []
+    for (const k of prefs.visibleColumns) {
+      const c = byKey.get(k)
+      if (c && !c.sticky && !c.stickyRight) mid.push(c)
+    }
+    return [...lockedLead, ...mid, ...lockedTrail]
+  }, [customizable, columns, prefs.visibleColumns, lockedLead, lockedTrail])
+
+  // The operator's toggle GATES the developer's flag — it never overrides which
+  // columns pin, only whether pinning applies at all.
+  const pinLeft = !customizable || prefs.stickyFirstColumn
+  const pinRight = !customizable || prefs.stickyLastColumn
+  const isSticky = (c: Column<T>) => !!c.sticky && pinLeft
+  const isStickyRight = (c: Column<T>) => !!c.stickyRight && pinRight
 
   const sortedRows = useMemo(() => {
     if (!sort) return rows
@@ -146,8 +293,8 @@ export function DataGrid<T>({
   const CK = 40
   let acc = selectable ? CK : 0
   const leftOf: Record<string, number> = {}
-  for (const c of columns) {
-    if (c.sticky) {
+  for (const c of cols) {
+    if (isSticky(c)) {
       leftOf[c.key] = acc
       acc += c.width ?? 0
     }
@@ -155,25 +302,25 @@ export function DataGrid<T>({
   // accumulate sticky-right offsets (right-pinned columns stack from the edge in)
   let accR = 0
   const rightOf: Record<string, number> = {}
-  for (let i = columns.length - 1; i >= 0; i--) {
-    const c = columns[i]
-    if (c.stickyRight) {
+  for (let i = cols.length - 1; i >= 0; i--) {
+    const c = cols[i]
+    if (isStickyRight(c)) {
       rightOf[c.key] = accR
       accR += c.width ?? 0
     }
   }
   const stickyStyle = (c: Column<T>): CSSProperties | undefined =>
-    c.sticky ? { left: leftOf[c.key], width: c.width }
-    : c.stickyRight ? { right: rightOf[c.key], width: c.width }
+    isSticky(c) ? { left: leftOf[c.key], width: c.width }
+    : isStickyRight(c) ? { right: rightOf[c.key], width: c.width }
     : c.width != null ? { width: c.width }
     : undefined
-  const stickyCls = (c: Column<T>) => (c.sticky ? 'sticky' : c.stickyRight ? 'sticky-right' : '')
+  const stickyCls = (c: Column<T>) => (isSticky(c) ? 'sticky' : isStickyRight(c) ? 'sticky-right' : '')
 
   const alignClass = (a?: 'left' | 'right' | 'center') => (a === 'right' ? 'r' : a === 'center' ? 'c' : '')
   const sortIcon = (key: string) =>
     sort?.key === key ? sort.dir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} /> : <ChevronsUpDown size={13} />
 
-  return (
+  const grid = (
     <div className={`h10-ds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
       <table className="h10-ds-grid">
         <thead>
@@ -192,7 +339,7 @@ export function DataGrid<T>({
                 />
               </th>
             )}
-            {columns.map((c) => {
+            {cols.map((c) => {
               const sorted = sort?.key === c.key
               const cls = [alignClass(c.align), stickyCls(c), sorted ? 'sorted' : ''].filter(Boolean).join(' ')
               return (
@@ -228,7 +375,7 @@ export function DataGrid<T>({
         <tbody>
           {sortedRows.length === 0 ? (
             <tr>
-              <td className="h10-ds-grid-empty" colSpan={columns.length + (selectable ? 1 : 0)}>
+              <td className="h10-ds-grid-empty" colSpan={cols.length + (selectable ? 1 : 0)}>
                 {emptyState ?? 'No rows.'}
               </td>
             </tr>
@@ -247,7 +394,7 @@ export function DataGrid<T>({
                       )}
                     </td>
                   )}
-                  {columns.map((c) => (
+                  {cols.map((c) => (
                     <td key={c.key} className={[alignClass(c.align), stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                       {c.render(row)}
                     </td>
@@ -261,7 +408,7 @@ export function DataGrid<T>({
           <tfoot>
             <tr className="totals">
               {selectable && <td className="ck sticky" style={{ left: 0 }} />}
-              {columns.map((c) => (
+              {cols.map((c) => (
                 <td key={c.key} className={[alignClass(c.align), stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                   {c.total}
                 </td>
@@ -271,5 +418,45 @@ export function DataGrid<T>({
         )}
       </table>
     </div>
+  )
+
+  // Not customizable ⇒ the exact element every existing consumer already
+  // renders. No wrapper, no extra node, nothing to re-verify.
+  if (!customizable) return grid
+
+  return (
+    <>
+      {!prefsControlled && (
+        <div className="h10-ds-grid-prefsbar">
+          <ToolbarButton
+            icon={<SlidersHorizontal size={14} />}
+            label={customizeTitle ?? 'Customise'}
+            description="Choose which columns show, and drag to reorder them."
+            onClick={() => setPrefsOpen(true)}
+            active={prefsOpen}
+          />
+        </div>
+      )}
+      {grid}
+      <PreferencesModal
+        open={prefsOpen}
+        onClose={() => setPrefsOpen(false)}
+        value={prefs}
+        onConfirm={(next) => {
+          setPrefs(next)
+          setPrefsOpen(false)
+        }}
+        allColumns={prefsColumns}
+        defaultVisible={movableKeys}
+        // Hidden rather than disabled: this grid paginates nothing and sorts
+        // from its own headers, so both sections would be controls that change
+        // nothing. Their values ride through `prefs` untouched.
+        sortFieldOptions={[]}
+        pageSizeChoices={[]}
+        // No pinned columns ⇒ two toggles that move nothing.
+        showSticky={lockedLead.length > 0 || lockedTrail.length > 0}
+        title={customizeTitle}
+      />
+    </>
   )
 }

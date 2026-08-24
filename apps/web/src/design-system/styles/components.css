@@ -1007,6 +1007,11 @@
 }
 
 /* ── DataGrid ────────────────────────────────────────────────────── */
+.h10-ds-grid-prefsbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--h10-space-8);
+}
 .h10-ds-grid-wrap {
   background: var(--h10-surface);
   border: 1px solid var(--h10-border);

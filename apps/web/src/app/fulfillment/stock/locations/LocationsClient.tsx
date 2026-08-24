@@ -292,6 +292,7 @@ function LocationsInner() {
     {
       key: 'actions',
       label: '',
+      prefsLabel: 'Actions',
       width: 100,
       align: 'right',
       render: (row) => {
@@ -364,6 +365,8 @@ function LocationsInner() {
           </div>
         ) : (
           <DataGrid
+            customizable
+            storageKey="stock.locations.columns"
             columns={columns}
             rows={rows}
             rowKey={(r) => r.id}

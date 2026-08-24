@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { GripVertical } from 'lucide-react'
-import { Modal } from '../components'
+// The component FILE, not the `../components` barrel: that barrel exports
+// `DataGrid`, which now imports this module, and a barrel import here would
+// close that loop into a real circular dependency.
+import { Modal } from '../components/Modal'
 import { Button, Toggle } from '../primitives'
 
 /**
