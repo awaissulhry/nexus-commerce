@@ -129,6 +129,12 @@
   --h10-imgup-drag: #e9f2ff;
   --h10-imgup-spin-track: #cdd5df;
   --h10-imgup-err: #cc1100;
+  --h10-tooltip-light-bg: var(--h10-white);
+  --h10-tooltip-light-fg: var(--h10-grey-900);
+  --h10-tooltip-light-border: var(--h10-grey-150);
+  --h10-tooltip-light-fg-2: var(--h10-grey-600);
+  --h10-tip-bg: var(--h10-grey-800);
+  --h10-tip-fg: var(--h10-white);
 
   /* ── Radius ── */
   --h10-radius-pill: 4px;
@@ -202,6 +208,12 @@
   --h10-border-subtle: #26323f;
   --h10-border-strong: #46505f;
   --h10-rail-border: #26323f;
+
+  /* ── Dark tone + link roles (AA on the dark canvas) ── */
+  --h10-success-strong: #6ee7a8;
+  --h10-warning-strong: #f0b46a;
+  --h10-danger-strong: #f79289;
+  --h10-text-link: #8ab6f0;
 
   /* ── Dark rail palette (app-wide rail only; shells pin light) ── */
   --h10-rail-text: #aab6c2;

@@ -28,6 +28,19 @@ DS across the app, **without ever forking**.
   pages of each section. These are the diff targets for every later step.
 - Activate the guardrails: wire `tools/token-guard.mjs` + the catalog
   visual-regression into `.githooks/pre-push`.
+  **DONE 2026-08-24** for `token-guard` + `api-guard` (both were red when wired:
+  55 token violations, 4 barrel gaps — cleared in the same change). The catalog
+  visual-regression baselines are the remaining open bullet.
+
+### 9.0b — Token-form collision → **`PHASE-9-0B-TOKEN-FORM.md`**
+- The DS and the app define the same 25 semantic names in two incompatible forms
+  (colours vs RGB channels), so **289 DS declarations are discarded** on every
+  page inside `.h10-shell`. Not a cascade-order bug — ancestor scope beats source
+  order — and not fixable by flipping `globals.css` (Tailwind needs the channels).
+- Fix: DS stylesheets consume `--h10-*` only; the platform-alias tier is deleted
+  and a `token-guard` check D keeps it out.
+- **Blocks 9.2 and 9.3**, which would otherwise amplify the ambiguity across ~290
+  pages. Full plan, measurements and gates in the linked doc.
 
 ### 9.1 — Tokenize `ads.css` (keystone — the deferred Phase 1 rewrite)
 - Rewrite `ads.css` to reference `var(--h10-*)` instead of hardcoded hex,

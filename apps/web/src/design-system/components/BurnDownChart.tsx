@@ -26,6 +26,7 @@
  */
 
 import type { CSSProperties } from 'react'
+import { chart } from '../tokens/colors'
 import {
   ComposedChart, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -52,11 +53,11 @@ export interface BurnDownChartProps {
   className?: string
 }
 
-const HUE_ACTUAL = '#1f6fde'
-const HUE_CAP = '#b3261e'
-const INK_REFERENCE = '#667080'
-const INK_AXIS = '#8a93a1'
-const GRID = '#eef1f5'
+const HUE_ACTUAL = chart.actual
+const HUE_CAP = chart.cap
+const INK_REFERENCE = chart.reference
+const INK_AXIS = chart.axis
+const GRID = chart.grid
 
 function BurnTooltip({ active, payload, label, format }: {
   active?: boolean
@@ -117,14 +118,14 @@ export function BurnDownChart({
             tickFormatter={format}
           />
           <Tooltip
-            cursor={{ stroke: '#c2c9d3' }}
+            cursor={{ stroke: chart.cursor }}
             content={(p) => (
               <BurnTooltip active={p.active} payload={p.payload as never} label={p.label as never} format={format} />
             )}
           />
 
           {todayDay != null && (
-            <ReferenceLine x={todayDay} stroke="#c2c9d3" strokeDasharray="2 3" />
+            <ReferenceLine x={todayDay} stroke={chart.cursor} strokeDasharray="2 3" />
           )}
           {capValue != null && capValue > 0 && (
             <ReferenceLine

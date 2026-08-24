@@ -122,11 +122,11 @@
  * and must stay that way. `globals.css` and `ads.css` both redefine the semantic text aliases as
  * bare RGB CHANNELS (`--text-secondary: 71 85 105`) for `rgb()` composition, so inside those
  * scopes `color: var(--text-secondary)` is an invalid declaration and is DROPPED — the label
- * silently inherits the page's near-black instead. Measured on prod: the tabs computed to
- * rgb(28,37,48) while the rule "said" grey. It also means SG.1's own `color: var(--text-primary)`
- * never applied either — its near-black came from inheritance, and the boldness from
- * `font-weight: 700` alone. `--h10-text-2` is a real hex in every scope (#5b6573 at :root AND
- * inside `.h10-shell`), so it resolves wherever this bar is used.
+ * silently inherits the page's near-black instead. That is measurable on prod: the tabs computed
+ * to rgb(28,37,48) while the rule "said" grey. It also means SG.1's own
+ * `color: var(--text-primary)` never applied either — its near-black came from inheritance, and
+ * the boldness from `font-weight: 700` alone. `--h10-text-2` is a real hex in every scope
+ * (#5b6573 at :root AND inside `.h10-shell`), so it resolves wherever this bar is used.
  * See memory: reference_ds_channel_tokens_used_raw.
  *
  * Now the heading owns the top of the page, the hairline under the bar separates navigation from
@@ -136,11 +136,13 @@
 .h10-ds-tabs.lg {
   gap: 28px;
   align-items: stretch;
-  /* 🔴 The SAME channel trap, and this half is what the operator actually named. `.h10-ds-tabs`
-     above declares `border-bottom: 1px solid var(--border-subtle)`, but `--border-subtle` is
-     `226 232 240` inside the ads shell, so the bar has been rendering with NO hairline at all —
-     measured `border-bottom: 0px none`. With nothing dividing the tabs from the Filters card
-     below, header, bar and content read as one block. Re-declared so the line actually paints. */
+  /* 🔴 The SAME channel trap as the label colour, and this half is what the operator actually
+     named. `.h10-ds-tabs` above declares `border-bottom: 1px solid var(--border-subtle)`, but
+     `--border-subtle` is `226 232 240` inside the ads shell, so the bar has been rendering with
+     NO hairline at all — measured `border-bottom: 0px none`. With nothing dividing the tabs from
+     the Filters card below, the header, the bar and the content read as one undifferentiated
+     block: *"there is no differentiation between the sections and this."* Re-declared with the
+     palette token so the line actually paints. */
   border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-tabs.lg .h10-ds-tab {
@@ -196,9 +198,9 @@
    It loses the inset ring and the 26px floor it needed while the labels were heavy: beside a
    600-weight label it reads on the sunken grey alone, as the reference bar's does.
    🔴 And it gets its background BACK. The base rule sets `background: var(--surface-sunken)`,
-   the same channel trap — `--surface-sunken` is `241 245 249` inside the ads shell, so the
-   declaration was dropped and every idle count chip has rendered fully TRANSPARENT since SG.1
-   (measured on prod: `rgba(0, 0, 0, 0)`). Only the ACTIVE pill ever showed its fill, because
+   which is the same channel trap — `--surface-sunken` is `241 245 249` inside the ads shell, so
+   the declaration was dropped and every idle count chip has rendered fully TRANSPARENT since
+   SG.1 (measured on prod: `rgba(0, 0, 0, 0)`). Only the ACTIVE pill ever showed its fill, because
    `--color-primary-soft` happens to be a real hex — which is exactly why this went unnoticed. */
 .h10-ds-tabs.lg .h10-ds-tab-count {
   min-width: 0;
@@ -1401,13 +1403,20 @@
 .h10-ds-burn { display: flex; flex-direction: column; gap: 6px; }
 .h10-ds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .h10-ds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); }
+/* `--h10-surface-raised`, not `--surface-raised`: that platform name is defined by
+   globals.css / ads.css as RGB CHANNELS (`255 255 255`), and this file loads alongside
+   both. `var(--surface-raised, #fff)` therefore resolved to `background: 255 255 255`
+   — invalid at computed-value time, so the tip painted TRANSPARENT and the `#fff`
+   fallback never applied (a fallback covers an undefined var, not an invalid one).
+   Aliasing the platform name to a colour here would have broken the reverse case:
+   reporting.css's `rgb(var(--surface-raised))` on a page that loads this file. */
 /* The hue arrives as `--c` so the dash gradient survives; an inline `background` shorthand would
    reset `background-image` and render every swatch solid. */
 .h10-ds-burn-key .ln { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
 .h10-ds-burn-key .ln.solid { background: var(--c); }
 /* The dashed marks repeat the line's own dash pattern, so the key reads as the chart does. */
 .h10-ds-burn-key .ln.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }
-.h10-ds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--surface-raised, #fff); border: 1px solid var(--border-default, #e3e7ec); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
+.h10-ds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--h10-surface-raised); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
 .h10-ds-burn-tip b { font-size: 11px; font-weight: 800; color: var(--text-primary); }
 .h10-ds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
 .h10-ds-burn-tip i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
@@ -1431,7 +1440,7 @@
   cursor: pointer; text-decoration: none;
 }
 .h10-ds-acct-trigger:hover { background: var(--h10-surface-hover); }
-.h10-ds-acct-trigger:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: 2px; }
+.h10-ds-acct-trigger:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .h10-ds-acct-trigger.is-muted { color: var(--h10-text-2); font-weight: 500; }
 .h10-ds-acct-summary { padding-left: 2px; }
 
@@ -1446,7 +1455,7 @@
 .h10-ds-acct-pill-n {
   min-width: 15px; padding: 0 4px; margin-left: 1px;
   border-radius: var(--h10-radius-round);
-  background: var(--h10-blue-600); color: var(--h10-white);
+  background: var(--color-primary); color: var(--h10-white);
   font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
 }
 
@@ -1495,7 +1504,7 @@
    row layout identical to the informational <div> so nothing shifts when a
    second account appears. */
 button.h10-ds-acct-row { width: 100%; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
-button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: -2px; }
+button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .h10-ds-acct-row[data-selected] { background: var(--h10-surface-sunken); }
 /* The tick is never the only marker of the current account — the row is also
    tinted and carries aria-current, so the state does not depend on one glyph. */
@@ -1512,16 +1521,10 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 .h10-ds-acct-row-sub code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--h10-text-2); }
 .h10-ds-acct-row-warn { font-size: 11.5px; color: var(--h10-warning-strong); }
 .h10-ds-acct-row-warn[data-tone='error'] { color: var(--h10-danger-strong); }
-/* Dark-mode tone text.
-   `.dark` (tokens.css) redefines the text/surface/border tokens but NOT
-   --h10-warning-strong, --h10-danger-strong or --h10-text-link. On the dark
-   panel those light-mode values measure 2.94:1 and 3.18:1 — both below AA.
-   Measured in-browser 2026-08-19; the replacements below measure >=4.5:1.
-   This is a DS-wide gap, not one local to this component: the correct fix is a
-   dark override on the tokens themselves, which belongs to the DS-hardening
-   session rather than to MAP.1. Scoped here so nothing else shifts underfoot. */
-.dark .h10-ds-acct-row-warn { color: #f0b46a; }
-.dark .h10-ds-acct-row-warn[data-tone='error'] { color: #f79289; }
+/* Dark-mode tone text: no rule needed. `.dark` (tokens.css) now carries
+   --h10-{success,warning,danger}-strong and --h10-text-link, so the rules above
+   re-theme themselves. The per-component hex overrides that stood here until
+   2026-08-24 were a DS-wide gap patched locally — fixed at the token tier. */
 .h10-ds-acct-tag {
   padding: 1px 6px; border-radius: var(--h10-radius-pill);
   background: var(--h10-surface-sunken); color: var(--h10-text-2);
@@ -1536,7 +1539,6 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 
 .h10-ds-acct-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
 .h10-ds-acct-foot a { font-size: 12px; font-weight: 600; color: var(--h10-text-link); text-decoration: none; }
-.dark .h10-ds-acct-foot a { color: #8ab6f0; }
 .h10-ds-acct-foot a:hover { text-decoration: underline; }
 
 /* ── AccountsPanel (MAP.4) ─────────────────────────────────────────────────
@@ -1556,8 +1558,6 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 .h10-ds-acctp-notice { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; }
 .h10-ds-acctp-notice[data-tone='ok'] { color: var(--h10-success-strong); }
 .h10-ds-acctp-notice[data-tone='error'] { color: var(--h10-danger-strong); }
-.dark .h10-ds-acctp-notice[data-tone='ok'] { color: #6ee7a8; }
-.dark .h10-ds-acctp-notice[data-tone='error'] { color: #f79289; }
 
 .h10-ds-acctp-group { margin-top: 14px; }
 .h10-ds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
@@ -1577,16 +1577,15 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 .h10-ds-acctp-name { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--h10-text); }
 .h10-ds-acctp-sub { font-size: 12px; color: var(--h10-text-2); }
 .h10-ds-acctp-warn { color: var(--h10-warning-strong); }
-.dark .h10-ds-acctp-warn { color: #f0b46a; }
 .h10-ds-acctp-badge {
   padding: 1px 7px; border-radius: var(--h10-radius-round);
-  background: var(--h10-blue-600); color: var(--h10-white);
+  background: var(--color-primary); color: var(--h10-white);
   font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
 }
 .h10-ds-acctp-input {
   font: inherit; font-size: 13.5px; font-weight: 600;
   padding: 3px 7px; width: min(280px, 100%);
-  border: 1px solid var(--h10-blue-600); border-radius: var(--h10-radius-sm);
+  border: 1px solid var(--color-primary); border-radius: var(--h10-radius-sm);
   background: var(--surface-card); color: var(--h10-text);
 }
 
@@ -1600,7 +1599,9 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
 .h10-ds-acctp-actions button:hover:not(:disabled) { background: var(--h10-surface-hover); }
 .h10-ds-acctp-actions button:disabled { color: var(--h10-text-disabled); cursor: not-allowed; }
 .h10-ds-acctp-actions button.is-danger { color: var(--h10-danger-strong); border-color: var(--h10-danger-soft); }
-.dark .h10-ds-acctp-actions button.is-danger { color: #f79289; border-color: var(--border-default); }
+/* The danger BORDER still needs a dark rule: --h10-danger-soft is a light wash
+   with no dark counterpart, and giving it one would re-tint every danger pill. */
+.dark .h10-ds-acctp-actions button.is-danger { border-color: var(--border-default); }
 .h10-ds-acctp-actions button.is-danger:disabled { color: var(--h10-text-disabled); border-color: var(--border-default); }
 /* Why an action is absent, in words a screen reader and an eye can both reach —
    never a `title` on a disabled control, which fires no pointer events. */
@@ -1613,7 +1614,6 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
   color: var(--h10-text-link); cursor: pointer;
 }
 .h10-ds-acctp-add:hover { background: var(--h10-surface-hover); }
-.dark .h10-ds-acctp-add { color: #8ab6f0; }
 
 /* MAP.4 — the account identity colour. A bar, never the only carrier of identity:
    every row also prints its account name, so the colour is a shortcut, not the
@@ -1625,5 +1625,55 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-blue-600); o
   border: 2px solid transparent; cursor: pointer;
 }
 .h10-ds-acctp-swatch[aria-pressed='true'] { border-color: var(--h10-text); }
-.h10-ds-acctp-swatch:focus-visible { outline: 2px solid var(--h10-blue-600); outline-offset: 1px; }
+.h10-ds-acctp-swatch:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .h10-ds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--border-strong); font-size: 10px; color: var(--h10-text-2); line-height: 1; }
+
+/* ── ColumnGroupModal (2026-08-24) ──────────────────────────────────────────────
+   Was the DS's other Tailwind-styled component (see the ToolbarButton note in
+   primitives.css for why that was load-bearing, not cosmetic). Rewritten onto
+   `.h10-ds-*` + tokens.
+
+   The group DOT: `color` on a group is a free-form string chosen by the consumer,
+   so the eleven Tailwind hues it used to accept are collapsed onto the DS's own
+   palette here — one system, not two. An unknown key falls through to the neutral
+   dot, and colour is never the only carrier: every row prints its label. */
+.h10-ds-cgm-list { display: flex; flex-direction: column; gap: 2px; }
+
+.h10-ds-cgm-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 4px; border-radius: var(--h10-radius-lg);
+}
+.h10-ds-cgm-row:hover { background: var(--h10-surface-hover); }
+
+.h10-ds-cgm-grip {
+  flex: none; display: inline-flex; padding: 0;
+  border: none; background: none; color: var(--h10-text-disabled);
+  cursor: grab;
+}
+.h10-ds-cgm-grip:hover { color: var(--text-tertiary); }
+.h10-ds-cgm-grip:active { cursor: grabbing; }
+.h10-ds-cgm-grip:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: var(--h10-radius-pill); }
+
+.h10-ds-cgm-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--text-tertiary); }
+.h10-ds-cgm-dot[data-color='blue'],
+.h10-ds-cgm-dot[data-color='sky'] { background: var(--color-primary); }
+.h10-ds-cgm-dot[data-color='purple'],
+.h10-ds-cgm-dot[data-color='violet'] { background: var(--h10-targeting-manual); }
+.h10-ds-cgm-dot[data-color='emerald'],
+.h10-ds-cgm-dot[data-color='teal'] { background: var(--status-success-line); }
+.h10-ds-cgm-dot[data-color='amber'],
+.h10-ds-cgm-dot[data-color='orange'] { background: var(--status-warning-line); }
+.h10-ds-cgm-dot[data-color='cyan'] { background: var(--h10-badge-sd-fg); }
+.h10-ds-cgm-dot[data-color='red'] { background: var(--status-danger-line); }
+
+.h10-ds-cgm-main { flex: 1; min-width: 0; }
+.h10-ds-cgm-label { font-size: 13px; font-weight: 500; color: var(--h10-text-strong); }
+/* A hidden group is dimmed, but it also keeps its Toggle in the off position —
+   the tint is a second signal, never the only one. */
+.h10-ds-cgm-label[data-hidden] { color: var(--text-tertiary); }
+.h10-ds-cgm-count { margin-left: 8px; font-size: 11.5px; color: var(--text-tertiary); }
+
+.h10-ds-cgm-foot { display: flex; width: 100%; align-items: center; justify-content: space-between; }
+.h10-ds-cgm-foot-actions { display: flex; gap: 8px; }
+.h10-ds-cgm-reset { display: inline-flex; align-items: center; gap: 6px; }
+.h10-ds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--text-tertiary); }

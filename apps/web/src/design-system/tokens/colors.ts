@@ -80,6 +80,47 @@ export const palette = {
   amazon: '#232f3e', // 8×
 } as const
 
+// ── Tier 3: bespoke token groups (their only home) ───────────────────
+
+/**
+ * Account-identity palette — a FIXED set, never a free colour picker.
+ *
+ * These hexes are PERSISTED: `ChannelConnection.accountColor` stores the string
+ * and the API validates against this list, so a value here is data, not styling.
+ * Snapping one onto the nearest ramp step would orphan every account already
+ * carrying the old value. They live here (rather than as literals in
+ * components/AccountSwitcher.tsx) so the switcher, the flat-file header, the
+ * orders inbox and the cross-account console all read one definition.
+ *
+ * Five sit on the ramp; teal / violet / slate are identity-only hues with no
+ * ramp counterpart, pinned deliberately. Checked against both grounds.
+ */
+export const accountIdentity = [
+  { name: 'Blue', hex: palette.blue[600] },
+  { name: 'Teal', hex: '#0f8b8d' },
+  { name: 'Green', hex: palette.green[600] },
+  { name: 'Amber', hex: palette.amber[600] },
+  { name: 'Orange', hex: palette.amber[700] },
+  { name: 'Red', hex: palette.red[600] },
+  { name: 'Purple', hex: '#7c3aed' },
+  { name: 'Slate', hex: '#475569' },
+] as const satisfies ReadonlyArray<{ name: string; hex: string }>
+
+/**
+ * Chart inks. Recharts takes colour as a prop, not a class, so an SVG
+ * presentation attribute cannot resolve `var(--h10-*)` — these must reach the
+ * component as literals. Four are exact ramp steps; `cap` and `reference` are
+ * chart-only hues with no ramp counterpart, pinned at their measured values.
+ */
+export const chart = {
+  actual: palette.blue[600],
+  cap: '#b3261e',
+  reference: '#667080',
+  axis: palette.grey[500],
+  grid: palette.grey[100],
+  cursor: palette.grey[300],
+} as const
+
 // ── Tier 2: semantic roles (consume these) ──────────────────────────
 
 export const color = {

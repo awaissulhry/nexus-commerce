@@ -1,4 +1,11 @@
-export { AppShell, type AppShellProps, type ShellNavItem } from './AppShell'
+export {
+  AppShell,
+  type AppShellProps,
+  type ShellNavItem,
+  type ShellSubItem,
+  type ShellNavGroup,
+  type ShellNavEntry,
+} from './AppShell'
 export { PageHeader, type PageHeaderProps } from './PageHeader'
 export { DetailHeader, type DetailHeaderProps } from './DetailHeader'
 export { FilterPanel, FilterField, type FilterPanelProps } from './FilterPanel'

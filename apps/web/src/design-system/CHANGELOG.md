@@ -4,6 +4,66 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [CONFORMANCE] — 2026-08-24 — The DS's own two guards go green, and get enforced
+
+`tools/token-guard.mjs` and `tools/api-guard.mjs` both shipped with the system and
+both sat **unwired** — so every push measured the app's conformance to the DS while
+nothing measured the DS's conformance to itself. Wired into `.githooks/pre-push` in
+this entry; they were red when wired (55 token violations, 4 barrel gaps) and are
+cleared here, because a gate is only honest once the tree passes it.
+
+### Token-value changes (these restyle the app)
+
+- **`.dark` gained the tone + link roles**: `--h10-success-strong`, `--h10-warning-strong`,
+  `--h10-danger-strong`, `--h10-text-link`. The light values measured **2.94:1–3.18:1**
+  on the dark canvas — below AA everywhere they were used, not just where someone had
+  noticed. `components.css` had been patching this per-component with hex overrides on
+  `.h10-ds-acct*`; those are deleted, so any component now inherits the AA value instead
+  of the sub-AA one. **Migration:** none — strictly a contrast improvement, dark only.
+- **Tooltip inks are tokens and theme-invariant**: `--h10-tooltip-light-{bg,fg,fg-2,border}`
+  and `--h10-tip-{bg,fg}`. The values they replace were foreign Tailwind slate hexes
+  (`#1e293b` / `#e2e8f0` / `#28313d`) hardcoded in `primitives.css`; snapped onto the
+  nearest H10 ramp step, max delta 4/255 per channel. They point at raw ramps, which
+  `.dark` never redefines, so a tip keeps its own contrast rather than inverting.
+- **`.h10-ds-burn-tip` painted transparent, not white.** It read
+  `var(--surface-raised, #fff)` — but `--surface-raised` IS defined app-wide, by
+  globals.css and ads.css, as **RGB channels** (`255 255 255`). The substitution produced
+  `background: 255 255 255`, invalid at computed-value time, and a `var()` fallback covers
+  an *undefined* variable, never an invalid one. Now reads `var(--h10-surface-raised)` —
+  DS-owned, a real colour in both themes. **Deliberately NOT fixed by aliasing
+  `--surface-raised` in tokens.css**: that would have broken the reverse case,
+  `rgb(var(--surface-raised))` in `reporting.css`, on the pages that load both.
+
+### The DS no longer depends on the consuming app's Tailwind build
+
+`ToolbarButton`, `ToolbarDivider` and `ColumnGroupModal` were styled with Tailwind
+utilities. `apps/web/tailwind.config.ts` scans `./src/pages`, `./src/components` and
+`./src/app` — **never `./src/design-system`** — so those utilities only reached a build
+when some other file happened to use the same class. The ToolbarButton badge's arbitrary
+values (`-right-0.5`, `min-w-[14px]`, `text-[9px]`) were emitted **zero times**: it was
+mis-rendered wherever it shipped, and `ToolbarDivider` was an invisible dimensionless div.
+
+Rewritten onto `.h10-ds-tbtn*` / `.h10-ds-tdivider` / `.h10-ds-cgm-*` + tokens. Every
+state (hover / pressed / disabled) is now CSS keyed off `:hover`, `[aria-pressed]` and
+`:disabled`, so the visual cannot drift from the a11y tree. ColumnGroupModal's eleven
+Tailwind dot hues collapse onto the DS palette via `[data-color]`; an unknown key falls
+through to the neutral dot. **No content-glob was added** — the DS depends on nothing
+outside itself, which is the point.
+
+### Other
+
+- `--h10-blue-600` × 6 in `components.css` → `var(--color-primary)` (value-identical).
+- `ACCOUNT_COLORS` moved to `tokens/colors.ts` as `accountIdentity`; chart inks to
+  `chart`. Both keep their exact hexes — `ChannelConnection.accountColor` **persists**
+  these strings, so snapping one onto a ramp step would orphan stored accounts.
+- Barrels: `LegacyTagTone` (primitives), `ShellSubItem` / `ShellNavGroup` / `ShellNavEntry`
+  (patterns) are now re-exported — a consumer can name what `AppShellProps` hands it.
+- `token-guard` itself is now **block-comment aware**. Its old per-line heuristic only saw
+  the first line of a `/* … */` block, so prose *explaining* why an idiom is banned
+  (Button.tsx's note on hand-rolled `!bg-red-600` overrides) counted as a violation — the
+  guard was pressuring authors to delete the explanation. Negative-tested: real hex, ramp
+  and Tailwind-palette violations in code still fail it.
+
 ## [DRAWER-WIDTH] — 2026-07-10 — Drawer width + subtitle props (EFX P6)
 
 - **`Drawer` gained `width`** (number = px, or any CSS length; default stays the

@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { accountIdentity } from '../tokens/colors'
 import '../styles/tokens.css'
 import '../styles/components.css'
 
@@ -47,17 +48,12 @@ export type AccountHealth = 'ok' | 'warn' | 'error' | 'unknown'
  *
  * Stored as hex because that is what `ChannelConnection.accountColor` holds and
  * what the API validates; the UI never offers anything outside this list.
+ *
+ * The values themselves live in `tokens/colors.ts` (`accountIdentity`) — this is
+ * the DS's public alias for them, kept so the existing import path still works.
  */
-export const ACCOUNT_COLORS: ReadonlyArray<{ name: string; hex: string }> = [
-  { name: 'Blue', hex: '#1f6fde' },
-  { name: 'Teal', hex: '#0f8b8d' },
-  { name: 'Green', hex: '#15a34a' },
-  { name: 'Amber', hex: '#b87503' },
-  { name: 'Orange', hex: '#c2410c' },
-  { name: 'Red', hex: '#d4493f' },
-  { name: 'Purple', hex: '#7c3aed' },
-  { name: 'Slate', hex: '#475569' },
-]
+export const ACCOUNT_COLORS: ReadonlyArray<{ name: string; hex: string }> =
+  accountIdentity
 
 export interface AccountRow {
   id: string

@@ -154,6 +154,19 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--h10-imgup-spin-track', value: '#cdd5df' },
   { name: '--h10-imgup-err', value: '#cc1100' },
 
+  // Tooltip bubbles. Both are deliberately THEME-INVARIANT — they point at the
+  // raw ramps, which the `.dark` block never redefines, so a tip keeps its own
+  // contrast instead of inverting with the canvas. The values they replace were
+  // foreign Tailwind slate hexes (#1e293b / #e2e8f0 / #28313d) hardcoded in
+  // primitives.css; snapped onto the nearest H10 ramp step 2026-08-24 (max
+  // delta 4/255 per channel — below a JND, and on-system).
+  { name: '--h10-tooltip-light-bg', value: 'var(--h10-white)' },
+  { name: '--h10-tooltip-light-fg', value: 'var(--h10-grey-900)' },
+  { name: '--h10-tooltip-light-border', value: 'var(--h10-grey-150)' },
+  { name: '--h10-tooltip-light-fg-2', value: 'var(--h10-grey-600)' },
+  { name: '--h10-tip-bg', value: 'var(--h10-grey-800)' },
+  { name: '--h10-tip-fg', value: 'var(--h10-white)' },
+
   // ── Radius ───────────────────────────────────────────────────────
   { section: 'Radius', name: '--h10-radius-pill', value: '4px' },
   { name: '--h10-radius-sm', value: '6px' },
@@ -229,6 +242,18 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--h10-border-subtle', value: '#26323f' },
   { name: '--h10-border-strong', value: '#46505f' },
   { name: '--h10-rail-border', value: '#26323f' },
+
+  // Tone + link roles on a dark canvas. The light values (--h10-amber-700 /
+  // --h10-red-700 / --h10-green-700 / --h10-blue-600) measure 2.94:1 - 3.18:1
+  // against the dark surfaces — all below AA. Measured in-browser 2026-08-19;
+  // every value below measures >= 4.5:1 on --h10-surface / --h10-surface-raised.
+  // These lived as `.dark .h10-ds-acct*` hex overrides in components.css until
+  // 2026-08-24: a DS-wide gap patched per-component, so any NEW component
+  // inherited the sub-AA value. Fixed at the token tier, which is its only home.
+  { section: 'Dark tone + link roles (AA on the dark canvas)', name: '--h10-success-strong', value: '#6ee7a8' },
+  { name: '--h10-warning-strong', value: '#f0b46a' },
+  { name: '--h10-danger-strong', value: '#f79289' },
+  { name: '--h10-text-link', value: '#8ab6f0' },
 
   // Dark rail palette (consumed only when the rail is NOT under .h10-shell —
   // i.e. the app-wide rail; standalone shells pin these light).

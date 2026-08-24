@@ -58,7 +58,36 @@ function walk(dir) {
   return out
 }
 
-const isComment = (t) => t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')
+/**
+ * Which lines of a file are comment. Block-aware, and it has to be: the old
+ * per-line heuristic (`startsWith('//' | '*' | '/*')`) only recognised the FIRST
+ * line of a `/* … *\/` block plus the `*`-led continuations that happen to be
+ * indented that way. A continuation line quoting the very hex or Tailwind class
+ * it is warning about read as code — so the guard pressured the author to DELETE
+ * the explanation, which is the opposite of what it exists to encourage.
+ */
+function commentMask(lines) {
+  const mask = new Array(lines.length).fill(false)
+  let inBlock = false
+  lines.forEach((line, i) => {
+    const t = line.trimStart()
+    if (inBlock) {
+      mask[i] = true
+      if (line.includes('*/')) inBlock = false
+      return
+    }
+    if (t.startsWith('//') || t.startsWith('*')) {
+      mask[i] = true
+      return
+    }
+    if (t.startsWith('/*')) {
+      mask[i] = true
+      const open = line.indexOf('/*')
+      if (line.indexOf('*/', open + 2) === -1) inBlock = true
+    }
+  })
+  return mask
+}
 
 const violations = []
 for (const file of walk(ROOT)) {
@@ -69,12 +98,12 @@ for (const file of walk(ROOT)) {
   if (!isTsOrCss) continue
 
   const lines = readFileSync(file, 'utf8').split('\n')
+  const isComment = commentMask(lines)
 
   // A — raw hex
   if (HEX_SCOPE.test(rel) && !HEX_ALLOW.has(rel)) {
     lines.forEach((line, i) => {
-      const t = line.trimStart()
-      if (HEX.test(line) && !isComment(t)) {
+      if (HEX.test(line) && !isComment[i]) {
         violations.push(`${rel}:${i + 1}  raw hex — use var(--h10-*) / tokens: ${line.trim().slice(0, 80)}`)
       }
     })
@@ -83,17 +112,20 @@ for (const file of walk(ROOT)) {
   // B — raw numbered ramp in the three component stylesheets
   if (isCss && RAMP_FILES.has(rel)) {
     lines.forEach((line, i) => {
-      const t = line.trimStart()
-      if (RAMP.test(line) && !isComment(t)) {
+      if (RAMP.test(line) && !isComment[i]) {
         violations.push(`${rel}:${i + 1}  raw ramp — use a semantic/platform token: ${line.trim().slice(0, 80)}`)
       }
     })
   }
 
   // C — raw Tailwind palette class in DS .tsx
+  //     Comments are skipped, as in A and B: prose EXPLAINING why an idiom is
+  //     banned (Button.tsx's note about hand-rolled `!bg-red-600` overrides) is
+  //     documentation, not a violation — and flagging it teaches the opposite
+  //     lesson, that the safe move is to delete the explanation.
   if (isTsx && TW_SCOPE.test(rel)) {
     lines.forEach((line, i) => {
-      if (TW.test(line)) {
+      if (TW.test(line) && !isComment[i]) {
         violations.push(`${rel}:${i + 1}  raw Tailwind palette — use .h10-ds-* + tokens: ${line.trim().slice(0, 80)}`)
       }
     })
