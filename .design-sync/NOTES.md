@@ -108,7 +108,7 @@ The component's own `initialData` prop is the fetch seam — no network in the p
 **Re-sync risk:** those are Next internals (Next 16.2.4). If a Next major bumps and the card
 breaks, check the module paths first.
 
-## 🔴 Two components depend on the consuming app's Tailwind build
+## ✅ Two components used to depend on the consuming app's Tailwind build
 
 `ToolbarButton` / `ToolbarDivider` (and part of `ColumnGroupModal`) are styled with **Tailwind
 utilities**, not the DS's `.h10-ds-*` convention. They therefore render unstyled anywhere the
@@ -131,9 +131,25 @@ the matching narrow reset (`button.flex.h-7.w-7`) plus the `--tw-*` variable def
 normally come from preflight — without those, `[TOKENS_MISSING]` fires and the transform /
 transition utilities resolve to nothing.
 
-**The real fix belongs in the repo:** give those two components `.h10-ds-*` classes in
-`primitives.css`, or add `./src/design-system/**` to the Tailwind `content` globs. Until then
-the shim is load-bearing and must be regenerated whenever either component's classes change.
+**FIXED IN THE REPO, 2026-08-24** (commit alongside the DS `[CONFORMANCE]` changelog entry).
+`ToolbarButton` / `ToolbarDivider` / `ColumnGroupModal` now carry `.h10-ds-tbtn*`,
+`.h10-ds-tdivider` and `.h10-ds-cgm-*` classes in the DS stylesheets, tokens throughout.
+`token-guard.mjs` bans raw Tailwind palette classes in DS `.tsx` and is enforced in
+`.githooks/pre-push`, so this cannot come back. The `content` globs were deliberately NOT
+widened — the DS depends on nothing outside itself, which is the stronger guarantee.
+
+**⚠ The shim is now inert and should be REMOVED on the next sync.** Its config scans exactly
+those two files for Tailwind classes; both are now Tailwind-free, so it emits an empty
+stylesheet. Removal is four pieces, and they must go together:
+  1. `.design-sync/ds-pkg/tailwind-shim.config.ts` + `tailwind-shim.in.css` — delete.
+  2. `build.mjs` §2b (the `npx tailwindcss` exec) and the `tailwind-shim.css` entry in its
+     concat list — delete. That also drops a `npx tailwindcss` call from every build.
+  3. `base.css` — drop the narrow `button.flex.h-7.w-7` reset AND the `--tw-*` variable
+     defaults block. Nothing consumes them once the shim is gone.
+  4. NOTES.md "Known render warns" — the `[TOKENS_MISSING]` for `--tw-*` line goes with it.
+Not done in the repo session that fixed the components: verifying the removal needs a full
+converter run, and a half-removed shim silently unstyles two cards. Do it as one step, then
+check the ToolbarButton / ColumnCustomizer cards on the contact sheet before uploading.
 
 ## `_PreviewRouterHost` — why it lives in the bundle
 
@@ -212,3 +228,58 @@ of component discovery (`^[A-Z][A-Za-z0-9]*$`), so it never becomes a card or a 
   presets rail and `.h10-ds-dp-day` styling are unreachable from any static card.
 - `ToolbarButton` / `ToolbarDivider` / `ColumnGroupModal`'s grip should get `.h10-ds-*` classes
   so they stop depending on the consuming app's Tailwind build (see the 🔴 section above).
+
+## Overlay components — how their cards were made to render
+
+Five of the eight overlays expose **no `open` prop**; their previews open them imperatively from a
+mount effect (`.click()` survives because outside-close listens on `mousedown`; `Combobox` needs the
+native value setter plus a bubbling `input` event). Nothing is hand-written markup — `ToastProvider`
+raises real toasts through the real `useToast` API.
+
+- **`useToast` imports fine even though it is not in `manifest.exported`** — the package shim does
+  `export * from` the raw bundle global, so any non-component named export is reachable from a preview.
+- **`Drawer` draws a UA focus ring in capture that production never shows**: it claims panel focus
+  programmatically and, with no prior interaction, Chrome resolves `:focus-visible`. Fixed through the
+  component's own contract — it only claims focus when nothing inside has, and React's `autoFocus`
+  runs first, so each cell autofocuses the control a keyboard user should land on. Not a CSS hack.
+- **`Combobox` shows the query, not the selection, while open.** Surprising but real; the `OpenList`
+  cell documents it rather than dodging it.
+- **`Drawer.overlay` is only a scrim** — the caller supplies the whole confirm surface.
+
+### 🔴 `viewport` is NOT grade-free — `cardMode` / `primaryStory` are
+
+`configSlicesFor().componentFor()` strips only the presentation-only knobs. Adding a `viewport`
+override re-keys that component's grade and forces a re-capture and re-grade. Consequence accepted
+here: `Modal size="xl"` clamps to ~860px of its declared 920px at the 900px capture viewport, and the
+cell's grade note says so. Reach for `viewport` only when you are ready to re-grade.
+
+### The default card is not what the grading sheet shows
+
+Grading reads `?story=` captures — one cell at a time. The **browsable** card is `<Name>.html` with no
+query, rendering every export at once, and that is where portalled overlays collide: four Modals stack
+over four superimposed scrims, three Drawers stack on one right edge, two toast viewports land at the
+same fixed coordinates, and `HoverCard`'s `:focus-within` reveal can only fire for one element per
+document. Always open the default card before declaring an overlay component done.
+
+## Re-sync risks — what can silently go stale
+
+- **🔴 This bundle was built from a working tree containing another session's UNCOMMITTED DS
+  changes.** At upload time (2026-08-24) the `.h10-ds-tbtn*` / `.h10-ds-tdivider` /
+  `.h10-ds-cgm-*` conformance work existed only as unstaged edits to `ToolbarButton.tsx`,
+  `ColumnGroupModal.tsx`, `AccountSwitcher.tsx`, `BurnDownChart.tsx`, `primitives.css`,
+  `components.css`, `tokens.css`, `colors.ts` and `css-vars.ts`. The five affected components
+  were re-captured and re-graded against that state, and the uploaded bundle matches it exactly
+  (`bundleSha12 a943b17b68ba`). **If those edits are reworked or dropped before landing, the
+  published cards describe code that does not exist** — re-sync and the diff will show it.
+- The **Tailwind shim is now dead** — it emits only Tailwind's unconditional preamble
+  (`.visible`, `.transform`, `.filter`, `.transition`; 700 bytes, down from 6.7 KB). Remove it
+  per the four-step list above, as one step, with a full converter run.
+- `_PreviewRouterHost` imports Next internals (`next/dist/shared/lib/*.shared-runtime`, Next
+  16.2.4). A Next major bump can move those paths; the AccountSwitcher card breaks first.
+- The Inter woff2 in `ds-pkg/fonts/` were lifted from `apps/web/.next/static/media/`. They are
+  committed, so they survive a clean, but they are a **snapshot** — if the app changes its font
+  or subsets, these do not follow automatically.
+- `gen-dts-props.mjs` must always run via `refresh-contracts.mjs` (clear → build → gen → build).
+  Calling it twice in a row silently drops already-fixed components out of `cfg.dtsPropsFor`.
+- Grades live in the gitignored `.design-sync/.cache/`; the durable carry-forward is the
+  uploaded `_ds_sync.json`. A fresh clone re-verifies only what the anchor says changed.
