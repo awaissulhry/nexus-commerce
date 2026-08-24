@@ -23,6 +23,13 @@
   --text-primary:    var(--h10-grey-900);  /* #1c2530 */
   --text-secondary:  var(--h10-grey-600);  /* #5b6573 */
   --text-tertiary:   var(--h10-grey-500);  /* #8a93a1 */
+  /* 9.0b — these two were USED by this page but never pinned, so they fell through
+     to globals.css `:root`, where they are RGB channels. Both declarations were
+     therefore dropped and inherited near-black instead: `.invManageLink` was a link
+     that did not look like a link, and the sort chevron was not muted. Measured
+     in-browser 2026-08-24. Pin ALL of them or none — the rule this block already states. */
+  --text-disabled:   var(--h10-grey-400);  /* #aeb6c2 */
+  --text-link:       var(--h10-blue-600);  /* #1f6fde */
 
   /* Pin light border tokens */
   --border-default:  var(--h10-grey-200);  /* #d8dde4 */

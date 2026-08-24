@@ -104,6 +104,7 @@
   --h10-warning-strong: var(--h10-amber-700);
   --h10-info-soft: var(--h10-blue-100);
   --h10-info: var(--h10-blue-600);
+  --h10-info-strong: var(--h10-blue-700);
 
   /* ── status pills (tone-named: success/warning/neutral/danger) ── */
   --h10-pill-success-fg: var(--h10-blue-900);
@@ -190,7 +191,7 @@
   --status-danger-strong: var(--h10-danger-strong);
   --status-info-soft: var(--h10-info-soft);
   --status-info-line: var(--h10-info);
-  --status-info-strong: var(--h10-blue-700);
+  --status-info-strong: var(--h10-info-strong);
 }
 
 .dark {

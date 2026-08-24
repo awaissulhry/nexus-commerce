@@ -20,15 +20,28 @@ reconciled, not merged.
 ## Token tiers
 
 1. **Primitive** — raw scale values (`--h10-blue-600: #1f6fde`). No semantics.
-2. **Semantic** — role-based, under the platform's names (`--text-primary`,
-   `--surface-card`, `--border-default`, `--status-success-{soft,line,strong}`,
-   `--color-primary`). **Live**: these are value-preserving aliases over the
-   `--h10-*` roles, and every component CSS rule consumes **them**.
-3. **Component** — DS-only knobs the semantic layer doesn't express, kept under
+2. **Semantic role** — role-based, kept under `--h10-*` (`--h10-text`,
+   `--h10-surface`, `--h10-border`, `--h10-success-strong`, `--h10-primary`).
+   **This is the tier component CSS consumes.**
+3. **Component** — DS-only knobs the role layer doesn't express, also under
    `--h10-*` (radius/shadow/focus/pill/badge/targeting/rail/structural-dim).
+4. **Platform alias** — the platform's own names (`--text-primary`,
+   `--surface-card`, `--border-default`, `--status-*`, `--color-primary`),
+   published in `tokens.css` **for app CSS only**.
 
-Components reference the **semantic** (or DS-only component) tier — never the raw
-`--h10-*-NNN` ramps, never raw hex.
+Components reference tier 2 or 3 — never the raw `--h10-*-NNN` ramps, never raw
+hex, and **never tier 4**.
+
+🔴 **Why components must not touch tier 4** (Phase 9.0b, 2026-08-24). Eleven of
+those names — `--text-*`, `--surface-*`, `--border-*` — are also defined by
+`globals.css` and `ads.css` as space-separated **RGB channels**, because Tailwind
+composes them as `rgb(var(--x) / <alpha-value>)`. Custom properties resolve from
+the nearest defining **ancestor**, not by source order, so inside `.h10-shell`
+those shadow the DS's and `background: var(--surface-card)` becomes
+`background: 255 255 255` — invalid at computed-value time, and silently dropped.
+**285 component declarations were dead this way.** They now use tier 2;
+`token-guard` check D keeps them there. Full account:
+`docs/PHASE-9-0B-TOKEN-FORM.md`.
 
 ## Versioning
 
@@ -100,7 +113,7 @@ concurrent sessions.
   `docs/AUDIT.md` §0, spec §3) extends the hex guard to two further rules that are
   enforced by review today and slated for lint: **(a) no raw ramp** — a
   `var(--h10-{grey,blue,green,red,amber,purple,cyan}-NNN)` reach in component CSS
-  is a defect (use the semantic alias instead); **(b) no raw Tailwind palette**
+  is a defect (use the `--h10-*` role token instead); **(b) no raw Tailwind palette**
   in DS `.tsx`. A planned `tools/api-guard.mjs` will assert **barrel-export
   completeness** (every component re-exports its public Props/types) and that the
   `Tone`/`Size` unions conform — until then, the barrels in

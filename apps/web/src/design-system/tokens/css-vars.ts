@@ -126,6 +126,11 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--h10-warning-strong', value: 'var(--h10-amber-700)' },
   { name: '--h10-info-soft', value: 'var(--h10-blue-100)' },
   { name: '--h10-info', value: 'var(--h10-blue-600)' },
+  // The info tone had soft + line but no `strong`: `--status-info-strong` reached past the
+  // semantic tier straight to the ramp (`--h10-blue-700`), which is the one thing component
+  // CSS may not do (token-guard check B). Named here so the tone family is complete and the
+  // 9.0b substitution has a legal target, like every other tone.
+  { name: '--h10-info-strong', value: 'var(--h10-blue-700)' },
 
   // status pills
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--h10-pill-success-fg', value: 'var(--h10-blue-900)' },
@@ -196,7 +201,29 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { section: 'Type', name: '--h10-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
   { name: '--h10-font-smoothing', value: 'auto' },
 
-  // ── Platform-semantic aliases (components consume THESE; bridge to globals.css) ──
+  // ── Platform-semantic aliases ────────────────────────────────────────
+  //
+  // 🔴 DS stylesheets DO NOT consume these. `token-guard` check D enforces it.
+  //
+  // This tier is published for APP CSS only. Eleven of these names — --text-*,
+  // --surface-* and --border-* — are ALSO defined by globals.css (`:root`) and
+  // ads.css (`.h10-shell`) as space-separated RGB CHANNELS, because Tailwind
+  // composes them as `rgb(var(--x) / <alpha-value>)`. Custom properties resolve
+  // from the nearest defining ANCESTOR, not by source order, so inside the shell
+  // those definitions shadow these and `background: var(--surface-card)` becomes
+  // `background: 255 255 255` — invalid at computed-value time, silently dropped.
+  // 285 DS declarations were dead that way until Phase 9.0b moved every one of
+  // them onto the DS-owned `--h10-*` tier (docs/PHASE-9-0B-TOKEN-FORM.md).
+  //
+  // The tier is KEPT rather than deleted: --color-primary and the --status-*
+  // family are NOT contested (nothing else defines them) and app stylesheets
+  // depend on them — reporting.css alone has 47 uses, plus trust.css and
+  // /products/next. Deleting the tier would break ~70 app declarations to fix a
+  // problem the guard already prevents.
+  //
+  // If you add a name here, first `grep -rn -- "--<name>:" apps/web/src/app`.
+  // If globals.css or ads.css already defines it, adding it is a landmine, not a
+  // fix — that is why --surface-raised is deliberately absent.
   { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--h10-text)' },
   { name: '--text-secondary', value: 'var(--h10-text-2)' },
   { name: '--text-tertiary', value: 'var(--h10-text-3)' },
@@ -221,7 +248,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--status-danger-strong', value: 'var(--h10-danger-strong)' },
   { name: '--status-info-soft', value: 'var(--h10-info-soft)' },
   { name: '--status-info-line', value: 'var(--h10-info)' },
-  { name: '--status-info-strong', value: 'var(--h10-blue-700)' },
+  { name: '--status-info-strong', value: 'var(--h10-info-strong)' },
 ]
 
 /** Dark-mode overrides (the `.dark` block). Provisional inversions; their only home. */

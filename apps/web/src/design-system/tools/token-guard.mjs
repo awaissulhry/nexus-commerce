@@ -43,6 +43,27 @@ const RAMP_FILES = new Set([
   'styles/patterns.css',
 ])
 
+// D — PLATFORM-ALIAS tokens reached from DS stylesheets (9.0b).
+//     `--text-*`, `--surface-*` and `--border-*` are ALSO defined by globals.css and
+//     ads.css as space-separated RGB CHANNELS, for Tailwind's `rgb(var(--x) / <alpha>)`.
+//     Custom properties resolve from the nearest defining ancestor, so inside
+//     `.h10-shell` those definitions shadow the DS's — and `background: var(--surface-card)`
+//     becomes `background: 255 255 255`, invalid at computed-value time, silently dropped.
+//     285 declarations were dead this way until 9.0b. `--color-primary` / `--status-*` are
+//     NOT contested (nothing else defines them) and stay published for app CSS — but DS
+//     stylesheets consume the DS-owned `--h10-*` tier only, so the whole alias tier is
+//     banned here and one rule covers both cases.
+// Global: a single declaration can reach several aliases, and reporting only the first
+// understates the work — someone fixes one, re-runs, and meets the same line again.
+const ALIAS =
+  /var\(\s*--(text-(?:primary|secondary|tertiary|disabled|link)|surface-(?:canvas|card|sunken|raised)|border-(?:default|subtle|strong)|color-primary(?:-soft)?|status-[a-z]+-[a-z]+)\s*\)/g
+const ALIAS_FILES = new Set([
+  'styles/primitives.css',
+  'styles/components.css',
+  'styles/patterns.css',
+  'styles/a11y.css',
+])
+
 // C — raw Tailwind palette utility classes in DS .tsx
 const TW =
   /\b(bg|text|border|ring|from|to|fill|stroke)-(slate|gray|zinc|blue|indigo|green|emerald|red|rose|amber|yellow|orange|purple|violet|cyan|sky)-[0-9]{2,3}\b/
@@ -118,6 +139,20 @@ for (const file of walk(ROOT)) {
     })
   }
 
+  // D — platform-alias token in a DS stylesheet
+  if (isCss && ALIAS_FILES.has(rel)) {
+    lines.forEach((line, i) => {
+      if (isComment[i]) return
+      for (const m of line.matchAll(ALIAS)) {
+        violations.push(
+          `${rel}:${i + 1}  platform alias --${m[1]} — use the DS-owned --h10-* token ` +
+            `(it is RGB channels inside .h10-shell, so this declaration is DROPPED): ` +
+            line.trim().slice(0, 60),
+        )
+      }
+    })
+  }
+
   // C — raw Tailwind palette class in DS .tsx
   //     Comments are skipped, as in A and B: prose EXPLAINING why an idiom is
   //     banned (Button.tsx's note about hand-rolled `!bg-red-600` overrides) is
@@ -133,10 +168,10 @@ for (const file of walk(ROOT)) {
 }
 
 if (violations.length) {
-  console.error(`✗ token-guard: ${violations.length} violation(s) (raw hex / ramp / Tailwind palette):`)
+  console.error(`✗ token-guard: ${violations.length} violation(s) (raw hex / ramp / Tailwind palette / platform alias):`)
   for (const v of violations) console.error('  ' + v)
   process.exit(1)
 }
 console.log(
-  '✓ token-guard: no raw hex, no numbered ramps in component CSS, no Tailwind palette in DS .tsx',
+  '✓ token-guard: no raw hex, no numbered ramps in component CSS, no Tailwind palette in DS .tsx,\n    no platform aliases in DS stylesheets',
 )

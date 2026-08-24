@@ -11,8 +11,8 @@
   min-height: 100%;
   overflow: hidden;
   padding-left: 66px;
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+  background: var(--h10-bg);
+  color: var(--h10-text);
 }
 .h10-ds-rail {
   position: absolute;
@@ -48,7 +48,7 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: var(--color-primary);
+  background: var(--h10-primary);
   color: var(--h10-text-inverse);
   font-weight: 800;
   font-size: 15px;
@@ -83,7 +83,7 @@
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   text-decoration: none;
   cursor: pointer;
   overflow: hidden;
@@ -94,7 +94,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-navitem .lbl {
   white-space: nowrap;
@@ -105,14 +105,14 @@
   opacity: 1;
 }
 .h10-ds-navitem:hover {
-  background: var(--border-subtle);
-  color: var(--text-primary);
+  background: var(--h10-border-subtle);
+  color: var(--h10-text);
 }
 .h10-ds-navitem:hover .ico {
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-navitem.on {
-  background: var(--color-primary);
+  background: var(--h10-primary);
   color: var(--h10-text-inverse);
 }
 .h10-ds-navitem.on .ico {
@@ -126,7 +126,7 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--status-danger-line);
+  background: var(--h10-danger);
   color: var(--h10-text-inverse);
   font-size: 10px;
   font-weight: 800;
@@ -142,7 +142,7 @@
   margin-left: auto;
   margin-right: 16px;
   flex-shrink: 0;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   opacity: 0;
   transition: opacity 0.14s ease, transform 0.18s ease;
 }
@@ -169,7 +169,7 @@
   text-align: left;
   white-space: nowrap;
   font-size: 12.5px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   text-decoration: none;
   padding: 6px 10px;
   border-radius: var(--h10-radius-sm);
@@ -177,10 +177,10 @@
 }
 .h10-ds-subitem:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-subitem.on {
-  color: var(--color-primary);
+  color: var(--h10-primary);
   font-weight: 600;
 }
 
@@ -188,7 +188,7 @@
   white-space: nowrap;
   padding: 12px 16px;
   font-size: 10px;
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
   opacity: 0;
   transition: opacity 0.14s ease;
   flex-shrink: 0;
@@ -216,20 +216,20 @@
 .h10-ds-pagehdr .eyebrow {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   margin-bottom: 2px;
 }
 .h10-ds-pagehdr h1 {
   margin: 0;
   font-size: 27px;
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--h10-text);
   letter-spacing: -0.02em;
 }
 .h10-ds-pagehdr .sub {
   margin: 4px 0 0;
   font-size: 13.5px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-pagehdr-actions {
   display: flex;
@@ -253,7 +253,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--h10-primary);
   cursor: pointer;
 }
 .h10-ds-detailhdr-row {
@@ -273,14 +273,14 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--h10-text);
   letter-spacing: -0.01em;
 }
 
 /* ── FilterPanel ─────────────────────────────────────────────────── */
 .h10-ds-fpanel {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-2xl);
   padding: 14px 18px 16px;
 }
@@ -302,7 +302,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
   letter-spacing: -0.01em;
 }
 .h10-ds-fpanel-toggle {
@@ -314,7 +314,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   cursor: pointer;
 }
 .h10-ds-fpanel-toggle svg {
@@ -396,14 +396,14 @@
   align-items: stretch;
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--h10-border-strong);
   border-radius: var(--h10-radius-lg);
-  background: var(--surface-card);
+  background: var(--h10-surface);
   overflow: hidden;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .h10-ds-range-in:focus-within {
-  border-color: var(--color-primary);
+  border-color: var(--h10-primary);
   box-shadow: var(--h10-focus-ring);
 }
 .h10-ds-range-in input {
@@ -414,12 +414,12 @@
   outline: none;
   font: inherit;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--h10-text);
   padding: 7px 10px;
   background: transparent;
 }
 .h10-ds-range-in input::placeholder {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
 }
 .h10-ds-range-in .ad {
   display: flex;
@@ -428,14 +428,14 @@
   padding: 0 9px;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   background: var(--h10-surface-hover);
 }
 .h10-ds-range-in.cur .ad {
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-range-in.pct .ad {
-  border-left: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-toggle-field {
   align-items: center;
@@ -450,11 +450,11 @@
 }
 .h10-ds-toolbar .cnt {
   font-size: 12.5px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   white-space: nowrap;
 }
 .h10-ds-toolbar .cnt b {
-  color: var(--text-primary);
+  color: var(--h10-text);
   font-weight: 700;
 }
 .h10-ds-toolbar .grow {
@@ -463,14 +463,14 @@
 /* One card wrapping the toolbar + grid (+ pager): the toolbar sits inside the
    grid rectangle with a divider, and the inner DataGrid drops its own border. */
 .h10-ds-gridcard {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-2xl);
   overflow: hidden;
 }
 .h10-ds-gridcard .h10-ds-toolbar {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-gridcard .h10-ds-grid-wrap {
   border: none;
@@ -506,12 +506,12 @@
   padding: 0;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
   margin-bottom: 8px;
 }
 .h10-ds-prefs-help {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   margin: 0 0 8px;
 }
 .h10-ds-prefs-radios {
@@ -525,7 +525,7 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   cursor: pointer;
 }
 .h10-ds-prefs-check {
@@ -536,7 +536,7 @@
 .h10-ds-prefs-check input {
   width: 15px;
   height: 15px;
-  accent-color: var(--color-primary);
+  accent-color: var(--h10-primary);
 }
 .h10-ds-prefs-sort {
   display: flex;
@@ -547,7 +547,7 @@
   min-width: 0;
 }
 .h10-ds-prefs-cols {
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-lg);
   overflow: hidden auto;
   max-height: 360px;
@@ -558,8 +558,8 @@
   gap: 9px;
   padding: 8px 10px;
   font-size: 13px;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle);
+  color: var(--h10-text);
+  border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-prefs-row:last-child {
   border-bottom: none;
@@ -574,11 +574,11 @@
   opacity: 0.4;
 }
 .h10-ds-prefs-row.locked {
-  background: var(--surface-sunken);
+  background: var(--h10-surface-sunken);
 }
 .h10-ds-prefs-grip {
   flex: none;
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
 }
 .h10-ds-prefs-row:not(.draggable) .h10-ds-prefs-grip {
   visibility: hidden;
@@ -594,13 +594,13 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-modal-f .grow {
   flex: 1;
 }
 .h10-ds-prefs-reset {
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 
 /* ── Sticky action bar (BulkActionBar / EditModeBar) ─────────────── */
@@ -611,8 +611,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-xl);
   padding: 11px 16px;
   box-shadow: var(--h10-shadow-card);
@@ -622,7 +622,7 @@
   color: var(--h10-text-strong);
 }
 .h10-ds-actionbar .lbl b {
-  color: var(--text-primary);
+  color: var(--h10-text);
   font-weight: 700;
 }
 .h10-ds-actionbar .grow {
@@ -639,14 +639,14 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   cursor: pointer;
   padding: 6px 8px;
   border-radius: var(--h10-radius-md);
 }
 .h10-ds-actionbar-clear:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 
 /* ── Builder (full-screen wizard + scroll-spy) ───────────────────── */
@@ -656,8 +656,8 @@
   z-index: 120;
   display: flex;
   flex-direction: column;
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+  background: var(--h10-bg);
+  color: var(--h10-text);
 }
 .h10-ds-builder-top {
   display: flex;
@@ -666,26 +666,26 @@
   height: 56px;
   padding: 0 18px;
   flex-shrink: 0;
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-default);
+  background: var(--h10-surface);
+  border-bottom: 1px solid var(--h10-border);
 }
 .h10-ds-builder-top .x {
   display: inline-flex;
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   cursor: pointer;
   padding: 6px;
   border-radius: var(--h10-radius-sm);
 }
 .h10-ds-builder-top .x:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-builder-top .ttl {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-builder-top .grow {
   flex: 1;
@@ -700,7 +700,7 @@
   flex-shrink: 0;
   padding: 20px 12px;
   overflow-y: auto;
-  border-right: 1px solid var(--border-default);
+  border-right: 1px solid var(--h10-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -712,18 +712,18 @@
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   padding: 9px 12px;
   border-radius: var(--h10-radius-md);
   cursor: pointer;
 }
 .h10-ds-builder-navitem:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-builder-navitem.on {
   background: var(--h10-wash-primary);
-  color: var(--color-primary);
+  color: var(--h10-primary);
 }
 .h10-ds-builder-content {
   position: relative;
@@ -740,7 +740,7 @@
   margin: 0 0 12px;
   font-size: 18px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
   letter-spacing: -0.01em;
 }
 
@@ -768,15 +768,15 @@
   display: inline-flex;
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 .h10-ds-colcust-row .grip button:hover:not(:disabled) {
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-colcust-row .grip button:disabled {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
   cursor: default;
 }

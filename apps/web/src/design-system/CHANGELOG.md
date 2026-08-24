@@ -4,6 +4,38 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [9.0b] — 2026-08-24 — 285 component declarations were being discarded by the browser
+
+The DS published `--text-*` / `--surface-*` / `--border-*` as **colours**; `globals.css` and
+`ads.css` define the same names as **RGB channels** (Tailwind composes them as
+`rgb(var(--x) / <alpha-value>)`). Custom properties resolve from the nearest defining
+**ancestor**, not by source order, so inside `.h10-shell` those shadowed the DS's and
+`background: var(--surface-card)` became `background: 255 255 255` — invalid at
+computed-value time, silently dropped. **285 declarations across nearly every component were
+dead on every ads page**: 138 `color`, 79 `border`, 63 `background`, 3 `box-shadow`.
+
+- **DS stylesheets now consume the DS-owned `--h10-*` tier only** — 394 substitutions
+  (`primitives` 100, `components` 226, `patterns` 68). Value-preserving at `:root`; a fix
+  inside the shell, where 6 of 6 sampled tokens went from `rgba(0,0,0,0)` to a real colour.
+- **`token-guard` check D** bans the whole platform-alias tier inside DS stylesheets.
+  Reports every alias on a line, not just the first.
+- **New token `--h10-info-strong`.** The info tone had `soft` and `line` but no `strong`, so
+  `--status-info-strong` reached past the semantic tier to `--h10-blue-700` — a numbered ramp,
+  which check B bans. The alias now points at the new token so the two cannot drift.
+- **The alias tier is KEPT, not deleted** (the plan said delete). Only 11 of 25 names are
+  contested; the other 14 are DS-only and app CSS depends on them — `reporting.css` alone has
+  47 uses. Deleting would have broken ~70 app declarations to fix what check D already
+  prevents. `css-vars.ts` records the reason and the rule for adding to it.
+- **`/products/next` fixed:** it pinned nine aliases to real colours but used
+  `--text-disabled` and `--text-link` without pinning them, so both were dropped — the
+  "Manage inventory" link did not render as a link and the sort chevron was not muted.
+- **`GOVERNANCE.md` corrected.** Its tier model instructed components to consume the very
+  tier that was silently failing. Now four tiers, tier 4 marked app-only.
+
+**Migration:** none for callers — no component API changed. Expect ads surfaces to gain
+borders, backgrounds and a real three-ink text hierarchy where declarations previously
+vanished. Full account: `docs/PHASE-9-0B-TOKEN-FORM.md`.
+
 ## [CONFORMANCE] — 2026-08-24 — The DS's own two guards go green, and get enforced
 
 `tools/token-guard.mjs` and `tools/api-guard.mjs` both shipped with the system and

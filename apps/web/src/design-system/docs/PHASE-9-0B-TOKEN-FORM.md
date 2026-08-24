@@ -1,6 +1,8 @@
 # Phase 9.0b — The token-form collision
 
-**Status:** PROPOSAL — awaiting approval. Blocks 9.2 and 9.3; slots into `MIGRATION.md`
+**Status:** ✅ **SHIPPED 2026-08-24.** Approved and executed the same day. Execution record
+in §11 — one step was deliberately narrowed after the audit, and two extra live defects
+were found and fixed. Original proposal text kept intact below for the record. Blocks 9.2 and 9.3; slots into `MIGRATION.md`
 between 9.0 (pre-flight) and 9.1 (tokenize `ads.css`).
 
 **One sentence:** the DS and the app define the same 25 token names in two incompatible
@@ -107,6 +109,42 @@ The mapping already exists in `tokens.css` and is **1:1 for 24 of 25**:
 ramp**, which `token-guard` check B bans in component stylesheets. It needs a real
 component token (`--h10-info-strong`) created first — step 1 below.
 
+## 4b. Step-2 audit — RESULT (run 24 Aug 2026, static pass)
+
+The static half of step 2 is done. Exact counts, replacing the §2 estimate:
+
+| | |
+|---|---:|
+| raw grep, including prose mentions | 289 |
+| **real declarations** | **285** |
+| mentions inside comments (not declarations) | 4 |
+
+**Batch order for step 3** — three commits, not four; `a11y.css` has none:
+
+| stylesheet | dead declarations |
+|---|---:|
+| `styles/components.css` | 157 |
+| `styles/primitives.css` | 68 |
+| `styles/patterns.css` | 60 |
+| `styles/a11y.css` | 0 |
+
+**What starts painting**, by property:
+
+| property | n | visible effect inside the shell |
+|---|---:|---|
+| `color` | 138 | text hierarchy separates into three inks instead of one inherited near-black |
+| `border` | 79 | hairlines, field outlines and dividers appear |
+| `background` | 63 | chips, wells and raised surfaces stop being transparent |
+| `box-shadow` | 3 | elevation returns |
+
+**Affected component families** — this is not localised; it is most of the system:
+`grid` · `field` · `dp` (date picker) · `acctp` · `builder` · `taginput` · `ms` (multi-select)
+· `banner` · `prefs` · `imgup` · `modal` · `combo` · `step` · `acct` · `range` · `btn` ·
+`textarea` · `seg`, and more.
+
+The remaining half of step 2 — the in-browser computed-value probe that confirms which of
+these render inside a shell *today* — runs against the dev server before step 3 begins.
+
 ## 5. Sub-steps
 
 | # | step | gate |
@@ -143,7 +181,15 @@ step wants its own visual review before push.
 **Touches:** `design-system/styles/*.css`, `design-system/tokens/css-vars.ts`,
 `design-system/tools/token-guard.mjs`. That is all.
 
-**Does NOT touch:** `globals.css`, `ads.css`, `tailwind.config.ts`, or any app page CSS.
+**One amendment to "no app CSS", found in the step-2 audit.** Exactly one app declaration
+depends on the DS publishing the alias tier as colours:
+`app/fulfillment/stock/sync-control/styles.module.css:30` uses `var(--border-default)`,
+renders at `:root` (no shell), and imports DS `tokens.css` — so today it wins the source-order
+race and gets a colour. Step 4 would silently kill it. It changes to `var(--h10-border)` in the
+same commit: one line, same bug class. Every other app consumer is either inside `.h10-shell`
+(already channels, unaffected) or re-pins the aliases itself (`/products/next`).
+
+**Does NOT touch:** `globals.css`, `ads.css`, `tailwind.config.ts`, or any other app page CSS.
 The channel form stays exactly where it is — Tailwind needs it, and `ads.css`'s own comment
 (*"Pin ALL of them or none"*) is correct and deliberate. Only the DS stops depending on the
 contested names.
@@ -170,3 +216,64 @@ shell — and must not be "fixed".
 ~398 mechanical 1:1 substitutions across 4 stylesheets, one new token, one guard check,
 one audit pass, one visual review. No component logic changes. Every step reversible; each
 stylesheet is its own commit.
+
+
+---
+
+## 11. Execution record (2026-08-24)
+
+**Done as planned:** step 1 (`--h10-info-strong` created; `--status-info-strong` repointed at
+it so the two cannot drift) · step 3 (**394** substitutions — 285 contested + 109 DS-only —
+across `primitives.css` 100, `components.css` 226, `patterns.css` 68, `a11y.css` 0) ·
+step 5 (check D) · step 6 (verification).
+
+### 🔴 Step 4 was NARROWED — the tier is kept, not deleted
+
+The plan said "delete the platform-alias tier". **The step-2 audit showed that would break
+roughly 70 app declarations.** Only **11** of the 25 names are genuinely contested
+(`--text-*`, `--surface-*`, `--border-*` — the ones globals.css and ads.css also define).
+The other 14 — `--color-primary`, `--color-primary-soft` and the twelve `--status-*` — are
+**DS-only**, uncontested, and app CSS actively depends on them:
+
+| consumer | uses |
+|---|---:|
+| `ads/reporting/reporting.css` | 47 |
+| `products/next/styles.module.css` + client | 11 |
+| `ads/trust/trust.css` | 9 |
+
+So the tier stays published as the DS's app-facing API, and `css-vars.ts` now carries the
+reason plus the rule for adding to it (`grep` the app first — that is why `--surface-raised`
+is deliberately absent). What actually prevents the defect is **check D**, which bans the
+whole tier inside DS stylesheets. Deleting the tier would have traded a guarded problem for
+an unguarded breakage.
+
+### Two extra live defects found by the audit
+
+1. **`/products/next` — two dead declarations.** The page pins nine semantic aliases to real
+   colours in `products-next-shell.css` but used **`--text-disabled` and `--text-link`
+   without pinning them**, so both fell through to `globals.css`'s channels and were dropped:
+   `.invManageLink` was a link that did not render as a link, and the sort chevron was not
+   muted. Both inherited near-black. Measured in-browser, then pinned. *"Pin ALL of them or
+   none"* — the rule that block already stated.
+2. **`GOVERNANCE.md` documented the defect as the rule.** Its tier model said components
+   consume the semantic alias tier — the exact thing that was silently failing. Rewritten to
+   four tiers, with tier 4 marked app-only and the reason recorded.
+
+### Verification actually performed
+
+- **Both scopes probed in-browser.** Inside `.h10-shell`: 6 of 6 sampled tokens went from
+  `rgba(0,0,0,0)` (dead) to a real colour. At `:root`: values identical before and after, as
+  the substitution is value-preserving there by construction.
+- Every rendered DS class on `/marketing/ads/suggestions` returns a real token colour; the
+  page tab hairline measures `1px solid rgb(230,233,238)`; no pure-black inherited text.
+- **Check D negative-tested twice** — first version reported only the first alias per line and
+  was fixed to report every match, because under-reporting lets someone fix one and believe
+  the line is clean.
+- `token-guard` · `api-guard` · `tokens:check` · `tsc` · `next build` all green.
+
+### Still open (unchanged from §9)
+
+`ads/trust/trust.css` (17) and `campaign-builder/launch-receipt.css` (16) — app-side, same
+bug class, dead today. `fulfillment/stock/sync-control/styles.module.css:30` joins them: it
+uses `var(--border-default)` at `:root` and currently resolves via source order, which is
+luck rather than design. `shared-report.css` (13) is correct and must not be touched.

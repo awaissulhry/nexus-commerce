@@ -5,8 +5,8 @@
 
 /* ── Card ────────────────────────────────────────────────────────── */
 .h10-ds-card {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-2xl);
 }
 .h10-ds-card.pad {
@@ -21,12 +21,12 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-card-head .t {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-card-body {
   padding: 16px;
@@ -48,18 +48,18 @@
   height: 46px;
   border-radius: 50%;
   background: var(--h10-wash-primary);
-  color: var(--color-primary);
+  color: var(--h10-primary);
   margin-bottom: 14px;
 }
 .h10-ds-empty .t {
   font-size: 14px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
   margin-bottom: 5px;
 }
 .h10-ds-empty .d {
   font-size: 12.5px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   line-height: 1.5;
   max-width: 320px;
 }
@@ -72,7 +72,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-tab {
   position: relative;
@@ -81,17 +81,17 @@
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   padding: 9px 12px;
   cursor: pointer;
   white-space: nowrap;
   transition: color 0.12s ease;
 }
 .h10-ds-tab:hover {
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-tab.on {
-  color: var(--color-primary);
+  color: var(--h10-primary);
 }
 .h10-ds-tab.on::after {
   content: '';
@@ -100,7 +100,7 @@
   right: 12px;
   bottom: -1px;
   height: 2px;
-  background: var(--color-primary);
+  background: var(--h10-primary);
   border-radius: 2px;
 }
 
@@ -160,7 +160,7 @@
   color: var(--h10-text);
 }
 .h10-ds-tabs.lg .h10-ds-tab.on {
-  color: var(--color-primary);
+  color: var(--h10-primary);
 }
 .h10-ds-tabs.lg .h10-ds-tab.on::after {
   left: 0;
@@ -179,19 +179,19 @@
   min-width: 26px;
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--surface-sunken);
+  background: var(--h10-surface-sunken);
   /* the bar sits on the page canvas, where the sunken grey alone can vanish — the inset
      ring keeps the pill legible without changing its box size */
-  box-shadow: inset 0 0 0 1px var(--border-subtle);
-  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 1px var(--h10-border-subtle);
+  color: var(--h10-text-2);
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.5;
 }
 .h10-ds-tab.on .h10-ds-tab-count {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--h10-primary-soft);
+  color: var(--h10-primary);
 }
 
 /* size="lg" count pill — placed AFTER the base rules it overrides so the cascade reads top-down.
@@ -211,16 +211,16 @@
   color: var(--h10-text-2);
 }
 .h10-ds-tabs.lg .h10-ds-tab.on .h10-ds-tab-count {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--h10-primary-soft);
+  color: var(--h10-primary);
 }
 .h10-ds-tab-badge {
   display: inline-flex;
   align-items: center;
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--h10-primary-soft);
+  color: var(--h10-primary);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.5;
@@ -239,13 +239,13 @@
   min-width: 30px;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-card);
+  border: 1px solid var(--h10-border-subtle);
+  background: var(--h10-surface);
   border-radius: var(--h10-radius-md);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
@@ -253,31 +253,31 @@
   background: var(--h10-surface-hover);
 }
 .h10-ds-pgbtn.on {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--h10-primary);
+  border-color: var(--h10-primary);
   color: var(--h10-text-inverse);
 }
 .h10-ds-pgbtn:disabled {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
   cursor: default;
 }
 .h10-ds-pgell {
   padding: 0 4px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 
 /* ── ProgressBar ─────────────────────────────────────────────────── */
 .h10-ds-progress {
   display: block;
   width: 100%;
-  background: var(--surface-sunken);
+  background: var(--h10-surface-sunken);
   border-radius: 999px;
   overflow: hidden;
 }
 .h10-ds-progress > .bar {
   display: block;
   height: 100%;
-  background: var(--color-primary);
+  background: var(--h10-primary);
   border-radius: 999px;
   transition: width 0.2s ease;
 }
@@ -312,7 +312,7 @@
   width: 440px;
   max-width: 100%;
   max-height: 82vh;
-  background: var(--surface-card);
+  background: var(--h10-surface);
   border-radius: var(--h10-radius-3xl);
   box-shadow: var(--h10-shadow-modal);
 }
@@ -335,17 +335,17 @@
 .h10-ds-modal-h .t {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-modal-h .sub {
   margin-top: 3px;
   font-size: 11.5px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-modal-x {
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   cursor: pointer;
   padding: 4px;
   border-radius: var(--h10-radius-sm);
@@ -353,16 +353,16 @@
 }
 .h10-ds-modal-x:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-modal-b {
   flex: 1;
   overflow-y: auto;
   padding: 12px 18px;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--h10-border-subtle);
+  border-bottom: 1px solid var(--h10-border-subtle);
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-modal-f {
   display: flex;
@@ -389,7 +389,7 @@
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--surface-card);
+  background: var(--h10-surface);
   box-shadow: var(--h10-shadow-modal);
   animation: h10-ds-slidein 0.18s ease;
 }
@@ -407,12 +407,12 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-drawer-h .t {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 /* EFX P6 — title/subtitle stack (subtitle is optional) */
 .h10-ds-drawer-ht {
@@ -423,7 +423,7 @@
 }
 .h10-ds-drawer-ht .st {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-drawer-b {
   flex: 1;
@@ -436,7 +436,7 @@
   overscroll-behavior: contain;
   padding: 16px 18px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-drawer-f {
   display: flex;
@@ -444,7 +444,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--h10-border-subtle);
 }
 /* In-drawer modal surface (see Drawer's `overlay` prop). Covers the whole
    panel — header, body AND footer — so no background action stays clickable
@@ -472,8 +472,8 @@
   left: 0;
   z-index: 40;
   min-width: 180px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-xl);
   box-shadow: var(--h10-shadow-menu);
   padding: 6px;
@@ -505,7 +505,7 @@
   background: var(--h10-surface-hover);
 }
 .h10-ds-menu button:disabled {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
   cursor: default;
 }
 .h10-ds-menu button:disabled:hover {
@@ -528,7 +528,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  background: var(--text-primary);
+  background: var(--h10-text);
   color: var(--h10-text-inverse);
   font-size: 13px;
   font-weight: 600;
@@ -541,20 +541,20 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--status-info-line);
+  background: var(--h10-info);
   flex-shrink: 0;
 }
 .h10-ds-toast.success .dot {
   background: var(--h10-live);
 }
 .h10-ds-toast.danger .dot {
-  background: var(--status-danger-line);
+  background: var(--h10-danger);
 }
 .h10-ds-toast.warning .dot {
-  background: var(--status-warning-line);
+  background: var(--h10-warning);
 }
 .h10-ds-toast.neutral .dot {
-  background: var(--text-tertiary);
+  background: var(--h10-text-3);
 }
 @keyframes h10-ds-toastin {
   from {
@@ -578,24 +578,24 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 160px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-lg);
   padding: 7px 11px;
   font: inherit;
   font-size: 13px;
-  color: var(--text-primary);
-  background: var(--surface-card);
+  color: var(--h10-text);
+  background: var(--h10-surface);
   cursor: pointer;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .h10-ds-ms-btn:hover {
-  border-color: var(--border-strong);
+  border-color: var(--h10-border-strong);
 }
 .h10-ds-ms-btn .ph {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
 }
 .h10-ds-ms-btn svg {
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   flex-shrink: 0;
 }
 .h10-ds-ms-pop {
@@ -606,8 +606,8 @@
   min-width: 200px;
   max-height: 260px;
   overflow-y: auto;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-xl);
   box-shadow: var(--h10-shadow-menu);
   padding: 5px;
@@ -629,7 +629,7 @@
   background: var(--h10-wash-primary);
 }
 .h10-ds-ms-opt.all {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--h10-border-subtle);
   border-radius: 0;
   margin-bottom: 3px;
   font-weight: 600;
@@ -637,11 +637,11 @@
 .h10-ds-ms-opt input {
   width: 15px;
   height: 15px;
-  accent-color: var(--color-primary);
+  accent-color: var(--h10-primary);
 }
 /* Facet count rendered after an option label (FilterBar `count`). */
 .h10-ds-ms-count {
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -655,28 +655,28 @@
 .h10-ds-combo-in {
   width: 100%;
   min-width: 200px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-lg);
   padding: 7px 30px 7px 11px;
   font: inherit;
   font-size: 13px;
-  color: var(--text-primary);
-  background: var(--surface-card);
+  color: var(--h10-text);
+  background: var(--h10-surface);
 }
 .h10-ds-combo-in:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--h10-primary);
   box-shadow: var(--h10-focus-ring);
 }
 .h10-ds-combo-in::placeholder {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
 }
 .h10-ds-combo .chev {
   position: absolute;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   pointer-events: none;
 }
 .h10-ds-combo-pop {
@@ -687,8 +687,8 @@
   z-index: 40;
   max-height: 240px;
   overflow-y: auto;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-xl);
   box-shadow: var(--h10-shadow-menu);
   padding: 5px;
@@ -711,14 +711,14 @@
 }
 .h10-ds-combo-pop button.on {
   background: var(--h10-wash-primary);
-  color: var(--color-primary);
+  color: var(--h10-primary);
   font-weight: 600;
 }
 .h10-ds-combo-empty {
   padding: 12px 9px;
   text-align: center;
   font-size: 12.5px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 
 /* ── MetricStrip (KPI tiles) ─────────────────────────────────────── */
@@ -728,21 +728,21 @@
   gap: 12px;
 }
 .h10-ds-metric {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-2xl);
   padding: 14px 16px;
 }
 .h10-ds-metric .lbl {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   margin-bottom: 6px;
 }
 .h10-ds-metric .val {
   font-size: 22px;
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--h10-text);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
@@ -752,10 +752,10 @@
   margin-top: 4px;
 }
 .h10-ds-metric .dlt.up {
-  color: var(--status-success-strong);
+  color: var(--h10-success-strong);
 }
 .h10-ds-metric .dlt.down {
-  color: var(--status-danger-strong);
+  color: var(--h10-danger-strong);
 }
 
 /* ── HoverCard (rich hover panel) ────────────────────────────────── */
@@ -771,9 +771,9 @@
   z-index: 1000;
   width: max-content;
   max-width: 280px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  color: var(--h10-text);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-xl);
   box-shadow: var(--h10-shadow-pop);
   padding: 12px 14px;
@@ -798,8 +798,8 @@
   left: 0;
   z-index: 40;
   display: flex;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-2xl);
   box-shadow: var(--h10-shadow-pop);
   overflow: hidden;
@@ -809,7 +809,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 10px;
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--h10-border-subtle);
   min-width: 132px;
 }
 .h10-ds-dp-preset {
@@ -818,7 +818,7 @@
   background: none;
   font: inherit;
   font-size: 12.5px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   padding: 7px 10px;
   border-radius: var(--h10-radius-md);
   cursor: pointer;
@@ -826,7 +826,7 @@
 }
 .h10-ds-dp-preset:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-dp-cal {
   padding: 14px 16px;
@@ -840,7 +840,7 @@
 .h10-ds-dp-nav button {
   border: none;
   background: none;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   cursor: pointer;
   padding: 4px;
   border-radius: var(--h10-radius-sm);
@@ -857,7 +857,7 @@
   text-align: center;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
   margin-bottom: 8px;
 }
 .h10-ds-dp-grid {
@@ -871,7 +871,7 @@
   text-align: center;
   font-size: 10px;
   font-weight: 700;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-dp-day {
   width: 30px;
@@ -880,7 +880,7 @@
   background: none;
   font: inherit;
   font-size: 12.5px;
-  color: var(--text-primary);
+  color: var(--h10-text);
   border-radius: var(--h10-radius-md);
   cursor: pointer;
 }
@@ -893,14 +893,14 @@
 }
 .h10-ds-dp-day.start,
 .h10-ds-dp-day.end {
-  background: var(--color-primary);
+  background: var(--h10-primary);
   color: var(--h10-text-inverse);
 }
 .h10-ds-dp-day.today {
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--h10-border-strong);
 }
 .h10-ds-dp-day.dis {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
   cursor: default;
 }
 .h10-ds-dp-day.dis:hover {
@@ -917,7 +917,7 @@
   gap: 18px;
   margin-top: 8px;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-chart-legend .sw {
   display: inline-flex;
@@ -930,8 +930,8 @@
   border-radius: 2px;
 }
 .h10-ds-chart-tt {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-lg);
   box-shadow: var(--h10-shadow-menu);
   padding: 8px 11px;
@@ -940,7 +940,7 @@
 }
 .h10-ds-chart-tt .d {
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--h10-text);
   margin-bottom: 6px;
 }
 .h10-ds-chart-tt .r {
@@ -973,7 +973,7 @@
   text-align: center;
   font-size: 9px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-heat-row {
   display: flex;
@@ -987,7 +987,7 @@
   text-align: right;
   font-size: 10px;
   font-weight: 700;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-heat-cell {
   flex: 1;
@@ -998,8 +998,8 @@
 
 /* ── DataGrid ────────────────────────────────────────────────────── */
 .h10-ds-grid-wrap {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border);
   border-radius: var(--h10-radius-2xl);
   overflow: auto;
 }
@@ -1014,19 +1014,19 @@
   top: 0;
   z-index: 4;
   background: var(--h10-surface-raised);
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--h10-border);
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   text-align: left;
   padding: 10px 14px;
   white-space: nowrap;
 }
 .h10-ds-grid tbody td {
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border-bottom: 1px solid var(--h10-border-subtle);
   padding: 11px 14px;
-  color: var(--text-primary);
+  color: var(--h10-text);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1065,7 +1065,7 @@
 /* a left edge-shadow separates a right-pinned column from scrolling content */
 .h10-ds-grid td.sticky-right,
 .h10-ds-grid th.sticky-right {
-  box-shadow: inset 1px 0 0 var(--border-subtle);
+  box-shadow: inset 1px 0 0 var(--h10-border-subtle);
 }
 .h10-ds-grid .sortbtn {
   display: inline-flex;
@@ -1079,20 +1079,20 @@
   padding: 0;
 }
 .h10-ds-grid .sortbtn:hover {
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-grid .sortbtn svg {
-  color: var(--text-disabled);
+  color: var(--h10-text-disabled);
 }
 .h10-ds-grid th.sorted,
 .h10-ds-grid th.sorted .sortbtn,
 .h10-ds-grid th.sorted .sortbtn svg {
-  color: var(--color-primary);
+  color: var(--h10-primary);
 }
 .h10-ds-grid input[type='checkbox'] {
   width: 15px;
   height: 15px;
-  accent-color: var(--color-primary);
+  accent-color: var(--h10-primary);
   vertical-align: middle;
 }
 .h10-ds-grid tr.totals td {
@@ -1100,41 +1100,41 @@
   bottom: 0;
   font-weight: 700;
   background: var(--h10-surface-raised);
-  color: var(--text-primary);
-  border-top: 1px solid var(--border-default);
+  color: var(--h10-text);
+  border-top: 1px solid var(--h10-border);
   border-bottom: none;
 }
 .h10-ds-grid-empty {
   padding: 40px;
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 
 /* ── ImageUpload ───────────────────────────────────────────────────────── */
 .h10-ds-imgup { display: flex; flex-direction: column; gap: 8px; }
-.h10-ds-imgup-lbl { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.h10-ds-imgup-lbl { font-size: 13px; font-weight: 600; color: var(--h10-text-2); }
 .h10-ds-imgup-row { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
 .h10-ds-imgup-zone {
   width: 200px; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; padding: 16px; border: 1.5px dashed var(--border-default); border-radius: 10px; background: var(--h10-imgup-surface);
-  color: var(--text-tertiary); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
+  gap: 6px; padding: 16px; border: 1.5px dashed var(--h10-border); border-radius: 10px; background: var(--h10-imgup-surface);
+  color: var(--h10-text-3); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
 }
-.h10-ds-imgup-zone:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); background: var(--h10-imgup-hover); }
-.h10-ds-imgup-zone.drag { border-color: var(--color-primary); border-style: solid; background: var(--h10-imgup-drag); color: var(--color-primary); }
+.h10-ds-imgup-zone:hover:not(:disabled) { border-color: var(--h10-primary); color: var(--h10-primary); background: var(--h10-imgup-hover); }
+.h10-ds-imgup-zone.drag { border-color: var(--h10-primary); border-style: solid; background: var(--h10-imgup-drag); color: var(--h10-primary); }
 .h10-ds-imgup-zone:disabled { opacity: .6; cursor: not-allowed; }
 .h10-ds-imgup-zone .t { font-size: 13px; font-weight: 600; }
 .h10-ds-imgup-zone .d { font-size: 11.5px; }
-.h10-ds-imgup-spin { width: 22px; height: 22px; border: 2.5px solid var(--h10-imgup-spin-track); border-top-color: var(--color-primary); border-radius: 50%; animation: h10-ds-imgup-spin .7s linear infinite; }
+.h10-ds-imgup-spin { width: 22px; height: 22px; border: 2.5px solid var(--h10-imgup-spin-track); border-top-color: var(--h10-primary); border-radius: 50%; animation: h10-ds-imgup-spin .7s linear infinite; }
 @keyframes h10-ds-imgup-spin { to { transform: rotate(360deg); } }
-.h10-ds-imgup-preview { position: relative; width: 200px; max-width: 100%; border: 1px solid var(--border-default); border-radius: 10px; overflow: hidden; background: var(--surface-card); }
+.h10-ds-imgup-preview { position: relative; width: 200px; max-width: 100%; border: 1px solid var(--h10-border); border-radius: 10px; overflow: hidden; background: var(--h10-surface); }
 .h10-ds-imgup-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .h10-ds-imgup-preview .rm { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(20,29,40,.72); color: var(--h10-text-inverse); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .h10-ds-imgup-preview .rm:hover { background: rgba(20,29,40,.9); }
-.h10-ds-imgup-crit { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; background: var(--h10-imgup-surface); border: 1px solid var(--surface-sunken); border-radius: 10px; }
-.h10-ds-imgup-crit .h { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; }
-.h10-ds-imgup-crit .c { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
-.h10-ds-imgup-crit .c b { color: var(--text-secondary); font-weight: 600; }
-.h10-ds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-primary); cursor: pointer; }
+.h10-ds-imgup-crit { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; background: var(--h10-imgup-surface); border: 1px solid var(--h10-surface-sunken); border-radius: 10px; }
+.h10-ds-imgup-crit .h { font-size: 12px; font-weight: 700; color: var(--h10-text-2); margin-bottom: 2px; }
+.h10-ds-imgup-crit .c { font-size: 12px; color: var(--h10-text-3); line-height: 1.5; }
+.h10-ds-imgup-crit .c b { color: var(--h10-text-2); font-weight: 600; }
+.h10-ds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--h10-primary); cursor: pointer; }
 .h10-ds-imgup-assets:hover { text-decoration: underline; }
 .h10-ds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--h10-imgup-err); }
 
@@ -1144,11 +1144,11 @@
   align-items: flex-start;
   gap: 11px;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--h10-border-subtle);
   border-left-width: 3px;
   border-radius: var(--h10-radius-lg);
-  background: var(--surface-card);
-  color: var(--text-primary);
+  background: var(--h10-surface);
+  color: var(--h10-text);
 }
 .h10-ds-banner-icon {
   display: inline-flex;
@@ -1165,12 +1165,12 @@
 .h10-ds-banner-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--h10-text);
   line-height: 1.35;
 }
 .h10-ds-banner-desc {
   font-size: 12.5px;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
   line-height: 1.45;
 }
 .h10-ds-banner-action {
@@ -1191,39 +1191,39 @@
   border: none;
   border-radius: var(--h10-radius-sm);
   background: none;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 .h10-ds-banner-dismiss:hover {
   background: var(--h10-surface-hover);
-  color: var(--text-primary);
+  color: var(--h10-text);
 }
 .h10-ds-banner.info {
-  border-left-color: var(--status-info-line);
-  background: var(--status-info-soft);
+  border-left-color: var(--h10-info);
+  background: var(--h10-info-soft);
 }
-.h10-ds-banner.info .h10-ds-banner-icon { color: var(--status-info-line); }
+.h10-ds-banner.info .h10-ds-banner-icon { color: var(--h10-info); }
 .h10-ds-banner.success {
-  border-left-color: var(--status-success-line);
-  background: var(--status-success-soft);
+  border-left-color: var(--h10-success);
+  background: var(--h10-success-soft);
 }
-.h10-ds-banner.success .h10-ds-banner-icon { color: var(--status-success-strong); }
+.h10-ds-banner.success .h10-ds-banner-icon { color: var(--h10-success-strong); }
 .h10-ds-banner.warning {
-  border-left-color: var(--status-warning-line);
-  background: var(--status-warning-soft);
+  border-left-color: var(--h10-warning);
+  background: var(--h10-warning-soft);
 }
-.h10-ds-banner.warning .h10-ds-banner-icon { color: var(--status-warning-strong); }
+.h10-ds-banner.warning .h10-ds-banner-icon { color: var(--h10-warning-strong); }
 .h10-ds-banner.danger {
-  border-left-color: var(--status-danger-line);
-  background: var(--status-danger-soft);
+  border-left-color: var(--h10-danger);
+  background: var(--h10-danger-soft);
 }
-.h10-ds-banner.danger .h10-ds-banner-icon { color: var(--status-danger-strong); }
+.h10-ds-banner.danger .h10-ds-banner-icon { color: var(--h10-danger-strong); }
 .h10-ds-banner.neutral {
-  border-left-color: var(--border-strong);
-  background: var(--surface-sunken);
+  border-left-color: var(--h10-border-strong);
+  background: var(--h10-surface-sunken);
 }
-.h10-ds-banner.neutral .h10-ds-banner-icon { color: var(--text-secondary); }
+.h10-ds-banner.neutral .h10-ds-banner-icon { color: var(--h10-text-2); }
 
 /* ── Stepper (horizontal step progress) ────────────────────────────────── */
 .h10-ds-stepper {
@@ -1250,9 +1250,9 @@
   width: 26px;
   height: 26px;
   border-radius: var(--h10-radius-round);
-  background: var(--surface-card);
-  border: 1.5px solid var(--border-strong);
-  color: var(--text-tertiary);
+  background: var(--h10-surface);
+  border: 1.5px solid var(--h10-border-strong);
+  color: var(--h10-text-3);
   z-index: 1;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1265,7 +1265,7 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 1.3;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1278,27 +1278,27 @@
   left: calc(50% + 17px);
   right: calc(-50% + 17px);
   height: 2px;
-  background: var(--border-default);
+  background: var(--h10-border);
 }
 .h10-ds-step.done .h10-ds-step-badge {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--h10-primary);
+  border-color: var(--h10-primary);
   color: var(--h10-text-inverse);
 }
 .h10-ds-step.done .h10-ds-step-label {
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-step.done .h10-ds-step-line {
-  background: var(--color-primary);
+  background: var(--h10-primary);
 }
 .h10-ds-step.active .h10-ds-step-badge {
-  background: var(--surface-card);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  background: var(--h10-surface);
+  border-color: var(--h10-primary);
+  color: var(--h10-primary);
   box-shadow: var(--h10-focus-ring);
 }
 .h10-ds-step.active .h10-ds-step-label {
-  color: var(--text-primary);
+  color: var(--h10-text);
   font-weight: 600;
 }
 
@@ -1316,30 +1316,30 @@
   gap: 8px;
   width: 100%;
   padding: 26px 18px;
-  border: 1.5px dashed var(--border-strong);
+  border: 1.5px dashed var(--h10-border-strong);
   border-radius: var(--h10-radius-xl);
-  background: var(--surface-sunken);
-  color: var(--text-tertiary);
+  background: var(--h10-surface-sunken);
+  color: var(--h10-text-3);
   font: inherit;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .h10-ds-dropzone:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: var(--h10-primary);
+  color: var(--h10-primary);
+  background: var(--h10-primary-soft);
 }
 .h10-ds-dropzone:focus-visible {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--h10-primary);
   border-style: solid;
   box-shadow: var(--h10-focus-ring);
 }
 .h10-ds-dropzone.drag {
-  border-color: var(--color-primary);
+  border-color: var(--h10-primary);
   border-style: solid;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--h10-primary-soft);
+  color: var(--h10-primary);
 }
 .h10-ds-dropzone:disabled {
   opacity: 0.6;
@@ -1348,15 +1348,15 @@
 .h10-ds-dropzone-primary {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--h10-text-2);
 }
 .h10-ds-dropzone:hover:not(:disabled) .h10-ds-dropzone-primary,
 .h10-ds-dropzone.drag .h10-ds-dropzone-primary {
-  color: var(--color-primary);
+  color: var(--h10-primary);
 }
 .h10-ds-dropzone-hint {
   font-size: 11.5px;
-  color: var(--text-tertiary);
+  color: var(--h10-text-3);
 }
 .h10-ds-dropzone-input {
   display: none;
@@ -1366,7 +1366,7 @@
   align-items: center;
   gap: 5px;
   font-size: 12px;
-  color: var(--status-danger-strong);
+  color: var(--h10-danger-strong);
 }
 
 /* ── Listbox (Wave 1 gap-fill) — plain single-select dropdown, zero native
@@ -1375,13 +1375,13 @@
 .h10-ds-listbox { position: relative; display: inline-flex; width: 100%; }
 .h10-ds-listbox-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; border: 1px solid var(--border-default); border-radius: var(--h10-radius-lg);
-  padding: 7px 11px; font: inherit; font-size: 13px; color: var(--text-primary);
-  background: var(--surface-card); cursor: pointer; text-align: left;
+  width: 100%; border: 1px solid var(--h10-border); border-radius: var(--h10-radius-lg);
+  padding: 7px 11px; font: inherit; font-size: 13px; color: var(--h10-text);
+  background: var(--h10-surface); cursor: pointer; text-align: left;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.h10-ds-listbox-btn:hover:not(:disabled) { border-color: var(--border-strong); }
-.h10-ds-listbox-btn:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: var(--h10-focus-ring); }
+.h10-ds-listbox-btn:hover:not(:disabled) { border-color: var(--h10-border-strong); }
+.h10-ds-listbox-btn:focus-visible { outline: none; border-color: var(--h10-primary); box-shadow: var(--h10-focus-ring); }
 .h10-ds-listbox-btn:disabled { opacity: 0.55; cursor: default; }
 .h10-ds-listbox-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ds-listbox-btn > span.ph { color: var(--h10-text-3); }
@@ -1394,15 +1394,15 @@
 .h10-ds-dp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .h10-ds-dp-nav button { border: none; background: none; color: var(--h10-text-2); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .h10-ds-dp-nav button:hover { background: var(--h10-surface-hover); }
-.h10-ds-datefield-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
-.h10-ds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--color-primary); cursor: pointer; }
+.h10-ds-datefield-foot { border-top: 1px solid var(--h10-border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
+.h10-ds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--h10-primary); cursor: pointer; }
 
 /* ── BurnDownChart (BSP.1) ─────────────────────────────────────────────────
    Appended at EOF under a new prefix; no existing selector is touched.
    The legend is always rendered, so no series is identified by colour alone. */
 .h10-ds-burn { display: flex; flex-direction: column; gap: 6px; }
 .h10-ds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-.h10-ds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); }
+.h10-ds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--h10-text-2); }
 /* `--h10-surface-raised`, not `--surface-raised`: that platform name is defined by
    globals.css / ads.css as RGB CHANNELS (`255 255 255`), and this file loads alongside
    both. `var(--surface-raised, #fff)` therefore resolved to `background: 255 255 255`
@@ -1416,11 +1416,11 @@
 .h10-ds-burn-key .ln.solid { background: var(--c); }
 /* The dashed marks repeat the line's own dash pattern, so the key reads as the chart does. */
 .h10-ds-burn-key .ln.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }
-.h10-ds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--h10-surface-raised); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
-.h10-ds-burn-tip b { font-size: 11px; font-weight: 800; color: var(--text-primary); }
-.h10-ds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.h10-ds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--h10-surface-raised); border: 1px solid var(--h10-border); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
+.h10-ds-burn-tip b { font-size: 11px; font-weight: 800; color: var(--h10-text); }
+.h10-ds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--h10-text-2); }
 .h10-ds-burn-tip i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-.h10-ds-burn-tip em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.h10-ds-burn-tip em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 800; color: var(--h10-text); font-variant-numeric: tabular-nums; }
 
 /* ── AccountSwitcher (MAP.1) ───────────────────────────────────────────────
    Appended at EOF under a new prefix; no existing selector is touched.
@@ -1434,13 +1434,13 @@
 .h10-ds-acct-trigger {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 8px 3px 4px;
-  border: 1px solid var(--border-subtle); border-radius: var(--h10-radius-round);
-  background: var(--surface-card); color: var(--h10-text);
+  border: 1px solid var(--h10-border-subtle); border-radius: var(--h10-radius-round);
+  background: var(--h10-surface); color: var(--h10-text);
   font: inherit; font-size: 12.5px; font-weight: 600;
   cursor: pointer; text-decoration: none;
 }
 .h10-ds-acct-trigger:hover { background: var(--h10-surface-hover); }
-.h10-ds-acct-trigger:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.h10-ds-acct-trigger:focus-visible { outline: 2px solid var(--h10-primary); outline-offset: 2px; }
 .h10-ds-acct-trigger.is-muted { color: var(--h10-text-2); font-weight: 500; }
 .h10-ds-acct-summary { padding-left: 2px; }
 
@@ -1455,7 +1455,7 @@
 .h10-ds-acct-pill-n {
   min-width: 15px; padding: 0 4px; margin-left: 1px;
   border-radius: var(--h10-radius-round);
-  background: var(--color-primary); color: var(--h10-white);
+  background: var(--h10-primary); color: var(--h10-white);
   font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
 }
 
@@ -1465,7 +1465,7 @@
 .h10-ds-acct-dot[data-health='warn'] { background: var(--h10-warning); }
 .h10-ds-acct-dot[data-health='error'] { background: var(--h10-danger); }
 .h10-ds-acct-dot[data-health='unknown'] { background: var(--h10-text-3); }
-.h10-ds-acct-dot[data-health='off'] { background: transparent; border: 1.5px solid var(--border-strong); }
+.h10-ds-acct-dot[data-health='off'] { background: transparent; border: 1.5px solid var(--h10-border-strong); }
 
 .h10-ds-acct-panel {
   position: absolute; top: calc(100% + 8px); right: 0;
@@ -1473,8 +1473,8 @@
      open modal still covers the chrome. */
   z-index: 48;
   width: 320px; max-height: min(70vh, 520px); overflow-y: auto;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle); border-radius: var(--h10-radius-xl);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle); border-radius: var(--h10-radius-xl);
   box-shadow: var(--h10-shadow-menu);
   padding: 6px;
 }
@@ -1489,7 +1489,7 @@
   color: var(--h10-text-2); font-size: 11px; letter-spacing: 0;
 }
 
-.h10-ds-acct-group + .h10-ds-acct-group { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; }
+.h10-ds-acct-group + .h10-ds-acct-group { border-top: 1px solid var(--h10-border-subtle); margin-top: 6px; padding-top: 6px; }
 .h10-ds-acct-group-head { padding: 4px 8px; font-size: 11px; font-weight: 700; color: var(--h10-text-2); }
 
 .h10-ds-acct-row {
@@ -1504,7 +1504,7 @@
    row layout identical to the informational <div> so nothing shifts when a
    second account appears. */
 button.h10-ds-acct-row { width: 100%; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
-button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--h10-primary); outline-offset: -2px; }
 .h10-ds-acct-row[data-selected] { background: var(--h10-surface-sunken); }
 /* The tick is never the only marker of the current account — the row is also
    tinted and carries aria-current, so the state does not depend on one glyph. */
@@ -1537,7 +1537,7 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
   font-size: 10.5px; font-weight: 700;
 }
 
-.h10-ds-acct-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
+.h10-ds-acct-foot { border-top: 1px solid var(--h10-border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
 .h10-ds-acct-foot a { font-size: 12px; font-weight: 600; color: var(--h10-text-link); text-decoration: none; }
 .h10-ds-acct-foot a:hover { text-decoration: underline; }
 
@@ -1547,8 +1547,8 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
    .h10-ds-acct-tag from the AccountSwitcher so a health dot means the same thing
    in the chip and on this page — one concept, one definition. */
 .h10-ds-acctp {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--h10-surface);
+  border: 1px solid var(--h10-border-subtle);
   border-radius: var(--h10-radius-xl);
   padding: 14px 16px;
 }
@@ -1560,7 +1560,7 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
 .h10-ds-acctp-notice[data-tone='error'] { color: var(--h10-danger-strong); }
 
 .h10-ds-acctp-group { margin-top: 14px; }
-.h10-ds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
+.h10-ds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--h10-border-subtle); }
 .h10-ds-acctp-ch { font-size: 12px; font-weight: 700; color: var(--h10-text); }
 .h10-ds-acctp-count {
   min-width: 18px; text-align: center; padding: 0 6px;
@@ -1569,7 +1569,7 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
 }
 .h10-ds-acctp-empty { margin: 8px 0; font-size: 12.5px; color: var(--h10-text-2); }
 
-.h10-ds-acctp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.h10-ds-acctp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--h10-border-subtle); }
 .h10-ds-acctp-row:last-of-type { border-bottom: none; }
 .h10-ds-acctp-row[data-busy] { opacity: 0.6; }
 .h10-ds-acctp-row .h10-ds-acct-dot { margin-top: 6px; }
@@ -1579,21 +1579,21 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
 .h10-ds-acctp-warn { color: var(--h10-warning-strong); }
 .h10-ds-acctp-badge {
   padding: 1px 7px; border-radius: var(--h10-radius-round);
-  background: var(--color-primary); color: var(--h10-white);
+  background: var(--h10-primary); color: var(--h10-white);
   font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
 }
 .h10-ds-acctp-input {
   font: inherit; font-size: 13.5px; font-weight: 600;
   padding: 3px 7px; width: min(280px, 100%);
-  border: 1px solid var(--color-primary); border-radius: var(--h10-radius-sm);
-  background: var(--surface-card); color: var(--h10-text);
+  border: 1px solid var(--h10-primary); border-radius: var(--h10-radius-sm);
+  background: var(--h10-surface); color: var(--h10-text);
 }
 
 .h10-ds-acctp-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .h10-ds-acctp-actions button {
   font: inherit; font-size: 12px; font-weight: 600;
   padding: 4px 9px; border-radius: var(--h10-radius-md);
-  border: 1px solid var(--border-default); background: var(--surface-card);
+  border: 1px solid var(--h10-border); background: var(--h10-surface);
   color: var(--h10-text); cursor: pointer;
 }
 .h10-ds-acctp-actions button:hover:not(:disabled) { background: var(--h10-surface-hover); }
@@ -1601,8 +1601,8 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
 .h10-ds-acctp-actions button.is-danger { color: var(--h10-danger-strong); border-color: var(--h10-danger-soft); }
 /* The danger BORDER still needs a dark rule: --h10-danger-soft is a light wash
    with no dark counterpart, and giving it one would re-tint every danger pill. */
-.dark .h10-ds-acctp-actions button.is-danger { border-color: var(--border-default); }
-.h10-ds-acctp-actions button.is-danger:disabled { color: var(--h10-text-disabled); border-color: var(--border-default); }
+.dark .h10-ds-acctp-actions button.is-danger { border-color: var(--h10-border); }
+.h10-ds-acctp-actions button.is-danger:disabled { color: var(--h10-text-disabled); border-color: var(--h10-border); }
 /* Why an action is absent, in words a screen reader and an eye can both reach —
    never a `title` on a disabled control, which fires no pointer events. */
 .h10-ds-acctp-note { font-size: 11.5px; color: var(--h10-text-2); max-width: 20ch; text-align: right; }
@@ -1610,7 +1610,7 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
 .h10-ds-acctp-add {
   margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 600;
   padding: 6px 11px; border-radius: var(--h10-radius-md);
-  border: 1px dashed var(--border-strong); background: none;
+  border: 1px dashed var(--h10-border-strong); background: none;
   color: var(--h10-text-link); cursor: pointer;
 }
 .h10-ds-acctp-add:hover { background: var(--h10-surface-hover); }
@@ -1625,8 +1625,8 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
   border: 2px solid transparent; cursor: pointer;
 }
 .h10-ds-acctp-swatch[aria-pressed='true'] { border-color: var(--h10-text); }
-.h10-ds-acctp-swatch:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
-.h10-ds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--border-strong); font-size: 10px; color: var(--h10-text-2); line-height: 1; }
+.h10-ds-acctp-swatch:focus-visible { outline: 2px solid var(--h10-primary); outline-offset: 1px; }
+.h10-ds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--h10-border-strong); font-size: 10px; color: var(--h10-text-2); line-height: 1; }
 
 /* ── ColumnGroupModal (2026-08-24) ──────────────────────────────────────────────
    Was the DS's other Tailwind-styled component (see the ToolbarButton note in
@@ -1650,30 +1650,30 @@ button.h10-ds-acct-row:focus-visible { outline: 2px solid var(--color-primary); 
   border: none; background: none; color: var(--h10-text-disabled);
   cursor: grab;
 }
-.h10-ds-cgm-grip:hover { color: var(--text-tertiary); }
+.h10-ds-cgm-grip:hover { color: var(--h10-text-3); }
 .h10-ds-cgm-grip:active { cursor: grabbing; }
-.h10-ds-cgm-grip:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: var(--h10-radius-pill); }
+.h10-ds-cgm-grip:focus-visible { outline: 2px solid var(--h10-primary); outline-offset: 2px; border-radius: var(--h10-radius-pill); }
 
-.h10-ds-cgm-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--text-tertiary); }
+.h10-ds-cgm-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--h10-text-3); }
 .h10-ds-cgm-dot[data-color='blue'],
-.h10-ds-cgm-dot[data-color='sky'] { background: var(--color-primary); }
+.h10-ds-cgm-dot[data-color='sky'] { background: var(--h10-primary); }
 .h10-ds-cgm-dot[data-color='purple'],
 .h10-ds-cgm-dot[data-color='violet'] { background: var(--h10-targeting-manual); }
 .h10-ds-cgm-dot[data-color='emerald'],
-.h10-ds-cgm-dot[data-color='teal'] { background: var(--status-success-line); }
+.h10-ds-cgm-dot[data-color='teal'] { background: var(--h10-success); }
 .h10-ds-cgm-dot[data-color='amber'],
-.h10-ds-cgm-dot[data-color='orange'] { background: var(--status-warning-line); }
+.h10-ds-cgm-dot[data-color='orange'] { background: var(--h10-warning); }
 .h10-ds-cgm-dot[data-color='cyan'] { background: var(--h10-badge-sd-fg); }
-.h10-ds-cgm-dot[data-color='red'] { background: var(--status-danger-line); }
+.h10-ds-cgm-dot[data-color='red'] { background: var(--h10-danger); }
 
 .h10-ds-cgm-main { flex: 1; min-width: 0; }
 .h10-ds-cgm-label { font-size: 13px; font-weight: 500; color: var(--h10-text-strong); }
 /* A hidden group is dimmed, but it also keeps its Toggle in the off position —
    the tint is a second signal, never the only one. */
-.h10-ds-cgm-label[data-hidden] { color: var(--text-tertiary); }
-.h10-ds-cgm-count { margin-left: 8px; font-size: 11.5px; color: var(--text-tertiary); }
+.h10-ds-cgm-label[data-hidden] { color: var(--h10-text-3); }
+.h10-ds-cgm-count { margin-left: 8px; font-size: 11.5px; color: var(--h10-text-3); }
 
 .h10-ds-cgm-foot { display: flex; width: 100%; align-items: center; justify-content: space-between; }
 .h10-ds-cgm-foot-actions { display: flex; gap: 8px; }
 .h10-ds-cgm-reset { display: inline-flex; align-items: center; gap: 6px; }
-.h10-ds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
+.h10-ds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--h10-text-3); }
