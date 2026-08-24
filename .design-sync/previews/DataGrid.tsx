@@ -47,6 +47,26 @@ export const CampaignGrid = () => (
   <DataGrid<Row> columns={COLS} rows={ROWS} rowKey={(r) => r.id} showTotals initialSort={{ key: 'spend', dir: 'desc' }} />
 )
 
+/**
+ * `customizable` + `storageKey` turn column ORDER and VISIBILITY into operator preferences:
+ * the Customise button opens the DS `PreferencesModal`, whose rows drag to reorder. Without
+ * these two props the grid renders `columns` in array order, which is what every other story
+ * here shows — so the card demonstrated a grid that could not be rearranged while the
+ * component could. Pinned columns (`sticky` / `stickyRight`) are held at the ends and marked
+ * Locked, because the pin offsets stack from an edge.
+ */
+export const Customizable = () => (
+  <DataGrid<Row>
+    columns={COLS}
+    rows={ROWS}
+    rowKey={(r) => r.id}
+    showTotals
+    initialSort={{ key: 'spend', dir: 'desc' }}
+    customizable
+    storageKey="ds-card.datagrid.columns"
+  />
+)
+
 /** `selectable` adds the checkbox column; drive it with `selected` + `onSelectedChange`. */
 export const Selectable = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set(['1', '3']))
