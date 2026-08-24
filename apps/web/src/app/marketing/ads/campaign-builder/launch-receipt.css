@@ -19,18 +19,18 @@
 .h10-vt-receipt-errors {
   margin: 0;
   padding: 8px 12px 8px 28px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgb(var(--border-subtle));
   border-radius: 6px;
-  background: var(--surface-sunken);
-  color: var(--text-secondary);
+  background: rgb(var(--surface-sunken));
+  color: rgb(var(--text-secondary));
   font-size: 11px;
   line-height: 1.55;
 }
 
 .h10-vt-receipt-body {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgb(var(--border-subtle));
   border-radius: 6px;
-  background: var(--surface-card);
+  background: rgb(var(--surface-card));
   overflow: hidden;
 }
 
@@ -42,7 +42,7 @@
   padding: 8px 10px;
   border: 0;
   background: transparent;
-  color: var(--text-primary);
+  color: rgb(var(--text-primary));
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -62,7 +62,7 @@
 /* Wide content scrolls inside its own container — the page body must never scroll sideways. */
 .h10-vt-receipt-table-wrap {
   overflow-x: auto;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid rgb(var(--border-subtle));
 }
 
 .h10-vt-receipt-table {
@@ -80,9 +80,9 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-tertiary);
-  background: var(--surface-sunken);
-  border-bottom: 1px solid var(--border-subtle);
+  color: rgb(var(--text-tertiary));
+  background: rgb(var(--surface-sunken));
+  border-bottom: 1px solid rgb(var(--border-subtle));
   white-space: nowrap;
 }
 
@@ -92,14 +92,14 @@
 
 .h10-vt-receipt-table td {
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
+  border-bottom: 1px solid rgb(var(--border-subtle));
+  color: rgb(var(--text-primary));
   vertical-align: top;
 }
 
 .h10-vt-receipt-table tr:last-child td { border-bottom: 0; }
 
-.h10-vt-t { color: var(--text-secondary); white-space: nowrap; }
+.h10-vt-t { color: rgb(var(--text-secondary)); white-space: nowrap; }
 
 .h10-vt-l {
   font-weight: 600;
@@ -110,27 +110,27 @@
 
 .h10-vt-d { display: flex; flex-direction: column; gap: 3px; }
 
-.h10-vt-muted { color: var(--text-secondary); }
+.h10-vt-muted { color: rgb(var(--text-secondary)); }
 
 .h10-vt-delta { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
 
-.h10-vt-delta b { color: var(--text-secondary); font-weight: 600; }
+.h10-vt-delta b { color: rgb(var(--text-secondary)); font-weight: 600; }
 
 .h10-vt-want {
   padding: 1px 5px;
   border-radius: 3px;
-  background: var(--status-success-soft);
-  color: var(--status-success-strong);
+  background: rgb(var(--status-success-soft));
+  color: rgb(var(--status-success-strong));
   font-variant-numeric: tabular-nums;
 }
 
-.h10-vt-arrow { color: var(--text-tertiary); }
+.h10-vt-arrow { color: rgb(var(--text-tertiary)); }
 
 .h10-vt-got {
   padding: 1px 5px;
   border-radius: 3px;
-  background: var(--status-danger-soft);
-  color: var(--status-danger-strong);
+  background: rgb(var(--status-danger-soft));
+  color: rgb(var(--status-danger-strong));
   font-variant-numeric: tabular-nums;
 }
 
