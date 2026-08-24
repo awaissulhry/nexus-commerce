@@ -29,3 +29,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
+
+/* ── Preview-card harness: stop the cards cropping their own overlays ──────
+ * The generated card HTML (lib/emit.mjs) styles each story cell as
+ * `.ds-cell{overflow:hidden}` and paints the page with `body{padding:24px}`.
+ * Every DS overlay except InfoTip renders IN-FLOW — tooltips and hover cards
+ * open above their trigger, menus/combos/date pickers/tag inputs below — so any
+ * card whose story opens one had it sliced off at the cell edge. It is not a
+ * property of "overlay components": ToolbarDivider clips too, because its story
+ * composes ToolbarButtons, and the filter patterns clip because they contain
+ * selects. Anything can compose anything, so this is fixed once, globally.
+ *
+ * `.ds-grid > .ds-cell` (0,2,0) is deliberate: the harness's own rule is (0,1,0)
+ * and its <style> block loads AFTER this stylesheet, so a plain `.ds-cell`
+ * selector would lose the cascade.
+ *
+ * Inert outside the harness — no product page has a `.ds-cell` or `.ds-grid`. */
+.ds-grid > .ds-cell { overflow: visible; }
+/* Room for an overlay that centres on its trigger (`left:50%; translateX(-50%)`)
+ * near the page's left edge, which the cell fix alone cannot give it. */
+html > body { padding: 72px 64px; }

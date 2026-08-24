@@ -46,18 +46,6 @@ const RefreshIcon = () => (
   </Icon>
 )
 
-// The card harness clips overlays: `.ds-cell` (lib/emit.mjs) sets `overflow:hidden`,
-// so a tooltip that opens ABOVE its trigger — `.h10-ds-tooltip > .tip` is
-// `bottom: calc(100% + 8px)` — is cut off by the cell's top edge on hover. The
-// static capture never showed it because the tip only exists while hovered or
-// focused; it is visible to anyone browsing the card. Scoped to this component's
-// own page, so it cannot affect another card.
-if (typeof document !== 'undefined' && !document.getElementById('tbtn-overflow')) {
-  const st = document.createElement('style')
-  st.id = 'tbtn-overflow'
-  st.textContent = '.ds-cell{overflow:visible}'
-  document.head.appendChild(st)
-}
 
 const bar: React.CSSProperties = {
   display: 'inline-flex',

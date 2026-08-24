@@ -15,16 +15,6 @@
 // show the loaded, degraded, loading and failed states side by side.
 import { AccountsPanel, type AccountsPayload } from '@nexus/design-system'
 
-// The card harness clips overlays: `.ds-cell` (lib/emit.mjs) sets `overflow:hidden`,
-// so any panel that escapes its trigger's box is cut off. Only InfoTip survives it,
-// because InfoTip portals to <body>; every other DS overlay renders in-flow. Scoped
-// to this component's own page — each card is a separate document.
-if (typeof document !== 'undefined' && !document.getElementById('ds-overlay-overflow')) {
-  const st = document.createElement('style')
-  st.id = 'ds-overlay-overflow'
-  st.textContent = '.ds-cell{overflow:visible}'
-  document.head.appendChild(st)
-}
 
 
 const LIVE = 'https://accounts.preview.nexus/live'

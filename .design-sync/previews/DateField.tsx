@@ -11,16 +11,6 @@
 import { useState, type ReactNode } from 'react'
 import { DateField } from '@nexus/design-system'
 
-// The card harness clips overlays: `.ds-cell` (lib/emit.mjs) sets `overflow:hidden`,
-// so any panel that escapes its trigger's box is cut off. Only InfoTip survives it,
-// because InfoTip portals to <body>; every other DS overlay renders in-flow. Scoped
-// to this component's own page — each card is a separate document.
-if (typeof document !== 'undefined' && !document.getElementById('ds-overlay-overflow')) {
-  const st = document.createElement('style')
-  st.id = 'ds-overlay-overflow'
-  st.textContent = '.ds-cell{overflow:visible}'
-  document.head.appendChild(st)
-}
 
 
 // The field is width:100%; the product gives it a form column, so the stories do too.

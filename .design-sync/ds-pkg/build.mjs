@@ -53,3 +53,18 @@ writeFileSync(
   parts.map(([name, p]) => `/* ── ${name} ── */\n${readFileSync(p, 'utf8')}`).join('\n\n'),
 );
 console.error(`ds-pkg: wrote dist/index.d.ts and dist/ds.css (${parts.length} stylesheets)`);
+
+// ── 4. the cards must not crop their own content ─────────────────────────
+// Runs after every build so a new component, or a story whose overlay opens near
+// an edge, cannot quietly reintroduce the cropping the operator reported. Skipped
+// when ds-bundle/ has not been generated yet (first build of a fresh clone).
+import { existsSync as _exists } from 'node:fs';
+if (_exists(join(repo, 'ds-bundle', 'components'))) {
+  try {
+    execFileSync('node', [join(here, 'check-clipping.mjs'), '--out', join(repo, 'ds-bundle')],
+      { stdio: 'inherit', cwd: repo });
+  } catch {
+    console.error('ds-pkg: clipping check FAILED — see above. The cards will crop overlays.');
+    process.exitCode = 1;
+  }
+}

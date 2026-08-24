@@ -101,6 +101,12 @@
     },
     "Tabs": {
       "cardMode": "column"
+    },
+    "DataGrid": {
+      "cardMode": "column"
+    },
+    "Tooltip": {
+      "cardMode": "column"
     }
   },
   "dtsPropsFor": {

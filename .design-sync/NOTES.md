@@ -283,32 +283,53 @@ document. Always open the default card before declaring an overlay component don
 - Grades live in the gitignored `.design-sync/.cache/`; the durable carry-forward is the
   uploaded `_ds_sync.json`. A fresh clone re-verifies only what the anchor says changed.
 
-## 🔴 The card harness clips every in-flow overlay
+## 🔴 The card harness clips every in-flow overlay — fixed globally, and guarded
 
-`.ds-cell` in the generated card HTML (`lib/emit.mjs`) is
-`{... overflow:hidden; transform:translateZ(0)}`. Any overlay that escapes its trigger's box is
-cut off. **Only `InfoTip` survives it**, because InfoTip portals to `<body>`; every other DS
-overlay renders in-flow:
+`.ds-cell` in the generated card HTML (`lib/emit.mjs`) is `{overflow:hidden; transform:translateZ(0)}`
+and the page is `body{padding:24px}`. Any overlay escaping its trigger's box was sliced off.
+**Only `InfoTip` survives natively** — it portals to `<body>`; every other DS overlay is in-flow:
+`.h10-ds-tooltip > .tip` and `.h10-ds-hovercard > .hc` open ABOVE; `.h10-ds-menu`,
+`.h10-ds-ms-pop`, `.h10-ds-combo-pop`, `.h10-ds-dp-pop`, `.h10-ds-taginput-menu`,
+`.h10-ds-acct-panel` open BELOW. **`cardMode:"single"` does NOT help** — it still uses `.ds-cell`.
 
-- opens **ABOVE** (needs headroom): `.h10-ds-tooltip > .tip`, `.h10-ds-hovercard > .hc`
-- opens **BELOW**: `.h10-ds-menu`, `.h10-ds-ms-pop`, `.h10-ds-combo-pop`, `.h10-ds-dp-pop`,
-  `.h10-ds-taginput-menu`, `.h10-ds-acct-panel`
+🔴 **Do not fix this per component.** The first attempt patched the eleven "overlay components"
+and the operator immediately found more: `ToolbarDivider` clips because its story composes
+`ToolbarButton`s, and the filter patterns clip because they contain selects. Anything can compose
+anything, so the property belongs to the harness, not to a list of components.
 
-**`cardMode: "single"` does NOT fix it** — that layout still wraps the story in `.ds-cell`.
+**The fix — two rules in `ds-pkg/base.css`, which every card loads via `_ds_bundle.css`:**
 
-**The fix, in each affected preview:** inject `.ds-cell{overflow:visible}` at module scope. Each
-component is its own HTML document, so the override cannot reach another card. Applied to the
-eleven overlay components; verified no cell collides with a neighbour afterwards.
+```css
+.ds-grid > .ds-cell { overflow: visible; }   /* (0,2,0) — the harness rule is (0,1,0) and its
+                                                <style> loads AFTER this sheet, so a bare
+                                                `.ds-cell` selector loses the cascade */
+html > body { padding: 72px 64px; }          /* room for a bubble centred near the page edge */
+```
 
-Two things this cost, both worth remembering:
+Both are inert outside the harness — no product page has a `.ds-cell` or `.ds-grid`.
 
-- **Static captures cannot see it.** A tooltip exists only while hovered or focused, so every
-  screenshot graded `good` while the live card was cropping. The operator found it by *using* the
-  pane. Any overlay whose open state is not forced is ungraded, not verified.
-- **An overlay centred on its trigger clips sideways too.** `.h10-ds-tooltip > .tip` is
-  `left:50%; translateX(-50%)`, so a trigger flush against the cell's left edge pushes the bubble
-  off-viewport — fixed by indenting the trigger, not by more overflow.
+**The guard: `ds-pkg/check-clipping.mjs`, run automatically as step 4 of every `build.mjs`.**
+It loads all 59 cards in Chromium, opens what can be opened, and fails if any `.ds-cell` computes
+`overflow` other than `visible`, or if anything renders outside the viewport. It found two cases
+the CSS alone did not fix — `DataGrid` (a 5-column grid wider than a cell) and `Tooltip` (a centred
+bubble at the row's left edge), both resolved with `cardMode:"column"` plus an indent — and it is
+negative-tested both ways: reintroduce `overflow:hidden` on one card and it names the cells; push
+an element off-viewport and it reports the box.
 
-`ToolbarButton` has a **closed prop list** — no rest spread — so `autoFocus` is silently dropped.
-Its tip is revealed by the DS's own `:focus-within`, so its preview focuses the button on mount
-(`ref.current?.querySelector('button.h10-ds-tbtn')?.focus()`) rather than faking the tip in markup.
+### Why the grades never caught it
+
+A tooltip exists only while hovered or focused. Every one of these cards graded `good` from a
+screenshot in which the overlay **was not rendered at all**. An overlay whose open state is not
+forced is *ungraded*, not verified. The operator found it by using the pane; the geometry check now
+covers what a static image cannot.
+
+Three component-specific gotchas worth keeping:
+
+- An overlay centred on its trigger (`left:50%; translateX(-50%)`) clips **sideways** when the
+  trigger sits near a page edge — `overflow:visible` cannot help. Indent the trigger.
+- `ToolbarButton` has a **closed prop list** with no rest spread, so `autoFocus` is silently
+  dropped. Its tip is revealed by the DS's own `:focus-within`, so its preview focuses the button
+  on mount (`ref.current?.querySelector('button.h10-ds-tbtn')?.focus()`).
+- Only **one** element per document can hold focus, so in a composite card only the first
+  `autoFocus` story shows its overlay — `Tooltip.OpenBubble` is the known case, and its per-story
+  capture does show the bubble.
