@@ -28,6 +28,14 @@
   font-weight: 700;
   color: var(--h10-text);
 }
+/* 9.3 — a headed card whose body meets its own edges (charts, tables, heatmaps). Before this
+   the head forced 16px on the body, which is why 17 call sites kept the second Card. */
+.h10-ds-card-body.flush { padding: 0; }
+/* 9.3 — title + sub-line stack. Only applied when a description is passed, so the 23 existing
+   headed cards keep byte-identical markup and centring. */
+.h10-ds-card-head.stacked { align-items: flex-start; }
+.h10-ds-card-headmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.h10-ds-card-head .d { font-size: 12.5px; font-weight: 500; color: var(--h10-text-2); }
 .h10-ds-card-body {
   padding: 16px;
 }

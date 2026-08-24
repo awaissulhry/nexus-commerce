@@ -7,6 +7,9 @@ export interface CardProps {
   elevated?: boolean
   /** optional header title; renders a bordered head + padded body */
   header?: ReactNode
+  /** 9.3 — sub-line under the header title. 105 call sites across the platform wanted one and
+   *  had to keep a second Card implementation to get it. Ignored without `header`. */
+  description?: ReactNode
   /** optional right-aligned header slot (e.g. an action button) */
   headerAction?: ReactNode
   children?: ReactNode
@@ -14,18 +17,30 @@ export interface CardProps {
 }
 
 /** Surface container (H10 panel/`.h10-am-card` look). */
-export function Card({ padded, elevated, header, headerAction, children, className }: CardProps) {
+export function Card({ padded, elevated, header, description, headerAction, children, className }: CardProps) {
   const cls = ['h10-ds-card', padded && header == null ? 'pad' : '', elevated ? 'shadow' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   if (header != null) {
+    // 9.3 — `padded` now also reaches the BODY of a headed card. It previously applied only to
+    // headerless cards, so a card with a header always got 16px however it was configured, and
+    // a chart or table that needs to meet its own edges could not use this component. Defaults
+    // to padded, and no existing caller passes both props, so nothing shifts.
+    const body = ['h10-ds-card-body', padded === false ? 'flush' : ''].filter(Boolean).join(' ')
     return (
       <div className={cls}>
-        <div className="h10-ds-card-head">
-          <span className="t">{header}</span>
+        <div className={['h10-ds-card-head', description != null ? 'stacked' : ''].filter(Boolean).join(' ')}>
+          {description != null ? (
+            <div className="h10-ds-card-headmain">
+              <span className="t">{header}</span>
+              <span className="d">{description}</span>
+            </div>
+          ) : (
+            <span className="t">{header}</span>
+          )}
           {headerAction}
         </div>
-        <div className="h10-ds-card-body">{children}</div>
+        <div className={body}>{children}</div>
       </div>
     )
   }

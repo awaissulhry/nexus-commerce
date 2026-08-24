@@ -93,12 +93,51 @@ keep the DS's minimal API and accept that 900 call sites get less than they have
 None of the three should be guessed at: the first changes how 246 chips read, the second adds a
 primitive the whole platform inherits, and the third rewrites the API behind 900 calls.
 
+## 3b. 🔴 The prerequisite nobody had written down: DS CSS is not reliably loaded
+
+Found while shipping tranche 2. **The design system's stylesheets are not loaded app-wide.**
+The root layout imports only `globals.css`; every DS stylesheet arrives because some individual
+file imported it.
+
+| stylesheet | files importing it |
+|---|---:|
+| `tokens.css` | 202 |
+| `components.css` | 198 |
+| `primitives.css` | **46** |
+| `patterns.css` | 24 |
+| `a11y.css` | **1** |
+
+Measured on `/design`: `.h10-ds-card` resolves, `.h10-ds-btn` **does not** — `components.css`
+reaches most routes incidentally, `primitives.css` does not reach that one at all. Of the 205
+files calling the legacy `Button`, **5** import `primitives.css`.
+
+**This is the Tailwind content-glob defect one level up**: a component styled only when some
+unrelated sibling happens to import its stylesheet. It bit this tranche directly — the
+`EmptyState` adapter renders a DS `Button`, which came out as unstyled black text on 55 of its
+56 pages until it was caught.
+
+**Interim fix, applied:** each adapter imports the stylesheets its DS component needs, the way
+`AccountSwitcher` already did. Next dedupes them, so it costs nothing.
+
+**The real fix is app-wide loading, and 9.0b is what makes it possible.** It could not be done
+before, because `tokens.css` publishes the platform-alias tier at `:root` and loading it
+globally would race `globals.css` for `--text-*` / `--surface-*` / `--border-*`. Now that DS
+stylesheets consume only `--h10-*`, `tokens.css` can be split — the `--h10-*` tiers load
+globally with `primitives`/`components`/`patterns`/`a11y`, and the alias tier stays opt-in.
+**That should land before the `Button` tranche**, which is 205 files needing `primitives.css`.
+
+**Separately: `a11y.css` is imported by exactly one file.** The DS's `focus-visible` and
+`prefers-reduced-motion` rules are absent from essentially the whole platform. That is an
+accessibility gap, not a styling one, and it is fixed by the same app-wide load.
+
 ## 4. Suggested order for the rest
 
-1. **Spinner, ProgressBar** — two files; also retires the hand-rolled `ProgressBar` copy at
-   `ReconciliationClient.tsx:694`. Smallest possible next proof.
-2. **EmptyState, Card** — adapters, no new DS capability needed. 201 files, 548 call sites.
-3. **Tooltip, Skeleton, Modal, Button** — each needs a real DS capability first. Contribute the
+1. ✅ **Spinner, ProgressBar** — shipped. Both had exactly one caller: `app/design/page.tsx`,
+   the legacy showcase 9.7 deletes. Every production call site was already on the DS versions.
+   The hand-rolled `{ pct }` copy at `ReconciliationClient.tsx:694` is still outstanding.
+2. ✅ **EmptyState, Card** — shipped. `Card.description` was lifted into the DS (105 call sites
+   wanted it) and `padded` now reaches the body of a headed card (17 charts needed that).
+3. **§3b first**, then **Tooltip, Skeleton, Modal, Button** — each needs a real DS capability first. Contribute the
    capability, then adapt; per `CONTRIBUTING.md` these belong in the system, not in a shim.
 4. **Badge, Input, Toast** — after §3 is decided.
 

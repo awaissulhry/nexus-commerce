@@ -1,147 +1,67 @@
 'use client'
 
 /**
- * U.2 — ProgressBar primitive.
+ * ProgressBar — ADAPTER over the design system's `ProgressBar` (Phase 9.3).
  *
- * Replaces 10+ inline `h-1.5 rounded` patterns scattered through bulk
- * operations, listing wizard submit flow, and various job strips.
+ * The platform had THREE bars: this one, the DS one, and a hand-rolled `{ pct }` copy inside
+ * `ReconciliationClient.tsx`. The track and fill are now the DS's in every case.
  *
- * Two display modes:
- *
- *   determinate (value provided 0-100) — fills to a percentage,
- *     surfaces an aria-valuenow for screen readers, optionally
- *     shows the count text "12 / 50" alongside the bar
- *
- *   indeterminate (value omitted) — slides a striped segment along
- *     the track. For "we know it's progressing but can't measure it"
- *     workloads (the BullMQ worker tick during a bulk job)
- *
- * Tone defaults to info (blue). Use success when the operation has
- * already completed and you're showing the final state; danger when
- * a partial-failure has occurred.
- *
- * Usage:
- *   <ProgressBar value={succeeded} max={total} label="Bulk publish" />
- *   <ProgressBar indeterminate label="Polling Amazon…" />
+ * Only `app/design/page.tsx` still imports this file. The label row (`label`, `showCount`,
+ * `showPercent`) stays here as composition rather than becoming DS props: the DS bar is the
+ * bar, and a caption above it is a caller's layout decision.
  */
 
-import { cn } from '@/lib/utils'
+import { ProgressBar as DsProgressBar } from '@/design-system/components/ProgressBar'
 
-type Tone = 'info' | 'success' | 'warning' | 'danger'
-type Size = 'xs' | 'sm' | 'md'
-
-interface ProgressBarProps {
-  /** Current progress 0..max. Omit for indeterminate state. */
-  value?: number
-  /** Total. Defaults to 100. */
-  max?: number
-  /** Indeterminate state — overrides value. */
-  indeterminate?: boolean
-  /** Optional label above the bar. */
-  label?: string
-  /** Show "12 / 50" alongside label. Defaults true when label set + value provided. */
-  showCount?: boolean
-  /** Show "24%" alongside label. */
-  showPercent?: boolean
-  tone?: Tone
-  size?: Size
-  className?: string
-}
-
-const TRACK: Record<Size, string> = {
-  xs: 'h-1',
-  sm: 'h-1.5',
-  md: 'h-2',
-}
-
-const TONE: Record<Tone, string> = {
-  info:    'bg-info-500',
-  success: 'bg-success-500',
-  warning: 'bg-warning-500',
-  danger:  'bg-danger-500',
-}
+/* The adapter carries its own stylesheet dependency, because the call sites do not.
+ * Measured 2026-08-24: `components.css` is imported by 198 files and reaches most routes
+ * incidentally, but `primitives.css` by only 46 — `.h10-ds-btn` does not resolve on
+ * /design at all. A DS component whose CSS arrives only when some unrelated sibling
+ * happens to import it is the same defect class as the Tailwind content-glob gap, one
+ * level up. Next dedupes these imports, so paying for them here is free. */
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 export function ProgressBar({
-  value,
+  value = 0,
   max = 100,
   indeterminate,
   label,
   showCount,
   showPercent,
-  tone = 'info',
-  size = 'sm',
+  size = 'md',
   className,
-}: ProgressBarProps) {
-  const isIndeterminate = indeterminate || value === undefined
-  const pct = isIndeterminate
-    ? 0
-    : Math.max(0, Math.min(100, (value! / Math.max(1, max)) * 100))
-
-  // Default count display: when there's a label + a value + max is
-  // not the implicit 100, show the count. Operator scanning a job
-  // strip wants "37 / 200" more than "18%".
-  const showCountResolved =
-    showCount ?? (label != null && !isIndeterminate && max !== 100)
-
+}: {
+  value?: number
+  max?: number
+  indeterminate?: boolean
+  label?: string
+  showCount?: boolean
+  showPercent?: boolean
+  tone?: 'default' | 'success' | 'warning' | 'danger'
+  size?: 'sm' | 'md'
+  className?: string
+}) {
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
+  const caption = showPercent ? `${Math.round(pct)}%` : showCount ? `${value} / ${max}` : null
   return (
-    <div className={cn('w-full', className)}>
-      {(label || showPercent || showCountResolved) && (
-        <div className="flex items-center justify-between text-sm text-secondary mb-1">
-          {label && <span className="font-label">{label}</span>}
-          {!label && <span />}
-          <span className="tabular-nums">
-            {showCountResolved && !isIndeterminate && (
-              <span>
-                {value} / {max}
-              </span>
-            )}
-            {showPercent && !isIndeterminate && (
-              <span className="ml-2">{pct.toFixed(0)}%</span>
-            )}
-          </span>
+    <div className={className}>
+      {(label || caption) && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 4,
+            fontSize: 12,
+            color: 'var(--h10-text-2)',
+          }}
+        >
+          {label && <span>{label}</span>}
+          {caption && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{caption}</span>}
         </div>
       )}
-      <div
-        role="progressbar"
-        aria-valuenow={isIndeterminate ? undefined : pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={label}
-        className={cn(
-          'w-full bg-sunken rounded-full overflow-hidden',
-          TRACK[size],
-        )}
-      >
-        {isIndeterminate ? (
-          <div
-            className={cn(
-              'h-full rounded-full animate-pulse',
-              TONE[tone],
-              'w-1/3',
-            )}
-            style={{
-              animation:
-                'progress-indeterminate 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
-            }}
-          />
-        ) : (
-          <div
-            className={cn('h-full rounded-full transition-all duration-base ease-out', TONE[tone])}
-            style={{ width: `${pct}%` }}
-          />
-        )}
-      </div>
-      {/* Indeterminate keyframes — inline because Tailwind doesn't
-          ship a sliding animation by default and adding it to the
-          config would force every page to load it. */}
-      {isIndeterminate && (
-        <style jsx>{`
-          @keyframes progress-indeterminate {
-            0%   { transform: translateX(-100%); }
-            100% { transform: translateX(400%); }
-          }
-        `}</style>
-      )}
+      <DsProgressBar value={pct} indeterminate={indeterminate} height={size === 'sm' ? 4 : 6} />
     </div>
   )
 }

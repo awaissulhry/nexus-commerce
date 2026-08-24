@@ -4,6 +4,47 @@ Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
 
+## [9.3-t2] — 2026-08-24 — Card, EmptyState, Spinner, ProgressBar collapse onto the DS
+
+Four more of the twelve duplicate concepts retired. `components/ui/{Card,EmptyState,Spinner,
+ProgressBar}` are now adapters over the DS components, legacy APIs kept verbatim so no call
+site changed.
+
+### Lifted into the DS (capabilities, not shims)
+
+- **`Card.description`** — a sub-line under the header title. 105 call sites wanted one, and
+  the duplicate `components/ui/Card` was the only way to get it. Renders as a stacked
+  title/description block; the 23 existing headed cards keep byte-identical markup because the
+  stack only applies when `description` is passed.
+- **`Card.padded` now reaches the BODY of a headed card.** It previously applied only to
+  headerless cards, so a headed card always got 16px — which is why 17 charts and tables kept
+  the legacy component. `padded={false}` → `.h10-ds-card-body.flush`. No existing DS caller
+  passes both props, so nothing shifts.
+
+### Kept OUT of the DS (deliberately)
+
+`Spinner.tone` / `Spinner.label` and `ProgressBar.label` / `showCount` / `showPercent` stay in
+the adapters. Each has a single caller — `app/design/page.tsx`, the legacy showcase 9.7
+deletes — and the DS's own answer to "spinner with a word beside it" is composition, not a
+prop. Every production call site was already using the DS `Spinner`/`ProgressBar` directly.
+
+### 🔴 Adapters now carry their own stylesheet imports
+
+The DS stylesheets are **not** loaded app-wide: `primitives.css` is imported by 46 files,
+`a11y.css` by **one**. Measured on `/design`, `.h10-ds-card` resolves but `.h10-ds-btn` does
+not. This bit the `EmptyState` adapter directly — it renders a DS `Button`, which came out as
+unstyled black text on 55 of its 56 pages until caught in review. Each adapter now imports the
+stylesheets its component needs, as `AccountSwitcher` already did. Next dedupes them.
+
+The real fix is loading the DS stylesheets once, app-wide, which **9.0b is what makes possible**
+— `tokens.css` can now be split into the `--h10-*` tiers (safe globally) and the platform-alias
+tier (opt-in, and a `:root` race with `globals.css` if loaded). It should land before the
+`Button` tranche, which is 205 files needing `primitives.css`. See
+`docs/PHASE-9-3-DUPLICATE-CONCEPTS.md` §3b.
+
+**Migration:** none. No component API changed; `Card` and `EmptyState` render the DS look on
+201 files that previously rendered bespoke Tailwind.
+
 ## [9.0b] — 2026-08-24 — 285 component declarations were being discarded by the browser
 
 The DS published `--text-*` / `--surface-*` / `--border-*` as **colours**; `globals.css` and

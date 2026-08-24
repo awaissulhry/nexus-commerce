@@ -23,6 +23,15 @@
 import { type ReactNode } from 'react'
 import { Tabs as DsTabs, type TabItem } from '@/design-system/components/Tabs'
 
+/* The adapter carries its own stylesheet dependency, because the call sites do not.
+ * Measured 2026-08-24: `components.css` is imported by 198 files and reaches most routes
+ * incidentally, but `primitives.css` by only 46 — `.h10-ds-btn` does not resolve on
+ * /design at all. A DS component whose CSS arrives only when some unrelated sibling
+ * happens to import it is the same defect class as the Tailwind content-glob gap, one
+ * level up. Next dedupes these imports, so paying for them here is free. */
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
+
 export interface Tab {
   id: string
   label: ReactNode

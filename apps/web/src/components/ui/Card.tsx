@@ -1,5 +1,32 @@
+/**
+ * Card — ADAPTER over the design system's `Card` (Phase 9.3).
+ *
+ * Was a second implementation of "bordered surface with an optional header": its own Tailwind
+ * chrome, its own header layout, its own padding rule. 145 files and 485 call sites used it,
+ * which is exactly why it could not be left to drift from the DS one.
+ *
+ * The legacy API is kept verbatim:
+ *   • `title`       → the DS's `header`
+ *   • `description` → lifted INTO the DS (105 call sites wanted a sub-line and this duplicate
+ *                     was the only way to get one)
+ *   • `action`      → the DS's `headerAction`
+ *   • `noPadding`   → the DS's `padded={false}`, which now also reaches the body of a HEADED
+ *                     card — previously impossible, and the reason 17 charts kept this file
+ *
+ * New code should import from `@/design-system/components/Card`.
+ */
+
 import { type ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { Card as DsCard } from '@/design-system/components/Card'
+
+/* The adapter carries its own stylesheet dependency, because the call sites do not.
+ * Measured 2026-08-24: `components.css` is imported by 198 files and reaches most routes
+ * incidentally, but `primitives.css` by only 46 — `.h10-ds-btn` does not resolve on
+ * /design at all. A DS component whose CSS arrives only when some unrelated sibling
+ * happens to import it is the same defect class as the Tailwind content-glob gap, one
+ * level up. Next dedupes these imports, so paying for them here is free. */
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/components.css'
 
 interface CardProps {
   title?: ReactNode
@@ -12,21 +39,14 @@ interface CardProps {
 
 export function Card({ title, description, action, children, className, noPadding }: CardProps) {
   return (
-    <div className={cn('bg-card border border-default rounded-lg', className)}>
-      {(title || description || action) && (
-        <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-default">
-          <div className="min-w-0">
-            {title && (
-              <h2 className="text-md font-heading text-primary">{title}</h2>
-            )}
-            {description && (
-              <p className="text-sm text-secondary mt-0.5">{description}</p>
-            )}
-          </div>
-          {action && <div className="flex-shrink-0">{action}</div>}
-        </div>
-      )}
-      <div className={cn(noPadding ? '' : 'p-4')}>{children}</div>
-    </div>
+    <DsCard
+      header={title}
+      description={title != null ? description : undefined}
+      headerAction={action}
+      padded={!noPadding}
+      className={className}
+    >
+      {children}
+    </DsCard>
   )
 }
