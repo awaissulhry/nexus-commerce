@@ -23,7 +23,8 @@
  *   node apps/web/src/design-system/tools/token-guard.mjs
  */
 import { readdirSync, readFileSync, statSync } from 'fs'
-import { join } from 'path'
+import { execSync } from 'child_process'
+import { join, relative } from 'path'
 
 const ROOT = 'apps/web/src/design-system'
 
@@ -72,12 +73,33 @@ const TW =
   /\b(bg|text|border|ring|from|to|fill|stroke)-(slate|gray|zinc|blue|indigo|green|emerald|red|rose|amber|yellow|orange|purple|violet|cyan|sky)-[0-9]{2,3}\b/
 const TW_SCOPE = /^(primitives|components|patterns)\//
 
+// Files git does not track are, by definition, not in the commit being pushed —
+// another session's work-in-progress in this shared tree. Failing a push over one
+// blocks work that has nothing to do with it: measured four times on 2026-08-24,
+// on pushes whose commit was a single markdown file. Tracked-but-dirty files ARE
+// still checked; those can legitimately be part of what you are about to push.
+let trackedSet = null
+function isTracked(p) {
+  if (trackedSet === null) {
+    try {
+      trackedSet = new Set(
+        execSync('git ls-files -z', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+          .split('\0')
+          .filter(Boolean),
+      )
+    } catch {
+      trackedSet = new Set() // not a git checkout — check everything
+    }
+  }
+  return trackedSet.size === 0 || trackedSet.has(relative(process.cwd(), p))
+}
+
 function walk(dir) {
   const out = []
   for (const e of readdirSync(dir)) {
     const p = join(dir, e)
     if (statSync(p).isDirectory()) out.push(...walk(p))
-    else out.push(p)
+    else if (isTracked(p)) out.push(p)
   }
   return out
 }

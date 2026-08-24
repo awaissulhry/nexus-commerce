@@ -38,12 +38,17 @@ So the genuine gap is three things, not a new tool:
 Rewrite §4 and §5 accordingly: extend the existing guard's file walk to `.css`, add two counters,
 and leave the allowlist policy to whoever owns Wave 1.
 
-### 0a. This guard and Phase 9.1 collide
+### 0a. This guard and Phase 9.1 collide — canary added
 
 The `ebay.css ⊆ ads.css` palette check compares **literal hex sets**. Phase 9.1 rewrites `ads.css`
 to reference `var(--h10-*)` instead of hex — at which point the Amazon palette set empties and the
 check either passes vacuously or fails everything, depending on which file tokenizes first.
-Nobody has flagged this. It needs resolving as part of 9.1, not after.
+**A canary now prevents the silent version:** `--check` fails if the Amazon palette resolves to
+fewer than 200 literal colours (317 today; tokenizing `ads.css` alone drops it to 30). It names the
+two real options — resolve both sides through `tokens.css`, or retire the check — so 9.1 has to make
+the decision rather than sail past a vacuously-green guard. Verified by simulating the rewrite.
+
+The decision itself still belongs to whoever runs 9.1.
 
 This coupling is already fragile: the split in `f4ba90df1` moved `#b87503` from `ads.css` into
 `_shared/shared-shell.css` and the guard failed the push, correctly — `ebay.css`'s conformance
@@ -160,17 +165,16 @@ Today `token-guard` sees ~50 design-system files. This proposal points it at **1
 window by roughly three, on the busiest directories in the repo. Any version of this rail that
 ignores that will be experienced as the guard randomly blocking people, and it will be disabled.
 
-**Decide one of:**
-- **Scope to the push.** Run the ratchet over `git diff --name-only origin/main...HEAD` rather than
-  the working tree. Strictly better here — it also makes the check proportional to the change — but
-  it is a change to how *every* DS guard is invoked, not just this one.
-- **Skip untracked files.** One line, keeps working-tree semantics, and closes the exact case above.
-  Does not help when the half-written file is tracked and merely dirty.
-- **Move the ratchet to CI only**, leaving pre-push to the existing narrow DS checks. Slowest
-  feedback, zero collisions.
+**✅ RESOLVED — untracked files are now skipped** by both `token-guard.mjs` and
+`ds-conformance-guard.mjs`. A file git does not track is not in the commit being pushed; in this
+tree it is another session's work in progress. Tracked-but-dirty files are still checked, because
+those may be exactly what you are pushing. Negative-tested both ways on both guards: an untracked
+file with violations passes, the same file `git add -N`'d fails.
 
-The first is the right answer if the team is willing to change guard invocation generally; the
-second is the cheap one that fixes the observed failure.
+Still open, and the better answer if the team wants it: **scope the check to
+`git diff --name-only origin/main...HEAD`** instead of the working tree. That also makes the check
+proportional to the change, but it alters how every DS guard is invoked, so it is a team call
+rather than a bug fix.
 
 ## 5. Rollout — cheapest and most credible first
 

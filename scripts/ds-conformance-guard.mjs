@@ -22,6 +22,7 @@
  * it reached zero in EV4 and stays there.
  */
 import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join, relative } from 'node:path'
 
 const ROOT = join(process.cwd(), 'apps/web/src/app')
@@ -43,12 +44,32 @@ const METRICS = {
   hex: /style=\{\{[^}]*#[0-9a-fA-F]{3,6}/g,
 }
 
+// Untracked files are not in the commit being pushed — in this shared working tree
+// they are another session's work in progress. Counting them can push a section over
+// its baseline and fail a push that has nothing to do with them. Tracked-but-dirty
+// files are still counted: those may be exactly what you are pushing.
+let trackedSet = null
+function isTracked(p) {
+  if (trackedSet === null) {
+    try {
+      trackedSet = new Set(
+        execSync('git ls-files -z', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+          .split('\0')
+          .filter(Boolean),
+      )
+    } catch {
+      trackedSet = new Set() // not a git checkout — count everything
+    }
+  }
+  return trackedSet.size === 0 || trackedSet.has(relative(process.cwd(), p))
+}
+
 function* walk(dir) {
   for (const e of readdirSync(dir)) {
     const p = join(dir, e)
     const s = statSync(p)
     if (s.isDirectory()) yield* walk(p)
-    else if (p.endsWith('.tsx')) yield p
+    else if (p.endsWith('.tsx') && isTracked(p)) yield p
   }
 }
 
@@ -110,6 +131,20 @@ if (mode === '--check') {
   const ebayCss = readFileSync(join(ROOT, 'marketing/ads/ebay/ebay.css'), 'utf8')
   const amazonPalette = new Set((adsCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))
   const offPalette = [...new Set((ebayCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))].filter((h) => !amazonPalette.has(h))
+  // 🔴 This check compares literal hex SETS. Phase 9.1 rewrites ads.css to
+  // var(--h10-*), at which point the Amazon palette empties and every ebay.css
+  // colour would "match" an empty set — the check would pass while enforcing
+  // nothing. Fail loudly instead, so the tokenization forces a real decision
+  // (resolve both sides through tokens.css, or retire this check) rather than
+  // silently going green. 200 is far below the ~900 literals present today and
+  // far above anything a tokenized file would leave behind.
+  if (amazonPalette.size < 200) {
+    failed = true
+    console.error(`❌ the Amazon palette resolved to only ${amazonPalette.size} literal colours.`)
+    console.error('   ads.css has probably been tokenized (Phase 9.1). This check compares hex')
+    console.error('   literals and can no longer enforce anything — resolve both sides through')
+    console.error('   tokens.css, or retire it. See docs/TOKEN-GUARD-RATCHET.md §0a.')
+  }
   if (offPalette.length) {
     failed = true
     console.error(`❌ ebay.css uses colour(s) not in the Amazon ads palette: ${offPalette.join(', ')}`)
