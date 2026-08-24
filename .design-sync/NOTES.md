@@ -187,7 +187,6 @@ of component discovery (`^[A-Z][A-Za-z0-9]*$`), so it never becomes a card or a 
 
 ### Known render warns (checked on re-sync; an unrecorded warn is new)
 
-- `[TOKENS_MISSING]` for `--tw-*`: expected only if the base.css defaults block is ever removed.
 - Floor-card `[RENDER_THIN]` / `[RENDER_BLANK]` on any component with no authored preview.
 
 ## Wave-2 findings (each verified by the orchestrator before recording)

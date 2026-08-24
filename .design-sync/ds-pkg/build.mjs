@@ -31,28 +31,21 @@ writeFileSync(
 
 mkdirSync(dist, { recursive: true });
 
-// ── 2b. the Tailwind shim.
-// Two components (ToolbarButton/ToolbarDivider, part of ColumnGroupModal) are
-// styled with Tailwind utilities instead of the DS's `.h10-ds-*` convention, so
-// they ship unstyled to anything without the app's Tailwind build. Regenerate
-// exactly those utilities from apps/web's own config each build, so a class
-// added to either component is picked up rather than silently unstyled.
-const shim = join(dist, 'tailwind-shim.css');
-execFileSync('npx', ['tailwindcss',
-  '-c', join(here, 'tailwind-shim.config.ts'),
-  '-i', join(here, 'tailwind-shim.in.css'),
-  '-o', shim], { stdio: ['ignore', 'ignore', 'inherit'], cwd: repo });
-
 // ── 3. one stylesheet. Order IS the cascade — this DS resolves conflicts by
 // source order, not specificity, so a11y.css stays last as the override layer.
 // tokens.css rides along here rather than in tokens/: cfg.tokensGlob only
 // reaches a node_modules package, and this DS's tokens are a generated source
 // file (tools/generate-tokens-css.ts), not a package.
+//
+// A generated Tailwind shim used to sit between patterns.css and a11y.css: the
+// DS had two components styled with Tailwind utilities instead of .h10-ds-*,
+// so they shipped unstyled to anything without the app's Tailwind build. The
+// repo fixed that at source (.h10-ds-tbtn* / .h10-ds-tdivider / .h10-ds-cgm-*),
+// which left the shim emitting only Tailwind's unconditional preamble. Removed.
 const parts = [
   ['tokens.css', join(dsStyles, 'tokens.css')],
   ['base.css', join(here, 'base.css')],
   ...['primitives.css', 'components.css', 'patterns.css'].map((f) => [f, join(dsStyles, f)]),
-  ['tailwind-shim.css (generated)', shim],
   ['a11y.css', join(dsStyles, 'a11y.css')],
 ];
 writeFileSync(
