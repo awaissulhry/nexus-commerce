@@ -316,6 +316,59 @@ bubble at the row's left edge), both resolved with `cardMode:"column"` plus an i
 negative-tested both ways: reintroduce `overflow:hidden` on one card and it names the cells; push
 an element off-viewport and it reports the box.
 
+## 🔴 …and fixing the crop EXPOSED a second bug: the next story paints over the overlay
+
+Reported by the operator with a screenshot the day after the crop fix shipped: the Combobox card's
+dropdown was no longer sliced, but the *next* story's heading, its `Marketplace` label and its
+search input were drawn straight through the open list. Two independent bugs with one symptom —
+"I cannot read the dropdown" — and fixing the first is what made the second visible.
+
+**Cause: `.ds-cell` carries `transform: translateZ(0)`, so every cell is its own stacking
+context.** The overlay's own z-index (40 for combo/menu pops, 50 for listboxes, 1000 for portal
+tips) is therefore scoped *inside* its cell and cannot order it against anything outside; sibling
+cells then paint in DOM order, so cell N+1 lands on top of whatever cell N let escape.
+
+**The transform is deliberate upstream** — it makes the cell the containing block for
+`position: fixed` descendants, so a pattern's fixed action bar renders in its own card instead of
+pinned to the viewport. Removing it trades this bug for a worse one. The cells get an explicit
+paint order instead (`base.css`):
+
+```css
+.ds-grid > .ds-cell:nth-child(1) { z-index: 24 }   /* …descending to nth-child(24) { z-index: 1 } */
+.ds-grid > .ds-cell:hover,
+.ds-grid > .ds-cell:focus-within { z-index: 60 }
+```
+
+Two rules because they cover opposite directions: descending order handles every **downward**
+overlay, and only the active-cell rule can lift an **upward** one (tooltips and hover cards open
+onto the story *above* them). Cards top out at 5 stories (`ImageUpload`), so 24 is headroom.
+
+### Three ways this check lied before it worked
+
+The guard grew with the bug; each of these passed a visibly broken card.
+
+1. **One viewport is not enough.** Occlusion needs a later story *below* an earlier one, so it only
+   exists once the `auto-fit` grid collapses. Combobox at 1200px: clean. At 640px: 55 occluded
+   points. The check now sweeps **640 / 900 / 1200**.
+2. **It never opened the thing it was asserting about.** The original opened one trigger per card
+   from a three-selector list; the Combobox card has no toolbar button, so nothing opened, no panel
+   existed, and it reported the card clean. It now focuses a trigger in **every cell in turn**, and
+   a card with overlay markup where nothing opened *and* no panel ever rendered is a **failure**,
+   not a pass.
+3. **It invented failures.** Flagging `Badge`, `Divider`, `Kbd`, `Pill` as "unverified" is noise —
+   they have no overlay to verify. And an overlay covering *another overlay* is legitimate: two
+   open panels must resolve somehow and the top one stays readable. The rule is narrow on purpose:
+   **an overlay may be covered by another overlay, never by ordinary story content.**
+
+Negative-tested both directions: run it against a bundle built before the `base.css` fix and it
+names the exact card, width, story pair and point count —
+`Combobox @640px: MarketplacePicker's overlay covered by NoMatches at 55 points`.
+
+**The DS stylesheets themselves are clean.** Every `transform`/`filter` in `primitives.css`,
+`components.css` and `patterns.css` is an icon rotation, a toggle knob, a spinner or a
+drawer/toast animation — none wraps an overlay. This is a harness property, not a DS defect, which
+is why the product does not show it and the cards did.
+
 ### Why the grades never caught it
 
 A tooltip exists only while hovered or focused. Every one of these cards graded `good` from a
