@@ -100,7 +100,13 @@ if (mode === '--check') {
 
   // Owner 2026-07-04: the eBay ads console must look EXACTLY like the Amazon
   // one — every colour in ebay.css must exist in ads.css (the Amazon palette).
-  const adsCss = readFileSync(join(ROOT, 'marketing/ads/ads.css'), 'utf8')
+  // The Amazon palette is ads.css PLUS _shared/shared-shell.css: the neutral rail /
+  // brand / nav rules were split out of ads.css and the ads layout loads both, so the
+  // console's real palette spans the pair. Reading ads.css alone silently shrinks it —
+  // #b87503 lives in the shell half and ebay.css legitimately uses it.
+  const adsCss =
+    readFileSync(join(ROOT, 'marketing/ads/ads.css'), 'utf8') +
+    readFileSync(join(ROOT, '_shared/shared-shell.css'), 'utf8')
   const ebayCss = readFileSync(join(ROOT, 'marketing/ads/ebay/ebay.css'), 'utf8')
   const amazonPalette = new Set((adsCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))
   const offPalette = [...new Set((ebayCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))].filter((h) => !amazonPalette.has(h))

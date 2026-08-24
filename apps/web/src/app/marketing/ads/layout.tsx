@@ -6,6 +6,11 @@
 // never opted into the DS sheets are visually untouched by this.
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
+// The neutral shell (rail/brand/nav/user/main) used to open ads.css; it now lives in
+// _shared/shared-shell.css so /products/next can have it without the cockpit. It must load
+// BEFORE ads.css — the position it held inside it — because this codebase resolves
+// conflicts by source order.
+import '@/app/_shared/shared-shell.css'
 import './ads.css'
 import type { ReactNode } from 'react'
 import { AdsSidebar } from './_shell/AdsSidebar'

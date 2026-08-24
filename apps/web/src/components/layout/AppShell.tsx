@@ -15,11 +15,12 @@
 
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
-// Rail styles (.h10-rail / .h10-item / .h10-sub* / chrome) live in ads.css.
-// Import here so the app-wide rail is styled on every non-standalone route.
-// ads.css is fully class-scoped (.h10-*), so this adds no global rules.
-// TODO(P7): extract the rail rules into a dedicated _shared/rail.css.
-import '../../app/marketing/ads/ads.css'
+// Rail styles (.h10-rail / .h10-item / .h10-sub* / chrome). These used to come from
+// ads.css, which meant every non-standalone route pulled in the whole ads cockpit —
+// 3,089 lines — to style a rail. They now live in _shared/shared-shell.css, split
+// verbatim out of ads.css and verified rule-by-rule as order-preserving.
+// Closes TODO(P7).
+import '@/app/_shared/shared-shell.css'
 
 /** Route prefixes that render with NO Nexus chrome (full-screen). */
 const STANDALONE_PREFIXES = [

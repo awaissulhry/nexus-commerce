@@ -8,16 +8,14 @@
  *   • A light-pin wrapper class so the page renders white/light regardless
  *     of the user's dark-mode preference or any ancestor .dark class.
  *
- * TODO: ads.css contains ads-specific rules mixed with the neutral shell rules
- * (.h10-shell, .h10-rail*, .h10-brand, .h10-nav, .h10-item, .h10-sub, .h10-railft).
- * Those neutral rules should eventually move into a shared-shell.css that both
- * /marketing/ads and /products/next import. Until then, importing ads.css here is
- * the zero-duplication path — the ads-specific rules are scoped classes that don't
- * affect anything outside the ads cockpit.
+ * The shell CSS is `_shared/shared-shell.css` — the neutral rail/brand/nav/user/main
+ * rules, split verbatim out of ads.css so this route no longer imports the entire
+ * ads cockpit to get a rail. The set was derived from the classes AppRail/AppNavRail
+ * actually emit, and the split was verified rule-by-rule as order-preserving.
  */
 
-// Shared rail + layout CSS (same classes as the ads console; see TODO above).
-import '../../marketing/ads/ads.css'
+// Shared rail + layout CSS (the same rules the ads console loads, minus its cockpit).
+import '@/app/_shared/shared-shell.css'
 // Light pin — re-scopes DS semantic tokens to :root light values under .productsNextLight.
 import './products-next-shell.css'
 
