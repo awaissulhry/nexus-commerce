@@ -42,7 +42,18 @@ const METRICS = {
   date: /type="date"/g,
   fontSize: /style=\{\{[^}]*fontSize/g,
   hex: /style=\{\{[^}]*#[0-9a-fA-F]{3,6}/g,
+  // ── 2026-08-25 — the two that decide whether NEW code joins the design system ──
+  // Neither is a defect on its own; both are how the platform stays split in two.
+  // Ratcheted, not banned: 397 files import the legacy kit and 376 more style
+  // themselves with raw palette classes and import nothing at all. Freezing those
+  // counts stops the pile growing while the migration runs — a hard ban would block
+  // every push today and teach people to reach for --no-verify.
+  legacyKit: /from ['"]@\/components\/ui/g,
+  rawColor: /\b(?:bg|text|border|ring|divide|outline|decoration|fill|stroke|accent|caret|placeholder|from|via|to)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)\b/g,
 }
+
+/** Every metric starts at zero — derived, so adding one above needs no other edit. */
+const zero = () => Object.fromEntries(Object.keys(METRICS).map((k) => [k, 0]))
 
 // Untracked files are not in the commit being pushed — in this shared working tree
 // they are another session's work in progress. Counting them can push a section over
@@ -87,25 +98,26 @@ function scan() {
     for (const [name, re] of Object.entries(METRICS)) {
       lines.forEach((line, i) => {
         if (new RegExp(re.source).test(line)) {
-          bySection[section] ??= { select: 0, date: 0, fontSize: 0, hex: 0 }
+          bySection[section] ??= zero()
           bySection[section][name]++
           ;(offenders[section] ??= []).push(`${name.padEnd(8)} apps/web/src/app/${rel}:${i + 1}`)
         }
       })
     }
-    bySection[section] ??= { select: 0, date: 0, fontSize: 0, hex: 0 }
+    bySection[section] ??= zero()
   }
   return { bySection, offenders }
 }
 
 const mode = process.argv[2] ?? '--census'
 const { bySection, offenders } = scan()
-const total = (s) => s.select + s.date + s.fontSize + s.hex
+const total = (s) => Object.keys(METRICS).reduce((n, k) => n + (s[k] ?? 0), 0)
 
 if (mode === '--census') {
   const rows = Object.entries(bySection).sort((a, b) => total(b[1]) - total(a[1]))
-  console.log('section'.padEnd(20), 'select', 'date', 'fontSize', 'hex')
-  for (const [k, v] of rows) if (total(v)) console.log(k.padEnd(20), String(v.select).padEnd(6), String(v.date).padEnd(4), String(v.fontSize).padEnd(8), v.hex)
+  const cols = Object.keys(METRICS)
+  console.log('section'.padEnd(20), cols.map((c) => c.padEnd(11)).join(''))
+  for (const [k, v] of rows) if (total(v)) console.log(k.padEnd(20), cols.map((c) => String(v[c] ?? 0).padEnd(11)).join(''))
   console.log('\n(zero-count sections omitted; legacy consoles + Amazon H10 world allowlisted)')
 }
 
@@ -151,12 +163,23 @@ if (mode === '--check') {
     console.error('   Copy the exact value ads.css uses for the same semantic — the consoles must match.')
   }
   for (const [section, counts] of Object.entries(bySection)) {
-    const b = base[section] ?? { select: 0, date: 0, fontSize: 0, hex: 0 }
+    const b = { ...zero(), ...(base[section] ?? {}) }
     for (const m of Object.keys(METRICS)) {
       if (counts[m] > b[m]) {
         failed = true
-        console.error(`❌ ${section}: ${m} ${b[m]} → ${counts[m]} — new ${m === 'select' ? 'native <select>' : m === 'date' ? 'native date input' : `inline ${m}`}(s) added.`)
-        console.error(`   Use the design-system component instead (Select/DateRangePicker/type classes).`)
+        const LABEL = {
+          select: 'native <select>', date: 'native date input',
+          fontSize: 'inline fontSize', hex: 'inline hex colour',
+          legacyKit: 'legacy @/components/ui import', rawColor: 'raw Tailwind palette class',
+        }
+        console.error(`❌ ${section}: ${m} ${b[m]} → ${counts[m]} — new ${LABEL[m] ?? m}(s) added.`)
+        console.error(
+          m === 'legacyKit'
+            ? '   Import from @/design-system, not @/components/ui — see /DESIGN.md.'
+            : m === 'rawColor'
+              ? '   Raw Tailwind palette classes bypass the token system — use a DS component or an --h10-* token.'
+              : '   Use the design-system component instead (Select/DateRangePicker/type classes).',
+        )
         console.error(`   Offenders: node scripts/ds-conformance-guard.mjs --manifest ${section}`)
       }
     }

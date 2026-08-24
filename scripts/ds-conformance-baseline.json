@@ -1,246 +1,342 @@
 {
   "note": "DS-conformance ratchet — waves lower these, pushes may never raise them",
-  "updatedAt": "2026-07-05",
+  "updatedAt": "2026-08-24",
   "sections": {
     "403": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 2
     },
     "_auth": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 4
     },
     "_shared": {
       "select": 2,
       "date": 2,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 10,
+      "rawColor": 398
     },
     "accept-invite": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 7
     },
     "admin": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 1,
+      "rawColor": 78
     },
     "analytics": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 58
     },
     "audit-log": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 3,
+      "rawColor": 52
     },
     "bulk-operations": {
       "select": 1,
       "date": 2,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 38,
+      "rawColor": 957
     },
     "catalog": {
       "select": 1,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 16,
+      "rawColor": 1052
     },
     "command-matrix": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 1,
+      "rawColor": 51
     },
     "customers": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 16,
+      "rawColor": 244
     },
     "dashboard": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 30,
+      "rawColor": 726
     },
     "design": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 16,
+      "rawColor": 13
     },
     "design-system": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0
     },
     "error.tsx": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 1,
+      "rawColor": 4
+    },
+    "fleet": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0
     },
     "forgot-password": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 5
     },
     "fulfillment": {
       "select": 0,
       "date": 0,
       "fontSize": 2,
-      "hex": 2
+      "hex": 2,
+      "legacyKit": 215,
+      "rawColor": 4840
     },
     "inbox": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 2,
+      "rawColor": 26
     },
     "insights": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 21,
+      "rawColor": 306
     },
     "inventory": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 1,
+      "rawColor": 13
     },
     "layout.tsx": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 2,
+      "rawColor": 1
     },
     "listings": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 45,
+      "rawColor": 707
     },
     "loading.tsx": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 1
     },
     "login": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 10
     },
     "marketing": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 68,
+      "rawColor": 1807
     },
     "not-found.tsx": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 1,
+      "rawColor": 4
     },
     "orders": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 44,
+      "rawColor": 630
     },
     "outbound": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0
     },
     "page.tsx": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0
     },
     "performance": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 66
     },
     "po": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 53
     },
     "pricing": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 32,
+      "rawColor": 328
     },
     "products": {
       "select": 15,
       "date": 0,
-      "fontSize": 5,
-      "hex": 1
+      "fontSize": 0,
+      "hex": 1,
+      "legacyKit": 304,
+      "rawColor": 7759
     },
     "reconciliation": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 133
     },
     "reports": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 33
     },
     "reset-password": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 5
     },
     "settings": {
       "select": 3,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 50,
+      "rawColor": 1370
+    },
+    "shared": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0
     },
     "sync-logs": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 23,
+      "rawColor": 554
     },
     "track": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 40
     },
     "unsubscribed": {
       "select": 0,
       "date": 0,
       "fontSize": 0,
-      "hex": 0
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 6
     }
   }
 }
