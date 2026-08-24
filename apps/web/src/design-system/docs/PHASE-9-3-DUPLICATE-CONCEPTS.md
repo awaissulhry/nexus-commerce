@@ -302,9 +302,30 @@ in opposite directions.
 
 **Why this gap is unlike the other four.** `filters`, the toolbar, the pager and the Total row are
 missing *design* — someone must first decide what a DS filters panel is. This one is missing
-*wiring only*: the modal exists, eight surfaces already share it, and it returns exactly the array
-`DataGrid` would need. `storageKey` + `customizable` props and a `visibleColumns` → order map is
-most of the work.
+**wiring plus one model choice**: the modal exists, eight surfaces already share it, and it returns
+exactly the array `DataGrid` would need. `storageKey` + `customizable` props and a `visibleColumns`
+→ order map is most of the work.
+
+**The model choice: the two sticky models collide under reorder.** DS `Column<T>` pins *per column*
+— `sticky` / `stickyRight`, the developer's call, with offsets stacked by `width`, which presumes
+pinned columns sit contiguously at an edge. `PreferencesValue` pins *positionally* —
+`stickyFirstColumn` / `stickyLastColumn`, the operator's call. Drag a developer-pinned column to
+position 5 and it pins mid-table over its neighbours. **`AdsDataGrid` has already resolved this and
+the resolution is copyable: the operator's toggle gates the developer's flag** —
+
+```ts
+const list = prefs.stickyLast ? visibleCols.filter((c) => c.freezeRight && c.width != null) : []
+```
+
+— and its first column is a distinct, non-movable concept (`renderFirst`), so the reorderable region
+never contains a left-pinned column. Migration cost is small: **7** `sticky: true` / `stickyRight:
+true` declarations exist across all 14 `DataGrid` call sites.
+
+**And the call sites justify it.** These are not summary tables — `fleet/workers` declares 28
+columns, `products/next` and `stock/import` 21 each, `products/ebay-flat-file` 20; the median across
+the 14 files is ~10. Only `fleet/map/EntityListView` (5) is small enough that reorder would be
+noise, which is the argument for making it opt-in (`storageKey` + `customizable` absent = today's
+behaviour) rather than default-on.
 
 It cuts the other way too: **the persistence is hand-rolled at every call site** — three spellings
 of "remember the operator's column order", one inside the component, six in their pages, one split
@@ -321,10 +342,12 @@ Same shape as the `Toast` question in §3, with the extra wrinkle that neither s
 3. **Promote `AdsDataGrid` into the DS and retire the DS one** — 20 call sites migrate instead of
    64, and the DS's `align`/`sticky`/`stickyRight` must be ported across.
 
-**Column reorder need not wait for this.** It is independent of all three options — even under
-option 1 the DS grid stays unable to do what eight other surfaces already do — and it is the
-cheapest item in this appendix, so wiring `PreferencesModal` into `DataGrid` is worth doing under
-any outcome.
+**Column reorder is the cheapest item here, but option 3 does gate it.** Under **1** it pays for
+itself — the DS grid otherwise stays unable to do what eight other surfaces already do, on tables of
+up to 28 columns. Under **2** it is a down payment on the merge. Under **3** the DS grid is retired
+and its 20 call sites inherit reorder from `AdsDataGrid`, so building it first is **wasted work**.
+So it is cheap under two of three outcomes, not free of the decision — an earlier revision of this
+appendix claimed the latter and was wrong.
 
 **Until it is decided**, `.design-sync/conventions.md` tells the claude.ai/design agent that
 `DataGrid` is the product-table workhorse and explicitly **not** the ads console's grid, so designs
