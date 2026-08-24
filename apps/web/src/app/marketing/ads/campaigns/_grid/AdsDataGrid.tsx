@@ -21,6 +21,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { H10Select, HoverCard } from '../FilterDropdown'
+import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns'
 import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { enabledRank } from './enabledRank'
 
@@ -34,6 +35,14 @@ export { enabledRank }
 
 /** A grid column. `render` draws the cell; `sortValue`/`filterValue` drive sort + range
  *  filters; `total` is the value shown in the pinned Total row (omit ⇒ blank). */
+/** SGX3 — what the Customize dialog persists per `storageKey`: the visible columns IN ORDER,
+ *  plus whether the identity column and the right-pinned set actually stick. */
+export interface GridPrefs {
+  visible: string[]
+  stickyFirst: boolean
+  stickyLast: boolean
+}
+
 export interface GridColumn<T> {
   key: string
   label: string
@@ -268,15 +277,6 @@ export interface AdsDataGridProps<T> {
   }
 }
 
-function useClickAway<T extends HTMLElement>(onAway: () => void) {
-  const ref = useRef<T>(null)
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onAway() }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [onAway])
-  return ref
-}
 
 // Consonant-y takes -ies ("8 Queries", not "8 Querys" — shipped, seen, fixed).
 const pluralize = (noun: string, n: number) => (n === 1 ? noun : /[^aeiou]y$/i.test(noun) ? `${noun.slice(0, -1)}ies` : `${noun}s`)
@@ -337,13 +337,22 @@ export function AdsDataGrid<T>({
   const [rowsPerPage, setRowsPerPage] = useState(100)
   const [showCustomize, setShowCustomize] = useState(false)
 
-  // column visibility (Customize) — keyed by column.key; first col is always locked on
-  const allKeys = useMemo(() => columns.map((c) => c.key), [columns])
-  const [hidden, setHidden] = useState<Set<string>>(() => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)))
+  /**
+   * SGX3 — column preferences: WHICH columns, in WHAT ORDER, and what STICKS.
+   *
+   * One record per `storageKey`, because the operator asked for the /products/next dialog and
+   * "the ability to customize it all, or even the locking position thing" — so order and
+   * stickiness are preferences here, not fixed component config. `visible` carries both the set
+   * AND the order, exactly as the DS `PreferencesModal` returns it, so there is one source of
+   * truth rather than a Set beside an array that could disagree.
+   */
+  const defaultVisibleKeys = useMemo(
+    () => columns.filter((c) => !c.defaultHidden).map((c) => c.key), [columns])
+  const [prefs, setPrefs] = useState<GridPrefs>(() => ({ visible: defaultVisibleKeys, stickyFirst: true, stickyLast: true }))
   /**
    * 🔴 SGX — a grid that swapped its column set kept the OLD one's hidden keys.
    *
-   * `hidden` is seeded by a `useState` INITIALIZER, which runs once per mount. This effect then
+   * `prefs` is seeded by a `useState` INITIALIZER, which runs once per mount. This effect then
    * re-read the persisted set when `storageKey` changed — but did nothing at all when nothing was
    * stored, leaving the previous column set's `defaultHidden` keys in place. On a page whose tabs
    * share one grid instance that is a visible defect, not a nuance: on Suggestions, clicking Bids
@@ -351,26 +360,62 @@ export function AdsDataGrid<T>({
    * those are `defaultHidden` on BIDS. The operator's per-family column lists therefore only
    * appeared on a hard page load — every in-app tab click showed the first tab's shape.
    *
-   * A storageKey change means a different saved view, so the fall-through is now explicit: use
-   * what is stored, and when nothing is stored fall back to THESE columns' own defaults. A live
-   * Customize choice is unaffected — it persists under its own key before this ever re-runs.
+   * A storageKey change means a different saved view, so the fall-through is explicit: use what is
+   * stored, and when nothing is stored fall back to THESE columns' own defaults.
+   *
+   * SGX3 — reads BOTH storage shapes. The old one was a bare `string[]` of visible keys; a saved
+   * view from before this change keeps working and simply adopts sticky-on, which is what it had.
+   * Keys that no longer exist in this column set are dropped rather than trusted.
    */
   useEffect(() => {
     if (!storageKey) return
+    const known = new Set(columns.map((c) => c.key))
     try {
       const raw = localStorage.getItem(storageKey)
-      if (raw) { const arr = JSON.parse(raw) as string[]; setHidden(new Set(allKeys.filter((k) => !arr.includes(k)))); return }
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown
+        if (Array.isArray(parsed)) {
+          setPrefs({ visible: (parsed as string[]).filter((k) => known.has(k)), stickyFirst: true, stickyLast: true })
+          return
+        }
+        const o = parsed as Partial<GridPrefs>
+        if (o && Array.isArray(o.visible)) {
+          setPrefs({
+            visible: o.visible.filter((k) => known.has(k)),
+            stickyFirst: o.stickyFirst !== false,
+            stickyLast: o.stickyLast !== false,
+          })
+          return
+        }
+      }
     } catch { /* ignore — fall through to this column set's own defaults */ }
-    setHidden(new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)))
+    setPrefs({ visible: columns.filter((c) => !c.defaultHidden).map((c) => c.key), stickyFirst: true, stickyLast: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
-  const persistVisible = (vis: string[]) => { if (storageKey) { try { localStorage.setItem(storageKey, JSON.stringify(vis)) } catch { /* ignore */ } } }
-  const visibleCols = useMemo(() => columns.filter((c) => !hidden.has(c.key)), [columns, hidden])
+  const persistPrefs = (p: GridPrefs) => { if (storageKey) { try { localStorage.setItem(storageKey, JSON.stringify(p)) } catch { /* ignore */ } } }
+
+  /** The operator's order IS the render order — a drag handle that did not move a column would lie. */
+  const visibleCols = useMemo(() => {
+    const byKey = new Map(columns.map((c) => [c.key, c] as const))
+    return prefs.visible.map((k) => byKey.get(k)).filter((c): c is GridColumn<T> => !!c)
+  }, [columns, prefs.visible])
+
+  /** The first column is the row's identity cell (`renderFirst`), not a `GridColumn` — it cannot
+   *  be hidden or moved, but whether it STICKS is now the operator's call. */
+  const fzFirst = prefs.stickyFirst ? ' fz' : ''
+
+  /** The dialog's registry: the identity column (locked — it is the row's name and its selection
+   *  target, so it cannot be hidden or moved) followed by every real column, all draggable. */
+  const prefsColumns = useMemo<PreferencesColumnSpec[]>(
+    () => [{ key: '__first', label: firstColLabel, locked: true }, ...columns.map((c) => ({ key: c.key, label: c.label }))],
+    [columns, firstColLabel],
+  )
 
   // SG.2 — right-pinned columns: cumulative offsets over the VISIBLE pinned set, right-to-left.
-  // The leftmost pinned column carries the separator (class `fzr0`).
+  // The leftmost pinned column carries the separator (class `fzr0`). SGX3 — an empty list when the
+  // operator turns sticky-last off, which drops every `fzr*` class and lets them scroll inline.
   const fzRight = useMemo(() => {
-    const list = visibleCols.filter((c) => c.freezeRight && c.width != null)
+    const list = prefs.stickyLast ? visibleCols.filter((c) => c.freezeRight && c.width != null) : []
     const offsets = new Map<string, number>()
     let acc = 0
     for (let i = list.length - 1; i >= 0; i--) {
@@ -378,7 +423,7 @@ export function AdsDataGrid<T>({
       acc += list[i].width!
     }
     return { offsets, first: list[0]?.key }
-  }, [visibleCols])
+  }, [visibleCols, prefs.stickyLast])
   const fzrClass = (c: GridColumn<T>): string =>
     fzRight.offsets.has(c.key) ? (c.key === fzRight.first ? ' fzr fzr0' : ' fzr') : ''
   const fzrStyle = (c: GridColumn<T>): CSSProperties | undefined =>
@@ -776,17 +821,40 @@ export function AdsDataGrid<T>({
         <span className="grow" />
         {toolbarRight}
         {customizable && (
-          <div className="h10-custwrap">
-            <button type="button" className={`h10-am-btn ${showCustomize ? 'on' : ''}`} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</button>
-            {showCustomize && (
-              <CustomizePanel
-                columns={columns} hidden={hidden} firstLabel={firstColLabel}
-                onChange={(vis) => { setHidden(new Set(allKeys.filter((k) => !vis.includes(k)))); persistVisible(vis) }}
-                onReset={() => { setHidden(new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key))); persistVisible(allKeys.filter((k) => !columns.find((c) => c.key === k)?.defaultHidden)) }}
-                onClose={() => setShowCustomize(false)}
-              />
-            )}
-          </div>
+          <>
+            <button type="button" className={`h10-am-btn ${showCustomize ? 'on' : ''}`} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</button>
+            {/**
+              * SGX3 — the SHARED dialog, not a second implementation.
+              *
+              * This was a bespoke `.h10-custpop` popover: a 4-column checkbox grid that applied
+              * instantly, with no reorder and no way back out. `/products/next` had already been
+              * moved onto the DS `PreferencesModal`, so the ads console was the odd one out —
+              * operator: *"make use of shared components so that there are no inconsistencies at
+              * all."* Same component, same draft-and-Save interaction, same drag-to-reorder.
+              *
+              * The optional left-panel sections stay collapsed on purpose: page size and sort
+              * already have their own controls on this grid (the footer picker and the sortable
+              * headers), and a second control for one setting is the inconsistency in another
+              * costume. The sticky toggles are shown — the operator asked for "the locking
+              * position thing" to be theirs too.
+              */}
+            <PreferencesModal
+              open={showCustomize}
+              onClose={() => setShowCustomize(false)}
+              title="Table Customisation"
+              value={{ visibleColumns: prefs.visible, stickyFirstColumn: prefs.stickyFirst, stickyLastColumn: prefs.stickyLast, pageSize: perPage, sortBy: sort?.key ?? '', sortDir: sort?.dir ?? 'desc' }}
+              onConfirm={(next) => {
+                const p: GridPrefs = { visible: next.visibleColumns, stickyFirst: next.stickyFirstColumn, stickyLast: next.stickyLastColumn }
+                setPrefs(p)
+                persistPrefs(p)
+              }}
+              allColumns={prefsColumns}
+              defaultVisible={defaultVisibleKeys}
+              sortFieldOptions={[]}
+              pageSizeChoices={[]}
+              showSticky
+            />
+          </>
         )}
         {exportable && <button type="button" className="h10-am-btn" onClick={onExport}><Download size={13} /> Export Data…</button>}
       </div>
@@ -797,7 +865,7 @@ export function AdsDataGrid<T>({
           <thead>
             <tr>
               {selectable && <th className="ck"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>}
-              <th className={`nm fz${sort?.key === '__first' ? ' sorted' : ''}`}><button type="button" className="sortable" onClick={() => onSort('__first')}>{firstColLabel} {firstSortValue && sortIcon('__first')}</button></th>
+              <th className={`nm${fzFirst}${sort?.key === '__first' ? ' sorted' : ''}`}><button type="button" className="sortable" onClick={() => onSort('__first')}>{firstColLabel} {firstSortValue && sortIcon('__first')}</button></th>
               {visibleCols.map((c) => (
                 <th key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${sort?.key === c.key ? ' sorted' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>
                   {c.sortable === false
@@ -816,7 +884,7 @@ export function AdsDataGrid<T>({
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={`sk${i}`} className="sk">
                   {selectable && <td className="ck"><span className="skb" style={{ width: 15 }} /></td>}
-                  <td className="nm fz"><span className="skb" style={{ width: 170 }} /></td>
+                  <td className={`nm${fzFirst}`}><span className="skb" style={{ width: 170 }} /></td>
                   {visibleCols.map((c) => <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${fzrClass(c)}`} style={fzrStyle(c)}><span className="skb" style={{ width: 52 }} /></td>)}
                 </tr>
               ))
@@ -827,7 +895,7 @@ export function AdsDataGrid<T>({
                 {showTotal && (
                   <tr className="h10-am-total">
                     {selectable && <td className="ck" />}
-                    <td className="nm fz"><b>{totalFirst}</b></td>
+                    <td className={`nm${fzFirst}`}><b>{totalFirst}</b></td>
                     {visibleCols.map((c) => <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${fzrClass(c)}`} style={fzrStyle(c)}>{(typeof c.total === 'function' ? (c.total as (r: T[]) => ReactNode)(sorted) : c.total) ?? ''}</td>)}
                   </tr>
                 )}
@@ -846,7 +914,7 @@ export function AdsDataGrid<T>({
                         onClick={onRowClick ? (e) => { if (!(e.target as HTMLElement).closest('button, a, input, label, select')) onRowClick(row) } : undefined}
                       >
                         {selectable && <td className="ck"><input type="checkbox" checked={sel.has(id)} onChange={() => toggle(id)} aria-label="Select row" /></td>}
-                        <td className={`nm fz${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
+                        <td className={`nm${fzFirst}${ef ? ' editing' : ''}`}>{ef ? ef.render(editVal(row, ef), (v) => setDraft(id, '__first', v), row) : cellWithPencil(row, '__first', renderFirst(row))}</td>
                         {visibleCols.map((c) => {
                           const cf = editing ? editByKey.get(c.key) : undefined
                           return <td key={c.key} className={`${c.metric === false ? 'ed' : 'num'}${cf ? ' editing' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>{cf ? cf.render(editVal(row, cf), (v) => setDraft(id, c.key, v), row) : cellWithPencil(row, c.key, c.render(row))}</td>
@@ -897,32 +965,3 @@ export function AdsDataGrid<T>({
 
 /** Column show/hide popover — replicates the H10 "Table Customization" dialog (the first
  *  column is locked on). Generic over the grid's own columns; no campaign coupling. */
-function CustomizePanel<T>({ columns, hidden, firstLabel, onChange, onReset, onClose }: {
-  columns: GridColumn<T>[]; hidden: Set<string>; firstLabel: string
-  onChange: (visible: string[]) => void; onReset: () => void; onClose: () => void
-}) {
-  const ref = useClickAway<HTMLDivElement>(onClose)
-  const allKeys = columns.map((c) => c.key)
-  const visible = allKeys.filter((k) => !hidden.has(k))
-  const vis = new Set(visible)
-  const allOn = allKeys.every((k) => vis.has(k))
-  const toggle = (k: string) => { const n = new Set(vis); if (n.has(k)) n.delete(k); else n.add(k); onChange([...n]) }
-  return (
-    <div className="h10-custpop" ref={ref} role="dialog" aria-label="Table Customization">
-      <div className="h10-custpop-h">Table Customization<button type="button" className="h10-custpop-reset" onClick={onReset}>Reset to default</button></div>
-      <div className="h10-custpop-colsh">
-        <span className="ti">Columns</span>
-        <label className="h10-custpop-all"><input type="checkbox" ref={(el) => { if (el) el.indeterminate = !allOn && vis.size > 0 }} checked={allOn} onChange={() => onChange(allOn ? [] : [...allKeys])} /> Select All</label>
-      </div>
-      <div className="h10-custpop-grid" style={{ gridTemplateRows: `repeat(${Math.ceil((columns.length + 1) / 4)}, auto)` }}>
-        <label className="h10-custpop-ck locked"><input type="checkbox" checked readOnly disabled /> <span>{firstLabel}</span></label>
-        {columns.map((c) => (
-          <label className="h10-custpop-ck" key={c.key}>
-            <input type="checkbox" checked={vis.has(c.key)} onChange={() => toggle(c.key)} />
-            <span>{c.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  )
-}
