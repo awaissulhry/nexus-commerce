@@ -261,6 +261,56 @@ Note `rows` · `rowId` · `noun` · `firstColLabel` · `renderFirst` · `firstSo
 passed by **all 56** measured call sites: the ads grid's real required surface is seven props, not
 two, because the first column is a distinct concept there.
 
+### The fifth asymmetry: column reorder — and the only one that is cheap to close
+
+**Found by the operator, again from the live product** (2026-08-24): *"on our ad manager page I can
+drag and drop to change the position of the grid, but it's not the same case with other grids."*
+Correct — but not because the ads grid built a drag feature. **The DS already owns the drag UI.**
+
+`patterns/PreferencesModal` renders the reorder list itself: a `GripVertical` grip per row and
+native HTML5 drag (`draggable` + `onDragStart` / `onDragOver` / `onDrop`) — no dnd-kit. It returns
+
+```ts
+PreferencesValue { visibleColumns: string[]; stickyFirstColumn; stickyLastColumn; pageSize; sortBy; sortDir }
+```
+
+where **`visibleColumns` carries the set AND the order** in one array — deliberately, per
+`AdsDataGrid`: *"one source of truth rather than a Set beside an array that could disagree."*
+
+So the DS has the hard half. What it lacks is the wiring: `components/DataGrid` scores **0** on
+every `reorder` / `columnOrder` / `visibleColumns` / `storageKey` / `customizable` grep, and renders
+`columns` in array order, full stop.
+
+| surface | column reorder | where the order is persisted | drag UI |
+|---|---|---|---|
+| `AdsDataGrid` | ✅ | `storageKey`-scoped, inside the component | DS `PreferencesModal` |
+| products · listings · stock · replenishment · purchase-orders · pricing | ✅ | a key per page (`products.visibleColumns`, …), in the page | DS `PreferencesModal` |
+| `FlatFileGrid` | ✅ | **two** keys — `${storageKey}-col-order` (per group) + `${storageKey}-hidden-cols` | its own, entirely |
+| DS `DataGrid` | ❌ | — | — |
+
+`_shared/grid-lens/PreferencesModal` is **not** a fourth implementation — it is an adapter over the
+DS one (XG.1, hoisted from products PG.5) so every `VirtualizedGrid` consumer plugs into the same
+modal.
+
+**The trap: row drag is a different axis.** `draggable|dnd-kit|onDrop` scores **16** on
+`VirtualizedGrid` and matches `GridView` too, and none of it is column reorder — those are *row*
+drag handles (a `LEAD_DRAG_W` lead cell, droppable parent-row overlays for the product/variant
+tree), and `GridView` is the set's only dnd-kit user. Measure this capability by whether a persisted
+order reaches render order, never by the drag vocabulary. A first pass here scored `VirtualizedGrid`
+as having no reorder and `FlatFileGrid` as having its own drag UI; both were the same mistake read
+in opposite directions.
+
+**Why this gap is unlike the other four.** `filters`, the toolbar, the pager and the Total row are
+missing *design* — someone must first decide what a DS filters panel is. This one is missing
+*wiring only*: the modal exists, eight surfaces already share it, and it returns exactly the array
+`DataGrid` would need. `storageKey` + `customizable` props and a `visibleColumns` → order map is
+most of the work.
+
+It cuts the other way too: **the persistence is hand-rolled at every call site** — three spellings
+of "remember the operator's column order", one inside the component, six in their pages, one split
+across two keys, none shared. That is a real duplicate underneath the shared modal, whichever way
+#13 goes.
+
 ### Decision needed
 
 Same shape as the `Toast` question in §3, with the extra wrinkle that neither side dominates:
@@ -270,6 +320,11 @@ Same shape as the `Toast` question in §3, with the extra wrinkle that neither s
    feature work in this phase by some distance.
 3. **Promote `AdsDataGrid` into the DS and retire the DS one** — 20 call sites migrate instead of
    64, and the DS's `align`/`sticky`/`stickyRight` must be ported across.
+
+**Column reorder need not wait for this.** It is independent of all three options — even under
+option 1 the DS grid stays unable to do what eight other surfaces already do — and it is the
+cheapest item in this appendix, so wiring `PreferencesModal` into `DataGrid` is worth doing under
+any outcome.
 
 **Until it is decided**, `.design-sync/conventions.md` tells the claude.ai/design agent that
 `DataGrid` is the product-table workhorse and explicitly **not** the ads console's grid, so designs
