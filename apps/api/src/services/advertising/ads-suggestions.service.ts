@@ -391,6 +391,10 @@ export interface SuggestionCurrent {
    *  already a percent). */
   targetAcosPct?: number | null
   entityStatus?: string | null
+  /** SGX — the placement lane's CURRENT bid modifier (%), for a placement-family row. Read from
+   *  `dynamicBidding.placementBidding` for the lane the action names; 0 is a real reading (no
+   *  modifier set), null means the campaign row itself did not resolve. */
+  placementPct?: number | null
 }
 
 export interface SuggestionDestination {
@@ -405,7 +409,15 @@ export interface SuggestionDestination {
 
 export interface SuggestionSuggested {
   bidCents?: number | null
+  /**
+   * SGX — the TOP of a starting-bid range, when a harvest fans one term into destinations that
+   * do not all launch at the same bid. `bidCents` is then the bottom. Absent when every
+   * destination agrees (the common case) — a range that reads "€0.38 – €0.38" is noise.
+   */
+  bidCentsMax?: number | null
   budgetEur?: number | null
+  /** SGX — the projected placement bid modifier (%), mirroring the placement_apply handler. */
+  placementPct?: number | null
   /**
    * SG.2b/f — where the change LANDS (H10's approve-hover card: "will be added to the
    * following entities when changes are applied"). New keywords resolve the action's external
@@ -468,6 +480,37 @@ export function projectBudgetEur(action: Record<string, unknown>, currentEur: nu
     if (op === 'decPct') return Math.max(1, currentEur * (1 - v / 100))
   }
   return null
+}
+
+/**
+ * SGX — the projected placement bid modifier (%), for a `placement_apply` action.
+ *
+ * Mirrors `ACTION_HANDLERS.placement_apply` exactly: the same clamp to [minPct, maxPct] inside
+ * Amazon's own 0–900 band, and the same rounding to a whole percent. The Placement tab had no
+ * before→after pair at all — its change lived only inside the "Proposed change" cell — while
+ * every other family got one, so this is the missing half of that column pair.
+ */
+export function projectPlacementPct(action: Record<string, unknown>, currentPct: number | null): number | null {
+  if (String(action.type ?? '') !== 'placement_apply' || currentPct == null) return null
+  const v = Number(action.value)
+  if (!Number.isFinite(v)) return null
+  const op = String(action.op ?? '')
+  const raw =
+    op === 'setValue' || op === 'set' ? v
+      : op === 'incPct' ? currentPct * (1 + v / 100)
+        : op === 'decPct' ? currentPct * (1 - v / 100)
+          : op === 'incAbs' ? currentPct + v
+            : op === 'decAbs' ? currentPct - v
+              : null
+  if (raw == null) return null
+  const minPct = Math.max(0, Number(action.minPct ?? 0))
+  const maxPct = Math.min(900, Number(action.maxPct ?? 900))
+  return Math.round(Math.min(maxPct, Math.max(minPct, raw)))
+}
+
+/** The placement lane an action targets — the handler's own default when it names none. */
+export function placementLaneOf(action: Record<string, unknown>): string {
+  return (action.placement as string | undefined) ?? 'PLACEMENT_TOP'
 }
 
 export interface DecisionRow extends SourceRow {
@@ -664,8 +707,17 @@ export async function attachDecisionData<T extends DecisionRow>(
         current.targetAcosPct = asPct((c.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos)
         const p = c.externalCampaignId ? perfByExtCampaign.get(c.externalCampaignId) : undefined
         if (p) metrics = derive(p)
+        // SGX — a placement row's before→after. The lane's CURRENT modifier is what the handler
+        // itself reads; a lane with no entry is a real 0 (Amazon's "no modifier"), not an unknown.
+        if (String(action.type ?? '') === 'placement_apply') {
+          const lanes = (c.dynamicBidding as { placementBidding?: Array<{ placement: string; percentage: number }> } | null)?.placementBidding
+          const lane = placementLaneOf(action)
+          const pct = Array.isArray(lanes) ? lanes.find((x) => x?.placement === lane)?.percentage : undefined
+          current.placementPct = Number.isFinite(Number(pct)) ? Number(pct) : 0
+        }
       }
       suggested.budgetEur = projectBudgetEur(action, current.dailyBudgetEur ?? null)
+      suggested.placementPct = projectPlacementPct(action, current.placementPct ?? null)
     } else if (it.entityType === 'SEARCH_TERM') {
       const p = perfByTermPair.get(it.entityId)
       if (p) metrics = derive(p)
@@ -728,6 +780,28 @@ export async function attachDecisionData<T extends DecisionRow>(
           note: scope === 'CAMPAIGN' ? 'Campaign-wide' : 'Applicable',
         }]
       }
+      /**
+       * 🔴 SGX — the Starting Bid column was "—" on EVERY wire-rule harvest row, under a tooltip
+       * that said "The rule sets no starting bid". The rule sets one: `action.bidEur` above is
+       * the ENGINE-NATIVE shape's field, and HP1's wire shape carries the bid per destination in
+       * `outcomes[].bidEur` instead — which the approve-hover card was already reading and
+       * printing (€0.38) two columns away. So the page held the number and the column denied it
+       * existed. Derived from the destinations we just resolved, never re-expanded from the
+       * mapping (the outcomes ARE the engine's own answer).
+       *
+       * A fan-out whose destinations launch at different bids has no single starting bid, so it
+       * reports the RANGE rather than picking one and calling it the answer.
+       */
+      if (suggested.bidCents == null) {
+        const bids = (suggested.destinations ?? [])
+          .map((d) => d.bidCents)
+          .filter((b): b is number => typeof b === 'number' && Number.isFinite(b) && b > 0)
+        if (bids.length) {
+          const lo = Math.min(...bids); const hi = Math.max(...bids)
+          suggested.bidCents = lo
+          if (hi !== lo) suggested.bidCentsMax = hi
+        }
+      }
     }
     return { ...it, metrics, current, suggested, volume }
   })
@@ -757,14 +831,77 @@ export interface SuggestionDelivery {
 }
 export interface SuggestionUndo { actionLogId: string; rolledBack: boolean }
 
-interface AppliedRow { entityType: string; entityId: string; decidedAt: Date | null; appliedResult: unknown }
+/**
+ * 🔴 SGX — what an applied row ACTUALLY changed.
+ *
+ * The Applied tab used to render its value columns from `attachDecisionData`, which projects the
+ * proposal against the entity's CURRENT value. On a row that already applied, that is a change
+ * which never happened, printed beside a green "Delivered" chip. Measured on prod:
+ *
+ *   DE_Exact_3_Keywords  showed  €11.25 → €8.44 ↓€2.81 · Delivered
+ *                        truth   €15.00 → €11.25, delivered 2026-08-22
+ *   IT_Auto_Close        showed  €1.00 → €1.20
+ *                        truth   €10.00 → €12.00, applied in June (the campaign is €1.00 today)
+ *
+ * The history is recoverable from two places that were both already stored and neither read:
+ * `proposedAction.wouldChange` is the pair as it stood when the change was proposed, and
+ * `appliedResult.output` carries the value the handler actually wrote. The written value WINS —
+ * it is the only one that survives an edit-before-apply override.
+ *
+ * `to` is never null: a row with no readable applied value returns null overall rather than half
+ * a sentence, and the column then says so instead of guessing.
+ */
+export interface SuggestionAppliedChange {
+  /** the value before the change, as it read when proposed; null when the pair is unrecoverable */
+  from: string | null
+  /** the value the handler wrote, in operator units */
+  to: string
+  /** set when the written value differs from what was proposed (an edit-before-apply override) */
+  note: string | null
+}
+
+/** `"38¢ → 42¢"` / `"€80.00 → €60.00"` / `"30% → 24%"` → the two halves, in operator units. */
+function readWouldChangePair(wouldChange: unknown): [string, string] | null {
+  if (typeof wouldChange !== 'string') return null
+  const halves = wouldChange.split('→').map((s) => s.trim())
+  if (halves.length !== 2 || !halves[0] || !halves[1]) return null
+  // bid_apply writes its dry-run pair in CENTS ("38¢ → 42¢") — every surface reads euros.
+  const norm = (s: string) => {
+    const c = /^(\d+(?:[.,]\d+)?)\s*¢$/.exec(s)
+    return c ? `€${(Number(c[1].replace(',', '.')) / 100).toFixed(2)}` : s
+  }
+  return [norm(halves[0]), norm(halves[1])]
+}
+
+export function appliedChangeOf(row: { proposedAction?: unknown; appliedResult?: unknown }): SuggestionAppliedChange | null {
+  const action = (row.proposedAction ?? {}) as Record<string, unknown>
+  const out = ((row.appliedResult as { output?: Record<string, unknown> } | null)?.output ?? {}) as Record<string, unknown>
+  const pair = readWouldChangePair(action.wouldChange)
+
+  // The value the handler REPORTS having written, per family. `noChange` is a real outcome:
+  // the apply ran and settled on the value already in place.
+  let wrote: string | null = null
+  if (Number.isFinite(Number(out.newDailyBudget))) wrote = `€${Number(out.newDailyBudget).toFixed(2)}`
+  else if (Number.isFinite(Number(out.newBidCents))) wrote = `€${(Number(out.newBidCents) / 100).toFixed(2)}`
+  else if (Number.isFinite(Number(out.percentage))) wrote = `${Number(out.percentage)}%`
+  else if (typeof out.wouldSet === 'string') wrote = String(out.wouldSet)
+
+  if (!wrote && out.noChange === true && pair) return { from: pair[0], to: pair[0], note: 'nothing to change — it already held this value' }
+  const to = wrote ?? pair?.[1] ?? null
+  if (!to) return null
+  const from = pair?.[0] ?? null
+  const note = pair && wrote && pair[1] !== wrote ? `proposed ${pair[1]} — applied ${wrote}` : null
+  return { from, to, note }
+}
+
+interface AppliedRow { entityType: string; entityId: string; decidedAt: Date | null; appliedResult: unknown; proposedAction?: unknown }
 
 const UNDO_MATCH_BEFORE_MS = 10_000
 const UNDO_MATCH_AFTER_MS = 60_000
 
 export async function attachDeliveryData<T extends AppliedRow>(
   items: T[],
-): Promise<Array<T & { delivery: SuggestionDelivery; undo: SuggestionUndo | null }>> {
+): Promise<Array<T & { delivery: SuggestionDelivery; undo: SuggestionUndo | null; appliedChange: SuggestionAppliedChange | null }>> {
   if (items.length === 0) return []
 
   const queueIds = [...new Set(items
@@ -842,7 +979,7 @@ export async function attachDeliveryData<T extends AppliedRow>(
       if (hit) undo = { actionLogId: hit.id, rolledBack: hit.rolledBackAt != null }
     }
 
-    return { ...it, delivery, undo }
+    return { ...it, delivery, undo, appliedChange: appliedChangeOf(it) }
   })
 }
 

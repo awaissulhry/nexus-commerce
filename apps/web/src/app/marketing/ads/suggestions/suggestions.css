@@ -144,7 +144,10 @@
 .h10-sug-mt.mt-n { background: #8a5316; }
 
 /* SG.2b — Reason (criteria) + Destinations cells */
-.h10-sug-reason { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--h10-text-2); }
+.h10-sug-reason { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--h10-text-2); }
+/* SGX — the window the criteria are measured over, muted so the criteria still read first. It
+   is what stops the Reason from appearing to contradict the trailing-30-day metric columns. */
+.h10-sug-reason .win { color: var(--h10-text-3); }
 .h10-sug-destn { font-size: 12.5px; font-weight: 600; color: var(--h10-text-link); cursor: default; }
 
 /* SG.2b — the empty-state Create Rule button (h10-am-btn is the idiom; this only spaces it) */

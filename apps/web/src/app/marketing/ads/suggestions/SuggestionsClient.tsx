@@ -73,15 +73,24 @@ interface SuggestionCurrent {
   dailyBudgetEur?: number | null
   targetAcosPct?: number | null
   entityStatus?: string | null
+  /** SGX — the placement lane's current bid modifier (%); 0 is a real reading, null unresolved */
+  placementPct?: number | null
 }
 interface SuggestionSuggested {
   bidCents?: number | null
+  /** SGX — the top of a starting-bid RANGE when a harvest's destinations disagree on the bid */
+  bidCentsMax?: number | null
   budgetEur?: number | null
+  /** SGX — the projected placement bid modifier (%) */
+  placementPct?: number | null
   destinations?: Array<{ campaignName: string | null; adProduct?: string | null; adGroupName: string | null; matchType: string; bidCents: number | null; note?: string }>
 }
 
 interface Suggestion {
   id: string; ruleId: string; ruleName: string | null; ruleCriteria?: string | null
+  /** SGX — the window `ruleCriteria` is measured over ("Last 7 Days, excluding the last 2 days").
+   *  Without it the Reason reads as contradicting the metric columns, which are trailing 30 days. */
+  ruleWindow?: string | null
   /** SG.2d — the ACoS threshold written into the producing rule, for the adaptive dot */
   ruleAcosPct?: number | null
   trigger: string | null; marketplace: string | null
@@ -105,6 +114,10 @@ interface Suggestion {
   delivery?: { state: 'delivered' | 'pending' | 'refused' | 'failed' | 'unknown'; detail: string | null } | null
   /** SG.3 — the Change-Log handle the rollback service is keyed on; null = none offered */
   undo?: { actionLogId: string; rolledBack: boolean } | null
+  /** 🔴 SGX — what an applied row ACTUALLY changed, from the stored proposal + the handler's own
+   *  written value. The Applied tab used to render `current`/`suggested`, which are recomputed
+   *  against TODAY — a change that never happened, printed beside a green Delivered chip. */
+  appliedChange?: { from: string | null; to: string; note: string | null } | null
 }
 
 type GroupKey = 'none' | 'rule' | 'campaign' | 'type'
@@ -487,7 +500,7 @@ const AD_PRODUCT_PILL: Record<string, string> = { SPONSORED_PRODUCTS: 'SP', SPON
 
 interface HoverRow { badge: { letter: string; cls: string } | null; typeLabel: string; bid: string; campaign: string; adProduct: string | null; adGroup: string; note: string }
 
-function approveHoverContent(s: Suggestion): { title: string; sub: string; rows: HoverRow[] } | null {
+function approveHoverContent(s: Suggestion): { title: string; sub: string; rows: HoverRow[]; headers?: HoverContent['headers'] } | null {
   const src = srcOf(s)
   const a = s.proposedAction ?? {}
   const rowFor = (matchType: string | undefined, bid: string, campaign: string | null, adProduct: string | null | undefined, adGroup: string | null, note: string): HoverRow => {
@@ -555,6 +568,29 @@ function approveHoverContent(s: Suggestion): { title: string; sub: string; rows:
         s.suggested?.budgetEur != null ? `€${s.suggested.budgetEur.toFixed(2)}` : '—',
         src.campaignName ?? src.label, null, '—',
         s.current?.dailyBudgetEur != null ? `from €${s.current.dailyBudgetEur.toFixed(2)}` : 'Applicable',
+      )],
+    }
+  }
+  /**
+   * 🔴 SGX — placement fell straight through to `return null`, so hovering ✓ on the Placement tab
+   * produced NOTHING while every other tab stated exactly what would happen. Verified on prod:
+   * the wrapper was present, the card never rendered. A verb whose blast radius is a live bid
+   * modifier is the last one that should be silent about it.
+   */
+  if (s.family === 'placement') {
+    const lane = (a.placement ?? 'PLACEMENT_TOP').replace('PLACEMENT_', '').replace(/_/g, ' ').toLowerCase()
+    const next = s.suggested?.placementPct
+    const cur = s.current?.placementPct
+    return {
+      title,
+      sub: `This campaign’s ${lane} bid modifier will be changed when changes are applied. Only this placement lane moves — the campaign’s other lanes are written back unchanged.`,
+      headers: ['Placement', 'New modifier', 'Campaign', 'Marketplace', 'Notes'],
+      // the lane rides in the badge slot: MT_BADGE has no entry for it, so it renders as plain
+      // text under the "Placement" header rather than an unrelated match-type circle.
+      rows: [rowFor(lane,
+        next != null ? `${next}%` : '—',
+        src.campaignName ?? src.label, null, src.marketplace ?? '—',
+        cur != null ? `from ${cur}%` : 'Applicable',
       )],
     }
   }
@@ -829,7 +865,7 @@ function SuggestionsInner() {
   const { toast } = useToast()
 
   // ── URL state — the source of truth for everything shareable ──────────────
-  const view = params.get('view') ?? 'bids'
+  const viewParam = params.get('view')
   const status = (['pending', 'applied', 'dismissed', 'expired', 'muted'].includes(params.get('status') ?? '') ? params.get('status') : 'pending') as Status
   const market = params.get('market') ?? 'all'
   const scope: ScopeValue = {
@@ -857,6 +893,29 @@ function SuggestionsInner() {
 
   // ── data ──────────────────────────────────────────────────────────────────
   const [items, setItems] = useState<Suggestion[]>([])
+  /**
+   * 🔴 SGX — `?rule=` used to dead-end on an empty Bids tab.
+   *
+   * The Rules & Automation grid links a rule's "N waiting" count here (`RulesGrid.tsx`) carrying
+   * only `?rule=<id>`, and `view` defaulted to `'bids'`. So a harvest rule with two waiting rows
+   * landed on Bids, which said **"No bid suggestions right now — Create a Bid rule"**: the
+   * operator was told to create a rule that already exists and already has suggestions waiting,
+   * while the New Keywords tab beside it showed the pill "2". Verified on prod before the fix.
+   *
+   * With no explicit `?view=`, a rule-scoped link now resolves to the tab that actually HOLDS
+   * that rule's rows — the busiest one, since a single rule can produce several families.
+   * DERIVED, never written to the URL: a redirect would fight the operator's own tab clicks, and
+   * clicking any tab sets `?view=`, which takes precedence from then on.
+   */
+  const ruleView = useMemo(() => {
+    if (viewParam || !ruleParam) return null
+    const tally = new Map<string, number>()
+    for (const s of items) if (s.ruleId === ruleParam) tally.set(s.family, (tally.get(s.family) ?? 0) + 1)
+    const best = [...tally].sort((a, b) => b[1] - a[1])[0]
+    if (!best) return null
+    return VIEWS.find((v) => v.family === best[0])?.key ?? (best[0] === 'other' ? 'other' : null)
+  }, [viewParam, ruleParam, items])
+  const view = viewParam ?? ruleView ?? 'bids'
   const [families, setFamilies] = useState<Record<string, number>>({})
   /** The tab pills — PENDING counts per family (the queue), whatever status is on screen. */
   const [pendingFamilies, setPendingFamilies] = useState<Record<string, number> | null>(null)
@@ -1581,11 +1640,28 @@ function SuggestionsInner() {
       render: (s) => s.lookback ? <span className="h10-sug-lb" title={s.lookback.why}>{s.lookback.label}</span> : dash('This rule’s trigger reads no performance window'),
     },
     rule: { key: 'rule', label: 'Rule', metric: false, sortable: true, sortValue: (s) => s.ruleName ?? '', render: (s) => <RuleCell s={s} /> },
+    /**
+     * 🔴 SGX — the Reason now carries its own WINDOW, because without it the row contradicted
+     * itself. On prod the Placement row read "Sales = €0 and Clicks ≥ 20" beside a Sales column
+     * of €162.30 — both true: the criteria run over the rule's lookback (7 days, minus the last
+     * 2), the metric columns over trailing 30. An operator reading that concludes the engine is
+     * broken. The window is muted and inline so the sentence stays one line, and the tooltip
+     * spells out both grains.
+     */
     reason: {
       key: 'reason', label: 'Reason', metric: false, sortable: true,
-      tip: 'Why this surfaced — the rule’s own criteria, in operator units. Falls back to the trigger when the rule states no criteria.',
+      tip: 'Why this surfaced — the rule’s own criteria, in operator units, followed by the window it measures them over. That window is the RULE’s; the metric columns on this row are trailing 30 days, so the two can legitimately disagree. Falls back to the trigger when the rule states no criteria.',
       sortValue: (s) => s.ruleCriteria ?? prettyTrigger(s.trigger),
-      render: (s) => <span className="h10-sug-reason" title={s.ruleCriteria ?? prettyTrigger(s.trigger)}>{s.ruleCriteria ?? prettyTrigger(s.trigger)}</span>,
+      render: (s) => {
+        const crit = s.ruleCriteria ?? prettyTrigger(s.trigger)
+        const full = s.ruleWindow ? `${crit} · measured over ${s.ruleWindow} (the metric columns are trailing 30 days)` : crit
+        return (
+          <span className="h10-sug-reason" title={full}>
+            {crit}
+            {s.ruleWindow ? <span className="win"> · {s.ruleWindow}</span> : null}
+          </span>
+        )
+      },
     },
     dateAdded: {
       key: 'dateAdded', label: 'Date Added', metric: false, sortable: true,
@@ -1636,7 +1712,26 @@ function SuggestionsInner() {
         ? <span className="h10-sug-pausechg">Enabled → Paused</span>
         : suggestedChange(s.current?.bidCents ?? null, s.suggested?.bidCents ?? null, 'cents'),
     },
-    startBid: { key: 'startBid', label: 'Starting Bid', tip: 'The bid the new exact target would launch with.', metric: true, sortable: true, sortValue: (s) => s.suggested?.bidCents ?? null, render: (s) => s.suggested?.bidCents != null ? <b className="h10-sug-sugval">{eur(s.suggested.bidCents)}</b> : dash('The rule sets no starting bid') },
+    /**
+     * 🔴 SGX — this printed "—" on EVERY wire-rule row under the tooltip "The rule sets no
+     * starting bid", while the ✓ hover card two columns away printed €0.38 from the same row's
+     * `destinations`. The server now derives `suggested.bidCents` from the engine's own
+     * `outcomes[]` when the action carries no scalar `bidEur`; a fan-out whose destinations
+     * disagree reports the RANGE rather than picking one and calling it the answer.
+     */
+    startBid: {
+      key: 'startBid', label: 'Starting Bid', metric: true, sortable: true,
+      tip: 'The bid the new target would launch with, as the engine resolved it. A range means this term fans out to destinations that launch at different bids — hover ✓ for the per-destination breakdown.',
+      sortValue: (s) => s.suggested?.bidCents ?? null,
+      render: (s) => {
+        const lo = s.suggested?.bidCents
+        if (lo == null) return dash('This rule sets no starting bid — the new target would launch at its ad group’s default')
+        const hi = s.suggested?.bidCentsMax
+        return hi != null && hi !== lo
+          ? <b className="h10-sug-sugval" title={`${eur(lo)} – ${eur(hi)} across this term’s destinations`}>{eur(lo)} – {eur(hi)}</b>
+          : <b className="h10-sug-sugval">{eur(lo)}</b>
+      },
+    },
     curBud: {
       key: 'curBud', label: 'Current Budget', metric: true, sortable: true, width: 132,
       tip: 'The live daily budget. ✓ the row and this becomes the value Apply will set — editable, ↺ restores the suggestion.',
@@ -1662,6 +1757,62 @@ function SuggestionsInner() {
       metric: true, sortable: true, sortValue: (s) => s.suggested?.budgetEur ?? null,
       render: (s) => suggestedChange(s.current?.dailyBudgetEur ?? null, s.suggested?.budgetEur ?? null, 'eur'),
     },
+    /**
+     * SGX — the Placement family's before→after pair. It was the ONE family with no value
+     * columns at all: its change lived only inside the "Proposed change" cell ("30% → 24%"),
+     * while bids, budget and new-keywords each got a Current → Suggested pair. 0% is a real
+     * reading (Amazon's "no modifier on this lane"), never a dash.
+     */
+    curPlace: {
+      key: 'curPlace', label: 'Current Modifier', metric: true, sortable: true,
+      tip: 'The campaign’s live bid modifier for the placement this rule targets. 0% means no modifier is set on that lane.',
+      sortValue: (s) => s.current?.placementPct ?? null,
+      render: (s) => s.current?.placementPct != null
+        ? <span className="h10-sug-num">{s.current.placementPct}%</span>
+        : dash('The campaign no longer resolves locally'),
+    },
+    sugPlace: {
+      key: 'sugPlace', label: 'Suggested Change', metric: true, sortable: true,
+      tip: 'The projected new placement bid modifier and its delta. The rule’s own floor/ceiling (and Amazon’s 0–900% band) still clamp at apply time.',
+      sortValue: (s) => s.suggested?.placementPct ?? null,
+      render: (s) => {
+        const cur = s.current?.placementPct ?? null
+        const next = s.suggested?.placementPct ?? null
+        if (next == null) return dash('Needs a current modifier to project from')
+        if (cur == null || cur === next) return <b className="h10-sug-sugval">{next}%</b>
+        const d = next - cur
+        return (
+          <span className="h10-sug-change">
+            <b className="h10-sug-sugval">{next}%</b>
+            <span className={`d ${d < 0 ? 'down' : 'up'}`}>{d < 0 ? '↓' : '↑'} {Math.abs(d)}%</span>
+          </span>
+        )
+      },
+    },
+    /**
+     * 🔴 SGX — what the apply ACTUALLY did, on the Applied tab.
+     *
+     * This column REPLACES "Suggested Change" there. That column rendered
+     * `suggestedChange(current, suggested)`, and both halves are recomputed against TODAY — so an
+     * applied row advertised a change that never happened, beside a green Delivered chip. Prod
+     * showed "€11.25 → €8.44 ↓€2.81 · Delivered" for an apply that was €15.00 → €11.25.
+     */
+    applied: {
+      key: 'applied', label: 'Applied change', metric: true, sortable: true,
+      tip: 'What this apply actually changed — the value as it stood when the change was proposed, and the value the handler wrote. Read from the stored proposal and the write’s own result, so it is history and does not move. The Current column beside it is today’s live value, which may have changed since.',
+      sortValue: (s) => s.appliedChange?.to ?? '',
+      render: (s) => {
+        const a = s.appliedChange
+        if (!a) return dash('This row records no readable before/after — the Change Log holds the receipt')
+        return (
+          <span className="h10-sug-change" title={a.note ?? undefined}>
+            {a.from ? <><span className="h10-sug-num">{a.from}</span><span className="d"> → </span></> : <span className="d">set to </span>}
+            <b className="h10-sug-sugval">{a.to}</b>
+            {a.note ? <span className="d" title={a.note}> ✎</span> : null}
+          </span>
+        )
+      },
+    },
     scope: { key: 'scope', label: 'Scope', tip: 'Where the negative lands. Ad group is the default — the path that measurably reaches Amazon; campaign-wide only when the rule says so explicitly.', metric: false, sortable: true, sortValue: (s) => s.proposedAction?.scope ?? 'AD_GROUP', render: (s) => <Tag tone="neutral">{s.proposedAction?.scope === 'CAMPAIGN' ? 'Campaign' : 'Ad group'}</Tag> },
   }
   const hidden = (c: GridColumn<Suggestion>): GridColumn<Suggestion> => ({ ...c, defaultHidden: true })
@@ -1672,9 +1823,21 @@ function SuggestionsInner() {
    * and the date pair; the harvest tab gets Lookback Period; no family carries columns that
    * don't answer its own decision.
    */
+  /**
+   * 🔴 SGX — on the Applied tab the PROJECTION column is replaced by what the apply actually did.
+   * `C.sugBid` / `C.sugBud` / `C.sugPlace` all read `suggested`, which `attachDecisionData`
+   * recomputes against today's value — a future that already happened, and on a delivered row a
+   * plain falsehood. `C.applied` is history: it reads the stored proposal and the write's own
+   * result, so it does not move. Only the three families that HAVE a numeric before/after swap;
+   * a harvest or a negative creates an entity rather than moving a number, and a column of
+   * dashes would be noise beside their Delivery chip.
+   */
+  const projOrApplied = (projected: GridColumn<Suggestion>): GridColumn<Suggestion> =>
+    (status === 'applied' ? C.applied : projected)
+
   const familyCols: GridColumn<Suggestion>[] =
     fam === 'bids' ? [
-      C.adGroup, C.spend, C.sales, C.acos, C.rule, C.curBid, C.cpc, C.sugBid, C.reason,
+      C.adGroup, C.spend, C.sales, C.acos, C.rule, C.curBid, C.cpc, projOrApplied(C.sugBid), C.reason,
       hidden(C.roas), hidden(C.impr), hidden(C.clicks), hidden(C.ctr), hidden(C.cvr), hidden(C.orders),
       hidden(C.tacos), ...(isPending ? [hidden(C.stake)] : []), hidden(C.created), hidden(C.dateAdded), hidden(C.impact),
     ] : fam === 'negatives' ? [
@@ -1686,8 +1849,14 @@ function SuggestionsInner() {
       C.clicks, C.ctr, C.cpc, C.orders, C.startBid,
       hidden(C.roas), hidden(C.cvr), hidden(C.impr), ...(isPending ? [hidden(C.stake)] : []), hidden(C.impact),
     ] : fam === 'budget' ? [
-      C.curBud, C.sugBud, C.spend, C.sales, C.acos, C.roas, C.rule, C.reason, C.created,
+      C.curBud, projOrApplied(C.sugBud), C.spend, C.sales, C.acos, C.roas, C.rule, C.reason, C.created,
       hidden(C.impr), hidden(C.clicks), hidden(C.dateAdded), ...(isPending ? [hidden(C.stake)] : []), hidden(C.impact),
+    ] : fam === 'placement' ? [
+      // SGX — placement used to fall through to the generic list, so it was the one family with
+      // no before→after pair. Same shape as budget's: the lane's live modifier, then the change.
+      C.curPlace, projOrApplied(C.sugPlace), C.spend, C.sales, C.acos, C.roas, C.rule, C.reason, C.created,
+      hidden(C.proposed), hidden(C.impr), hidden(C.clicks), hidden(C.ctr), hidden(C.cvr), hidden(C.orders),
+      hidden(C.cpc), hidden(C.dateAdded), ...(isPending ? [hidden(C.stake)] : []), hidden(C.impact),
     ] : [
       C.proposed, C.spend, C.sales, C.acos, C.rule, C.reason, C.created,
       hidden(C.roas), hidden(C.impr), hidden(C.clicks), ...(isPending ? [hidden(C.stake)] : []), hidden(C.impact), hidden(C.dateAdded),

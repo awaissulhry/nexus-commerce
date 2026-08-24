@@ -414,6 +414,17 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-am-grid td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .h10-am-grid td.nm .mk { font-size: 10px; color: #8a93a1; border: 1px solid #e6e9ee; border-radius: 4px; padding: 1px 5px; }
 .h10-am-grid td.empty { text-align: center; color: #8a93a1; padding: 28px; }
+/**
+ * 🔴 SGX — an empty state's sentence was being CLIPPED, unreadable, on every wide grid.
+ *
+ * `.h10-am-grid tbody td` sets `white-space: nowrap` (above), and the empty cell is a `td`. So
+ * `EmptyState`'s description inherited it, its own `max-width: 320px` could not wrap the text,
+ * and the line painted straight out of that box across the row until the right-frozen column
+ * covered it. Measured on prod (Suggestions → New Keywords → Status: Muted): the copy ended
+ * mid-word at "…let the engine speak up|". Short empty states hid the bug; long ones could not
+ * be read at all. Re-enabling wrapping inside the empty cell fixes every AdsDataGrid consumer.
+ */
+.h10-am-grid td.empty, .h10-am-grid td.empty * { white-space: normal; }
 .h10-toggle { display: inline-block; width: 30px; height: 17px; border-radius: 999px; background: #cbd2db; position: relative; vertical-align: middle; }
 .h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 999px; background: #fff; }
 .h10-rulecount { color: #8a93a1; }

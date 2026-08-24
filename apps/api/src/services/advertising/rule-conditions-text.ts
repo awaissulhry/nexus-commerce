@@ -110,3 +110,38 @@ export const conditionsTextOf = (conditions: unknown): string => {
     return `${field} ${sym} ${String(raw)}`
   }).join(' and ')
 }
+
+/**
+ * SGX (2026-08-24) — the WINDOW the conditions above are measured over.
+ *
+ * 🔴 Why this exists. On prod a Placement row read **"Sales = €0 and Clicks ≥ 20"** beside a Sales
+ * column showing **€162.30** — and both were true. The criteria are evaluated over the builder
+ * group's own `lookback` (minus `exclude`); the grid's metric columns are trailing 30 days. With
+ * the window absent from the sentence the row read as self-contradictory, which is the one thing a
+ * review queue must never do: an operator seeing a rule apparently contradicted by its own
+ * evidence concludes the engine is broken.
+ *
+ * Returned SEPARATELY from `conditionsTextOf` rather than appended to it. That string is also the
+ * assignment modal's and the Budget tab's, and its pinning tests describe the criteria alone —
+ * widening it would change three surfaces to fix one. Null when the rule stores no window:
+ * engine-flat rules carry theirs on the ACTION, which `ruleLookback()` already reports as the
+ * Lookback Period column.
+ */
+export const ruleWindowOf = (conditions: unknown): string | null => {
+  const list = (Array.isArray(conditions) ? conditions : []) as Array<Record<string, unknown>>
+  for (const c of list) {
+    // Recurse first: a group may nest another group that carries the window.
+    if (Array.isArray(c.conditions)) {
+      const inner = ruleWindowOf(c.conditions)
+      if (inner) return inner
+    }
+    const look = typeof c.lookback === 'string' ? c.lookback.trim() : ''
+    if (!look) continue
+    const excl = typeof c.exclude === 'string' ? c.exclude.trim() : ''
+    // "None" is the builder's own word for "exclude nothing" — saying it aloud would read as a
+    // caveat where there is none.
+    if (!excl || /^none$/i.test(excl)) return look
+    return `${look}, excluding the ${excl.replace(/^last\s+/i, 'last ').toLowerCase()}`
+  }
+  return null
+}

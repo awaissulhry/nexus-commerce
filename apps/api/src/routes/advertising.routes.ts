@@ -6748,9 +6748,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // rule's conditions (and it already speaks operator units, not database paths).
     // SG.2d — the rule's ACoS threshold rides along for the ADAPTIVE traffic dot (precedence:
     // campaign target → this → the default 30% band), via acosThresholdOf (both rule shapes).
-    const { conditionsTextOf } = await import('../services/advertising/rule-conditions-text.js')
+    const { conditionsTextOf, ruleWindowOf } = await import('../services/advertising/rule-conditions-text.js')
     const { acosThresholdOf } = await import('../services/advertising/ads-suggestions.service.js')
     const criteria = new Map(liveRules.map((r) => [r.id, conditionsTextOf(r.conditions)]))
+    // 🔴 SGX — the WINDOW those criteria are measured over. Without it a Placement row read
+    // "Sales = €0 and Clicks ≥ 20" beside a Sales column of €162.30 and looked self-contradictory:
+    // the criteria run over the rule's own lookback, the metric columns over trailing 30 days.
+    const ruleWin = new Map(liveRules.map((r) => [r.id, ruleWindowOf(r.conditions)]))
     const ruleAcos = new Map(liveRules.map((r) => [r.id, acosThresholdOf(r.conditions)]))
     // SG.2f — the Lookback Period column, from the ONE window table the engine itself reads
     // (@nexus/shared/ads-rule-window). Per ROW, because the trigger lives on the suggestion.
@@ -6765,6 +6769,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         ...r,
         ruleName: live.get(r.ruleId) ?? r.ruleName,
         ruleCriteria: criteria.get(r.ruleId) ?? null,
+        ruleWindow: ruleWin.get(r.ruleId) ?? null,
         ruleAcosPct: ruleAcos.get(r.ruleId) ?? null,
         lookback: lb ? { label: lb.label, why: Array.isArray(lb.why) ? lb.why.join(' ') : String(lb.why ?? '') } : null,
       }
