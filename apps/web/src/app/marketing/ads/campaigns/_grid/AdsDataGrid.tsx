@@ -340,12 +340,28 @@ export function AdsDataGrid<T>({
   // column visibility (Customize) — keyed by column.key; first col is always locked on
   const allKeys = useMemo(() => columns.map((c) => c.key), [columns])
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)))
+  /**
+   * 🔴 SGX — a grid that swapped its column set kept the OLD one's hidden keys.
+   *
+   * `hidden` is seeded by a `useState` INITIALIZER, which runs once per mount. This effect then
+   * re-read the persisted set when `storageKey` changed — but did nothing at all when nothing was
+   * stored, leaving the previous column set's `defaultHidden` keys in place. On a page whose tabs
+   * share one grid instance that is a visible defect, not a nuance: on Suggestions, clicking Bids
+   * → New Keywords dropped Date Added, Suggestion Created, Clicks, CTR and PPC Orders, because
+   * those are `defaultHidden` on BIDS. The operator's per-family column lists therefore only
+   * appeared on a hard page load — every in-app tab click showed the first tab's shape.
+   *
+   * A storageKey change means a different saved view, so the fall-through is now explicit: use
+   * what is stored, and when nothing is stored fall back to THESE columns' own defaults. A live
+   * Customize choice is unaffected — it persists under its own key before this ever re-runs.
+   */
   useEffect(() => {
     if (!storageKey) return
     try {
       const raw = localStorage.getItem(storageKey)
-      if (raw) { const arr = JSON.parse(raw) as string[]; setHidden(new Set(allKeys.filter((k) => !arr.includes(k)))) }
-    } catch { /* ignore */ }
+      if (raw) { const arr = JSON.parse(raw) as string[]; setHidden(new Set(allKeys.filter((k) => !arr.includes(k)))); return }
+    } catch { /* ignore — fall through to this column set's own defaults */ }
+    setHidden(new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
   const persistVisible = (vis: string[]) => { if (storageKey) { try { localStorage.setItem(storageKey, JSON.stringify(vis)) } catch { /* ignore */ } } }
