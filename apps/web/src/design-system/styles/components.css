@@ -104,32 +104,67 @@
   border-radius: 2px;
 }
 
-/* SG.1 — the PAGE-level tab bar (size="lg"): H10's Suggestions/Analytics treatment. Bolder,
-   larger, near-black idle labels; a 3px primary indicator; count pills and promo badges as
-   first-class parts of the tab. Additive — the default 'md' bar above is untouched. */
+/* The PAGE-level tab bar (size="lg") — the section bar, as Rules & Automation wears it.
+ *
+ * 🔴 SGX2 (2026-08-24) supersedes SG.1's treatment on the operator's instruction, and the reason
+ * is worth keeping so it is not "restored" later. SG.1 shipped this bold: 15px/700 in
+ * near-black `--text-primary`, on H10's own Suggestions bar. On our page that put the tab labels
+ * at the SAME visual weight as the `Suggestions` H1 directly above them, so the header and the
+ * navigation read as one undifferentiated block — operator: *"they have a bold appearance that's
+ * main text and headings … there is no differentiation between the sections and this."*
+ *
+ * The fix is not a new look, it is the one the console already had: `.h10-cd-tab` (ads.css), the
+ * Rules & Automation bar, which the operator pointed at as the reference. Matched here in tokens
+ * rather than by copying its raw hex — every value lands within a shade of it (grey-600 vs its
+ * #3f4754, grey-150 vs its #e3e7ec).
+ *
+ * 🔴 The label colour uses the PALETTE token `--h10-text-2`, not the semantic `--text-secondary`,
+ * and must stay that way. `globals.css` and `ads.css` both redefine the semantic text aliases as
+ * bare RGB CHANNELS (`--text-secondary: 71 85 105`) for `rgb()` composition, so inside those
+ * scopes `color: var(--text-secondary)` is an invalid declaration and is DROPPED — the label
+ * silently inherits the page's near-black instead. Measured on prod: the tabs computed to
+ * rgb(28,37,48) while the rule "said" grey. It also means SG.1's own `color: var(--text-primary)`
+ * never applied either — its near-black came from inheritance, and the boldness from
+ * `font-weight: 700` alone. `--h10-text-2` is a real hex in every scope (#5b6573 at :root AND
+ * inside `.h10-shell`), so it resolves wherever this bar is used.
+ * See memory: reference_ds_channel_tokens_used_raw.
+ *
+ * Now the heading owns the top of the page, the hairline under the bar separates navigation from
+ * content, and the blue label + indicator is the only thing competing for attention — which is
+ * the tab you are on. Suggestions is the ONLY `<Tabs size="lg">` consumer, so this is a
+ * one-page change; the default 'md' bar above is untouched. */
 .h10-ds-tabs.lg {
-  gap: 12px;
+  gap: 28px;
+  align-items: stretch;
+  /* 🔴 The SAME channel trap, and this half is what the operator actually named. `.h10-ds-tabs`
+     above declares `border-bottom: 1px solid var(--border-subtle)`, but `--border-subtle` is
+     `226 232 240` inside the ads shell, so the bar has been rendering with NO hairline at all —
+     measured `border-bottom: 0px none`. With nothing dividing the tabs from the Filters card
+     below, header, bar and content read as one block. Re-declared so the line actually paints. */
+  border-bottom: 1px solid var(--h10-border-subtle);
 }
 .h10-ds-tabs.lg .h10-ds-tab {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  padding: 11px 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--h10-text-2);
+  /* no horizontal padding: the indicator below spans the LABEL, as the reference bar's does */
+  padding: 0 0 11px;
+  margin-bottom: -1px;
 }
 .h10-ds-tabs.lg .h10-ds-tab:not(.on):hover {
-  color: var(--color-primary);
+  color: var(--h10-text);
 }
 .h10-ds-tabs.lg .h10-ds-tab.on {
   color: var(--color-primary);
 }
 .h10-ds-tabs.lg .h10-ds-tab.on::after {
-  left: 10px;
-  right: 10px;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  border-radius: 0;
 }
 .h10-ds-tab-ic {
   display: inline-flex;
@@ -153,6 +188,27 @@
   line-height: 1.5;
 }
 .h10-ds-tab.on .h10-ds-tab-count {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* size="lg" count pill — placed AFTER the base rules it overrides so the cascade reads top-down.
+   It loses the inset ring and the 26px floor it needed while the labels were heavy: beside a
+   600-weight label it reads on the sunken grey alone, as the reference bar's does.
+   🔴 And it gets its background BACK. The base rule sets `background: var(--surface-sunken)`,
+   the same channel trap — `--surface-sunken` is `241 245 249` inside the ads shell, so the
+   declaration was dropped and every idle count chip has rendered fully TRANSPARENT since SG.1
+   (measured on prod: `rgba(0, 0, 0, 0)`). Only the ACTIVE pill ever showed its fill, because
+   `--color-primary-soft` happens to be a real hex — which is exactly why this went unnoticed. */
+.h10-ds-tabs.lg .h10-ds-tab-count {
+  min-width: 0;
+  padding: 1px 7px;
+  box-shadow: none;
+  font-size: 11.5px;
+  background: var(--h10-surface-sunken);
+  color: var(--h10-text-2);
+}
+.h10-ds-tabs.lg .h10-ds-tab.on .h10-ds-tab-count {
   background: var(--color-primary-soft);
   color: var(--color-primary);
 }
