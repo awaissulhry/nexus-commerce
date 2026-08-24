@@ -4,10 +4,16 @@
  * `tools/generate-tokens-css.mts` reads this and writes the stylesheet.
  *
  * Hex values come from ./colors (palette/pill/badge) so colour is defined ONCE.
+ * Spacing and type sizes come from ./spacing and ./typography for the same
+ * reason — before 2026-08-24 those scales existed ONLY as TypeScript, so a
+ * stylesheet had no way to reference a padding or a font size and every one of
+ * them was written raw (63 distinct spacing values, 36 font sizes, measured).
  * Tier-2 roles are `var(--…)` reference strings (no hex to duplicate). Radius /
  * shadow / structural / type / the dark block are literals here (their only home).
  */
 import { palette, pill, badge } from './colors'
+import { space } from './spacing'
+import { fontSize, fontWeight } from './typography'
 
 export interface CssVar {
   /** when set, a section-comment is emitted before this row */
@@ -15,6 +21,29 @@ export interface CssVar {
   name: string
   value: string
 }
+
+/** `px12` -> `12`, `xsPlus` -> `xs-plus`, `2xl` -> `2xl`. */
+const kebab = (k: string): string =>
+  k.replace(/^px/, '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+
+const spacingVars: ReadonlyArray<CssVar> = Object.entries(space).map(([k, v], i) => ({
+  ...(i === 0 ? { section: 'Dimension: spacing (scale lives in tokens/spacing.ts)' } : {}),
+  name: `--h10-space-${kebab(k)}`,
+  value: v,
+}))
+
+const typeVars: ReadonlyArray<CssVar> = [
+  ...Object.entries(fontSize).map(([k, v], i) => ({
+    ...(i === 0 ? { section: 'Dimension: type scale (tokens/typography.ts)' } : {}),
+    name: `--h10-font-size-${kebab(k)}`,
+    value: v,
+  })),
+  ...Object.entries(fontWeight).map(([k, v], i) => ({
+    ...(i === 0 ? { section: 'Dimension: type weight' } : {}),
+    name: `--h10-font-weight-${kebab(k)}`,
+    value: String(v),
+  })),
+]
 
 export const cssVars: ReadonlyArray<CssVar> = [
   // ── Tier 1: primitive ramps ──────────────────────────────────────
@@ -249,6 +278,16 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--status-info-soft', value: 'var(--h10-info-soft)' },
   { name: '--status-info-line', value: 'var(--h10-info)' },
   { name: '--status-info-strong', value: 'var(--h10-info-strong)' },
+
+  // ── Dimension: spacing + type ────────────────────────────────────
+  // Derived from ./spacing and ./typography rather than restated here, so each
+  // scale is still defined exactly once: `px12` -> `--h10-space-12`,
+  // `xsPlus` -> `--h10-font-size-xs-plus`.
+  //
+  // These are theme-invariant, so they are emitted to :root only and never to
+  // the .dark block — a padding does not change with the canvas.
+  ...spacingVars,
+  ...typeVars,
 ]
 
 /** Dark-mode overrides (the `.dark` block). Provisional inversions; their only home. */
@@ -295,4 +334,5 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--h10-rail-chip-active-bg', value: '#1d3a5f' },
   { name: '--h10-rail-chip-active-fg', value: '#cfe1fb' },
   { name: '--h10-rail-ft', value: '#6f7b8b' },
+
 ]

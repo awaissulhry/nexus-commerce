@@ -192,6 +192,50 @@
   --status-info-soft: var(--h10-info-soft);
   --status-info-line: var(--h10-info);
   --status-info-strong: var(--h10-info-strong);
+
+  /* ── Dimension: spacing (scale lives in tokens/spacing.ts) ── */
+  --h10-space-1: 1px;
+  --h10-space-2: 2px;
+  --h10-space-3: 3px;
+  --h10-space-4: 4px;
+  --h10-space-5: 5px;
+  --h10-space-6: 6px;
+  --h10-space-7: 7px;
+  --h10-space-8: 8px;
+  --h10-space-9: 9px;
+  --h10-space-10: 10px;
+  --h10-space-11: 11px;
+  --h10-space-12: 12px;
+  --h10-space-14: 14px;
+  --h10-space-16: 16px;
+  --h10-space-18: 18px;
+  --h10-space-20: 20px;
+  --h10-space-22: 22px;
+  --h10-space-24: 24px;
+  --h10-space-26: 26px;
+  --h10-space-30: 30px;
+  --h10-space-32: 32px;
+  --h10-space-40: 40px;
+  --h10-space-48: 48px;
+
+  /* ── Dimension: type scale (tokens/typography.ts) ── */
+  --h10-font-size-micro: 10px;
+  --h10-font-size-xs: 11px;
+  --h10-font-size-xs-plus: 11.5px;
+  --h10-font-size-sm: 12px;
+  --h10-font-size-sm-plus: 12.5px;
+  --h10-font-size-base: 13px;
+  --h10-font-size-base-plus: 13.5px;
+  --h10-font-size-md: 15px;
+  --h10-font-size-lg: 18px;
+  --h10-font-size-xl: 22px;
+  --h10-font-size-2xl: 27px;
+
+  /* ── Dimension: type weight ── */
+  --h10-font-weight-medium: 500;
+  --h10-font-weight-semibold: 600;
+  --h10-font-weight-bold: 700;
+  --h10-font-weight-extrabold: 800;
 }
 
 .dark {
