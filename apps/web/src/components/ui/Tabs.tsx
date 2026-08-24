@@ -1,7 +1,27 @@
 'use client'
 
+/**
+ * Tabs — ADAPTER over the design system's `Tabs` (Phase 9.3).
+ *
+ * This file used to be a second, independent implementation of the same concept: its own
+ * markup, its own Tailwind classes, its own underline treatment. Two definitions of "tab bar"
+ * drift by construction, and they had — the DS bar carries the H10 count pill, the icon slot
+ * and the `lg` page-level size that this one never grew.
+ *
+ * The legacy API is kept verbatim so no call site changes:
+ *   • `activeTab` → the DS's `active` (rename only)
+ *   • `Tab.disabled` → lifted into the DS rather than shimmed here (one real caller)
+ *
+ * The legacy `trailing` prop is GONE: measured across every `<Tabs>` in the app, it had zero
+ * call sites. Porting it into the DS would have added an API nobody asked for to the one place
+ * that is meant to hold only what the platform actually uses.
+ *
+ * New code should import from `@/design-system/components/Tabs` directly. This adapter exists
+ * to retire the duplicate without a 9-file rewrite, not to be a permanent second front door.
+ */
+
 import { type ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { Tabs as DsTabs, type TabItem } from '@/design-system/components/Tabs'
 
 export interface Tab {
   id: string
@@ -14,51 +34,16 @@ interface TabsProps {
   tabs: Tab[]
   activeTab: string
   onChange: (id: string) => void
-  trailing?: ReactNode
   className?: string
 }
 
-export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsProps) {
+export function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
   return (
-    <div
-      className={cn(
-        'flex items-center gap-0 border-b border-default -mb-px overflow-x-auto',
-        className
-      )}
-    >
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id
-        return (
-          <button
-            key={tab.id}
-            onClick={() => !tab.disabled && onChange(tab.id)}
-            disabled={tab.disabled}
-            className={cn(
-              // U.60 — flex-shrink-0 belt-and-braces with whitespace-nowrap
-              // so a tab never squishes into a constrained parent.
-              'flex items-center gap-1.5 h-10 px-4 text-md font-label border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-info-500/30',
-              isActive
-                ? 'border-info-600 text-info-700'
-                : 'border-transparent text-secondary hover:text-primary',
-              tab.disabled && 'opacity-50 cursor-not-allowed'
-            )}
-          >
-            {tab.label}
-            {tab.count != null && (
-              <span
-                className={cn(
-                  'inline-flex items-center justify-center rounded text-xs tabular-nums px-1.5 py-0.5 min-w-[18px]',
-                  isActive ? 'bg-info-soft text-info-strong' : 'bg-sunken text-secondary'
-                )}
-              >
-                {tab.count}
-              </span>
-            )}
-          </button>
-        )
-      })}
-      {trailing && <div className="ml-auto">{trailing}</div>}
-    </div>
+    <DsTabs
+      tabs={tabs as TabItem[]}
+      active={activeTab}
+      onChange={onChange}
+      className={className}
+    />
   )
 }

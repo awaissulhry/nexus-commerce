@@ -133,17 +133,19 @@
  * content, and the blue label + indicator is the only thing competing for attention — which is
  * the tab you are on. Suggestions is the ONLY `<Tabs size="lg">` consumer, so this is a
  * one-page change; the default 'md' bar above is untouched. */
+/* A tab that cannot be entered. Dimmed AND non-interactive — the label is expected to say
+   why, so hue is never the only carrier. */
+.h10-ds-tab:disabled { opacity: .45; cursor: not-allowed; }
+.h10-ds-tab:disabled:hover { color: inherit; }
+
 .h10-ds-tabs.lg {
   gap: 28px;
   align-items: stretch;
-  /* 🔴 The SAME channel trap as the label colour, and this half is what the operator actually
-     named. `.h10-ds-tabs` above declares `border-bottom: 1px solid var(--border-subtle)`, but
-     `--border-subtle` is `226 232 240` inside the ads shell, so the bar has been rendering with
-     NO hairline at all — measured `border-bottom: 0px none`. With nothing dividing the tabs from
-     the Filters card below, the header, the bar and the content read as one undifferentiated
-     block: *"there is no differentiation between the sections and this."* Re-declared with the
-     palette token so the line actually paints. */
-  border-bottom: 1px solid var(--h10-border-subtle);
+  /* The hairline is inherited from `.h10-ds-tabs` above. SGX2 had to re-declare it here
+     because the base rule used `--border-subtle`, which is RGB channels inside the ads shell
+     — the bar measured `border-bottom: 0px none` and the operator reported it as "no
+     differentiation between the sections". Phase 9.0b fixed that at the source (the base rule
+     now uses the palette token), so the re-declaration is redundant and has been removed. */
 }
 .h10-ds-tabs.lg .h10-ds-tab {
   display: inline-flex;

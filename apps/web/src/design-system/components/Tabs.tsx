@@ -10,6 +10,9 @@ export interface TabItem {
   badge?: string
   /** SG.1 — optional leading icon (H10 marks its A.I. tab). Sized by the caller (≤16px). */
   icon?: ReactNode
+  /** 9.3 — a tab that cannot be entered yet. Carries `disabled` + `aria-disabled` so the
+   *  reason is reachable; never the only signal (the label should say why). */
+  disabled?: boolean
 }
 
 export interface TabsProps {
@@ -36,7 +39,9 @@ export function Tabs({ tabs, active, onChange, className, size = 'md' }: TabsPro
           role="tab"
           aria-selected={t.id === active}
           className={['h10-ds-tab', t.id === active ? 'on' : ''].filter(Boolean).join(' ')}
-          onClick={() => onChange(t.id)}
+          disabled={t.disabled}
+          aria-disabled={t.disabled || undefined}
+          onClick={() => { if (!t.disabled) onChange(t.id) }}
         >
           {t.icon ? <span className="h10-ds-tab-ic" aria-hidden>{t.icon}</span> : null}
           {t.label}
