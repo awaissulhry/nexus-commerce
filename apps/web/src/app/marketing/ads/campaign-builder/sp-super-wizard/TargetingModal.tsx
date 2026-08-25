@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { Modal } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Radio, Textarea, Toggle } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -43,16 +43,16 @@ function NegKeywordEditor({ manual, auto, onChange }: { manual: NegKeyword[]; au
       <div className="h10-neg-left">
         <div className="h10-neg-mt">
           <span className="lbl">Match Type:</span>
-          <label className={mt === 'EXACT' ? 'on' : ''}><input type="radio" name="spwnegmt" checked={mt === 'EXACT'} onChange={() => setMt('EXACT')} /> Negative Exact</label>
-          <label className={mt === 'PHRASE' ? 'on' : ''}><input type="radio" name="spwnegmt" checked={mt === 'PHRASE'} onChange={() => setMt('PHRASE')} /> Negative Phrase</label>
+          <Radio name="spwnegmt" className={mt === 'EXACT' ? 'on' : undefined} checked={mt === 'EXACT'} onChange={() => setMt('EXACT')} label="Negative Exact" />
+          <Radio name="spwnegmt" className={mt === 'PHRASE' ? 'on' : undefined} checked={mt === 'PHRASE'} onChange={() => setMt('PHRASE')} label="Negative Phrase" />
         </div>
-        <textarea className="h10-neg-ta" value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Negative keywords" />
-        <button type="button" className="h10-neg-add" disabled={!text.trim()} onClick={stage}>Add Keywords</button>
+        <Textarea style={{ minHeight: 300 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Negative keywords" />
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}><Button disabled={!text.trim()} onClick={stage}>Add Keywords</Button></div>
       </div>
       <div className="h10-neg-right">
         <div className="h10-neg-rh">
           <span>{manual.length} Added{auto.length ? ` · ${auto.length} auto` : ''}</span>
-          <button type="button" className="h10-neg-rmall" disabled={!manual.length} onClick={() => onChange([])}><Trash2 size={14} /> Remove All</button>
+          <Button size="sm" disabled={!manual.length} onClick={() => onChange([])}><Trash2 size={14} /> Remove All</Button>
         </div>
         <div className="h10-neg-lh"><span>Keyword</span><ChevronsUpDown size={13} /></div>
         <div className="h10-neg-list">
@@ -100,11 +100,11 @@ function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup
         const sugCents = suggested?.[g.key]
         return (
           <div className={`row ${g.enabled ? '' : 'off'}`} key={g.key}>
-            <input type="checkbox" className="h10-spw-sw" checked={g.enabled} onChange={() => toggle(g.key)} aria-label={`Enable ${meta.label}`} />
+            <Toggle checked={g.enabled} onChange={() => toggle(g.key)} aria-label={`Enable ${meta.label}`} />
             <div className="nm"><span className="t">{meta.label}</span><span className="d">{meta.desc}</span></div>
             <div className="bid">
-              <div className="money"><span className="pf">{currency}</span><input inputMode="decimal" value={g.bid} disabled={!g.enabled} onChange={(e) => setBid(g.key, e.target.value)} aria-label={`${meta.label} bid`} /></div>
-              {sugCents != null && <button type="button" className="h10-spw-auto-sug" disabled={!g.enabled} title="Use Helium 10's data-grounded suggested bid (your median CPC, by intent)" onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>Suggested: {currency}{(sugCents / 100).toFixed(2)} · Use</button>}
+              <Input inputMode="decimal" prefix={currency} value={g.bid} disabled={!g.enabled} onChange={(e) => setBid(g.key, e.target.value)} aria-label={`${meta.label} bid`} fieldClassName="h10-spw-bidnum" />
+              {sugCents != null && <Button variant="link" size="sm" disabled={!g.enabled} title="Use Helium 10's data-grounded suggested bid (your median CPC, by intent)" onClick={() => setBid(g.key, (sugCents / 100).toFixed(2))}>Suggested: {currency}{(sugCents / 100).toFixed(2)} · Use</Button>}
             </div>
           </div>
         )

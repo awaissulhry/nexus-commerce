@@ -36,14 +36,17 @@
  *     Unmatched tokens are now reported instead of disappearing.
  */
 import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronDown, X, Save } from 'lucide-react'
-import { Select } from '@/design-system/primitives'
+import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronRight, ChevronDown, X, Save } from 'lucide-react'
+import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
+import { Pagination } from '@/design-system/components'
 // A shared component must not depend on its HOST importing these. Eight of the
 // nine call sites happen to, but ai-advertising/new-goal does NOT — so the DS
 // controls below would have rendered unstyled there. Next dedupes CSS imports,
 // so owning them here costs nothing and makes the component self-sufficient.
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AmazonBadge } from '../../_shell/BrandMarks'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -529,9 +532,8 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
 
         {tab === 'search' ? (
           <>
-            <div className="h10-spw-ps-search">
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" />
-              <Search size={15} />
+            <div style={{ marginBottom: 12 }}>
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" leadingIcon={<Search size={15} aria-hidden />} fieldClassName="spw-field-full" />
             </div>
             {/* APS.5a — filters the SERVER applies, so they hold across pages
                 rather than only the rows on screen. Options come from the
@@ -563,14 +565,14 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                 </Select>
               </label>
               {(productType || status) && (
-                <button type="button" className="h10-spw-ps-clear" onClick={() => { setProductType(''); setStatus('') }}>
+                <Button variant="link" size="sm" className="back" onClick={() => { setProductType(''); setStatus('') }}>
                   <X size={12} /> Clear
-                </button>
+                </Button>
               )}
             </div>
             <div className="h10-spw-ps-cnt">
               <span>Viewing {total === 0 ? 0 : start + 1}-{Math.min(start + PAGE, total)} of {total} Products</span>
-              <button type="button" className="addall" disabled={!view.length} onClick={() => void addAll()}><Plus size={13} /> Add All</button>
+              <Button size="sm" disabled={!view.length} onClick={() => void addAll()}><Plus size={13} /> Add All</Button>
             </div>
             <div className="h10-spw-ps-list">
               {loading ? (
@@ -615,8 +617,8 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                             appears on standalones and children — never on a family row. */}
                         {!isFamily ? <EligPill e={verdict(p)} /> : null}
                         {isFamily
-                          ? <button type="button" className={`addbtn ${allSel ? 'on' : ''}`} onClick={() => (allSel ? removeAllChildren(p) : void addAllChildren(p))}>{allSel ? <><Check size={13} /> Added</> : sel > 0 ? <>{sel}/{adv ?? p.childCount}</> : <><Plus size={13} /> Add all</>}</button>
-                          : <button type="button" className={`addbtn ${has(p.id) ? 'on' : ''}`} disabled={blocked(p) && !has(p.id)} title={blocked(p) ? 'Amazon reports this product cannot be advertised' : undefined} onClick={() => (has(p.id) ? remove(p.id) : add(p))}>{has(p.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>}
+                          ? <Button variant="link" size="sm" className={allSel ? 'back' : undefined} onClick={() => (allSel ? removeAllChildren(p) : void addAllChildren(p))}>{allSel ? <><Check size={13} /> Added</> : sel > 0 ? <>{sel}/{adv ?? p.childCount}</> : <><Plus size={13} /> Add all</>}</Button>
+                          : <Button variant="link" size="sm" className={has(p.id) ? 'back' : undefined} disabled={blocked(p) && !has(p.id)} title={blocked(p) ? 'Amazon reports this product cannot be advertised' : undefined} onClick={() => (has(p.id) ? remove(p.id) : add(p))}>{has(p.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</Button>}
                       </div>
                       {open && (loadingKids.has(p.id) ? (
                         <div className="h10-spw-ps-kidload">Loading variations…</div>
@@ -627,7 +629,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                           <Thumb p={kid} />
                           <ProductMeta p={kid} />
                           <EligPill e={verdict(kid)} />
-                          <button type="button" className={`addbtn ${has(kid.id) ? 'on' : ''}`} disabled={blocked(kid) && !has(kid.id)} title={blocked(kid) ? 'Amazon reports this product cannot be advertised' : undefined} onClick={() => (has(kid.id) ? remove(kid.id) : add(kid))}>{has(kid.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</button>
+                          <Button variant="link" size="sm" className={has(kid.id) ? 'back' : undefined} disabled={blocked(kid) && !has(kid.id)} title={blocked(kid) ? 'Amazon reports this product cannot be advertised' : undefined} onClick={() => (has(kid.id) ? remove(kid.id) : add(kid))}>{has(kid.id) ? <><Check size={13} /> Added</> : <><Plus size={13} /> Add</>}</Button>
                         </div>
                       )))}
                     </Fragment>
@@ -636,21 +638,15 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
               )}
             </div>
             {pages > 1 && (
-              <div className="h10-spw-ps-pager">
-                <button type="button" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page"><ChevronLeft size={15} /></button>
-                {Array.from({ length: pages }).slice(0, 7).map((_, i) => (
-                  <button type="button" key={i} className={page === i + 1 ? 'on' : ''} onClick={() => setPage(i + 1)}>{i + 1}</button>
-                ))}
-                <button type="button" disabled={page >= pages} onClick={() => setPage((p) => Math.min(pages, p + 1))} aria-label="Next page"><ChevronRight size={15} /></button>
-              </div>
+              <div className="spw-pager-row"><Pagination page={page} pageCount={pages} onPage={setPage} /></div>
             )}
           </>
         ) : (
           <div className="h10-spw-ps-enter">
-            <textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Enter product names, ASINs, or SKUs — one per line" />
+            <Textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Enter product names, ASINs, or SKUs — one per line" aria-label="Enter products" />
             <div className="h10-spw-ps-enterfoot">
               {enterMsg ? <span className="h10-spw-ps-entermsg">{enterMsg}</span> : <span />}
-              <button type="button" className="addall" disabled={!enterText.trim() || entering} onClick={() => void addEntered()}><Plus size={13} /> {entering ? 'Resolving…' : 'Add'}</button>
+              <Button size="sm" disabled={!enterText.trim() || entering} onClick={() => void addEntered()}><Plus size={13} /> {entering ? 'Resolving…' : 'Add'}</Button>
             </div>
           </div>
         )}
@@ -659,7 +655,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
       <div className="h10-spw-ps-right">
         <div className="h10-spw-ps-rh">
           <b>{products.length} Products Added</b>
-          <button type="button" className="rm" disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={12} /> Remove All</button>
+          <Button variant="link" size="sm" className="back" disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={12} /> Remove All</Button>
         </div>
         {/* APS.5b — reusable selections, scoped to this marketplace. */}
         <div className="h10-spw-ps-sets">
@@ -672,9 +668,9 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
             <option value="">{sets.length ? 'Load a set…' : 'No saved sets'}</option>
             {sets.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.count})</option>)}
           </Select>
-          <button type="button" className="h10-spw-ps-saveset" disabled={!products.length || setBusy} onClick={() => void saveSet()}>
+          <Button size="sm" disabled={!products.length || setBusy} onClick={() => void saveSet()}>
             <Save size={12} /> Save as set
-          </button>
+          </Button>
         </div>
         {setMsg ? <div className="h10-spw-ps-setmsg">{setMsg}</div> : null}
         {sponsoredVideo ? (
@@ -694,9 +690,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                     out mid-build). The tray must show that, not just the catalogue. */}
                 <EligPill e={verdict(p)} />
                 {sponsoredVideo && (
-                  <label className="h10-spw-ps-sv" title="Run a Sponsored Brands video for this product">
-                    <input type="checkbox" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
-                  </label>
+                  <Checkbox className="h10-spw-ps-sv" title="Run a Sponsored Brands video for this product" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
                 )}
                 <button type="button" className="x" onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`}><X size={14} /></button>
               </div>

@@ -8,7 +8,7 @@
  * Shell is the Nexus DS <Modal> (size xxl). Endpoint already on prod (frontend-only).
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Radio, Textarea } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -69,9 +69,9 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
       title="Add Negative Keywords to Campaign"
       footer={
         <>
-<Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-     <Button variant="primary" disabled={!staged.length || busy} onClick={() => void submit()}>{busy ? 'Adding…' : 'Add to Campaign'}</Button>
+          <Button variant="primary" disabled={!staged.length || busy} onClick={() => void submit()}>{busy ? 'Adding…' : 'Add to Campaign'}</Button>
         </>
       }
     >
@@ -83,16 +83,16 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
         <div className="h10-neg-left">
           <div className="h10-neg-mt">
             <span className="lbl">Match Type:</span>
-            <label className={matchType === 'NEGATIVE_EXACT' ? 'on' : ''}><input type="radio" name="negmt" checked={matchType === 'NEGATIVE_EXACT'} onChange={() => setMatchType('NEGATIVE_EXACT')} /> Negative Exact</label>
-            <label className={matchType === 'NEGATIVE_PHRASE' ? 'on' : ''}><input type="radio" name="negmt" checked={matchType === 'NEGATIVE_PHRASE'} onChange={() => setMatchType('NEGATIVE_PHRASE')} /> Negative Phrase</label>
+            <Radio name="negmt" className={matchType === 'NEGATIVE_EXACT' ? 'on' : undefined} checked={matchType === 'NEGATIVE_EXACT'} onChange={() => setMatchType('NEGATIVE_EXACT')} label="Negative Exact" />
+            <Radio name="negmt" className={matchType === 'NEGATIVE_PHRASE' ? 'on' : undefined} checked={matchType === 'NEGATIVE_PHRASE'} onChange={() => setMatchType('NEGATIVE_PHRASE')} label="Negative Phrase" />
           </div>
-          <textarea className="h10-neg-ta" value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Negative keywords" />
-          <button type="button" className="h10-neg-add" disabled={!text.trim()} onClick={stage}>Add Negative Keywords</button>
+          <Textarea style={{ minHeight: 300 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Negative keywords" />
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}><Button disabled={!text.trim()} onClick={stage}>Add Negative Keywords</Button></div>
         </div>
         <div className="h10-neg-right">
           <div className="h10-neg-rh">
             <span>{staged.length} Negative Keyword{staged.length === 1 ? '' : 's'} Added</span>
-            <button type="button" className="h10-neg-rmall" disabled={!staged.length} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</button>
+            <Button size="sm" disabled={!staged.length} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</Button>
           </div>
           <div className="h10-neg-lh"><span>Keyword</span><ChevronsUpDown size={13} /></div>
           <div className="h10-neg-list">

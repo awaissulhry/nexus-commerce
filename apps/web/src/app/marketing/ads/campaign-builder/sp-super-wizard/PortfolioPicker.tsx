@@ -46,7 +46,7 @@ export function PortfolioPicker({ value, onChange, market = 'IT' }: { value: str
   return (
     <div className="h10-spw-pf">
       <Listbox width={300} options={options} value={value} onChange={onChange} ariaLabel="Portfolio" />
-      <button type="button" className="h10-spw-pf-new" onClick={() => setCreating(true)}><Plus size={13} /> Create portfolio</button>
+      <Button variant="link" size="sm" onClick={() => setCreating(true)}><Plus size={13} /> Create portfolio</Button>
       {creating && (
         <Modal open onClose={() => setCreating(false)} size="sm" title="Create portfolio"
           footer={<><Button onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" disabled={!name.trim() || busy} onClick={create}>{busy ? 'Creating…' : 'Create'}</Button></>}>

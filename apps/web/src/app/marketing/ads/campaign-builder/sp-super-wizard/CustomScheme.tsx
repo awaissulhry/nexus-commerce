@@ -13,7 +13,7 @@
  */
 import { type Dispatch, type SetStateAction, Fragment, useEffect, useRef, useState } from 'react'
 import { Info, Plus, X, ChevronDown } from 'lucide-react'
-import { Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
@@ -76,8 +76,8 @@ function KeywordPopup({ initial, onApply, onClose }: { initial: string[]; onAppl
     <div className="h10-spw-cs-pop" role="dialog" aria-label="Edit keywords" onClick={(e) => e.stopPropagation()}>
       <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Please Enter one keyword per line" autoFocus />
       <div className="ft">
-        <button type="button" className="cancel" onClick={onClose}>Cancel</button>
-        <button type="button" className="apply" onClick={apply}>Apply</button>
+        <Button size="sm" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" size="sm" onClick={apply}>Apply</Button>
       </div>
     </div>
   )
@@ -137,13 +137,13 @@ export function CustomScheme({ keywordTypes, setKeywordTypes, targetingTypes, se
                 <span className="mts">{MATCHES.map((m) => <Checkbox key={m.k} label={m.label} checked={kt.matchTypes.includes(m.k)} onChange={() => toggleMatch(idx, m.k)} />)}</span>
                 {kt.matchTypes.length === 0 && <span className="h10-spw-cs-warn" role="alert">Pick a match type</span>}
                 <span className="h10-spw-cs-kwwrap">
-                  <button type="button" className={`kwbtn ${kt.keywords.length ? 'has' : ''}`} onClick={() => setKwEditIdx(kwEditIdx === idx ? null : idx)}>{kt.keywords.length > 0 ? `${kt.keywords.length} keyword${kt.keywords.length === 1 ? '' : 's'}` : '+ Keywords'}</button>
+                  <Button size="sm" variant={kt.keywords.length ? 'secondary' : 'ghost'} onClick={() => setKwEditIdx(kwEditIdx === idx ? null : idx)}>{kt.keywords.length > 0 ? `${kt.keywords.length} keyword${kt.keywords.length === 1 ? '' : 's'}` : '+ Keywords'}</Button>
                   {kwEditIdx === idx && <KeywordPopup initial={kt.keywords} onApply={(kws) => setKeywords(idx, kws)} onClose={() => setKwEditIdx(null)} />}
                 </span>
                 <button type="button" className="rm" onClick={() => removeKw(idx)} aria-label={`Remove ${kt.name}`}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="h10-spw-cs-add" onClick={addKw}><Plus size={13} /> Add</button>
+            <div><Button variant="ghost" size="sm" onClick={addKw}><Plus size={13} /> Add</Button></div>
           </div>
         </div>
       )}
@@ -159,7 +159,7 @@ export function CustomScheme({ keywordTypes, setKeywordTypes, targetingTypes, se
             </Fragment>
           ))}
         </div>
-        <button type="button" className="h10-spw-cs-add mt" onClick={addToken}><Plus size={13} /> Add</button>
+        <div style={{ marginTop: 12 }}><Button variant="ghost" size="sm" onClick={addToken}><Plus size={13} /> Add</Button></div>
       </div>
 
       <div className="h10-spw-cs-preview">
@@ -174,10 +174,7 @@ export function CustomScheme({ keywordTypes, setKeywordTypes, targetingTypes, se
         )}
       </div>
 
-      <label className="h10-spw-cs-remember">
-        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-        <span>Remember the current settings</span>
-      </label>
+      <Checkbox className="h10-spw-cs-remember" label="Remember the current settings" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
       <p className="h10-spw-cs-note">The <b>custom scheme</b> products do not currently support AI control.</p>
     </div>
   )

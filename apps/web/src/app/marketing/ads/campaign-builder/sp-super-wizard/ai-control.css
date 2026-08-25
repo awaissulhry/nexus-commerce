@@ -7,15 +7,7 @@
 .h10-ai-guards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px 18px; align-items: end; }
 .h10-ai-field { display: flex; flex-direction: column; gap: 6px; }
 .h10-ai-field .lbl { font-size: 12.5px; font-weight: 700; color: var(--nds-grey-800); }
-.h10-ai-field .inp { display: inline-flex; align-items: stretch; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); overflow: hidden; }
-.h10-ai-field .inp input { border: 0; outline: 0; padding: 9px 11px; font: inherit; font-size: 13.5px; width: 100%; color: var(--nds-grey-900); background: var(--nds-white); }
-.h10-ai-field .inp input:focus { outline: 0; }
-.h10-ai-field .inp .sfx { padding: 0 11px; background: var(--nds-grey-50); color: var(--nds-grey-600); font-size: 13px; display: flex; align-items: center; border-left: 1px solid var(--nds-grey-200); }
 .h10-ai-toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--nds-grey-700); grid-column: 1 / -1; cursor: pointer; }
-.h10-ai-sw { width: 40px; height: 22px; border-radius: var(--nds-radius-2xl); border: 0; background: #cfd6df; position: relative; cursor: pointer; padding: 0; transition: background .15s; flex-shrink: 0; }
-.h10-ai-sw span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--nds-white); transition: left .15s; }
-.h10-ai-sw.on { background: var(--nds-blue-600); }
-.h10-ai-sw.on span { left: 20px; }
 
 .h10-ai-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .h10-ai-mod { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-150); border-radius: 9px; padding: 10px 12px; cursor: pointer; }

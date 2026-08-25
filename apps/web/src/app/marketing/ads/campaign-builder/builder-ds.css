@@ -1,0 +1,19 @@
+/* DS-alignment glue for the campaign builders (2026-08-25).
+   WIDTH AND ALIGNMENT ONLY. Every colour, border, radius and font on these
+   controls comes from the design-system primitives — nothing here repaints a
+   DS component, and nothing here is a component of its own.
+
+   It exists because `fieldClassName` is the only way a DS <Input> takes a
+   width, and the console's existing width classes (`.h10-spw-bidnum`,
+   `.h10-scb-money`) live in ads.css, which this session does not own. */
+
+/* full-bleed field inside a grid/flex cell */
+.spw-field-full { width: 100%; }
+
+/* currency / number field: the H10 campaign-setup money box, right-aligned */
+.spw-field-money { width: 100%; max-width: 172px; }
+.spw-field-money > input { text-align: right; }
+
+/* the product-list pager: DS <Pagination> centred under the list, with the
+   14px breathing room the hand-rolled `.h10-spw-ps-pager` used to own */
+.spw-pager-row { display: flex; justify-content: center; padding-top: 14px; }

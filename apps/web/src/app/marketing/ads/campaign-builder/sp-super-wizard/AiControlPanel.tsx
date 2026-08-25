@@ -8,8 +8,11 @@
  * canvas (P-D) renders/edit this same config. See docs/ai-control-autopilot-spec.md.
  */
 import { Megaphone, Target, Scale, ShoppingCart, Trophy, Sparkles } from 'lucide-react'
-import { RadioCard } from '@/design-system/primitives'
+import { Input, RadioCard, Toggle } from '@/design-system/primitives'
 import { InfoTip } from '../../campaigns/InfoTip'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '../builder-ds.css'
 import './ai-control.css'
 
 export type AiGoal = 'LAUNCH' | 'PROFIT' | 'BALANCED' | 'LIQUIDATE' | 'DEFEND_RANK'
@@ -58,7 +61,10 @@ const MODULES: Array<{ key: keyof AiModules; label: string; note?: string }> = [
   { key: 'negate', label: 'Negative targeting', note: 'via Rule Setting' },
 ]
 const Field = ({ label, value, onChange, suffix, placeholder }: { label: string; value: string; onChange: (v: string) => void; suffix: string; placeholder?: string }) => (
-  <label className="h10-ai-field"><span className="lbl">{label}</span><span className="inp"><input inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /><span className="sfx">{suffix}</span></span></label>
+  <label className="h10-ai-field">
+    <span className="lbl">{label}</span>
+    <Input inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} suffix={suffix} aria-label={label} fieldClassName="spw-field-full" />
+  </label>
 )
 
 export function AiControlPanel({ value, onChange }: { value: AiControlConfig; onChange: (v: AiControlConfig) => void }) {
@@ -96,7 +102,7 @@ export function AiControlPanel({ value, onChange }: { value: AiControlConfig; on
           <Field label="Max daily budget" value={g.budgetMaxEur} onChange={(v) => setG({ budgetMaxEur: v })} suffix="€" />
           <Field label="Max daily ad spend" value={g.maxDailySpendEur} onChange={(v) => setG({ maxDailySpendEur: v })} suffix="€" placeholder="No cap" />
           <Field label="Max change / cycle" value={g.rampPct} onChange={(v) => setG({ rampPct: v })} suffix="%" />
-          <label className="h10-ai-toggle"><button type="button" className={`h10-ai-sw ${g.neverPause ? 'on' : ''}`} role="switch" aria-checked={g.neverPause} aria-label="Never pause" onClick={() => setG({ neverPause: !g.neverPause })}><span /></button> Never pause (suppress instead)</label>
+          <span className="h10-ai-toggle"><Toggle checked={g.neverPause} onChange={(v) => setG({ neverPause: v })} aria-label="Never pause" /> Never pause (suppress instead)</span>
         </div>
       </div>
 

@@ -9,6 +9,9 @@
  */
 import { type Dispatch, type SetStateAction, Fragment } from 'react'
 import { Atom } from 'lucide-react'
+import { Toggle } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { CustomScheme, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 import { InfoTip } from '../../campaigns/InfoTip'
 
@@ -141,11 +144,11 @@ export function StructureSelection({ mode, setMode, automationMode, setAutomatio
       )}
 
       <div className="h10-spw-st-auto">
-        <label className="sw">
-          <input type="checkbox" className="h10-spw-sw" checked={autoNegate} onChange={(e) => setAutoNegate(e.target.checked)} aria-label="Auto-negate to isolate campaigns" />
+        <span className="sw">
+          <Toggle checked={autoNegate} onChange={setAutoNegate} aria-label="Auto-negate to isolate campaigns" />
           <span className="t">Auto-negate to isolate campaigns</span>
           <InfoTip tip="Adds ad-group-level negatives so each search term serves from one campaign — Exact gets none, Phrase neg-exacts its keywords, Broad neg-exacts + neg-phrases them, and the Auto campaign neg-exacts every keyword so it only finds new terms. All editable per campaign in Step 2." />
-        </label>
+        </span>
         <span className="h">{mode === 'standard'
           ? 'Standard combines match types, so this only isolates the Auto campaign from your keywords.'
           : 'Each search term serves from exactly one campaign — no self-competition, cleaner data.'}</span>

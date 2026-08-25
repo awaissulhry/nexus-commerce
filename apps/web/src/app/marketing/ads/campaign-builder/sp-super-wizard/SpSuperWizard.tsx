@@ -211,7 +211,7 @@ export function SpSuperWizard() {
             disabled={!marketReady}
             brand={<span className="amz">amazon</span>}
           />
-          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+          <Button onClick={() => router.push(EXIT_TO)}>Exit Builder</Button>
         </div>
       </header>
 
@@ -299,12 +299,12 @@ export function SpSuperWizard() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <button type="button" className="h10-spw-back" onClick={goBack}>Back</button>}
+        {step > 1 && <Button onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
-        <button type="button" className="h10-spw-next" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching}>
+        <Button variant="primary" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching}>
           {step < 3 ? 'Next' : launching ? 'Launching…' : 'Launch'}
-        </button>
+        </Button>
       </footer>
 
       <Modal

@@ -10,8 +10,8 @@
  * AI Control collapses the manual config to an "AI handles it" note.
  */
 import { type Dispatch, type SetStateAction, useState } from 'react'
-import { ChevronDown, BarChart3 } from 'lucide-react'
-import { RadioCard, Input } from '@/design-system/primitives'
+import { ChevronDown, ChevronUp, BarChart3 } from 'lucide-react'
+import { Button, RadioCard, Input } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { InfoTip } from '../../campaigns/InfoTip'
@@ -124,7 +124,11 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
           <div className="f"><span className="l">Bid Strategy</span><span className="v"><BarChart3 size={16} className="bi" /> {stageLabel}</span></div>
           <div className="f"><span className="l">Bid Algorithm</span><span className="v">{algoLabel}</span></div>
         </div>
-        <button type="button" className="h10-spw-pgd-port" onClick={() => setPortfolioOpen((o) => !o)}><ChevronDown size={15} className={portfolioOpen ? 'up' : ''} /> Portfolio Association (Optional)</button>
+        <div style={{ marginTop: 18 }}>
+          <Button variant="link" onClick={() => setPortfolioOpen((o) => !o)} aria-expanded={portfolioOpen}>
+            {portfolioOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />} Portfolio Association (Optional)
+          </Button>
+        </div>
         {portfolioOpen && <div className="h10-spw-pgd-portbody"><PortfolioPicker value={portfolioId} onChange={setPortfolioId} /></div>}
       </div>
 

@@ -8,13 +8,14 @@
  * Per the build decision this is a purpose-built table (not AdsDataGrid — that grid is
  * hardwired for filter/sort/pager); the per-row Edit drawers land in SPW.5.
  */
-import { type Dispatch, type SetStateAction, useEffect, useState } from 'react'
+import { type Dispatch, type SetStateAction, useState } from 'react'
 import { X, Layers, Pencil, RotateCcw, Plus, Trash2, ChevronDown } from 'lucide-react'
-import { Modal } from '@/design-system/components'
-import { Button, Input, Radio, Textarea } from '@/design-system/primitives'
+import { Menu, Modal } from '@/design-system/components'
+import { Button, Checkbox, Input, Radio, Textarea } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import { standardRows, advancedRows } from './StructureSelection'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
 import type { CustomKeywordType, TargetingKind, MatchTypeKey } from './CustomScheme'
@@ -240,15 +241,13 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulk, setBulk] = useState<null | 'keywords' | 'negatives' | 'bid' | 'budget' | 'products' | 'adjustbid' | 'rename'>(null)
-  const [selOpen, setSelOpen] = useState(false)
-  const [clearOpen, setClearOpen] = useState(false)
 
   const upd = (id: string, patch: Partial<SpwCampaign>) => setCampaigns((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   const del = (id: string) => { setCampaigns((cs) => applyAutoNegatives(cs.filter((c) => c.id !== id), autoNegate)); setSelected((s) => { const n = new Set(s); n.delete(id); return n }) }
 
   // ── BA.1 — selection model ───────────────────────────────────────────
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const selectBy = (pred: (c: SpwCampaign) => boolean) => { setSelected(new Set(campaigns.filter(pred).map((c) => c.id))); setSelOpen(false) }
+  const selectBy = (pred: (c: SpwCampaign) => boolean) => setSelected(new Set(campaigns.filter(pred).map((c) => c.id)))
   const clearSel = () => setSelected(new Set())
   const selCampaigns = campaigns.filter((c) => selected.has(c.id))
   const n = selCampaigns.length
@@ -256,16 +255,6 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
   const selKeyword = selCampaigns.filter((c) => c.kind === 'keyword').length
   const selPat = selCampaigns.filter((c) => c.kind === 'pat').length
   const selNegTargets = selCampaigns.filter((c) => c.kind !== 'pat').length
-  useEffect(() => {
-    if (!selOpen) return
-    const h = (e: MouseEvent) => { if (!(e.target as Element).closest('.h10-spw-cset-select')) setSelOpen(false) }
-    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
-  }, [selOpen])
-  useEffect(() => {
-    if (!clearOpen) return
-    const h = (e: MouseEvent) => { if (!(e.target as Element).closest('.h10-spw-bulk-clearwrap')) setClearOpen(false) }
-    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
-  }, [clearOpen])
 
   // ── BA.2 / BA.3 / BA.4 — bulk apply ──────────────────────────────────
   const bulkKeywords = (lines: string[]) => { setCampaigns((cs) => applyAutoNegatives(cs.map((c) => (selected.has(c.id) && c.kind === 'keyword' ? { ...c, keywords: dedupeCI([...c.keywords, ...lines]) } : c)), autoNegate)); setBulk(null) }
@@ -298,7 +287,7 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
       if (what === 'negatives') return { ...c, negKeywords: [] } // clears manual; auto funnel negs re-derive
       if (what === 'products' && c.kind === 'pat') return { ...c, productTargets: [] }
       return c
-    }), autoNegate)); setClearOpen(false)
+    }), autoNegate))
   }
 
   const tgtLabel = (c: SpwCampaign) => (c.kind === 'auto' ? `Auto : ${c.autoGroups.filter((g) => g.enabled).length}/4` : c.kind === 'pat' ? `Product : ${c.productTargets.length}` : `Keyword : ${c.keywords.length}`)
@@ -310,58 +299,53 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
         {n > 0 ? (
           <>
             <span className="cnt sel">{n} selected</span>
-            <button type="button" className="h10-spw-bulk-btn" disabled={!selKeyword} onClick={() => setBulk('keywords')}><Plus size={13} /> Keywords{selKeyword ? ` · ${selKeyword}` : ''}</button>
-            <button type="button" className="h10-spw-bulk-btn" disabled={!selNegTargets} onClick={() => setBulk('negatives')}><Plus size={13} /> Negatives</button>
-            <div className="h10-spw-bulk-clearwrap">
-              <button type="button" className="h10-spw-bulk-btn" onClick={() => setClearOpen((o) => !o)} aria-haspopup="menu" aria-expanded={clearOpen}>Clear <ChevronDown size={13} /></button>
-              {clearOpen && (
-                <div className="menu" role="menu">
-                  <button type="button" role="menuitem" disabled={!selKeyword} onClick={() => bulkClear('keywords')}>Keywords</button>
-                  <button type="button" role="menuitem" disabled={!selNegTargets} onClick={() => bulkClear('negatives')}>Negatives</button>
-                  <button type="button" role="menuitem" disabled={!selPat} onClick={() => bulkClear('products')}>Product targets</button>
-                </div>
-              )}
-            </div>
-            <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('bid')}>Set bid</button>
-            <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('budget')}>Set budget</button>
-            <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('adjustbid')}>Adjust bid %</button>
-            <button type="button" className="h10-spw-bulk-btn" disabled={!selPat} onClick={() => setBulk('products')}><Plus size={13} /> Products{selPat ? ` · ${selPat}` : ''}</button>
-            <button type="button" className="h10-spw-bulk-btn" onClick={() => setBulk('rename')}>Rename</button>
-            <button type="button" className="h10-spw-bulk-btn danger" onClick={bulkDelete}><Trash2 size={13} /> Delete</button>
+            <Button disabled={!selKeyword} onClick={() => setBulk('keywords')}><Plus size={13} /> Keywords{selKeyword ? ` · ${selKeyword}` : ''}</Button>
+            <Button disabled={!selNegTargets} onClick={() => setBulk('negatives')}><Plus size={13} /> Negatives</Button>
+            <Menu
+              label={<>Clear <ChevronDown size={13} /></>}
+              items={[
+                { id: 'kw', label: 'Keywords', disabled: !selKeyword, onSelect: () => bulkClear('keywords') },
+                { id: 'neg', label: 'Negatives', disabled: !selNegTargets, onSelect: () => bulkClear('negatives') },
+                { id: 'pat', label: 'Product targets', disabled: !selPat, onSelect: () => bulkClear('products') },
+              ]}
+            />
+            <Button onClick={() => setBulk('bid')}>Set bid</Button>
+            <Button onClick={() => setBulk('budget')}>Set budget</Button>
+            <Button onClick={() => setBulk('adjustbid')}>Adjust bid %</Button>
+            <Button disabled={!selPat} onClick={() => setBulk('products')}><Plus size={13} /> Products{selPat ? ` · ${selPat}` : ''}</Button>
+            <Button onClick={() => setBulk('rename')}>Rename</Button>
+            <Button variant="danger" onClick={bulkDelete}><Trash2 size={13} /> Delete</Button>
             <span className="grow" />
-            <button type="button" className="h10-spw-bulk-clear" onClick={clearSel}>Deselect</button>
+            <Button variant="link" className="back" onClick={clearSel}>Deselect</Button>
           </>
         ) : (
           <>
             <span className="cnt">{campaigns.length} Campaign{campaigns.length === 1 ? '' : 's'}</span>
-            <div className="h10-spw-cset-select">
-              <button type="button" onClick={() => setSelOpen((o) => !o)} aria-haspopup="menu" aria-expanded={selOpen}>Select <ChevronDown size={13} /></button>
-              {selOpen && (
-                <div className="menu" role="menu">
-                  <button type="button" role="menuitem" onClick={() => selectBy(() => true)}>All campaigns</button>
-                  <button type="button" role="menuitem" onClick={() => selectBy((c) => c.kind === 'keyword')}>Keyword campaigns</button>
-                  <button type="button" role="menuitem" onClick={() => selectBy((c) => c.kind === 'auto')}>Auto</button>
-                  <button type="button" role="menuitem" onClick={() => selectBy((c) => c.kind === 'pat')}>Product (PAT)</button>
-                  <div className="sep" />
-                  <button type="button" role="menuitem" onClick={() => selectBy((c) => singleMatch(c.matchType) === 'BROAD')}>Match type: Broad</button>
-                  <button type="button" role="menuitem" onClick={() => selectBy((c) => singleMatch(c.matchType) === 'PHRASE')}>Match type: Phrase</button>
-                  <button type="button" role="menuitem" onClick={() => selectBy((c) => singleMatch(c.matchType) === 'EXACT')}>Match type: Exact</button>
-                </div>
-              )}
-            </div>
+            <Menu
+              label={<>Select <ChevronDown size={13} /></>}
+              items={[
+                { id: 'all', label: 'All campaigns', onSelect: () => selectBy(() => true) },
+                { id: 'kw', label: 'Keyword campaigns', onSelect: () => selectBy((c) => c.kind === 'keyword') },
+                { id: 'auto', label: 'Auto', onSelect: () => selectBy((c) => c.kind === 'auto') },
+                { id: 'pat', label: 'Product (PAT)', onSelect: () => selectBy((c) => c.kind === 'pat') },
+                { id: 'broad', label: 'Match type: Broad', onSelect: () => selectBy((c) => singleMatch(c.matchType) === 'BROAD') },
+                { id: 'phrase', label: 'Match type: Phrase', onSelect: () => selectBy((c) => singleMatch(c.matchType) === 'PHRASE') },
+                { id: 'exact', label: 'Match type: Exact', onSelect: () => selectBy((c) => singleMatch(c.matchType) === 'EXACT') },
+              ]}
+            />
             <span className="grow" />
-            <button type="button" className="h10-spw-cset-restore" onClick={onRestore}><RotateCcw size={14} /> Restore Default</button>
+            <Button variant="primary" onClick={onRestore}><RotateCcw size={14} /> Restore Default</Button>
           </>
         )}
       </div>
       <div className="h10-spw-cset-grid">
         <div className="h10-spw-cset-head">
-          <span className="ck"><input type="checkbox" checked={allSel} onChange={() => (allSel ? clearSel() : selectBy(() => true))} aria-label="Select all campaigns" /></span>
+          <span className="ck"><Checkbox checked={allSel} onChange={() => (allSel ? clearSel() : selectBy(() => true))} aria-label="Select all campaigns" /></span>
           <span>Ad Group</span><span>Match Type</span><span>Keyword Type</span><span>Default Bid</span><span>Budget</span><span>Targeting</span><span>Negative Targeting</span>
         </div>
         {campaigns.map((c) => (
           <div className={`h10-spw-cset-row ${selected.has(c.id) ? 'sel' : ''}`} key={c.id}>
-            <div className="ck"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></div>
+            <div className="ck"><Checkbox checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></div>
             <div className="ag">
               <button type="button" className="del" onClick={() => del(c.id)} aria-label={`Remove ${c.name}`}><X size={16} /></button>
               <div className="agb">
@@ -372,19 +356,19 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
             <div className="mt">{c.matchType}</div>
             <div className="kt">{c.keywordType}</div>
             <div className="bid">
-              <div className="money"><span className="pf">{currency}</span><input inputMode="decimal" value={c.bid} onChange={(e) => upd(c.id, { bid: e.target.value })} aria-label="Default bid" /></div>
+              <Input inputMode="decimal" prefix={currency} value={c.bid} onChange={(e) => upd(c.id, { bid: e.target.value })} aria-label="Default bid" fieldClassName="spw-field-money" />
               <div className="sug">Suggested: <b>{money(currency, c.sugBid)}</b> ({money(currency, c.sugBid * SUG_LOW)} - {money(currency, c.sugBid * SUG_HIGH)})</div>
             </div>
             <div className="bid">
-              <div className="money"><span className="pf">{currency}</span><input inputMode="decimal" value={c.budget} onChange={(e) => upd(c.id, { budget: e.target.value })} aria-label="Budget" /></div>
+              <Input inputMode="decimal" prefix={currency} value={c.budget} onChange={(e) => upd(c.id, { budget: e.target.value })} aria-label="Budget" fieldClassName="spw-field-money" />
               <div className="sug">Suggested: <b>{money(currency, c.sugBudget)}</b> ({money(currency, c.sugBudget * SUG_LOW)} - {money(currency, c.sugBudget * SUG_HIGH)})</div>
             </div>
             <div className="tgt">
-              {tgtLabel(c) ? <><span className="ct">{tgtLabel(c)}</span><button type="button" className="edit" onClick={() => onEditTargeting?.(c.id)}><Pencil size={12} /> Edit</button></> : <span className="dash">-</span>}
+              {tgtLabel(c) ? <><span className="ct">{tgtLabel(c)}</span><span><Button variant="link" onClick={() => onEditTargeting?.(c.id)}><Pencil size={12} /> Edit</Button></span></> : <span className="dash">-</span>}
             </div>
             <div className="tgt">
               {negLabels(c).map((l) => <span className="ct" key={l}>{l}</span>)}
-              <button type="button" className="edit" onClick={() => onEditNegative?.(c.id)}><Pencil size={12} /> Edit</button>
+              <span><Button variant="link" onClick={() => onEditNegative?.(c.id)}><Pencil size={12} /> Edit</Button></span>
             </div>
           </div>
         ))}
