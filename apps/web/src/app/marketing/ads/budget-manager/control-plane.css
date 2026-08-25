@@ -22,33 +22,36 @@
 .cp-insp-kpis i { font-style: normal; font-weight: 500; color: var(--nds-grey-500); }
 .cp-insp-sec { display: flex; flex-direction: column; gap: 10px; }
 .cp-sec-h { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--nds-grey-500); }
-.cp-fld { display: flex; flex-direction: column; gap: 4px; }
+/* `min-width: 0` on the two field wrappers is load-bearing since the money/percent inputs
+   became the DS `Input`. That primitive is a real flex container, so its min-content width is
+   the adornment plus ~20 characters of input — and `.cp-fld2` / `.cp-pl3` are `1fr` grids,
+   whose tracks floor at their item's min-content. Measured without it: the three placement
+   fields rendered 210px each and the inspector's scrollWidth went 318 → 656 inside a 320px
+   panel. With it every field matches the hand-rolled widths to the pixel (290 · 141 · 130 ·
+   92.7), which is how these numbers were chosen. */
+.cp-fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cp-fld > span:first-child { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); }
 .cp-fld2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.cp-eurin { display: inline-flex; align-items: center; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 7px 10px; }
-.cp-eurin:focus-within { border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
-.cp-eurin i { font-style: normal; color: var(--nds-grey-500); font-size: 12.5px; margin-right: 4px; }
-.cp-eurin input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; color: var(--nds-grey-900); background: transparent; }
+/* The DS Input's `fieldClassName`. Width only — border, radius, padding, focus ring and
+   the shaded €/% adornment belong to the primitive, and this sheet loads AFTER
+   primitives.css at equal specificity, so anything restated here would silently win. */
+.cp-eurin { width: 100%; min-width: 0; }
 .cp-insp-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.cp-act { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 6px 10px; cursor: pointer; }
-.cp-act:hover { background: var(--nds-grey-75); }
-.cp-act.on { background: #fdf2cf; color: #97700f; border-color: #f3e2a6; }
 .cp-statusbtns { display: inline-flex; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); overflow: hidden; width: fit-content; }
 .cp-statusbtns button { border: none; background: var(--nds-white); font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--nds-grey-100); }
 .cp-statusbtns button:last-child { border-right: none; }
 .cp-statusbtns button:hover { background: var(--nds-grey-75); }
 .cp-statusbtns button.on { background: var(--nds-blue-50); color: var(--nds-blue-600); }
-.cp-eurin.pct { justify-content: space-between; max-width: 130px; }
-.cp-eurin.pct i { margin-left: 4px; }
+.cp-eurin.pct { width: 130px; }
 .cp-pl3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-.cp-pl3 > label { display: flex; flex-direction: column; gap: 3px; }
+.cp-pl3 > label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .cp-pl3 > label > span { font-size: 10.5px; font-weight: 600; color: var(--nds-grey-500); }
-.cp-plin { display: inline-flex; align-items: center; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); padding: 5px 7px; }
-.cp-plin:focus-within { border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.1); }
-.cp-plin input { border: none; outline: none; font: inherit; font-size: 12px; width: 100%; min-width: 0; color: var(--nds-grey-900); background: transparent; }
-.cp-plin i { font-style: normal; color: var(--nds-grey-500); font-size: 11px; }
-.cp-clear { align-self: flex-start; border: none; background: none; font: inherit; font-size: 11.5px; color: var(--nds-blue-600); cursor: pointer; padding: 0; }
-.cp-clear:hover { text-decoration: underline; }
+/* `min-width: 0` is load-bearing, not decoration: the field is a flex item of the
+   `.cp-pl3 > label` column, and a flex item's automatic minimum is its min-content size —
+   which for a text input is ~20 characters. Without it the three placement fields measured
+   210px each inside a 320px inspector and blew the grid out. */
+.cp-plin { width: 100%; min-width: 0; }
+.cp-clear { align-self: flex-start; }  /* the rest is the DS Button's `link` variant */
 
 /* provenance */
 .cp-prov { display: flex; flex-direction: column; }
@@ -83,7 +86,6 @@
 
 .cp-compare { display: flex; flex-direction: column; gap: 12px; min-height: 420px; }
 .cp-compare-pick { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--nds-grey-600); }
-.cp-compare-pick select { font: inherit; font-size: 12.5px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 6px 10px; color: var(--nds-grey-900); }
 .cp-compare-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .cp-compare-col { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px; background: var(--nds-white); }
 .cp-compare-col .hd { display: flex; flex-direction: column; gap: 3px; }
@@ -101,7 +103,7 @@
 .cp-bulk .cp-bulk-counts span { font-size: 11px; font-weight: 600; color: #0d9488; background: #e6f6f4; border-radius: var(--nds-radius-full); padding: 2px 9px; }
 .cp-bulk-row { display: flex; align-items: center; gap: 7px; }
 .cp-bulk-row > span:first-child { font-size: 12px; font-weight: 600; color: var(--nds-grey-600); min-width: 48px; }
-.cp-bulk-row .cp-eurin.pct { max-width: 80px; }
+.cp-bulk-row .cp-eurin.pct { width: 80px; }
 .cp-bulk-hint { font-size: 11px; color: var(--nds-grey-400); line-height: 1.5; margin-top: auto; }
 
 /* P5 — live SSE indicator + canvas flash */

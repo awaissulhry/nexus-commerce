@@ -13,7 +13,7 @@
  * Palantir-style scenario → review → commit over the live ontology.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 import { Lock, History as HistoryIcon } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
@@ -135,29 +135,29 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
 
       <div className="cp-insp-sec">
         {camp ? <>
-          <label className="cp-fld"><span>Daily budget</span><span className="cp-eurin"><i>€</i><input inputMode="decimal" value={budget} onChange={(e) => stageBudget(e.target.value)} aria-label="Daily budget" /></span></label>
+          <label className="cp-fld"><span>Daily budget</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => stageBudget(e.target.value)} aria-label="Daily budget" /></label>
           <div className="cp-fld2">
-            <label className="cp-fld"><span>Min €/day</span><span className="cp-eurin"><i>€</i><input inputMode="decimal" placeholder="—" value={min} onChange={(e) => stageMin(e.target.value)} aria-label="Min daily" /></span></label>
-            <label className="cp-fld"><span>Max €/day</span><span className="cp-eurin"><i>€</i><input inputMode="decimal" placeholder="—" value={max} onChange={(e) => stageMax(e.target.value)} aria-label="Max daily" /></span></label>
+            <label className="cp-fld"><span>Min €/day</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" placeholder="—" value={min} onChange={(e) => stageMin(e.target.value)} aria-label="Min daily" /></label>
+            <label className="cp-fld"><span>Max €/day</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" placeholder="—" value={max} onChange={(e) => stageMax(e.target.value)} aria-label="Max daily" /></label>
           </div>
           <div className="cp-insp-actions">
-            <button type="button" className="cp-act" onClick={pin}><Lock size={12} /> Pin budget</button>
-            <button type="button" className={`cp-act ${effSuppress ? 'on' : ''}`} onClick={toggleSuppress}>{effSuppress ? 'Restore bids' : 'Suppress (bid floor)'}</button>
+            <Button size="sm" onClick={pin}><Lock size={12} /> Pin budget</Button>
+            <Button size="sm" active={effSuppress} aria-pressed={effSuppress} onClick={toggleSuppress}>{effSuppress ? 'Restore bids' : 'Suppress (bid floor)'}</Button>
           </div>
         </> : <>
-          <label className="cp-fld"><span>{t === 'adgroup' ? 'Default bid' : 'Bid'} €</span><span className="cp-eurin"><i>€</i><input inputMode="decimal" value={bid} onChange={(e) => stageBid(e.target.value)} aria-label="Bid" /></span></label>
+          <label className="cp-fld"><span>{t === 'adgroup' ? 'Default bid' : 'Bid'} €</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" value={bid} onChange={(e) => stageBid(e.target.value)} aria-label="Bid" /></label>
           <div className="cp-fld"><span>Status</span><div className="cp-statusbtns">{(['ENABLED', 'PAUSED', 'ARCHIVED'] as const).map((s) => (<button type="button" key={s} className={effStatus === s ? 'on' : ''} onClick={() => stageStatus(s)}>{s === 'ENABLED' ? 'Enable' : s === 'PAUSED' ? 'Pause' : 'Archive'}</button>))}</div></div>
         </>}
-        {staged && <button type="button" className="cp-clear" onClick={() => { onClear(); setBudget(camp ? (camp.currentDailyCents / 100).toFixed(2) : ''); setMin(''); setMax(''); setBid(!camp ? (curBidCents / 100).toFixed(2) : '') }}>Clear staged change</button>}
+        {staged && <Button variant="link" size="sm" className="cp-clear" onClick={() => { onClear(); setBudget(camp ? (camp.currentDailyCents / 100).toFixed(2) : ''); setMin(''); setMax(''); setBid(!camp ? (curBidCents / 100).toFixed(2) : '') }}>Clear staged change</Button>}
       </div>
 
       {camp && settings && (
         <div className="cp-insp-sec">
           <div className="cp-sec-h">Bidding</div>
           <div className="cp-fld"><span>Strategy</span><div className="cp-statusbtns">{STRAT.map(([v, l]) => (<button type="button" key={v} className={effStrat === v ? 'on' : ''} onClick={() => stageStrat(v)}>{l}</button>))}</div></div>
-          <label className="cp-fld"><span>Target ACoS</span><span className="cp-eurin pct"><input inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" /><i>%</i></span></label>
+          <label className="cp-fld"><span>Target ACoS</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" /></label>
           <div className="cp-fld"><span>Placement multipliers</span><div className="cp-pl3">
-            {(['tos', 'pdp', 'ros'] as const).map((k) => (<label key={k}><span>{k === 'tos' ? 'ToS' : k === 'pdp' ? 'PDP' : 'RoS'}</span><span className="cp-plin"><input inputMode="decimal" value={pl[k]} onChange={(e) => stagePl(k, e.target.value)} placeholder="0" aria-label={`${k} multiplier`} /><i>%</i></span></label>))}
+            {(['tos', 'pdp', 'ros'] as const).map((k) => (<label key={k}><span>{k === 'tos' ? 'ToS' : k === 'pdp' ? 'PDP' : 'RoS'}</span><Input fieldClassName="cp-plin" suffix="%" inputMode="decimal" value={pl[k]} onChange={(e) => stagePl(k, e.target.value)} placeholder="0" aria-label={`${k} multiplier`} /></label>))}
           </div></div>
         </div>
       )}
@@ -196,15 +196,15 @@ function BulkPanel({ refs, allCamps, adGroups, targets, onStageMany, onClear }: 
       {camps.length > 0 && (
         <div className="cp-insp-sec">
           <div className="cp-sec-h">Campaigns</div>
-          <div className="cp-bulk-row"><span>Budget</span><span className="cp-eurin pct"><input inputMode="decimal" value={budgetPct} onChange={(e) => setBudgetPct(e.target.value)} aria-label="Budget percent" /><i>%</i></span><button type="button" className="cp-act" onClick={() => bulkBudget(1)}>Raise</button><button type="button" className="cp-act" onClick={() => bulkBudget(-1)}>Lower</button></div>
-          <div className="cp-insp-actions"><button type="button" className="cp-act" onClick={() => bulkSuppress(true)}>Suppress all</button><button type="button" className="cp-act" onClick={() => bulkSuppress(false)}>Restore all</button></div>
+          <div className="cp-bulk-row"><span>Budget</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={budgetPct} onChange={(e) => setBudgetPct(e.target.value)} aria-label="Budget percent" /><Button size="sm" onClick={() => bulkBudget(1)}>Raise</Button><Button size="sm" onClick={() => bulkBudget(-1)}>Lower</Button></div>
+          <div className="cp-insp-actions"><Button size="sm" onClick={() => bulkSuppress(true)}>Suppress all</Button><Button size="sm" onClick={() => bulkSuppress(false)}>Restore all</Button></div>
         </div>
       )}
       {childRefs.length > 0 && (
         <div className="cp-insp-sec">
           <div className="cp-sec-h">Ad groups &amp; targets</div>
-          <div className="cp-bulk-row"><span>Bid</span><span className="cp-eurin pct"><input inputMode="decimal" value={bidPct} onChange={(e) => setBidPct(e.target.value)} aria-label="Bid percent" /><i>%</i></span><button type="button" className="cp-act" onClick={() => bulkBid(1)}>Raise</button><button type="button" className="cp-act" onClick={() => bulkBid(-1)}>Lower</button></div>
-          <div className="cp-insp-actions"><button type="button" className="cp-act" onClick={() => bulkStatus('ENABLED')}>Enable all</button><button type="button" className="cp-act" onClick={() => bulkStatus('PAUSED')}>Pause all</button></div>
+          <div className="cp-bulk-row"><span>Bid</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={bidPct} onChange={(e) => setBidPct(e.target.value)} aria-label="Bid percent" /><Button size="sm" onClick={() => bulkBid(1)}>Raise</Button><Button size="sm" onClick={() => bulkBid(-1)}>Lower</Button></div>
+          <div className="cp-insp-actions"><Button size="sm" onClick={() => bulkStatus('ENABLED')}>Enable all</Button><Button size="sm" onClick={() => bulkStatus('PAUSED')}>Pause all</Button></div>
         </div>
       )}
       <div className="cp-bulk-hint">⌘/Ctrl/Shift-click nodes to add or remove. Bulk edits stage like any other change — review &amp; commit below.</div>
@@ -218,7 +218,7 @@ function ComparePanel({ working, workingName, saved, compareId, setCompareId, al
   const cols: Array<{ key: string; name: string; changes: Record<string, StagedChange>; isWorking: boolean }> = [{ key: 'working', name: workingName, changes: working, isWorking: true }, ...(right ? [{ key: right.id, name: right.name, changes: right.changes, isWorking: false }] : [])]
   return (
     <div className="cp-compare">
-      <div className="cp-compare-pick"><span>Compare the working set against</span><select value={compareId} onChange={(e) => setCompareId(e.target.value)}>{saved.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+      <div className="cp-compare-pick"><span>Compare the working set against</span><Select value={compareId} onChange={(e) => setCompareId(e.target.value)}>{saved.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
       <div className="cp-compare-cols">
         {cols.map((col) => {
           const st = scenarioStats(col.changes, allCamps)
