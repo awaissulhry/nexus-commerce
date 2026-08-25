@@ -207,7 +207,7 @@
 }
 .nds-taginput-field > input::placeholder { color: var(--text-tertiary); }
 .nds-taginput-menu {
-  position: absolute; z-index: 50; left: 0; right: 0; top: 100%; margin-top: 4px;
+  position: absolute; z-index: var(--nds-z-popover); left: 0; right: 0; top: 100%; margin-top: 4px;
   max-height: 160px; overflow-y: auto; padding: 4px 0; margin: 4px 0 0; list-style: none;
   background: var(--surface-card); border: 1px solid var(--border-default);
   border-radius: var(--nds-radius-lg); box-shadow: var(--nds-shadow-menu);
@@ -476,7 +476,7 @@
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: var(--nds-z-tooltip);
   width: max-content;
   max-width: 260px;
   background: var(--text-primary);

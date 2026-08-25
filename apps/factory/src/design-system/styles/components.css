@@ -176,7 +176,7 @@
 .nds-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--nds-z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -268,14 +268,14 @@
 .nds-drawer-bd {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--nds-z-overlay);
   background: rgb(var(--nds-shadow-rgb) / 0.42);
 }
 .nds-drawer {
   position: fixed;
   top: 0;
   right: 0;
-  z-index: 61;
+  z-index: var(--nds-z-modal);
   height: 100%;
   width: 420px;
   max-width: 100%;
@@ -342,7 +342,7 @@
   position: absolute;
   top: calc(100% + 5px);
   left: 0;
-  z-index: 40;
+  z-index: var(--nds-z-popover);
   min-width: 180px;
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
@@ -390,7 +390,7 @@
   bottom: 22px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 70;
+  z-index: var(--nds-z-toast);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -474,7 +474,7 @@
   position: absolute;
   top: calc(100% + 5px);
   left: 0;
-  z-index: 40;
+  z-index: var(--nds-z-popover);
   min-width: 200px;
   max-height: 260px;
   overflow-y: auto;
@@ -556,7 +556,7 @@
   top: calc(100% + 5px);
   left: 0;
   right: 0;
-  z-index: 40;
+  z-index: var(--nds-z-popover);
   max-height: 240px;
   overflow-y: auto;
   background: var(--surface-card);
@@ -693,7 +693,7 @@
    scroll container, and the surfaces that want one are grids with overflow:auto. */
 .nds-hovercard-card {
   position: fixed;
-  z-index: 90;
+  z-index: var(--nds-z-tooltip);
   background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
@@ -729,7 +729,7 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 40;
+  z-index: var(--nds-z-popover);
   display: flex;
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);

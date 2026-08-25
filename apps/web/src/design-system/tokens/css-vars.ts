@@ -274,6 +274,23 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-tip-fg', value: 'var(--nds-white)' },
 
   // ── Radius ───────────────────────────────────────────────────────
+  // ── Layering ────────────────────────────────────────────────────────────────────────────────
+  // There was no z scale: every DS z-index was a bare literal, and they did not agree with the
+  // app's. Measured 2026-08-25 — the DS backdrop was 60 while the ads console's own overlays run
+  // to 1200/1201 and 1300/1301, so a DS Modal opened from inside one rendered BEHIND it, and
+  // converting a hand-rolled modal to the DS one dropped it twenty layers.
+  //
+  // The bands sit above the app's highest (1301) so a converted surface always wins, and stay
+  // ordered among themselves. Popover is ABOVE modal on purpose: a Listbox opened inside a Modal
+  // must escape it, and a page-level popover is never open while a modal has focus.
+  { section: 'Layering', name: '--nds-z-sticky', value: '5' },
+  { name: '--nds-z-actionbar', value: '20' },
+  { name: '--nds-z-rail', value: '50' },
+  { name: '--nds-z-overlay', value: '1400' },
+  { name: '--nds-z-modal', value: '1410' },
+  { name: '--nds-z-popover', value: '1450' },
+  { name: '--nds-z-toast', value: '1600' },
+  { name: '--nds-z-tooltip', value: '1700' },
   { section: 'Radius', name: '--nds-radius-pill', value: '4px' },
   { name: '--nds-radius-sm', value: '6px' },
   { name: '--nds-radius-md', value: '7px' },

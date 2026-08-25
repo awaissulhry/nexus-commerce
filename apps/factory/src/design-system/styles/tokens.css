@@ -136,6 +136,14 @@
 
   /* ── Radius ── */
   --nds-radius-pill: 4px;
+  --nds-z-sticky: 5;
+  --nds-z-actionbar: 20;
+  --nds-z-rail: 50;
+  --nds-z-overlay: 1400;
+  --nds-z-modal: 1410;
+  --nds-z-popover: 1450;
+  --nds-z-toast: 1600;
+  --nds-z-tooltip: 1700;
   --nds-radius-sm: 6px;
   --nds-radius-md: 7px;
   --nds-radius-lg: 8px;

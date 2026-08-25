@@ -159,6 +159,15 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-imgup-err', value: '#cc1100' },
 
   // ── Radius ───────────────────────────────────────────────────────
+  // Layering. Mirrors apps/web — see that copy for why the bands sit above 1301.
+  { section: 'Layering', name: '--nds-z-sticky', value: '5' },
+  { name: '--nds-z-actionbar', value: '20' },
+  { name: '--nds-z-rail', value: '50' },
+  { name: '--nds-z-overlay', value: '1400' },
+  { name: '--nds-z-modal', value: '1410' },
+  { name: '--nds-z-popover', value: '1450' },
+  { name: '--nds-z-toast', value: '1600' },
+  { name: '--nds-z-tooltip', value: '1700' },
   { section: 'Radius', name: '--nds-radius-pill', value: '4px' },
   { name: '--nds-radius-sm', value: '6px' },
   { name: '--nds-radius-md', value: '7px' },
