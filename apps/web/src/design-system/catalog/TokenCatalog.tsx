@@ -73,6 +73,7 @@ import {
   type Column,
   ToastProvider,
   useToast,
+  Field,
 } from '@/design-system/components'
 import {
   AppShell,
@@ -471,6 +472,14 @@ export function TokenCatalog() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 10 }}>
             <Input size="sm" placeholder="sm — 12.5px" />
             <Input size="xs" placeholder="xs — dense grid tier" />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 14 }}>
+            <Field label="Campaign name" required hint="Shown in Seller Central">
+              <Input placeholder="Summer — Broad" />
+            </Field>
+            <Field label="Daily budget" hint="Amazon's day starts at 00:00 UTC">
+              <Input prefix="€" placeholder="0.00" style={{ flex: 'none', width: 90 }} />
+            </Field>
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Select</div>

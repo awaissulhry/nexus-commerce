@@ -1756,3 +1756,36 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-cgm-foot-actions { display: flex; gap: 8px; }
 .nds-cgm-reset { display: inline-flex; align-items: center; gap: 6px; }
 .nds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }
+
+/* ── Field ─────────────────────────────────────────────────────────────────
+   Label + required marker + info slot + control + hint. Replaces six spellings across the ads
+   console; 6px is the gap plurality of the five that use flex column. Two of the three colours
+   fix a live AA failure — see Field.tsx for the measurements. */
+.nds-field-w {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.nds-field-lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+}
+.nds-field-lbl .req {
+  color: var(--nds-danger-text);
+  font-weight: 700;
+}
+.nds-field-info {
+  display: inline-flex;
+  align-items: center;
+}
+.nds-field-hint {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--nds-text-muted);
+}
