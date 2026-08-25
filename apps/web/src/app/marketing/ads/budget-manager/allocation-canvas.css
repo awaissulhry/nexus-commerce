@@ -11,8 +11,8 @@
 .bmc-env.over { border-color: #f3c9c6; background: linear-gradient(180deg, #fef5f4, var(--nds-white)); }
 .bmc-env .eyebrow { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--nds-grey-600); }
 .bmc-env b { font-size: 20px; font-weight: 800; color: var(--nds-grey-900); }
-.bmc-bar { height: 6px; border-radius: 999px; background: var(--nds-grey-100); overflow: hidden; margin: 3px 0; }
-.bmc-bar span { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 999px; }
+.bmc-bar { height: 6px; border-radius: var(--nds-radius-full); background: var(--nds-grey-100); overflow: hidden; margin: 3px 0; }
+.bmc-bar span { display: block; height: 100%; background: var(--nds-blue-600); border-radius: var(--nds-radius-full); }
 .bmc-bar span.over { background: #d9534f; }
 .bmc-env .sub { font-size: 11.5px; color: var(--nds-grey-600); }
 .bmc-env .sub2 { font-size: 11px; color: var(--nds-grey-500); }
@@ -41,7 +41,7 @@
 .bmc-camp.focus, .bmc-ag.focus { border-left: 3px solid var(--nds-blue-600); }
 .bmc-camp .stgtag { font-size: 9.5px; font-weight: 700; color: #7c3aed; }
 .bmc-camp .flow em.stg, .bmc-camp .flow .stg { color: #7c3aed; font-style: normal; font-weight: 700; }
-.bmc-node .cdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+.bmc-node .cdot { width: 7px; height: 7px; border-radius: var(--nds-radius-full); flex-shrink: 0; }
 .bmc-node .cdot.on { background: #1f9d5b; }
 .bmc-node .cdot.pa { background: #e0a92e; }
 .bmc-node .cdot.ar { background: var(--nds-grey-400); }

@@ -109,6 +109,9 @@
   --nds-success-text: #14724d;
   --nds-warning-text: #8a5316;
   --nds-stale-text: #6d3f10;
+  --nds-note-error-bg: #fdecea;
+  --nds-note-error-fg: #7a1c16;
+  --nds-note-error-icon: #b3261e;
   --nds-danger-text: #9c2f2a;
   --nds-info-text: #10457f;
 
@@ -161,6 +164,7 @@
   --nds-radius-xl: 10px;
   --nds-radius-2xl: 12px;
   --nds-radius-3xl: 14px;
+  --nds-radius-full: 999px;
   --nds-radius-round: 999px;
 
   /* ── Elevation + focus ── */

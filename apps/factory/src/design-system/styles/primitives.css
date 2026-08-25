@@ -371,7 +371,7 @@
   position: relative;
   width: 30px;
   height: 17px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   background: var(--border-strong);
   border: none;
   padding: 0;
@@ -387,7 +387,7 @@
   left: 2px;
   width: 13px;
   height: 13px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   background: var(--nds-white);
   box-shadow: 0 1px 2px rgb(var(--nds-shadow-rgb) / 0.2);
   transition: transform 0.15s ease;
@@ -519,7 +519,7 @@
 /* ── Spinner ─────────────────────────────────────────────────────── */
 .nds-spinner {
   display: inline-block;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   border: 2px solid var(--border-default);
   border-top-color: var(--color-primary);
   animation: nds-spin 0.7s linear infinite;

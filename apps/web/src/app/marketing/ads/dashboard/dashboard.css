@@ -39,7 +39,7 @@
 .dash-sev--high { background: var(--nds-red-500); } .dash-sev--medium { background: var(--nds-amber-600); }
 .dash-atype { font-size: 9px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; flex-shrink: 0; background: var(--nds-blue-50); color: var(--nds-blue-600); }
 .dash-atype--acos_breach { background: #fdeaea; color: var(--nds-red-500); }
-.dash-atype--zero_sales { background: #fdeaea; color: #b3261e; }
+.dash-atype--zero_sales { background: #fdeaea; color: var(--nds-note-error-icon); }
 .dash-atype--spend_spike { background: #fff4e0; color: var(--nds-amber-600); }
 .dash-atype--sales_drop { background: #fbf3da; color: #8a5a00; }
 .dash-amsg { color: #37495b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

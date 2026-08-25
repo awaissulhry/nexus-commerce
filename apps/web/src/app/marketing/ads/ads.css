@@ -43,8 +43,8 @@
 .nds-card .h10-am-pager { padding: 12px 16px 14px; }
 .nds-card + .h10-am-latest { margin-top: 12px; }
 
-.h10-toggle { display: inline-block; width: 30px; height: 17px; border-radius: 999px; background: #cbd2db; position: relative; vertical-align: middle; }
-.h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 999px; background: var(--nds-white); }
+.h10-toggle { display: inline-block; width: 30px; height: 17px; border-radius: var(--nds-radius-full); background: #cbd2db; position: relative; vertical-align: middle; }
+.h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: var(--nds-radius-full); background: var(--nds-white); }
 .h10-rulecount { color: var(--nds-grey-500); }
 /* CBN.2b — filter bar (Helium 10 Ad Manager match) */
 .h10-am-fpanel { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-2xl); padding: 14px 18px 16px; }
@@ -237,7 +237,7 @@
 .h10-gsel-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 152px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 8px 11px; font: inherit; font-size: 13px; color: var(--nds-grey-900); cursor: pointer; }
 .h10-gsel-btn:hover { background: var(--nds-grey-25); }
 .h10-gsel.open .h10-gsel-btn { border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31, 111, 222, 0.12); }
-.h10-gsel-btn .dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+.h10-gsel-btn .dot { width: 9px; height: 9px; border-radius: var(--nds-radius-full); flex-shrink: 0; }
 .h10-gsel-btn .lb { flex: 1; text-align: left; }
 .h10-gsel-btn svg { color: var(--nds-grey-500); flex-shrink: 0; }
 .h10-gsel-pop { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; min-width: 100%; width: max-content; max-height: 264px; overflow-y: auto; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 9px; box-shadow: 0 12px 28px rgba(20, 30, 50, 0.14); padding: 5px; }
@@ -252,10 +252,10 @@
    metric instead of a single one, and each option shows its tick and its colour. Everything else
    reuses .h10-gsel* above unchanged — this is the same control, doing more. */
 .h10-gmdots { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
-.h10-gmdots .dot { width: 9px; height: 9px; border-radius: 999px; }
+.h10-gmdots .dot { width: 9px; height: 9px; border-radius: var(--nds-radius-full); }
 .h10-gsel-pop button { display: flex; align-items: center; gap: 8px; }
 .h10-gsel-pop button .tick { width: 10px; flex-shrink: 0; color: var(--nds-blue-600); font-weight: 700; }
-.h10-gsel-pop button .dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+.h10-gsel-pop button .dot { width: 9px; height: 9px; border-radius: var(--nds-radius-full); flex-shrink: 0; }
 /* Why two lines of different heights can both look "big". Stated once, under the legend. */
 .h10-gscale { margin: 2px 0 0; text-align: center; font-size: 11.5px; color: var(--nds-grey-500); }
 
@@ -265,7 +265,7 @@
 .h10-gtt { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 9px; box-shadow: 0 10px 26px rgba(20, 30, 50, 0.16); padding: 10px 12px; min-width: 212px; }
 .h10-gtt-d { font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); margin-bottom: 7px; }
 .h10-gtt-r { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 2px 0; font-size: 12.5px; }
-.h10-gtt-r .dot { width: 9px; height: 9px; border-radius: 999px; }
+.h10-gtt-r .dot { width: 9px; height: 9px; border-radius: var(--nds-radius-full); }
 .h10-gtt-r .nm { color: var(--nds-grey-600); }
 .h10-gtt-r .v { color: var(--nds-grey-900); font-weight: 600; font-variant-numeric: tabular-nums; }
 
@@ -333,12 +333,12 @@
 .h10-rules b { color: var(--nds-grey-800); font-weight: 600; }
 .h10-rules svg, .h10-gear { color: var(--nds-grey-500); cursor: pointer; }
 .h10-gear:hover { color: var(--nds-grey-600); }
-.h10-util { display: inline-block; width: 48px; height: 7px; background: var(--nds-grey-100); border-radius: 999px; overflow: hidden; vertical-align: middle; flex: 0 0 auto; }
+.h10-util { display: inline-block; width: 48px; height: 7px; background: var(--nds-grey-100); border-radius: var(--nds-radius-full); overflow: hidden; vertical-align: middle; flex: 0 0 auto; }
 .h10-plc { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .h10-plc .v { color: var(--nds-grey-800); font-weight: 600; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .h10-plc .hourly { font-style: normal; color: #8a5a00; font-size: 11px; line-height: 1; }
 .h10-rc-bidrule.unset { color: #6b7383; font-weight: 500; }
-.h10-util .uf { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 999px; }
+.h10-util .uf { display: block; height: 100%; background: var(--nds-blue-600); border-radius: var(--nds-radius-full); }
 /* ADM-H P2 — the bar now travels with its number. It used to be the whole cell, aria-hidden and
    pinned at 0% width on every row: a gauge with no reading. `nowrap` matters more than it looks —
    the bar and the value are two inline children in a narrow cell, and letting them wrap adds a
@@ -477,8 +477,8 @@
 .h10-bulk-inp.sf .sfx { padding: 0 9px; font-size: 12.5px; color: var(--nds-grey-500); background: var(--nds-grey-25); align-self: stretch; display: inline-flex; align-items: center; border-left: 1px solid var(--nds-grey-150); }
 .h10-bulk-inp.sf input { width: 64px; }
 
-.h10-bktoggle { width: 34px; height: 19px; border-radius: 999px; background: #cbd2db; border: none; position: relative; cursor: pointer; padding: 0; transition: background .15s; }
-.h10-bktoggle span { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 999px; background: var(--nds-white); transition: left .15s; }
+.h10-bktoggle { width: 34px; height: 19px; border-radius: var(--nds-radius-full); background: #cbd2db; border: none; position: relative; cursor: pointer; padding: 0; transition: background .15s; }
+.h10-bktoggle span { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: var(--nds-radius-full); background: var(--nds-white); transition: left .15s; }
 .h10-bktoggle.on { background: var(--nds-blue-600); }
 .h10-bktoggle.on span { left: 17px; }
 .h10-bktoggle:disabled { opacity: .55; cursor: default; }
@@ -657,7 +657,7 @@
 .h10-cd-tab.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
 /* Count pill in a tab label. Quieter than the label so the word still reads first, and it
    inherits the tab's colour when active so the pair moves together. */
-.h10-cd-tabn { font-size: 11.5px; font-weight: 700; color: #6b7280; background: var(--nds-grey-100); border-radius: 999px; padding: 1px 7px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.h10-cd-tabn { font-size: 11.5px; font-weight: 700; color: #6b7280; background: var(--nds-grey-100); border-radius: var(--nds-radius-full); padding: 1px 7px; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .h10-cd-tab.on .h10-cd-tabn { color: var(--nds-blue-600); background: var(--nds-blue-100); }
 .h10-cd-new { font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px; color: var(--nds-blue-600); background: var(--nds-blue-100); border-radius: 5px; padding: 2px 6px; line-height: 1; }
 
@@ -737,7 +737,7 @@
    no percentage/border arithmetic. A magic-number `top` (even `top:50%;translateY(-50%)`)
    drifts the knob ~0.5px high here because the 1.5px border makes `50%` resolve against a
    19px base while layout uses 18px — a recurring user-caught defect. Slide kept via translateX. */
-.h10-cd-switch .tk { display: inline-flex; align-items: center; width: 38px; height: 21px; border-radius: 999px; background: var(--nds-white); border: 1.5px solid #6d839f; padding-left: 3px; box-sizing: border-box; flex-shrink: 0; transition: background .15s, border-color .15s; }
+.h10-cd-switch .tk { display: inline-flex; align-items: center; width: 38px; height: 21px; border-radius: var(--nds-radius-full); background: var(--nds-white); border: 1.5px solid #6d839f; padding-left: 3px; box-sizing: border-box; flex-shrink: 0; transition: background .15s, border-color .15s; }
 .h10-cd-switch .tk::after { content: ''; width: 13px; height: 13px; border-radius: 50%; background: #6d839f; transition: transform .15s, background .15s; }
 .h10-cd-switch input:checked + .tk { background: #316ee0; border-color: #316ee0; }
 .h10-cd-switch input:checked + .tk::after { transform: translateX(16px); background: var(--nds-white); }
@@ -1108,7 +1108,7 @@
 .h10-apm .apm-removeall:disabled { color: #c8d0db; background: var(--nds-grey-25); cursor: default; }
 .h10-apm .apm-thead { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; background: var(--nds-grey-50); font-size: 11px; font-weight: 700; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .03em; }
 .h10-apm .apm-thead .sv { display: inline-flex; align-items: center; gap: 7px; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-700); }
-.h10-apm .apm-thead .sv .new { font-size: 10px; font-weight: 700; color: var(--nds-blue-600); background: #d8e8fd; border-radius: 999px; padding: 2px 8px; font-style: normal; letter-spacing: 0; }
+.h10-apm .apm-thead .sv .new { font-size: 10px; font-weight: 700; color: var(--nds-blue-600); background: #d8e8fd; border-radius: var(--nds-radius-full); padding: 2px 8px; font-style: normal; letter-spacing: 0; }
 .h10-apm .apm-rempty { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 220px; color: var(--nds-grey-800); font-size: 15px; }
 .h10-apm .apm-rrows { flex: 1; overflow-y: auto; max-height: 340px; }
 .h10-apm .apm-rrow .sv { width: 110px; text-align: center; color: var(--nds-grey-400); font-size: 12px; flex-shrink: 0; }
@@ -1329,7 +1329,7 @@
 .h10-aig-psel .c-prod .m { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .h10-aig-psel .c-prod .nm { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .h10-aig-psel .c-prod .id { font-size: 11px; color: var(--nds-grey-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.h10-aig-psel .lqs { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--nds-green-600); background: #e7f7ee; border: 1px solid #c7ecd5; border-radius: 999px; padding: 3px 10px; }
+.h10-aig-psel .lqs { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--nds-green-600); background: #e7f7ee; border: 1px solid #c7ecd5; border-radius: var(--nds-radius-full); padding: 3px 10px; }
 .h10-aig-psel .c-sug { font-size: 12.5px; color: #344054; }
 .h10-aig-psel .psel-total { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 13px 16px; font-size: 13px; color: var(--nds-grey-600); }
 .h10-aig-psel .psel-total b { color: var(--nds-grey-900); font-size: 14px; }
@@ -2192,7 +2192,7 @@
 .h10-rep-chg.on { color: var(--nds-blue-600); border-color: #d6e6fb; background: var(--nds-blue-100); }
 
 .h10-rep-chips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 9px 12px; border-bottom: 1px solid var(--nds-grey-100); }
-.h10-rep-chips button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.h10-rep-chips button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-full); padding: 4px 11px; cursor: pointer; }
 .h10-rep-chips button:hover { border-color: #c8d1db; }
 .h10-rep-chips button.on { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
 .h10-rep-chips .n { font-size: 11px; opacity: .85; }
@@ -2252,7 +2252,7 @@
 .h10-rep-tbl .whrline:hover { color: var(--nds-blue-600); }
 .h10-rep-tbl .whrbtn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: 12px; color: var(--nds-grey-600); background: none; border: none; padding: 0; cursor: pointer; }
 .h10-rep-tbl .whrbtn:hover { color: var(--nds-blue-600); text-decoration: underline; }
-.h10-rep-tbl .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.h10-rep-tbl .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; border-radius: var(--nds-radius-full); padding: 2px 8px; white-space: nowrap; }
 .h10-rep-tbl .pill.ok { color: var(--nds-grey-600); background: var(--nds-grey-75); }
 .h10-rep-tbl .pill.cut { color: #a4adba; background: var(--nds-grey-100); }
 /* `:not(.tag)` because two different things wear this class: the status cell's
@@ -2364,8 +2364,8 @@
 /* AX3.8 — the run watcher. */
 .h10-rep-running .hd { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-rep-running .sub { margin: 7px 0 13px; font-size: 12.5px; color: var(--nds-grey-600); }
-.h10-rep-running .bar { height: 8px; border-radius: 999px; background: var(--nds-grey-100); overflow: hidden; }
-.h10-rep-running .bar span { display: block; height: 100%; border-radius: 999px; background: var(--nds-blue-600); transition: width .4s ease; }
+.h10-rep-running .bar { height: 8px; border-radius: var(--nds-radius-full); background: var(--nds-grey-100); overflow: hidden; }
+.h10-rep-running .bar span { display: block; height: 100%; border-radius: var(--nds-radius-full); background: var(--nds-blue-600); transition: width .4s ease; }
 .h10-rep-running .tally { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; font-size: 12.5px; color: var(--nds-grey-600); }
 .h10-rep-running .tally b { color: var(--nds-grey-900); font-size: 15px; }
 .h10-rep-running .safe { margin: 14px 0 0; font-size: 12px; line-height: 1.55; color: #7c8794; }
@@ -2488,7 +2488,7 @@
    with 400 clean ones, so the tone carries that rather than the order alone. */
 .h10-cl-sum { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 0 0 10px; }
 .h10-cl-sum .lbl { font-size: 11px; font-weight: 700; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .3px; margin-right: 2px; }
-.h10-cl-sum .chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer; color: var(--nds-grey-700); }
+.h10-cl-sum .chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: var(--nds-radius-full); padding: 4px 11px; font-size: 12px; cursor: pointer; color: var(--nds-grey-700); }
 .h10-cl-sum .chip:hover { border-color: var(--nds-blue-600); color: var(--nds-grey-900); }
 .h10-cl-sum .chip.on { border-color: var(--nds-blue-600); background: var(--nds-blue-50); color: var(--nds-blue-900); font-weight: 600; }
 .h10-cl-sum .chip .n { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2707,7 +2707,7 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
    The Minus icon and the word carry the difference instead, at the shared 4.77:1. */
 /* The Bid Automation switch is READ-ONLY in these grids — H10 shows state here and edits it in the
    selection toolbar — so it is a span, not a button, and takes no pointer affordance. */
-.h10-rc-toggle { display: inline-flex; align-items: center; width: 34px; height: 18px; padding: 2px; border-radius: 999px; background: var(--nds-grey-200); transition: background .12s; }
+.h10-rc-toggle { display: inline-flex; align-items: center; width: 34px; height: 18px; padding: 2px; border-radius: var(--nds-radius-full); background: var(--nds-grey-200); transition: background .12s; }
 .h10-rc-toggle > span { width: 14px; height: 14px; border-radius: 50%; background: var(--nds-white); transition: transform .12s; }
 .h10-rc-toggle.on { background: var(--nds-blue-600); }
 .h10-rc-toggle.on > span { transform: translateX(16px); }

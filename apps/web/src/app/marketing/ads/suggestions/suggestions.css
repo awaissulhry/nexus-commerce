@@ -263,7 +263,7 @@
 
 /* ── SG.3 — the Delivery chip: an approve is ENQUEUED; this is the write's actual fate.
    Refused is amber, never red — a governed stop is not a failure. */
-.h10-sug-dl { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.h10-sug-dl { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: var(--nds-radius-full); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 .h10-sug-dl.ok { background: #e6f6f1; color: #067d62; }
 .h10-sug-dl.pd { background: var(--nds-surface-sunken); color: var(--nds-text-2); }
 .h10-sug-dl.rf { background: #fff6e8; color: var(--nds-warning-text); }

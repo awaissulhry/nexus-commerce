@@ -575,7 +575,7 @@
 .h10-rp-lbl .grow { flex: 1; }
 .h10-rp-link { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-blue-600); background: none; border: 0; cursor: pointer; padding: 0; }
 .h10-rp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.h10-rp-chip { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.h10-rp-chip { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 6px 12px; cursor: pointer; }
 .h10-rp-chip:hover { background: var(--nds-grey-25); }
 .h10-rp-chip.on { border-color: var(--nds-blue-600); background: var(--nds-blue-50); color: #14223a; }
 .h10-rp-chip .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
@@ -770,7 +770,7 @@
 /* Phase 5 — portfolio-scoped schedules get a sublabel under the name. */
 .nds-wsgrid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-600); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
-.h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 999px; padding: 3px 9px; }
+.h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .h10-rg-chip .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1634,9 +1634,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bd-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-bd-note b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-bd-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-bd-note.bad svg { color: var(--nds-warning-text); }
-.h10-bd-note.bad b { color: #7a4512; }
+.h10-bd-note.warn { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-bd-note.warn svg { color: var(--nds-warning-text); }
+.h10-bd-note.warn b { color: #7a4512; }
 .h10-bd-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bd-said b { font-weight: 800; color: var(--nds-grey-900); }
 
@@ -2015,11 +2015,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── the pinned pacing band ─────────────────────────────────────────────────────────────────── */
 .h10-bsp-band { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 4px 12px; border-top: 1px solid var(--nds-grey-100); }
-.h10-bsp-band.broke { background: #fdecea; border-top-color: #f5c6c2; border-radius: 0 0 9px 9px; }
+.h10-bsp-band.broke { background: var(--nds-note-error-bg); border-top-color: #f5c6c2; border-radius: 0 0 9px 9px; }
 .h10-bsp-bandmsg { padding: 8px 0; font-size: 12px; line-height: 1.5; color: var(--nds-grey-600); }
 .h10-bsp-bandmsg b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-bsp-band.broke .h10-bsp-bandmsg { color: #7a1c16; }
-.h10-bsp-band.broke .h10-bsp-bandmsg b { color: #7a1c16; }
+.h10-bsp-band.broke .h10-bsp-bandmsg { color: var(--nds-note-error-fg); }
+.h10-bsp-band.broke .h10-bsp-bandmsg b { color: var(--nds-note-error-fg); }
 .h10-bsp-bandmsg.dim { color: var(--nds-text-muted); }
 
 .h10-bsp-chips { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -2042,14 +2042,14 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-bar { display: block; width: 100%; margin-top: 2px; }
 
 .h10-bsp-chip.s-on-track .hd i { color: #146c43; }
-.h10-bsp-chip.s-over     .hd i { color: #b3261e; }
+.h10-bsp-chip.s-over     .hd i { color: var(--nds-note-error-icon); }
 .h10-bsp-chip.s-under    .hd i { color: var(--nds-warning-text); }
 .h10-bsp-chip.s-no-budget .hd i { color: var(--nds-grey-600); }
 
 .h10-bsp-sum { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: var(--nds-grey-600); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .h10-bsp-sum .l { display: inline-flex; align-items: baseline; gap: 5px; }
 .h10-bsp-sum b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-bsp-sum b.bad { color: #b3261e; }
+.h10-bsp-sum b.bad { color: var(--nds-note-error-icon); }
 .h10-bsp-sum s { text-decoration: none; color: var(--nds-text-muted); }
 .h10-bsp-plan { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-bsp-plan:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
@@ -2060,9 +2060,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: var(--nds-radius-lg); font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bsp-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-bsp-note b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-bsp-note.bad { background: #fdecea; color: #7a1c16; }
-.h10-bsp-note.bad svg { color: #b3261e; }
-.h10-bsp-note.bad b { color: #7a1c16; }
+.h10-bsp-note.bad { background: var(--nds-note-error-bg); color: var(--nds-note-error-fg); }
+.h10-bsp-note.bad svg { color: var(--nds-note-error-icon); }
+.h10-bsp-note.bad b { color: var(--nds-note-error-fg); }
 
 /* ── content + inspector rail ─────────────────────────────────────────────────────────────────
    The rail is an in-flow COLUMN, not a DS Drawer: `Drawer` portals to document.body, which leaves
@@ -2081,7 +2081,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-railfacts > div:last-child { border-bottom: 0; }
 .h10-bsp-railfacts dt { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); }
 .h10-bsp-railfacts dd { margin: 0; font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-bsp-railfacts dd.bad { color: #b3261e; }
+.h10-bsp-railfacts dd.bad { color: var(--nds-note-error-icon); }
 .h10-bsp-raillink { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); font-size: 12px; font-weight: 700; color: var(--nds-info-text); text-decoration: none; }
 .h10-bsp-raillink:hover { background: var(--nds-blue-100); border-color: var(--nds-blue-600); }
 
@@ -2096,7 +2096,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-sechd .ttl i { font-style: normal; font-size: 12px; color: var(--nds-grey-600); }
 /* The owning session, on screen: an operator must never have to wonder whether an empty section is
    broken or simply not built yet. */
-.h10-bsp-sechd .own { flex: none; padding: 2px 7px; background: var(--nds-grey-75); border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .03em; color: var(--nds-grey-600); }
+.h10-bsp-sechd .own { flex: none; padding: 2px 7px; background: var(--nds-grey-75); border-radius: var(--nds-radius-full); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; color: var(--nds-grey-600); }
 .h10-bsp-secbd { padding: 0 14px 14px; }
 
 .h10-bsp-pending { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: var(--nds-grey-25); border: 1px dashed var(--nds-grey-200); border-radius: 9px; }
@@ -2104,7 +2104,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-pending span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 
 .h10-bsp-empty { padding: 22px 0; }
-.h10-bsp-empty.broke .ico { color: #b3261e; }
+.h10-bsp-empty.broke .ico { color: var(--nds-note-error-icon); }
 
 /* ── responsive ────────────────────────────────────────────────────────────────────────────────
    Below 1180 the rail cannot hold 320px beside a grid without squeezing the grid; it becomes a
@@ -2402,9 +2402,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-bud-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-bud-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 4px; border-radius: 4px; background: #fdeed5; color: #7a4512; }
-.h10-bud-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-bud-note.bad svg { color: var(--nds-warning-text); }
-.h10-bud-note.bad b { color: #7a4512; }
+.h10-bud-note.warn { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-bud-note.warn svg { color: var(--nds-warning-text); }
+.h10-bud-note.warn b { color: #7a4512; }
 .h10-bud-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bud-said b { font-weight: 800; color: var(--nds-grey-900); }
 
@@ -2592,9 +2592,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-note svg { flex: none; margin-top: 3px; color: var(--nds-text-muted); }
 .h10-ar-note b { font-weight: 800; color: var(--nds-grey-900); }
 /* Broke — the read failed. Amber, and the only state on this page that is allowed to look wrong. */
-.h10-ar-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
-.h10-ar-note.bad svg, .h10-ar-note.bad b { color: var(--nds-warning-text); }
-.h10-ar-note.bad .h10-ar-lnk { color: #7a4512; }
+.h10-ar-note.warn { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-ar-note.warn svg, .h10-ar-note.warn b { color: var(--nds-warning-text); }
+.h10-ar-note.warn .h10-ar-lnk { color: #7a4512; }
 /* Refused — the scope cannot resolve. A refusal is not a failure: it is the system working, and it
    gets its own colour so an operator never reads "this is broken" where the answer is "this asks
    for two things that cannot both be true". */
@@ -2631,7 +2631,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-reach { flex: none; padding: 1px 6px; border-radius: 5px; background: var(--nds-blue-100); color: #414a7a; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 
 /* ── row state ────────────────────────────────────────────────────────────────────────────────── */
-.h10-ar-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .01em; }
+.h10-ar-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--nds-radius-full); font-size: 10.5px; font-weight: 800; letter-spacing: .01em; }
 /* U11d — the `st-*` variants went with the Status column, which now renders the Ad Manager's
    `.h10-pill` + chevron menu (`StatusCell`). `dl-*` stays: Delivery is this page's own column. */
 .h10-ar-pill.dl-on { background: #e7f5ed; color: #14663f; }
@@ -2639,7 +2639,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* 🔴 Enabled + not delivering + gate shut. Resuming a paused campaign does NOT re-open the write
    gate — the write is refused at `campaign_allowlist` and the gate's own comment calls that the
    intended trade — so this row is one nothing may correct. Amber, and only on that intersection. */
-.h10-ar-flag { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 999px; background: var(--nds-warning-text); color: var(--nds-white); font-style: normal; font-size: 9px; font-weight: 800; }
+.h10-ar-flag { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: var(--nds-radius-full); background: var(--nds-warning-text); color: var(--nds-white); font-style: normal; font-size: 9px; font-weight: 800; }
 /* Absence, said once and the same way everywhere: no portfolio, no product line, no reported
    delivery. It is a measurement, not a placeholder, and never the same glyph as a zero. */
 .h10-ar-nd { font-size: 11px; font-style: italic; color: var(--nds-text-muted); }
@@ -2688,7 +2688,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-btn.primary { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
 .h10-bsp-btn.primary:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); color: var(--nds-white); }
 .h10-bsp-btn.primary:disabled { background: #b7cdf0; border-color: #b7cdf0; color: var(--nds-white); }
-.h10-bsp-btn.danger { background: #b3261e; border-color: #b3261e; color: var(--nds-white); }
+.h10-bsp-btn.danger { background: #b3261e; border-color: var(--nds-note-error-icon); color: var(--nds-white); }
 .h10-bsp-btn.danger:hover:not(:disabled) { background: #8c1d17; border-color: #8c1d17; }
 .h10-bsp-btn.sm { padding: 5px 9px; font-size: 11.5px; }
 .h10-bsp-saverow { display: flex; gap: 7px; }
@@ -2707,7 +2707,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-disc:hover { background: var(--nds-grey-25); color: var(--nds-grey-900); border-color: var(--nds-grey-300); }
 .h10-bsp-disc i { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 600; color: var(--nds-text-muted); }
 
-.h10-bsp-del { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; background: none; border: 0; font-size: 11.5px; font-weight: 700; color: #b3261e; cursor: pointer; }
+.h10-bsp-del { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; background: none; border: 0; font-size: 11.5px; font-weight: 700; color: var(--nds-note-error-icon); cursor: pointer; }
 .h10-bsp-del:hover:not(:disabled) { text-decoration: underline; }
 .h10-bsp-del:disabled { color: var(--nds-grey-450); cursor: not-allowed; }
 
@@ -2729,7 +2729,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-callist .p { font-weight: 800; color: var(--nds-info-text); font-variant-numeric: tabular-nums; }
 .h10-bsp-callist .e { margin-left: auto; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-bsp-callist button { display: inline-flex; padding: 3px; background: none; border: 0; border-radius: 5px; color: var(--nds-text-muted); cursor: pointer; }
-.h10-bsp-callist button:hover:not(:disabled) { background: #fdecea; color: #b3261e; }
+.h10-bsp-callist button:hover:not(:disabled) { background: var(--nds-note-error-bg); color: var(--nds-note-error-icon); }
 .h10-bsp-caladd { display: flex; gap: 6px; }
 .h10-bsp-caladd input { width: 68px; padding: 5px 8px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); font: inherit; font-size: 12px; color: var(--nds-grey-900); }
 .h10-bsp-caladd input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; }
@@ -2744,11 +2744,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-enlist li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: var(--nds-white); border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-sm); font-size: 11.5px; }
 .h10-bsp-enlist .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-grey-900); font-weight: 600; }
 .h10-bsp-enlist .v { display: inline-flex; align-items: center; gap: 4px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.h10-bsp-enlist .v b.down { color: #b3261e; }
+.h10-bsp-enlist .v b.down { color: var(--nds-note-error-icon); }
 .h10-bsp-enlist .v b.up { color: #146c43; }
 .h10-bsp-enlist .v i { font-style: normal; font-size: 10.5px; color: var(--nds-text-muted); }
 .h10-bsp-enlist .act { font-weight: 800; white-space: nowrap; }
-.h10-bsp-enlist .act.down { color: #b3261e; }
+.h10-bsp-enlist .act.down { color: var(--nds-note-error-icon); }
 .h10-bsp-enlist .act.up { color: #146c43; }
 
 /* ── the limits modal ─────────────────────────────────────────────────────────────────────────
@@ -3627,7 +3627,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngp-g .tw svg { flex: none; transition: transform 0.12s ease; color: var(--nds-text-muted); }
 .h10-ngp-g .tw svg.rot { transform: rotate(90deg); }
 .h10-ngp-g .cls { justify-self: start; padding: 2px 7px; border-radius: 4px; font-size: 10.5px; white-space: nowrap; }
-.h10-ngp-g .cls.own-line-brand { background: #fdecea; color: #8c2a1a; }
+.h10-ngp-g .cls.own-line-brand { background: var(--nds-note-error-bg); color: #8c2a1a; }
 .h10-ngp-g .cls.other-line-brand { background: #fdf3e3; color: #7d5312; }
 .h10-ngp-g .cls.non-brand { background: var(--nds-grey-100); color: #4a5566; }
 .h10-ngp-g .cn { font-size: 11.5px; color: #4a5566; }
@@ -4277,7 +4277,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngrec-led .w { font-size: 10.5px; color: var(--nds-text-muted); }
 .h10-ngrec-led .a { justify-self: start; padding: 2px 7px; border-radius: 4px; font-size: 10.5px; white-space: nowrap; }
 .h10-ngrec-led .a.created { background: var(--nds-grey-100); color: #4a5566; }
-.h10-ngrec-led .a.retired { background: #fdecea; color: #8c2a1a; }
+.h10-ngrec-led .a.retired { background: var(--nds-note-error-bg); color: #8c2a1a; }
 .h10-ngrec-led .a.state-changed { background: #fdf3e3; color: #7d5312; }
 .h10-ngrec-led .c { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4a5566; }
 .h10-ngrec-led .by { font-size: 10.5px; color: #4a5566; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4657,7 +4657,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-bd7-name { color: var(--nds-blue-600); text-decoration: none; }
 .h10-bd7-name:hover { text-decoration: underline; }
-.h10-bd7-posture { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.h10-bd7-posture { display: inline-block; padding: 2px 8px; border-radius: var(--nds-radius-full); font-size: 11px; font-weight: 700; }
 /* 🔴 P3a: #6b7585 measured 4.19:1 on this chip's OWN #f1f3f6 ground — below AA for 11px text, and
    it had been failing wherever this chip appears (the rules grid's "off", the Bid page's postures).
    Latent while it sat on 2 rows; P3a puts it on 100+ as "paused" / "local only", which is what made
@@ -4994,7 +4994,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
 .h10-bsp-bind { font-size: 12px; color: var(--nds-text-muted); font-variant-numeric: tabular-nums; }
 .h10-bsp-bind b { font-weight: 800; color: var(--nds-text-muted); }
-.h10-bsp-bind.on b { color: #b3261e; }
+.h10-bsp-bind.on b { color: var(--nds-note-error-icon); }
 /* Over 100% is NORMAL — Amazon overshoots a daily budget and settles the month. It is marked,
    deliberately, in the same amber the approximate flag uses rather than in an error red. */
 .h10-bsp-ratio { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
@@ -5194,7 +5194,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* EA5 — a section held non-interactive because the builder cannot draw all of it. Not `disabled`
    on each control: the reason belongs in the banner above, and a disabled control cannot show one. */
 .h10-rb-sec.held { opacity: .62; }
-.h10-rb-sec.held::after { content: "read-only"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #f6e7c6; color: #7a4d10; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; vertical-align: middle; }
+.h10-rb-sec.held::after { content: "read-only"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: var(--nds-radius-full); background: #f6e7c6; color: #7a4d10; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; vertical-align: middle; }
 
 /* ── EA6 — the Reaches cell on Automations ─────────────────────────────────────────────────────
    Appended at EOF, `h10-au-reach` only. Three readings, three weights: a plain count, the whole
@@ -5381,7 +5381,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    guard" label — measured on prod 2026-08-21: line x=352 vs label x 351–422. */
 .h10-rb-noise { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 50px; flex-wrap: wrap; }
 .h10-rb-noise .lbl { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); }
-.h10-rb-noise button { display: inline-flex; align-items: center; gap: 4px; border: 1px dashed #c6cedb; background: none; color: #2b5aa7; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.h10-rb-noise button { display: inline-flex; align-items: center; gap: 4px; border: 1px dashed #c6cedb; background: none; color: #2b5aa7; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: var(--nds-radius-full); cursor: pointer; }
 .h10-rb-noise button:hover { background: var(--nds-blue-50); border-color: #9db8e0; }
 
 /* HP4 — the cohort line under the harvest view pill: what harvesting has produced. */
@@ -5449,7 +5449,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    was refused or never reached the channel, grey = nothing to report. The point of the column is
    that "applied" and "at Amazon" are different facts, so they must not share a colour.
    `bs-contested` is the Status pill saying so: in its date range, but not in force. */
-.h10-bs-deliv { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.h10-bs-deliv { display: inline-block; padding: 2px 8px; border-radius: var(--nds-radius-full); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .h10-bs-deliv.ok { background: #e9f7ef; color: #116b3a; }
 .h10-bs-deliv.warn { background: #faf3e3; color: #7a5a12; }
 .h10-bs-deliv.bad { background: #fdf1f0; color: #b42318; }
@@ -5631,3 +5631,15 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-page-empty .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
 .h10-page-empty.bad b { color: var(--nds-warning-text); }
 .h10-page-empty.refused b { color: #414a7a; }
+
+/* Errors are RED; the amber tier above is `.warn` for cautions (truncation, at-floor).
+   `.bad` used to carry both, so a failed write and a 5,000-row cap looked identical. */
+.h10-bd-note.bad { background: var(--nds-note-error-bg); border: 1px solid var(--nds-danger-soft); color: var(--nds-note-error-fg); }
+.h10-bd-note.bad svg { color: var(--nds-note-error-icon); }
+.h10-bd-note.bad b { color: var(--nds-note-error-fg); }
+.h10-bud-note.bad { background: var(--nds-note-error-bg); border: 1px solid var(--nds-danger-soft); color: var(--nds-note-error-fg); }
+.h10-bud-note.bad svg { color: var(--nds-note-error-icon); }
+.h10-bud-note.bad b { color: var(--nds-note-error-fg); }
+.h10-ar-note.bad { background: var(--nds-note-error-bg); border: 1px solid var(--nds-danger-soft); color: var(--nds-note-error-fg); }
+.h10-ar-note.bad svg { color: var(--nds-note-error-icon); }
+.h10-ar-note.bad b { color: var(--nds-note-error-fg); }

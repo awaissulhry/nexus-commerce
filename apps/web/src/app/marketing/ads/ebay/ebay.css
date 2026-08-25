@@ -56,7 +56,7 @@
 .eb-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .eb-linkbtn { background: none; border: none; color: var(--nds-blue-600); cursor: pointer; font-size: 12.5px; padding: 0; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
 .eb-linkbtn:hover { text-decoration: underline; }
-.eb-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; background: var(--nds-grey-100); color: #475467; }
+.eb-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: var(--nds-radius-full); font-size: 10.5px; font-weight: 600; background: var(--nds-grey-100); color: #475467; }
 .eb-chip--run { background: var(--nds-pill-success-bg); color: var(--nds-blue-900); }
 .eb-chip--warn { background: #fdf3d3; color: #9a6700; }
 
@@ -100,7 +100,7 @@
 
 /* ER3.2 — suggestions queue (delta 6) */
 .eb-kind-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
-.eb-kind-chip { border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: 999px; font-size: 12px; font-weight: 600; color: #475467; padding: 4px 12px; cursor: pointer; }
+.eb-kind-chip { border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: var(--nds-radius-full); font-size: 12px; font-weight: 600; color: #475467; padding: 4px 12px; cursor: pointer; }
 .eb-kind-chip:hover { border-color: var(--nds-blue-600); color: var(--nds-blue-600); }
 .eb-kind-chip.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: var(--nds-blue-900); }
 .eb-decide-cell { display: inline-flex; align-items: center; gap: 6px; }
@@ -132,7 +132,7 @@
 .eb-recs { display: flex; flex-direction: column; }
 .eb-rec { display: flex; align-items: flex-start; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--nds-grey-100); }
 .eb-rec:last-child { border-bottom: none; }
-.eb-rec-count { min-width: 34px; height: 24px; border-radius: 999px; background: var(--nds-blue-100); color: var(--nds-blue-900); font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; margin-top: 1px; }
+.eb-rec-count { min-width: 34px; height: 24px; border-radius: var(--nds-radius-full); background: var(--nds-blue-100); color: var(--nds-blue-900); font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; margin-top: 1px; }
 .eb-rec-body { flex: 1; min-width: 0; }
 .eb-rec-body b { font-size: 13px; color: var(--nds-grey-900); }
 .eb-rec-criteria { font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.45; margin: 2px 0 0; }
@@ -142,8 +142,8 @@
 .eb-pacing { display: flex; flex-direction: column; gap: 12px; padding: 2px; }
 .eb-pace-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--nds-grey-900); }
 .eb-pace-head span { font-size: 11.5px; color: var(--nds-grey-600); }
-.eb-pace-bar { height: 8px; border-radius: 999px; background: var(--nds-grey-100); overflow: hidden; margin-top: 5px; }
-.eb-pace-bar .fill { display: block; height: 100%; border-radius: 999px; background: #2d9d5f; }
+.eb-pace-bar { height: 8px; border-radius: var(--nds-radius-full); background: var(--nds-grey-100); overflow: hidden; margin-top: 5px; }
+.eb-pace-bar .fill { display: block; height: 100%; border-radius: var(--nds-radius-full); background: #2d9d5f; }
 .eb-pace-bar .fill.warn { background: var(--nds-amber-600); }
 .eb-pace-proj { font-size: 11.5px; color: var(--nds-grey-600); margin: 5px 0 0; }
 .eb-pace-cpc { border-top: 1px solid var(--nds-grey-100); padding-top: 10px; }
@@ -166,7 +166,7 @@
 
 /* ER3.4 — Products: promoted chips + qty badges · Change Log cells */
 .eb-promo-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; max-width: 260px; }
-.eb-promo-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: var(--nds-blue-900); background: var(--nds-blue-100); border-radius: 999px; padding: 1px 8px; text-decoration: none; }
+.eb-promo-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: var(--nds-blue-900); background: var(--nds-blue-100); border-radius: var(--nds-radius-full); padding: 1px 8px; text-decoration: none; }
 .eb-promo-chip:hover { background: var(--nds-pill-success-bg); }
 .eb-promo-chip b { font-size: 9px; letter-spacing: 0.04em; color: #4a5462; }
 .eb-qty-cell { display: inline-flex; align-items: center; gap: 5px; }
@@ -182,7 +182,7 @@
 .eb-movers td.nm { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .eb-movers td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .eb-movers td.bar { width: 140px; }
-.eb-movers td.bar span { display: block; height: 7px; border-radius: 999px; background: var(--nds-pill-success-bg); min-width: 2px; }
+.eb-movers td.bar span { display: block; height: 7px; border-radius: var(--nds-radius-full); background: var(--nds-pill-success-bg); min-width: 2px; }
 .eb-digest-plink { color: inherit; text-decoration: none; }
 .eb-digest-plink:hover { color: var(--nds-blue-600); text-decoration: underline; }
 .eb-hl-row td { background: #fdf3d3 !important; transition: background 1.2s ease; }
@@ -193,7 +193,7 @@
 
 /* ER4 E2 — digest per-marketplace strip */
 .eb-mkt-split { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; border-top: 1px dashed var(--nds-grey-100); padding-top: 10px; }
-.eb-mkt-chip { font-size: 11.5px; color: #475467; background: var(--nds-grey-50); border-radius: 999px; padding: 3px 10px; }
+.eb-mkt-chip { font-size: 11.5px; color: #475467; background: var(--nds-grey-50); border-radius: var(--nds-radius-full); padding: 3px 10px; }
 .eb-mkt-chip b { color: var(--nds-grey-900); margin-right: 2px; }
 
 /* ER4 E3 — estimated weekly impact on suggestions */

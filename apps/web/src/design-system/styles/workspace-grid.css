@@ -37,7 +37,7 @@
 
 .nds-wsgrid td.nm { display: flex; align-items: center; gap: 8px; max-width: 360px; }
 
-.nds-wsgrid td.nm .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nds-wsgrid-dot); flex-shrink: 0; }
+.nds-wsgrid td.nm .dot { width: 7px; height: 7px; border-radius: var(--nds-radius-full); background: var(--nds-wsgrid-dot); flex-shrink: 0; }
 
 .nds-wsgrid td.nm .dot.live { background: var(--nds-green-500); }
 

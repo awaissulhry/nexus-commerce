@@ -188,7 +188,7 @@
   justify-content: center;
   min-width: 26px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   background: var(--nds-surface-sunken);
   /* the bar sits on the page canvas, where the sunken grey alone can vanish — the inset
      ring keeps the pill legible without changing its box size */
@@ -228,7 +228,7 @@
   display: inline-flex;
   align-items: center;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   background: var(--nds-primary-soft);
   color: var(--nds-primary);
   font-size: 11px;
@@ -281,14 +281,14 @@
   display: block;
   width: 100%;
   background: var(--nds-surface-sunken);
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   overflow: hidden;
 }
 .nds-progress > .bar {
   display: block;
   height: 100%;
   background: var(--nds-primary);
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   transition: width 0.2s ease;
 }
 .nds-progress.indet > .bar {
@@ -564,7 +564,7 @@
 .nds-toast .dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   background: var(--nds-info);
   flex-shrink: 0;
 }
@@ -1037,7 +1037,7 @@
 .nds-chart-tt .r .dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   flex-shrink: 0;
 }
 

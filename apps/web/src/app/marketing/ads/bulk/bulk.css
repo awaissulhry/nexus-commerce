@@ -109,7 +109,7 @@
   font-weight: 500;
   color: var(--ds-text-tertiary, #94a3b8);
   padding: 5px 12px 5px 5px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   border: 1px solid transparent;
 }
 
@@ -119,7 +119,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   background: var(--ds-surface-muted, var(--nds-grey-75));
   color: var(--ds-text-tertiary, #94a3b8);
   font-size: 11px;
@@ -210,7 +210,7 @@
   font-size: 13px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   font-variant-numeric: tabular-nums;
 }
 .bulk-budget-d.is-up { color: var(--ds-danger, #dc2626); background: var(--ds-danger-soft, #fee2e2); }
@@ -306,7 +306,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--nds-radius-full);
   text-transform: lowercase;
   white-space: nowrap;
   background: var(--ds-surface-muted, var(--nds-grey-75));
@@ -374,7 +374,7 @@
 .esm-saved { display: flex; flex-wrap: wrap; gap: 6px; }
 .esm-chip {
   display: inline-flex; align-items: center; gap: 2px;
-  border: 1px solid var(--ds-border, var(--nds-grey-150)); border-radius: 999px;
+  border: 1px solid var(--ds-border, var(--nds-grey-150)); border-radius: var(--nds-radius-full);
   background: var(--ds-surface-subtle, var(--nds-grey-25));
 }
 .esm-chip button {

@@ -107,7 +107,7 @@
 /* State as a WORD, not only a colour. */
 .dt-state {
   display: inline-flex; align-items: center; gap: 3px;
-  padding: 1px 6px; border-radius: 999px;
+  padding: 1px 6px; border-radius: var(--nds-radius-full);
   font-size: 10px; font-weight: 650; letter-spacing: 0.02em;
   border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600);
 }
@@ -137,7 +137,7 @@
 .dt-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 19px; height: 17px; padding: 0 5px;
-  border-radius: 999px; background: var(--nds-grey-100); border: 1px solid #dde4ec;
+  border-radius: var(--nds-radius-full); background: var(--nds-grey-100); border: 1px solid #dde4ec;
   font-size: 10px; font-weight: 700; color: #46525f;
   font-variant-numeric: tabular-nums;
 }
@@ -216,7 +216,7 @@
 .ap-tabs button:focus-visible { outline: 2px solid #7fb0ea; outline-offset: -2px; border-radius: 5px 5px 0 0; }
 .ap-tabcount {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 19px; height: 17px; padding: 0 5px; border-radius: 999px;
+  min-width: 19px; height: 17px; padding: 0 5px; border-radius: var(--nds-radius-full);
   background: var(--nds-grey-100); border: 1px solid #dde4ec;
   font-size: 10px; font-weight: 700; color: #46525f;
   font-variant-numeric: tabular-nums;
@@ -344,7 +344,7 @@
 }
 .ap-plabel {
   display: inline-flex; align-items: center; padding: 1px 7px;
-  border-radius: 999px; font-size: 10px; font-weight: 700;
+  border-radius: var(--nds-radius-full); font-size: 10px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.03em;
   border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600); white-space: nowrap;
 }
@@ -369,7 +369,7 @@
 
 .ap-outcome {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 7px; border-radius: 999px;
+  padding: 2px 7px; border-radius: var(--nds-radius-full);
   font-size: 10.5px; font-weight: 650; white-space: nowrap;
   border: 1px solid var(--nds-grey-150); background: var(--nds-grey-75); color: var(--nds-grey-600);
 }

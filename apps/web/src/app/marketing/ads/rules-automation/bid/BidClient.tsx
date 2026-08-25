@@ -882,7 +882,7 @@ export function BidClient() {
       )}
 
       {data?.truncated && (
-        <p className="h10-bd-note bad">
+        <p className="h10-bd-note warn">
           <AlertTriangle size={12} />
           <span>This scope holds more than 5,000 targets and the grid is showing the first 5,000 by bid. Narrow the scope — the export would be truncated too.</span>
         </p>

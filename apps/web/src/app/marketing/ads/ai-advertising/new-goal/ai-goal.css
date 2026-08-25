@@ -33,7 +33,7 @@
 /* scaffold preview ("what will be built") */
 .aig2-scaffold { display: flex; flex-direction: column; gap: 12px; }
 .aig2-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.aig2-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #344054; background: var(--nds-grey-75); border-radius: 999px; padding: 4px 11px; }
+.aig2-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #344054; background: var(--nds-grey-75); border-radius: var(--nds-radius-full); padding: 4px 11px; }
 .aig2-chip b { color: var(--nds-text); }
 .aig2-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #9a6b00; background: #fdf6e3; border: 1px solid #f1e2b6; border-radius: var(--nds-radius-lg); padding: 8px 11px; }
 .aig2-ptable { width: 100%; border-collapse: collapse; }

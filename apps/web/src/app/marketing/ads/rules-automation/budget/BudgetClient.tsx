@@ -823,7 +823,7 @@ export function BudgetClient() {
         "Reaches Amazon" column says "cut only locally" on each of the four rows.
       */}
       {census && census.campaigns > 0 && census.atFloor / census.campaigns > 0.5 && (
-        <p className="h10-bud-note bad">
+        <p className="h10-bud-note warn">
           <AlertTriangle size={12} />
           <span>
             <b>{num(census.atFloor)} of {num(census.campaigns)} campaigns sit at Amazon&rsquo;s €1 minimum</b>,
@@ -843,7 +843,7 @@ export function BudgetClient() {
       )}
 
       {data?.truncated && (
-        <p className="h10-bud-note bad">
+        <p className="h10-bud-note warn">
           <AlertTriangle size={12} />
           <span>This scope holds more than 5,000 campaigns and the grid is showing the first 5,000 by budget. Narrow the scope — the export would be truncated too.</span>
         </p>

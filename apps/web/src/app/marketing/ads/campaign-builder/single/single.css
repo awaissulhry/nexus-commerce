@@ -84,13 +84,13 @@
 .h10-scb-rules .rname { display: inline-flex; align-items: center; gap: 6px; }
 .h10-scb-rules .rname .ic { display: inline-flex; padding: 4px; border: none; background: none; color: var(--nds-grey-500); cursor: pointer; border-radius: 5px; }
 .h10-scb-rules .rname .ic:hover { color: var(--nds-blue-600); background: var(--nds-blue-50); }
-.h10-scb-rules .rname .ic.del:hover { color: var(--nds-imgup-err); background: #fdecea; }
+.h10-scb-rules .rname .ic.del:hover { color: var(--nds-imgup-err); background: var(--nds-note-error-bg); }
 .h10-scb-rules .rtype { color: var(--nds-grey-600); }
 .h10-scb-rules .nodata { padding: 40px 16px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
 
 /* SB.6 — Keyword & Bid Suggestion Automation toggle */
 .h10-scb-autotoggle { display: inline-flex; align-items: center; gap: 11px; font-size: 13.5px; font-weight: 500; color: var(--nds-grey-900); cursor: pointer; }
-.h10-scb-sw { position: relative; width: 38px; height: 22px; border-radius: 999px; background: #cfd6df; border: none; padding: 0; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+.h10-scb-sw { position: relative; width: 38px; height: 22px; border-radius: var(--nds-radius-full); background: #cfd6df; border: none; padding: 0; cursor: pointer; transition: background .15s; flex-shrink: 0; }
 .h10-scb-sw > span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--nds-white); box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
 .h10-scb-sw.on { background: var(--nds-blue-600); }
 .h10-scb-sw.on > span { transform: translateX(16px); }
@@ -129,4 +129,4 @@
 .h10-scb-review-card .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-900); background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 16px; padding: 3px 10px; }
 .h10-scb-review-card .chip .mt { font-size: 9px; font-weight: 800; color: var(--nds-blue-600); background: var(--nds-white); border-radius: 4px; padding: 0 4px; }
 .h10-scb-review-card .chip.more { color: var(--nds-grey-600); font-weight: 700; }
-.h10-scb-launcherr { margin-top: 14px; padding: 11px 14px; border: 1px solid #f3c9c5; background: #fdecea; border-radius: 9px; color: #b42318; font-size: 13px; font-weight: 500; }
+.h10-scb-launcherr { margin-top: 14px; padding: 11px 14px; border: 1px solid #f3c9c5; background: var(--nds-note-error-bg); border-radius: 9px; color: #b42318; font-size: 13px; font-weight: 500; }

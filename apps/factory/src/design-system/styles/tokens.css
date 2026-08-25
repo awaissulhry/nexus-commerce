@@ -142,6 +142,10 @@
   --nds-radius-xl: 10px;
   --nds-radius-2xl: 12px;
   --nds-radius-3xl: 14px;
+  --nds-radius-full: 999px;
+  --nds-note-error-bg: #fdecea;
+  --nds-note-error-fg: #7a1c16;
+  --nds-note-error-icon: #b3261e;
   --nds-radius-round: 999px;
 
   /* ── Elevation + focus ── */

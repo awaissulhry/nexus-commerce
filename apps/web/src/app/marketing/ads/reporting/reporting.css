@@ -318,7 +318,7 @@
 }
 .rpt-dl-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .rpt-dl-h .n {
-  margin-left: 2px; padding: 0 6px; border-radius: 999px;
+  margin-left: 2px; padding: 0 6px; border-radius: var(--nds-radius-full);
   background: rgb(var(--surface-sunken)); color: rgb(var(--text-secondary));
   font-size: 11px; letter-spacing: 0; font-variant-numeric: tabular-nums;
 }
@@ -413,7 +413,7 @@ select.rpt-input { height: 32px; }
    without the eye having to match a label against a legend. Reserved even when the metric is
    not plotted, so ticking one does not shunt the label sideways. */
 .rpt-kpi .lbl .sw {
-  width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: var(--nds-radius-full); flex-shrink: 0;
   border: 1px solid rgb(var(--border-default));
 }
 .rpt-kpi.on .lbl .sw { border-color: transparent; }
