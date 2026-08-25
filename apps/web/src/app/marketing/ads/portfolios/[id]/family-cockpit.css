@@ -17,10 +17,6 @@
 .fc-state.archived { background: var(--nds-grey-75); color: #7a869a; }
 .fc-mkt { font-size: 11px; color: #46536a; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 2px 7px; }
 
-.fc-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #46536a; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 6px 11px; cursor: pointer; }
-.fc-btn:hover:not(:disabled) { background: var(--nds-grey-50); }
-.fc-btn:disabled { opacity: 0.55; cursor: default; }
-.fc-btn.sm { font-size: 11px; padding: 4px 8px; }
 
 /* vitals strip — the family at a glance, on every tab */
 .fc-vitals { display: flex; gap: 0; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); margin-bottom: 14px; overflow-x: auto; }

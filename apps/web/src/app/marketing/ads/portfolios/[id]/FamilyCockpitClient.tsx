@@ -26,6 +26,9 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, Check, Crown, Info, Pause, Play, RefreshCw, X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/design-system/primitives/Button'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { AutomationDock, ruleDropProps, setRuleScope } from '../../_shared/AutomationDock'
 import './family-cockpit.css'
 
@@ -227,9 +230,9 @@ export function FamilyCockpitClient() {
           <span className={`fc-state ${(ck.portfolio.state ?? '').toLowerCase()}`}>{ck.portfolio.state ?? '—'}</span>
           {ck.portfolio.marketplace && <span className="fc-mkt">{ck.portfolio.marketplace}</span>}
         </div>
-        <button type="button" className="fc-btn" onClick={() => void load()} disabled={loading}>
+        <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={13} /> {loading ? 'Loading…' : 'Refresh'}
-        </button>
+        </Button>
       </header>
 
       {/* the family's vitals, always visible */}
@@ -263,8 +266,8 @@ export function FamilyCockpitClient() {
             <h2>Campaigns</h2>
             <span className="fc-sec-sub">the live-writes switch is this family&rsquo;s hard automation boundary — enforced at the write gate</span>
             <span className="fc-bulk">
-              <button type="button" className="fc-btn sm" disabled={busy != null} onClick={() => void bulkLiveWrites(true)}>All writable</button>
-              <button type="button" className="fc-btn sm" disabled={busy != null} onClick={() => void bulkLiveWrites(false)}>All read-only</button>
+              <Button variant="secondary" size="sm" disabled={busy != null} onClick={() => void bulkLiveWrites(true)}>All writable</Button>
+              <Button variant="secondary" size="sm" disabled={busy != null} onClick={() => void bulkLiveWrites(false)}>All read-only</Button>
             </span>
           </div>
           <div className="fc-tablewrap">
@@ -366,13 +369,13 @@ export function FamilyCockpitClient() {
             </span>
             <span className="fc-bulk">
               {covSet && (
-                <button type="button" className="fc-btn sm" disabled={previewBusy} onClick={() => void previewEngine()}>
+                <Button variant="secondary" size="sm" disabled={previewBusy} onClick={() => void previewEngine()}>
                   {previewBusy ? 'Previewing…' : 'Preview engine decisions'}
-                </button>
+                </Button>
               )}
-              <button type="button" className="fc-btn sm" disabled={covSetBusy} onClick={() => void seedCovSet()}>
+              <Button variant="secondary" size="sm" disabled={covSetBusy} onClick={() => void seedCovSet()}>
                 {covSet ? 'Re-seed from evidence' : 'Seed from evidence'}
-              </button>
+              </Button>
             </span>
           </div>
           {!covSet ? (

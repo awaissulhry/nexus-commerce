@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { RefreshCw, Plus, Pencil, Archive, Wallet, Search } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
 import { Modal } from '@/design-system/components/Modal'
@@ -258,11 +259,13 @@ function PortfoliosInner() {
                   <td className="num pf-acos">{r.acos == null ? '—' : pct(r.acos)}</td>
                   <td>{ago(r.lastSyncedAt)}</td>
                   <td className="pf-actions">
-                    <button type="button" className="pf-act" title="Set budget" disabled={rowBusy === r.portfolioId} onClick={() => openBudget(r)}><Wallet size={13} /></button>
-                    <button type="button" className="pf-act" title="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }}><Pencil size={13} /></button>
-                    {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
-                      <button type="button" className="pf-act" title="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)}><Archive size={13} /></button>
-                    )}
+                    <span className="pf-actrow">
+                      <ToolbarButton variant="boxed" icon={<Wallet size={13} />} label="Set budget" disabled={rowBusy === r.portfolioId} onClick={() => openBudget(r)} />
+                      <ToolbarButton variant="boxed" icon={<Pencil size={13} />} label="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }} />
+                      {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
+                        <ToolbarButton variant="boxed" icon={<Archive size={13} />} label="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)} tooltipAlign="end" />
+                      )}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -316,7 +319,7 @@ function PortfoliosInner() {
         title="Archive portfolio"
         footer={<>
           <Button variant="secondary" size="sm" onClick={() => setArchiveRow(null)}>Cancel</Button>
-          <Button variant="primary" className={mode === 'sandbox' ? undefined : 'pf-btn-danger'} size="sm" disabled={rowBusy === archiveRow?.portfolioId} onClick={() => void doArchive()}>{rowBusy === archiveRow?.portfolioId ? 'Archiving…' : 'Archive'}</Button>
+          <Button variant={mode === 'sandbox' ? 'primary' : 'danger'} size="sm" disabled={rowBusy === archiveRow?.portfolioId} onClick={() => void doArchive()}>{rowBusy === archiveRow?.portfolioId ? 'Archiving…' : 'Archive'}</Button>
         </>}
       >
         <div className="pf-form">
@@ -335,7 +338,7 @@ function PortfoliosInner() {
         title={<>Set budget · {budgetRow?.name}</>}
         footer={<>
           <Button variant="secondary" size="sm" onClick={() => setBudgetRow(null)}>Cancel</Button>
-          <Button variant="primary" className={mode === 'sandbox' ? undefined : 'pf-btn-danger'} size="sm" disabled={rowBusy === budgetRow?.portfolioId || !(Number(budgetAmount) > 0)} onClick={() => void doSetBudget()}>{rowBusy === budgetRow?.portfolioId ? 'Saving…' : 'Set budget'}</Button>
+          <Button variant={mode === 'sandbox' ? 'primary' : 'danger'} size="sm" disabled={rowBusy === budgetRow?.portfolioId || !(Number(budgetAmount) > 0)} onClick={() => void doSetBudget()}>{rowBusy === budgetRow?.portfolioId ? 'Saving…' : 'Set budget'}</Button>
         </>}
       >
         <div className="pf-form">

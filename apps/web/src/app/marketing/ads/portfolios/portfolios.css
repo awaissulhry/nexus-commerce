@@ -53,15 +53,12 @@
 .pf-mode--live { background: var(--nds-blue-50); color: #1f4f9e; border: 1px solid var(--nds-blue-200); }
 .pf-mode b { font-weight: 800; }
 .pf-confirm-name { font-size: 13px; color: #37495b; }
-.nds-btn.pf-btn-danger { background: var(--nds-red-500); border-color: var(--nds-red-500); color: var(--nds-white); }
-.nds-btn.pf-btn-danger:hover { background: #cf3d42; border-color: #cf3d42; }
 
 /* row actions */
 .pf-table thead th.pf-actions-h { text-align: right; }
 .pf-table tbody td.pf-actions { text-align: right; white-space: nowrap; }
-.pf-act { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: var(--nds-radius-sm); border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-500); cursor: pointer; margin-left: 4px; }
-.pf-act:hover:not(:disabled) { background: var(--nds-grey-50); color: var(--nds-grey-600); }
-.pf-act:disabled { opacity: 0.5; cursor: default; }
+/* the three row actions are design-system ToolbarButtons; this row is only their spacing. */
+.pf-actrow { display: inline-flex; align-items: center; gap: 4px; }
 .pf-table tbody td.pf-nocap { color: var(--nds-grey-400); font-weight: 600; }
 
 /* budget modal */
