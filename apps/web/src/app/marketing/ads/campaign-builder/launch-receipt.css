@@ -60,44 +60,18 @@
 }
 
 /* Wide content scrolls inside its own container — the page body must never scroll sideways. */
-.h10-vt-receipt-table-wrap {
-  overflow-x: auto;
-  border-top: 1px solid rgb(var(--border-subtle));
-}
-
-.h10-vt-receipt-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-  /* Long keyword text must not stretch the grid — see the DataGrid table-layout trap. */
-  table-layout: fixed;
-}
-
-.h10-vt-receipt-table th {
-  padding: 6px 10px;
-  text-align: left;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgb(var(--text-tertiary));
-  background: rgb(var(--surface-sunken));
-  border-bottom: 1px solid rgb(var(--border-subtle));
-  white-space: nowrap;
-}
-
-.h10-vt-receipt-table th:nth-child(1) { width: 90px; }
-.h10-vt-receipt-table th:nth-child(2) { width: 30%; }
-.h10-vt-receipt-table th:nth-child(3) { width: 90px; }
-
-.h10-vt-receipt-table td {
-  padding: 6px 10px;
-  border-bottom: 1px solid rgb(var(--border-subtle));
-  color: rgb(var(--text-primary));
-  vertical-align: top;
-}
-
-.h10-vt-receipt-table tr:last-child td { border-bottom: 0; }
+/* The receipt list is the DS `DataGrid`. Two things it does not do for us:
+   the hairline that joins it to the toggle above, and `table-layout: fixed`.
+   The grid is `table-layout: auto` with `white-space: nowrap`, so the deltas
+   column — a variable list of field → value pairs — would expand and shove the
+   rest off-screen. Column `width` is only a hint under auto layout; this is the
+   proven scoped fix, not a repaint. */
+.h10-vt-receipt-grid { border-top: 1px solid rgb(var(--border-subtle)); border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; }
+.h10-vt-receipt-grid .nds-grid { table-layout: fixed; }
+.h10-vt-receipt-grid tbody td { vertical-align: top; overflow: hidden; }
+/* the grid is `white-space: nowrap`; the deltas column is a stacked list of
+   field → value pairs and must wrap, or fixed layout clips it. */
+.h10-vt-receipt-grid tbody td { white-space: normal; }
 
 .h10-vt-t { color: rgb(var(--text-secondary)); white-space: nowrap; }
 

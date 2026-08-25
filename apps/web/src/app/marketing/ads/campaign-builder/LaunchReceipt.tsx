@@ -20,6 +20,7 @@
 import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { Banner } from '@/design-system/components/Banner'
+import { DataGrid } from '@/design-system/components'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
 import type { Tone } from '@/design-system/primitives/tone'
@@ -125,34 +126,33 @@ export function LaunchReceipt({ v, onRecheck, onContinue, rechecking }: {
           </button>
 
           {open && (
-            <div className="h10-vt-receipt-table-wrap">
-              <table className="h10-vt-receipt-table">
-                <thead>
-                  <tr><th>Type</th><th>Item</th><th>Status</th><th>What differs</th></tr>
-                </thead>
-                <tbody>
-                  {failed.map((e) => (
-                    <tr key={`${e.entityType}-${e.localId}`}>
-                      <td className="h10-vt-t">{TYPE_LABEL[e.entityType]}</td>
-                      <td className="h10-vt-l" title={e.label}>{e.label}</td>
-                      <td><Pill tone={VERDICT_TONE[e.verdict]}>{VERDICT_LABEL[e.verdict]}</Pill></td>
-                      <td className="h10-vt-d">
-                        {e.verdict === 'NOT_PUSHED' && <span className="h10-vt-muted">Never reached Amazon — needs pushing</span>}
-                        {e.verdict === 'MISSING_ON_AMAZON' && <span className="h10-vt-muted">Amazon does not return this id — will not self-heal</span>}
-                        {e.verdict === 'MISMATCH' && e.deltas.map((d) => (
-                          <span key={d.field} className="h10-vt-delta">
-                            <b>{d.field}</b>
-                            <span className="h10-vt-want">{d.intended}</span>
-                            <span className="h10-vt-arrow">→</span>
-                            <span className="h10-vt-got">{d.observed ?? 'empty'}</span>
-                          </span>
-                        ))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataGrid<LaunchEntityResult>
+              className="h10-vt-receipt-grid"
+              rows={failed}
+              rowKey={(e) => `${e.entityType}-${e.localId}`}
+              columns={[
+                { key: 'type', label: 'Type', width: 90, render: (e) => <span className="h10-vt-t">{TYPE_LABEL[e.entityType]}</span> },
+                { key: 'item', label: 'Item', width: 240, render: (e) => <span className="h10-vt-l" title={e.label}>{e.label}</span> },
+                { key: 'status', label: 'Status', width: 110, render: (e) => <Pill tone={VERDICT_TONE[e.verdict]}>{VERDICT_LABEL[e.verdict]}</Pill> },
+                {
+                  key: 'differs', label: 'What differs',
+                  render: (e) => (
+                    <span className="h10-vt-d">
+                      {e.verdict === 'NOT_PUSHED' && <span className="h10-vt-muted">Never reached Amazon — needs pushing</span>}
+                      {e.verdict === 'MISSING_ON_AMAZON' && <span className="h10-vt-muted">Amazon does not return this id — will not self-heal</span>}
+                      {e.verdict === 'MISMATCH' && e.deltas.map((d) => (
+                        <span key={d.field} className="h10-vt-delta">
+                          <b>{d.field}</b>
+                          <span className="h10-vt-want">{d.intended}</span>
+                          <span className="h10-vt-arrow">→</span>
+                          <span className="h10-vt-got">{d.observed ?? 'empty'}</span>
+                        </span>
+                      ))}
+                    </span>
+                  ),
+                },
+              ]}
+            />
           )}
         </div>
       )}
