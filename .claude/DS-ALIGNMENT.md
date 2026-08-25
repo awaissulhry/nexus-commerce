@@ -7,6 +7,33 @@ Every component in the advertising console uses the design system instead of han
 what the DS already ships. Measured 2026-08-25: **453 components, 1,331 raw `<button>`,
 269 `<input>`, 70 checkboxes, 48 `<table>`, 33 `<select>`, 25 hand-built modals.**
 
+## ROUND 2 — the target is 100%
+
+Measured on origin/main, both ends at the same commits and the same glob:
+
+| raw element | at start | now | converted |
+|---|---|---|---|
+| `<select>` | 91 | 14 | 85% |
+| checkbox | 114 | 26 | 77% |
+| `<input>` | 517 | 140 | 73% |
+| `<button>` | 1331 | **666** | 50% |
+| `<table>` | 67 | **67** | **0%** |
+
+**Tables are the untouched surface.** Nothing has adopted a DS grid, in either direction —
+`<table>` has not moved at all. Classified: **41 are real data grids** (sortable, selectable, or
+6+ columns), 22 are mid tables (4–5 columns), 4 are small static ones (≤3 columns).
+
+- Use **`DataGrid`** (`components/`) for almost all of them. It already has sortable columns,
+  sticky columns, selection, totals and per-column width, and is already adopted in 60 files.
+- Use **`WorkspaceGrid`** (`patterns/`) only when the surface also needs the filter bar and
+  column customisation — it is the heavier workspace shell, adopted in 58 files.
+- A genuinely static 2–3 column table is allowed to stay a `<table>`. Say so in the commit rather
+  than converting it to look thorough.
+
+**`ads/_shared`, `ads/_shell` and `ads/_canvas` are now IN scope** (they were held back in round 1
+because every other directory imports them). They belong to ONE session — see the prompts. Convert
+their internals only; do not change what they export, or you break every consumer at once.
+
 ## The DS is at `apps/web/src/design-system/`
 - `primitives/` — **Button** (`primary|secondary|ghost|danger|link`, `md|sm`, `active`), ToolbarButton, tone
 - `components/` — Modal, Listbox, MultiSelect, Combobox, Menu, Tabs, Card, Banner, Toast,
