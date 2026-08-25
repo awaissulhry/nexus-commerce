@@ -9,8 +9,11 @@
  */
 
 import { useMemo, useState } from 'react'
-import { X, Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components/Modal'
+import { Listbox } from '@/design-system/components/Listbox'
 import { buildRule, type AutomationDef, type ParamDef } from './automations'
 import { CatIcon } from './_icons'
 
@@ -56,10 +59,19 @@ export function Configurator({ def, onClose, onSaved }: { def: AutomationDef; on
   }
 
   return (
-    <div className="az-modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="az-modal" role="dialog" aria-label={`Configure ${def.name}`} style={{ width: 'min(620px, 96vw)' }}>
-        <div className="az-modal-head"><h2><span className="az-cfgicon"><CatIcon cat={def.category} size={18} /></span>{def.name}</h2><button className="x" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
-        <div className="az-modal-body" style={{ display: 'block', overflowY: 'auto', padding: '14px 22px' }}>
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span className="az-cfgicon"><CatIcon cat={def.category} size={18} /></span>{def.name}</span>}
+      footer={<>
+        <span style={{ color: 'var(--ink2)', fontSize: 12 }}>Added disabled + dry-run — turn it on from Active rules.</span>
+        <span className="grow" />
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={saving} onClick={() => void save()}><Check size={15} /> {saving ? 'Adding…' : 'Add automation'}</Button>
+      </>}
+    >
+      <div>
           <div style={{ color: 'var(--ink2)', fontSize: 13, lineHeight: 1.55, marginBottom: 14 }}>{def.desc}</div>
 
           {/* live plain-English preview */}
@@ -76,8 +88,8 @@ export function Configurator({ def, onClose, onSaved }: { def: AutomationDef; on
                 <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
                   <label style={{ flex: 1, fontWeight: 500, fontSize: 13 }}>{p.label}{p.hint && <span style={{ display: 'block', color: 'var(--ink2)', fontSize: 11.5, fontWeight: 400 }}>{p.hint}</span>}</label>
                   {p.kind === 'select'
-                    ? <select value={String(vals[p.key])} onChange={(e) => setVals((v) => ({ ...v, [p.key]: e.target.value }))} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', cursor: 'pointer' }}>{(p.options ?? []).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
-                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><input type="number" step="any" value={vals[p.key]} onChange={(e) => setVals((v) => ({ ...v, [p.key]: e.target.value }))} style={{ width: 96, border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', textAlign: 'right' }} /><span style={{ color: 'var(--ink2)', fontSize: 12, minWidth: 28 }}>{unitSuffix(p.kind)}</span></span>}
+                    ? <Listbox ariaLabel={p.label} width={190} value={String(vals[p.key])} onChange={(nv) => setVals((v) => ({ ...v, [p.key]: nv }))} options={(p.options ?? []).map((o) => ({ value: o.v, label: o.l }))} />
+                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Input type="number" step="any" aria-label={p.label} value={vals[p.key]} onChange={(e) => setVals((v) => ({ ...v, [p.key]: e.target.value }))} style={{ width: 96, textAlign: 'right' }} /><span style={{ color: 'var(--ink2)', fontSize: 12, minWidth: 28 }}>{unitSuffix(p.kind)}</span></span>}
                 </div>
               ))}
             </div>
@@ -85,23 +97,17 @@ export function Configurator({ def, onClose, onSaved }: { def: AutomationDef; on
 
           <div className="az-fp-sec" style={{ borderBottom: 0 }}>
             <h4>Name</h4>
-            <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', font: 'inherit' }} />
+            <div style={{ display: 'grid' }}><Input aria-label="Automation name" value={name} onChange={(e) => setName(e.target.value)} /></div>
           </div>
 
-          <button className="az-link" onClick={() => setAdv((a) => !a)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Advanced guardrails <ChevronDown size={14} style={{ transform: adv ? 'rotate(180deg)' : undefined }} /></button>
+          <Button variant="link" aria-expanded={adv} onClick={() => setAdv((a) => !a)}>Advanced guardrails <ChevronDown size={14} style={{ transform: adv ? 'rotate(180deg)' : undefined }} /></Button>
           {adv && (
             <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max runs / day<br /><input type="number" placeholder={String(built.maxExecutionsPerDay ?? 10)} value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} style={{ marginTop: 4, width: 110, border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit' }} /></label>
-              <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max €/day affected<br /><input type="number" placeholder={built.maxDailyAdSpendCentsEur != null ? String(built.maxDailyAdSpendCentsEur / 100) : 'no limit'} value={maxSpend} onChange={(e) => setMaxSpend(e.target.value)} style={{ marginTop: 4, width: 110, border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit' }} /></label>
+              <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max runs / day<br /><Input type="number" placeholder={String(built.maxExecutionsPerDay ?? 10)} value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} style={{ width: 90 }} /></label>
+              <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max €/day affected<br /><Input type="number" prefix="€" placeholder={built.maxDailyAdSpendCentsEur != null ? String(built.maxDailyAdSpendCentsEur / 100) : 'no limit'} value={maxSpend} onChange={(e) => setMaxSpend(e.target.value)} style={{ width: 90 }} /></label>
             </div>
           )}
-        </div>
-        <div className="az-modal-foot">
-          <span style={{ flex: 1, color: 'var(--ink2)', fontSize: 12 }}>Added disabled + dry-run — turn it on from Active rules.</span>
-          <button className="az-btn" onClick={onClose}>Cancel</button>
-          <button className="az-btn dark" disabled={saving} onClick={() => void save()}><Check size={15} /> {saving ? 'Adding…' : 'Add automation'}</button>
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }
