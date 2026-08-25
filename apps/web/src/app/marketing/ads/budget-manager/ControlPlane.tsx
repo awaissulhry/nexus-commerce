@@ -157,7 +157,7 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
           <div className="cp-fld"><span>Strategy</span><div className="cp-statusbtns">{STRAT.map(([v, l]) => (<button type="button" key={v} className={effStrat === v ? 'on' : ''} onClick={() => stageStrat(v)}>{l}</button>))}</div></div>
           <label className="cp-fld"><span>Target ACoS</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" /></label>
           <div className="cp-fld"><span>Placement multipliers</span><div className="cp-pl3">
-            {(['tos', 'pdp', 'ros'] as const).map((k) => (<label key={k}><span>{k === 'tos' ? 'ToS' : k === 'pdp' ? 'PDP' : 'RoS'}</span><Input fieldClassName="cp-plin" suffix="%" inputMode="decimal" value={pl[k]} onChange={(e) => stagePl(k, e.target.value)} placeholder="0" aria-label={`${k} multiplier`} /></label>))}
+            {(['tos', 'pdp', 'ros'] as const).map((k) => (<label key={k}><span>{k === 'tos' ? 'ToS' : k === 'pdp' ? 'PDP' : 'RoS'}</span><Input size="sm" fieldClassName="cp-plin" suffix="%" inputMode="decimal" value={pl[k]} onChange={(e) => stagePl(k, e.target.value)} placeholder="0" aria-label={`${k} multiplier`} /></label>))}
           </div></div>
         </div>
       )}

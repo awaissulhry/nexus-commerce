@@ -66,13 +66,7 @@
 .bm-nextbtn:hover { background: var(--nds-grey-75); border-color: var(--nds-grey-150); }
 .bm-nextbtn svg { color: var(--nds-grey-400); }
 .bm-nextbtn .ph { color: var(--nds-grey-400); font-weight: 500; }
-/* NOT converted — see .claude/DS-GAPS.md. This is an inline editor inside a data-grid cell:
-   the hand-rolled control is 22.5px tall, the DS Input is 31px, and the DS has no compact
-   field size (`.nds-field` has only a `disabled` modifier). Left alone rather than worked
-   around locally. */
-.bm-nextedit { display: inline-flex; align-items: center; border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); padding: 3px 8px; box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
-.bm-nextedit .pf { color: var(--nds-grey-500); font-size: 12.5px; margin-right: 3px; }
-.bm-nextedit input { border: none; outline: none; font: inherit; font-size: 12.5px; width: 64px; color: var(--nds-grey-900); }
+.bm-nextedit { width: 116px; min-width: 0; }
 
 /* Settings modal */
 .bm-set { display: flex; flex-direction: column; gap: 18px; }
@@ -96,10 +90,14 @@
 .bm-cal-sum.ok { color: #1f7a44; }
 .bm-cal-sum.bad { color: #d9534f; }
 .bm-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-.bm-cal-day { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+/* `min-width: 0` here for the same reason as `.bm-eurin` below: the day cell is a `1fr`
+   grid item, and now that its input is the DS field — a real flex container with a
+   ~20-character min-content width — the track would floor at 146px and the seven-column
+   week would render 1058px wide inside a 624px modal. Measured. */
+.bm-cal-day { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
 .bm-cal-day .d { font-size: 10px; color: var(--nds-grey-500); }
-.bm-cal-day input { width: 100%; text-align: center; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-sm); padding: 5px 2px; font: inherit; font-size: 11.5px; color: var(--nds-grey-900); outline: none; }
-.bm-cal-day input:focus { border-color: var(--nds-blue-600); }
+.bm-cal-in { width: 100%; min-width: 0; }
+.bm-cal-in > input { text-align: center; }  /* the only thing the calendar adds to the primitive */
 
 /* More drawer */
 .bm-more-foot { font-size: 12px; color: var(--nds-grey-500); margin-right: auto; }

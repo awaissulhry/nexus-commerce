@@ -150,7 +150,7 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
               {cal.map((v, i) => (
                 <label key={i} className="bm-cal-day" title={`Day ${i + 1}`}>
                   <span className="d">{i + 1}</span>
-                  <input inputMode="decimal" value={v} onChange={(e) => setCal((c) => c.map((x, j) => (j === i ? (Number(e.target.value) || 0) : x)))} aria-label={`Day ${i + 1} percent`} />
+                  <Input size="xs" fieldClassName="bm-cal-in" inputMode="decimal" value={v} onChange={(e) => setCal((c) => c.map((x, j) => (j === i ? (Number(e.target.value) || 0) : x)))} aria-label={`Day ${i + 1} percent`} />
                 </label>
               ))}
             </div>
@@ -214,7 +214,7 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
             <div className="bm-more-seg">
               {(['ENABLED', 'PAUSED', 'ALL'] as const).map((s) => (<button type="button" key={s} className={statusFilter === s ? 'on' : ''} onClick={() => setStatusFilter(s)}>{s === 'ENABLED' ? 'Enabled' : s === 'PAUSED' ? 'Paused' : 'All'}</button>))}
             </div>
-            <Input fieldClassName="bm-more-search" leadingIcon={<Search size={13} />} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" aria-label="Search campaigns" />
+            <Input size="sm" fieldClassName="bm-more-search" leadingIcon={<Search size={13} />} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" aria-label="Search campaigns" />
             <span className="bm-more-count">{shown.length} of {camps.length}</span>
           </div>
           {shown.length === 0 ? <div className="bm-more-empty">No campaigns match this filter.</div> : (
@@ -224,8 +224,8 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
                 <div className="bm-more-row" key={c.id}>
                   <span className="nm"><span className={`bm-cdot ${c.status === 'ENABLED' ? 'on' : c.status === 'PAUSED' ? 'pa' : 'ar'}`} />{c.name}</span>
                   <span className="db">{eur(c.dailyBudgetCents)}</span>
-                  <Input fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} />
-                  <Input fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} />
+                  <Input size="sm" fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} />
+                  <Input size="sm" fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} />
                 </div>
               ))}
             </div>
@@ -331,7 +331,7 @@ export function BudgetManagerClient() {
     { key: 'thisMonth', label: 'This Month', metric: false, sortable: true, sortValue: (r) => r.spendCents ?? 0, render: (r) => (<span className="bm-cell"><Sparkline data={r.daily} color={STATUS_COLOR[r.status]} /><span className="bm-cellv">{eur(r.spendCents)}<i className={`st st-${r.status}`} title={STATUS_LABEL[r.status]}>{pctTxt(r.pct)}</i></span></span>) },
     { key: 'nextMonthBudget', label: 'Next Month Budget', metric: false, sortable: true, sortValue: (r) => r.nextMonthBudgetCents ?? -1, render: (r) => (
       editingNext === r.marketplace
-        ? <span className="bm-nextedit"><span className="pf">€</span><input autoFocus inputMode="decimal" value={nextDraft} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" /></span>
+        ? <Input size="xs" fieldClassName="bm-nextedit" prefix="€" autoFocus inputMode="decimal" value={nextDraft} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" />
         : <button type="button" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null ? eur(r.nextMonthBudgetCents) : <span className="ph">Set budget</span>}<Pencil size={11} /></button>
     ) },
   ], [editingNext, nextDraft, month, result]) // eslint-disable-line react-hooks/exhaustive-deps
