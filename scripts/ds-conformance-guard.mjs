@@ -163,8 +163,31 @@ if (mode === '--check') {
     readFileSync(join(ROOT, 'marketing/ads/ads.css'), 'utf8') +
     readFileSync(join(ROOT, '_shared/shared-shell.css'), 'utf8')
   const ebayCss = readFileSync(join(ROOT, 'marketing/ads/ebay/ebay.css'), 'utf8')
-  const amazonPalette = new Set((adsCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))
-  const offPalette = [...new Set((ebayCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))].filter((h) => !amazonPalette.has(h))
+  // Phase 9.1 — ads.css is being TOKENIZED, so its palette is no longer only literals. A
+  // `var(--nds-blue-600)` contributes #1f6fde exactly as the literal did, and reading literals
+  // alone shrinks the palette every time a conversion lands: ebay.css would start failing for
+  // colours that are still, in fact, identical. That happened on the first pass — 1,384 literals
+  // left ads.css and 5 ebay colours "went off-palette" without anyone changing them. So resolve
+  // BOTH sides: literals plus the hex behind every --nds-* token the file references. This is the
+  // "resolve both sides through tokens.css" option the note below names.
+  const tokenSrc = readFileSync(join(process.cwd(), 'apps/web/src/design-system/styles/tokens.css'), 'utf8')
+  const tokenHex = new Map()
+  for (const m of tokenSrc.matchAll(/(--nds-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g)) tokenHex.set(m[1], m[2].toLowerCase())
+  for (let i = 0; i < 4; i++) {  // `--nds-primary: var(--nds-blue-600)` — resolve alias hops
+    for (const m of tokenSrc.matchAll(/(--nds-[a-z0-9-]+)\s*:\s*var\((--nds-[a-z0-9-]+)\)\s*;/g)) {
+      if (!tokenHex.has(m[1]) && tokenHex.has(m[2])) tokenHex.set(m[1], tokenHex.get(m[2]))
+    }
+  }
+  const resolvePalette = (css) => {
+    const out = new Set((css.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((h) => h.toLowerCase()))
+    for (const m of css.matchAll(/var\((--nds-[a-z0-9-]+)\)/g)) {
+      const hex = tokenHex.get(m[1])
+      if (hex) out.add(hex)
+    }
+    return out
+  }
+  const amazonPalette = resolvePalette(adsCss)
+  const offPalette = [...resolvePalette(ebayCss)].filter((h) => !amazonPalette.has(h))
   // 🔴 This check compares literal hex SETS. Phase 9.1 rewrites ads.css to
   // var(--nds-*), at which point the Amazon palette empties and every ebay.css
   // colour would "match" an empty set — the check would pass while enforcing
