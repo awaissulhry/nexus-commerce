@@ -429,7 +429,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => setConfirm(null)}>Cancel</Button>
-            <Button variant="primary" className={mode === 'sandbox' ? undefined : 'rec-btn-live'} size="sm" disabled={!!busy} onClick={confirmApply}>
+            <Button variant={mode === 'sandbox' ? 'primary' : 'danger'} size="sm" disabled={!!busy} onClick={confirmApply}>
               {mode === 'sandbox' ? 'Apply in sandbox' : 'Apply'}
             </Button>
           </>

@@ -90,8 +90,6 @@
 .rec-mode--sandbox { background: var(--nds-blue-50); color: var(--nds-blue-600); border: 1px solid var(--nds-blue-200); }
 .rec-mode--live { background: #fdf4f4; color: var(--nds-note-error-icon); border: 1px solid #f3c0c2; }
 .rec-mode b { font-weight: 800; }
-.nds-btn.rec-btn-live { background: var(--nds-red-500); border-color: var(--nds-red-500); color: var(--nds-white); }
-.nds-btn.rec-btn-live:hover { background: #cf3d42; border-color: #cf3d42; }
 
 /* detail drawer — provenance flow */
 .rec-dh { display: inline-flex; align-items: center; gap: 8px; }
@@ -124,11 +122,6 @@
 .rec-plan-lede { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 
 .rec-plan-stars { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; margin-bottom: 12px; }
-.rec-plan-star { text-align: left; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); background: var(--nds-white); padding: 9px 12px; cursor: pointer; }
-.rec-plan-star:hover { border-color: #b9cbe6; }
-.rec-plan-star.on { border-color: var(--nds-blue-600); box-shadow: inset 0 0 0 1px var(--nds-blue-600); background: var(--nds-imgup-surface); }
-.rec-plan-star b { display: block; font-size: 12.5px; color: var(--nds-grey-900); }
-.rec-plan-star span { display: block; margin-top: 2px; font-size: 11.5px; color: var(--nds-grey-500); line-height: 1.45; }
 
 .rec-plan-ctl { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 /* The DS secondary button renders BORDERLESS in this console, so "Preview plan" read as bold text
@@ -139,12 +132,9 @@
    `border: 0px` preflight wins. Same for background via --surface-card.
    Scoped literal here rather than a DS-wide change: ~164 DS declarations share that root cause and
    deciding their intended appearance is not this panel's call. See ACR.6.3. */
-.rec-plan-ctl .nds-btn { border: 1px solid var(--nds-grey-200); background: var(--nds-white); }
-.rec-plan-ctl .nds-btn:hover:not(:disabled) { background: var(--nds-grey-75); }
-.rec-plan-ctl .nds-btn.rec-btn-live { border-color: var(--nds-red-500); background: var(--nds-red-500); }
 .rec-plan-f { display: flex; flex-direction: column; gap: 3px; }
 .rec-plan-f > span { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
-.rec-plan-f input { width: 92px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 9px; font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white); }
+.rec-plan-in { width: 92px; min-width: 0; }  /* DS Input fieldClassName — width only */
 .rec-plan-note { flex: 1; min-width: 220px; font-size: 11px; color: var(--nds-grey-500); line-height: 1.5; }
 
 .rec-plan-err { margin-top: 10px; font-size: 12px; color: var(--nds-note-error-icon); background: #fdeaea; border-radius: var(--nds-radius-lg); padding: 8px 11px; }

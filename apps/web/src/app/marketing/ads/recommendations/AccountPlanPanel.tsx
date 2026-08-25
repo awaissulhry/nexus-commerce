@@ -29,6 +29,8 @@
 import { useCallback, useState } from 'react'
 import { ChevronDown, Rocket, Check } from 'lucide-react'
 import { Button } from '@/design-system/primitives/Button'
+import { Input } from '@/design-system/primitives/Input'
+import { RadioCard } from '@/design-system/primitives/RadioCard'
 import { Modal } from '@/design-system/components/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -108,25 +110,29 @@ export function AccountPlanPanel({ mode: accountMode, toast }: { mode: string; t
 
           <div className="rec-plan-stars" role="radiogroup" aria-label="North star">
             {NORTH_STARS.map((n) => (
-              <button key={n.mode} type="button" role="radio" aria-checked={goal === n.mode}
-                className={`rec-plan-star${goal === n.mode ? ' on' : ''}`}
-                onClick={() => { setGoal(n.mode); setPlan(null); setApplied(null) }}>
-                <b>{n.title}</b>
-                <span>{n.blurb}</span>
-              </button>
+              <RadioCard
+                key={n.mode}
+                name="rec-north-star"
+                value={n.mode}
+                title={n.title}
+                description={n.blurb}
+                checked={goal === n.mode}
+                selected={goal === n.mode}
+                onChange={() => { setGoal(n.mode); setPlan(null); setApplied(null) }}
+              />
             ))}
           </div>
 
           <div className="rec-plan-ctl">
             <label className="rec-plan-f">
               <span>Marketplace</span>
-              <input value={marketplace} onChange={(e) => setMarketplace(e.target.value)} placeholder="all" aria-label="Marketplace code, blank for all" />
+              <Input size="sm" fieldClassName="rec-plan-in" value={marketplace} onChange={(e) => setMarketplace(e.target.value)} placeholder="all" aria-label="Marketplace code, blank for all" />
             </label>
             <Button variant="secondary" size="sm" disabled={loading} onClick={() => void preview()}>
               {loading ? 'Building the plan…' : 'Preview plan'}
             </Button>
             {plan && changes > 0 && (
-              <Button variant="primary" size="sm" className={sandbox ? undefined : 'rec-btn-live'} disabled={applying} onClick={() => setConfirming(true)}>
+              <Button variant={sandbox ? 'primary' : 'danger'} size="sm" disabled={applying} onClick={() => setConfirming(true)}>
                 {applying ? 'Applying…' : `Apply ${changes} change${changes === 1 ? '' : 's'}`}
               </Button>
             )}
@@ -182,7 +188,7 @@ export function AccountPlanPanel({ mode: accountMode, toast }: { mode: string; t
             : 'Live — changes reach Amazon for campaigns on the write allowlist. Everything else is skipped and reported.'}
           footer={<>
             <Button variant="secondary" size="sm" onClick={() => setConfirming(false)}>Cancel</Button>
-            <Button variant="primary" size="sm" className={sandbox ? undefined : 'rec-btn-live'} onClick={() => void apply()}>
+            <Button variant={sandbox ? 'primary' : 'danger'} size="sm" onClick={() => void apply()}>
               {sandbox ? `Simulate ${changes} change${changes === 1 ? '' : 's'}` : `Apply ${changes} change${changes === 1 ? '' : 's'}`}
             </Button>
           </>}
