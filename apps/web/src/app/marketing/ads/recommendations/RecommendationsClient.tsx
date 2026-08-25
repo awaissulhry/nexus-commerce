@@ -25,6 +25,7 @@ import { Sparkles, AlertTriangle, Check, X, ArrowUpRight, ChevronRight } from 'l
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AccountPlanPanel } from './AccountPlanPanel'
 import { Button } from '@/design-system/primitives/Button'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Modal } from '@/design-system/components/Modal'
 import { Drawer } from '@/design-system/components/Drawer'
@@ -147,7 +148,7 @@ function RecommendationsInner() {
   const dismiss = (r: Recommendation) => {
     setDismissed((s) => new Set(s).add(r.id))
     setDetail(null)
-    toast(<>Dismissed · <button type="button" className="rec-undo" onClick={() => setDismissed((s) => { const n = new Set(s); n.delete(r.id); return n })}>Undo</button></>, 'info')
+    toast(<>Dismissed · <Button variant="link" inline className="rec-undo" onClick={() => setDismissed((s) => { const n = new Set(s); n.delete(r.id); return n })}>Undo</Button></>, 'info')
   }
 
   const recs = (data?.recommendations ?? [])
@@ -280,14 +281,14 @@ function RecommendationsInner() {
                       <span className="rec-applied"><Check size={14} /> Applied</span>
                     ) : (
                       <>
-                        <button type="button" className="rec-iconbtn apply" disabled={busy === r.id} title="Apply" onClick={() => setConfirm({ kind: 'one', rec: r })}>{busy === r.id ? '…' : <Check size={14} />}</button>
-                        <button type="button" className="rec-iconbtn" title="Dismiss" onClick={() => dismiss(r)}><X size={14} /></button>
+                        <ToolbarButton variant="boxed" className="rec-iconbtn apply" tooltip={false} icon={busy === r.id ? <>…</> : <Check size={14} />} label="Apply" title="Apply" disabled={busy === r.id} onClick={() => setConfirm({ kind: 'one', rec: r })} />
+                        <ToolbarButton variant="boxed" className="rec-iconbtn" tooltip={false} icon={<X size={14} />} label="Dismiss" title="Dismiss" onClick={() => dismiss(r)} />
                       </>
                     )
                   ) : (
                     <>
                       <span className="rec-review"><ArrowUpRight size={12} /> Review</span>
-                      <button type="button" className="rec-iconbtn" title="Dismiss" onClick={() => dismiss(r)}><X size={14} /></button>
+                      <ToolbarButton variant="boxed" className="rec-iconbtn" tooltip={false} icon={<X size={14} />} label="Dismiss" title="Dismiss" onClick={() => dismiss(r)} />
                     </>
                   )}
                 </div>

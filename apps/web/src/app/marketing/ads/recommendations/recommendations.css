@@ -69,11 +69,10 @@
 .rec-metric b { font-weight: 700; color: #37495b; font-variant-numeric: tabular-nums; }
 .rec-impact { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; flex-shrink: 0; margin-top: 2px; }
 .rec-acts { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.rec-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--nds-radius-full); cursor: pointer; border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-500); }
-.rec-iconbtn:hover:not(:disabled) { background: var(--nds-grey-50); color: var(--nds-grey-600); }
-.rec-iconbtn:disabled { opacity: 0.5; cursor: default; }
-.rec-iconbtn.apply { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.rec-iconbtn.apply:hover:not(:disabled) { background: var(--nds-blue-700); }
+/* The box is the DS's (`ToolbarButton variant="boxed"`); the filled Apply is this page's own
+   affirmative, restated deep enough to beat `.nds-tbtn.boxed` on specificity, not load order. */
+.nds-tbtn.rec-iconbtn.apply { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
+.nds-tbtn.rec-iconbtn.apply:hover:not(:disabled) { background: var(--nds-blue-700); }
 .rec-applied { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #067d62; }
 .rec-review { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--nds-grey-500); }
 .rec-empty { border: 1px dashed var(--nds-grey-200); border-radius: 11px; padding: 30px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
@@ -113,8 +112,9 @@
    Collapsed by default and inert until Preview: this is the one control on the
    page whose blast radius is the whole account rather than a single card. */
 .rec-plan { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); background: var(--nds-white); overflow: hidden; }
-.rec-plan-t { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 0; background: var(--nds-white); cursor: pointer; font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); text-align: left; }
-.rec-plan-t:hover { background: var(--nds-grey-25); }
+/* `Button block variant="quiet"` gives the full-width row, the reset and the hover; what is left
+   is this header's own inset and type, at 0,3,0 so `.nds-btn` cannot win it on load order. */
+.nds-btn.block.rec-plan-t { padding: 10px 14px; gap: 8px; font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); }
 .rec-plan-t > svg:first-child { color: var(--nds-blue-600); }
 .rec-plan-t > span { flex: 1; }
 .rec-plan-t svg.open { transform: rotate(180deg); }

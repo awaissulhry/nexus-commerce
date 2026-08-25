@@ -95,11 +95,11 @@ export function AccountPlanPanel({ mode: accountMode, toast }: { mode: string; t
 
   return (
     <section className="rec-plan">
-      <button type="button" className="rec-plan-t" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <Button block variant="quiet" className="rec-plan-t" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Rocket size={13} aria-hidden />
         <span>Account plan — set one goal, apply the whole plan</span>
         <ChevronDown size={15} className={open ? 'open' : ''} aria-hidden />
-      </button>
+      </Button>
 
       {open && (
         <div className="rec-plan-b">
