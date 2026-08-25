@@ -26,6 +26,7 @@ import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange } from './_rd/
 import { GrainSwitch } from './_rd/GrainSwitch'
 import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
+import { Pill } from '@/design-system/primitives'
 
 const builderHref = (groupId: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule?groupId=${groupId}`
 
@@ -176,8 +177,8 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
       sortValue: (r) => (r.runtime.canConverge ? 1 : 0),
       tip: 'Whether this campaign can reach what it is being asked to hold. Status only says whether it is switched on.',
       render: (r) => (r.runtime.canConverge
-        ? <span className="h10-pill ok" title="Nothing is stopping this campaign from holding its target.">OK</span>
-        : <span className="h10-pill warn" title={r.runtime.cannotConvergeReason ?? ''}>Cannot converge</span>),
+        ? <Pill tone="success" title="Nothing is stopping this campaign from holding its target.">OK</Pill>
+        : <Pill tone="warning" title={r.runtime.cannotConvergeReason ?? ''}>Cannot converge</Pill>),
     },
     {
       key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.scheduleEnabled ? 0 : 1),

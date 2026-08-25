@@ -11,6 +11,7 @@ import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGr
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { kindLabel } from '../_lib/rules'
 import type { SuggestionRow } from './SuggestionsTab'
+import { Pill } from '@/design-system/primitives'
 
 interface AppliedRow extends SuggestionRow {
   decidedBy: string | null; decidedAt: string | null
@@ -32,7 +33,7 @@ export function AppliedTab({ busy, act, bump }: { busy: boolean; act: (fn: () =>
 
   const columns: GridColumn<AppliedRow>[] = useMemo(() => [
     { key: 'when', label: 'When', metric: false, sortValue: (p) => p.decidedAt ?? p.createdAt, render: (p) => new Date(p.decidedAt ?? p.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) },
-    { key: 'kind', label: 'Change', metric: false, sortValue: (p) => p.kind, render: (p) => <span className="h10-pill ok">{kindLabel(p.kind)}</span> },
+    { key: 'kind', label: 'Change', metric: false, sortValue: (p) => p.kind, render: (p) => <Pill tone="success">{kindLabel(p.kind)}</Pill> },
     { key: 'delta', label: 'From → To', metric: false, sortable: false, render: (p) => <span>{String(p.proposedAction.from ?? '')} → <b>{String(p.proposedAction.to ?? '')}</b></span> },
     { key: 'rule', label: 'Rule', metric: false, sortValue: (p) => (p.ruleId ? ruleNames.get(p.ruleId) ?? '' : ''), render: (p) => <span className="eb-be-hint">{p.ruleId ? ruleNames.get(p.ruleId) ?? '—' : 'guard'}</span> },
     { key: 'result', label: 'Result', metric: false, sortable: false, render: (p) => <span className="eb-be-hint" title={p.appliedResult?.detail}>{p.appliedResult?.detail ?? '—'}</span> },

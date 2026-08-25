@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err } from '../../_lib/modal'
 import { postEbayAds } from '../../_lib'
+import { Pill } from '@/design-system/primitives'
 
 // ── Match a listing to a catalog product (unlocks costs + break-evens) ──────
 interface MatchCandidate { id: string; sku: string; name: string; costPriceCents: number | null; suggested: boolean }
@@ -69,8 +70,8 @@ export function MatchModal(props: { open: boolean; onClose: () => void; itemId: 
                 <input type="radio" name="match-candidate" checked={pick === c.id} onChange={() => setPick(c.id)} />
                 <span style={{ flex: 1 }}>{c.name}</span>
                 <code>{c.sku}</code>
-                {c.suggested && <span className="h10-pill arch">suggested</span>}
-                {c.costPriceCents != null && <span className="h10-pill ok">cost €{(c.costPriceCents / 100).toFixed(2)}</span>}
+                {c.suggested && <Pill tone="neutral">suggested</Pill>}
+                {c.costPriceCents != null && <Pill tone="success">cost €{(c.costPriceCents / 100).toFixed(2)}</Pill>}
               </label>
             </li>
           ))}

@@ -14,6 +14,7 @@ import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGr
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { kindLabel, type WhyReasoning } from '../_lib/rules'
 import { WhyModal } from '../modals/WhyModal'
+import { Pill } from '@/design-system/primitives'
 
 export interface SuggestionRow {
   id: string; kind: string; status: string; ruleId: string | null
@@ -98,7 +99,7 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
   }, [act])
 
   const columns: GridColumn<SuggestionRow>[] = useMemo(() => [
-    { key: 'kind', label: 'Suggestion', metric: false, sortValue: (p) => p.kind, render: (p) => <span className="h10-pill ok">{kindLabel(p.kind)}</span> },
+    { key: 'kind', label: 'Suggestion', metric: false, sortValue: (p) => p.kind, render: (p) => <Pill tone="success">{kindLabel(p.kind)}</Pill> },
     { key: 'change', label: 'Change', metric: false, sortable: false, render: (p) => <span>{String(p.proposedAction.from ?? '')} → <b>{String(p.proposedAction.to ?? '')}</b></span> },
     { key: 'rule', label: 'Rule', metric: false, sortValue: (p) => (p.ruleId ? ruleNames.get(p.ruleId) ?? '' : ''), render: (p) => <span className="eb-be-hint">{p.ruleId ? ruleNames.get(p.ruleId) ?? '—' : 'guard'}</span> },
     { key: 'guard', label: 'Guardrail', metric: false, sortable: false, render: (p) => p.reasoning?.clampNote ? <span className="h10-pill warn">{p.reasoning.clampNote}</span> : <span className="h10-pill ok">within break-even</span> },

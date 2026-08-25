@@ -16,6 +16,7 @@ import { EbayMark } from '../../../_shell/EbayMark'
 import { HoverCard } from '../../../campaigns/FilterDropdown'
 import { getEbayAds, EBAY_MARKETS } from '../../_lib'
 import type { BuilderTemplate } from './_wizard/plan'
+import { Pill } from '@/design-system/primitives'
 
 const FLAG: Record<string, string> = { EBAY_IT: '🇮🇹', EBAY_DE: '🇩🇪', EBAY_FR: '🇫🇷', EBAY_ES: '🇪🇸', EBAY_GB: '🇬🇧' }
 
@@ -102,7 +103,7 @@ export function EbayCampaignChooser() {
                   <span className="h10-cb-ttl">{c.title}</span>
                   <span className="h10-cb-bf"><b>Best for:</b> {c.bestFor}</span>
                   <span className="h10-cb-desc">{c.desc}</span>
-                  {disabled && <span className="h10-pill warn" style={{ marginTop: 8 }}>unavailable on eBay Spain</span>}
+                  {disabled && <Pill tone="warning" style={{ marginTop: 8 }}>unavailable on eBay Spain</Pill>}
                 </button>
               )
             })}

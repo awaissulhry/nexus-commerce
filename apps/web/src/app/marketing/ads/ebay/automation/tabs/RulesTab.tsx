@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { postEbayAds, getEbayAds } from '../../_lib'
 import { type AutomationRule, conditionSentence, actionSentence, scopeLabel } from '../_lib/rules'
+import { Pill } from '@/design-system/primitives'
 
 function RuleMenu({ rule, busy, onRun, onDelete }: { rule: AutomationRule; busy: boolean; onRun: () => void; onDelete: () => void }) {
   const router = useRouter()
@@ -79,7 +80,7 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
                 onClick={() => void act(() => postEbayAds(`/automation/rules/${r.id}`, { mode: r.mode === 'AUTOPILOT' ? 'PROPOSE' : 'AUTOPILOT' }))}>
                 {r.mode}
               </button>
-              <span className="h10-pill arch" title={r.scope?.campaignIds?.length ? 'Evaluates only the campaigns bound to this rule' : 'Evaluates every eligible campaign on the marketplace'}>{scopeLabel(r)}</span>
+              <Pill tone="neutral" title={r.scope?.campaignIds?.length ? 'Evaluates only the campaigns bound to this rule' : 'Evaluates every eligible campaign on the marketplace'}>{scopeLabel(r)}</Pill>
               <span className="eb-chip">{r.trigger.scope === 'CPS_AD' ? 'CPS ads' : 'CPC keywords'}</span>
               {r.version != null && <span className="eb-chip" title="Config version — every definition edit snapshots immutably; restore any prior version from the editor's History">v{r.version}</span>}
               <span style={{ flex: 1 }} />

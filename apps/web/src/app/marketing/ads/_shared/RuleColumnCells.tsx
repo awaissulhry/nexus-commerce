@@ -42,10 +42,6 @@
  *   campaign's budget (`lastMovedByKind === 'rule'` — true on 1 of 86), with the reach as context.
  */
 import { useEffect, useState } from 'react'
-import { utilBand, UTIL_CAPPED_PCT, UTIL_NEARLY_PCT, type UtilBand } from './utilBand'
-
-// ADM-P6b — re-exported so the cells and their consumers have one import site for the band.
-export { utilBand, UTIL_CAPPED_PCT, UTIL_NEARLY_PCT, type UtilBand } from './utilBand'
 import { Shuffle, Sparkles, User, Wallet } from 'lucide-react'
 
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
@@ -128,15 +124,28 @@ export function BidRuleCell({ algorithm, bidder, bidderName, known }: {
 }) {
   const algo = bidAlgoLabel(algorithm)
   const o = ownerBits(bidder, bidderName, known)
+  /**
+   * 🔴 ADM-H P7 (2026-08-22) — this tooltip used to say the unchosen default was
+   * *"the default the optimizer would use"*. It is not: `dynamicBidding.bidAlgorithm` has **zero
+   * readers across `apps/api`** — the route stores it, the route echoes it, and no executor opens
+   * it. That sentence asserted an effect the account does not have, which is the same defect as
+   * the `bidAutomation` switch three columns away, and it was not on record anywhere.
+   *
+   * The cell also printed a confident "Target ACOS" on the **219 of 220** campaigns where nobody
+   * had chosen anything, visually identical to the one campaign that had. A fallback rendered as
+   * a setting is the exact shape of the fabricated 30% target ACoS and the phantom "Down only"
+   * strategy, both already removed from this grid. It is now muted, so the eye can tell a choice
+   * from a default without opening a tooltip.
+   */
   const algoTip = [
     algorithm == null
-      ? `No bid algorithm has been chosen for this campaign; ${algo} is the default the optimizer would use. Amazon exposes no per-campaign algorithm field, so this is stored locally.`
-      : `Bid algorithm: ${algo}. Amazon exposes no per-campaign algorithm field, so this is stored locally.`,
+      ? `No bid algorithm has been chosen for this campaign — ${algo} is what this cell shows when nothing is set, not a setting. Amazon exposes no per-campaign algorithm field, so this is stored locally; no engine reads it yet, so choosing one records a decision and changes no bid on its own.`
+      : `Bid algorithm: ${algo}. Amazon exposes no per-campaign algorithm field, so this is stored locally; no engine reads it yet, so it records a decision and changes no bid on its own.`,
     o ? null : quietReason(bidder, known),
   ].filter(Boolean).join('\n')
   return (
     <span className="h10-rc-bidrule2">
-      <span className="h10-rc-bidrule algo" title={algoTip}>
+      <span className={`h10-rc-bidrule algo${algorithm == null ? ' unset' : ''}`} title={algoTip}>
         <Shuffle size={13} aria-hidden />
         <span className="t">{algo}</span>
       </span>
@@ -202,6 +211,200 @@ export function MinMaxBidCell({ minCents, maxCents }: { minCents?: number | null
 }
 
 /**
+ * Budget utilization — the bar the Ad Manager painted at a hard-coded zero on every row.
+ *
+ * 🔴 ADM-H P2 (2026-08-22). Both "Current Budget Utilization" and "Average Budget Utilization"
+ * rendered one literal: `<span class="h10-util" aria-hidden><span class="uf" style="width:0%"/></span>`.
+ * Measured in the deployed DOM: a 64×7px track, **0px of fill, no text, aria-hidden**, identical on
+ * all 100 rows. That does not read as "no data" — it reads as an instrument pegged at zero, which
+ * is a finding ("nothing here is budget-capped") the account never made. Same class as the
+ * hard-coded `<b>0</b>` C2 removed from the Rules column two columns away.
+ *
+ * The bar is no longer `aria-hidden` on its own — it now carries a text value beside it, because a
+ * gauge nobody can read is not a reading. The fill is capped at 100% of the TRACK while the number
+ * keeps saying 288%: clamping the bar keeps the row legible, clamping the number would hide the
+ * overspend that makes the column worth having.
+ */
+/**
+ * ADM-P6 — the gauge itself, so the Average and Current columns are the SAME instrument.
+ * Two utilization columns that drew their bars differently would be two instruments, and the
+ * operator would have no way to tell a rendering difference from a real one.
+ */
+function UtilGauge({ pct, title, suffix }: { pct: number; title: string; suffix?: string | null }) {
+  return (
+    <span className="h10-utilcell" title={title}>
+      <span className="h10-util"><span className="uf" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></span>
+      <span className="uv">{pct < 0.1 && pct > 0 ? '<0.1%' : `${pct.toFixed(0)}%`}</span>
+      {suffix ? <span className="h10-utilage">{suffix}</span> : null}
+    </span>
+  )
+}
+
+/** ADM-P6 — the five things the Current column's reading can be. Mirrors the API's own union. */
+export type BudgetUsageState = 'live' | 'derived' | 'silent' | 'unsupported' | 'unknown'
+
+/**
+ * ADM-P6 — how old the reading is, in words, computed on the CLIENT only.
+ *
+ * Deliberately not rendered during SSR: `Date.now()` on the server and on the client are
+ * different instants, and a mismatch there is a hydration error rather than a wrong number.
+ * Returns null until mounted, and the cell simply shows no age until it knows one.
+ */
+function useAgeLabel(iso?: string | null): string | null {
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => { setNow(Date.now()) }, [iso])
+  if (!iso || now == null) return null
+  const ms = now - Date.parse(iso)
+  if (!Number.isFinite(ms)) return null
+  const mins = Math.floor(ms / 60_000)
+  // Under a quarter of an hour is what "now" means for a figure Amazon itself updates on
+  // spend events; saying "3m" there is noise, and saying nothing is not a claim of freshness.
+  if (mins < 15) return null
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}d`
+}
+
+export function BudgetUtilCell({ fraction, days, measured, current }: {
+  /** Average of per-day (spend ÷ that day's budget). A FRACTION: 0.5 = 50%. */
+  fraction?: number | null
+  /** Days in the window Amazon has actually reported — never the days the operator picked. */
+  days?: number
+  /** false when the campaign has no performance row in the window at all. */
+  measured?: boolean
+  /**
+   * ADM-P6 — present ONLY for the Current column. Not a style switch: it carries a different
+   * measurement with a different source, a different day, and its own age, so the cell needs
+   * the data to say anything honest about it. Absent ⇒ this is the Average column, unchanged.
+   */
+  current?: {
+    state: BudgetUsageState
+    /** Amazon's usageUpdatedTimestamp — the age of the READING, not of the page. */
+    asOf?: string | null
+    /** The denominator this fraction actually used, in euros. */
+    budget?: number | null
+  }
+}) {
+  const age = useAgeLabel(current?.asOf)
+
+  if (current) {
+    if (current.state === 'unsupported') {
+      return <span className="h10-rc-unknown" title="Amazon's budget-usage API covers Sponsored Products only, and this is a Sponsored Display or Sponsored Brands campaign. Not a gap in our sampling — a question this source does not answer.">n/a — SP</span>
+    }
+    if (current.state === 'unknown') {
+      return <span className="h10-rc-unknown" title="No budget-usage reading has ever been sampled for this campaign. The sampler runs every five minutes; if this persists, the campaign has no external Amazon id or its profile has no active connection.">not measured</span>
+    }
+    if (current.state === 'silent' || fraction == null) {
+      return (
+        <span
+          className="h10-rc-unknown"
+          title={`Amazon has reported no consumption for this campaign since the budget reset at 00:00 UTC today, and the hourly stream shows no spend today either.
+That is NOT 0%. Amazon does not zero its percentage at the reset — it stops updating it, so the absence of a reading and a reading of zero look identical from here, and only one of them is a fact.${current.asOf ? `\nIts last reading was ${current.asOf}, which belongs to a previous budget day.` : ''}`}
+        >not reported today</span>
+      )
+    }
+    const pct = fraction * 100
+    const denom = current.budget != null ? `€${current.budget.toFixed(2)}` : 'its daily budget'
+    const title = current.state === 'derived'
+      ? `Today's spend ÷ this campaign's stored daily budget (${denom}), from the hourly stream — Amazon itself has not reported a percentage since the 00:00 UTC reset.
+Newest hourly row: ${current.asOf ?? 'unknown'}. A cross-check, not Amazon's own answer: our stored budget can differ from Amazon's.
+The budget day runs 00:00–24:00 UTC. That was measured against 301 campaign-days, not assumed from the marketplace timezone.`
+      : `Amazon's own budget-usage reading: ${pct.toFixed(2)}% of ${denom}, the budget Amazon held for this campaign at that moment.
+As of ${current.asOf ?? 'unknown'} — the age of the READING, not of this page. Amazon updates it when the campaign spends, so a quiet campaign carries an older stamp without being wrong.
+The budget day runs 00:00–24:00 UTC, measured against 301 campaign-days rather than assumed from the marketplace timezone.
+Above 100% is real, not an error: Amazon may overspend a daily budget, and the budget itself can move during the day.`
+    return <UtilGauge pct={pct} title={title} suffix={age} />
+  }
+
+  if (fraction == null) {
+    return measured === false
+      ? <span className="h10-rc-unknown" title="No performance row for this campaign in the window — it was not served, which is not the same as spending none of its budget.">not served</span>
+      : <span className="h10-rc-unknown" title="Amazon reported no daily budget for this campaign on any day in the window, so there is no denominator to divide by.">unknown</span>
+  }
+  const pct = fraction * 100
+  const dayNote = days ? `${days} day${days === 1 ? '' : 's'} of reported data` : 'the reported days'
+  return (
+    <UtilGauge
+      pct={pct}
+      title={`Average of each day's spend ÷ that day's budget, over ${dayNote} in the selected window.
+Above 100% is real, not an error: Amazon may overspend a daily budget, and the budget itself can change mid-window.
+⚠ An average cannot see WHEN the money went: a campaign that exhausts by 10am and one that paces evenly across 24 hours produce the identical number.`}
+    />
+  )
+}
+
+/**
+ * ADM-P6 — Out-of-Budget Hours and Actively Bidding Hours.
+ *
+ * ONE component for both, because they are one instrument read two ways: the same observation
+ * spans, the same denominator, the same sampling start. `kind` picks which of the two facts the
+ * cell states — it is not a style flag, and forking this would let the two columns disagree about
+ * a day they were counted from together.
+ *
+ * 🔴 Both are bounded by when sampling began. Amazon's stream is never backfilled and its pull API
+ * has no history, so the hours before the first sample are not zero — they are unwatched, and
+ * unrecoverable. The cell says how many hours it actually watched, every time.
+ */
+export function UsageHoursCell({ kind, hours, observed, since }: {
+  kind: 'oob' | 'actbid'
+  /** Hours of the current budget day in this state, or null when the source cannot answer. */
+  hours?: number | null
+  /** Hours of the current budget day in which ANY reading was observed. The denominator. */
+  observed?: number | null
+  /** ISO instant sampling began — what bounds both columns. */
+  since?: string | null
+}) {
+  if (hours == null || observed == null) {
+    return <span className="h10-rc-unknown" title="Amazon's budget-usage API covers Sponsored Products only, and this is a Sponsored Display or Sponsored Brands campaign. Hours cannot be counted from a source that does not answer for it.">n/a — SP</span>
+  }
+  if (observed === 0) {
+    return (
+      <span
+        className="h10-rc-unknown"
+        title={`No budget-usage reading has been observed for this campaign during today's budget day (00:00 UTC onwards), so there are no hours to count.${since ? `\nSampling began ${since}; hours before that were never watched and cannot be recovered.` : ''}`}
+      >not measured</span>
+    )
+  }
+  const why = kind === 'oob'
+    ? `Hours of today's budget day in which this campaign was observed at or above 100% of its budget.
+Counted from ${observed} hour${observed === 1 ? '' : 's'} actually watched, not from 24: the day is still running, and hours nobody sampled are unwatched rather than clear.
+🔴 The exact instant of exhaustion is unobservable — Amazon reports consumption in steps, and this is sampled every five minutes. The honest unit is the hour.`
+    : `Hours of today's budget day in which this campaign was observed BELOW 100% of its budget — watched, and not budget-capped.
+Counted from ${observed} hour${observed === 1 ? '' : 's'} actually watched, not from 24. An hour with no reading is not counted either way.`
+  const tail = since ? `\nSampling began ${since}; nothing before that was watched, and neither Amazon feed can be backfilled.` : ''
+  return (
+    <span className="h10-rc-word" title={why + tail}>
+      {hours} <span className="h10-utilage">of {observed}h watched</span>
+    </span>
+  )
+}
+
+/**
+ * Min/Max Budget — the BUDGET twin of the pair above, enforced at the same write gate.
+ *
+ * 🔴 ADM-H P1 (2026-08-22). The Ad Manager rendered this from `c.minMaxBudget`, a key
+ * `/advertising/campaigns` has never returned, so it printed **"None" on 220 of 220** rows while
+ * `Campaign.minBudgetCents` / `maxBudgetCents` — real columns that `ads-write-gate.ts` enforces on
+ * every budget write — sat unselected in the same response. Identical in shape to the `minMaxBid`
+ * bug ADX G2 fixed for bids on 2026-08-19; it was simply never fixed for budget.
+ *
+ * Deliberately NOT a `variant` on `MinMaxBidCell`: they are two different controls with two
+ * different consequences, and one cell that explained both would need a copy prop to do it.
+ * Same vocabulary though — **None** = settable and unset, **—** = that half has no value.
+ */
+export function MinMaxBudgetCell({ minCents, maxCents }: { minCents?: number | null; maxCents?: number | null }) {
+  if (minCents == null && maxCents == null) {
+    return <span className="h10-rc-none" title="No budget band is set, so a rule, the pacer or a manual edit may move this campaign's daily budget anywhere above Amazon's own €1 floor.">None</span>
+  }
+  return (
+    <span className="h10-rc-num" title={`The write gate refuses any daily budget outside ${minCents != null ? eur(minCents) : 'no floor'} – ${maxCents != null ? eur(maxCents) : 'no ceiling'}. Denied and recorded, never clamped.`}>
+      {minCents != null ? eur(minCents) : '—'} – {maxCents != null ? eur(maxCents) : '—'}
+    </span>
+  )
+}
+
+/**
  * Bid Automation — H10's own switch for "let the bid algorithm act".
  * ⚠ NOT the write gate. Apply Rules' "Automations" column shows `liveBidWritesEnabled` (whether any
  * armed rule may write at all); this is `bidAutomation`, a different field on a different endpoint.
@@ -249,8 +452,8 @@ export function BidAutomationCell({ on, onToggle, busy }: {
       className={`h10-rc-toggle ${isOn ? 'on' : 'off'}${busy ? ' busy' : ''}`}
       aria-label={isOn ? 'Bid automation on' : 'Bid automation off'}
       title={isOn
-        ? 'Bid automation is ON for this campaign. Recorded on the campaign; no bid optimizer reads it yet, so it does not by itself apply anything. This is not the write gate — see the Automations column for that.'
-        : 'Bid automation is OFF: bid suggestions stay proposals. Recorded on the campaign; no bid optimizer reads it yet. This is not the write gate — see the Automations column for that.'}
+        ? 'Bid automation is ON for this campaign. Recorded on the campaign; no bid optimizer reads it yet, so it does not by itself apply anything. This is not the write gate — see the Automation Access column for that.'
+        : 'Bid automation is OFF: bid suggestions stay proposals. Recorded on the campaign; no bid optimizer reads it yet. This is not the write gate — see the Automation Access column for that.'}
       onClick={() => { if (!busy) onToggle(!isOn) }}
     ><span /></button>
   )
@@ -318,217 +521,6 @@ export function BudgetRuleCell({ assigned, staged, ruleHref }: {
       {body}
       {/* An uncommitted change, so the row says so before the operator hits Apply. */}
       {staged && <span className="h10-rc-staged" title="Staged — not saved yet. Use Apply to commit, or Discard to revert.">staged</span>}
-    </span>
-  )
-}
-
-/**
- * Budget utilization — the bar the Ad Manager painted at a hard-coded zero on every row.
- *
- * 🔴 ADM-H P2 (2026-08-22). Both "Current Budget Utilization" and "Average Budget Utilization"
- * rendered one literal: `<span class="h10-util" aria-hidden><span class="uf" style="width:0%"/></span>`.
- * Measured in the deployed DOM: a 64×7px track, **0px of fill, no text, aria-hidden**, identical on
- * all 100 rows. That does not read as "no data" — it reads as an instrument pegged at zero, which
- * is a finding ("nothing here is budget-capped") the account never made. Same class as the
- * hard-coded `<b>0</b>` C2 removed from the Rules column two columns away.
- *
- * The bar is no longer `aria-hidden` on its own — it now carries a text value beside it, because a
- * gauge nobody can read is not a reading. The fill is capped at 100% of the TRACK while the number
- * keeps saying 288%: clamping the bar keeps the row legible, clamping the number would hide the
- * overspend that makes the column worth having.
- */
-/**
- * ADM-P6 — the gauge itself, so the Average and Current columns are the SAME instrument.
- * Two utilization columns that drew their bars differently would be two instruments, and the
- * operator would have no way to tell a rendering difference from a real one.
- */
-const BAND_NOTE: Record<UtilBand, string> = {
-  capped: '\n🔴 At or above 100%: the budget is spent, and a campaign that has spent its budget stops serving for the rest of the day.',
-  nearly: '\n⚠ Above 85%: on course to spend the budget before the day ends, after which the campaign stops serving.',
-  normal: '',
-}
-
-/**
- * ADM-P6b — the printed number, and it must never contradict the colour beside it.
- *
- * 🔴 `toFixed(0)` rounds 99.9 to "100", so a cell one tenth of a point BELOW the capped
- * threshold printed **100%** while wearing the amber band — the number claiming the budget was
- * spent and the colour saying it was not. Measured in the harness, not reasoned about. Banding on
- * the rounded value instead would fix the contradiction the wrong way round: 99.6% would then
- * print 100% in red and assert that a still-serving campaign had stopped.
- *
- * So the value keeps one decimal whenever it sits within a point of either threshold, which is
- * the only place the rounding can lie. Everywhere else it stays a whole number.
- */
-function utilLabel(pct: number): string {
-  if (pct > 0 && pct < 0.1) return '<0.1%'
-  const nearThreshold =
-    Math.abs(pct - UTIL_NEARLY_PCT) < 1 || Math.abs(pct - UTIL_CAPPED_PCT) < 1
-  return `${pct.toFixed(nearThreshold ? 1 : 0)}%`
-}
-
-function UtilGauge({ pct, title, suffix }: { pct: number; title: string; suffix?: string | null }) {
-  const band = utilBand(pct)
-  return (
-    <span className={`h10-utilcell b-${band}`} title={title + BAND_NOTE[band]}>
-      <span className="h10-util"><span className="uf" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></span>
-      <span className="uv">{utilLabel(pct)}</span>
-      {suffix ? <span className="h10-utilage">{suffix}</span> : null}
-    </span>
-  )
-}
-
-/**
- * ADM-P6 — an ISO instant as `2026-08-22 09:57 UTC`.
- *
- * A pure slice, deliberately not `toLocaleString`: that is locale-dependent (an en-US machine
- * renders `09:57 AM`) and would differ between the server render and the client's. The zone is
- * spelled out because the budget day this belongs to is UTC and the reader is not.
- */
-function utcStamp(iso?: string | null): string {
-  if (!iso || iso.length < 16) return 'unknown'
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`
-}
-
-/** ADM-P6 — the five things the Current column's reading can be. Mirrors the API's own union. */
-export type BudgetUsageState = 'live' | 'derived' | 'silent' | 'unsupported' | 'unknown'
-
-/**
- * ADM-P6 — how old the reading is, in words, computed on the CLIENT only.
- *
- * Deliberately not rendered during SSR: `Date.now()` on the server and on the client are
- * different instants, and a mismatch there is a hydration error rather than a wrong number.
- * Returns null until mounted, and the cell simply shows no age until it knows one.
- */
-function useAgeLabel(iso?: string | null): string | null {
-  const [now, setNow] = useState<number | null>(null)
-  useEffect(() => { setNow(Date.now()) }, [iso])
-  if (!iso || now == null) return null
-  const ms = now - Date.parse(iso)
-  if (!Number.isFinite(ms)) return null
-  const mins = Math.floor(ms / 60_000)
-  // Under a quarter of an hour is what "now" means for a figure Amazon itself updates on
-  // spend events; saying "3m" there is noise, and saying nothing is not a claim of freshness.
-  if (mins < 15) return null
-  if (mins < 60) return `${mins}m`
-  const h = Math.floor(mins / 60)
-  if (h < 24) return `${h}h`
-  return `${Math.floor(h / 24)}d`
-}
-
-export function BudgetUtilCell({ fraction, days, measured, current }: {
-  /** Average of per-day (spend ÷ that day's budget). A FRACTION: 0.5 = 50%. */
-  fraction?: number | null
-  /** Days in the window Amazon has actually reported — never the days the operator picked. */
-  days?: number
-  /** false when the campaign has no performance row in the window at all. */
-  measured?: boolean
-  /**
-   * ADM-P6 — present ONLY for the Current column. Not a style switch: it carries a different
-   * measurement with a different source, a different day, and its own age, so the cell needs
-   * the data to say anything honest about it. Absent ⇒ this is the Average column, unchanged.
-   */
-  current?: {
-    state: BudgetUsageState
-    /** Amazon's usageUpdatedTimestamp — the age of the READING, not of the page. */
-    asOf?: string | null
-    /** The denominator this fraction actually used, in euros. */
-    budget?: number | null
-  }
-}) {
-  const age = useAgeLabel(current?.asOf)
-
-  if (current) {
-    if (current.state === 'unsupported') {
-      return <span className="h10-rc-unknown" title="Amazon's budget-usage API covers Sponsored Products only, and this is a Sponsored Display or Sponsored Brands campaign. Not a gap in our sampling — a question this source does not answer.">n/a — SP</span>
-    }
-    if (current.state === 'unknown') {
-      return <span className="h10-rc-unknown" title="No budget-usage reading has ever been sampled for this campaign. The sampler runs every five minutes; if this persists, the campaign has no external Amazon id or its profile has no active connection.">not measured</span>
-    }
-    if (current.state === 'silent' || fraction == null) {
-      return (
-        <span
-          className="h10-rc-unknown"
-          title={`Amazon has reported no consumption for this campaign since the budget reset at 00:00 UTC today, and the hourly stream shows no spend today either.
-That is NOT 0%. Amazon does not zero its percentage at the reset — it stops updating it, so the absence of a reading and a reading of zero look identical from here, and only one of them is a fact.${current.asOf ? `\nIts last reading was ${utcStamp(current.asOf)}, which belongs to a previous budget day.` : ''}`}
-        >not reported today</span>
-      )
-    }
-    const pct = fraction * 100
-    const denom = current.budget != null ? `€${current.budget.toFixed(2)}` : 'its daily budget'
-    const title = current.state === 'derived'
-      ? `Today's spend ÷ this campaign's stored daily budget (${denom}), from the hourly stream — Amazon itself has not reported a percentage since the 00:00 UTC reset.
-Newest hourly row: ${utcStamp(current.asOf)}. A cross-check, not Amazon's own answer: our stored budget can differ from Amazon's.
-The budget day runs 00:00–24:00 UTC. That was measured against 301 campaign-days, not assumed from the marketplace timezone.`
-      : `Amazon's own budget-usage reading: ${pct.toFixed(2)}% of ${denom}, the budget Amazon held for this campaign at that moment.
-As of ${utcStamp(current.asOf)} — the age of the READING, not of this page. Amazon updates it when the campaign spends, so a quiet campaign carries an older stamp without being wrong.
-The budget day runs 00:00–24:00 UTC, measured against 301 campaign-days rather than assumed from the marketplace timezone.
-Above 100% is real, not an error: Amazon may overspend a daily budget, and the budget itself can move during the day.`
-    return <UtilGauge pct={pct} title={title} suffix={age} />
-  }
-
-  if (fraction == null) {
-    return measured === false
-      ? <span className="h10-rc-unknown" title="No performance row for this campaign in the window — it was not served, which is not the same as spending none of its budget.">not served</span>
-      : <span className="h10-rc-unknown" title="Amazon reported no daily budget for this campaign on any day in the window, so there is no denominator to divide by.">unknown</span>
-  }
-  const pct = fraction * 100
-  const dayNote = days ? `${days} day${days === 1 ? '' : 's'} of reported data` : 'the reported days'
-  return (
-    <UtilGauge
-      pct={pct}
-      title={`Average of each day's spend ÷ that day's budget, over ${dayNote} in the selected window.
-Above 100% is real, not an error: Amazon may overspend a daily budget, and the budget itself can change mid-window.
-⚠ An average cannot see WHEN the money went: a campaign that exhausts by 10am and one that paces evenly across 24 hours produce the identical number.`}
-    />
-  )
-}
-
-/**
- * ADM-P6 — Out-of-Budget Hours and Actively Bidding Hours.
- *
- * ONE component for both, because they are one instrument read two ways: the same observation
- * spans, the same denominator, the same sampling start. `kind` picks which of the two facts the
- * cell states — it is not a style flag, and forking this would let the two columns disagree about
- * a day they were counted from together.
- *
- * 🔴 Both are bounded by when sampling began. Amazon's stream is never backfilled and its pull API
- * has no history, so the hours before the first sample are not zero — they are unwatched, and
- * unrecoverable. The cell says how many hours it actually watched, every time.
- */
-export function UsageHoursCell({ kind, hours, observed, since }: {
-  kind: 'oob' | 'actbid'
-  /** Hours of the current budget day in this state, or null when the source cannot answer. */
-  hours?: number | null
-  /** Hours of the current budget day in which ANY reading was observed. The denominator. */
-  observed?: number | null
-  /** ISO instant sampling began — what bounds both columns. */
-  since?: string | null
-}) {
-  if (hours == null || observed == null) {
-    return <span className="h10-rc-unknown" title="Amazon's budget-usage API covers Sponsored Products only, and this is a Sponsored Display or Sponsored Brands campaign. Hours cannot be counted from a source that does not answer for it.">n/a — SP</span>
-  }
-  if (observed === 0) {
-    return (
-      <span
-        className="h10-rc-unknown"
-        title={`No budget-usage reading has been observed for this campaign during today's budget day (00:00 UTC onwards), so there are no hours to count.${since ? `\nSampling began ${utcStamp(since)}; hours before that were never watched and cannot be recovered.` : ''}`}
-      >not measured</span>
-    )
-  }
-  const why = kind === 'oob'
-    ? `Hours of today's budget day in which this campaign was observed at or above 100% of its budget.
-Counted from ${observed} hour${observed === 1 ? '' : 's'} actually watched, not from 24: the day is still running, and hours nobody sampled are unwatched rather than clear.
-🔴 The exact instant of exhaustion is unobservable — Amazon reports consumption in steps, and this is sampled every five minutes. The honest unit is the hour.`
-    : `Hours of today's budget day in which this campaign was observed BELOW 100% of its budget — watched, and not budget-capped.
-Counted from ${observed} hour${observed === 1 ? '' : 's'} actually watched, not from 24. An hour with no reading is not counted either way.`
-  const tail = since ? `\nSampling began ${utcStamp(since)}; nothing before that was watched, and neither Amazon feed can be backfilled.` : ''
-  // ADM-P6b — an hour out of budget is the same fact the gauge turns red for, so it wears the
-  // same red. ActBid hours never colour: "the campaign was bidding" is not an exception.
-  const capped = kind === 'oob' && hours > 0
-  return (
-    <span className={capped ? 'h10-rc-word b-capped' : 'h10-rc-word'} title={why + tail}>
-      {hours}h <span className="h10-utilage">of {observed}h watched</span>
     </span>
   )
 }

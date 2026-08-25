@@ -28,6 +28,7 @@ import { ImportCsvModal } from '../_modals/ImportCsvModal'
 import { CloneModal } from './[id]/modals/CloneModal'
 import { EndCampaignModal } from './[id]/modals/EndCampaignModal'
 import { GridBudgetModal } from './GridBudgetModal'
+import { Pill } from '@/design-system/primitives'
 
 type CampaignsPayload = {
   window: { since: string; until: string }
@@ -130,8 +131,8 @@ export function EbayCampaignsGrid() {
       render: (c) => (
         <span title={(c.ads.hidden ?? 0) > 0 ? `${c.ads.hidden} hidden — out of stock (eBay resurfaces them on restock)` : undefined}>
           {c.ads.total}
-          {c.ads.stale > 0 && <span className="h10-pill warn" style={{ marginLeft: 6 }} title="Ads pointing at listings no longer live">{c.ads.stale} stale</span>}
-          {(c.ads.hidden ?? 0) > 0 && <span className="h10-pill arch" style={{ marginLeft: 6 }} title="Auto-hidden by eBay — out of stock; a state, not an error">{c.ads.hidden} hidden</span>}
+          {c.ads.stale > 0 && <Pill tone="warning" style={{ marginLeft: 6 }} title="Ads pointing at listings no longer live">{c.ads.stale} stale</Pill>}
+          {(c.ads.hidden ?? 0) > 0 && <Pill tone="neutral" style={{ marginLeft: 6 }} title="Auto-hidden by eBay — out of stock; a state, not an error">{c.ads.hidden} hidden</Pill>}
         </span>
       ),
     },

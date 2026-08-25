@@ -14,6 +14,7 @@ import { Gauge, SlidersHorizontal } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { effRate, includedListings, SUGGEST_MARKETS, type CampaignPlan, type PlanListing } from '../plan'
+import { Pill } from '@/design-system/primitives'
 
 export function RatesStep({ plan, set, listings }: {
   plan: CampaignPlan
@@ -61,8 +62,8 @@ export function RatesStep({ plan, set, listings }: {
                 Ads attach <b>without fixed rates</b> — eBay adjusts daily under the cap. Rate edits and Rate Discovery don&apos;t apply while dynamic; switching back to Fixed is a one-click campaign edit later.
               </span>
               {overCap.length > 0
-                ? <span className="h10-pill warn">{overCap.length} listing(s) break even below {Number.isFinite(cap) ? `${cap}%` : 'the cap'}</span>
-                : <span className="h10-pill ok">cap under break-even for every costed listing</span>}
+                ? <Pill tone="warning">{overCap.length} listing(s) break even below {Number.isFinite(cap) ? `${cap}%` : 'the cap'}</Pill>
+                : <Pill tone="success">cap under break-even for every costed listing</Pill>}
             </div>
           </div>
         </section>
@@ -82,7 +83,7 @@ export function RatesStep({ plan, set, listings }: {
                     ? 'eBay suggested rates load per listing below.'
                     : <>eBay exposes <b>no suggested/trending rate API for {plan.marketplace.replace('EBAY_', 'eBay ')}</b> — break-even is the anchor instead.</>}
                 </span>
-                <span className="h10-pill arch">projected ≈ {money(forecast)}/month at trailing sales</span>
+                <Pill tone="neutral">projected ≈ {money(forecast)}/month at trailing sales</Pill>
               </div>
             </div>
 
@@ -98,7 +99,7 @@ export function RatesStep({ plan, set, listings }: {
                       return (
                         <tr key={l.itemId}>
                           <td className="ed"><div className="nmw"><span className="t" title={l.title ?? l.itemId}>{l.title ?? l.itemId}</span><span className="mk">{l.itemId.slice(-6)}</span></div></td>
-                          <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <span className="h10-pill warn">add cost</span>}</td>
+                          <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>}</td>
                           <td className="num">
                             <input className={`h10-cd-input ${over ? 'over-be' : ''}`} style={{ width: 74 }} type="number" min={2} max={100} step={0.1}
                               value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')}

@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { money } from '../../../../campaigns/_grid/format'
 import { postEbayAds } from '../../../_lib'
+import { Pill } from '@/design-system/primitives'
 
 interface SelectionRule { brands?: string[]; categoryIds?: string[]; categoryScope?: string; listingConditionIds?: string[]; minPrice?: number; maxPrice?: number }
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
@@ -34,7 +35,7 @@ export function CriterionCard({ criterion, marketplace, onClone }: { criterion: 
         <span className={`h10-pill ${autoSelect ? 'ok' : 'arch'}`} title="eBay re-evaluates matching listings daily: matches are added, non-matches removed — including newly created listings.">
           auto-select future listings: {autoSelect ? 'ON' : 'OFF'}
         </span>
-        {preview && <span className="h10-pill arch">{preview.count} of {preview.totalLive} live listings match now</span>}
+        {preview && <Pill tone="neutral">{preview.count} of {preview.totalLive} live listings match now</Pill>}
       </div>
       {rules.length === 0 ? (
         <p className="eb-be-hint">No selection rules recorded on the sync — eBay applies the campaign&apos;s original rules server-side.</p>

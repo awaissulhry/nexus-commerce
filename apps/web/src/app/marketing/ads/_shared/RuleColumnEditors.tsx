@@ -133,8 +133,16 @@ const RANGE_COPY = {
   budget: {
     title: 'Min/Max Budget',
     rangeLabel: 'Set a Min/Max Budget Range',
-    note: 'Read by Budget Manager when it paces this campaign. Local only — Amazon exposes no min/max budget field.',
-    floorCents: 0,
+    // 🔴 ADM-H P1 — the old note said "Read by Budget Manager when it paces this campaign",
+    // which understated it in the one direction that matters: these bounds are enforced at the
+    // WRITE GATE, so they bind every rule, the pacer and any manual edit, not one consumer that
+    // chooses to look. "Local only" stays because it is true — Amazon has no such field — but on
+    // its own it read as "this does nothing yet", which is what the Ad Manager's editor actually
+    // did before this unit.
+    note: 'Enforced at the write gate on every budget write to this campaign: outside the band a write is DENIED and recorded, never clamped. Amazon has no min/max budget field — this is our own bound, and it binds rules, the pacer and manual edits alike.',
+    // Amazon's own hard floor is €1 and the server refuses anything below 100 cents, so a 0
+    // floor here let the editor offer a value the endpoint would reject.
+    floorCents: 100,
   },
 } as const
 

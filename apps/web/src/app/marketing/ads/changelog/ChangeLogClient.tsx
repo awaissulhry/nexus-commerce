@@ -27,6 +27,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_gri
 import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { fmtChangeValue } from '../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Pill } from '@/design-system/primitives'
 
 interface Origin { kind: string; id: string | null; name: string }
 interface Delivery { state: string; attempts: number; lastError: string | null }
@@ -269,7 +270,7 @@ export function ChangeLogClient() {
         </span>
       ),
     },
-    { key: 'field', label: 'What', metric: false, sortable: true, sortValue: (r) => r.field, render: (r) => <span className="h10-pill arch">{fieldLabel(r.field)}</span> },
+    { key: 'field', label: 'What', metric: false, sortable: true, sortValue: (r) => r.field, render: (r) => <Pill tone="neutral">{fieldLabel(r.field)}</Pill> },
     {
       key: 'change', label: 'Change', metric: false, sortable: false,
       render: (r) => (

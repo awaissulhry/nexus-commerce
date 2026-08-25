@@ -12,6 +12,7 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import '../ebay.css'
 import { getEbayAds, actionSummary, SOURCE_LABELS, type ActionRow } from '../_lib'
+import { Pill } from '@/design-system/primitives'
 
 const PAGE = 200
 
@@ -41,7 +42,7 @@ export function EbayChangeLog() {
       key: 'source', label: 'Source', metric: false, sortValue: (a) => a.source ?? '',
       render: (a) => { const s = SOURCE_LABELS[a.source ?? 'operator'] ?? SOURCE_LABELS.operator; return <span className={`h10-pill ${s.cls}`} title={s.tip}>{s.label}</span> },
     },
-    { key: 'action', label: 'Action', metric: false, sortValue: (a) => a.actionType, render: (a) => <span className="h10-pill arch">{a.actionType.replace(/_/g, ' ')}</span> },
+    { key: 'action', label: 'Action', metric: false, sortValue: (a) => a.actionType, render: (a) => <Pill tone="neutral">{a.actionType.replace(/_/g, ' ')}</Pill> },
     { key: 'change', label: 'Change', metric: false, sortable: false, render: (a) => <span className="eb-cl-change" title={actionSummary(a)}>{actionSummary(a) || '—'}</span> },
     {
       key: 'result', label: 'Result', metric: false, sortValue: (a) => a.channelResponseStatus,
@@ -51,7 +52,7 @@ export function EbayChangeLog() {
           <span className="eb-cl-result">
             <span className={`h10-pill ${a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn'}`}>{a.channelResponseStatus.toLowerCase()}</span>
             {mode && mode !== 'accept' && <span className={`h10-pill ${mode === 'live' ? 'ok' : 'arch'}`}>{mode}</span>}
-            {a.rolledBackAt && <span className="h10-pill warn" title={`Rolled back ${new Date(a.rolledBackAt).toLocaleString('en-GB')}`}>rolled back</span>}
+            {a.rolledBackAt && <Pill tone="warning" title={`Rolled back ${new Date(a.rolledBackAt).toLocaleString('en-GB')}`}>rolled back</Pill>}
           </span>
         )
       },

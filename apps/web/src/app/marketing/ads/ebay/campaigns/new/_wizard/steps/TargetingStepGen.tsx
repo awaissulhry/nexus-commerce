@@ -14,6 +14,7 @@ import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
+import { Pill } from '@/design-system/primitives'
 
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
 
@@ -78,7 +79,7 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
               Auto-select future listings (new matches enroll daily)
             </label>
             <span className="grow" style={{ flex: 1 }} />
-            {preview && <span className="h10-pill arch">{preview.count} of {preview.totalLive} live listings match now</span>}
+            {preview && <Pill tone="neutral">{preview.count} of {preview.totalLive} live listings match now</Pill>}
           </div>
 
           {rules.length === 0 && <p className="eb-be-hint">No rules yet — with none, nothing matches. Add at least one selection rule.</p>}

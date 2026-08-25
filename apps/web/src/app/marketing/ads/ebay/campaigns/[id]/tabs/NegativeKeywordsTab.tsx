@@ -13,6 +13,7 @@ import type { CampaignDetailPayload, NegativeKeywordRow } from '../../../_lib'
 import { ebayStatusPill } from '../../../_lib/status'
 import { StatusPill } from '../../../../_shared/StatusPill'
 import { AddNegativeKeywordsModal } from '../modals/AddNegativeKeywordsModal'
+import { Pill } from '@/design-system/primitives'
 
 export function NegativeKeywordsTab({ data, campaignId, reload }: { data: CampaignDetailPayload; campaignId: string; reload: () => void }) {
   const rows = data.negativeKeywords
@@ -20,12 +21,12 @@ export function NegativeKeywordsTab({ data, campaignId, reload }: { data: Campai
   const [addOpen, setAddOpen] = useState(false)
 
   const columns: GridColumn<NegativeKeywordRow>[] = useMemo(() => [
-    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <span className="h10-pill arch">{r.matchType}</span> },
+    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <Pill tone="neutral">{r.matchType}</Pill> },
     {
       key: 'group', label: 'Ad Group', metric: false, sortValue: (r) => (r.adGroupId ? groupsById.get(r.adGroupId) ?? '' : ''),
       render: (r) => r.adGroupId
         ? <Link className="h10-am-link" href={`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.adGroupId}`} onClick={(e) => e.stopPropagation()}>{groupsById.get(r.adGroupId) ?? 'group'}</Link>
-        : <span className="h10-pill arch">campaign</span>,
+        : <Pill tone="neutral">campaign</Pill>,
     },
     { key: 'state', label: 'State', metric: false, sortValue: (r) => r.status, render: (r) => { const p = ebayStatusPill(r.status); return <StatusPill label={p.label} cls={p.cls} /> } },
   ], [groupsById, campaignId])

@@ -8,6 +8,7 @@
  * rule DEFINITIONS only — eBay state never changes from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Pill } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X } from 'lucide-react'
@@ -310,8 +311,8 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
       <section className="h10-cd-sec">
         <h3>Guardrails — always on</h3>
         <div className="eb-form-row" style={{ alignItems: 'center' }}>
-          <span className="h10-pill ok" title="Every rate/bid automation is clamped at the listing's break-even from the commerce system; no rule can exceed it">break-even clamp</span>
-          <span className="h10-pill ok" title="Per-campaign Protected / posture / caps from the campaign's Automation tab apply after the break-even clamp">campaign policy caps</span>
+          <Pill tone="success" title="Every rate/bid automation is clamped at the listing's break-even from the commerce system; no rule can exceed it">break-even clamp</Pill>
+          <Pill tone="success" title="Per-campaign Protected / posture / caps from the campaign's Automation tab apply after the break-even clamp">campaign policy caps</Pill>
           {(action.type === 'adjust_ad_rate' || action.type === 'set_rate_to_breakeven_factor') && (
             <label className="eb-cond-lbl">rate floor
               <input className="h10-cd-input eb-cond-num" type="number" min={2} max={100} step={0.5} value={action.minRatePct ?? 2} aria-label="Rate floor %"
@@ -347,7 +348,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                       </p>
                     </div>
                     {v.version === currentVersion
-                      ? <span className="h10-pill ok">current</span>
+                      ? <Pill tone="success">current</Pill>
                       : <button type="button" className="h10-am-btn sm" disabled={busy} title="Re-validates the old config and saves it as a NEW version — history is never rewritten" onClick={() => void restoreVersion(v.version)}>Restore</button>}
                   </div>
                 ))}
@@ -363,7 +364,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           <p className="eb-be-hint"><b>{preview.evaluated}</b> evaluated · <b>{preview.matched}</b> would match now{preview.matched > preview.samples.length ? ` (first ${preview.samples.length} shown)` : ''}</p>
           {preview.samples.map((s, i) => (
             <p key={i} className="eb-preview-row">
-              <span className="h10-pill ok">{s.kind.replace(/_/g, ' ')}</span>
+              <Pill tone="success">{s.kind.replace(/_/g, ' ')}</Pill>
               <b>{s.entityRef.campaignName}</b> {s.entityRef.listingId ?? s.entityRef.keywordText ?? ''} · {String(s.from ?? '')} → <b>{String(s.to ?? '')}</b>
             </p>
           ))}

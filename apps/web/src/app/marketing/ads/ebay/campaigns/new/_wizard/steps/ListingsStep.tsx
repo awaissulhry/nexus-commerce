@@ -15,6 +15,7 @@ import { money, pct } from '../../../../../campaigns/_grid/format'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { EbayMark } from '../../../../../_shell/EbayMark'
 import type { CampaignPlan, PlanListing } from '../plan'
+import { Pill } from '@/design-system/primitives'
 
 const PAGE = 10
 
@@ -102,8 +103,8 @@ export function ListingsStep({ plan, set, listings, isPriority, loading }: {
 
   const rowPills = (l: PlanListing) => (
     <>
-      {l.conflict && <span className="h10-pill warn" title={`Already promoted in "${l.conflict.campaignName}" — resolve after staging (one listing = one General campaign)`}>in campaign</span>}
-      {oos(l) && <span className="h10-pill warn" title="eBay rejects out-of-stock listings on Priority campaigns at creation — restock first">out of stock</span>}
+      {l.conflict && <Pill tone="warning" title={`Already promoted in "${l.conflict.campaignName}" — resolve after staging (one listing = one General campaign)`}>in campaign</Pill>}
+      {oos(l) && <Pill tone="warning" title="eBay rejects out-of-stock listings on Priority campaigns at creation — restock first">out of stock</Pill>}
     </>
   )
 

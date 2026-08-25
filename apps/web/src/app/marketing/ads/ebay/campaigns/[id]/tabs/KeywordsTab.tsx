@@ -14,6 +14,7 @@ import { postEbayAds, type CampaignDetailPayload, type KeywordRow, type WriteIte
 import { ebayStatusPill } from '../../../_lib/status'
 import { StatusPill } from '../../../../_shared/StatusPill'
 import { metricColumns } from './metric-columns'
+import { Pill } from '@/design-system/primitives'
 
 interface SuggestOut { suggestions: { suggestedBids?: Array<{ keywordText?: string; suggestedBid?: { value?: string } }> } }
 
@@ -66,7 +67,7 @@ export function KeywordsTab({ data, campaignId, reload, say }: { data: CampaignD
 
   const columns: GridColumn<KeywordRow>[] = useMemo(() => [
     { key: 'state', label: 'State', metric: false, sortValue: (r) => r.status, render: (r) => { const p = ebayStatusPill(r.status); return <StatusPill label={p.label} cls={p.cls} /> } },
-    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <span className="h10-pill arch">{r.matchType}</span> },
+    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <Pill tone="neutral">{r.matchType}</Pill> },
     {
       key: 'group', label: 'Ad Group', metric: false, sortValue: (r) => r.adGroupName ?? '',
       render: (r) => <Link className="h10-am-link" href={`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.adGroupId}`} onClick={(e) => e.stopPropagation()}>{r.adGroupName ?? 'group'}</Link>,

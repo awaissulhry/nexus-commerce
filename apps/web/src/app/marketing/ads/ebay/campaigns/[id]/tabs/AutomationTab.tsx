@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
+import { Pill } from '@/design-system/primitives'
 
 const POSTURES = [
   { id: 'INHERIT', label: 'Inherit', tip: 'Follow the global dial (Rules & Automation hub)' },
@@ -75,7 +76,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             <button key={m.id} type="button" className={`h10-am-btn ${p.posture === m.id ? 'on' : ''}`} title={m.tip} disabled={busy}
               onClick={() => void savePolicy({ posture: m.id }, `posture → ${m.id}`)}>{m.label}</button>
           ))}
-          <span className="h10-pill arch" title="The global dial this campaign inherits from">global: {data.globalMode}{data.halted ? ' · HALTED' : ''}</span>
+          <Pill tone="neutral" title="The global dial this campaign inherits from">global: {data.globalMode}{data.halted ? ' · HALTED' : ''}</Pill>
           <span className="grow" style={{ flex: 1 }} />
           <label className="eb-toggle-lbl" title="Excluded from ALL automation — rules, coverage guard, discovery. Badged in the header and Ad Manager.">
             <button type="button" role="switch" aria-checked={p.protected} className={`h10-bktoggle ${p.protected ? 'on' : ''}`} disabled={busy}
@@ -109,8 +110,8 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <div key={r.id} className="eb-row">
             <span className={`h10-pill ${r.enabled ? 'ok' : 'arch'}`}>{r.enabled ? 'on' : 'off'}</span>
             <span className="nm6">{r.name}</span>
-            <span className="h10-pill arch">{r.mode}</span>
-            <span className="h10-pill arch">{r.scoped ? 'bound to this campaign' : 'global'}</span>
+            <Pill tone="neutral">{r.mode}</Pill>
+            <Pill tone="neutral">{r.scoped ? 'bound to this campaign' : 'global'}</Pill>
             <span className="grow" style={{ flex: 1 }} />
             <span className="ts">{r.lastEvaluatedAt ? `last run ${new Date(r.lastEvaluatedAt).toLocaleString('en-GB')}` : 'never run'}</span>
           </div>
@@ -124,10 +125,10 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <div className="empty">Nothing pending for this campaign.</div>
         ) : data.proposals.map((pr) => (
           <div key={pr.id} className="eb-row">
-            <span className="h10-pill ok">{pr.kind.replace(/_/g, ' ')}</span>
+            <Pill tone="success">{pr.kind.replace(/_/g, ' ')}</Pill>
             <span className="dim">{pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</span>
             <span>{String(pr.proposedAction.from ?? '')} → <b>{String(pr.proposedAction.to ?? '')}</b></span>
-            {pr.reasoning?.clampNote && <span className="h10-pill warn">{pr.reasoning.clampNote}</span>}
+            {pr.reasoning?.clampNote && <Pill tone="warning">{pr.reasoning.clampNote}</Pill>}
             <span className="grow" style={{ flex: 1 }} />
             <button type="button" className="h10-am-btn sm primary" disabled={busy} onClick={() => void decide([pr.id], 'approve')}>Approve</button>
             <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void decide([pr.id], 'reject')}>Reject</button>
@@ -142,7 +143,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <div className="empty">Nothing applied yet.</div>
         ) : data.applied.map((pr) => (
           <div key={pr.id} className="eb-row">
-            <span className="h10-pill ok">{pr.kind.replace(/_/g, ' ')}</span>
+            <Pill tone="success">{pr.kind.replace(/_/g, ' ')}</Pill>
             <span className="dim">{pr.entityRef.listingId ?? pr.entityRef.keywordText ?? ''}</span>
             <span>{String(pr.proposedAction.from ?? '')} → <b>{String(pr.proposedAction.to ?? '')}</b></span>
             <span className="ts">{pr.decidedAt ? new Date(pr.decidedAt).toLocaleString('en-GB') : ''}</span>
@@ -160,9 +161,9 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
               <b className="eb-strong">Rate Discovery</b>
               <span className={`h10-pill ${rd.status === 'ACTIVE' ? 'ok' : rd.status === 'COMPLETE' ? 'arch' : 'warn'}`}>{rd.status}</span>
-              <span className="h10-pill arch">{rd.floorPct}% → {rd.capPct}% · {rd.stepPct}% steps · {rd.dwellDays}-day windows</span>
-              {rd.currentPct != null && <span className="h10-pill ok">now at {rd.currentPct}%</span>}
-              {rd.bestPct != null && <span className="h10-pill ok" title="Best net-of-fees attributed sales per day">best: {rd.bestPct}%</span>}
+              <Pill tone="neutral">{rd.floorPct}% → {rd.capPct}% · {rd.stepPct}% steps · {rd.dwellDays}-day windows</Pill>
+              {rd.currentPct != null && <Pill tone="success">now at {rd.currentPct}%</Pill>}
+              {rd.bestPct != null && <Pill tone="success" title="Best net-of-fees attributed sales per day">best: {rd.bestPct}%</Pill>}
             </div>
             {rd.history.length === 0 ? (
               <p className="eb-be-hint">No completed windows yet — each step arrives as a proposal above; approving it moves every ad&apos;s rate (clamped per listing to break-even).</p>

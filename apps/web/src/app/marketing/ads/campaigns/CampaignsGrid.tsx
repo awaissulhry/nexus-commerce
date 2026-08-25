@@ -10,9 +10,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
-import { TargetAcosCell, MinMaxBidCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
+import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
-import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
+import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -33,7 +33,10 @@ interface Camp {
   adProduct?: string | null; type?: string | null
   biddingStrategy?: string | null; dailyBudget?: string | number | null
   spend?: number | string; sales?: number | string; acos?: number | string | null; roas?: number | string | null
-  impressions?: number | string; clicks?: number | string; ppcOrders?: number; orders?: number
+  // ADM-H P7 — `orders?: number` sat here too, a key `/advertising/campaigns` has never sent.
+  // A type that promises a field the payload lacks is exactly how `minMaxBudget` printed "None"
+  // on 220 rows for a year: `??` chains read as defensive and are really just unreachable.
+  impressions?: number | string; clicks?: number | string; ppcOrders?: number | null
   trueProfitCents?: number | null; trueProfitMarginPct?: number | string | null
   portfolioId?: string | null; startDate?: string | null; endDate?: string | null
   deliveryStatus?: string | null; deliveryReasons?: string[] | null
@@ -50,34 +53,96 @@ interface Camp {
   // so one field in one unit is enough.
   minBidCents?: number | null
   maxBidCents?: number | null
-  minMaxBudget?: { min: number | null; max: number | null } | null
-  // ADM-P6 — TODAY's utilization, from Amazon's own budget-usage reading, sampled every five
-  // minutes by `budget-usage-sample`. A FRACTION (0.5 = 50%), and null whenever the state is not
-  // a reading — the API classifies it against the 00:00 UTC reset so the cell never has to guess.
-  // ADM-H P2 (restored) — Average Budget Utilization: each day's spend ÷ THAT day's budget, then
-  // averaged. A FRACTION, null when nothing was measurable, plus the days Amazon actually reported.
+  // ADM-H P1 — the budget twin, and REAL. This was `minMaxBudget?: {min,max}` in euros:
+  // a key `/advertising/campaigns` has never returned, so the cell printed "None" on all
+  // 220 rows forever while its pencil wrote React state that died on reload. Both halves
+  // now speak the same cents the /guardrails endpoint takes and the write gate enforces.
+  minBudgetCents?: number | null
+  maxBudgetCents?: number | null
+  // ADM-H P2 — Average Budget Utilization: a FRACTION (0.5 = 50%), null when nothing was
+  // measurable, plus the number of days Amazon actually reported inside the picked window.
   avgBudgetUtil?: number | null
   avgBudgetUtilDays?: number
+  // ADM-H P3 — columns that were rendering "—" over data already in AmazonAdsDailyPerformance.
+  // Every one of these is `null` (never 0) when Amazon reported nothing: the cells say so.
+  topOfSearchIS?: number | null   // FRACTION — mean of the daily shares
+  topOfSearchISDays?: number
+  saleUnits?: number | null
+  sameSkuSales?: number | null
+  sameSkuSaleUnits?: number | null
+  sameSkuOrders?: number | null
+  otherSales?: number | null
+  otherSalesPct?: number | null   // FRACTION
+  asp?: number | null
+  // ADM-P6 — TODAY's utilization, which is a different question from avgBudgetUtil above and has
+  // a different source: Amazon's own `POST /sp/campaigns/budget/usage`, sampled every 5 minutes.
+  // A FRACTION like its neighbour, and null whenever the state is not a reading.
   curBudgetUtil?: number | null
   curBudgetUtilState?: BudgetUsageState
   /** Amazon's usageUpdatedTimestamp — the age of the READING, never of this response. */
   curBudgetUtilAsOf?: string | null
-  /** The denominator that fraction used, in euros: Amazon's own budget for a `live` reading. */
+  /** The denominator that fraction used, in euros — Amazon's own budget for a `live` reading. */
   curBudgetUtilBudget?: number | null
-  // ADM-P6 — hours of the current budget day (00:00 UTC onwards), counted from observation spans.
-  // `hoursObserved` is the denominator that makes the other two honest on a part-watched day.
+  // ADM-P6 — hours of the current budget day (00:00 UTC onwards), counted from the observation
+  // spans. `hoursObserved` is the denominator both of them are honest only when stated beside.
   oobHours?: number | null
   actBidHours?: number | null
   hoursObserved?: number | null
-  /** When sampling began. Nothing before it was watched, and neither Amazon feed backfills. */
+  /** When sampling began. Nothing before it was watched, and neither feed can be backfilled. */
   usageSince?: string | null
 }
 type Mode = 'metrics' | 'edit'
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
 const eur = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-// ADM-P6/AC — `pct()` removed with its only call site. It guessed whether a number was a fraction
-// or a percentage by MAGNITUDE, which cannot be right for a value that legitimately crosses 1. If a
-// percentage helper is needed again, it must be told the unit, never infer it.
+/**
+ * ADM-H P3 — the third token in this grid's empty-state vocabulary, and the one it was missing.
+ * **None** = settable, nothing set · **—** = no value · **unknown** = the source did not say.
+ * Twenty columns were printing `—` for four different truths; `unknown` separates "Amazon never
+ * reported this" from "there is genuinely nothing here".
+ */
+const UNKNOWN = <span className="h10-rc-unknown" title="Amazon reported no value for this campaign on any day in the selected window. Not the same as zero.">unknown</span>
+/**
+ * ADM-H P5 — why a column is empty, per column. `na()` renders the same muted token everywhere;
+ * only the sentence behind it changes, because only the reason changes.
+ */
+// `.h10-rc-unknown`, not `.h10-rc-none`: this grid's own stylesheet reserves the italic token for
+// an ABSENCE of data and notes that `.h10-rc-none`'s #8a93a1 measures 3.10:1 on white and fails AA
+// for body text. That was tolerable for a one-glyph dash; twelve columns of WORDS in it would not
+// be, and these cells now carry words.
+const na = (label: string, why: string): ReactNode => <span className="h10-rc-unknown" title={why}>{label}</span>
+const NTB_WHY = 'New-to-brand is reported only for Sponsored Brands and Sponsored Display. Every campaign in this account is Sponsored Products, so Amazon reports nothing here — this is not a gap in our ingest.'
+const NTB_UNITS_WHY = 'New-to-brand UNITS are not ingested at all (only NTB orders and NTB sales are), and NTB itself is a Sponsored Brands / Display metric — this account runs only Sponsored Products.'
+const NOT_APPLICABLE: Record<string, ReactNode> = {
+  ntbOrders: na('n/a — SP', NTB_WHY),
+  ntbOrdersPct: na('n/a — SP', NTB_WHY),
+  ntbOrderRate: na('n/a — SP', NTB_WHY),
+  ntbSales: na('n/a — SP', NTB_WHY),
+  ntbSalesPct: na('n/a — SP', NTB_WHY),
+  ntbUnits: na('n/a — SP', NTB_UNITS_WHY),
+  ntbUnitsPct: na('n/a — SP', NTB_UNITS_WHY),
+  viewImpr: na('n/a — SP', 'Viewable impressions are reported for Sponsored Display and Sponsored Brands. This account runs only Sponsored Products, and the ingested field is 0 on every row.'),
+  kindleReads: na('n/a', 'A Kindle Direct Publishing metric. This account sells no books, so Amazon has nothing to report.'),
+  kindleRoyalties: na('n/a', 'A Kindle Direct Publishing metric. This account sells no books, so Amazon has nothing to report.'),
+  // ADM-P6 — `actBidHours` and `oobHours` used to live here, saying "not measured" because the
+  // out-of-budget term had no source. It has one now (Amazon's budget-usage reading, sampled every
+  // five minutes), so both are real cells below and neither is an N/A any more.
+}
+/**
+ * Spend with no attributed sales — a real outcome, and not a number ACoS can express. Muted but
+ * NOT italic, following the rule this stylesheet already states for "no owner": italic marks an
+ * absence of data, and this is a reading.
+ */
+const NO_SALES = <span className="h10-rc-word" title="This campaign spent money and Amazon attributed no sales to it in this window. ACoS has no value here (it would divide by zero sales); the ROAS column reads 0.00, which is the same fact stated as a return.">no sales</span>
+/**
+ * A share, as a percentage — with the floor that keeps a tiny non-zero from rounding into a
+ * confident 0.00%. The SOV page shipped `2 impressions of 93,869` as `0.00%`, the identical
+ * string a real zero produces; `toFixed` destroyed a null≠0 contract the service had preserved.
+ */
+const sharePct = (frac: number) => {
+  const p = frac * 100
+  if (p > 0 && p < 0.01) return '<0.01%'
+  return `${p.toFixed(2)}%`
+}
 const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 /**
  * AX2.1 — PATCH and report what ACTUALLY happened.
@@ -185,7 +250,16 @@ const DELIVERY_PILL: Record<DeliveryCampaign['state'], { label: string; cls: str
   unknown:        { label: '—',        cls: '',      hint: 'No write has been attempted yet.' },
 }
 const ALL_COLS: ColDef[] = [
-  { key: 'delivery', label: 'Amazon Delivery' },
+  // 🔴 ADM-H P4 — this column was labelled "Amazon Delivery" and showed OUR write pipeline's
+  // state. Amazon's own serving status was arriving on the same payload (`deliveryStatus` +
+  // `deliveryReasons`, added by H.2 for exactly this purpose) and was rendered nowhere. On 14 of
+  // 100 rows the two disagreed — a green "Live" over a campaign Amazon called NOT_DELIVERING,
+  // 8 of them out of budget. Two facts, one name, so each now has its own column:
+  //   · Write Delivery  — did OUR last change reach Amazon (delivery-state / OutboundSyncQueue)
+  //   · Amazon Delivery — is Amazon serving the campaign, and if not, why (Campaign.deliveryStatus)
+  // The `delivery` key is unchanged so stored column preferences keep working.
+  { key: 'delivery', label: 'Write Delivery' },
+  { key: 'amazonDelivery', label: 'Amazon Delivery' },
   // ACR.1.6 — what automation is allowed to do to this campaign, beside what actually
   // reached Amazon. The two belong together: "Amazon Delivery" answers whether our last
   // write landed, this answers whether the next one is even permitted to be attempted.
@@ -250,7 +324,9 @@ const ALL_KEYS = ALL_COLS.map((c) => c.key)
 const DEFAULT_VISIBLE = ALL_KEYS
 // Bumped whenever a column is ADDED: the visible set is persisted per operator, so a new
 // key would otherwise be invisible to everyone who has ever opened Customize Columns.
-const COLS_KEY = 'h10-am-columns-v4' // v3: AX2.1 Amazon Delivery · v4: ACR.1.6 Automation
+// Bumped whenever a column is ADDED: the visible set is persisted per operator, so a new key
+// would otherwise stay invisible to everyone who has ever opened Customize Columns.
+const COLS_KEY = 'h10-am-columns-v5' // v3: AX2.1 Amazon Delivery · v4: ACR.1.6 Automation · v5: ADM-H P4 Amazon Delivery split from Write Delivery
 
 // Physical grid columns. Most checklist items are one column; "Bid Algorithm"
 // expands to the Adtomic cluster. `metric` → numeric/sortable cell (renderCol);
@@ -262,7 +338,7 @@ const CLUSTER: PhysCol[] = [
   { key: 'minMaxBid', label: 'Min/Max Bid', metric: false },
   { key: 'bidAutomation', label: 'Bid Automation', metric: false },
 ]
-const SETTINGS_KEYS = new Set(['delivery', 'automation', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
+const SETTINGS_KEYS = new Set(['delivery', 'amazonDelivery', 'automation', 'status', 'minMaxBudget', 'rules', 'biddingStrategy', 'bidMultiplier', 'startDate', 'endDate', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil'])
 function physCols(itemKey: string): PhysCol[] {
   if (itemKey === 'bidAlgorithm') return CLUSTER
   const it = COL_BY_KEY[itemKey]
@@ -277,43 +353,98 @@ const physToItem = (k: string): string => (CLUSTER_KEY_SET.has(k) ? 'bidAlgorith
 // Numeric/metric cell. Settings columns are rendered by settingsCell instead.
 // Columns without a Nexus data source render "—" (H10-parity placeholders, P4).
 function renderCol(c: Camp, key: string): ReactNode {
-  const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders ?? c.orders)
+  const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders)
+  const hasOrders = c.ppcOrders != null
   switch (key) {
     case 'spend': return eur(spend)
     case 'sales': return eur(sales)
     /**
-     * 🔴 ADM-P6/AC — this ran through `pct()`, which GUESSED the unit: `n <= 1 ? n * 100 : n`.
+     * 🔴 ADM-H P7 — this ran through `pct()`, whose `n <= 1 ? n * 100 : n` guess renders a
+     * fraction of 1.5 (an ACoS of 150%) as **"1.50%"** — off by two orders of magnitude, and
+     * confidently. Latent, not observed: 0 of 220 campaigns exceeded 100% ACoS when measured
+     * 2026-08-22, which is exactly why it had survived. `/advertising/campaigns` documents this
+     * field as a FRACTION (`spendCents / salesCents`), so the guess is not needed and the
+     * ambiguity it introduced is worse than the case it handled. Same family as the
+     * `?? 'LEGACY_FOR_SALES'` strategy fallback C4 removed: fixed because it is wrong.
      *
-     * `/advertising/campaigns` documents `acos` as a FRACTION, so the guess is only ever right by
-     * coincidence — and it inverts precisely where it matters most. A campaign at 204% ACoS arrives
-     * as 2.04, fails the `<= 1` test, and renders **2.04%**: money spent at twice what it earns,
-     * displayed as the single best number on the page.
-     *
-     * ADM-H found it latent (0 of 220 on the page's default 7-day window) and it is not latent any
-     * more. The double-count fix in `8ebf4893b` corrected ad sales downward, which raised true ACoS
-     * and moved campaigns INTO the failing band — measured over 30 days, 1 before that fix and 3
-     * after: GALE | IT | Phrase | Category 204.1%, GALE | IT | PAT 113.9%, GALE EXACT IT 106.9%.
-     *
-     * No magnitude test survives here. The unit is known, so it is applied.
+     * ACoS and ROAS also disagreed about the SAME campaigns: with spend and no sales, ACoS said
+     * "—" and ROAS said "0.00", inches apart on one row. ROAS of 0.00 is a true reading there —
+     * you got nothing back — so ACoS now says what it means too: undefined, because dividing by
+     * zero sales is not a percentage. One vocabulary, one branch.
      */
     case 'acos': {
       const frac = c.acos != null ? Number(c.acos) : (sales > 0 ? spend / sales : NaN)
-      // '—' for both absences rather than distinguishing "spent, zero attributed sales". ADM-H has
-      // a `NO_SALES` token for exactly that, uncommitted, and re-creating it here would fork theirs
-      // — the magnitude guess is the bug; the richer empty state is theirs to land.
-      if (!Number.isFinite(frac)) return '—'
+      if (!Number.isFinite(frac)) return spend > 0 ? NO_SALES : '—'
       return `${(frac * 100).toFixed(2)}%`
     }
-    case 'roas': { const r = c.roas != null ? Number(c.roas) : (spend ? sales / spend : NaN); return Number.isFinite(r) ? r.toFixed(2) : '—' }
+    case 'roas': {
+      const r = c.roas != null ? Number(c.roas) : (spend ? sales / spend : NaN)
+      if (!Number.isFinite(r)) return spend > 0 ? NO_SALES : '—'
+      return r.toFixed(2)
+    }
     case 'impressions': return impr.toLocaleString()
     case 'clicks': return clicks.toLocaleString()
     case 'cpc': return clicks ? eur(spend / clicks) : '—'
     case 'ctr': return impr ? `${((clicks / impr) * 100).toFixed(2)}%` : '—'
-    case 'cvr': return clicks ? `${((orders / clicks) * 100).toFixed(2)}%` : '—'
-    case 'ppcOrders': return orders ? orders.toLocaleString() : '0'
-    case 'cpa': return orders ? eur(spend / orders) : '—'
-    case 'aov': return orders ? eur(sales / orders) : '—'
-    default: return '—' // parity placeholders (no data source yet)
+    /**
+     * ADM-H P7 — `orders` was `c.ppcOrders ?? c.orders`, and `num()` turns an absent value into
+     * 0. The route only returns `ppcOrders` when the request carries date params; the Ad Manager
+     * always sends them, so these four columns are honest TODAY — by a caller's habit, not by
+     * anything in the code. Without a range this printed a confident "0" orders and "0.00%" CVR
+     * on all 220 rows. `hasOrders` makes the guarantee structural instead of circumstantial.
+     */
+    case 'cvr': return !hasOrders ? UNKNOWN : clicks ? `${((orders / clicks) * 100).toFixed(2)}%` : '—'
+    case 'ppcOrders': return !hasOrders ? UNKNOWN : orders.toLocaleString()
+    case 'cpa': return !hasOrders ? UNKNOWN : orders ? eur(spend / orders) : '—'
+    case 'aov': return !hasOrders ? UNKNOWN : orders ? eur(sales / orders) : '—'
+    /**
+     * ADM-H P3 — eight columns that fell through the default `'—'` below while their numbers sat
+     * in the same table this route already aggregates. Measured on prod 2026-08-22 over the page's
+     * own 7-day window: top-of-search IS reported on 65 of 83 campaigns, Sale Units and the halo
+     * pair non-zero on 11, the SameSKU trio on 2.
+     *
+     * `null` is the source saying nothing and renders `unknown`; a real 0 renders `0`. Keeping
+     * those apart is the entire job — an unreported same-SKU figure printed as €0.00 would read
+     * as "none of this campaign's sales were the advertised ASIN", which is a finding, not a gap.
+     */
+    case 'saleUnits': return c.saleUnits == null ? UNKNOWN : c.saleUnits.toLocaleString()
+    case 'asp': return c.asp == null ? UNKNOWN : eur(c.asp)
+    case 'otherSales': return c.otherSales == null ? UNKNOWN : eur(c.otherSales)
+    case 'otherSalesPct': return c.otherSalesPct == null ? UNKNOWN : sharePct(c.otherSalesPct)
+    case 'sameSkuSales': return c.sameSkuSales == null ? UNKNOWN : eur(c.sameSkuSales)
+    case 'sameSkuSaleUnits': return c.sameSkuSaleUnits == null ? UNKNOWN : c.sameSkuSaleUnits.toLocaleString()
+    case 'sameSkuOrders': return c.sameSkuOrders == null ? UNKNOWN : c.sameSkuOrders.toLocaleString()
+    case 'topOfSearchIS': {
+      if (c.topOfSearchIS == null) return UNKNOWN
+      const d = c.topOfSearchISDays ?? 0
+      return (
+        <span title={`Mean of the daily top-of-search impression shares Amazon reported, over ${d} day${d === 1 ? '' : 's'} in this window. Days Amazon did not report are skipped rather than counted as zero.`}>
+          {sharePct(c.topOfSearchIS)}
+        </span>
+      )
+    }
+    /**
+     * 🔴 ADM-H P5 — twelve columns used to fall through to a bare `'—'`, and that one glyph was
+     * covering FOUR different truths: "no value", "Amazon does not report this for the ad
+     * products this account runs", "we never ingested the field", and "nobody can measure this
+     * yet". An operator reading a dash cannot tell a gap from an impossibility, and the
+     * difference decides whether it is worth chasing.
+     *
+     * Measured on prod 2026-08-22, and this is why each says what it says:
+     *  · NTB ×7 and View Impr. — the fields ARE ingested and are 0 on every one of 1,949
+     *    campaign rows, because all 1,949 are SPONSORED_PRODUCTS and these are SB/SD metrics.
+     *    (NTB-Units and NTB-Units% go further: no field for them was ever ingested at all.)
+     *  · Kindle ×2 — KDP metrics; this account has no book catalogue.
+     *  · ActBid/OOB Hours — genuinely unmeasured. Hourly rows exist for 66 campaigns, but a
+     *    missing hour means "no impressions", "out of budget" or "report gap" indistinguishably,
+     *    so deriving hours from row absence would invent precision Amazon never sent. The real
+     *    source is the AMS budget-usage feed, which `ingestBudgetUsage()` counts, logs and does
+     *    not store.
+     *
+     * ⛔ None of them is removed. Placeholder surfaces are a roadmap here, and which columns an
+     * account keeps is the operator's call — this only stops them pretending.
+     */
+    default: return NOT_APPLICABLE[key] ?? '—'
   }
 }
 
@@ -327,23 +458,30 @@ const RANGE_FIELDS: Array<{ key: string; label: string; unit: '%' | '€' | '' }
   { key: 'dailyBudget', label: 'Daily Budget', unit: '' },
 ]
 function metricVal(c: Camp, key: string): number {
-  const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders ?? c.orders)
+  const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders)
   switch (key) {
-    // 🔴 The same guess lived here, and this is the half that HIDES rather than misleads:
-    // `metricVal` feeds the FILTER and the SORT, so 2.037 compared as "2.04" means a filter of
-    // `ACoS > 50` silently EXCLUDES the three worst campaigns in the account. A wrong number
-    // invites a second look; a wrong filter never does.
-    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales > 0 ? spend / sales : 0); return a * 100 }
+    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales ? spend / sales : 0); return a <= 1 ? a * 100 : a }
     case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
-    // ADM-P6 — -1 for every absence, so a row with no reading sorts below a real 0%, which IS a
-    // reading. The three states that carry no number are not "the smallest number".
-    case 'curBudgetUtil': return c.curBudgetUtil != null ? c.curBudgetUtil * 100 : -1
-    case 'avgBudgetUtil': return c.avgBudgetUtil != null ? c.avgBudgetUtil * 100 : -1
-    case 'oobHours': return c.oobHours ?? -1
-    case 'actBidHours': return c.actBidHours ?? -1
     case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
     case 'cpc': return clicks ? spend / clicks : 0; case 'ctr': return impr ? (clicks / impr) * 100 : 0
     case 'cvr': return clicks ? (orders / clicks) * 100 : 0; case 'impressions': return impr; case 'dailyBudget': return num(c.dailyBudget)
+    // ADM-H P3 — without these, clicking any of the newly-wired headers sorted every row as 0,
+    // i.e. it did nothing while looking like it had. -1 for an unreported value so a real zero
+    // still outranks "Amazon never said", in both directions.
+    case 'saleUnits': return c.saleUnits ?? -1
+    case 'asp': return c.asp ?? -1
+    case 'otherSales': return c.otherSales ?? -1
+    case 'otherSalesPct': return c.otherSalesPct != null ? c.otherSalesPct * 100 : -1
+    case 'sameSkuSales': return c.sameSkuSales ?? -1
+    case 'sameSkuSaleUnits': return c.sameSkuSaleUnits ?? -1
+    case 'sameSkuOrders': return c.sameSkuOrders ?? -1
+    case 'topOfSearchIS': return c.topOfSearchIS != null ? c.topOfSearchIS * 100 : -1
+    case 'avgBudgetUtil': return c.avgBudgetUtil != null ? c.avgBudgetUtil * 100 : -1
+    // ADM-P6 — -1 for every absence so an unreadable row sorts below a real 0%, which is a
+    // reading. The three states that carry no number are not "the smallest number".
+    case 'curBudgetUtil': return c.curBudgetUtil != null ? c.curBudgetUtil * 100 : -1
+    case 'oobHours': return c.oobHours ?? -1
+    case 'actBidHours': return c.actBidHours ?? -1
   }
   return 0
 }
@@ -372,7 +510,10 @@ const COL_TIPS: Record<string, string> = {
   targetAcos: 'Only if "Target ACoS" is selected for the Bid Algorithm. This selection dictates the ACoS goal. Click the Edit Campaigns button to edit the displayed ACoS',
   minMaxBid: 'An absolute floor and ceiling on any bid in this campaign, enforced on every write to Amazon. Note these are BASE bids: placement modifiers stack on top, so an effective CPC can still exceed the max. Deliberate suppression (retail guard, budget cap, Min-bid windows) is exempt from the floor.',
   bidAutomation: 'Active will automate the keyword bid suggestions currently found on the Suggestions page. Changes will be recorded in the Change Log',
-  minMaxBudget: 'The Minimum and Maximum Budget limits for this campaign will be used by Budget Manager. Minimum Budget: the lowest daily budget this campaign can receive. Maximum Budget: the highest daily budget this campaign can receive.',
+  // ADM-H P4 — two columns, two questions, and each tip says which one it answers.
+  delivery: 'Did OUR last change reach Amazon? Live = the write was accepted; Pending = queued; Gated = live writes are switched off for this campaign so the change stays local; Failed = Amazon rejected it. This says nothing about whether the campaign is currently serving — the Amazon Delivery column answers that.',
+  amazonDelivery: 'Is Amazon serving this campaign right now, and if not, why \u2014 Amazon\u2019s own delivery status and reason codes, not ours. A campaign can read "Delivering" here while our last write is still queued, and can read "Not delivering \u00b7 out of budget" while every write we sent landed perfectly.',
+  minMaxBudget: 'A floor and ceiling on this campaign\u2019s daily budget, enforced on every write: a cut below the floor or a raise above the ceiling is DENIED at the write gate and recorded, never clamped. Amazon has no such field \u2014 this is our own bound, and it binds every rule, the pacer and any manual edit. Amazon\u2019s own hard floor is \u20AC1, so a floor here must be at least that.',
   ntbOrdersPct: 'The percentage of total orders that are new-to-brand. Only relevant for SB and SD',
   ntbSalesPct: 'The percentage of total sales (in local currency) that are new-to-brand sales. Only relevant for SB and SD',
   ntbUnits: 'The total sale units (in local currency) of new-to-brand orders. Only relevant for SB and SD',
@@ -380,7 +521,14 @@ const COL_TIPS: Record<string, string> = {
   sameSkuOrders: 'Orders where the purchased ASIN/SKU was the same as the ASIN/SKU advertised.',
   actBidHours: 'Average hours ads were actually bidding (Actual bidding hours = Available bidding hours − Out of budget hours).',
   oobHours: 'Average Out of Budget Time.',
-  topOfSearchIS: 'Top-of-search impression share — the percentage of top-of-search impressions your ads received out of those available.',
+  topOfSearchIS: 'Top-of-search impression share \u2014 the share of available top-of-search impressions your ads won. Shown as the mean of the daily shares Amazon reported inside the selected window; days it did not report are skipped, never counted as zero. Hover a cell for the number of days behind that row.',
+  // ADM-H P3 — the newly-wired columns explain their own arithmetic, because every one of them
+  // is a derivation an operator would otherwise have to guess at.
+  saleUnits: 'Units sold, attributed to this campaign inside the selected window (the report\u2019s 7-day attribution). Reads "unknown" when Amazon reported no unit figure \u2014 which is not the same as selling none.',
+  asp: 'Average selling price \u2014 attributed sales divided by attributed UNITS. Not the same as AOV, which divides by orders: a single two-unit order separates them.',
+  otherSales: 'Halo \u2014 attributed sales of products OTHER than the advertised ASIN, computed as total attributed sales minus same-SKU sales. Unknown whenever the same-SKU half is unknown, because total minus unknown is unknown.',
+  otherSalesPct: 'Halo as a share of total attributed sales. High here means the campaign sells the catalogue rather than the ASIN it advertises.',
+  sameSkuSaleUnits: 'Units where the purchased ASIN/SKU was the same as the ASIN/SKU advertised.',
 }
 const STATUS_OPTS: Array<{ value: string; label: string }> = [
   { value: 'ENABLED', label: 'Enabled' },
@@ -1202,12 +1350,32 @@ export function CampaignsGrid() {
       toast(`Bid bounds refused · ${c.name}${r.error ? ` — ${r.error}` : ''}`)
     }
   }
-  const setCampaignMinMaxBudget = (c: Camp, mm: { minCents: number | null; maxCents: number | null } | null) => {
+  /**
+   * ADM-H P1 — persists to Campaign.minBudgetCents / maxBudgetCents, the gate-enforced budget
+   * bounds, through the SAME `/guardrails` endpoint the Min/Max Bid pencil already used and
+   * the Budget page's own Guardrails panel writes.
+   *
+   * 🔴 What this replaced: a function that updated React state, toasted "(local — Amazon field
+   * pending)" and threw the value away on reload. The toast was half right and wholly
+   * misleading — Amazon really has no min/max budget field, but OURS exists, is a real column,
+   * and `ads-write-gate.ts` denies any budget write outside it. Nothing was pending; the write
+   * was simply never made. Local state is updated only once the server has accepted, and a
+   * refusal is reported as a refusal.
+   */
+  const setCampaignMinMaxBudget = async (c: Camp, mm: { minCents: number | null; maxCents: number | null } | null) => {
     setEditPop(null)
-    // Still local-only — no Amazon field exists — so it keeps holding euros in `Camp`.
-    const asEur = mm && { min: mm.minCents == null ? null : mm.minCents / 100, max: mm.maxCents == null ? null : mm.maxCents / 100 }
-    setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minMaxBudget: asEur } : x)))
-    toast(`Min/Max budget updated · ${c.name} (local — Amazon field pending)`)
+    const minBudgetCents = mm?.minCents ?? null
+    const maxBudgetCents = mm?.maxCents ?? null
+    const r = await patchWrite(`${getBackendUrl()}/api/advertising/campaigns/${c.id}/guardrails`, { minBudgetCents, maxBudgetCents })
+    if (r.outcome === 'applied' || r.outcome === 'queued') {
+      setRows((rs) => rs.map((x) => (x.id === c.id ? { ...x, minBudgetCents, maxBudgetCents } : x)))
+      const label = minBudgetCents != null || maxBudgetCents != null
+        ? `${minBudgetCents != null ? eur(minBudgetCents / 100) : '—'} – ${maxBudgetCents != null ? eur(maxBudgetCents / 100) : '—'}`
+        : 'cleared'
+      toast(`Budget bounds → ${label} · ${c.name}`)
+    } else {
+      toast(`Budget bounds refused · ${c.name}${r.error ? ` — ${r.error}` : ''}`)
+    }
   }
   // Target ACoS → real /automation write (fraction); Daily Budget → gated PATCH.
   const setCampaignTargetAcos = async (c: Camp, pctStr: string) => {
@@ -1386,14 +1554,16 @@ export function CampaignsGrid() {
           />
         )
       }
+      // ADM-H P4 — Amazon's own view, from fields the payload has always carried.
+      case 'amazonDelivery': return <AmazonDeliveryCell status={c.deliveryStatus} reasons={c.deliveryReasons} />
       case 'status': return <StatusCell status={c.status} name={c.name} onChange={(next) => void setCampaignStatus(c, next)} />
-      // C5 — one empty-state vocabulary. This said "None - None" while the Min/Max BID cell
-      // beside it said "None" for the identical idea, and Target ACoS said "—". The rule now:
-      // **None** = settable, nothing set · **—** = no value · **unknown** = the source did not say.
-      // (It stays its own cell rather than borrowing `MinMaxBidCell`: a budget band and a bid band
-      // are different controls with different consequences, and a shared cell would need a copy
-      // prop to explain itself — which is a fork with extra steps.)
-      case 'minMaxBudget': return ed(c.minMaxBudget && (c.minMaxBudget.min != null || c.minMaxBudget.max != null) ? `${c.minMaxBudget.min != null ? eur(c.minMaxBudget.min) : '—'} – ${c.minMaxBudget.max != null ? eur(c.minMaxBudget.max) : '—'}` : 'None', 'minMaxBudget')
+      // C5 — one empty-state vocabulary: **None** = settable, nothing set · **—** = no value ·
+      // **unknown** = the source did not say. ADM-H P1 moved the cell into
+      // `_shared/RuleColumnCells.tsx` beside `MinMaxBidCell` and pointed it at the REAL
+      // gate-enforced columns. It stays its own cell rather than a `variant` on the bid one:
+      // a budget band and a bid band are different controls with different consequences, and
+      // one cell explaining both would need a copy prop — a fork with extra steps.
+      case 'minMaxBudget': return ed(<MinMaxBudgetCell minCents={c.minBudgetCents} maxCents={c.maxBudgetCents} />, 'minMaxBudget')
       /**
        * 🔴 C2 — this printed a hard-coded `<b>0</b>` on all 220 rows while the Automation cell
        * immediately to its left said, in its own tooltip, that **20 enabled rules govern every
@@ -1419,9 +1589,46 @@ export function CampaignsGrid() {
         )
       }
       case 'biddingStrategy': return <BiddingStrategyCell strategy={effStrat(c)} onEdit={() => setStrategyModal(c)} />
-      case 'bidMultiplier': return <button type="button" className="h10-gearbtn" aria-label={`Bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>
+      /**
+       * ADM-H P7 — this was a gear icon and nothing else, on all 220 rows: a column that told you
+       * nothing about the campaign and made you open a modal per row to learn anything. The
+       * multipliers were in the payload the whole time — `placements {tos,pdp,ros}`, present on
+       * 178 of 220 campaigns in 113 distinct shapes when measured 2026-08-22.
+       *
+       * 🔴 It shows the PLAN beside the number, which is not decoration. `placementBidding` is a
+       * time-of-day reading for the campaigns an AdSchedule governs: `ad-rank-defend` pins each
+       * lane to the floor of whichever RankTarget the hour resolves to, and the `pause` target's
+       * bias is 0 — so a campaign carrying 150% at 13:00 can carry nothing at 03:00. Quoting a
+       * live multiplier without naming the plan behind it reads as instability. The owner is the
+       * same `bidOwners` join the Bid Rule cell already uses, so no new fetch and no second
+       * source that could disagree with that column.
+       */
+      case 'bidMultiplier': {
+        const p = c.placements
+        const lanes = p ? ([['Top', p.tos], ['PDP', p.pdp], ['Rest', p.ros]] as const).filter(([, v]) => v != null && v !== 0) : []
+        const owner = bidOwners?.get(c.id)
+        const planHeld = owner?.bidder === 'schedule'
+        const tip = lanes.length
+          ? `${lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}\n${planHeld
+            ? `⚠ A rank schedule${owner?.bidderName ? ` (${owner.bidderName})` : ''} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
+            : 'Nothing governs these lanes, so they hold until someone changes them.'}`
+          : 'No placement multiplier on any lane: every placement bids the base bid.'
+        return (
+          <span className="h10-plc" title={tip}>
+            {lanes.length
+              ? <span className="v">{lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}</span>
+              : <span className="h10-rc-none">None</span>}
+            {planHeld && lanes.length > 0 && <i className="hourly" aria-label="Rewritten hourly by a rank schedule">⏱</i>}
+            <button type="button" className="h10-gearbtn" aria-label={`Edit bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>
+          </span>
+        )
+      }
       case 'startDate': return fmtDate(c.startDate)
-      case 'endDate': return c.endDate ? fmtDate(c.endDate) : '-'
+      // ADM-H P7 — printed a bare ASCII '-' on 220 of 220 rows, in a grid whose own C5 vocabulary
+      // reserves '—' for "no value" and **None** for "settable, nothing set". An end date is
+      // settable (the Bulk Actions modal writes it), and no campaign has one — so it is None,
+      // and the two glyphs stop being a coin toss.
+      case 'endDate': return c.endDate ? fmtDate(c.endDate) : <span className="h10-rc-none" title="No end date is set, so this campaign runs until it is paused or archived.">None</span>
       case 'dailyBudget': {
         if (mode === 'edit') {
           const dirty = e?.dailyBudget != null && e.dailyBudget !== '' && Number(e.dailyBudget) !== num(c.dailyBudget)
@@ -1435,18 +1642,33 @@ export function CampaignsGrid() {
         return ed(c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', 'dailyBudget')
       }
       /**
-       * 🔴 ADM-P6 — this column rendered `not measured` on 220 of 220 rows, and before that a
-       * hard-coded zero-width bar. The sentence behind "not measured" was true when written: no
-       * source held today's spend-so-far, and the Marketing Stream's budget-usage percentage is
-       * received, counted, logged and never stored.
+       * 🔴 ADM-H P2 — both of these returned one hard-coded `width: '0%'` bar, aria-hidden, with no
+       * text, on every row of every page. See `BudgetUtilCell` for what that actually rendered.
+       *
+       * They are split now because they are two different truths:
+       *
+       *  · **Average** is REAL — each day's spend ÷ that day's reported budget, averaged over the
+       *    days Amazon has data for. Measured 2026-08-22: computable for 83 of 83 campaigns that
+       *    have report rows, from 7.6% to 288%.
+       *
+       *  · **Current** is NOT, and this says so rather than drawing an empty gauge. Today's
+       *    spend-so-far is not ingested at the daily grain, and Amazon Marketing Stream's
+       *    per-campaign budget-usage percentage is received, counted, logged — and never stored
+       *    (`ingestBudgetUsage()` persists nothing). Until that feed is written down there is no
+       *    live reading to show, and an empty bar claiming 0% is the worst available answer.
+       */
+      /**
+       * 🔴 ADM-P6 — this said `not measured` on 220 of 220 rows, and the sentence behind it was
+       * true when it was written: the Marketing Stream's budget-usage percentage was received,
+       * counted, logged and never stored, and no other source held today's spend-so-far.
        *
        * There was a third source. `POST /sp/campaigns/budget/usage` answers synchronously for
-       * every Sponsored Products campaign — 200 of 200, measured 2026-08-22 — with Amazon's OWN
-       * percentage, Amazon's OWN budget as the denominator, and `usageUpdatedTimestamp`, the age
-       * of the reading itself.
+       * every Sponsored Products campaign — 200 of 200, measured — with Amazon's OWN percentage,
+       * Amazon's OWN budget as the denominator, and `usageUpdatedTimestamp`, the age of the
+       * reading itself. `budget-usage-sample` records it every five minutes; this reads that.
        *
-       * The cell never computes the day boundary and never renders 0 in place of an absence: the
-       * API sends a state, and each state has its own sentence.
+       * The cell never computes the day boundary itself and never renders a 0 in place of an
+       * absence — the API classifies the reading against the 00:00 UTC reset and sends a state.
        */
       case 'curBudgetUtil': return (
         <BudgetUtilCell
@@ -1458,21 +1680,11 @@ export function CampaignsGrid() {
           }}
         />
       )
-      // ADM-P6 — one component, two readings of the SAME observation spans. Counted apart, the
-      // two columns would be free to disagree about the day they were counted from.
+      // ADM-P6 — one component, two readings of the same observation spans. Out-of-budget hours
+      // and actively-bidding hours counted apart would be free to disagree about the day they
+      // were counted from.
       case 'oobHours': return <UsageHoursCell kind="oob" hours={c.oobHours} observed={c.hoursObserved} since={c.usageSince} />
       case 'actBidHours': return <UsageHoursCell kind="actbid" hours={c.actBidHours} observed={c.hoursObserved} since={c.usageSince} />
-      /**
-       * 🔴 ADM-P6b — this rendered a hard-coded `width: '0%'` bar, aria-hidden, with no text, on
-       * every row of every page. That does not read as "no data": it reads as an instrument
-       * pegged at zero, which is a finding ("nothing here is budget-capped") the account never
-       * made. Measured over 7 days it is false on 25 of 83 readable campaigns — 17 of them
-       * average 100% or more.
-       *
-       * ADM-H diagnosed this and their fix was discarded from the shared tree before it landed.
-       * Restored here rather than left standing beside a working gauge, because two adjacent
-       * utilization columns where one is real and one is painted at zero is worse than either.
-       */
       case 'avgBudgetUtil': return (
         <BudgetUtilCell
           fraction={c.avgBudgetUtil}
@@ -1856,7 +2068,7 @@ export function CampaignsGrid() {
         // popover and its cell — correct, but a second unit for one field. Both now read the
         // cents the endpoint itself takes, and the derived field is gone.
         if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="bid" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
-        return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="budget" minCents={c.minMaxBudget?.min != null ? Math.round(c.minMaxBudget.min * 100) : null} maxCents={c.minMaxBudget?.max != null ? Math.round(c.minMaxBudget.max * 100) : null} anchor={editPop.anchor} onApply={(mm) => setCampaignMinMaxBudget(c, mm)} onClose={close} />
+        return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="budget" minCents={c.minBudgetCents ?? null} maxCents={c.maxBudgetCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBudget(c, mm)} onClose={close} />
       })()}
 
       {/* AX-IE.10 — "export exactly what I'm looking at".

@@ -23,6 +23,7 @@ import {
 import { PromoteModal } from '../_modals/PromoteModal'
 import { MatchModal } from './modals/MatchModal'
 import { CostModal } from './modals/CostModal'
+import { Pill } from '@/design-system/primitives'
 
 interface Row extends ProductListingRow {
   groupKey: string
@@ -66,7 +67,7 @@ export function EbayProductsRollup() {
       key: 'state', label: 'State', metric: false, sortValue: (r) => r.matchStatus,
       tip: 'Match a listing to a catalog product to unlock costs, break-evens and margin guardrails — ad spend is counted either way.',
       render: (r) => r.matchStatus === 'MATCHED' || r.matchStatus === 'CONFIRMED' || r.matchStatus === 'MANUAL'
-        ? <span className="h10-pill ok" title={r.matchStatus === 'MANUAL' ? 'Operator-confirmed match (sticky across syncs)' : 'Matched via eBay SKU / listing map'}>Matched</span>
+        ? <Pill tone="success" title={r.matchStatus === 'MANUAL' ? 'Operator-confirmed match (sticky across syncs)' : 'Matched via eBay SKU / listing map'}>Matched</Pill>
         : <button type="button" className="h10-am-btn sm" title="Link this listing to a catalog product — unlocks cost entry, break-evens and margin guardrails" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>Match…</button>,
     },
     {
@@ -86,8 +87,8 @@ export function EbayProductsRollup() {
       render: (r) => (
         <span className="eb-qty-cell">
           {r.quantity != null ? int(r.quantity) : '—'}
-          {r.quantity === 0 && <span className="h10-pill warn" title="Out of stock — eBay auto-hides its ads until restock">OOS</span>}
-          {r.quantity !== 0 && r.campaigns?.some((c) => c.adHidden) && <span className="h10-pill warn" title="An ad for this listing is hidden by eBay (auto-hide); it resurfaces on restock">hidden</span>}
+          {r.quantity === 0 && <Pill tone="warning" title="Out of stock — eBay auto-hides its ads until restock">OOS</Pill>}
+          {r.quantity !== 0 && r.campaigns?.some((c) => c.adHidden) && <Pill tone="warning" title="An ad for this listing is hidden by eBay (auto-hide); it resurfaces on restock">hidden</Pill>}
         </span>
       ),
     },
@@ -97,7 +98,7 @@ export function EbayProductsRollup() {
         if (r.breakEvenAdRatePct != null) {
           return <button type="button" className="h10-am-link" title={`Unit cost €${r.costPriceCents != null ? (r.costPriceCents / 100).toFixed(2) : '?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</button>
         }
-        if (r.economicsStatus === 'MISSING_PRICE') return <span className="h10-pill arch">no price</span>
+        if (r.economicsStatus === 'MISSING_PRICE') return <Pill tone="neutral">no price</Pill>
         if (r.groupKey === '~unmatched') return <button type="button" className="h10-am-btn sm" title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</button>
         return <button type="button" className="h10-am-btn sm" title="Enter the unit cost — break-even + margin guardrails activate immediately" onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>add cost</button>
       },

@@ -8,11 +8,12 @@ import { AdsDataGrid, type GridColumn } from '../../../../../../campaigns/_grid/
 import type { AdGroupDetailPayload, NegativeKeywordRow } from '../../../../../_lib'
 import { ebayStatusPill } from '../../../../../_lib/status'
 import { StatusPill } from '../../../../../../_shared/StatusPill'
+import { Pill } from '@/design-system/primitives'
 
 export function AgNegativeKeywordsTab({ data, onAdd }: { data: AdGroupDetailPayload; onAdd: () => void }) {
   const rows = data.negativeKeywords
   const columns: GridColumn<NegativeKeywordRow>[] = useMemo(() => [
-    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <span className="h10-pill arch">{r.matchType}</span> },
+    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <Pill tone="neutral">{r.matchType}</Pill> },
     { key: 'state', label: 'State', metric: false, sortValue: (r) => r.status, render: (r) => { const p = ebayStatusPill(r.status); return <StatusPill label={p.label} cls={p.cls} /> } },
   ], [])
 

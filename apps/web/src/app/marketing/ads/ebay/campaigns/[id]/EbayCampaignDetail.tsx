@@ -25,6 +25,7 @@ import { CloneModal } from './modals/CloneModal'
 import { EndCampaignModal } from './modals/EndCampaignModal'
 import { CreateAdGroupModal } from './modals/CreateAdGroupModal'
 import { PromoteModal } from '../../_modals/PromoteModal'
+import { Pill } from '@/design-system/primitives'
 
 const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } }
 
@@ -79,8 +80,8 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
         badge={c ? STRATEGY_BADGE[strategy] : undefined}
         title={c?.name ?? ''}
         titleBadges={c ? <>
-          {policy?.protected && <span className="h10-pill warn" title="Protected — excluded from ALL automation (rules, coverage guard, discovery)">Protected</span>}
-          {c.nexusManaged && <span className="h10-pill arch" title="Created and managed by Nexus">nexus</span>}
+          {policy?.protected && <Pill tone="warning" title="Protected — excluded from ALL automation (rules, coverage guard, discovery)">Protected</Pill>}
+          {c.nexusManaged && <Pill tone="neutral" title="Created and managed by Nexus">nexus</Pill>}
         </> : null}
         markets={[c?.marketplace ?? 'EBAY_IT']}
         market={c?.marketplace ?? 'EBAY_IT'}

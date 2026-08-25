@@ -663,19 +663,9 @@ async function ingestCampaignRows(
     // the v2 attributedSales14d/attributedConversions14d names. Store
     // SB sales in sales14dCents to preserve the original 14d-window
     // semantic; analytics sums both fields anyway.
-    /**
-     * 🔴 ADM-P6/DC — the HEADLINE column, for every ad product without exception.
-     *
-     * Sponsored Brands used to be routed into `sales14dCents` instead, which made that column mean
-     * the SB headline to fourteen readers AND the 14-day window to this ingest. The moment a real
-     * 14-day figure was written for a Sponsored Products row, those rows were summed with
-     * themselves: EUR 18,953 of ad sales shown against EUR 9,483 true, every affected ACoS halved.
-     * See `ads-core/ad-sales.ts`.
-     */
     const sales7dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
       : job.adProduct === 'SPONSORED_DISPLAY' ? toCents(r.sales)
-      : job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.sales)
       : 0
     /**
      * 🔴 SPC.1 — this read `SPONSORED_BRANDS ? toCents(r.sales) : 0`, and that
@@ -685,21 +675,9 @@ async function ingestCampaignRows(
      * later null-out of the legacy columns would be undone by the next nightly
      * cron. Each ad product now writes its own window and nothing else writes 0.
      */
-    /**
-     * The 14-day attribution WINDOW, and nothing else — never the headline, never summed.
-     *
-     * 🔴 MERGE NOTE (ADM-P6/DC + SPC.1). SPC.1 wrote this as
-     *   `SP ? centsOrNull(r.sales14d) : SB ? centsOrNull(r.sales) : null`
-     * which was correct under the OLD contract, where the SB branch WAS Sponsored Brands' headline.
-     * That branch is gone: SB's headline now lives in `sales7dCents` with every other product, and
-     * duplicating it here would record one figure in two columns for no reader.
-     *
-     * SPC.1's real contribution survives intact — Sponsored Products now carries a genuine 14-day
-     * window, which is precisely what could not be done safely before, because the readers summed
-     * it into the headline.
-     */
     const sales14dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? centsOrNull(r.sales14d)
+      : job.adProduct === 'SPONSORED_BRANDS' ? centsOrNull(r.sales)
       : null
     const orders7d =
       job.adProduct === 'SPONSORED_PRODUCTS' ? (r.purchases7d ?? 0)

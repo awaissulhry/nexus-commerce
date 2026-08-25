@@ -11,6 +11,7 @@ import { postEbayAds, type AdGroupDetailPayload, type KeywordRow, type WriteItem
 import { ebayStatusPill } from '../../../../../_lib/status'
 import { StatusPill } from '../../../../../../_shared/StatusPill'
 import { metricColumns } from '../../../tabs/metric-columns'
+import { Pill } from '@/design-system/primitives'
 
 interface SuggestOut { suggestions: { suggestedBids?: Array<{ keywordText?: string; suggestedBid?: { value?: string } }> } }
 
@@ -59,7 +60,7 @@ export function AgKeywordsTab({ data, campaignId, reload, say, onAdd }: { data: 
 
   const columns: GridColumn<KeywordRow>[] = useMemo(() => [
     { key: 'state', label: 'State', metric: false, sortValue: (r) => r.status, render: (r) => { const p = ebayStatusPill(r.status); return <StatusPill label={p.label} cls={p.cls} /> } },
-    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <span className="h10-pill arch">{r.matchType}</span> },
+    { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <Pill tone="neutral">{r.matchType}</Pill> },
     { key: 'bid', label: 'Bid', render: (r) => money(r.bidCents, currency), sortValue: (r) => r.bidCents ?? -1 },
     {
       key: 'suggested', label: 'Suggested Bid',

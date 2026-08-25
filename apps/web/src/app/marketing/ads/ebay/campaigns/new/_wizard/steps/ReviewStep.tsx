@@ -16,6 +16,7 @@ import { postEbayAds, getEbayAds } from '../../../../_lib'
 import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
+import { Pill } from '@/design-system/primitives'
 
 interface LaunchOut {
   ok: boolean; mode: string; campaignId: string
@@ -182,13 +183,13 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
       {/* recap */}
       <div className="h10-cd-card pad">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span className="h10-pill ok">{plan.name || 'unnamed'}</span>
-          <span className="h10-pill arch">{plan.type === 'general' ? (isRules ? 'General · rules-based' : 'General · key-based') : plan.type === 'priority-manual' ? 'Priority · manual' : 'Priority · smart'}</span>
-          <span className="h10-pill arch">{plan.marketplace}</span>
-          {plan.startDate && <span className="h10-pill arch">scheduled — starts {plan.startDate}</span>}
-          {plan.endDate && <span className="h10-pill warn">ends {plan.endDate}</span>}
-          {dynKey && <span className="h10-pill ok">dynamic rate ≤ {plan.dynamicCapPct}%</span>}
-          {plan.rateDiscovery.on && isGen && !isRules && !dynKey && <span className="h10-pill ok">Rate Discovery {plan.rateDiscovery.floorPct}%→{plan.rateDiscovery.capPct}%</span>}
+          <Pill tone="success">{plan.name || 'unnamed'}</Pill>
+          <Pill tone="neutral">{plan.type === 'general' ? (isRules ? 'General · rules-based' : 'General · key-based') : plan.type === 'priority-manual' ? 'Priority · manual' : 'Priority · smart'}</Pill>
+          <Pill tone="neutral">{plan.marketplace}</Pill>
+          {plan.startDate && <Pill tone="neutral">scheduled — starts {plan.startDate}</Pill>}
+          {plan.endDate && <Pill tone="warning">ends {plan.endDate}</Pill>}
+          {dynKey && <Pill tone="success">dynamic rate ≤ {plan.dynamicCapPct}%</Pill>}
+          {plan.rateDiscovery.on && isGen && !isRules && !dynKey && <Pill tone="success">Rate Discovery {plan.rateDiscovery.floorPct}%→{plan.rateDiscovery.capPct}%</Pill>}
           <span className="grow" style={{ flex: 1 }} />
           <span title={readiness.fixes.join('\n') || 'Ready'} className={`eb-readiness ${readiness.score >= 80 ? 'ok' : readiness.score >= 50 ? 'mid' : 'bad'}`}>
             Launch readiness {readiness.score}/100
@@ -237,7 +238,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
                   return (
                     <tr key={l.itemId}>
                       <td className="ed"><span className="t">{l.title ?? l.itemId}</span></td>
-                      <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <span className="h10-pill warn">add cost</span>}</td>
+                      <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>}</td>
                       <td className="num"><input className={`h10-cd-input ${over ? 'over-be' : ''}`} style={{ width: 74 }} type="number" min={2} max={100} step={0.1} value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')} onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} /></td>
                     </tr>
                   )

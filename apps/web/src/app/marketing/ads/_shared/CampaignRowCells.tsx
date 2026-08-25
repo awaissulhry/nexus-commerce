@@ -32,6 +32,7 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink, Lightbulb, Pencil, X } from 'lucide-react'
 import { HoverCard } from '../campaigns/FilterDropdown'
+import { Pill } from '@/design-system/primitives'
 
 // ── the label maps, defined once ────────────────────────────────────────────────────────────────
 
@@ -224,6 +225,55 @@ export function AutomationCell({ managed, missing, pins, boundRuleNames, account
       {shown.map(([k, s]) => <span key={k} className="h10-auto-pin">{s}</span>)}
       {bound.length > 0 && <span className="h10-auto-rules">{bound.length}</span>}
       {suppressedAt && <span className="h10-auto-sup" aria-label="bids suppressed">↓</span>}
+    </span>
+  )
+}
+
+/**
+ * Amazon's OWN answer to "is this campaign serving right now" — `Campaign.deliveryStatus` plus
+ * `deliveryReasons`, straight from Amazon's v1 export.
+ *
+ * 🔴 ADM-H P4 (2026-08-22). Both fields have arrived on `/advertising/campaigns` since H.2, which
+ * added them *"so operators can see why a campaign isn't serving"* — and no surface on the Ad
+ * Manager ever rendered either one. What sat under the heading **"Amazon Delivery"** was our own
+ * write pipeline's state, i.e. whether OUR last edit reached Amazon. Two unrelated facts, one
+ * name, and they disagree: joining the rendered pill against the payload across 100 rows found
+ * **14 rows reading a green "Live" while Amazon reported the campaign NOT_DELIVERING** — 8 of
+ * them out of budget, 2 incomplete, 4 paused. An operator scanning that column would have
+ * believed eight campaigns were serving that were not spending a cent.
+ *
+ * Same shape as the C1 defect where "Bid Rule" meant the algorithm on one page and bid ownership
+ * on the other. The fix is the same: give each fact its own column and its own name.
+ */
+const DELIVERY_REASON_LABEL: Record<string, string> = {
+  CAMPAIGN_PAUSED: 'paused',
+  CAMPAIGN_ARCHIVED: 'archived',
+  CAMPAIGN_OUT_OF_BUDGET: 'out of budget',
+  PORTFOLIO_OUT_OF_BUDGET: 'portfolio out of budget',
+  CAMPAIGN_INCOMPLETE: 'incomplete',
+  CAMPAIGN_STATUS_ENABLED: 'enabled',
+  ADVERTISER_PAYMENT_FAILURE: 'payment failure',
+  CAMPAIGN_ENDED: 'ended',
+  ENDED: 'ended',
+  PENDING_START_DATE: 'not started yet',
+}
+const reasonText = (r: string): string => DELIVERY_REASON_LABEL[r] ?? r.replace(/^CAMPAIGN_/, '').toLowerCase().replace(/_/g, ' ')
+
+export function AmazonDeliveryCell({ status, reasons }: { status?: string | null; reasons?: string[] | null }) {
+  const rs = (reasons ?? []).filter(Boolean)
+  const why = rs.length ? rs.map(reasonText).join(' · ') : null
+  if (status == null) {
+    return <span className="h10-rc-none" title="Amazon has not reported a delivery status for this campaign yet. Not the same as 'not delivering'.">unknown</span>
+  }
+  if (status === 'DELIVERING') {
+    return <Pill tone="success" title={`Amazon reports this campaign is serving.${why ? `\nReason codes: ${why}` : ''}`}>Delivering</Pill>
+  }
+  return (
+    <span
+      className="h10-pill warn"
+      title={`Amazon reports this campaign is NOT serving${why ? `, because: ${why}` : ''}.\nThis is Amazon's own view of the campaign, not whether our last write reached them — the Write Delivery column answers that.`}
+    >
+      Not delivering{why ? ` · ${why}` : ''}
     </span>
   )
 }
