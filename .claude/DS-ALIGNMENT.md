@@ -18,15 +18,32 @@ Read the component before using it. `components/README.md` and `patterns/README.
 ## 🔴 Rule 1 — you may NOT edit the design system
 `design-system/**` is owned by the DS session alone. Six sessions editing shared files is how
 one concept ends up with five spellings.
-**Known DS coverage, corrected 2026-08-25 by measurement — read this before reporting a gap:**
-- **Icon-only buttons are already covered.** `primitives/ToolbarButton` takes `icon` + `label`
-  (which becomes the `aria-label`) + `active` (`aria-pressed`) + `badge` + tooltip. The console's
-  boxed icon buttons (`.az-iconbtn`, `.h10-sug-iconbtn`, `.rec-iconbtn`) map straight onto it.
-  Do NOT report these as a gap; convert them.
-- **A `Segmented` control is genuinely missing** and the DS session is building it. Leave the
-  console's 20 `-seg` spellings alone until it lands.
-- **The bare icon button** (`.x` ×29, `.rm` ×14 — `border:none; background:none`) is a real gap,
-  also with the DS session. Note that none of those 43 call sites has an `aria-label` today.
+**🔴 Before reporting ANY gap, `ls` these three directories.** The DS session got this wrong
+three times in a row by grepping for one name instead of listing the folder — it declared a
+`Segmented` control missing and built a duplicate of one that already existed, whose CSS class it
+then collided with. The inventory, verified 2026-08-25:
+
+`primitives/` (21) — Badge Button Checkbox Divider InfoTip Input Kbd Pill Radio RadioCard
+**SegmentedControl** Select Skeleton Spinner Tag TagInput Textarea Toggle **ToolbarButton** Tooltip
+
+`components/` (26) — AccountSwitcher AccountsPanel Banner BurnDownChart Card ColumnGroupModal
+Combobox DataGrid DateField DateRangePicker Drawer EmptyState FileDropzone Heatmap HoverCard
+Listbox Menu MetricStrip Modal MultiSelect Pagination PerformanceGraph ProgressBar Stepper Tabs Toast
+
+`patterns/` (12) — AppShell Builder BulkActionBar ColumnCustomizer DetailHeader EditModeBar
+FilterBar FilterPanel GridToolbar PageHeader PreferencesModal WorkspaceGrid
+
+**Two things you might think are gaps and are not:**
+- **The 20 `-seg` spellings** (`.seg`, `.h10-svt-seg`, `.rpt-seg`, `.az-mode-seg`, …) → convert to
+  `SegmentedControl`. It already has `radiogroup`/`radio`, arrow-key roving and sm/md, and not one
+  of the 20 hand-rolled versions exposes a role at all.
+- **Bare icon buttons** (`.x` ×29, `.rm` ×14) → `ToolbarButton`, which is bare by default. Pass
+  `tooltip={false}` to skip the wrapper element where layout is tight. These 43 sites have **no
+  `aria-label` today**, and their icons sit at **1.89:1 and 2.27:1 — under the 3:1 non-text
+  minimum**. Converting takes them to 5.91:1 and gives them a name. Worth doing early.
+
+**One real gap, now filled:** boxed icon buttons (`.az-iconbtn` 34px, `.h10-sug-iconbtn`,
+`.rec-iconbtn`) → `<ToolbarButton variant="boxed">`.
 
 **Found some OTHER gap, or a missing variant?**
 STOP on that case, leave the original markup untouched, and write one line to
