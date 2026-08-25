@@ -1074,3 +1074,29 @@ button.nds-token > .t,
 .nds-radiocard.row.on .rc-title {
   color: var(--nds-tonal-fg);
 }
+
+/* Engaged state, toned. `active` alone is the primary blue fill, but "engaged" does not always
+   mean the same thing — an alert channel that is ON reads GREEN on this console, and blue would
+   say something else. Tinted rather than filled, because these sit inline among other controls.
+   Every pair measured to RISE against what it replaces: success 6.74 → 6.95, warning 5.69 → 8.27,
+   danger 6.21 → 6.27. */
+.nds-btn.on.success {
+  background: var(--nds-success-soft);
+  border-color: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-btn.on.warning {
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning-border);
+  color: var(--nds-warning-text);
+}
+.nds-btn.on.danger {
+  background: var(--nds-danger-soft);
+  border-color: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-btn.on.success svg,
+.nds-btn.on.warning svg,
+.nds-btn.on.danger svg {
+  color: currentColor;
+}

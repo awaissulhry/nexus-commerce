@@ -1,5 +1,6 @@
 import { cloneElement, forwardRef, isValidElement } from 'react'
 import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react'
+import type { Tone } from './tone'
 
 export type ButtonVariant =
   | 'primary'
@@ -73,6 +74,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    */
   active?: boolean
   /**
+   * Colour family for the ENGAGED state. Defaults to the primary blue fill.
+   *
+   * `active` had one look, but "engaged" does not always mean the same thing: an alert channel
+   * that is ON is GREEN on this console, and blue would say something else. Only affects the
+   * engaged appearance — an unpressed button is unchanged.
+   */
+  tone?: Exclude<Tone, 'info'>
+  /**
    * Defaults to `'button'`, NOT the HTML default of `'submit'`.
    *
    * A design-system button that submits the nearest form unless told otherwise is a footgun: it
@@ -87,10 +96,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', type = 'button', active, inline, block, asChild, className, children, ...rest },
+  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, asChild, className, children, ...rest },
   ref,
 ) {
-  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', block ? 'block' : '', inline ? 'inline' : '', className ?? '']
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', active && tone && tone !== 'neutral' ? tone : '', block ? 'block' : '', inline ? 'inline' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   if (asChild && isValidElement(children)) {

@@ -154,8 +154,16 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-live', value: 'var(--nds-green-500)' },
   { name: '--nds-danger-soft', value: 'var(--nds-red-soft)' },
   { name: '--nds-danger', value: 'var(--nds-red-500)' },
-  { name: '--nds-danger-strong', value: 'var(--nds-red-700)' },
-  { name: '--nds-warning-soft', value: 'var(--nds-amber-soft)' },
+  // #a3211a, not --nds-red-700 (#c0392b). White on red-700 is 5.44:1, but this console measured
+  // its own two dangerous actions DARKER for exactly this reason — #b3261e (6.54:1) on the plan
+  // delete and #a3342b (6.81:1) on the undo-commit — so neither could convert without lowering
+  // contrast, which is forbidden. #a3211a is 7.53:1 and clears both. It is used as a FILL (white
+  // on it) and as TEXT (it on white) in eight DS rules; darkening raises contrast in both.
+  { name: '--nds-danger-strong', value: '#a3211a' },
+  // #fff6e8, decoupled from --nds-amber-soft, so the warning pair IS the stale pair below. A
+  // literal on a semantic token is the shape this file already uses for the -text tier: derived
+  // from a contrast requirement, not from a ramp position.
+  { name: '--nds-warning-soft', value: '#fff6e8' },
   { name: '--nds-warning', value: 'var(--nds-amber-600)' },
   { name: '--nds-warning-strong', value: 'var(--nds-amber-700)' },
   { name: '--nds-info-soft', value: 'var(--nds-blue-100)' },
@@ -197,8 +205,16 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // noting "measured in the deployed DOM, not estimated". Same story as the status -text tier —
   // the console hit a gap in this system and filled it correctly.
   { name: '--nds-text-muted', value: '#667080' },
-  { name: '--nds-success-text', value: '#14724d' },
-  { name: '--nds-warning-text', value: '#8a5316' },
+  // #146034, was #14724d. Third instance of the same finding in one sweep: an engaged GREEN
+  // toggle measured #146034 on #e7f4ec = 6.74:1 while the DS pair was 5.40:1, so it could not
+  // convert without losing contrast. Darkening only the TEXT clears it at 6.95:1 on the existing
+  // --nds-success-soft, so the wash does not move.
+  { name: '--nds-success-text', value: '#146034' },
+  // #6d3f10, was #8a5316. Same story as the -text tier one tier up, one more turn: four spellings
+  // of a "this view is stale, click to reload" chip measured #6d3f10 on #fff6e8 = 8.27:1, while
+  // Button variant="warning" was 5.69:1 — so four call sites of ONE concept could not converge
+  // without losing contrast. The console computed the better number again; the DS adopts it.
+  { name: '--nds-warning-text', value: '#6d3f10' },
   // The tone palettes ship soft/text/strong but no BORDER step, so a tinted warning control had
   // nowhere to land — this is `.bp-btn.warn`'s measured #f0d9a8, tokenised. A tint's hairline is
   // decorative, so the number does not move; the TEXT is what rose (5.66 -> 5.69).
@@ -206,7 +222,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // "Stale" had FIVE browns across the ads console — #8a5316, #6d3f10, #7a4512, #7a5b00 and a
   // red — for one meaning. This is the darkest measured value, so adopting it everywhere only
   // ever RAISES contrast: 5.89 → 8.27 on the stale badge, 7.29 → 8.27 on the feed banner.
-  { name: '--nds-stale-text', value: '#6d3f10' },
+  // Now an ALIAS: the warning pair above was darkened to exactly this, so "stale" and "warning"
+  // stopped being two colours for one meaning. Kept as a name because the surfaces read better
+  // for it, but there is one value.
+  { name: '--nds-stale-text', value: 'var(--nds-warning-text)' },
   // Inline-note severities, one pair each. Values are the HIGHEST-contrast variant found among
   // the six that existed, so adopting them raises contrast everywhere and lowers it nowhere:
   // error 6.24/9.16/9.23 → 9.23, caution 5.79/5.89/6.63 → 6.63.

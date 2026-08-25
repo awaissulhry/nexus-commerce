@@ -101,8 +101,8 @@
   --nds-live: var(--nds-green-500);
   --nds-danger-soft: var(--nds-red-soft);
   --nds-danger: var(--nds-red-500);
-  --nds-danger-strong: var(--nds-red-700);
-  --nds-warning-soft: var(--nds-amber-soft);
+  --nds-danger-strong: #a3211a;
+  --nds-warning-soft: #fff6e8;
   --nds-warning: var(--nds-amber-600);
   --nds-warning-strong: var(--nds-amber-700);
   --nds-info-soft: var(--nds-blue-100);
