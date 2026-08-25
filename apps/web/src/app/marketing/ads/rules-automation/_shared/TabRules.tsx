@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, Plus, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { DataGrid, type Column } from '@/design-system/components'
 import { ruleBelongsToTab } from './tabs'
 import { NoDataIllus } from './NoDataIllus'
 
@@ -54,6 +55,44 @@ function scopeOf(r: RuleRow): { word: string; loud: boolean } {
   if (r.scopeMarketplace) return { word: r.scopeMarketplace, loud: false }
   return { word: 'account-wide', loud: true }
 }
+
+/**
+ * The five governance questions, as DS `DataGrid` columns. Hoisted out of the render because they
+ * are constant: `postureOf` and `scopeOf` read only the row.
+ */
+const RULE_COLUMNS: Array<Column<RuleRow>> = [
+  {
+    key: 'name',
+    label: 'Rule',
+    render: (r) => (
+      <Link className="h10-bd7-name" href={`/marketing/ads/rules-automation/automations?rule=${r.id}`} title="Open the rule record on Automations — conditions, simulate, history, edit">{r.name}</Link>
+    ),
+  },
+  {
+    key: 'posture',
+    label: 'May it act?',
+    render: (r) => { const p = postureOf(r); return <span className={`h10-bd7-posture ${p.cls}`} title={p.tip}>{p.word}</span> },
+  },
+  {
+    key: 'scope',
+    label: 'Where',
+    render: (r) => { const s = scopeOf(r); return s.loud
+      ? <b title="No scope bound — this rule can reach every campaign the account holds. Bind one on Automations.">account-wide</b>
+      : <>{s.word}</> },
+  },
+  {
+    key: 'caps',
+    label: 'Caps',
+    render: (r) => (
+      <span title="The two caps: writes per day (demotes to propose beyond it) and € per action (the gate refuses above it). Unset = that cap does not bind.">
+        {r.maxWritesPerDay != null ? `${num(r.maxWritesPerDay)}/day` : '—'}
+        {' · '}
+        {r.maxValueCentsEur != null ? (r.maxValueCentsEur === 0 ? '€0 ⚠' : `€${(r.maxValueCentsEur / 100).toFixed(0)}`) : '—'}
+      </span>
+    ),
+  },
+  { key: 'execs', label: 'Executions', align: 'right', render: (r) => <>{num(r.executionCount)}</> },
+]
 
 export function TabRules({ tabKey, heading, subject, builderHref, builderLabel, emptyLine, sectionId }: {
   /** the RULE_TAB_ACTION_TYPES key — membership and the badge share it */
@@ -103,32 +142,12 @@ export function TabRules({ tabKey, heading, subject, builderHref, builderLabel, 
         </span>
       ) : (
         <>
-          <div className="h10-bd8-scroll">
-            <table className="h10-bd8-tbl">
-              <thead><tr><th>Rule</th><th>May it act?</th><th>Where</th><th>Caps</th><th>Executions</th></tr></thead>
-              <tbody>
-                {rules.map((r) => {
-                  const p = postureOf(r)
-                  const s = scopeOf(r)
-                  return (
-                    <tr key={r.id}>
-                      <td><Link className="h10-bd7-name" href={`/marketing/ads/rules-automation/automations?rule=${r.id}`} title="Open the rule record on Automations — conditions, simulate, history, edit">{r.name}</Link></td>
-                      <td><span className={`h10-bd7-posture ${p.cls}`} title={p.tip}>{p.word}</span></td>
-                      <td>{s.loud
-                        ? <b title="No scope bound — this rule can reach every campaign the account holds. Bind one on Automations.">account-wide</b>
-                        : s.word}</td>
-                      <td className="nw" title="The two caps: writes per day (demotes to propose beyond it) and € per action (the gate refuses above it). Unset = that cap does not bind.">
-                        {r.maxWritesPerDay != null ? `${num(r.maxWritesPerDay)}/day` : '—'}
-                        {' · '}
-                        {r.maxValueCentsEur != null ? (r.maxValueCentsEur === 0 ? '€0 ⚠' : `€${(r.maxValueCentsEur / 100).toFixed(0)}`) : '—'}
-                      </td>
-                      <td className="nw">{num(r.executionCount)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataGrid<RuleRow>
+            className="h10-bd8-scroll"
+            rows={rules}
+            rowKey={(r) => r.id}
+            columns={RULE_COLUMNS}
+          />
           <p className="h10-bd8-foot">
             The rule record — conditions, simulate, approve, edit, delete — lives on{' '}
             <Link href="/marketing/ads/rules-automation/automations">Automations <ExternalLink size={11} aria-hidden /></Link>; each name opens it there. This section only states who may act on {subject}.

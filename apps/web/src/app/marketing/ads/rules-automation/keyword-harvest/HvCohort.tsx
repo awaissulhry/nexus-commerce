@@ -44,6 +44,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Info, ShieldAlert } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { DataGrid, type Column } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
 
@@ -98,6 +99,20 @@ const OUTCOME_TIP: Record<HvOutcome, string> = {
   'not-measured': 'It was created before 2026-07-05, when performance data begins, and has no rows. We cannot see what it did. This is NOT the same as "it did nothing".',
   'local-only': 'Our record says we created a keyword. Amazon has no such keyword. Nothing will ever happen to it — this is a plumbing failure, not a performance one.',
 }
+
+type CmpGroup = Payload['comparison']['groups'][number]
+
+/** The comparison table's eight columns. Figures right-align; the DS grid has no numeric tier. */
+const CMP_COLUMNS: Array<Column<CmpGroup>> = [
+  { key: 'actor', label: 'Group', render: (g) => <>{g.actorLabel}</> },
+  { key: 'market', label: 'Market', render: (g) => <>{g.market}</> },
+  { key: 'served', label: 'Served', align: 'right', render: (g) => <>{num(g.keywords)}</> },
+  { key: 'spend', label: 'Spend', align: 'right', render: (g) => <>{eur(g.spendCents)}</> },
+  { key: 'sales', label: 'Sales', align: 'right', render: (g) => <>{eur(g.salesCents)}</> },
+  { key: 'orders', label: 'Orders', align: 'right', render: (g) => <>{num(g.orders)}</> },
+  { key: 'acos', label: 'ACoS', align: 'right', render: (g) => <>{g.acosPct == null ? '—' : `${g.acosPct.toFixed(0)}%`}</> },
+  { key: 'age', label: 'Avg age', align: 'right', render: (g) => <>{g.avgAgeDays.toFixed(0)}d</> },
+]
 
 export function HvCohort({ scope, push }: HvSlotProps) {
   const [data, setData] = useState<Payload | null>(null)
@@ -262,18 +277,17 @@ export function HvCohort({ scope, push }: HvSlotProps) {
               <p className="couple"><Info size={12} /><span>Indicative — the sample now supports a comparison. Read the confounds below before quoting it.</span></p>
             )}
             {data.comparison.groups.length > 0 && (
-              <table className="h10-hv-cmp">
-                <thead><tr><th>Group</th><th>Market</th><th>Served</th><th>Spend</th><th>Sales</th><th>Orders</th><th>ACoS</th><th>Avg age</th></tr></thead>
-                <tbody>
-                  {data.comparison.groups.map((g) => (
-                    <tr key={`${g.actor}|${g.market}`} className={g.actor === 'engine' || g.actor === 'operator' ? 'me' : ''}>
-                      <td>{g.actorLabel}</td><td>{g.market}</td><td>{num(g.keywords)}</td>
-                      <td>{eur(g.spendCents)}</td><td>{eur(g.salesCents)}</td><td>{num(g.orders)}</td>
-                      <td>{g.acosPct == null ? '—' : `${g.acosPct.toFixed(0)}%`}</td><td>{g.avgAgeDays.toFixed(0)}d</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataGrid<CmpGroup>
+                /* The class stays on the WRAPPER, which is where DataGrid puts `className`. Its
+                   `tr.me td` rule is (0,2,2) and still outranks `.nds-grid tbody td` (0,1,2), so
+                   the "this is us" highlight survives; the base cell rules lose to the DS, which
+                   is the point. */
+                className="h10-hv-cmp"
+                rows={data.comparison.groups}
+                rowKey={(g) => `${g.actor}|${g.market}`}
+                rowClassName={(g) => (g.actor === 'engine' || g.actor === 'operator' ? 'me' : undefined)}
+                columns={CMP_COLUMNS}
+              />
             )}
             <ul className="h10-hv-conf">
               {data.comparison.confounds.map((f) => <li key={f}>{f}</li>)}
