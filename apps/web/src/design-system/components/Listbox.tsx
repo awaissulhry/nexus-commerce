@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
+import type { Size } from '../primitives/size'
 import { groupOptions } from '../lib/group-options'
 import { searchOptions } from '../lib/option-search'
 
@@ -37,6 +38,12 @@ export interface ListboxOption {
 }
 
 export interface ListboxProps {
+  /**
+   * `xs` is the dense grid-cell tier, matching Button/Input/Select. Without it a Listbox's 13px
+   * trigger sat beside 11.5px fields, which is why the last two native selects in the console
+   * could not adopt it.
+   */
+  size?: Extract<Size, 'xs' | 'sm' | 'md'>
   options: ListboxOption[]
   value?: string
   onChange: (value: string) => void
@@ -71,7 +78,7 @@ const SEARCH_THRESHOLD = 7
  * Combobox popover, no typeahead. Wave 1 gap-fill (2026-07-04): pages are
  * banned from native selects; this is what they migrate to.
  */
-export function Listbox({ options, value, onChange, placeholder = 'Select…', ariaLabel, className, disabled,
+export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, className, disabled,
   width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false }: ListboxProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -101,7 +108,7 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
   )
 
   return (
-    <div className={`nds-listbox${className ? ` ${className}` : ''}`} style={width != null ? { width } : undefined} ref={ref} onKeyDown={(e) => (() => {
+    <div className={['nds-listbox', size === 'md' ? '' : size, className].filter(Boolean).join(' ')} style={width != null ? { width } : undefined} ref={ref} onKeyDown={(e) => (() => {
         if (!open) return
         if (e.key === 'Escape') { e.preventDefault(); setOpen(false); setQ(''); setActive(0) }
         else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }

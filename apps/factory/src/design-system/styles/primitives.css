@@ -981,3 +981,24 @@ button.nds-token > .t,
   background: none;
   padding-right: 4px;
 }
+
+/* RadioCard/CheckboxCard as a plain option ROW: no border, no radius, no wash. Three pickers are
+   structurally identical to the card but are rows — as cards they would box nine options in one
+   dialog. All three also pass an `on` class that no rule styles, so their selected state is
+   carried by the radio dot alone; this gives them a real one. */
+.nds-radiocard.row {
+  border-color: transparent;
+  border-radius: var(--nds-radius-md);
+  padding: 7px 8px;
+  background: none;
+}
+.nds-radiocard.row:hover {
+  background: var(--nds-surface-hover);
+}
+.nds-radiocard.row.on {
+  border-color: transparent;
+  background: var(--nds-tonal-bg);
+}
+.nds-radiocard.row.on .rc-title {
+  color: var(--nds-tonal-fg);
+}

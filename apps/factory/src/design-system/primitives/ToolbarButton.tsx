@@ -13,7 +13,7 @@ function cx(...classes: (string | undefined | false | null)[]): string {
 // ── ToolbarButton ──────────────────────────────────────────────────────────
 
 export interface ToolbarButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'children' | 'onClick'> {
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'children'> {
   icon: ReactNode
   /** aria-label + default tooltip heading */
   label: string
@@ -21,7 +21,14 @@ export interface ToolbarButtonProps
   description?: string
   /** keyboard shortcut shown in tooltip, e.g. '⌘F' */
   shortcut?: string
-  onClick?: () => void
+  /**
+   * Takes the native handler signature — the EVENT is passed.
+   *
+   * It used to be `() => void`, which silently made `preventDefault()` impossible: a
+   * ToolbarButton nested inside a `<label>` could not stop the click also toggling the label's
+   * control, so deleting a template also selected its row.
+   */
+  onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick']
   disabled?: boolean
   /**
    * Pressed / highlighted state, emitted as `aria-pressed`.

@@ -6,6 +6,8 @@ export interface CheckboxCardProps extends Omit<InputHTMLAttributes<HTMLInputEle
   description?: ReactNode
   /** Visual highlight (the `.on` state). Pair with the checkbox's checked state. */
   selected?: boolean
+  /** `row` drops the border, radius, padding and wash — see `RadioCard`. */
+  variant?: 'card' | 'row'
 }
 
 /**
@@ -16,10 +18,10 @@ export interface CheckboxCardProps extends Omit<InputHTMLAttributes<HTMLInputEle
  * only difference is the input type and the ARIA that follows from it.
  */
 export const CheckboxCard = forwardRef<HTMLInputElement, CheckboxCardProps>(function CheckboxCard(
-  { title, description, selected, className, ...rest },
+  { title, description, selected, variant = 'card', className, ...rest },
   ref,
 ) {
-  const cls = ['nds-radiocard', selected ? 'on' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-radiocard', variant === 'row' ? 'row' : '', selected ? 'on' : '', className ?? ''].filter(Boolean).join(' ')
   return (
     <label className={cls}>
       <input ref={ref} type="checkbox" {...rest} />

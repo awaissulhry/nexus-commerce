@@ -1787,12 +1787,28 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 /* A Card that is a <button> — a KPI tile that filters a chart, a card that scrolls to its
    section. Four surfaces hand-rolled this. Resets the button chrome and inherits type, so the
    card looks identical whether or not it is clickable. */
-.nds-card.btn {
+/* LAYOUT at zero specificity. `.nds-card.btn` is (0,2,0) and was beating the one-class layout
+   every hand-rolled tile already carries: `.h10-cd-algo` (flex column) flattened to a block and
+   `.az-kpi` (`flex: none; min-width: 132px` in a scrolling strip) stretched. Keeping the legacy
+   class did not protect them, because two classes beat one. `:where()` scores 0, so it supplies
+   a default that ANY single class overrides — which is what a DS layout default should do.
+
+   `width: 100%` is load-bearing, not redundant: measured, a `<button>` at `display: block` and
+   no width is 120.5px in a 400px container — a form control does not fill its parent the way a
+   div does. So a tile in a flex strip must set `width: auto` itself to opt out. Measured with
+   the real cascade: `.az-kpi { flex: none; min-width: 132px; width: auto }` renders 132px, and
+   the same class WITHOUT `width` renders 400px. One class beats `:where()`; nothing beat
+   `.nds-card.btn` before. */
+:where(.nds-card.btn) {
   display: block;
   width: 100%;
+  text-align: left;
+}
+/* CHROME stays at normal specificity: a legacy tile is not setting `font: inherit` on a button,
+   and a button that keeps the UA's 13.33px Arial is the defect, not the override. */
+.nds-card.btn {
   font: inherit;
   color: inherit;
-  text-align: left;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
@@ -1855,4 +1871,20 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 }
 .nds-combo-pop button .nds-listbox-lead {
   vertical-align: -2px;
+}
+
+/* Listbox dense tiers, matching Button/Input/Select exactly (13 / 12.5 / 11.5). Without these a
+   Listbox trigger sat at 13px beside 11.5px grid fields. */
+.nds-listbox.sm .nds-listbox-btn {
+  padding: 5px 9px;
+  font-size: 12.5px;
+}
+.nds-listbox.xs .nds-listbox-btn {
+  padding: 4px 9px;
+  font-size: 11.5px;
+}
+.nds-listbox.xs .nds-listbox-btn .chev,
+.nds-listbox.sm .nds-listbox-btn .chev {
+  width: 13px;
+  height: 13px;
 }
