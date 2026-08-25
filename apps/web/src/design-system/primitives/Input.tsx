@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import type { Size } from './size'
 
@@ -22,14 +23,17 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
  * a bordered wrapper that owns hover/focus, with optional leading icon and
  * shaded €/% unit adornments. Requires `styles/primitives.css`.
  */
-export function Input({ leadingIcon, prefix, suffix, fieldClassName, size = 'md', disabled, ...rest }: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { leadingIcon, prefix, suffix, fieldClassName, size = 'md', disabled, ...rest },
+  ref,
+) {
   const cls = ['nds-field', size === 'md' ? '' : size, disabled ? 'disabled' : '', fieldClassName ?? ''].filter(Boolean).join(' ')
   return (
     <span className={cls}>
       {prefix != null && <span className="ad pre">{prefix}</span>}
       {leadingIcon != null && <span className="lead">{leadingIcon}</span>}
-      <input disabled={disabled} {...rest} />
+      <input ref={ref} disabled={disabled} {...rest} />
       {suffix != null && <span className="ad suf">{suffix}</span>}
     </span>
   )
-}
+})

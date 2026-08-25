@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link' | 'quiet'
@@ -55,13 +56,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * The canonical button. Matches the H10 action button (.h10-am-btn) spec,
  * tokenized. Requires `styles/primitives.css`.
  */
-export function Button({ variant = 'secondary', size = 'md', type = 'button', active, inline, block, className, children, ...rest }: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = 'secondary', size = 'md', type = 'button', active, inline, block, className, children, ...rest },
+  ref,
+) {
   const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', block ? 'block' : '', inline ? 'inline' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (
-    <button type={type} className={cls} {...rest}>
+    <button ref={ref} type={type} className={cls} {...rest}>
       {children}
     </button>
   )
-}
+})
