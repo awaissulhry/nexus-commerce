@@ -17,6 +17,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Sparkles, Play, Radio, LineChart } from 'lucide-react'
+import { Button, Select } from '@/design-system/primitives'
 import { AutopilotCanvas, type CanvasConfig } from './AutopilotCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
 import './autopilot-control-room.css'
@@ -92,13 +93,13 @@ export function AutopilotControlRoom() {
         : (
           <>
             <div className="apr-bar">
-              <label className="f"><span>Plan</span><select value={sel} onChange={(e) => setSel(e.target.value)}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-              <label className="f"><span>Goal</span><select value={plan?.goal ?? 'BALANCED'} onChange={(e) => patchPlan({ goal: e.target.value })}>{GOALS.map((g) => <option key={g} value={g}>{GOAL_LABEL[g]}</option>)}</select></label>
-              <label className="f"><span>Autonomy</span><select value={plan?.autonomy ?? 'SUGGEST'} onChange={(e) => patchPlan({ autonomy: e.target.value })}>{AUTONOMY.map((a) => <option key={a} value={a}>{AUT_LABEL[a]}</option>)}</select></label>
+              <label className="f"><span>Plan</span><Select value={sel} onChange={(e) => setSel(e.target.value)}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></label>
+              <label className="f"><span>Goal</span><Select value={plan?.goal ?? 'BALANCED'} onChange={(e) => patchPlan({ goal: e.target.value })}>{GOALS.map((g) => <option key={g} value={g}>{GOAL_LABEL[g]}</option>)}</Select></label>
+              <label className="f"><span>Autonomy</span><Select value={plan?.autonomy ?? 'SUGGEST'} onChange={(e) => patchPlan({ autonomy: e.target.value })}>{AUTONOMY.map((a) => <option key={a} value={a}>{AUT_LABEL[a]}</option>)}</Select></label>
               <span className="grow" />
               <span className={`apr-live ${live ? 'on' : ''}`}><Radio size={13} /> {live ? 'Live' : 'Offline'}</span>
-              <button type="button" className="apr-run" onClick={runNow}><Play size={14} /> Run now (dry-run)</button>
-              <button type="button" className="apr-run" onClick={runBacktest}><LineChart size={14} /> Backtest 30d</button>
+              <Button variant="ghost" onClick={runNow}><Play size={14} /> Run now (dry-run)</Button>
+              <Button variant="ghost" onClick={runBacktest}><LineChart size={14} /> Backtest 30d</Button>
             </div>
 
             {backtest?.summary && (

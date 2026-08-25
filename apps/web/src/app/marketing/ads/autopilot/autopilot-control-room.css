@@ -11,12 +11,13 @@
 
 .apr-bar { display: flex; align-items: flex-end; gap: 16px; margin: 18px 0; flex-wrap: wrap; }
 .apr-bar .f { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--nds-grey-800); }
-.apr-bar select { height: 36px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 10px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); min-width: 170px; }
+/* Width only. `.apr-bar select` used to restate the whole control here, and it is the same
+   (0,1,1) as `.nds-select select` with this sheet loading second — so it would have beaten the
+   primitive outright and the Select would have rendered as its old self. */
+.apr-bar .nds-select { min-width: 170px; }
 .apr-bar .grow { flex: 1; }
 .apr-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--nds-grey-500); background: var(--nds-grey-75); border-radius: 16px; padding: 6px 12px; }
 .apr-live.on { color: var(--nds-green-600); background: #e7f7ec; }
-.apr-run { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-blue-600); background: var(--nds-white); color: var(--nds-blue-600); border-radius: var(--nds-radius-lg); padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.apr-run:hover { background: var(--nds-blue-50); }
 
 .apr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: stretch; }
 @media (max-width: 1100px) { .apr-grid { grid-template-columns: 1fr; } }
