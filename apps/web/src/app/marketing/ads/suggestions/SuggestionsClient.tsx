@@ -1618,7 +1618,7 @@ function SuggestionsInner() {
                   : `No ${activeView.noun} suggestions right now`}
                 description={status === 'pending'
                   ? familyCta
-                    ? <span className="h10-sug-ctawrap">Create a {familyCta.label} rule set to <em>Manual</em> — its proposed changes will queue here for your approval.<br /><Link className="h10-am-btn primary h10-sug-cta" href={familyCta.href}>Create Rule</Link></span>
+                    ? <span className="h10-sug-ctawrap">Create a {familyCta.label} rule set to <em>Manual</em> — its proposed changes will queue here for your approval.<br /><Link className="nds-btn primary h10-sug-cta" href={familyCta.href}>Create Rule</Link></span>
                     : <>When a rule set to <em>Manual</em> finds something to do, its proposed change appears here for you to approve.</>
                   : status === 'applied' ? 'Suggestions you approve will be listed here.'
                   : status === 'expired' ? 'A pending suggestion the engine stops re-proposing expires on its own and lands here — the queue only ever holds the engine’s current opinion.'

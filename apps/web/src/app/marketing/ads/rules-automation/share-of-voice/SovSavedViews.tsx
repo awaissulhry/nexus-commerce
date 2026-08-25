@@ -32,6 +32,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Bookmark, Check, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -115,9 +116,9 @@ export function SovSavedViews({ currentQs, onApply }: { currentQs: string; onApp
               placeholder="Name this view…"
               aria-label="Name this view"
             />
-            <button type="button" className="h10-am-btn sm" disabled={!name.trim() || busy} onClick={() => void save()}>
+            <Button size="sm" disabled={!name.trim() || busy} onClick={() => void save()}>
               <Check size={12} /> Save
-            </button>
+            </Button>
             <button type="button" className="x" onClick={() => setOpen(false)} aria-label="Close"><X size={13} /></button>
           </div>
 

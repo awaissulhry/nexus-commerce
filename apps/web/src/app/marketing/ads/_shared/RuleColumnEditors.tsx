@@ -55,6 +55,7 @@
  * the components needed no CSS at all.
  */
 import { useLayoutEffect, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 
 /** Both popovers are positioned from the pencil's own bounding rect, in fixed coordinates. */
 export interface PopAnchor { x: number; y: number }
@@ -192,10 +193,10 @@ export function RangePopover({
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <button type="button" className="h10-am-link" disabled={busy} onClick={onClose}>Cancel</button>
-          <button
-            type="button" className="h10-am-btn primary sm" disabled={busy || bad}
-            onClick={() => onApply(range ? { minCents: minC, maxCents: maxC } : null)}
-          >{busy ? 'Applying…' : 'Apply'}</button>
+          <Button
+ variant="primary" size="sm" disabled={busy || bad}
+ onClick={() => onApply(range ? { minCents: minC, maxCents: maxC } : null)}
+ >{busy ? 'Applying…' : 'Apply'}</Button>
         </div>
       </div>
     </>
@@ -251,7 +252,7 @@ export function ValuePopover({
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
           <button type="button" className="h10-am-link" disabled={busy} onClick={onClose}>Cancel</button>
-          <button type="button" className="h10-am-btn primary sm" disabled={busy || bad} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</button>
+          <Button variant="primary" size="sm" disabled={busy || bad} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</Button>
         </div>
       </div>
     </>

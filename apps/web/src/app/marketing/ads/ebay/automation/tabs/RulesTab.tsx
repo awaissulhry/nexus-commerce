@@ -24,7 +24,7 @@ function RuleMenu({ rule, busy, onRun, onDelete }: { rule: AutomationRule; busy:
   }, [open])
   return (
     <span className="eb-rule-menu" ref={ref}>
-      <button type="button" className="h10-am-btn sm" aria-label={`Actions for ${rule.name}`} onClick={() => setOpen((o) => !o)}><MoreHorizontal size={14} /></button>
+      <Button size="sm" aria-label={`Actions for ${rule.name}`} onClick={() => setOpen((o) => !o)}><MoreHorizontal size={14} /></Button>
       {open && (
         <span className="h10-statusmenu eb-statusfix">
           <button type="button" onClick={() => { setOpen(false); router.push(`/marketing/ads/ebay/automation/rules/${rule.id}`) }}>Edit…</button>
@@ -57,7 +57,7 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
       <div className="eb-rules-toolbar">
         <span className="eb-be-hint">{rules.length} rule{rules.length === 1 ? '' : 's'} · conditions AND together — for OR, duplicate the rule</span>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary sm" onClick={() => router.push('/marketing/ads/ebay/automation/rules/new')}>+ New rule</button>
+        <Button variant="primary" size="sm" onClick={() => router.push('/marketing/ads/ebay/automation/rules/new')}>+ New rule</Button>
       </div>
       {rules.length === 0 ? (
         <div style={{ padding: '28px 18px', textAlign: 'center' }}>
@@ -101,11 +101,11 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
             {confirmDelete?.id === r.id && (
               <p className="eb-rule-confirm" role="alert">
                 Delete “{r.name}”? Its execution history goes with it; past proposals stay.
-                <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => setConfirmDelete(null)}>Cancel</button>
-                <button type="button" className="h10-am-btn sm danger" disabled={busy}
-                  onClick={() => { setConfirmDelete(null); void act(() => postEbayAds(`/automation/rules/${r.id}`, {}, 'DELETE'), 'rule deleted') }}>
+                <Button size="sm" disabled={busy} onClick={() => setConfirmDelete(null)}>Cancel</Button>
+                <Button variant="danger" size="sm" disabled={busy}
+ onClick={() => { setConfirmDelete(null); void act(() => postEbayAds(`/automation/rules/${r.id}`, {}, 'DELETE'), 'rule deleted') }}>
                   Delete
-                </button>
+                </Button>
               </p>
             )}
           </div>

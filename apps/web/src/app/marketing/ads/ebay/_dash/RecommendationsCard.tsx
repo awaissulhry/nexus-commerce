@@ -28,7 +28,7 @@ export function RecommendationsCard({ recs }: { recs: RecommendationRow[] | null
                 <p className="eb-rec-criteria">{r.criteria}</p>
                 {r.samples.length > 0 && <p className="eb-rec-samples">e.g. {r.samples.join(' · ')}</p>}
               </div>
-              <Link className="h10-am-btn sm" href={r.cta.href}>{r.cta.label}</Link>
+              <Link className="nds-btn sm" href={r.cta.href}>{r.cta.label}</Link>
             </div>
           ))}
         </div>

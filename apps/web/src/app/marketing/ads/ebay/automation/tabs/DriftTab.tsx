@@ -6,6 +6,7 @@
  * Structural move only — rendering and Re-apply/Accept semantics unchanged.
  */
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { getEbayAds, postEbayAds, eurC } from '../../_lib'
 
 interface DriftRow {
@@ -37,8 +38,8 @@ export function DriftTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
             Nexus set <b>{d.kind === 'budget' ? eurC(d.nexusValue) : `${d.nexusValue}%`}</b> ({new Date(d.setAt).toLocaleDateString('en-GB')}) · eBay now <b>{d.ebayValue == null ? 'removed' : d.kind === 'budget' ? eurC(d.ebayValue) : `${d.ebayValue}%`}</b>
           </span>
           <span className="grow" style={{ flex: 1 }} />
-          <button type="button" className="h10-am-btn sm primary" disabled={busy} onClick={() => void act(() => postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action: 'reapply' }), 'Nexus value re-applied')}>Re-apply</button>
-          <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void act(() => postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action: 'accept' }), 'eBay value accepted')}>Accept</button>
+          <Button variant="primary" size="sm" disabled={busy} onClick={() => void act(() => postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action: 'reapply' }), 'Nexus value re-applied')}>Re-apply</Button>
+          <Button size="sm" disabled={busy} onClick={() => void act(() => postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action: 'accept' }), 'eBay value accepted')}>Accept</Button>
         </div>
       ))}
     </div>

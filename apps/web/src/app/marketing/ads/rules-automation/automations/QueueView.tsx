@@ -24,6 +24,7 @@
  * own words, and an override still clamps to the action's own bounds server-side.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Check, ExternalLink, RotateCcw, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -137,20 +138,20 @@ export function QueueView({ onDecided }: { onDecided?: () => void }) {
                       {editing?.id === s.id ? (
                         <>
                           <input className="qedit" inputMode="decimal" value={editing.value} onChange={(e) => setEditing({ id: s.id, value: e.target.value })} aria-label="Edited value" autoFocus />
-                          <button type="button" className="h10-am-btn sm primary" disabled={busy === s.id || !editing.value.trim()} onClick={() => void decide(s, 'apply', Number(editing.value))}>Apply edited</button>
-                          <button type="button" className="h10-am-btn sm" onClick={() => setEditing(null)}><RotateCcw size={12} aria-hidden /></button>
+                          <Button variant="primary" size="sm" disabled={busy === s.id || !editing.value.trim()} onClick={() => void decide(s, 'apply', Number(editing.value))}>Apply edited</Button>
+                          <Button size="sm" onClick={() => setEditing(null)}><RotateCcw size={12} aria-hidden /></Button>
                         </>
                       ) : (
                         <>
-                          <button type="button" className="h10-am-btn sm primary" disabled={busy === s.id} onClick={() => void decide(s, 'apply')} title="Apply exactly as proposed. Unchanged applies are the evidence the graduation ladder counts.">
+                          <Button variant="primary" size="sm" disabled={busy === s.id} onClick={() => void decide(s, 'apply')} title="Apply exactly as proposed. Unchanged applies are the evidence the graduation ladder counts.">
                             <Check size={12} aria-hidden /> Apply as proposed
-                          </button>
+                          </Button>
                           {typeof s.proposedAction.value === 'number' && (
-                            <button type="button" className="h10-am-btn sm" disabled={busy === s.id} onClick={() => setEditing({ id: s.id, value: String(s.proposedAction.value) })} title="Change the magnitude before applying. Server-side bounds still clamp it — and an edited apply earns no graduation evidence.">
+                            <Button size="sm" disabled={busy === s.id} onClick={() => setEditing({ id: s.id, value: String(s.proposedAction.value) })} title="Change the magnitude before applying. Server-side bounds still clamp it — and an edited apply earns no graduation evidence.">
                               edit…
-                            </button>
+                            </Button>
                           )}
-                          <button type="button" className="h10-am-btn sm" disabled={busy === s.id} onClick={() => void decide(s, 'dismiss')}><X size={12} aria-hidden /> Dismiss</button>
+                          <Button size="sm" disabled={busy === s.id} onClick={() => void decide(s, 'dismiss')}><X size={12} aria-hidden /> Dismiss</Button>
                         </>
                       )}
                     </span>

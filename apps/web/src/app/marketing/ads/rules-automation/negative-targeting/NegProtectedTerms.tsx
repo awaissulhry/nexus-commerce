@@ -333,10 +333,10 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
                 <span className={`cx ${p.contradictions > 0 ? 'hot' : ''}`}>
                   {p.contradictions > 0 ? <><b>{num(p.contradictions)}</b> contradicted</> : <>none contradicted</>}
                 </span>
-                <button
-                  type="button" className="h10-am-btn bulk" disabled={busy}
-                  aria-label={`Remove protection for ${p.term}`} onClick={() => void removeProtection(p)}
-                ><Trash2 size={12} /></button>
+                <Button
+ variant="ghost" disabled={busy}
+ aria-label={`Remove protection for ${p.term}`} onClick={() => void removeProtection(p)}
+ ><Trash2 size={12} /></Button>
               </li>
             ))}
           </ul>
@@ -353,10 +353,10 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
                   <span className="meta"><em>{p.marketplace ?? 'all markets'}</em></span>
                   <span className="reach" />
                   <span className="cx" />
-                  <button
-                    type="button" className="h10-am-btn bulk" disabled={busy}
-                    aria-label={`Remove rule for ${p.term}`} onClick={() => void removeProtection(p)}
-                  ><Trash2 size={12} /></button>
+                  <Button
+ variant="ghost" disabled={busy}
+ aria-label={`Remove rule for ${p.term}`} onClick={() => void removeProtection(p)}
+ ><Trash2 size={12} /></Button>
                 </li>
               ))}
             </ul>

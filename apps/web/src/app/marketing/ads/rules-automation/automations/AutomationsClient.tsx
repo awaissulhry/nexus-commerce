@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -875,7 +876,7 @@ export function AutomationsClient() {
             queue, with each family&rsquo;s own columns, the evidence behind every proposal, and what
             actually reached Amazon after you approve.
           </p>
-          <Link className="h10-am-btn primary" href="/marketing/ads/suggestions">Open Suggestions</Link>
+          <Link className="nds-btn primary" href="/marketing/ads/suggestions">Open Suggestions</Link>
         </div>
       )}
 
@@ -992,13 +993,13 @@ export function AutomationsClient() {
           <span className="h10-au-bulkrow">
             <span className="lbl">Set mode</span>
             {(['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as Level[]).map((lv) => (
-              <button key={lv} type="button" className="h10-am-btn bulk" disabled={busy === 'bulk'} onClick={() => openBulk({ kind: 'mode', level: lv })}>
+              <Button key={lv} variant="ghost" disabled={busy === 'bulk'} onClick={() => openBulk({ kind: 'mode', level: lv })}>
                 {LEVEL_WORD[lv]}
-              </button>
+              </Button>
             ))}
-            <button type="button" className="h10-am-btn bulk danger" disabled={busy === 'bulk'} onClick={() => openBulk({ kind: 'delete' })}>
+            <Button variant="danger" disabled={busy === 'bulk'} onClick={() => openBulk({ kind: 'delete' })}>
               <Trash2 size={13} aria-hidden /> Delete
-            </button>
+            </Button>
             <button type="button" className="h10-am-link" onClick={clear}>Clear {ids.length}</button>
           </span>
         )}

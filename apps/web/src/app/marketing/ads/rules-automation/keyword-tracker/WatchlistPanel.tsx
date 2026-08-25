@@ -243,8 +243,8 @@ export function WatchlistPanel({
                   You can add them back by pasting them in again, but their notes would be lost.
                 </span>
                 <span className="acts">
-                  <button type="button" className="h10-am-btn sm" onClick={() => setConfirm(null)}>Keep them</button>
-                  <button type="button" className="h10-am-btn danger sm" onClick={removeSelected} disabled={busy}>Remove {num(sel.size)}</button>
+                  <Button size="sm" onClick={() => setConfirm(null)}>Keep them</Button>
+                  <Button variant="danger" size="sm" onClick={removeSelected} disabled={busy}>Remove {num(sel.size)}</Button>
                 </span>
               </p>
             ) : (
@@ -295,14 +295,14 @@ export function WatchlistPanel({
                   {lists.length === 1 && <> It is {market}’s only list, so {market} would have no watchlist at all.</>}
                 </span>
                 <span className="acts">
-                  <button type="button" className="h10-am-btn sm" onClick={() => setConfirm(null)}>Keep it</button>
-                  <button type="button" className="h10-am-btn danger sm" onClick={deleteList} disabled={busy}>Delete the list</button>
+                  <Button size="sm" onClick={() => setConfirm(null)}>Keep it</Button>
+                  <Button variant="danger" size="sm" onClick={deleteList} disabled={busy}>Delete the list</Button>
                 </span>
               </p>
             ) : (
-              <button type="button" className="h10-am-btn danger" onClick={() => setConfirm('delete-list')} disabled={busy}>
+              <Button variant="danger" onClick={() => setConfirm('delete-list')} disabled={busy}>
                 <Trash2 size={13} /> Delete “{active.name}”…
-              </button>
+              </Button>
             )
           )}
         </section>

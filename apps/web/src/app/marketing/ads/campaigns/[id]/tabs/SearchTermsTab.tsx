@@ -6,6 +6,7 @@
  * (euros), sales is salesCents, acos/ctr are fractions.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../_grid/AdsDataGrid'
 import { num, eur, int, METRIC_TIPS } from '../../_grid/format'
@@ -88,8 +89,8 @@ export function SearchTermsTab({ campaign, dateRange }: { campaign: CampaignDeta
         onSelectedChange={setSelected}
         selectionActions={() => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" onClick={() => setAction('keyword')}>Add as Keyword</button>
-            <button type="button" className="h10-am-btn bulk" onClick={() => setAction('negative')}>Add as Negative</button>
+            <Button variant="ghost" onClick={() => setAction('keyword')}>Add as Keyword</Button>
+            <Button variant="ghost" onClick={() => setAction('negative')}>Add as Negative</Button>
           </span>
         )}
         emptyLabel="No search-term data for this campaign in the selected date range."

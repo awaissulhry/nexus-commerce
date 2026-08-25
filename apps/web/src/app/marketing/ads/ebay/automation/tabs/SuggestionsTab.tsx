@@ -14,7 +14,7 @@ import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGr
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { kindLabel, type WhyReasoning } from '../_lib/rules'
 import { WhyModal } from '../modals/WhyModal'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 export interface SuggestionRow {
   id: string; kind: string; status: string; ruleId: string | null
@@ -47,7 +47,7 @@ function DecideMenu({ row, busy, onDecide }: { row: SuggestionRow; busy: boolean
   const pick = (snoozeDays: number | undefined, label: string) => { setOpen(false); onDecide([row.id], 'reject', snoozeDays, label) }
   return (
     <span className="eb-rule-menu" ref={ref}>
-      <button type="button" className="h10-am-btn sm" disabled={busy} aria-label="Dismiss options" onClick={toggle}>✕ <ChevronDown size={11} /></button>
+      <Button size="sm" disabled={busy} aria-label="Dismiss options" onClick={toggle}>✕ <ChevronDown size={11} /></Button>
       {open && pos && (
         <span className="h10-statusmenu eb-statusfix" style={{ position: 'fixed', top: pos.top, left: pos.left }}>
           <button type="button" title="May re-suggest on the next evaluation if conditions still hold" onClick={() => pick(undefined, 'dismissed (may re-suggest)')}>Dismiss</button>
@@ -128,7 +128,7 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
     {
       key: 'decide', label: '', metric: false, sortable: false, render: (p) => (
         <span className="eb-decide-cell">
-          <button type="button" className="h10-am-btn sm primary" disabled={busy} title="Apply through the guarded write layer" onClick={() => decide([p.id], 'approve')}>✓ Apply</button>
+          <Button variant="primary" size="sm" disabled={busy} title="Apply through the guarded write layer" onClick={() => decide([p.id], 'approve')}>✓ Apply</Button>
           <DecideMenu row={p} busy={busy} onDecide={decide} />
         </span>
       ),
@@ -167,8 +167,8 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
         onSelectedChange={setSelected}
         selectionActions={(ids, clear) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" disabled={busy} onClick={() => { decide(ids, 'approve'); clear() }}>Apply {ids.length} change{ids.length === 1 ? '' : 's'}</button>
-            <button type="button" className="h10-am-btn bulk" disabled={busy} onClick={() => { decide(ids, 'reject', undefined, `dismissed ${ids.length}`); clear() }}>Dismiss {ids.length}</button>
+            <Button variant="ghost" disabled={busy} onClick={() => { decide(ids, 'approve'); clear() }}>Apply {ids.length} change{ids.length === 1 ? '' : 's'}</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => { decide(ids, 'reject', undefined, `dismissed ${ids.length}`); clear() }}>Dismiss {ids.length}</Button>
           </span>
         )}
         storageKey="h10-ebay-suggestions-cols"

@@ -50,6 +50,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
@@ -888,24 +889,22 @@ export function BudgetClient() {
             const restorable = chosen.filter((c) => c.budgetBaselineCents != null && c.budgetBaselineCents !== c.dailyBudgetCents)
             return (
               <span className="h10-bud-selrow">
-                <button
-                  type="button"
-                  className="h10-am-btn bulk"
-                  disabled={writeBusy || restorable.length === 0}
-                  title={restorable.length === 0 ? 'None of the selected campaigns has a baseline it is away from — capture baselines below first.' : `Write each campaign's budget back to its captured baseline. ${chosen.length - restorable.length > 0 ? `${chosen.length - restorable.length} of the selection will be skipped (no baseline, or already there).` : ''}`}
-                  onClick={() => void restoreSelected(ids)}
-                >
+                <Button
+ variant="ghost"
+ disabled={writeBusy || restorable.length === 0}
+ title={restorable.length === 0 ? 'None of the selected campaigns has a baseline it is away from — capture baselines below first.' : `Write each campaign's budget back to its captured baseline. ${chosen.length - restorable.length > 0 ? `${chosen.length - restorable.length} of the selection will be skipped (no baseline, or already there).` : ''}`}
+ onClick={() => void restoreSelected(ids)}
+ >
                   Restore {restorable.length > 0 ? `${restorable.length} ` : ''}to baseline
-                </button>
-                <button
-                  type="button"
-                  className="h10-am-btn bulk"
-                  disabled={writeBusy || ids.length !== 2}
-                  title={ids.length === 2 ? 'Move €/day from one of the two selected campaigns to the other.' : 'Select exactly two campaigns to transfer budget between them.'}
-                  onClick={() => setTransferOpen(true)}
-                >
+                </Button>
+                <Button
+ variant="ghost"
+ disabled={writeBusy || ids.length !== 2}
+ title={ids.length === 2 ? 'Move €/day from one of the two selected campaigns to the other.' : 'Select exactly two campaigns to transfer budget between them.'}
+ onClick={() => setTransferOpen(true)}
+ >
                   Transfer…
-                </button>
+                </Button>
               </span>
             )
           }}
@@ -968,7 +967,7 @@ export function BudgetClient() {
           Automations, and the builder entry lives below. Pending budget proposals queue in ONE
           inbox — Automations' Queue — per the section's one-owner rule. */}
       <p className="h10-bud-foot">
-        <a className="h10-am-btn" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> New budget rule</a>
+        <a className="nds-btn" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> New budget rule</a>
         <a className="h10-am-link" href="/marketing/ads/rules-automation/automations?view=queue">Pending budget proposals live in the Queue →</a>
       </p>
 

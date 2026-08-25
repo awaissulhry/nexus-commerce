@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 const POSTURES = [
   { id: 'INHERIT', label: 'Inherit', tip: 'Follow the global dial (Rules & Automation hub)' },
@@ -95,8 +95,8 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             <label>Rate floor %</label>
             <input type="number" min={0} max={100} step={0.1} value={floorPct} onChange={(e) => setFloorPct(e.target.value)} placeholder="none" />
           </div>
-          <button type="button" className="h10-am-btn sm" disabled={busy}
-            onClick={() => void savePolicy({ rateCapPct: capPct === '' ? null : Number(capPct), rateFloorPct: floorPct === '' ? null : Number(floorPct) }, 'guardrail overrides saved')}>Save caps</button>
+          <Button size="sm" disabled={busy}
+ onClick={() => void savePolicy({ rateCapPct: capPct === '' ? null : Number(capPct), rateFloorPct: floorPct === '' ? null : Number(floorPct) }, 'guardrail overrides saved')}>Save caps</Button>
           <span className="eb-be-hint">Caps clamp automation AFTER the break-even clamp — they can tighten the guardrail, never exceed it.</span>
         </div>
       </div>
@@ -130,8 +130,8 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             <span>{String(pr.proposedAction.from ?? '')} → <b>{String(pr.proposedAction.to ?? '')}</b></span>
             {pr.reasoning?.clampNote && <Pill tone="warning">{pr.reasoning.clampNote}</Pill>}
             <span className="grow" style={{ flex: 1 }} />
-            <button type="button" className="h10-am-btn sm primary" disabled={busy} onClick={() => void decide([pr.id], 'approve')}>Approve</button>
-            <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void decide([pr.id], 'reject')}>Reject</button>
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void decide([pr.id], 'approve')}>Approve</Button>
+            <Button size="sm" disabled={busy} onClick={() => void decide([pr.id], 'reject')}>Reject</Button>
           </div>
         ))}
       </div>
@@ -148,7 +148,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             <span>{String(pr.proposedAction.from ?? '')} → <b>{String(pr.proposedAction.to ?? '')}</b></span>
             <span className="ts">{pr.decidedAt ? new Date(pr.decidedAt).toLocaleString('en-GB') : ''}</span>
             <span className="grow" style={{ flex: 1 }} />
-            <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void rollback(pr.id)}>Rollback</button>
+            <Button size="sm" disabled={busy} onClick={() => void rollback(pr.id)}>Rollback</Button>
           </div>
         ))}
       </div>
@@ -198,8 +198,8 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
             <span className="dim">{d.listingId ?? ''}</span>
             <span>Nexus set <b>{d.kind === 'budget' ? money(d.nexusValue) : `${d.nexusValue}%`}</b> · eBay now <b>{d.ebayValue == null ? 'removed' : d.kind === 'budget' ? money(d.ebayValue) : `${d.ebayValue}%`}</b></span>
             <span className="grow" style={{ flex: 1 }} />
-            <button type="button" className="h10-am-btn sm primary" disabled={busy} onClick={() => void repairDrift(d, 'reapply')}>Re-apply</button>
-            <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => void repairDrift(d, 'accept')}>Accept</button>
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void repairDrift(d, 'reapply')}>Re-apply</Button>
+            <Button size="sm" disabled={busy} onClick={() => void repairDrift(d, 'accept')}>Accept</Button>
           </div>
         ))}
       </div>

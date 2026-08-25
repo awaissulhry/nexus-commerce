@@ -24,6 +24,7 @@
  * counts — "Filters · GALE-JACKET · Enabled" tells you where you are; "3 filters" does not.
  */
 import { useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import { ChevronDown } from 'lucide-react'
 import { FilterDropdown, MultiSelect } from '../FilterDropdown'
 import { InfoTip } from '../InfoTip'
@@ -165,10 +166,10 @@ export function AdsFilterBar({
           <div className="fft">
             {presetsSlot}
             <span className="grow" />
-            <button
-              type="button" className="h10-am-btn sm" onClick={() => set({})} disabled={!hasActive}
-              title="Clears everything in this bar, scope included — one bar, one Clear."
-            >Clear</button>
+            <Button
+ size="sm" onClick={() => set({})} disabled={!hasActive}
+ title="Clears everything in this bar, scope included — one bar, one Clear."
+ >Clear</Button>
           </div>
         </>
       )}

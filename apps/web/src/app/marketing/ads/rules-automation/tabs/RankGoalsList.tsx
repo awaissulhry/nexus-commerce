@@ -11,6 +11,7 @@
  * builder's target palette, and persisted group-level enable/pause.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from '../dayparting/_rd/rdFilters'
@@ -394,11 +395,11 @@ export function RankGoalsList() {
       onSelectedChange={setSel}
       selectionActions={(ids, clear) => (
         <span className="h10-bulkrow">
-          <button type="button" className="h10-am-btn bulk" onClick={() => { void setEnabled(ids, true); clear() }}>Enable</button>
-          <button type="button" className="h10-am-btn bulk" onClick={() => { void setEnabled(ids, false); clear() }}>Pause</button>
+          <Button variant="ghost" onClick={() => { void setEnabled(ids, true); clear() }}>Enable</Button>
+          <Button variant="ghost" onClick={() => { void setEnabled(ids, false); clear() }}>Pause</Button>
           {/* F2 — the place N schedules are already selected is the place to apply one plan to
               all of them. No new page, no new nav. */}
-          <button type="button" className="h10-am-btn bulk" onClick={() => setTplFor(ids)}>Apply template…</button>
+          <Button variant="ghost" onClick={() => setTplFor(ids)}>Apply template…</Button>
         </span>
       )}
       customizable
@@ -425,11 +426,11 @@ export function RankGoalsList() {
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
           <b>No rank schedules yet — create one named schedule to hold a rank across many campaigns.</b>
-          <a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Create Rank Schedule</a>
+          <a className="nds-btn primary" href={builderHref()}><Plus size={13} /> Create Rank Schedule</a>
         </span>
       )}
       toolbarLeft={<GrainSwitch schedules={rows.length} campaigns={campaigns.length} skewMinutes={clock?.skewMinutes ?? null} />}
-      toolbarRight={<a className="h10-am-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
+      toolbarRight={<a className="nds-btn primary" href={builderHref()}><Plus size={13} /> Rank Schedule</a>}
       /* RDX/E1 — a plain row click opens the forward view ("what is this about to do"), which is
          the more useful default; the explicit Activity button still opens the history it names. */
       onRowClick={(r) => openRow(r.id, 'next24')}

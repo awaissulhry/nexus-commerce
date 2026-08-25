@@ -6,6 +6,7 @@
  * windowed metrics in cents). The first column is the product (thumb + title + ASIN/SKU).
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../_grid/AdsDataGrid'
 import { num, eur, int, STATUS_PILL, METRIC_TIPS } from '../../_grid/format'
@@ -112,9 +113,9 @@ export function AdsTab({ campaign, dateRange }: { campaign: CampaignDetailData |
       editMode={editMode}
       selectionActions={(ids, clear) => (
         <span className="h10-bulkrow">
-          <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ENABLED', reason: 'Bulk enable' }, clear)}>Enable</button>
-          <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, clear)}>Archive</button>
-          <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
+          <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ENABLED', reason: 'Bulk enable' }, clear)}>Enable</Button>
+          <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, clear)}>Archive</Button>
+          <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</Button>
         </span>
       )}
       emptyLabel="No ads on this campaign."

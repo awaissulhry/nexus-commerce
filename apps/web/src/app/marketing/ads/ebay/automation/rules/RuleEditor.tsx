@@ -266,15 +266,15 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                     onChange={(e) => setCond(i, { threshold: e.target.value === '' ? undefined : toWire(c.metric, Number(e.target.value)) })} />
                 </label>
               )}
-              <button type="button" className="h10-am-btn sm" aria-label="Remove condition" disabled={trigger.all.length <= 1}
-                onClick={() => { setTrigger((t) => ({ ...t, all: t.all.filter((_, j) => j !== i) })); setPreview(null) }}><X size={13} /></button>
+              <Button size="sm" aria-label="Remove condition" disabled={trigger.all.length <= 1}
+ onClick={() => { setTrigger((t) => ({ ...t, all: t.all.filter((_, j) => j !== i) })); setPreview(null) }}><X size={13} /></Button>
             </div>
           )
         })}
         {trigger.all.length < 8 && (
-          <button type="button" className="h10-am-btn sm" onClick={() => { setTrigger((t) => ({ ...t, all: [...t.all, { metric: 'clicks', windowDays: 14, op: 'gte', threshold: 10 }] })); setPreview(null) }}>
+          <Button size="sm" onClick={() => { setTrigger((t) => ({ ...t, all: [...t.all, { metric: 'clicks', windowDays: 14, op: 'gte', threshold: 10 }] })); setPreview(null) }}>
             <Plus size={13} /> Add condition
-          </button>
+          </Button>
         )}
         <p className="eb-be-hint" style={{ marginTop: 8 }}>Reads: <b>{trigger.all.map(conditionSentence).join(' AND ') || '—'}</b></p>
       </section>
@@ -349,7 +349,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                     </div>
                     {v.version === currentVersion
                       ? <Pill tone="success">current</Pill>
-                      : <button type="button" className="h10-am-btn sm" disabled={busy} title="Re-validates the old config and saves it as a NEW version — history is never rewritten" onClick={() => void restoreVersion(v.version)}>Restore</button>}
+                      : <Button size="sm" disabled={busy} title="Re-validates the old config and saves it as a NEW version — history is never rewritten" onClick={() => void restoreVersion(v.version)}>Restore</Button>}
                   </div>
                 ))}
               </div>

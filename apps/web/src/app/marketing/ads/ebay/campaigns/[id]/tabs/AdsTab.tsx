@@ -105,7 +105,7 @@ export function AdsTab({ data, campaignId, strategy, reload, say, onAddListings 
         onSelectedChange={setSelected}
         selectionActions={editable ? (ids, clear) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" onClick={() => { setRemoveIds(rows.filter((r) => ids.includes(r.id)).map((r) => r.listingId!).filter(Boolean)); clear() }}>Remove ads</button>
+            <Button variant="ghost" onClick={() => { setRemoveIds(rows.filter((r) => ids.includes(r.id)).map((r) => r.listingId!).filter(Boolean)); clear() }}>Remove ads</Button>
           </span>
         ) : undefined}
     toolbarRight={editable ? <Button variant="primary" onClick={onAddListings}>+ Add listings</Button> : undefined}

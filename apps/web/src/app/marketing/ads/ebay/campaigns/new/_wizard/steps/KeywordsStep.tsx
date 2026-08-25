@@ -62,7 +62,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
             <div className="h10-cd-field s" style={{ maxWidth: 140 }}><label>Default bid € <InfoTip tip="Applies to keywords without their own bid. Every bid stays editable per keyword, here and after launch." /></label>
               <input type="number" min={0.02} step={0.01} value={g.defaultBidEur} onChange={(e) => setGroup(i, { defaultBidEur: e.target.value })} /></div>
             <span className="grow" style={{ flex: 1 }} />
-            {plan.adGroups.length > 1 && <button type="button" className="h10-am-btn sm" onClick={() => set({ adGroups: plan.adGroups.filter((_, j) => j !== i) })}>Remove group</button>}
+            {plan.adGroups.length > 1 && <Button size="sm" onClick={() => set({ adGroups: plan.adGroups.filter((_, j) => j !== i) })}>Remove group</Button>}
           </div>
 
           <nav className="h10-cd-tabs" style={{ marginBottom: 10 }}>

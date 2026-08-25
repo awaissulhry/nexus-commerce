@@ -12,7 +12,7 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import '../ebay.css'
 import { getEbayAds, actionSummary, SOURCE_LABELS, type ActionRow } from '../_lib'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 const PAGE = 200
 
@@ -112,7 +112,7 @@ export function EbayChangeLog() {
       />
       {more && all.length > 0 && (
         <div style={{ padding: '10px 2px' }}>
-          <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => load(all[all.length - 1]?.createdAt)}>{busy ? 'Loading…' : 'Load older'}</button>
+          <Button size="sm" disabled={busy} onClick={() => load(all[all.length - 1]?.createdAt)}>{busy ? 'Loading…' : 'Load older'}</Button>
         </div>
       )}
     </div>

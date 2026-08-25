@@ -40,6 +40,7 @@
  * are counted and named rather than swallowed.
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange } from '../_shared/adsBus'
 
@@ -166,14 +167,14 @@ export function ArBulkVerbs({ ids, names, onDone, onAssignRule }: {
       {(['automation', 'assign', 'bidauto', 'acos', 'bounds'] as const).map((v) => v === 'assign' ? (
         /* Collapses any open popover WITHOUT the close() path — close() may clear the selection
            (after a write), and this button is about to open a modal over that very selection. */
-        <button key="assign" type="button" className="h10-am-btn bulk" onClick={() => { setOpen(null); setResult(null); onAssignRule() }}>
+        <Button key="assign" variant="ghost" onClick={() => { setOpen(null); setResult(null); onAssignRule() }}>
           + Assign Rule
-        </button>
+        </Button>
       ) : (
         <span key={v} className="h10-ar-bulkwrap">
-          <button type="button" className="h10-am-btn bulk" aria-expanded={open === v} onClick={() => { if (open === v) close(); else { setResult(null); setOpen(v) } }}>
+          <Button variant="ghost" aria-expanded={open === v} onClick={() => { if (open === v) close(); else { setResult(null); setOpen(v) } }}>
             {LABEL[v]}
-          </button>
+          </Button>
           {open === v && (
             <div className="h10-ar-pop" role="dialog" aria-label={`${LABEL[v]} for ${noun}`}>
               <b>{LABEL[v]}</b>

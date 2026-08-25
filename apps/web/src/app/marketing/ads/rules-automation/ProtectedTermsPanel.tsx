@@ -101,10 +101,10 @@ export function ProtectedTermsPanel() {
         {p.marketplace && <em className="h10-pt-flag">{p.marketplace}</em>}
       </span>
       {p.reason && <span className="h10-pt-reason">{p.reason}</span>}
-      <button
-        type="button" className="h10-am-btn bulk" disabled={busy}
-        aria-label={`Remove protection for ${p.term}`} onClick={() => void remove(p.id)}
-      ><Trash2 size={12} /></button>
+      <Button
+ variant="ghost" disabled={busy}
+ aria-label={`Remove protection for ${p.term}`} onClick={() => void remove(p.id)}
+ ><Trash2 size={12} /></Button>
     </li>
   )
 

@@ -362,9 +362,9 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
 
                 <div className="h10-ngr-acts">
          <Button onClick={close} disabled={busy}>Keep {writeCount === 1 ? 'it' : 'them'}</Button>
-                  <button type="button" className="h10-am-btn danger" onClick={submit} disabled={busy || writeCount === 0}>
+                  <Button variant="danger" onClick={submit} disabled={busy || writeCount === 0}>
                     {busy ? <><Loader2 size={13} className="spin" /> Removing…</> : <><Trash2 size={13} /> {rowClass === 'local-only' ? 'Remove our record' : `Archive ${writeCount === 1 ? 'it' : `${num(writeCount)} negations`}`}</>}
-                  </button>
+                  </Button>
                 </div>
               </>
             )}

@@ -369,7 +369,7 @@ export function SchedulesSection({ market }: { market?: string }) {
         onSelectedChange={setSel}
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" onClick={() => deleteSchedules(ids)}><Trash2 size={13} /> Delete</button>
+            <Button variant="ghost" onClick={() => deleteSchedules(ids)}><Trash2 size={13} /> Delete</Button>
           </span>
         )}
         customizable={false}

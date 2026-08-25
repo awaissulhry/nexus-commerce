@@ -23,6 +23,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle } from 'lucide-react'
 import { H10Select } from '../../campaigns/FilterDropdown'
 
@@ -249,9 +250,9 @@ export function ScopeForm({
       )}
 
       {dirty && (
-        <button type="button" className="h10-am-btn primary sm" disabled={!canApply} onClick={() => onApply(next)}>
+        <Button variant="primary" size="sm" disabled={!canApply} onClick={() => onApply(next)}>
           {busy ? 'Binding…' : contradiction ? 'Cannot bind — nothing to cover' : incomplete ? 'Finish choosing' : 'Bind this scope'}
-        </button>
+        </Button>
       )}
     </div>
   )

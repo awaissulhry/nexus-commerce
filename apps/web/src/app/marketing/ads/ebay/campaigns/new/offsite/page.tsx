@@ -17,8 +17,8 @@ export default function Page() {
         like any other campaign (see the existing &quot;Jacket Shopping Ad Google&quot; campaign).
       </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        <a className="h10-am-btn primary" href="https://www.ebay.it/sh/mkt/marketing/campaigns" target="_blank" rel="noreferrer">Open Seller Hub</a>
-        <Link className="h10-am-btn" href="/marketing/ads/ebay/campaigns/new">Back to campaign types</Link>
+        <a className="nds-btn primary" href="https://www.ebay.it/sh/mkt/marketing/campaigns" target="_blank" rel="noreferrer">Open Seller Hub</a>
+        <Link className="nds-btn" href="/marketing/ads/ebay/campaigns/new">Back to campaign types</Link>
       </div>
     </div>
   )

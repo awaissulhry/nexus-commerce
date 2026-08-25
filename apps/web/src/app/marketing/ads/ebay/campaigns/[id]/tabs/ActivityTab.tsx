@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { getEbayAds, actionSummary, type ActionRow } from '../../../_lib'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 export function ActivityTab({ externalCampaignId }: { externalCampaignId: string }) {
   const [rows, setRows] = useState<ActionRow[] | null>(null)
@@ -64,7 +64,7 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
           })}
           {more && (
             <div className="eb-rowlist-foot">
-              <button type="button" className="h10-am-btn sm" disabled={busy} onClick={() => load(rows[rows.length - 1]?.createdAt)}>{busy ? 'Loading…' : 'Load older'}</button>
+              <Button size="sm" disabled={busy} onClick={() => load(rows[rows.length - 1]?.createdAt)}>{busy ? 'Loading…' : 'Load older'}</Button>
             </div>
           )}
         </>

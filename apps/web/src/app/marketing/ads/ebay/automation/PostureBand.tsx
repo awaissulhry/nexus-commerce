@@ -59,10 +59,10 @@ export function PostureBand({ state, busy, act }: {
           <label className="eb-posture-caplbl">EBAY_IT €
             <input className="h10-cd-input" style={{ width: 76, marginLeft: 6 }} type="number" min={10} value={capInput} onChange={(e) => setCapInput(e.target.value)} />
           </label>
-          <button type="button" className="h10-am-btn sm" disabled={busy}
-            onClick={() => void act(() => postEbayAds('/automation/ceilings', { marketplace: 'EBAY_IT', monthlyCapCents: Math.round(Number(capInput) * 100) }), 'ceiling saved')}>
+          <Button size="sm" disabled={busy}
+ onClick={() => void act(() => postEbayAds('/automation/ceilings', { marketplace: 'EBAY_IT', monthlyCapCents: Math.round(Number(capInput) * 100) }), 'ceiling saved')}>
             Save
-          </button>
+          </Button>
         </div>
         <p className="eb-posture-hint">Attributed fees month-to-date; automation halts at 100%.</p>
       </section>

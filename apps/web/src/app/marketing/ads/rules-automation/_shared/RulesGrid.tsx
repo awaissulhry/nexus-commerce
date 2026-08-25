@@ -1234,7 +1234,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     <span className="h10-rr-empty">
       <NoDataIllus size={104} />
       <b>{emptyLine}</b>
-      <a className="h10-am-btn" href={builderHref}>Create Rule</a>
+      <a className="nds-btn" href={builderHref}>Create Rule</a>
     </span>
   )
 
@@ -1286,8 +1286,8 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
     toolbarRight={<Button variant="primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</Button>}
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</button>
-            <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'delete', ids })}><Trash2 size={13} /> Delete</button>
+            <Button variant="ghost" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</Button>
+            <Button variant="ghost" onClick={() => setBulk({ kind: 'delete', ids })}><Trash2 size={13} /> Delete</Button>
           </span>
         )}
       />

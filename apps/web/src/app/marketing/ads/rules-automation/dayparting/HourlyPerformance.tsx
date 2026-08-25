@@ -17,6 +17,7 @@
  * so a cell means the same thing in both places.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { DaypartingHeatmap, type HeatCell } from '../_schedule/DaypartingHeatmap'
 import { CHART_METRICS } from '../_schedule/scheduleConfig'
@@ -205,15 +206,15 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
             placeholder="Template name…"
             aria-label="Template name"
           />
-          <button type="button" className="h10-am-btn primary sm" disabled={!tplName.trim() || savingTpl} onClick={() => void saveTemplate()}>
+          <Button variant="primary" size="sm" disabled={!tplName.trim() || savingTpl} onClick={() => void saveTemplate()}>
             {savingTpl ? 'Saving…' : 'Save as template'}
-          </button>
+          </Button>
           {/* Clear resets the draft entirely — leaving a half-typed name behind produced a
               concatenated nonsense name on the next save. */}
           {/* RDX/D2 — the additive sibling of "Save as template". Kept as its own button because
               replacing a plan and adding to one are different decisions, not two ways to do one. */}
-          <button type="button" className="h10-am-btn sm" onClick={() => setAddOpen(true)}>Add to schedule…</button>
-          <button type="button" className="h10-am-btn sm" onClick={() => { setSel(new Set()); setTplMsg(''); setTplName('') }}>Clear</button>
+          <Button size="sm" onClick={() => setAddOpen(true)}>Add to schedule…</Button>
+          <Button size="sm" onClick={() => { setSel(new Set()); setTplMsg(''); setTplName('') }}>Clear</Button>
         </div>
       )}
       {tplMsg && <p className="h10-dp-selmsg">{tplMsg}</p>}

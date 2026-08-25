@@ -154,10 +154,10 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
         editMode={editMode}
         selectionActions={(ids, clear) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => setAdjustBid({ ids, clear })}>Adjust Bid</button>
-            <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ENABLED', reason: 'Bulk enable' }, clear)}>Enable</button>
-            <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, clear)}>Archive</button>
-            <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
+            <Button variant="ghost" disabled={bulkBusy} onClick={() => setAdjustBid({ ids, clear })}>Adjust Bid</Button>
+            <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ENABLED', reason: 'Bulk enable' }, clear)}>Enable</Button>
+            <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, clear)}>Archive</Button>
+            <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</Button>
           </span>
         )}
     toolbarRight={<Button variant="primary" onClick={() => setShowCreate(true)}><Plus size={13} /> Add Group</Button>}

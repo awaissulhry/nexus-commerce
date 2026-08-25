@@ -195,8 +195,8 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
     toolbarRight={<Button variant="primary" onClick={onAddRule}><Plus size={13} /> Rule</Button>}
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</button>
-            <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'delete', ids })}><Trash2 size={13} /> Delete</button>
+            <Button variant="ghost" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</Button>
+            <Button variant="ghost" onClick={() => setBulk({ kind: 'delete', ids })}><Trash2 size={13} /> Delete</Button>
           </span>
         )}
       />

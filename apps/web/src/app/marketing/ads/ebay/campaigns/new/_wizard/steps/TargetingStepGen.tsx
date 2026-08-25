@@ -93,7 +93,7 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
                 <input type="number" min={0} value={r.minPrice} onChange={(e) => setRule(i, { minPrice: e.target.value })} /></div>
               <div className="h10-cd-field s" style={{ maxWidth: 120 }}><label>Max price € <InfoTip tip="Listing price ceiling for this rule; blank = no maximum." /></label>
                 <input type="number" min={0} value={r.maxPrice} onChange={(e) => setRule(i, { maxPrice: e.target.value })} /></div>
-              <button type="button" className="h10-am-btn sm" onClick={() => set({ criterion: { ...plan.criterion, rules: rules.filter((_, j) => j !== i) } })}>Remove</button>
+              <Button size="sm" onClick={() => set({ criterion: { ...plan.criterion, rules: rules.filter((_, j) => j !== i) } })}>Remove</Button>
             </div>
           ))}
      <Button onClick={() => set({ criterion: { ...plan.criterion, rules: [...rules, emptyRule()] } })}>+ Selection rule</Button>

@@ -173,19 +173,19 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
                   and putting a dialog in front of the safe direction trains people through it.
                   Arming shows the diff first — that is the direction that changes bids. */}
               {e.phase !== 'past' && (
-                <button
-                  type="button" className="h10-am-btn bulk" disabled={busy}
-                  onClick={() => {
-                    if (e.enabled) { void setEnabled(e, false); return }
-                    setArming(e); setArmPrev(null); setErr('')
-                    void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/events/${e.id}/arm-preview`, { cache: 'no-store' })
-                      .then((r) => r.json())
-                      .then((j) => setArmPrev(j?.diff || j?.expired ? (j as ArmPreview) : null))
-                      .catch(() => setArmPrev(null))
-                  }}
-                >
+                <Button
+ variant="ghost" disabled={busy}
+ onClick={() => {
+ if (e.enabled) { void setEnabled(e, false); return }
+ setArming(e); setArmPrev(null); setErr('')
+ void fetch(`${getBackendUrl()}/api/advertising/rank-schedule-groups/${groupId}/events/${e.id}/arm-preview`, { cache: 'no-store' })
+ .then((r) => r.json())
+ .then((j) => setArmPrev(j?.diff || j?.expired ? (j as ArmPreview) : null))
+ .catch(() => setArmPrev(null))
+ }}
+ >
                   {e.enabled ? 'Disarm' : 'Arm'}
-                </button>
+                </Button>
               )}
               <button type="button" className="del" aria-label={`Delete ${e.name}`} disabled={busy} onClick={() => void remove(e)}><Trash2 size={13} /></button>
             </div>

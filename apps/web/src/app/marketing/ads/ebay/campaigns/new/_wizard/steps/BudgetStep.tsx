@@ -8,6 +8,7 @@
  * with eBay's suggestMaxCpc.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { money } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { postEbayAds } from '../../../../_lib'
@@ -72,7 +73,7 @@ export function BudgetStep({ plan, set, showMaxCpc }: { plan: CampaignPlan; set:
                 <label>Max CPC (EUR) <InfoTip tip="The most a single click may cost. eBay picks targets and bids under this cap — there is no keyword management on smart campaigns by design." /></label>
                 <input type="number" min={0.02} step={0.01} value={plan.maxCpcEur} onChange={(e) => set({ maxCpcEur: e.target.value })} />
               </div>
-              <button type="button" className="h10-am-btn sm" disabled={cpcBusy} onClick={() => void suggestCpc()}>{cpcBusy ? '…' : "eBay's suggested max CPC"}</button>
+              <Button size="sm" disabled={cpcBusy} onClick={() => void suggestCpc()}>{cpcBusy ? '…' : "eBay's suggested max CPC"}</Button>
               <span className="eb-be-hint">Smart targeting: eBay picks targets and bids under this cap.</span>
             </div>
           </div>

@@ -68,7 +68,7 @@ export function EbayProductsRollup() {
       tip: 'Match a listing to a catalog product to unlock costs, break-evens and margin guardrails — ad spend is counted either way.',
       render: (r) => r.matchStatus === 'MATCHED' || r.matchStatus === 'CONFIRMED' || r.matchStatus === 'MANUAL'
         ? <Pill tone="success" title={r.matchStatus === 'MANUAL' ? 'Operator-confirmed match (sticky across syncs)' : 'Matched via eBay SKU / listing map'}>Matched</Pill>
-        : <button type="button" className="h10-am-btn sm" title="Link this listing to a catalog product — unlocks cost entry, break-evens and margin guardrails" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>Match…</button>,
+        : <Button size="sm" title="Link this listing to a catalog product — unlocks cost entry, break-evens and margin guardrails" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>Match…</Button>,
     },
     {
       key: 'promoted', label: 'Promoted', metric: false, sortValue: (r) => (r.campaigns?.length ?? 0),
@@ -99,8 +99,8 @@ export function EbayProductsRollup() {
           return <button type="button" className="h10-am-link" title={`Unit cost €${r.costPriceCents != null ? (r.costPriceCents / 100).toFixed(2) : '?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</button>
         }
         if (r.economicsStatus === 'MISSING_PRICE') return <Pill tone="neutral">no price</Pill>
-        if (r.groupKey === '~unmatched') return <button type="button" className="h10-am-btn sm" title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</button>
-        return <button type="button" className="h10-am-btn sm" title="Enter the unit cost — break-even + margin guardrails activate immediately" onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>add cost</button>
+        if (r.groupKey === '~unmatched') return <Button size="sm" title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</Button>
+        return <Button size="sm" title="Enter the unit cost — break-even + margin guardrails activate immediately" onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>add cost</Button>
       },
       sortValue: (r) => r.breakEvenAdRatePct ?? -1,
     },
@@ -178,7 +178,7 @@ export function EbayProductsRollup() {
         onSelectedChange={setSelected}
         selectionActions={(ids, clear) => (
           <span className="h10-bulkrow">
-            <button type="button" className="h10-am-btn bulk" onClick={() => { setPromote({ listingIds: ids }); clear() }}><Megaphone size={13} /> Promote</button>
+            <Button variant="ghost" onClick={() => { setPromote({ listingIds: ids }); clear() }}><Megaphone size={13} /> Promote</Button>
           </span>
         )}
         reportLabel={latestReportLabel([data?.freshness.factsReportedAt ?? null])}

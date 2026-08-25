@@ -194,7 +194,7 @@ export function AiAdvertisingDashboard() {
         : (
           <span className="aiad-status-wrap">
             <span className="aiad-status warn">Not launched</span>
-            <button type="button" className="h10-am-btn primary aiad-launch" disabled={busy === g.id} onClick={(e) => { e.stopPropagation(); void materialize(g.id) }}>{busy === g.id ? 'Launching…' : 'Launch'}</button>
+            <Button variant="primary" className="aiad-launch" disabled={busy === g.id} onClick={(e) => { e.stopPropagation(); void materialize(g.id) }}>{busy === g.id ? 'Launching…' : 'Launch'}</Button>
           </span>
         ),
     },
@@ -344,7 +344,7 @@ export function AiAdvertisingDashboard() {
             icon={<IconAtom size={30} />}
             title="No product goals yet"
             description="Pick products, a target and a budget — the AI builds the campaign structure, then proposes every optimization for your approval as data arrives."
-            action={<Link className="h10-am-btn primary" href="/marketing/ads/ai-advertising/new-goal"><Plus size={13} /> Product Goal</Link>}
+            action={<Link className="nds-btn primary" href="/marketing/ads/ai-advertising/new-goal"><Plus size={13} /> Product Goal</Link>}
           />
         }
       />

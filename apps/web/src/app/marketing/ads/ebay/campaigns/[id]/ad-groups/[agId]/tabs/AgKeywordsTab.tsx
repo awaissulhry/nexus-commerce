@@ -84,8 +84,8 @@ export function AgKeywordsTab({ data, campaignId, reload, say, onAdd }: { data: 
       onSelectedChange={setSelected}
       selectionActions={(ids, clear) => (
         <span className="h10-bulkrow">
-          <button type="button" className="h10-am-btn bulk" onClick={() => { void setStatus(ids, 'ACTIVE'); clear() }}>Enable</button>
-          <button type="button" className="h10-am-btn bulk" onClick={() => { void setStatus(ids, 'PAUSED'); clear() }}>Pause</button>
+          <Button variant="ghost" onClick={() => { void setStatus(ids, 'ACTIVE'); clear() }}>Enable</Button>
+          <Button variant="ghost" onClick={() => { void setStatus(ids, 'PAUSED'); clear() }}>Pause</Button>
         </span>
       )}
       toolbarRight={<>

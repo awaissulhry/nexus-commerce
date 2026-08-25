@@ -1853,7 +1853,7 @@ export function CampaignsGrid() {
             <div className="fft">
               <span className="grow" />
               <button type="button" className="h10-am-link" onClick={savePreset} disabled={!hasActiveFilters}>{presetMsg || 'Save Filter Preset'}</button>
-              <button type="button" className="h10-am-btn sm" onClick={clearFilters}>Clear</button>
+              <Button size="sm" onClick={clearFilters}>Clear</Button>
             </div>
           </>
         )}
@@ -1889,7 +1889,7 @@ export function CampaignsGrid() {
                 ))}
                 <div className="abrow">
                   <span className="h10-bulk-inp"><span className="pf">{adjMode === 'set' ? '€' : '%'}</span><input type="number" min="0" step="1" value={adjVal} onChange={(e) => setAdjVal(e.target.value)} aria-label="Budget value" /></span>
-                  <button type="button" className="h10-am-btn primary sm" onClick={applyAdjustBudget}>Apply</button>
+                  <Button variant="primary" size="sm" onClick={applyAdjustBudget}>Apply</Button>
                 </div>
               </div>
             </>}

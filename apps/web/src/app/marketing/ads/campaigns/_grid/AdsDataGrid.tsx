@@ -777,13 +777,13 @@ export function AdsDataGrid<T>({
                             onBlur={() => setPresetRenaming(null)}
                           />
                         ) : (
-                          <button
-                            type="button" className="h10-am-btn sm" title="Apply preset · double-click to rename"
-                            /* FB.1 — a preset carries metric filters ONLY. It keeps whatever scope keys are
-                               set, because a saved metric view must never move you to another account view. */
-                            onClick={() => { setFstate((cur) => ({ ...Object.fromEntries(Object.entries(cur).filter(([k]) => isServerKey(k))), ...stripServerKeys(p.values) })); setPage(1) }}
-                            onDoubleClick={() => setPresetRenaming(p.name)}
-                          >{p.name}</button>
+                          <Button
+ size="sm" title="Apply preset · double-click to rename"
+ /* FB.1 — a preset carries metric filters ONLY. It keeps whatever scope keys are
+ set, because a saved metric view must never move you to another account view. */
+ onClick={() => { setFstate((cur) => ({ ...Object.fromEntries(Object.entries(cur).filter(([k]) => isServerKey(k))), ...stripServerKeys(p.values) })); setPage(1) }}
+ onDoubleClick={() => setPresetRenaming(p.name)}
+ >{p.name}</Button>
                         )}
                         <button type="button" className="h10-am-link" aria-label={`Delete preset ${p.name}`} style={{ fontSize: 11 }} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}>✕</button>
                       </span>
@@ -968,8 +968,8 @@ export function AdsDataGrid<T>({
           <div className="h">{editLabelFor(inline.key)}</div>
           {(inlineField.renderPopover ?? inlineField.render)(inlineDraft, setInlineDraft, inlineRow as T)}
           <div className="f">
-            <button type="button" className="h10-am-btn sm" onClick={() => setInline(null)}>Cancel</button>
-            <button type="button" className="h10-am-btn primary sm" disabled={savingInline} onClick={saveInline}>{savingInline ? 'Saving…' : 'Save'}</button>
+            <Button size="sm" onClick={() => setInline(null)}>Cancel</Button>
+            <Button variant="primary" size="sm" disabled={savingInline} onClick={saveInline}>{savingInline ? 'Saving…' : 'Save'}</Button>
           </div>
         </div>
       </>, document.body)}

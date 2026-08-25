@@ -11,7 +11,7 @@ import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGr
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { kindLabel } from '../_lib/rules'
 import type { SuggestionRow } from './SuggestionsTab'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 interface AppliedRow extends SuggestionRow {
   decidedBy: string | null; decidedAt: string | null
@@ -40,10 +40,10 @@ export function AppliedTab({ busy, act, bump }: { busy: boolean; act: (fn: () =>
     { key: 'actor', label: 'Actor', metric: false, sortValue: (p) => p.decidedBy ?? '', render: (p) => <span className="eb-chip" title={p.decidedBy ?? undefined}>{p.decidedBy === 'automation:ebay-ads' ? 'autopilot' : 'operator'}</span> },
     {
       key: 'rb', label: '', metric: false, sortable: false, render: (p) => (
-        <button type="button" className="h10-am-btn sm" disabled={busy} title="Push the recorded inverse back through the guarded write layer"
-          onClick={() => void act(() => postEbayAds(`/automation/proposals/${p.id}/rollback`, {}), 'rolled back')}>
+        <Button size="sm" disabled={busy} title="Push the recorded inverse back through the guarded write layer"
+ onClick={() => void act(() => postEbayAds(`/automation/proposals/${p.id}/rollback`, {}), 'rolled back')}>
           Rollback
-        </button>
+        </Button>
       ),
     },
   ], [busy, act, ruleNames])

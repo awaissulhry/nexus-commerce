@@ -15,6 +15,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Clock, FlaskConical, GraduationCap, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ScopeForm, type ScopeOptions, type ScopeValue } from './ScopeForm'
@@ -273,15 +274,15 @@ export function RuleDetail({
                 <li>Last run {rule.lastExecutedAt ? new Date(rule.lastExecutedAt).toLocaleString('en-IE') : 'never'}{rule.ageDays != null ? ` · rule created ${rule.ageDays === 0 ? 'today' : `${rule.ageDays} day${rule.ageDays === 1 ? '' : 's'} ago`}` : ''}</li>
               </ul>
               <div className="h10-au-recbtns">
-                <button type="button" className="h10-am-btn sm" onClick={onHistory}>
+                <Button size="sm" onClick={onHistory}>
                   <Clock size={12} aria-hidden /> Execution history
-                </button>
+                </Button>
                 {/* AUTO.A3 — Simulate, allowed ONLY here (SUB §8.12) and only because the route is
                     `simulateOneRule`: this rule, no other, forceDryRun, works on a DISABLED rule
                     without arming it. The old endpoint void-ran the whole evaluator live. */}
-                <button type="button" className="h10-am-btn sm" disabled={simBusy} onClick={() => void simulate()}>
+                <Button size="sm" disabled={simBusy} onClick={() => void simulate()}>
                   <FlaskConical size={12} aria-hidden /> {simBusy ? 'Simulating…' : 'Simulate'}
-                </button>
+                </Button>
               </div>
               {sim && (
                 <p className={`h10-au-simres ${sim.err ? 'bad' : ''}`} role="status">

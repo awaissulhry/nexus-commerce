@@ -88,7 +88,7 @@ export function TabRules({ tabKey, heading, subject, builderHref, builderLabel, 
     <section id={sectionId} className="h10-bd7">
       <h3>
         <ShieldCheck size={14} aria-hidden /> Rules — {heading}
-        <a className="h10-am-btn primary" href={builderHref}><Plus size={13} aria-hidden /> {builderLabel}</a>
+        <a className="nds-btn primary" href={builderHref}><Plus size={13} aria-hidden /> {builderLabel}</a>
       </h3>
 
       {err != null ? (
@@ -99,7 +99,7 @@ export function TabRules({ tabKey, heading, subject, builderHref, builderLabel, 
         <span className="h10-rr-empty">
           <NoDataIllus size={104} />
           <b>{emptyLine}</b>
-          <a className="h10-am-btn primary" href={builderHref}><Plus size={13} aria-hidden /> Create Rule</a>
+          <a className="nds-btn primary" href={builderHref}><Plus size={13} aria-hidden /> Create Rule</a>
         </span>
       ) : (
         <>

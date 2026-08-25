@@ -312,7 +312,7 @@ export function AiGoalBuilder() {
                     {budgetMode === 'strict' && <><span className="c-sug">Suggested Budget</span><span className="c-bud">Budget</span></>}
                   </div>
                   {products.length === 0 ? (
-                    <div className="psel-empty"><ProductsEmptyArt /><div className="t">No Product Added</div><button type="button" className="h10-am-btn sm" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</button></div>
+                    <div className="psel-empty"><ProductsEmptyArt /><div className="t">No Product Added</div><Button size="sm" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</Button></div>
                   ) : (
                     <ul className="psel-rows">
                       {products.map((p) => {
@@ -366,7 +366,7 @@ export function AiGoalBuilder() {
                   <h3>Advanced Targeting</h3>
                   <p>Add or exclude additional types of targets</p>
                 </div>
-                <button type="button" className="h10-am-btn ghost" onClick={() => setAdvOpen(true)}><Settings size={13} /> Settings</button>
+                <Button variant="ghost" onClick={() => setAdvOpen(true)}><Settings size={13} /> Settings</Button>
               </div>
               <div className="adv-note"><Info size={15} /><span>If the SP Auto campaign does not immediately generate keywords or product targets (ASINs), the SP KW and SP PAT campaigns will remain in an Incomplete status due to the lack of required inputs. This is normal and may take some time as the SP Auto campaign gathers data. Please be patient and allow the SP Auto campaign to run long enough to identify relevant keywords and targets.</span></div>
             </div>
