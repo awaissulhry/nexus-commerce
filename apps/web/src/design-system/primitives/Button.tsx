@@ -9,6 +9,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    *  `!bg-red-600` overrides, which drifted apart and beat every token). */
   variant?: ButtonVariant
   size?: ButtonSize
+  /**
+   * Defaults to `'button'`, NOT the HTML default of `'submit'`.
+   *
+   * A design-system button that submits the nearest form unless told otherwise is a footgun: it
+   * behaves correctly in isolation and reloads the page the day someone wraps it in a `<form>`.
+   * Every call site that genuinely submits says so with `type="submit"`.
+   */
   children?: ReactNode
 }
 
@@ -16,12 +23,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * The canonical button. Matches the H10 action button (.h10-am-btn) spec,
  * tokenized. Requires `styles/primitives.css`.
  */
-export function Button({ variant = 'secondary', size = 'md', className, children, ...rest }: ButtonProps) {
+export function Button({ variant = 'secondary', size = 'md', type = 'button', className, children, ...rest }: ButtonProps) {
   const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'sm' ? 'sm' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (
-    <button className={cls} {...rest}>
+    <button type={type} className={cls} {...rest}>
       {children}
     </button>
   )

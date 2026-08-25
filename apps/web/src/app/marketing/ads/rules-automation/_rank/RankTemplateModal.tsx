@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Save, Trash2, Download, Pencil } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/design-system/primitives'
 
 type Win = { days: number[]; startHour: number; endHour: number; targetKey?: string }
 interface Tpl { id: string; name: string; windows: Win[]; defaultTargetKey: string | null; updatedAt: string }
@@ -48,7 +49,7 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
         <div className="hd">Schedule templates<span className="grow" /><button type="button" className="h10-kebab" onClick={onClose} aria-label="Close">✕</button></div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '10px 15px', borderBottom: '1px solid #d8dde4' }}>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Name this schedule (e.g. Evenings push)" style={{ flex: 1, border: '1px solid #d8dde4', borderRadius: 6, padding: '6px 9px', font: 'inherit', fontSize: 12.5 }} onKeyDown={e => { if (e.key === 'Enter') void saveNew() }} />
-          <button type="button" className="h10-btn primary sm" disabled={busy || !currentWindows.length} onClick={() => void saveNew()} title={currentWindows.length ? 'Save the current painted schedule as a new template' : 'Paint a schedule first'}><Save size={13} /> Save current</button>
+     <Button variant="primary" size="sm" disabled={busy || !currentWindows.length} onClick={() => void saveNew()} title={currentWindows.length ? 'Save the current painted schedule as a new template' : 'Paint a schedule first'}><Save size={13} /> Save current</Button>
         </div>
         <div className="list">
           {items.length === 0 && <div className="h10-rp-empty">No templates yet — name the current schedule above and Save it.</div>}
@@ -57,7 +58,7 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
               <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }} title={t.name}>{t.name}</span>
               <span style={{ fontSize: 11, color: '#8a93a1' }}>{(t.windows || []).length} window{(t.windows || []).length === 1 ? '' : 's'}{t.defaultTargetKey ? ` · baseline ${t.defaultTargetKey}` : ''}</span>
               <span style={{ flex: 1 }} />
-              <button type="button" className="h10-btn sm" disabled={busy} onClick={() => doLoad(t)} title="Paint this schedule into the grid"><Download size={12} /> Load</button>
+       <Button size="sm" disabled={busy} onClick={() => doLoad(t)} title="Paint this schedule into the grid"><Download size={12} /> Load</Button>
               <button type="button" className="h10-kebab" disabled={busy} onClick={() => void overwrite(t.id)} title="Overwrite with the current schedule"><Save size={13} /></button>
               <button type="button" className="h10-kebab" disabled={busy} onClick={() => void rename(t.id, t.name)} title="Rename"><Pencil size={13} /></button>
               <button type="button" className="h10-kebab" disabled={busy} style={{ color: '#cc1100' }} onClick={() => void del(t.id, t.name)} title="Delete"><Trash2 size={13} /></button>
@@ -65,7 +66,7 @@ export function RankTemplateModal({ open, onClose, currentWindows, currentBaseli
           ))}
         </div>
         {msg && <div className="h10-rp-msg" style={{ margin: '0 15px' }}>{msg}</div>}
-        <div className="ft"><span className="cnt">{items.length} saved · loads onto any product or campaign</span><span className="grow" /><button type="button" className="h10-btn" onClick={onClose}>Close</button></div>
+    <div className="ft"><span className="cnt">{items.length} saved · loads onto any product or campaign</span><span className="grow" /><Button onClick={onClose}>Close</Button></div>
       </div>
     </div>
   )

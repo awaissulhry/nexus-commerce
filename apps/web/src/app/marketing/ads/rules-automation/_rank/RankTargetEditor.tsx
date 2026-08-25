@@ -16,6 +16,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { Save, Plus, Trash2, RotateCcw, Info, SlidersHorizontal, Layers } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RankBlendEditor, type BlendLane } from './RankBlendEditor'
+import { Button } from '@/design-system/primitives'
 
 interface RankTarget { id: string; key: string; name: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents: number | null; allOut: boolean; color: string | null; builtIn: boolean; scopeProductId: string | null; scopeCampaignId: string | null; jumpStartPct: number | null; stepUpPct: number | null; stepDownPct: number | null; maxBiasPct: number | null; keepClimbing: boolean; lanes?: BlendLane[] | null; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 type OvField = 'biasPct' | 'targetISPct' | 'acosCapPct' | 'maxCpcCents' | 'floorBidCents' | 'jumpStartPct' | 'stepUpPct' | 'stepDownPct' | 'maxBiasPct'
@@ -473,18 +474,18 @@ export function RankTargetEditor({ open, onClose, scopeKind, scopeLabel, scopeOv
                 Add to: <label><input type="radio" checked={form.scope === 'scope'} onChange={() => setForm(f => ({ ...f, scope: 'scope' }))} disabled={scopeKind === 'product' ? !productId : !campaignId} /> {scopeKind === 'product' ? 'This product only' : 'This campaign only'}</label>
                 <label><input type="radio" checked={form.scope === 'global'} onChange={() => setForm(f => ({ ...f, scope: 'global' }))} /> Global (everywhere)</label>
                 <span className="grow" />
-                <button type="button" className="h10-btn primary sm" disabled={busy} onClick={() => void addCustom()}>Add target</button>
-                <button type="button" className="h10-btn sm" onClick={() => setAdding(false)}>Cancel</button>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void addCustom()}>Add target</Button>
+        <Button size="sm" onClick={() => setAdding(false)}>Cancel</Button>
               </div>
             </div>
           )}
         </div>
         {msg && <div className="h10-rp-msg" style={{ margin: '0 15px' }}>{msg}</div>}
         <div className="ft">
-          {!adding && <button type="button" className="h10-btn" onClick={() => setAdding(true)}><Plus size={13} /> Add target</button>}
+     {!adding && <Button onClick={() => setAdding(true)}><Plus size={13} /> Add target</Button>}
           <span className="grow" />
-          <button type="button" className="h10-btn" onClick={() => onClose(changed)}>Close</button>
-          {((view === 'scope' && scopeAvailable) || view === 'global') && <button type="button" className="h10-btn primary" disabled={busy || !changed} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : view === 'scope' ? 'Save overrides' : 'Save defaults'}</button>}
+     <Button onClick={() => onClose(changed)}>Close</Button>
+     {((view === 'scope' && scopeAvailable) || view === 'global') && <Button variant="primary" disabled={busy || !changed} onClick={() => void save()}><Save size={13} /> {busy ? 'Saving…' : view === 'scope' ? 'Save overrides' : 'Save defaults'}</Button>}
         </div>
       </div>
     </div>
