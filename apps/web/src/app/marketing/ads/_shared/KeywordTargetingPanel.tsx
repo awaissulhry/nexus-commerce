@@ -13,6 +13,7 @@
  */
 import { useState } from 'react'
 import { Trash2, X, ChevronsUpDown, ChevronDown, Plus } from 'lucide-react'
+import { ToolbarButton } from '@/design-system/primitives'
 import './keyword-targeting.css'
 
 export type KwMatch = 'BROAD' | 'PHRASE' | 'EXACT'
@@ -118,7 +119,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
               <div className="row" key={`${k.text}|${k.matchType}|${i}`}>
                 <span className="h10-scb-tgt-kw bskt" title={k.text}>{k.text} <span className={`h10-scb-tgt-mtag ${k.matchType.toLowerCase()}`}>{MATCH_LABEL[k.matchType]}</span></span>
                 {bids && <span className="h10-scb-tgt-bid"><span className="pf">{currency}</span><input inputMode="decimal" value={k.bidEur} onChange={(e) => setKwBid(i, e.target.value)} placeholder="0.00" aria-label={`Bid for ${k.text}`} /></span>}
-                <button type="button" className="x" onClick={() => removeKw(i)} aria-label={`Remove ${k.text}`}><X size={14} /></button>
+                <ToolbarButton size="sm" tooltip={false} icon={<X size={14} />} label={`Remove ${k.text}`} onClick={() => removeKw(i)} />
               </div>
             ))}
           </div>
@@ -150,7 +151,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
               {negKeywords.length === 0 ? <div className="h10-spw-ps-nodata">No data</div> : negKeywords.map((n, i) => (
                 <div className="row" key={`${n.text}|${n.matchType}|${i}`}>
                   <span className="h10-scb-tgt-kw bskt" title={n.text}>{n.text} <span className={`h10-scb-tgt-mtag ${n.matchType === 'PHRASE' ? 'phrase' : 'exact'}`}>{n.matchType === 'PHRASE' ? 'Neg Phrase' : 'Neg Exact'}</span></span>
-                  <button type="button" className="x" onClick={() => setNegKeywords(negKeywords.filter((_, idx) => idx !== i))} aria-label={`Remove ${n.text}`}><X size={14} /></button>
+                  <ToolbarButton size="sm" tooltip={false} icon={<X size={14} />} label={`Remove ${n.text}`} onClick={() => setNegKeywords(negKeywords.filter((_, idx) => idx !== i))} />
                 </div>
               ))}
             </div>
