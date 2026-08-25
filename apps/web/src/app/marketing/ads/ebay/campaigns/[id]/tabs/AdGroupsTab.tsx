@@ -7,6 +7,7 @@
  * expansion).
  */
 import { useMemo } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { AdsDataGrid, type GridColumn } from '../../../../campaigns/_grid/AdsDataGrid'
 import { int, money } from '../../../../campaigns/_grid/format'
@@ -59,7 +60,7 @@ export function AdGroupsTab({ data, campaignId, onCreate }: { data: CampaignDeta
       firstSortValue={(r) => r.name.toLowerCase()}
       columns={columns}
       onRowClick={(r) => router.push(`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.id}`)}
-      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={onCreate}>+ Ad group</button>}
+   toolbarRight={<Button variant="primary" onClick={onCreate}>+ Ad group</Button>}
       storageKey="er1-ebay-detail-adgroups"
       emptyLabel="No ad groups — create one to add keywords."
       showTotal

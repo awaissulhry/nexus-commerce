@@ -20,6 +20,7 @@
  *    a silent redirect.
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { X, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -300,8 +301,8 @@ export function AiGoalBuilder() {
                 <div className="h10-aig-pselbar">
                   <span className="cnt">{products.length} Product{products.length > 1 ? 's' : ''} Added</span>
                   <span className="grow" />
-                  <button type="button" className="h10-am-btn" disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={13} /> Remove All</button>
-                  <button type="button" className="h10-am-btn primary" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</button>
+         <Button disabled={!products.length} onClick={() => setProducts([])}><Trash2 size={13} /> Remove All</Button>
+         <Button variant="primary" onClick={() => setShowAddProducts(true)}><Plus size={13} /> Add Products</Button>
                 </div>
                 <div className="h10-aig-psel">
                   <div className={`psel-head ${budgetMode}`}>
@@ -383,7 +384,7 @@ export function AiGoalBuilder() {
         </div>
       </div>
       <footer className="h10-aig-bottombar">
-        <button type="button" className="h10-am-btn" onClick={() => router.push(exitTo)}>Cancel</button>
+    <Button onClick={() => router.push(exitTo)}>Cancel</Button>
         <span className="grow" />
         {launchPhase === 'failed' && <span className="err">{launchResult.message}</span>}
         <button type="button" className="launch" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</button>
@@ -482,8 +483,8 @@ function LaunchOverlay({ phase, result, onViewGoal, onDone }: {
         )}
         <div className="btns">
           {busy ? <Spinner /> : <>
-            <button type="button" className="h10-am-btn" onClick={onDone}>Go to dashboard</button>
-            {result.goalId && <button type="button" className="h10-am-btn primary" onClick={onViewGoal}>View goal</button>}
+      <Button onClick={onDone}>Go to dashboard</Button>
+      {result.goalId && <Button variant="primary" onClick={onViewGoal}>View goal</Button>}
           </>}
         </div>
       </div>
@@ -562,7 +563,7 @@ function KeywordEntry({ placeholder, text, setText, list, setList, max }: { plac
     <div className="h10-aig-kwgrid">
       <div className="kw-left">
         <textarea className="h10-aig-enter" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
-        <div className="h10-aig-kwbtn"><button type="button" className="h10-am-btn primary" disabled={!text.trim() || list.length >= max} onClick={add}>Add Keywords</button></div>
+    <div className="h10-aig-kwbtn"><Button variant="primary" disabled={!text.trim() || list.length >= max} onClick={add}>Add Keywords</Button></div>
       </div>
       <AddedPanel list={list} setList={setList} max={max} />
     </div>

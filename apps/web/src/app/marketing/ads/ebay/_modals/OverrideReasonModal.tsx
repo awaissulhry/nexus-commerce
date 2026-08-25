@@ -6,6 +6,7 @@
  * reason is audited with the write.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 
 export function OverrideReasonModal(props: {
@@ -27,9 +28,9 @@ export function OverrideReasonModal(props: {
     <H10Modal open={props.open} onClose={props.onClose} title={props.title ?? 'Break-even override'}
       subtitle="These changes exceed the margin guardrail. They only proceed with a named reason, which is audited."
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={() => void submit()} disabled={busy || !reason.trim()}>{busy ? 'Applying…' : 'Apply with override'}</button>
+    <Button variant="primary" onClick={() => void submit()} disabled={busy || !reason.trim()}>{busy ? 'Applying…' : 'Apply with override'}</Button>
       </>}>
       <ul className="eb-results">
         {props.blockedItems.map((b, i) => <li key={i} className="blocked">{b}</li>)}

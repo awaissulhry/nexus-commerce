@@ -28,7 +28,7 @@ import { ImportCsvModal } from '../_modals/ImportCsvModal'
 import { CloneModal } from './[id]/modals/CloneModal'
 import { EndCampaignModal } from './[id]/modals/EndCampaignModal'
 import { GridBudgetModal } from './GridBudgetModal'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 type CampaignsPayload = {
   window: { since: string; until: string }
@@ -234,8 +234,8 @@ export function EbayCampaignsGrid() {
         toolbarLeft={<DateRangePicker value={dateRange} onChange={(start, end) => setDateRange({ start, end })} />}
         toolbarRight={
           <>
-            <button type="button" className="h10-am-btn" onClick={() => setImportOpen(true)}><Upload size={13} /> Import CSV</button>
-            <button type="button" className="h10-am-btn primary" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}><Plus size={13} /> Campaign</button>
+      <Button onClick={() => setImportOpen(true)}><Upload size={13} /> Import CSV</Button>
+      <Button variant="primary" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}><Plus size={13} /> Campaign</Button>
           </>
         }
       />

@@ -7,6 +7,7 @@
  * PATCH /advertising/product-ads/:id) + bulk Enable/Archive/Pause.
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AddProductsModal } from './AddProductsModal'
@@ -98,7 +99,7 @@ export function AgAdsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | 
           <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
         </span>
       )}
-      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Add Product</button>}
+   toolbarRight={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Add Product</Button>}
       emptyLabel="No ads on this ad group."
     />
     {showAdd && adGroup && <AddProductsModal adGroupId={adGroup.id} onClose={() => setShowAdd(false)} onAdded={() => onRefresh?.()} />}

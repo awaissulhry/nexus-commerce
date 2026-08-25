@@ -5,6 +5,7 @@
  * (verified — teardown §6 #5). Prefill support for Search Terms → negative.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
@@ -42,9 +43,9 @@ export function AddNegativeKeywordsModal(props: {
   return (
     <H10Modal open={props.open} onClose={props.onClose} title="Add negative keywords" subtitle="EXACT or PHRASE only — eBay does not support broad negatives"
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Close</button>
+    <Button onClick={props.onClose}>Close</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={apply} disabled={busy || !adGroupId || results != null}>{busy ? 'Adding…' : 'Add negatives'}</button>
+    <Button variant="primary" onClick={apply} disabled={busy || !adGroupId || results != null}>{busy ? 'Adding…' : 'Add negatives'}</Button>
       </>}>
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">

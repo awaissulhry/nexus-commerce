@@ -11,7 +11,7 @@ import { postEbayAds, type AdGroupDetailPayload, type KeywordRow, type WriteItem
 import { ebayStatusPill } from '../../../../../_lib/status'
 import { StatusPill } from '../../../../../../_shared/StatusPill'
 import { metricColumns } from '../../../tabs/metric-columns'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 interface SuggestOut { suggestions: { suggestedBids?: Array<{ keywordText?: string; suggestedBid?: { value?: string } }> } }
 
@@ -89,11 +89,11 @@ export function AgKeywordsTab({ data, campaignId, reload, say, onAdd }: { data: 
         </span>
       )}
       toolbarRight={<>
-        <button type="button" className="h10-am-btn" disabled={loadingSuggest || rows.length === 0} onClick={() => void fetchSuggestions()}>{loadingSuggest ? 'Loading…' : 'Get suggested bids'}</button>
-        <button type="button" className="h10-am-btn primary" onClick={onAdd}>+ Keywords</button>
+    <Button disabled={loadingSuggest || rows.length === 0} onClick={() => void fetchSuggestions()}>{loadingSuggest ? 'Loading…' : 'Get suggested bids'}</Button>
+    <Button variant="primary" onClick={onAdd}>+ Keywords</Button>
       </>}
       storageKey="er1-ebay-ag-keywords"
-      emptyNode={<div className="h10-cd-empty"><h3>No keywords yet</h3><p>Add keywords — the builder can also mine seeds from your listing titles and aspects.</p><button type="button" className="h10-am-btn primary" onClick={onAdd}>+ Keywords</button></div>}
+   emptyNode={<div className="h10-cd-empty"><h3>No keywords yet</h3><p>Add keywords — the builder can also mine seeds from your listing titles and aspects.</p><Button variant="primary" onClick={onAdd}>+ Keywords</Button></div>}
       searchable
       searchValue={(r) => r.text}
       defaultSort={{ key: 'spend', dir: 'desc' }}

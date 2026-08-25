@@ -46,6 +46,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -255,7 +256,7 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
                 </span>
               </p>
             )}
-            <div className="h10-ngr-acts"><button type="button" className="h10-am-btn primary" onClick={close}>Done</button></div>
+      <div className="h10-ngr-acts"><Button variant="primary" onClick={close}>Done</Button></div>
           </>
         ) : ctx ? (
           <>
@@ -276,7 +277,7 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
                     <code> retiredAt</code>.
                   </span>
                 </p>
-                <div className="h10-ngr-acts"><button type="button" className="h10-am-btn" onClick={close}>Close</button></div>
+        <div className="h10-ngr-acts"><Button onClick={close}>Close</Button></div>
               </>
             ) : (
               <>
@@ -360,7 +361,7 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
                 </label>
 
                 <div className="h10-ngr-acts">
-                  <button type="button" className="h10-am-btn" onClick={close} disabled={busy}>Keep {writeCount === 1 ? 'it' : 'them'}</button>
+         <Button onClick={close} disabled={busy}>Keep {writeCount === 1 ? 'it' : 'them'}</Button>
                   <button type="button" className="h10-am-btn danger" onClick={submit} disabled={busy || writeCount === 0}>
                     {busy ? <><Loader2 size={13} className="spin" /> Removing…</> : <><Trash2 size={13} /> {rowClass === 'local-only' ? 'Remove our record' : `Archive ${writeCount === 1 ? 'it' : `${num(writeCount)} negations`}`}</>}
                   </button>

@@ -20,6 +20,7 @@
  * custom End-Date calendar popover, and the Product-Selection amazon badge + ASIN copy.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -311,10 +312,10 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
 
       {/* sticky footer */}
       <div className="h10-cd-footer">
-        <button type="button" className="h10-am-btn" onClick={() => setForm(baseline)} disabled={!dirty || saving}>Discard Changes</button>
+    <Button onClick={() => setForm(baseline)} disabled={!dirty || saving}>Discard Changes</Button>
         <span className="grow" />
         {toast && <span className="msg">{toast}</span>}
-        <button type="button" className="h10-am-btn primary" onClick={() => void save()} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Campaign'}</button>
+    <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
       </div>
     </div>
   )

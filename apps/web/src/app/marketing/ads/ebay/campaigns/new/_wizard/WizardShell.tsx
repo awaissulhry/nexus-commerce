@@ -9,6 +9,7 @@
  * money; deviation recorded in the spec §11.3).
  */
 import { Fragment, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { H10Modal } from '../../../_lib/modal'
 
@@ -73,7 +74,7 @@ export function WizardShell(props: {
 
       <H10Modal open={showBlockers} onClose={() => setShowBlockers(false)} title="Before you continue"
         subtitle="These must be resolved — launches spend real money, so blocking checks have no continue-anyway."
-        footer={<><span style={{ flex: 1 }} /><button type="button" className="h10-am-btn primary" onClick={() => setShowBlockers(false)}>Fix them</button></>}>
+    footer={<><span style={{ flex: 1 }} /><Button variant="primary" onClick={() => setShowBlockers(false)}>Fix them</Button></>}>
         <ul className="eb-results">{props.blockers.map((b) => <li key={b} className="err">{b}</li>)}</ul>
       </H10Modal>
     </div>

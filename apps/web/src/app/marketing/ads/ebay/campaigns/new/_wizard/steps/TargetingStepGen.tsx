@@ -14,7 +14,7 @@ import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
 
@@ -96,7 +96,7 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
               <button type="button" className="h10-am-btn sm" onClick={() => set({ criterion: { ...plan.criterion, rules: rules.filter((_, j) => j !== i) } })}>Remove</button>
             </div>
           ))}
-          <button type="button" className="h10-am-btn" onClick={() => set({ criterion: { ...plan.criterion, rules: [...rules, emptyRule()] } })}>+ Selection rule</button>
+     <Button onClick={() => set({ criterion: { ...plan.criterion, rules: [...rules, emptyRule()] } })}>+ Selection rule</Button>
           <p className="eb-be-hint" style={{ marginTop: 10 }}>A listing matches if it satisfies ANY rule (each rule combines its own conditions). Item condition rules aren&apos;t previewable here but can be added post-launch in Seller Hub. The &quot;up to 10 rules&quot; limit is enforced by eBay at launch.</p>
           {preview?.sample.length ? (
             <ul className="eb-results" style={{ marginTop: 8 }}>

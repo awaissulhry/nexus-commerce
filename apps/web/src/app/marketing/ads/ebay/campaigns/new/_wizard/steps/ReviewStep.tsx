@@ -16,7 +16,7 @@ import { postEbayAds, getEbayAds } from '../../../../_lib'
 import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 interface LaunchOut {
   ok: boolean; mode: string; campaignId: string
@@ -171,8 +171,8 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
         <p className="eb-cap" style={{ margin: '8px 0 4px' }}>What happens next</p>
         <ul className="eb-results">{launched.timeline.map((t, i) => <li key={i} className="ok">{t}</li>)}</ul>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button type="button" className="h10-am-btn primary" onClick={() => router.push(`/marketing/ads/ebay/campaigns/${launched.campaignId}`)}>Open campaign</button>
-          <button type="button" className="h10-am-btn" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}>Launch another</button>
+     <Button variant="primary" onClick={() => router.push(`/marketing/ads/ebay/campaigns/${launched.campaignId}`)}>Open campaign</Button>
+     <Button onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}>Launch another</Button>
         </div>
       </div>
     )

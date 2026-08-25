@@ -7,6 +7,7 @@
  * week-over-week ▲▼ deltas. Generate now / Mark reviewed semantics unchanged.
  */
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import '../ebay.css'
@@ -98,8 +99,8 @@ export function EbayDigestClient() {
           </span>
         )}
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn" onClick={() => void generate()} disabled={busy}>{busy ? 'Generating…' : 'Generate now'}</button>
-        {digest && !digest.reviewedAt && <button type="button" className="h10-am-btn primary" onClick={() => void markReviewed()} disabled={busy}>Mark week reviewed ✓</button>}
+    <Button onClick={() => void generate()} disabled={busy}>{busy ? 'Generating…' : 'Generate now'}</Button>
+    {digest && !digest.reviewedAt && <Button variant="primary" onClick={() => void markReviewed()} disabled={busy}>Mark week reviewed ✓</Button>}
         {digest?.reviewedAt && <span className="eb-chip eb-chip--run">reviewed {new Date(digest.reviewedAt).toLocaleDateString('en-GB')}</span>}
       </div>
       {error && <div className="h10-am-latest" role="alert"><b>Digest error:</b> {error}</div>}
@@ -109,7 +110,7 @@ export function EbayDigestClient() {
         <div className="eb-panel">
           <EmptyNote title="No digest yet" description="Digests generate every Monday morning (Rome) — or press Generate now." />
           <div style={{ textAlign: 'center', paddingBottom: 16 }}>
-            <button type="button" className="h10-am-btn primary" onClick={() => void generate()} disabled={busy}>Generate now</button>
+      <Button variant="primary" onClick={() => void generate()} disabled={busy}>Generate now</Button>
           </div>
         </div>
       ) : (

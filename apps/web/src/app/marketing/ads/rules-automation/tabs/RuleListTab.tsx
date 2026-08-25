@@ -14,6 +14,7 @@
  * field, and is disabled with the reason on engine rules, whose mode lives on Automations.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Plus, Trash2, ExternalLink, Clock, X, RotateCcw } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -191,7 +192,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         defaultSort={{ key: '__first', dir: 'asc' }}
         emptyLabel={`No ${nounLower}s yet.`}
         emptyNode={emptyNode}
-        toolbarRight={<button type="button" className="h10-am-btn primary" onClick={onAddRule}><Plus size={13} /> Rule</button>}
+    toolbarRight={<Button variant="primary" onClick={onAddRule}><Plus size={13} /> Rule</Button>}
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
             <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</button>

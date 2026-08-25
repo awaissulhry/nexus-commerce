@@ -8,6 +8,7 @@
  * equivalent. One component, two modes. Deploy-safe: web dev hits the live API.
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../FilterDropdown'
@@ -83,9 +84,9 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
           {err && <div className="h10-cd-modalerr">{err}</div>}
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
+     <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-          <button type="button" className="h10-am-btn primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? 'Adding…' : isKw ? 'Add Keywords' : 'Add Negatives'}</button>
+     <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? 'Adding…' : isKw ? 'Add Keywords' : 'Add Negatives'}</Button>
         </div>
       </div>
     </div>

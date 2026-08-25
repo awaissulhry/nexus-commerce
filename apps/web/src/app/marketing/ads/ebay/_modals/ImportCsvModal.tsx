@@ -5,6 +5,7 @@
  * C1). Used by the Ad Manager.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 
@@ -33,10 +34,10 @@ export function ImportCsvModal(props: { open: boolean; onClose: () => void; onDo
     <H10Modal open={props.open} onClose={props.onClose} wide title="Import ad operations (CSV)"
       subtitle="Columns: entity, campaign_id, listing_id, ad_rate_pct, keyword_id, bid_eur, daily_budget_eur, action(add|remove|pause|resume|end). Start from Export Data to get the exact shape."
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Close</button>
+    <Button onClick={props.onClose}>Close</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn" onClick={() => run(true)} disabled={busy || !csvText.trim()}>{busy ? '…' : 'Dry-run'}</button>
-        <button type="button" className="h10-am-btn primary" onClick={() => run(false)} disabled={busy || !diff || diff.every((d) => d.error) || applied != null}>Apply valid rows</button>
+    <Button onClick={() => run(true)} disabled={busy || !csvText.trim()}>{busy ? '…' : 'Dry-run'}</Button>
+    <Button variant="primary" onClick={() => run(false)} disabled={busy || !diff || diff.every((d) => d.error) || applied != null}>Apply valid rows</Button>
       </>}>
       <SandboxBanner mode={mode} />
       <textarea className="eb-textarea" rows={6} value={csvText} onChange={(e) => { setCsvText(e.target.value); setDiff(null); setApplied(null) }} placeholder="Paste CSV here…" />

@@ -7,6 +7,7 @@
  * only what the engine recorded.
  */
 import Link from 'next/link'
+import { Button } from '@/design-system/primitives'
 import { H10Modal } from '../../_lib/modal'
 import { eurC } from '../../_lib'
 import { type WhyReasoning, conditionSentence, CENTS_METRICS, PCT_METRICS, type RuleCondition } from '../_lib/rules'
@@ -28,7 +29,7 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
   const rows = r.conditionResults ?? r.conditions?.map((c) => ({ ...c, value: null, cmp: null, pass: null })) ?? []
   return (
     <H10Modal open={open} onClose={onClose} title="Why this suggestion" subtitle={title}
-      footer={<><span style={{ flex: 1 }} /><button type="button" className="h10-am-btn" onClick={onClose}>Close</button></>}>
+   footer={<><span style={{ flex: 1 }} /><Button onClick={onClose}>Close</Button></>}>
       <p className="eb-be-hint" style={{ marginBottom: 8 }}>
         Rule: <b>{ruleName ?? r.rule ?? '—'}</b>
         {campaignId && <> · <Link className="h10-am-link" href={`/marketing/ads/ebay/campaigns/${campaignId}`}>open campaign →</Link></>}

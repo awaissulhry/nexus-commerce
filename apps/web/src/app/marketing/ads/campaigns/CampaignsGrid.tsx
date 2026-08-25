@@ -8,6 +8,7 @@
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, X, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
@@ -792,7 +793,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
               </div>
             </div>
           </div>
-          <div className="h10-modal-f"><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!any} onClick={() => setStep(2)}>Apply</button></div>
+     <div className="h10-modal-f"><span className="grow" /><Button variant="primary" disabled={!any} onClick={() => setStep(2)}>Apply</Button></div>
         </>) : (<>
           <div className="h10-modal-b">
             <div className="h10-bulk-review">
@@ -878,7 +879,7 @@ function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: ()
           <div className="h10-rules-top"><span className="cnt">0 Rules</span><Link href="/marketing/ads/rules-automation/builder" className="h10-am-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
           <div className="h10-rules-empty">No rules are applied to this campaign yet. Create one in Rules &amp; Automation.</div>
         </div>
-        <div className="h10-modal-f"><span className="grow" /><button type="button" className="h10-am-btn primary" onClick={onClose}>Close</button></div>
+    <div className="h10-modal-f"><span className="grow" /><Button variant="primary" onClick={onClose}>Close</Button></div>
       </div>
     </div>
   )
@@ -1864,7 +1865,7 @@ export function CampaignsGrid() {
         <button type="button" className={`h10-am-btn ${sel.size > 0 ? 'on' : ''}`} disabled={sel.size === 0} onClick={() => setShowBulk(true)}><ListChecks size={13} /> Bulk Actions</button>
         <button type="button" className={`h10-am-btn ${mode === 'edit' ? 'on' : ''}`} onClick={() => setMode(mode === 'edit' ? 'metrics' : 'edit')}><Pencil size={13} /> Edit Campaigns</button>
         <div className="h10-bulkwrap">
-          <button type="button" className="h10-am-btn" disabled={sel.size === 0} onClick={() => setPortfolioMenu((v) => !v)}><Plus size={13} /> Portfolio</button>
+     <Button disabled={sel.size === 0} onClick={() => setPortfolioMenu((v) => !v)}><Plus size={13} /> Portfolio</Button>
           {portfolioMenu && sel.size > 0 && <>
             <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setPortfolioMenu(false)} />
             <div className="h10-menu" role="dialog" aria-label="Assign to portfolio" style={{ maxHeight: 320, overflowY: 'auto' }}>
@@ -1878,7 +1879,7 @@ export function CampaignsGrid() {
         </div>
         {sel.size > 0 && <>
           <div className="h10-bulkwrap">
-            <button type="button" className="h10-am-btn" onClick={() => setAdjustOpen((v) => !v)}>Adjust Budget</button>
+      <Button onClick={() => setAdjustOpen((v) => !v)}>Adjust Budget</Button>
             {adjustOpen && <>
               <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setAdjustOpen(false)} />
               <div className="h10-menu adjbud" role="dialog" aria-label="Adjust Budget">
@@ -1893,9 +1894,9 @@ export function CampaignsGrid() {
               </div>
             </>}
           </div>
-          <button type="button" className="h10-am-btn" onClick={() => setBulkConfirm('ENABLED')}>Enable</button>
-          <button type="button" className="h10-am-btn" onClick={() => setBulkConfirm('ARCHIVED')}>Archive</button>
-          <button type="button" className="h10-am-btn" onClick={() => setBulkConfirm('PAUSED')}>Pause</button>
+     <Button onClick={() => setBulkConfirm('ENABLED')}>Enable</Button>
+     <Button onClick={() => setBulkConfirm('ARCHIVED')}>Archive</Button>
+     <Button onClick={() => setBulkConfirm('PAUSED')}>Pause</Button>
         </>}
         <span className="grow" />
         <div className="h10-custwrap">
@@ -1906,7 +1907,7 @@ export function CampaignsGrid() {
             which is its own small lie: a button that looks like it works. Now it
             opens the export scope modal, so "Export Data" from the grid means
             exactly what it says and carries the current view with it. */}
-        <button type="button" className="h10-am-btn" onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Download size={13} /> Export Data</button>
+    <Button onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Download size={13} /> Export Data</Button>
         <Link href="/marketing/ads/rules-automation/builder" className="h10-am-btn"><Wand2 size={13} /> Create Rule</Link>
         <Link href="/marketing/ads/campaign-builder" className="h10-am-btn primary"><Plus size={13} /> Campaign</Link>
       </div>
@@ -1987,8 +1988,8 @@ export function CampaignsGrid() {
         <div className="h10-am-editbar">
           <span className="lbl"><b>{diffs.length}</b> campaign{diffs.length > 1 ? 's' : ''} edited · {diffs.reduce((n, d) => n + d.changes.length, 0)} change{diffs.reduce((n, d) => n + d.changes.length, 0) > 1 ? 's' : ''}</span>
           <span className="grow" />
-          <button type="button" className="h10-am-btn" onClick={() => setEdits({})} disabled={applying}>Discard</button>
-          <button type="button" className="h10-am-btn primary" onClick={() => setShowApply(true)} disabled={applying}>Review &amp; Apply</button>
+     <Button onClick={() => setEdits({})} disabled={applying}>Discard</Button>
+     <Button variant="primary" onClick={() => setShowApply(true)} disabled={applying}>Review &amp; Apply</Button>
         </div>
       )}
 
@@ -2010,8 +2011,8 @@ export function CampaignsGrid() {
             </div>
             <div className="h10-modal-f">
               <span className="grow" />
-              <button type="button" className="h10-am-btn" onClick={() => setShowApply(false)} disabled={applying}>Cancel</button>
-              <button type="button" className="h10-am-btn primary" onClick={applyAll} disabled={applying}>{applying ? 'Applying…' : `Apply ${diffs.length} campaign${diffs.length > 1 ? 's' : ''}`}</button>
+       <Button onClick={() => setShowApply(false)} disabled={applying}>Cancel</Button>
+       <Button variant="primary" onClick={applyAll} disabled={applying}>{applying ? 'Applying…' : `Apply ${diffs.length} campaign${diffs.length > 1 ? 's' : ''}`}</Button>
             </div>
           </div>
         </div>
@@ -2032,8 +2033,8 @@ export function CampaignsGrid() {
             </div>
             <div className="h10-modal-f">
               <span className="grow" />
-              <button type="button" className="h10-am-btn" onClick={() => setBulkConfirm(null)} disabled={applying}>Cancel</button>
-              <button type="button" className="h10-am-btn primary" onClick={() => void applyBulkStatus(bulkConfirm)} disabled={applying}>{applying ? 'Applying…' : `${bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} ${sel.size}`}</button>
+       <Button onClick={() => setBulkConfirm(null)} disabled={applying}>Cancel</Button>
+       <Button variant="primary" onClick={() => void applyBulkStatus(bulkConfirm)} disabled={applying}>{applying ? 'Applying…' : `${bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} ${sel.size}`}</Button>
             </div>
           </div>
         </div>

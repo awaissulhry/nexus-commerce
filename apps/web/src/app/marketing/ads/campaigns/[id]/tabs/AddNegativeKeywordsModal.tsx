@@ -8,6 +8,7 @@
  * Reuses the shared .h10-modal-* shell. Endpoint already on prod (frontend-only).
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -98,9 +99,9 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
           {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
+     <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-          <button type="button" className="h10-am-btn primary" disabled={!staged.length || busy} onClick={() => void submit()}>{busy ? 'Adding…' : 'Add to Campaign'}</button>
+     <Button variant="primary" disabled={!staged.length || busy} onClick={() => void submit()}>{busy ? 'Adding…' : 'Add to Campaign'}</Button>
         </div>
       </div>
     </div>

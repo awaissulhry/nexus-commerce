@@ -5,6 +5,7 @@
  * file per modal) + prefill support for the Search Terms → keyword flow.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
@@ -44,9 +45,9 @@ export function AddKeywordsModal(props: {
   return (
     <H10Modal open={props.open} onClose={props.onClose} title="Add keywords" subtitle="One per line · ≤100 chars · ≤10 words · BROAD / PHRASE / EXACT"
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Close</button>
+    <Button onClick={props.onClose}>Close</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={apply} disabled={busy || !adGroupId || results != null}>{busy ? 'Adding…' : 'Add keywords'}</button>
+    <Button variant="primary" onClick={apply} disabled={busy || !adGroupId || results != null}>{busy ? 'Adding…' : 'Add keywords'}</Button>
       </>}>
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">

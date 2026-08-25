@@ -14,6 +14,7 @@
  * period deltas, pending proposals) + `/ai-goals/:id` (drawer) + the plan decision SSE.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Archive } from 'lucide-react'
@@ -329,7 +330,7 @@ export function AiAdvertisingDashboard() {
         selected={selected}
         onSelectedChange={setSelected}
         selectionActions={(ids, clear) => (
-          <button type="button" className="h10-am-btn" onClick={() => void archive(ids, clear)}><Archive size={13} /> Archive {ids.length}</button>
+     <Button onClick={() => void archive(ids, clear)}><Archive size={13} /> Archive {ids.length}</Button>
         )}
         exportable
         onExport={csv}

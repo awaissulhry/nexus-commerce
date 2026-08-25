@@ -13,6 +13,7 @@
  * clickable (grace timers on both edges).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 
 export interface HoverRow {
@@ -75,7 +76,7 @@ export function ApproveHoverCard({ content, children }: { content: () => HoverCo
           </div>
           {c.action && (
             <div className="ft">
-              <button type="button" className="h10-am-btn primary" onClick={c.action.onClick}>{c.action.label}</button>
+       <Button variant="primary" onClick={c.action.onClick}>{c.action.label}</Button>
             </div>
           )}
         </div>,

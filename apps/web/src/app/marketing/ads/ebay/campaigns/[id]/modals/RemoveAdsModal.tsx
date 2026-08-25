@@ -5,6 +5,7 @@
  * critique X4). Reversible: listings can be re-promoted any time.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
 
@@ -26,9 +27,9 @@ export function RemoveAdsModal(props: { open: boolean; onClose: () => void; camp
     <H10Modal open={props.open} onClose={props.onClose} title={`Remove ${props.listingIds.length} ad(s)?`}
       subtitle="The listings stop being promoted in this campaign."
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>{results ? 'Close' : 'Cancel'}</button>
+    <Button onClick={props.onClose}>{results ? 'Close' : 'Cancel'}</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={apply} disabled={busy || results != null}>{busy ? 'Removing…' : 'Remove ads'}</button>
+    <Button variant="primary" onClick={apply} disabled={busy || results != null}>{busy ? 'Removing…' : 'Remove ads'}</Button>
       </>}>
       <SandboxBanner mode={mode} />
       <ul className="eb-results">

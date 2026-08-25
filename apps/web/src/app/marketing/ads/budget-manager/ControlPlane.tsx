@@ -13,6 +13,7 @@
  * Palantir-style scenario → review → commit over the live ontology.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Lock, History as HistoryIcon } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
@@ -226,7 +227,7 @@ function ComparePanel({ working, workingName, saved, compareId, setCompareId, al
             <div className="cp-compare-col" key={col.key}>
               <div className="hd"><b>{col.name}</b><span className="st">{st.count} change{st.count === 1 ? '' : 's'}{st.delta !== 0 ? ` · daily ${st.delta > 0 ? '+' : ''}${eur(st.delta)}` : ''}{st.suppress ? ` · ${st.suppress} suppress` : ''}</span></div>
               <div className="rows">{rows.length === 0 ? <div className="empty">No changes.</div> : rows.map(([id, s]) => { const c = allCamps.get(id); const name = c ? c.name : `${s.entityType ?? 'campaign'} ·${id.slice(-6)}`; return <div className="row" key={id}><span className="nm" title={name}>{name}</span><span className="ch">{summarizeStaged(s)}</span></div> })}</div>
-              <button type="button" className="h10-am-btn primary" disabled={committing || st.count === 0} onClick={() => onCommit(col.changes, col.isWorking)}>Commit this</button>
+       <Button variant="primary" disabled={committing || st.count === 0} onClick={() => onCommit(col.changes, col.isWorking)}>Commit this</Button>
             </div>
           )
         })}
@@ -368,8 +369,8 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
         <div className="cp-review">
           <span className="sum">{stageCount === 0 ? 'No staged changes' : (<><b>{stageCount} staged change{stageCount === 1 ? '' : 's'}</b>{projectedDelta !== 0 ? <> · daily <em className={projectedDelta > 0 ? 'up' : 'down'}>{projectedDelta > 0 ? '+' : ''}{eur(projectedDelta)}</em></> : null}{suppressCount > 0 ? <> · {suppressCount} suppress</> : null}</>)}</span>
           <span className="grow" />
-          <button type="button" className="h10-am-btn" disabled={!stageCount || committing} onClick={() => setScenario({})}>Discard</button>
-          <button type="button" className="h10-am-btn primary" disabled={!stageCount || committing} onClick={commit}>{committing ? 'Committing…' : `Commit${stageCount ? ` ${stageCount}` : ''}`}</button>
+     <Button disabled={!stageCount || committing} onClick={() => setScenario({})}>Discard</Button>
+     <Button variant="primary" disabled={!stageCount || committing} onClick={commit}>{committing ? 'Committing…' : `Commit${stageCount ? ` ${stageCount}` : ''}`}</Button>
         </div>
       )}>
       {!enforcement || enforcement.plans.length === 0 ? (
@@ -393,10 +394,10 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
             ))}
             <span className="grow" />
             <span className="cp-live" title="Live automation activity"><span className={`dot ${liveOn ? 'on' : ''}`} />{liveOn ? (liveCount ? `Live · ${liveCount}` : 'Live') : 'Connecting…'}</span>
-            {activeId && <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={updateActiveScenario}>Update</button>}
-            <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={saveScenarioAs}>Save as…</button>
-            <button type="button" className="h10-am-btn" disabled={!stageCount} onClick={promoteToRule}>Save as rule</button>
-            {saved.length > 0 && <button type="button" className="h10-am-btn" onClick={() => setCompareId(compareId ? null : saved[0].id)}>{compareId ? 'Close compare' : '⇄ Compare'}</button>}
+      {activeId && <Button disabled={!stageCount} onClick={updateActiveScenario}>Update</Button>}
+      <Button disabled={!stageCount} onClick={saveScenarioAs}>Save as…</Button>
+      <Button disabled={!stageCount} onClick={promoteToRule}>Save as rule</Button>
+      {saved.length > 0 && <Button onClick={() => setCompareId(compareId ? null : saved[0].id)}>{compareId ? 'Close compare' : '⇄ Compare'}</Button>}
           </div>
           {compareId ? (
             <ComparePanel working={scenario} workingName={activeId ? `${saved.find((s) => s.id === activeId)?.name ?? 'Working'} (active)` : 'Working set'} saved={saved} compareId={compareId} setCompareId={setCompareId} allCamps={allCamps} committing={committing} onCommit={commitChanges} />

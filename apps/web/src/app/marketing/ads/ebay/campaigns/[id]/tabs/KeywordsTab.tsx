@@ -14,7 +14,7 @@ import { postEbayAds, type CampaignDetailPayload, type KeywordRow, type WriteIte
 import { ebayStatusPill } from '../../../_lib/status'
 import { StatusPill } from '../../../../_shared/StatusPill'
 import { metricColumns } from './metric-columns'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 interface SuggestOut { suggestions: { suggestedBids?: Array<{ keywordText?: string; suggestedBid?: { value?: string } }> } }
 
@@ -99,7 +99,7 @@ export function KeywordsTab({ data, campaignId, reload, say }: { data: CampaignD
           <button type="button" className="h10-am-btn bulk" onClick={() => { void setStatus(ids, 'PAUSED'); clear() }}>Pause</button>
         </span>
       )}
-      toolbarRight={<button type="button" className="h10-am-btn" disabled={loadingSuggest || rows.length === 0} onClick={() => void fetchSuggestions()}>{loadingSuggest ? 'Loading…' : 'Get suggested bids'}</button>}
+   toolbarRight={<Button disabled={loadingSuggest || rows.length === 0} onClick={() => void fetchSuggestions()}>{loadingSuggest ? 'Loading…' : 'Get suggested bids'}</Button>}
       storageKey="er1-ebay-detail-keywords"
       emptyLabel="No keywords — add them from an ad-group page (or Action ▾ → Add ad group first)."
       searchable

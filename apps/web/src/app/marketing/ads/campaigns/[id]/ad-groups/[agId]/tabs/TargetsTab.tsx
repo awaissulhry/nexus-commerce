@@ -10,6 +10,7 @@
  * Status + Bid (PATCH /advertising/ad-targets/:id; status + bid sync to Amazon, deploy-gated).
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { AddKeywordsTargetsModal } from './AddKeywordsTargetsModal'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../../../_grid/AdsDataGrid'
@@ -151,7 +152,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
           <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
         </span>
       )}
-      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Keyword / Target</button>}
+   toolbarRight={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Keyword / Target</Button>}
     />
     {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="target" bidLabel="Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => patchEach(adjustBid.ids, { bidCents: Math.round(bidEur * 100), reason: 'Bulk adjust bid' }, adjustBid.clear).then(() => setAdjustBid(null))} />}
     {showAdd && adGroup && <AddKeywordsTargetsModal adGroupId={adGroup.id} adGroupName={adGroup.name} campaignName={adGroup.campaign?.name ?? ''} defaultBidEur={adGroup.defaultBidCents != null ? adGroup.defaultBidCents / 100 : 0.75} onClose={() => setShowAdd(false)} onAdded={() => onRefresh?.()} />}

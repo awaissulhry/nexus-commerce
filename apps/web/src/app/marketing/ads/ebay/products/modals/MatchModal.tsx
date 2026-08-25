@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err } from '../../_lib/modal'
 import { postEbayAds } from '../../_lib'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 // ── Match a listing to a catalog product (unlocks costs + break-evens) ──────
 interface MatchCandidate { id: string; sku: string; name: string; costPriceCents: number | null; suggested: boolean }
@@ -50,9 +50,9 @@ export function MatchModal(props: { open: boolean; onClose: () => void; itemId: 
     <H10Modal open={props.open} onClose={props.onClose} title="Match listing to product" wide
       subtitle={`${props.listingTitle ?? props.itemId} — pick the catalog product behind this eBay listing. Suggestions are title-similarity only; your confirmation is what links them. Sticky across syncs.`}
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={() => void save()} disabled={busy || !pick}>{busy ? 'Matching…' : 'Match'}</button>
+    <Button variant="primary" onClick={() => void save()} disabled={busy || !pick}>{busy ? 'Matching…' : 'Match'}</Button>
       </>}>
       <div>
         <label>Search catalog (name / SKU) — leave empty for suggestions</label>

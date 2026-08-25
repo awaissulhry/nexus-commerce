@@ -5,6 +5,7 @@
  * modal; products-page scope).
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../../_lib/modal'
 import { postEbayAds } from '../../_lib'
 
@@ -31,11 +32,11 @@ export function CostModal(props: { open: boolean; onClose: () => void; itemId: s
     <H10Modal open={props.open} onClose={props.onClose} title="Product cost (COGS)"
       subtitle={`${props.listingTitle ?? props.itemId} — unit cost in EUR. Applies to ${props.productSku ?? "the listing's matched product(s)"}; break-even ad rate recomputes immediately. Refine per-variant later in the product editor.`}
       footer={done ? <>
-        <button type="button" className="h10-am-btn primary" onClick={props.onClose}>Done</button>
+    <Button variant="primary" onClick={props.onClose}>Done</Button>
       </> : <>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={() => void save()} disabled={busy || !(Number(costEur) > 0)}>{busy ? 'Saving…' : 'Save cost'}</button>
+    <Button variant="primary" onClick={() => void save()} disabled={busy || !(Number(costEur) > 0)}>{busy ? 'Saving…' : 'Save cost'}</Button>
       </>}>
       {done ? (
         <ul className="eb-results">

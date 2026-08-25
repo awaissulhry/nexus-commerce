@@ -64,6 +64,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1431,7 +1432,7 @@ export function ApplyRulesClient() {
           <span className="n">{assignStaged.size} campaign{assignStaged.size === 1 ? '' : 's'} staged</span>
           {assignErr && <span className="er" role="status">{assignErr}</span>}
           <span className="grow" />
-          <button type="button" className="h10-am-btn" disabled={assignBusy} aria-disabled={assignBusy} onClick={() => { setAssignStaged(new Map()); setAssignErr(null) }}>Discard</button>
+     <Button disabled={assignBusy} aria-disabled={assignBusy} onClick={() => { setAssignStaged(new Map()); setAssignErr(null) }}>Discard</Button>
           <button type="button" className="h10-am-btn primary" disabled={assignBusy} aria-disabled={assignBusy} onClick={() => void applyAssignments()}>
             {assignBusy ? 'Applying…' : 'Apply'}
           </button>

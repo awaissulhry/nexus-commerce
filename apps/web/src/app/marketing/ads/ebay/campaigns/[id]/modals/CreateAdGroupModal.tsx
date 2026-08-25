@@ -5,6 +5,7 @@
  * role; POST /ebay-ads/campaigns/:id/ad-groups (guarded write, audited).
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../../../_lib'
 
@@ -26,9 +27,9 @@ export function CreateAdGroupModal(props: { open: boolean; onClose: () => void; 
     <H10Modal open={props.open} onClose={props.onClose} title="Create ad group"
       subtitle="eBay allows up to 500 ad groups per campaign; keywords and negatives live under the group."
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={apply} disabled={busy || !name.trim()}>{busy ? 'Creating…' : 'Create ad group'}</button>
+    <Button variant="primary" onClick={apply} disabled={busy || !name.trim()}>{busy ? 'Creating…' : 'Create ad group'}</Button>
       </>}>
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">

@@ -18,6 +18,7 @@
  * pages needed in order to show one bar instead of a scope bar plus a filter bar.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
 import { H10Select, HoverCard } from '../FilterDropdown'
@@ -815,10 +816,10 @@ export function AdsDataGrid<T>({
         {editMode && editMode.bulk !== false ? (editing ? (
           <span className="h10-edit-actions">
             <button type="button" className="h10-discard" onClick={discardEdits}>Discard Changes</button>
-            <button type="button" className="h10-am-btn primary" disabled={!dirtyEdits.length || applying} onClick={applyEdits}>{applying ? 'Applying…' : 'Apply Changes'}</button>
+      <Button variant="primary" disabled={!dirtyEdits.length || applying} onClick={applyEdits}>{applying ? 'Applying…' : 'Apply Changes'}</Button>
           </span>
         ) : (
-          <button type="button" className="h10-am-btn primary" onClick={enterEdit}><Pencil size={13} /> {editMode.label}</button>
+     <Button variant="primary" onClick={enterEdit}><Pencil size={13} /> {editMode.label}</Button>
         )) : toolbarLeft}
         {selectable && sel.size > 0 && !editing && selectionActions ? selectionActions([...sel], () => setSel(new Set())) : null}
         {/* inline 🔍 sits after the count + any selection actions (H10 order) */}
@@ -869,7 +870,7 @@ export function AdsDataGrid<T>({
             />
           </>
         )}
-        {exportable && <button type="button" className="h10-am-btn" onClick={onExport}><Download size={13} /> Export Data…</button>}
+    {exportable && <Button onClick={onExport}><Download size={13} /> Export Data…</Button>}
       </div>
 
       {/* grid */}

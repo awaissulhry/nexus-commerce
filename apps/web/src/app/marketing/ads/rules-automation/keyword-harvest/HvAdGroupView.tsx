@@ -33,6 +33,7 @@
  * release — never a stale-constant column ([[reference_fleet_stale_constant_class]]).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Plus, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
@@ -485,7 +486,7 @@ export function HvAdGroupView() {
         : null}
       /* HP2 — the SAME "+ Rule" idiom as the Rules View: the type modal, seeded to this tab.
          The old link read "Rule ⧉" and jumped straight into the builder past the modal. */
-      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</button>}
+   toolbarRight={<Button variant="primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</Button>}
     />
     {picker && <RuleTypeModal initial="keyword-harvesting" onClose={() => setPicker(false)} />}
     </>

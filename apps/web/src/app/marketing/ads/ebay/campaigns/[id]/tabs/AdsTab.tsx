@@ -9,6 +9,7 @@
  * read-only (eBay manages Offsite CPC).
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { ExternalLink } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../campaigns/_grid/AdsDataGrid'
 import { pct, money } from '../../../../campaigns/_grid/format'
@@ -107,7 +108,7 @@ export function AdsTab({ data, campaignId, strategy, reload, say, onAddListings 
             <button type="button" className="h10-am-btn bulk" onClick={() => { setRemoveIds(rows.filter((r) => ids.includes(r.id)).map((r) => r.listingId!).filter(Boolean)); clear() }}>Remove ads</button>
           </span>
         ) : undefined}
-        toolbarRight={editable ? <button type="button" className="h10-am-btn primary" onClick={onAddListings}>+ Add listings</button> : undefined}
+    toolbarRight={editable ? <Button variant="primary" onClick={onAddListings}>+ Add listings</Button> : undefined}
         storageKey="er1-ebay-detail-ads"
         emptyLabel={editable ? 'No ads — Add listings, or let the coverage guard propose enrollment.' : 'No ads.'}
         searchable

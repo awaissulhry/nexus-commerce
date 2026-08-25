@@ -12,6 +12,7 @@
  *   product → POST /advertising/targets/create  { adGroupId, kind:'PRODUCT', value, bidEur }
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -146,8 +147,8 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
           {msg && <div className="h10-cd-modalerr">{msg}</div>}
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="h10-am-btn primary" disabled={!n || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${n ? ` (${n})` : ''}`}</button>
+     <Button onClick={onClose}>Cancel</Button>
+     <Button variant="primary" disabled={!n || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${n ? ` (${n})` : ''}`}</Button>
         </div>
       </div>
     </div>

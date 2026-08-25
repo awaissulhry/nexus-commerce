@@ -7,6 +7,7 @@
  * a named reason.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err, ResultsList } from '../_lib/modal'
@@ -73,9 +74,9 @@ export function PromoteModal(props: {
       title="Promote on eBay"
       subtitle={props.productIds?.length ? `${props.productIds.length} product(s) — every live item ID resolves automatically` : props.listingIds?.length ? `${props.listingIds.length} listing(s) selected` : 'Paste item IDs to promote into this campaign'}
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Close</button>
+    <Button onClick={props.onClose}>Close</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={launch} disabled={busy || !campaignId || results != null}>{busy ? 'Launching…' : 'Launch ads'}</button>
+    <Button variant="primary" onClick={launch} disabled={busy || !campaignId || results != null}>{busy ? 'Launching…' : 'Launch ads'}</Button>
       </>}
     >
       <SandboxBanner mode={mode} />

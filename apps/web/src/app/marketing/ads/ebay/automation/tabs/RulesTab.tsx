@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { postEbayAds, getEbayAds } from '../../_lib'
 import { type AutomationRule, conditionSentence, actionSentence, scopeLabel } from '../_lib/rules'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 function RuleMenu({ rule, busy, onRun, onDelete }: { rule: AutomationRule; busy: boolean; onRun: () => void; onDelete: () => void }) {
   const router = useRouter()
@@ -62,8 +62,8 @@ export function RulesTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
       {rules.length === 0 ? (
         <div style={{ padding: '28px 18px', textAlign: 'center' }}>
           <p className="eb-empty-note">No rules yet. The starter pack ships six documented rules — fee creep-down, click-bleeder removal, break-even repair, restock re-promote, keyword bleeder pause, keyword bid-down — all disabled, all PROPOSE. Or build your own.</p>
-          <button type="button" className="h10-am-btn primary" disabled={busy} onClick={() => void act(() => postEbayAds('/automation/presets/starter-pack', {}), 'starter pack installed')}>Install starter rule-pack</button>
-          <button type="button" className="h10-am-btn" style={{ marginLeft: 8 }} onClick={() => router.push('/marketing/ads/ebay/automation/rules/new')}>New rule…</button>
+     <Button variant="primary" disabled={busy} onClick={() => void act(() => postEbayAds('/automation/presets/starter-pack', {}), 'starter pack installed')}>Install starter rule-pack</Button>
+     <Button style={{ marginLeft: 8 }} onClick={() => router.push('/marketing/ads/ebay/automation/rules/new')}>New rule…</Button>
         </div>
       ) : rules.map((r) => {
         const last = r.executions?.[0]

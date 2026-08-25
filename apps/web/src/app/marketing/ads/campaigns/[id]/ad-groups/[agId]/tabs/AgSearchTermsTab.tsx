@@ -7,6 +7,7 @@
  * pre-targeting this ad group. Spend is costUnits (euros), sales is salesCents.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../../../_grid/AdsDataGrid'
 import { num, eur, int, METRIC_TIPS } from '../../../../_grid/format'
@@ -87,8 +88,8 @@ export function AgSearchTermsTab({ adGroup, dateRange }: { adGroup: AdGroupDetai
         selected={selected}
         onSelectedChange={setSelected}
         toolbarLeft={<>
-          <button type="button" className="h10-am-btn" disabled={!selected.size} onClick={() => setAction('keyword')}>Add as Keyword</button>
-          <button type="button" className="h10-am-btn" disabled={!selected.size} onClick={() => setAction('negative')}>Add as Negative</button>
+     <Button disabled={!selected.size} onClick={() => setAction('keyword')}>Add as Keyword</Button>
+     <Button disabled={!selected.size} onClick={() => setAction('negative')}>Add as Negative</Button>
         </>}
         emptyLabel="No search-term data for this ad group in the selected date range."
       />

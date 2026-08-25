@@ -8,7 +8,7 @@
  * rule DEFINITIONS only — eBay state never changes from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X } from 'lucide-react'
@@ -374,10 +374,10 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
       {error && <p className="eb-rule-confirm" role="alert">{error}</p>}
 
       <div className="eb-editor-footer">
-        <button type="button" className="h10-am-btn" disabled={busy} onClick={() => router.push('/marketing/ads/ebay/automation')}>Cancel</button>
+    <Button disabled={busy} onClick={() => router.push('/marketing/ads/ebay/automation')}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn" disabled={busy || !name.trim()} title="Dry-run the rule against live data — no proposals, no cooldowns" onClick={() => void doPreview()}>{busy ? '…' : 'Preview matches'}</button>
-        <button type="button" className="h10-am-btn primary" disabled={busy || !name.trim()} onClick={() => void doSave()}>{isEdit ? 'Save rule' : 'Create rule (disabled + PROPOSE)'}</button>
+    <Button disabled={busy || !name.trim()} title="Dry-run the rule against live data — no proposals, no cooldowns" onClick={() => void doPreview()}>{busy ? '…' : 'Preview matches'}</Button>
+    <Button variant="primary" disabled={busy || !name.trim()} onClick={() => void doSave()}>{isEdit ? 'Save rule' : 'Create rule (disabled + PROPOSE)'}</Button>
       </div>
       <p className="eb-be-hint" style={{ marginTop: 6 }}>
         New rules are created <b>disabled</b> in <b>PROPOSE</b> — enable them on the hub when ready. Suggested for fee/sales windows: exclude the last 3 days (eBay reconciles attribution for ~72h).

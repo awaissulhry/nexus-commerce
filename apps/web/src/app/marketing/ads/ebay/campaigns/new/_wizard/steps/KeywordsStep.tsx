@@ -10,6 +10,7 @@
  * (AU/DE/GB/US only — stated honestly for the rest).
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
@@ -71,14 +72,14 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
 
           {(tab[i] ?? 'mined') === 'mined' && (
             <div style={{ marginBottom: 10 }}>
-              <button type="button" className="h10-am-btn" disabled={mining || plan.selected.length === 0} onClick={() => void mineSeeds(i)}>{mining ? 'Mining…' : `Mine seeds from ${plan.selected.length} staged listing(s)`}</button>
+       <Button disabled={mining || plan.selected.length === 0} onClick={() => void mineSeeds(i)}>{mining ? 'Mining…' : `Mine seeds from ${plan.selected.length} staged listing(s)`}</Button>
               <span className="eb-be-hint" style={{ marginLeft: 10 }}>Title bigrams + Marca×Tipo aspects — no eBay suggest API exists pre-launch; these are YOUR data.</span>
             </div>
           )}
           {tab[i] === 'enter' && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               <textarea className="eb-textarea" rows={3} style={{ flex: 1 }} placeholder={'one keyword per line…'} value={entry[i] ?? ''} onChange={(e) => setEntry((x) => ({ ...x, [i]: e.target.value }))} />
-              <button type="button" className="h10-am-btn" onClick={() => addEntered(i)}>Add</button>
+       <Button onClick={() => addEntered(i)}>Add</Button>
             </div>
           )}
 
@@ -121,7 +122,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
           </div>
         </div>
       ))}
-      <div><button type="button" className="h10-am-btn" onClick={() => set({ adGroups: [...plan.adGroups, { ...emptyGroup(), name: `Group ${plan.adGroups.length + 1}` }] })}>+ Ad group</button>
+   <div><Button onClick={() => set({ adGroups: [...plan.adGroups, { ...emptyGroup(), name: `Group ${plan.adGroups.length + 1}` }] })}>+ Ad group</Button>
         <span className="eb-be-hint" style={{ marginLeft: 10 }}>eBay allows up to 500 groups; 1,000 keywords + 1,000 negatives per group.</span></div>
       </div>
     </section>

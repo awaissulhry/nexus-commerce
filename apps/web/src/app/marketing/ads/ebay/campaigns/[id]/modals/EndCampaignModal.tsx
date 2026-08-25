@@ -5,6 +5,7 @@
  * window.confirm — critique X4). ENDED is terminal on eBay.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../../../_lib'
 
@@ -24,7 +25,7 @@ export function EndCampaignModal(props: { open: boolean; onClose: () => void; ca
     <H10Modal open={props.open} onClose={props.onClose} title="End this campaign?"
       subtitle={props.campaignName}
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
         <button type="button" className="h10-am-btn danger-solid" onClick={apply} disabled={busy}>{busy ? 'Ending…' : 'End campaign'}</button>
       </>}>

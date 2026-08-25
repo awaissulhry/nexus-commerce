@@ -15,6 +15,7 @@
  * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
@@ -142,7 +143,7 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
           <label className="bm-swrow tight"><span><b>Custom daily distribution</b><em>Weight specific days (tentpole events) instead of an even split.</em></span><button type="button" className={`h10-bktoggle ${custom ? 'on' : ''}`} role="switch" aria-checked={custom} aria-label="Custom daily distribution" onClick={() => setCustom((v) => !v)}><span /></button></label>
           {custom && <>
             <div className="bm-cal-tools">
-              <button type="button" className="h10-am-btn" onClick={() => setCal(Array(dim).fill(evenPct))}>Distribute evenly</button>
+       <Button onClick={() => setCal(Array(dim).fill(evenPct))}>Distribute evenly</Button>
               <span className={`bm-cal-sum ${Math.abs(sum - 100) > 0.5 ? 'bad' : 'ok'}`}>Total {sum.toFixed(1)}%{Math.abs(sum - 100) > 0.5 ? ' — must equal 100%' : ''}</span>
             </div>
             <div className="bm-cal-grid">
@@ -204,7 +205,7 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
 
   return (
     <Drawer open onClose={onClose} title={`Campaign Budget Limits — ${mktName(row.marketplace)}`}
-      footer={<><span className="bm-more-foot">{dirty.length ? `${dirty.length} change${dirty.length === 1 ? '' : 's'}` : 'No changes'}</span><button type="button" className="h10-am-btn primary" disabled={saving || !dirty.length} onClick={saveAll}>{saving ? 'Saving…' : 'Save limits'}</button></>}>
+   footer={<><span className="bm-more-foot">{dirty.length ? `${dirty.length} change${dirty.length === 1 ? '' : 's'}` : 'No changes'}</span><Button variant="primary" disabled={saving || !dirty.length} onClick={saveAll}>{saving ? 'Saving…' : 'Save limits'}</Button></>}>
       <p className="bm-more-intro">Set a minimum and maximum daily budget per campaign. Auto Pacing keeps each campaign within these bounds when it redistributes this market’s monthly budget.</p>
       {camps == null ? <div className="bm-more-loading">Loading campaigns…</div>
         : camps.length === 0 ? <div className="bm-more-empty">No campaigns in {mktName(row.marketplace)}.</div>
@@ -368,8 +369,8 @@ export function BudgetManagerClient() {
         {month !== nowMonth() && <button type="button" className="bm-today" onClick={() => setMonth(nowMonth())}>This month</button>}
         {result && <span className="bm-mb-sum">Budget <b>{eur(result.totals.budgetCents)}</b> · Spent <b>{eur(result.totals.spendCents)}</b>{result.totals.pct != null && <em> ({pctTxt(result.totals.pct)})</em>}</span>}
         <span className="bm-grow" />
-        <button type="button" className="h10-am-btn" onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</button>
-        <button type="button" className="h10-am-btn" onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</button>
+    <Button onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</Button>
+    <Button onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</Button>
         {result && <span className="bm-mb-day">Day {result.dayOfMonth} of {result.daysInMonth}</span>}
       </div>
 
@@ -378,7 +379,7 @@ export function BudgetManagerClient() {
           <span className="ico"><Sparkles size={15} /></span>
           <span className="txt"><b>Auto Pacing preview</b> — {enforcement.totals.budgetChanges} budget change{enforcement.totals.budgetChanges === 1 ? '' : 's'}{enforcement.totals.suppressing > 0 ? ` · ${enforcement.totals.suppressing} suppressing` : ''}{enforcement.totals.restoring > 0 ? ` · ${enforcement.totals.restoring} restoring` : ''} today <em>· dry-run, nothing applied</em></span>
           <span className="bm-grow" />
-          <button type="button" className="h10-am-btn" onClick={() => { setCanvasMarket(enforcement.plans[0]?.marketplace ?? ''); setCanvasOpen(true) }}><Network size={13} /> View Allocation Map</button>
+     <Button onClick={() => { setCanvasMarket(enforcement.plans[0]?.marketplace ?? ''); setCanvasOpen(true) }}><Network size={13} /> View Allocation Map</Button>
         </div>
       )}
 

@@ -8,7 +8,7 @@ import { AdsDataGrid, type GridColumn } from '../../../../../../campaigns/_grid/
 import type { AdGroupDetailPayload, NegativeKeywordRow } from '../../../../../_lib'
 import { ebayStatusPill } from '../../../../../_lib/status'
 import { StatusPill } from '../../../../../../_shared/StatusPill'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 export function AgNegativeKeywordsTab({ data, onAdd }: { data: AdGroupDetailPayload; onAdd: () => void }) {
   const rows = data.negativeKeywords
@@ -26,7 +26,7 @@ export function AgNegativeKeywordsTab({ data, onAdd }: { data: AdGroupDetailPayl
       renderFirst={(r) => <div className="nmw"><span className="t">{r.text}</span></div>}
       firstSortValue={(r) => r.text.toLowerCase()}
       columns={columns}
-      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={onAdd}>+ Negative keywords</button>}
+   toolbarRight={<Button variant="primary" onClick={onAdd}>+ Negative keywords</Button>}
       storageKey="er1-ebay-ag-negatives"
       emptyLabel="No negative keywords in this ad group (EXACT and PHRASE supported — broad is not)."
       searchable

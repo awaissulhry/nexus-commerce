@@ -44,6 +44,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -549,7 +550,7 @@ export function KeywordTrackerClient() {
           </p>
           <div className="h10-kt-pickrow">
             {MARKETS.map((m) => (
-              <button type="button" key={m} className="h10-am-btn" onClick={() => push({ market: m })}>{m}</button>
+       <Button key={m} onClick={() => push({ market: m })}>{m}</Button>
             ))}
           </div>
         </div>

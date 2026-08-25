@@ -82,6 +82,7 @@
  *    the Automations mode dial had been silently refusing 14 notches the whole time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Button } from '@/design-system/primitives'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Clock, ExternalLink, Plus, Trash2 } from 'lucide-react'
@@ -1282,7 +1283,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
          * calls preventDefault is a middle-click that silently does the wrong thing. The empty
          * state's "Create Rule" keeps its plain href — there is no grid to stay on there.
          */
-        toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</button>}
+    toolbarRight={<Button variant="primary" onClick={() => setPicker(true)}><Plus size={13} aria-hidden /> Rule</Button>}
         selectionActions={(ids) => (
           <span className="h10-bulkrow">
             <button type="button" className="h10-am-btn bulk" onClick={() => setBulk({ kind: 'automation', ids })}>Automation</button>

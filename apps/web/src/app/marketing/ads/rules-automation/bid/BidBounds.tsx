@@ -24,6 +24,7 @@
  * an existing bid in. That last fact is the panel's warning, not its secret.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Check, Ruler, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../campaigns/FilterDropdown'
@@ -168,7 +169,7 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
         <H10Select width={280} options={[{ value: '', label: 'Choose a scope…' }, ...scopeOpts]} value={scopeId} onChange={setScopeId} ariaLabel="Bound scope" searchable />
         <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Bid floor in euros" /></span>
         <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Bid ceiling in euros" /></span>
-        <button type="button" className="h10-am-btn primary" disabled={busy || !scopeId || (!minEur.trim() && !maxEur.trim())} onClick={() => void savePolicy()}>Save bound</button>
+    <Button variant="primary" disabled={busy || !scopeId || (!minEur.trim() && !maxEur.trim())} onClick={() => void savePolicy()}>Save bound</Button>
       </div>
 
       <div className="h10-bud2-row">
@@ -184,8 +185,8 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
           <>
             <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={cMin} onChange={(e) => setCMin(e.target.value)} aria-label="Campaign bid floor" /></span>
             <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={cMax} onChange={(e) => setCMax(e.target.value)} aria-label="Campaign bid ceiling" /></span>
-            <button type="button" className="h10-am-btn primary" disabled={busy} onClick={() => void saveCamp()}>Save band</button>
-            <button type="button" className="h10-am-btn" onClick={() => setCampId('')}>Cancel</button>
+      <Button variant="primary" disabled={busy} onClick={() => void saveCamp()}>Save band</Button>
+      <Button onClick={() => setCampId('')}>Cancel</Button>
           </>
         )}
       </div>

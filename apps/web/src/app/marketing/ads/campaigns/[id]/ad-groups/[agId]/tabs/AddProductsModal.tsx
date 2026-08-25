@@ -10,6 +10,7 @@
  * placeholder (no SV creative source yet), exactly as the campaign grids treat such fields.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X, Search, PlusCircle, Check, Trash2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -176,8 +177,8 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
           {msg && <div className="h10-cd-modalerr">{msg}</div>}
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="h10-am-btn primary" disabled={!added.length || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${added.length ? ` (${added.length})` : ''}`}</button>
+     <Button onClick={onClose}>Cancel</Button>
+     <Button variant="primary" disabled={!added.length || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${added.length ? ` (${added.length})` : ''}`}</Button>
         </div>
       </div>
     </div>

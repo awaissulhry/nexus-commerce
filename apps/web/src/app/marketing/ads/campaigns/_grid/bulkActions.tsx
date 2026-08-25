@@ -6,6 +6,7 @@
  * shared "set bid for N selected" dialog used by Ad Groups (Default Bid) and Targets (Bid).
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -33,9 +34,9 @@ export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€'
           </div>
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
+     <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-          <button type="button" className="h10-am-btn primary" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onApply(Number(bid)) } finally { setBusy(false) } }}>{busy ? 'Applying…' : 'Apply'}</button>
+     <Button variant="primary" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onApply(Number(bid)) } finally { setBusy(false) } }}>{busy ? 'Applying…' : 'Apply'}</Button>
         </div>
       </div>
     </div>

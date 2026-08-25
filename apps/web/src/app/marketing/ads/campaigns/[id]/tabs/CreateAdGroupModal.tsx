@@ -6,6 +6,7 @@
  * targeting choice is captured for parity; the local create service defaults it.
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -60,9 +61,9 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
           {err && <div className="h10-cd-modalerr">{err}</div>}
         </div>
         <div className="h10-modal-f">
-          <button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button>
+     <Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
-          <button type="button" className="h10-am-btn primary" disabled={!valid || busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create Ad Group'}</button>
+     <Button variant="primary" disabled={!valid || busy} onClick={() => void create()}>{busy ? 'Creating…' : 'Create Ad Group'}</Button>
         </div>
       </div>
     </div>

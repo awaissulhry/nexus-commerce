@@ -34,6 +34,7 @@
  * rather than quietly stopping to pass it — the read-only property was stated, and its end is too.
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Anchor, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../campaigns/FilterDropdown'
@@ -159,8 +160,8 @@ export function BudGuardrails({ campaigns, loading, reload }: BudSlotProps) {
             <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Budget floor in euros" /></span>
             <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Budget ceiling in euros" /></span>
             <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Baseline" value={baseEur} onChange={(e) => setBaseEur(e.target.value)} aria-label="Budget baseline in euros" /></span>
-            <button type="button" className="h10-am-btn primary" disabled={busy} onClick={() => void saveOne()}>Save</button>
-            <button type="button" className="h10-am-btn" onClick={() => setEditId('')}>Cancel</button>
+      <Button variant="primary" disabled={busy} onClick={() => void saveOne()}>Save</Button>
+      <Button onClick={() => setEditId('')}>Cancel</Button>
           </>
         )}
       </div>

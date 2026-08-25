@@ -23,7 +23,7 @@ import {
 import { PromoteModal } from '../_modals/PromoteModal'
 import { MatchModal } from './modals/MatchModal'
 import { CostModal } from './modals/CostModal'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 interface Row extends ProductListingRow {
   groupKey: string
@@ -184,7 +184,7 @@ export function EbayProductsRollup() {
         reportLabel={latestReportLabel([data?.freshness.factsReportedAt ?? null])}
         toolbarLeft={<DateRangePicker value={dateRange} onChange={(start, end) => setDateRange({ start, end })} />}
         toolbarRight={
-          <button type="button" className="h10-am-btn primary" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}>New campaign</button>
+     <Button variant="primary" onClick={() => router.push('/marketing/ads/ebay/campaigns/new')}>New campaign</Button>
         }
         emptyLabel="No live eBay listings indexed yet — discovery runs every 4 hours."
       />

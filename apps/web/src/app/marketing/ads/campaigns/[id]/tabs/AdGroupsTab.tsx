@@ -8,6 +8,7 @@
  * parity placeholders where Amazon has no data source, exactly as the Ad Manager treats them).
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { Plus, Layers, ExternalLink } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../_grid/AdsDataGrid'
@@ -159,7 +160,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
             <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
           </span>
         )}
-        toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setShowCreate(true)}><Plus size={13} /> Add Group</button>}
+    toolbarRight={<Button variant="primary" onClick={() => setShowCreate(true)}><Plus size={13} /> Add Group</Button>}
       />
       {showCreate && <CreateAdGroupModal campaignId={campaignId} onClose={() => setShowCreate(false)} onCreated={() => onRefresh?.()} />}
       {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="ad group" bidLabel="Default Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => patchEach(adjustBid.ids, { defaultBidCents: Math.round(bidEur * 100), reason: 'Bulk adjust bid' }, adjustBid.clear).then(() => setAdjustBid(null))} />}

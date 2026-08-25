@@ -8,6 +8,7 @@
  * &negative=1, filtered to isNegative===true (deploy-safe vs an API predating the flag).
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../_grid/AdsDataGrid'
@@ -90,7 +91,7 @@ export function NegativeTargetsTab({ campaign }: { campaign: CampaignDetailData 
             <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
           </span>
         )}
-        toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Negative Targets</button>}
+    toolbarRight={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Negative Targets</Button>}
         emptyLabel="No negative targets on this campaign."
       />
       {showAdd && (

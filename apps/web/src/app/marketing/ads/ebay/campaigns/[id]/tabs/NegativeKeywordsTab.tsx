@@ -13,7 +13,7 @@ import type { CampaignDetailPayload, NegativeKeywordRow } from '../../../_lib'
 import { ebayStatusPill } from '../../../_lib/status'
 import { StatusPill } from '../../../../_shared/StatusPill'
 import { AddNegativeKeywordsModal } from '../modals/AddNegativeKeywordsModal'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 export function NegativeKeywordsTab({ data, campaignId, reload }: { data: CampaignDetailPayload; campaignId: string; reload: () => void }) {
   const rows = data.negativeKeywords
@@ -41,7 +41,7 @@ export function NegativeKeywordsTab({ data, campaignId, reload }: { data: Campai
         renderFirst={(r) => <div className="nmw"><span className="t">{r.text}</span></div>}
         firstSortValue={(r) => r.text.toLowerCase()}
         columns={columns}
-        toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setAddOpen(true)}>+ Negative keywords</button>}
+    toolbarRight={<Button variant="primary" onClick={() => setAddOpen(true)}>+ Negative keywords</Button>}
         storageKey="er1-ebay-detail-negatives"
         emptyLabel="No negative keywords (eBay supports EXACT and PHRASE — broad is not supported)."
         searchable

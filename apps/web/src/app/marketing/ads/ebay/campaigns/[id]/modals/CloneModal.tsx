@@ -6,6 +6,7 @@
  * General ads copy only from ENDED sources. Shows per-kind counts.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../../../_lib'
 
@@ -27,13 +28,13 @@ export function CloneModal(props: { open: boolean; onClose: () => void; campaign
     <H10Modal open={props.open} onClose={props.onClose} title="Clone campaign"
       subtitle="Structure always copies. Keywords/ad groups/negatives + scoped rules rematerialize; General ads copy only from ENDED sources (a live campaign still owns its listings). Selection rules become editable in the clone flow."
       footer={done ? <>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Close</button>
+    <Button onClick={props.onClose}>Close</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={() => { props.onDone?.(done.campaignId); props.onClose() }}>Open clone</button>
+    <Button variant="primary" onClick={() => { props.onDone?.(done.campaignId); props.onClose() }}>Open clone</Button>
       </> : <>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={apply} disabled={busy || !name.trim()}>{busy ? 'Cloning…' : 'Clone'}</button>
+    <Button variant="primary" onClick={apply} disabled={busy || !name.trim()}>{busy ? 'Cloning…' : 'Clone'}</Button>
       </>}>
       <SandboxBanner mode={mode} />
       {done ? (

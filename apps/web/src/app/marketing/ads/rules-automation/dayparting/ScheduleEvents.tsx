@@ -19,6 +19,7 @@
  * weeks early is the mistake the feature exists to prevent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { H10Select } from '../../campaigns/FilterDropdown'
@@ -287,7 +288,7 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
           {err && <div className="h10-ntm-err">{err}</div>}
           <div className="h10-evt-act">
             <button type="button" className="h10-rb-btn ghost" onClick={() => { setAdding(false); setErr('') }} disabled={busy}>Cancel</button>
-            <button type="button" className="h10-am-btn primary" onClick={() => void create()} disabled={busy}>{busy ? 'Saving…' : 'Add event'}</button>
+      <Button variant="primary" onClick={() => void create()} disabled={busy}>{busy ? 'Saving…' : 'Add event'}</Button>
           </div>
         </div>
       )}

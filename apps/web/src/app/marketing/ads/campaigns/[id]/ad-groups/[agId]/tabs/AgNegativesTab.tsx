@@ -9,6 +9,7 @@
  * (The "+ Negative" creation flow is ad-group-scoped follow-up; the grid + edit ship now.)
  */
 import { useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../_grid/AdsDataGrid'
@@ -78,7 +79,7 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
           <button type="button" className="h10-am-btn bulk" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</button>
         </span>
       )}
-      toolbarRight={<button type="button" className="h10-am-btn primary" onClick={() => setShowAdd(true)}><Plus size={13} /> {mode === 'targets' ? 'Negative Targets' : 'Negative Keywords'}</button>}
+   toolbarRight={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={13} /> {mode === 'targets' ? 'Negative Targets' : 'Negative Keywords'}</Button>}
       emptyLabel={`No negative ${mode === 'keywords' ? 'keywords' : 'targets'} on this ad group.`}
     />
     {showAdd && mode === 'targets' && adGroup && <AddNegativeTargetsModal adGroupId={adGroup.id} adGroupName={adGroup.name} campaignName={adGroup.campaign?.name ?? ''} onClose={() => setShowAdd(false)} onAdded={() => onRefresh?.()} />}

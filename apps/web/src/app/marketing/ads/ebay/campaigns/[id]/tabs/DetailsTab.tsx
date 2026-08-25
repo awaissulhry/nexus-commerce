@@ -9,6 +9,7 @@
  * critique D-1 (read-only settings) and D-2 (raw-JSON criterion/prefs).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { money } from '../../../../campaigns/_grid/format'
 import { EbDateField } from '../../../_lib/EbDateField'
 import { postEbayAds, type CampaignDetailPayload } from '../../../_lib'
@@ -217,9 +218,9 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
       </div>
 
       <div className="h10-cd-footer">
-        <button type="button" className="h10-am-btn" disabled={!dirty || saving} onClick={() => setForm(baseline)}>Discard Changes</button>
+    <Button disabled={!dirty || saving} onClick={() => setForm(baseline)}>Discard Changes</Button>
         {msg && <span className="msg">{msg}</span>}
-        <button type="button" className="h10-am-btn primary" disabled={!dirty || saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save Campaign'}</button>
+    <Button variant="primary" disabled={!dirty || saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
       </div>
     </div>
   )

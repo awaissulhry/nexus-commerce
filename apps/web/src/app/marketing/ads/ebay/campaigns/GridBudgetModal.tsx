@@ -6,6 +6,7 @@
  * the 2×-daily note, guarded write.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 import { money } from '../../campaigns/_grid/format'
@@ -33,9 +34,9 @@ export function GridBudgetModal(props: {
   return (
     <H10Modal open={props.open} onClose={props.onClose} title="Daily budget" subtitle={props.campaignName}
       footer={<>
-        <button type="button" className="h10-am-btn" onClick={props.onClose}>Cancel</button>
+    <Button onClick={props.onClose}>Cancel</Button>
         <span style={{ flex: 1 }} />
-        <button type="button" className="h10-am-btn primary" onClick={apply} disabled={busy || !(Number(value) >= 1)}>{busy ? 'Saving…' : 'Save budget'}</button>
+    <Button variant="primary" onClick={apply} disabled={busy || !(Number(value) >= 1)}>{busy ? 'Saving…' : 'Save budget'}</Button>
       </>}>
       <SandboxBanner mode={mode} />
       <div className="eb-form-row" style={{ alignItems: 'center' }}>
