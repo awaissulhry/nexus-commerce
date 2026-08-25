@@ -203,6 +203,20 @@
 .nds-modal.xl {
   width: 920px;
 }
+/* one step past xl, for modals holding a table. Its padding scales with it —
+   18px reads thin at this width. */
+.nds-modal.xxl {
+  width: 1040px;
+}
+.nds-modal.xxl .nds-modal-h {
+  padding: 20px 28px 14px;
+}
+.nds-modal.xxl .nds-modal-b {
+  padding: 18px 28px;
+}
+.nds-modal.xxl .nds-modal-f {
+  padding: 16px 28px;
+}
 .nds-modal-h {
   display: flex;
   align-items: flex-start;

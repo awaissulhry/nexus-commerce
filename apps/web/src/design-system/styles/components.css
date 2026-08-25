@@ -395,11 +395,6 @@
   gap: 8px;
   padding: 12px 18px;
 }
-/* a `<span className="grow" />` splits the footer: secondary left, primary right.
-   11 of the 27 ads-console modals use this shape; without it they all collapse right. */
-.nds-modal-f .grow {
-  flex: 1;
-}
 
 /* ── Drawer (right) ──────────────────────────────────────────────── */
 .nds-drawer-bd {

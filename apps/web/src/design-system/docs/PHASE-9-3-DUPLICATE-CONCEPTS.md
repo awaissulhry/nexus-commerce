@@ -515,9 +515,12 @@ which moved all 14 eBay call sites in one edit.
 1. **No accessible name.** `role="dialog" aria-modal="true"` with a rendered title that nothing
    pointed at. Every ads modal carried its own `aria-label`, so a straight port would have *lost*
    the name. Now `useId` + `aria-labelledby`, with `aria-label` accepted for the untitled case.
-2. **Footer right-aligned everything.** 11 of 16 ads modals split the footer with
-   `<span className="grow" />`. Added `.nds-modal-f .grow { flex: 1 }`; without it they would all
-   have silently collapsed right.
+2. ~~**Footer right-aligned everything.**~~ **Not a gap — corrected.** 11 of 16 ads modals split
+   the footer with `<span className="grow" />`, and I added `.nds-modal-f .grow { flex: 1 }` to
+   `components.css` believing it was missing. **`patterns.css:599` already defined it, identically.**
+   The duplicate has been removed. The lesson is the cheap check I skipped: the DS splits its CSS
+   across `components.css` and `patterns.css`, so "is this rule missing?" must be asked of the
+   whole `styles/` directory, never one file.
 3. **The scale stopped at xl/920.** `.h10-modal.neg` is 1040 and holds a keyword *table*. Added
    `xxl` (1040) rather than narrow a table by 12% to satisfy a scale.
 
@@ -576,3 +579,13 @@ the only losses are shell class names, the `role`/`Close`/`Escape` strings the D
 six `aria-label`s superseded by the visible title.
 
 Shipped in `eda47fc6f`, `4d432be9c`, `4e5d3bb7b`.
+
+### Ported to `apps/factory`, and one claim withdrawn
+
+`apps/factory` keeps a forked DS copy; its `Modal.tsx` was **byte-identical** to web's before this
+work, so the two genuine fixes ported cleanly and the file is now identical again. That gave **46
+factory modal call sites** an accessible name — none of them passed `aria-label`, so the change is
+purely additive.
+
+It also exposed the error above: factory already had `.nds-modal-f .grow` in *its* `patterns.css`,
+which is what sent me to check web's — where it had been all along.
