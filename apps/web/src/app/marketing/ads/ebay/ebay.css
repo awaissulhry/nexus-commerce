@@ -137,7 +137,6 @@
 .eb-rec-body b { font-size: 13px; color: var(--nds-grey-900); }
 .eb-rec-criteria { font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.45; margin: 2px 0 0; }
 .eb-rec-samples { font-size: 11px; color: var(--nds-grey-500); margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.eb-rec .h10-am-btn { white-space: nowrap; margin-top: 2px; }
 
 /* ER3.3 — budget pacing (delta 3) */
 .eb-pacing { display: flex; flex-direction: column; gap: 12px; padding: 2px; }
@@ -277,7 +276,7 @@
 /* EV4d — semantic modifiers replacing the last inline hexes */
 .h10-open.promote { background: #2d9d5f; }
 .h10-open.negative { background: var(--nds-amber-600); }
-.h10-am-btn.danger-solid { background: var(--nds-red-500); border-color: var(--nds-red-500); color: var(--nds-white); }
+
 .h10-cd-input.over-be { border-color: var(--nds-red-500); }
 .eb-panel.warn { border-color: #f0d9a8; background: #fdf3d3; }
 .eb-panel.warn .eb-panel-head h3 { color: #9a6700; }

@@ -889,7 +889,7 @@ function CampaignRulesModal({ campaign, onClose }: { campaign: Camp; onClose: ()
         </>
       }
     >
-      <div className="h10-rules-top"><span className="cnt">0 Rules</span><Link href="/marketing/ads/rules-automation/builder" className="h10-am-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
+      <div className="h10-rules-top"><span className="cnt">0 Rules</span><Link href="/marketing/ads/rules-automation/builder" className="nds-btn primary sm"><Plus size={13} /> Add Rule</Link></div>
       <div className="h10-rules-empty">No rules are applied to this campaign yet. Create one in Rules &amp; Automation.</div>
     </Modal>
   )
@@ -1918,8 +1918,8 @@ export function CampaignsGrid() {
             opens the export scope modal, so "Export Data" from the grid means
             exactly what it says and carries the current view with it. */}
     <Button onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Download size={13} /> Export Data</Button>
-        <Link href="/marketing/ads/rules-automation/builder" className="h10-am-btn"><Wand2 size={13} /> Create Rule</Link>
-        <Link href="/marketing/ads/campaign-builder" className="h10-am-btn primary"><Plus size={13} /> Campaign</Link>
+        <Link href="/marketing/ads/rules-automation/builder" className="nds-btn"><Wand2 size={13} /> Create Rule</Link>
+        <Link href="/marketing/ads/campaign-builder" className="nds-btn primary"><Plus size={13} /> Campaign</Link>
       </div>
 
       {/* grid */}

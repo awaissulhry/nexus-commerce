@@ -977,7 +977,6 @@
 /* The shared primary button's disabled state resolves to near-white text on a near-white fill in
    this bar, so "Save as template" read as an empty box until a name was typed. Scoped here rather
    than changed globally — every other console button keeps its existing look. */
-.h10-dp-selbar .h10-am-btn.primary:disabled { background: var(--nds-grey-100); color: var(--nds-grey-500); border-color: var(--nds-grey-200); }
 
 /* ── F1/F2 — template library modal ────────────────────────────────────────────────────────
    Wider than the shared h10-ntm confirm, because each row carries a week-shape strip: you pick a
@@ -1354,7 +1353,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-lane h4 { margin: 0 0 9px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-muted); }
 .h10-au-reach { margin: 10px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
 .h10-au-reach b { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-au-lane .h10-am-btn { margin-top: 10px; }
+
 .h10-au-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; font-size: 11px; line-height: 1.55; color: var(--nds-text-muted); }
 .h10-au-note svg { flex-shrink: 0; margin-top: 2px; }
 .h10-au-note b { color: var(--nds-grey-600); }
@@ -1628,7 +1627,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-danger { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 0; padding: 10px 12px; border-radius: 9px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; width: 100%; }
 .h10-kt-danger b { font-weight: 800; color: #7a4512; }
 .h10-kt-danger .acts { display: flex; gap: 8px; }
-.h10-am-btn.danger { color: #a02c2c; }
 
 @media (max-width: 900px) {
   .h10-kt-wlgrid { grid-template-columns: 1fr; }
@@ -2420,7 +2418,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    Height budget: the scope bar and the census together must add ≤120px to the 138px header+tabs
    baseline. The two are sized here to 52 + 64 = 116px at rest; the note rows below them are
    conditional and are not part of the resting height. */
-
 
 /* ── the sentences ─────────────────────────────────────────────────────────────────────────── */
 .h10-bud-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
@@ -3743,10 +3740,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    svg existed, was visible, had opacity 1 and a stroke colour, and passed every check: tsc, the
    ratchet, the class↔stylesheet sweep and the build. Only LOOKING at it finds this.
    Scoped to this list so the shared button class is unchanged everywhere else. */
-.h10-ngp-plist .h10-am-btn.bulk {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; padding: 0; flex: none;
-}
 
 /* ── NEG.6 · wasteful words (h10-ngw-*) ────────────────────────────────────────────────────────
    Appended at EOF per the parallel-session protocol. Source order beats specificity in this file,
@@ -4692,7 +4685,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* BID.S7 — rules as declared exceptions to the bidder. */
 .h10-bd7 { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
 .h10-bd7 h3 { margin: 0 0 10px; font-size: 13.5px; color: var(--nds-grey-900); display: flex; align-items: center; gap: 6px; }
-.h10-bd7 h3 .h10-am-btn { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+
 .h10-bd7-name { color: var(--nds-blue-600); text-decoration: none; }
 .h10-bd7-name:hover { text-decoration: underline; }
 .h10-bd7-posture { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }

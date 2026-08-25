@@ -16,7 +16,7 @@ await p.fill('.h10-neg-ta', 'alpha\nbeta\ngamma')
 await p.click('.h10-neg-add')             // stage
 await p.waitForTimeout(150)
 const stagedCount = await p.locator('.h10-neg-row').count()
-await p.click('.nds-modal-f .h10-am-btn.primary') // Save
+await p.click('.nds-modal-f .nds-btn.primary') // Save
 await p.waitForTimeout(300)
 const cellText = (await p.locator('.h10-spw-cset-row').nth(1).locator('.tgt').first().locator('.ct').innerText()).trim()
 

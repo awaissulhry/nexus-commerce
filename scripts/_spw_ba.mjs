@@ -28,7 +28,7 @@ await p.locator('.h10-spw-bulk-btn', { hasText: 'Keywords' }).click()
 await p.waitForTimeout(250)
 await p.screenshot({ path: '/tmp/spw/ba_kwmodal.png' })
 await p.fill('.h10-spw-bulk-ta', 'alpha\nbeta\nalpha')
-await p.locator('.nds-modal.lg .h10-am-btn.primary').click()
+await p.locator('.nds-modal.lg .nds-btn.primary').click()
 await p.waitForTimeout(300)
 
 // functional check: keyword rows now show "Keyword : 2"; Auto row unaffected

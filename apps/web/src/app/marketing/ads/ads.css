@@ -28,10 +28,7 @@
 .h10-am-toolbar .cnt { font-size: 12.5px; color: var(--nds-grey-600); }
 .h10-am-toolbar .cnt b { color: var(--nds-grey-900); }
 .h10-am-toolbar .grow { flex: 1; }
-.h10-am-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 7px 13px; cursor: pointer; text-decoration: none; }
-.h10-am-btn:hover { background: var(--nds-grey-75); }
-.h10-am-btn.primary { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-am-btn.primary:hover { background: var(--nds-blue-700); }
+
 .h10-am-grid { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; overflow: auto; }
 /* CBN.3 — unify toolbar + grid + pager into ONE card (H10: the toolbar lives inside the grid
    rectangle, just above the header). Scoped to .h10-am-card so the standalone .h10-am-grid /
@@ -202,7 +199,6 @@
 /* Inside a toast the surface is DARK (--text-primary); brand blue fails contrast there, so the
    one link-verb class adapts to the container: inherit the inverse text, underline for affordance. */
 .nds-toast .h10-am-link { color: inherit; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; }
-.h10-am-btn.sm { padding: 6px 14px; font-size: 13px; }
 
 /* saved-filter library popover */
 .h10-libpop { position: absolute; z-index: 45; top: calc(100% + 6px); left: 0; width: 280px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; box-shadow: 0 14px 34px rgba(20, 28, 38, 0.18); padding: 10px; }
@@ -439,7 +435,6 @@
    `.h10-rc-none`'s #8a93a1, which the note above measures at 3.10:1. */
 .h10-rc-word { font-size: 12px; color: #6b7383; white-space: nowrap; }
 
-
 /* CBN.2e.2 — sortable column headers (⇅ / ↑ / ↓) */
 .h10-am-grid th .sortable { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
 .h10-am-grid th .sortable i { font-style: normal; color: var(--nds-grey-300); font-size: 10px; line-height: 1; }
@@ -518,17 +513,15 @@
 .h10-am-toolbar .h10-edit-actions { display: inline-flex; align-items: center; gap: 16px; margin-left: 16px; }
 .h10-am-toolbar .h10-discard { border: none; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 700; color: var(--nds-grey-900); cursor: pointer; }
 .h10-am-toolbar .h10-discard:hover { color: var(--nds-blue-600); }
-.h10-am-btn.primary:disabled { background: #c3d3ea; color: var(--nds-white); cursor: default; }
+
 /* B6 — Budget list empty state (matches the recording: magnifier + CTA copy + Create Rule) */
 .h10-rr-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 46px 16px; }
 .h10-rr-empty .ic { width: 60px; height: 60px; border-radius: 16px; background: var(--nds-blue-50); color: #5b8ad6; display: inline-flex; align-items: center; justify-content: center; }
 .h10-rr-empty b { font-size: 14px; font-weight: 600; color: #46505f; }
-.h10-rr-empty .h10-am-btn.primary { text-decoration: none; }
+
 /* CBN.3 — bulk-action buttons (H10): appear in the toolbar when rows are selected; blue outline */
 .h10-bulkrow { display: inline-flex; align-items: center; gap: 9px; }
-.h10-am-btn.bulk { border-color: #2f6bff; color: var(--nds-blue-600); font-weight: 700; }
-.h10-am-btn.bulk:hover { background: var(--nds-blue-50); border-color: var(--nds-blue-600); }
-.h10-am-btn.bulk:disabled { border-color: #cdd9ef; color: #9bb4e0; background: var(--nds-white); cursor: default; }
+
 .h10-am-grid td.editing { text-align: left; padding-top: 7px; padding-bottom: 7px; }
 /* editor controls — NOT grid-scoped, so they also style the portaled hover-edit popover */
 .h10-edit-in { width: 100%; border: 1px solid var(--nds-grey-300); border-radius: 7px; padding: 6px 9px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); outline: none; }
@@ -553,12 +546,7 @@
 
 /* CBN.2h.2 — single Edit-Campaigns toggle + greyed Bulk Actions dropdown */
 .h10-am-toolbar .h10-bulkwrap { position: relative; }
-.h10-am-btn.on { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-am-btn.on:hover { background: var(--nds-blue-700); }
-.h10-am-btn.on svg { color: var(--nds-white); }
-.h10-am-btn:disabled { color: var(--nds-grey-300); background: var(--nds-white); cursor: default; }
-.h10-am-btn:disabled:hover { background: var(--nds-white); }
-.h10-am-btn:disabled svg { color: var(--nds-grey-200); }
+
 .h10-am-toolbar .h10-bulkwrap .h10-menu { min-width: 168px; }
 .h10-diffrow .dr-nm .to { font-size: 12px; color: var(--nds-blue-600); font-weight: 600; }
 
@@ -641,9 +629,8 @@
 .h10-menu.adjbud .abrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .h10-menu.adjbud .abrow .h10-bulk-inp { flex: 1; height: 32px; }
 .h10-menu.adjbud .abrow .h10-bulk-inp input { width: 100%; }
-.h10-am-btn.sm { padding: 6px 12px; font-size: 12px; }
+
 .h10-am-toolbar .cnt { white-space: nowrap; }
-.h10-am-toolbar .h10-am-btn { white-space: nowrap; }
 
 /* grid Bid Automation toggle — ON state (reads Campaign.dynamicBidding.bidAutomation) */
 .h10-toggle.on { background: var(--nds-blue-600); }
@@ -1628,9 +1615,7 @@
 .h10-aig-card.adv .adv-note { display: flex; gap: 10px; background: var(--nds-blue-50); border: 1px solid #d6e6fb; border-radius: 8px; padding: 12px 14px; }
 .h10-aig-card.adv .adv-note svg { color: var(--nds-blue-600); flex-shrink: 0; margin-top: 1px; }
 .h10-aig-card.adv .adv-note span { font-size: 12.5px; line-height: 1.55; color: #46586c; }
-.h10-am-btn.ghost { background: var(--nds-white); border-color: var(--nds-blue-200); color: var(--nds-blue-600); }
-.h10-am-btn.ghost:hover { background: var(--nds-blue-50); }
-.h10-am-btn.ghost svg { color: var(--nds-blue-600); }
+
 .h10-aig-bottombar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; background: var(--nds-white); border-top: 1px solid var(--nds-grey-150); padding: 12px 24px; }
 .h10-aig-bottombar .grow { flex: 1; }
 .h10-aig-bottombar .launch { border: none; background: var(--nds-grey-150); color: #9aa3af; font: inherit; font-size: 13px; font-weight: 600; padding: 9px 26px; border-radius: 8px; cursor: not-allowed; }
@@ -1727,7 +1712,6 @@
 .h10-aig-bottombar .err { font-size: 12.5px; color: var(--nds-red-600); margin-right: 4px; }
 
 /* AI Advertising dashboard — populated goal rows */
-
 
 /* ── SP Super Wizard (SPW-series) · Campaign Builder : SP Super Wizard ───────────
    Inline builder (rail stays visible). Header + 3-step stepper + sticky step-1

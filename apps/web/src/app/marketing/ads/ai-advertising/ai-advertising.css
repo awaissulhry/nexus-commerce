@@ -20,7 +20,6 @@
 .aiad-status.muted { color: var(--nds-text-3); }
 .aiad-status.muted::before { background: var(--nds-grey-300); }
 .aiad-status-wrap { display: inline-flex; align-items: center; gap: 10px; }
-.aiad-launch.h10-am-btn { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
 
 /* AI Control cell — the plan's autonomy, one vocabulary with the Control Room. */
 .aiad-ctl { font-size: 12.5px; font-weight: 600; }
