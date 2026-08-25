@@ -16,6 +16,8 @@ import { Search, ChevronDown, RefreshCw, Plus, Ban, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { marketplaceCountryName } from '@/lib/marketplace-code'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { PerformancePanel } from '../campaigns/PerformancePanel'
 
 interface Targ {
@@ -40,8 +42,7 @@ const MATCH_LABEL: Record<string, string> = { EXACT: 'Exact', PHRASE: 'Phrase', 
 export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) {
   const [tab, setTab] = useState('targeting')
   const [days, setDays] = useState(30)
-  const [showRange, setShowRange] = useState(false)
-  const rangeLabel = RANGES.find((r) => r.d === days)?.label ?? `Last ${days} days`
+
 
   // ── keywords/targets tab ──────────────────────────────────────────────
   const [targets, setTargets] = useState<Targ[]>(initialTargets)
@@ -146,7 +147,7 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
 
       <div className="az-listhead">
         <span className="title">{tab === 'targeting' ? 'Keywords & targets' : 'Search terms'} <ChevronDown size={18} /></span>
-        {tab === 'targeting' && <div className="az-search" style={{ minWidth: 300 }}><Search size={15} /><input placeholder="Find a keyword or target" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}
+        {tab === 'targeting' && <Input leadingIcon={<Search size={15} />} placeholder="Find a keyword or target" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 260 }} />}
         <span style={{ flex: 1 }} />
       </div>
 
@@ -154,21 +155,25 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
 
       <div className="az-tbar2">
         {tab === 'searchterms' && <>
-          <span className="ctl" style={{ cursor: 'default' }}>Min spend €<input type="number" step="1" min="0" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} style={{ width: 56, marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} /></span>
-          <span className="ctl" style={{ cursor: 'default' }}>Orders
-            <select value={hasOrders} onChange={(e) => setHasOrders(e.target.value as 'any' | 'some' | 'none')} style={{ marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit', cursor: 'pointer' }}>
-              <option value="any">Any</option><option value="some">With orders</option><option value="none">No orders (waste)</option>
-            </select>
+          <span className="ctl" style={{ cursor: 'default', gap: 8 }}>Min spend<Input type="number" step="1" min="0" aria-label="Minimum spend" prefix="€" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} style={{ width: 56 }} /></span>
+          <span className="ctl" style={{ cursor: 'default', gap: 8 }}>Orders
+            <Listbox
+              ariaLabel="Orders filter"
+              width={170}
+              value={hasOrders}
+              onChange={(v) => setHasOrders(v as 'any' | 'some' | 'none')}
+              options={[{ value: 'any', label: 'Any' }, { value: 'some', label: 'With orders' }, { value: 'none', label: 'No orders (waste)' }]}
+            />
           </span>
         </>}
-        <span className="az-menuwrap">
-          <span className="ctl" onClick={() => setShowRange((v) => !v)}>{rangeLabel} <ChevronDown size={14} /></span>
-          {showRange && <>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setShowRange(false)} />
-            <div className="az-menu">{RANGES.map((r) => <button key={r.d} className={days === r.d ? 'on' : ''} onClick={() => { setDays(r.d); setShowRange(false) }}>{r.label}{days === r.d && <span>✔</span>}</button>)}</div>
-          </>}
-        </span>
-        <button className="az-iconbtn" onClick={() => { if (tab === 'targeting') void refetchTargets(); else void refetchST() }} title="Refresh"><RefreshCw size={15} className={(tab === 'targeting' ? tLoading : stLoading) ? 'az-spin' : ''} /></button>
+        <Listbox
+          ariaLabel="Date range"
+          width={150}
+          value={String(days)}
+          onChange={(v) => setDays(Number(v))}
+          options={RANGES.map((r) => ({ value: String(r.d), label: r.label }))}
+        />
+        <ToolbarButton icon={<RefreshCw size={15} className={(tab === 'targeting' ? tLoading : stLoading) ? 'az-spin' : ''} />} label="Refresh" onClick={() => { if (tab === 'targeting') void refetchTargets(); else void refetchST() }} />
       </div>
 
       {tab === 'targeting' ? (
@@ -201,7 +206,7 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
                     <td className="l">{t.campaignName}<div className="sub">{marketplaceCountryName(t.marketplace) || ''}</div></td>
                     <td className="l">{statusBadge(t.status)}</td>
                     <td className="num">{edit[t.id] != null
-                      ? <input autoFocus className="az-edit" type="number" step="0.01" value={edit[t.id]} onChange={(e) => setEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBid(t); if (e.key === 'Escape') setEdit((s) => { const x = { ...s }; delete x[t.id]; return x }) }} onBlur={() => void saveBid(t)} disabled={busy === t.id} />
+                      ? <Input autoFocus aria-label="Bid" type="number" step="0.01" prefix="€" style={{ width: 62, textAlign: 'right' }} value={edit[t.id]} onChange={(e) => setEdit((s) => ({ ...s, [t.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') void saveBid(t); if (e.key === 'Escape') setEdit((s) => { const x = { ...s }; delete x[t.id]; return x }) }} onBlur={() => void saveBid(t)} disabled={busy === t.id} />
                       : <button className="az-editbtn" onClick={() => setEdit((s) => ({ ...s, [t.id]: (t.bidCents / 100).toFixed(2) }))}>{eur(t.bidCents)}</button>}</td>
                     <td className="num">{num(t.impressions)}</td>
                     <td className="num">{num(t.clicks)}</td>
@@ -246,9 +251,9 @@ export function TargetingClient({ initialTargets }: { initialTargets: Targ[] }) 
                     <td className="l">
                       {d ? <span className="az-badge deliver"><Check size={12} /> {d === 'neg' ? 'Negated' : d === 'exact' ? 'Added exact' : 'Added phrase'}</span>
                         : <span style={{ display: 'inline-flex', gap: 6 }}>
-                          <button className="az-btn" disabled={b} onClick={() => void promote(r, 'EXACT')} title="Add as exact keyword"><Plus size={13} />Exact</button>
-                          <button className="az-btn" disabled={b} onClick={() => void promote(r, 'PHRASE')} title="Add as phrase keyword"><Plus size={13} />Phrase</button>
-                          <button className="az-btn" disabled={b} onClick={() => void negate(r)} title="Add as negative exact"><Ban size={13} />Negate</button>
+                          <Button size="sm" disabled={b} onClick={() => void promote(r, 'EXACT')} title="Add as exact keyword"><Plus size={13} />Exact</Button>
+                          <Button size="sm" disabled={b} onClick={() => void promote(r, 'PHRASE')} title="Add as phrase keyword"><Plus size={13} />Phrase</Button>
+                          <Button size="sm" disabled={b} onClick={() => void negate(r)} title="Add as negative exact"><Ban size={13} />Negate</Button>
                         </span>}
                     </td>
                   </tr>
