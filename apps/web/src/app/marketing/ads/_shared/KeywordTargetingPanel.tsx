@@ -95,7 +95,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
               ) : shown.map((s) => (
                 <div className="row" key={s}>
                   <span className="h10-scb-tgt-kw" title={s}>{s}</span>
-                  <button type="button" className="addbtn" onClick={() => addMany([s])}><Plus size={13} /> Add</button>
+                  <Button variant="link" size="sm" onClick={() => addMany([s])}><Plus size={13} /> Add</Button>
                 </div>
               ))}
             </div>
