@@ -43,6 +43,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import {
   AlertTriangle, Check, Info, Download, ShieldCheck, TrendingUp, WifiOff, X, ChevronRight,
@@ -296,10 +297,10 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
             <div className="h10-ngw-col">
               <div className="h10-ngw-subhd">
                 <b>Costing money, earning nothing</b>
-                <button type="button" className="h10-ngw-csv" onClick={() => csv(
+                <Button size="xs" onClick={() => csv(
                   d.wasteful.map((w) => ({ gram: w.gram, n: w.n, spend: (w.costCents / 100).toFixed(2), clicks: w.clicks, blocks: w.catches, adGroups: w.adGroups, actionable: w.actionable, blockedBy: w.blockedBy.join('|') })),
                   'gram,words,spend,clicks,blocks_terms,ad_groups,actionable,blocked_by', 'wasteful',
-                )}><Download size={12} /> CSV</button>
+                )}><Download size={12} /> CSV</Button>
               </div>
 
               {rows.length === 0 ? (
@@ -333,7 +334,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                       <span className="ag">{num(w.adGroups)} ad {w.adGroups === 1 ? 'group' : 'groups'}</span>
                       <span className="ac">
                         {w.actionable
-                          ? <button type="button" className="h10-ngw-act" onClick={() => { setResult(null); push({ negate: w.gram }) }}>Negate…</button>
+                          ? <Button size="xs" onClick={() => { setResult(null); push({ negate: w.gram }) }}>Negate…</Button>
                           : <em className="why">{BLOCK_LABEL[w.blockedBy[0]]}</em>}
                       </span>
                       {w.isSizeToken && (
@@ -380,10 +381,10 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
             <div className="h10-ngw-col">
               <div className="h10-ngw-subhd">
                 <b>Earning — never negate these</b>
-                <button type="button" className="h10-ngw-csv" onClick={() => csv(
+                <Button size="xs" onClick={() => csv(
                   d.winning.map((w) => ({ gram: w.gram, n: w.n, roas: (w.roas ?? 0).toFixed(2), spend: (w.costCents / 100).toFixed(2), sales: (w.salesCents / 100).toFixed(2), orders: w.orders, protected: w.isProtected })),
                   'gram,words,roas,spend,sales,orders,protected', 'winning',
-                )}><Download size={12} /> CSV</button>
+                )}><Download size={12} /> CSV</Button>
               </div>
               <p className="h10-ngw-rail">
                 <TrendingUp size={13} />
@@ -467,7 +468,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                   )}
                 </ul>
                 <div className="acts">
-                  <button type="button" className="h10-ngw-act ghost" onClick={() => push({ negate: '' })}>Cancel</button>
+                  <Button size="xs" onClick={() => push({ negate: '' })}>Cancel</Button>
                   <button type="button" className="h10-ngw-act danger" disabled={busy} onClick={() => void runNegate()}>
                     {busy ? 'Writing…' : `Negate in ${num(target.adGroupsWritable)} ad ${target.adGroupsWritable === 1 ? 'group' : 'groups'}`}
                   </button>
@@ -502,7 +503,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                   </ul>
                 )}
                 <div className="acts">
-                  <button type="button" className="h10-ngw-act ghost" onClick={() => { setResult(null); push({ negate: '' }) }}>Close</button>
+                  <Button size="xs" onClick={() => { setResult(null); push({ negate: '' }) }}>Close</Button>
                 </div>
               </>
             )}

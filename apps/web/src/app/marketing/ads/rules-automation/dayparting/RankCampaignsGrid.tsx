@@ -26,7 +26,7 @@ import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange } from './_rd/
 import { GrainSwitch } from './_rd/GrainSwitch'
 import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { pillTone } from '../../_shared/pillTone'
 
 const builderHref = (groupId: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule?groupId=${groupId}`
@@ -211,9 +211,9 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
           </a>
         )}
         {r.groupId && (
-          <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); openRow(r, 'activity') }}>
+          <Button size="xs" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); openRow(r, 'activity') }}>
             <History size={11} /> Activity
-          </button>
+          </Button>
         )}
       </span>
     </span>

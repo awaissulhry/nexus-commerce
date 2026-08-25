@@ -135,7 +135,7 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         <span className="h10-nt-acts">
           {href ? <a className="h10-nt-open" href={href} onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Open</a>
             : <a className="h10-nt-open" href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><ExternalLink size={11} /> Open</a>}
-          {r.live && <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}><Clock size={11} /> History</button>}
+          {r.live && <Button size="xs" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}><Clock size={11} /> History</Button>}
         </span>
       </span>
     )

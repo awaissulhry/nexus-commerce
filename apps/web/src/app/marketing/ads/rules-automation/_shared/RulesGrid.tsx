@@ -1215,9 +1215,9 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         )}
         <span className="h10-nt-acts">
           <a className="h10-nt-open" href={href} onClick={overlay}><ExternalLink size={11} /> Open</a>
-          <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
+          <Button size="xs" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); setHistoryRule({ id: r.id, name: r.name }) }}>
             <Clock size={11} /> History
-          </button>
+          </Button>
         </span>
       </span>
     )

@@ -23,7 +23,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Input, Radio } from '@/design-system/primitives'
+import { Button, Input, Radio } from '@/design-system/primitives'
 
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -226,9 +226,9 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
           {/* On Products, "Add All" means every campaign of the products currently listed — the
               campaign-level `addable` would not match what the list is showing. */}
           {tab === 'Products' ? (
-            <button type="button" className="cp-addall" disabled={!productAddable.length} onClick={() => onAddMany(productAddable)}>Add All</button>
+            <Button variant="primary" disabled={!productAddable.length} onClick={() => onAddMany(productAddable)}>Add All</Button>
           ) : (
-            <button type="button" className="cp-addall" disabled={!addable.length} onClick={() => onAddMany(addable)}>Add All</button>
+            <Button variant="primary" disabled={!addable.length} onClick={() => onAddMany(addable)}>Add All</Button>
           )}
         </div>
         <div className="cp-list">
@@ -243,7 +243,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
                         {grp.line.name || grp.line.sku}
                         <em className="cp-grpsub">{grp.line.sku}{grp.line.variations > 1 ? ` · ${grp.line.variations} variations` : ''} · {grp.items.length} campaign{grp.items.length === 1 ? '' : 's'}</em>
                       </span>
-                      <button type="button" className="cp-grpadd" disabled={!add.length} onClick={() => onAddMany(add)}><Plus size={12} /> Add</button>
+                      <Button variant="ghost" size="sm" disabled={!add.length} onClick={() => onAddMany(add)}><Plus size={12} /> Add</Button>
                     </div>
                     {grp.items.map(row)}
                   </div>
@@ -253,7 +253,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
             : tab === 'Portfolios' ? (
               portfolioGroups && portfolioGroups.length ? portfolioGroups.map((grp, i) => (
                 <div className="cp-grp" key={i}>
-                  <div className="cp-grph"><span className="gn" title={grp.name}>{grp.name}</span><button type="button" className="cp-grpadd" disabled={!grp.items.filter((c) => !selIds.has(c.id)).length} onClick={() => onAddMany(grp.items.filter((c) => !selIds.has(c.id)))}><Plus size={12} /> Add</button></div>
+                  <div className="cp-grph"><span className="gn" title={grp.name}>{grp.name}</span><Button variant="ghost" size="sm" disabled={!grp.items.filter((c) => !selIds.has(c.id)).length} onClick={() => onAddMany(grp.items.filter((c) => !selIds.has(c.id)))}><Plus size={12} /> Add</Button></div>
                   {grp.items.map(row)}
                 </div>
               )) : <div className="cp-msg">No campaigns match.</div>

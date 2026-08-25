@@ -368,7 +368,7 @@ export function RankGoalsList() {
         <a className="h10-nt-open" href={builderHref(r.id)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}><ExternalLink size={11} /> Manage</a>
         {/* RDX/A4 — row click opens Activity too, but an explicit affordance keeps it discoverable
             next to Manage rather than relying on someone guessing the row is clickable. */}
-        <button type="button" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); openRow(r.id, 'activity') }}><History size={11} /> Activity</button>
+        <Button size="xs" className="h10-nt-open hist" onClick={(e) => { e.stopPropagation(); openRow(r.id, 'activity') }}><History size={11} /> Activity</Button>
       </span>
       {r.portfolioName && <span className="rg-pfbadge" title={`Portfolio schedule · ${r.portfolioName}`}>Portfolio · {r.portfolioName}</span>}
       <ScheduleRowActions row={r} onRenamed={renameRow} onDeleted={removeRow} />

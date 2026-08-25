@@ -210,8 +210,8 @@
 .h10-nt-freqedit { display: inline-flex; gap: 8px; }
 /* F3 — Open + History affordances + execution-history drawer */
 .h10-nt-acts { display: inline-flex; align-items: center; gap: 7px; }
-.h10-nt-open.hist { background: var(--nds-white); color: var(--nds-grey-700); border: 1px solid var(--nds-grey-200); cursor: pointer; }
-.h10-nt-open.hist:hover { background: var(--nds-grey-75); color: var(--nds-blue-600); border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the history opener is the DS `Button` at `xs`; the class stays only to carry the
+   row-hover reveal above, which is a GRID behaviour, not a button one. */
 .nds-wsgrid tbody tr:hover .h10-nt-open.hist, .h10-nt-open.hist:focus-visible { opacity: 1; }
 .h10-hist-back { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 200; display: flex; justify-content: flex-end; }
 .h10-hist { width: 460px; max-width: calc(100vw - 32px); height: 100%; background: var(--nds-white); box-shadow: -16px 0 48px rgba(20,28,38,.22); display: flex; flex-direction: column; }
@@ -275,9 +275,8 @@
 .cp-statusrow .lbl { font-size: 13px; font-weight: 600; color: var(--nds-grey-800); }
 /* DS-ALIGN — the DS `Radio`. */
 .cp-statusrow .rad { gap: 5px; }
-.cp-addall { margin-left: auto; background: var(--nds-blue-600); color: var(--nds-white); border: 0; border-radius: var(--nds-radius-lg); padding: 7px 15px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.cp-addall:hover { background: var(--nds-blue-700); }
-.cp-addall:disabled { background: #b9c4d2; cursor: default; }
+/* DS-ALIGN — the DS `Button variant="primary"`; only its place in the row is ours. */
+.cp-statusrow .nds-btn.primary { margin-left: auto; }
 .cp-list, .cp-alist { max-height: 322px; overflow-y: auto; }
 .cp-msg { padding: 36px 12px; text-align: center; color: var(--nds-grey-500); font-size: 13px; }
 .cp-row, .cp-arow { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--nds-grey-75); }
@@ -455,8 +454,7 @@
 .cp-grph .cp-grpsub { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; font-style: normal; color: #7c8595; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The name column may now be two lines, so the header stops centring its two children. */
 .cp-grph:has(.cp-grpsub) { align-items: flex-start; }
-.cp-grpadd { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--nds-blue-600); background: var(--nds-white); color: var(--nds-blue-600); border-radius: var(--nds-radius-md); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; }
-.cp-grpadd:disabled { color: var(--nds-grey-400); border-color: var(--nds-grey-150); cursor: not-allowed; }
+/* DS-ALIGN — the DS `Button variant="ghost"`, which IS the blue-outline treatment. */
 
 /* schedule-type radios (Campaign Budget / Budget Multiplier) */
 .h10-sb-types { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 22px; }
@@ -565,7 +563,9 @@
 .h10-rp-sec:last-of-type { border-bottom: 0; }
 .h10-rp-lbl { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); margin-bottom: 10px; }
 .h10-rp-lbl .grow { flex: 1; }
-.h10-rp-link { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-blue-600); background: none; border: 0; cursor: pointer; padding: 0; }
+/* DS-ALIGN — `Button variant="link" inline`, which takes the 12.5px of the label row it sits
+   in. Contrast rose doing it: --nds-blue-600 is 4.79:1 on white, --nds-text-link is 5.88:1. */
+.h10-rp-link { gap: 4px; font-weight: 600; }
 .h10-rp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .h10-rp-chip { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 6px 12px; cursor: pointer; }
 .h10-rp-chip:hover { background: var(--nds-grey-25); }
@@ -3740,10 +3740,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngw-subhd { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--nds-grey-100); }
 .h10-ngw-subhd b { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #10151c; }
-.h10-ngw-csv { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px;
-  border: 1px solid var(--nds-grey-200); border-radius: 5px; background: var(--nds-white); cursor: pointer;
-  font-size: 10.5px; color: #4a5566; }
-.h10-ngw-csv:hover { border-color: #2f6feb; color: #1d3f87; }
+/* DS-ALIGN — the DS `Button` at `xs` (#4a5566 was 7.55:1 on white; --nds-text-strong is 9.87). */
 
 .h10-ngw-rail { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px; padding: 7px 9px;
   border-radius: var(--nds-radius-sm); background: #edf7f0; font-size: 11px; line-height: 1.55; color: #1c5334; }
@@ -3800,13 +3797,16 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngw-list.win .ro b { font-weight: 800; color: #177a41; }
 .h10-ngw-list.win .sa, .h10-ngw-list.win .or { color: var(--nds-text-muted); text-align: right; }
 
-.h10-ngw-act { padding: 4px 10px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); background: var(--nds-white);
-  cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-700); white-space: nowrap; }
-.h10-ngw-act:hover:not(:disabled) { border-color: #2f6feb; color: #1d3f87; background: var(--nds-grey-50); }
-.h10-ngw-act:disabled { opacity: 0.55; cursor: default; }
-.h10-ngw-act.ghost { color: #4a5566; }
-.h10-ngw-act.danger { border-color: #b3301c; background: #b3301c; color: var(--nds-white); }
-.h10-ngw-act.danger:hover:not(:disabled) { border-color: #8f2616; background: #8f2616; color: var(--nds-white); }
+/* DS-ALIGN — the neutral actions here are the DS `Button` at `xs`. The DESTRUCTIVE one is not:
+   white on this #b3301c is 6.26:1 where the DS `danger` token is 5.44:1, and a substitution may
+   only ever raise contrast. It goes when that token is darkened. */
+.h10-ngw-act.danger {
+  padding: 4px 10px; border-radius: var(--nds-radius-sm); cursor: pointer;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  border: 1px solid #b3301c; background: #b3301c; color: var(--nds-white);
+}
+.h10-ngw-act.danger:hover:not(:disabled) { border-color: #8f2616; background: #8f2616; }
+.h10-ngw-act.danger:disabled { opacity: 0.55; cursor: default; }
 
 /* ── the confirm ────────────────────────────────────────────────────────────────────────────── */
 .h10-ngw-modal { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center;

@@ -270,7 +270,7 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
       )}
 
       {!adding ? (
-        <button type="button" className="h10-rp-link" onClick={() => setAdding(true)}><Plus size={12} /> Add an event</button>
+        <Button variant="link" inline className="h10-rp-link" onClick={() => setAdding(true)}><Plus size={12} /> Add an event</Button>
       ) : (
         <div className="h10-evt-form">
           <label>Name<Input fieldClassName="h10-rb-input" value={name} onChange={(ev) => setName(ev.target.value)} placeholder="Black Friday" /></label>

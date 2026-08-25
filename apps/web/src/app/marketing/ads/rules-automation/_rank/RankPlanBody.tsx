@@ -15,7 +15,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
-import { Select } from '@/design-system/primitives'
+import { Button, Select } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { SchedCampaign } from '../_schedule/CampaignSection'
@@ -223,7 +223,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
               <Select className="h10-rp-tf" size="xs" value={demandDays} onChange={e => setDemandDays(Number(e.target.value))} aria-label="Demand timeframe" title="Timeframe for the demand data">
                 {[7, 14, 30, 60, 90, 180].map(d => <option key={d} value={d}>last {d}d</option>)}
               </Select>
-              {rec && rec.windows.length > 0 && <button type="button" className="h10-rp-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</button>}
+              {rec && rec.windows.length > 0 && <Button variant="link" inline className="h10-rp-link" onClick={applyRecommended} title="Set windows from the demand peaks"><Wand2 size={12} /> Recommend windows</Button>}
             </div>
             <DemandReadout grid={activeDemand.grid} hourProfile={activeDemand.hourProfile} weekdayProfile={activeDemand.weekdayProfile} timezone={demand.timezone} metric={demand.metric} />
           </div>
@@ -236,7 +236,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
               <button type="button" role="tab" aria-selected={winView === 'grid'} className={winView === 'grid' ? 'on' : ''} onClick={() => setWinView('grid')}>Grid</button>
               <button type="button" role="tab" aria-selected={winView === 'list'} className={winView === 'list' ? 'on' : ''} onClick={() => setWinView('list')}>List</button>
             </span>
-            {winView === 'list' && <button type="button" className="h10-rp-link" onClick={addWindow}><Plus size={12} /> Add window</button>}
+            {winView === 'list' && <Button variant="link" inline className="h10-rp-link" onClick={addWindow}><Plus size={12} /> Add window</Button>}
           </div>
           {winView === 'grid' ? (
             <RankTimeGrid windows={windows} onWindowsChange={setWindows} targets={targets} baselineKey={baseline} demandGrid={activeDemand?.grid ?? null} onUseDemandPeaks={rec?.windows?.length ? applyRecommended : undefined} onEditTargets={() => setEditorOpen(true)} onOpenTemplates={() => setTplOpen(true)} />
