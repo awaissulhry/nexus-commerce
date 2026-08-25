@@ -1569,7 +1569,9 @@
    finished step is the gesture people reach for, and a label-only target misses it. Inherits the
    li's layout so adding interactivity does not move anything. */
 .nds-step-hit {
-  display: inline-flex;
+  /* MUST mirror .nds-step's axis — see apps/web's copy. */
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: inherit;
   padding: 0;

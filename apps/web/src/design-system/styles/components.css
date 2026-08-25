@@ -1933,7 +1933,12 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
    finished step is the gesture people reach for, and a label-only target misses it. Inherits the
    li's layout so adding interactivity does not move anything. */
 .nds-step-hit {
-  display: inline-flex;
+  /* MUST mirror `.nds-step`'s axis. `display: inline-flex` defaults to `row`, and `.nds-step` is
+     `column` — so a selectable step read badge-beside-label while an inert one read
+     badge-above-label, inside the same bar, and the bar grew 47px to 68px. `gap: inherit` does
+     not carry direction; nothing does. Written out. */
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: inherit;
   padding: 0;

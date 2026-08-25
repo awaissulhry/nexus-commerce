@@ -191,3 +191,5 @@ it sets, even though app CSS loads later. Across these ten tables **96 declarati
 separate hand-rolled uppercase header treatments. That is the alignment working, but nothing in
 the DataGrid docblock says it will happen, and a stylesheet left un-swept afterwards reads as
 though those rules are still live.
+- ✅ RESOLVED (DS session) — 🔴 my own `Stepper` `onSelect` regression. `.nds-step-hit` was `display: inline-flex`, which defaults to `row`, while `.nds-step` is `column` — so a selectable step read badge-beside-label and an inert one badge-above-label, in the same bar, and the bar grew 47px → 68px. I wrote `gap: inherit` assuming it carried the layout; **`flex-direction` is not inherited and nothing carries it**. Now written out explicitly and verified: all three step states measure badge y=32, label y=68, gap 7, centre-aligned, bar 51.6px. The conversion that was written and reverted can go back in.
+- ✅ RESOLVED (DS session) — `StepperStep.label` is `ReactNode`, so a step can nest a sub-step list.

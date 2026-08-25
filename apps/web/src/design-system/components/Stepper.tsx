@@ -14,10 +14,15 @@
  * Requires `styles/components.css`.
  */
 import { Check } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 export interface StepperStep {
   key: string
-  label: string
+  /**
+   * `ReactNode`, not `string` — two builders nest a sub-step list inside the ACTIVE step's label
+   * and would lose it otherwise.
+   */
+  label: ReactNode
 }
 export interface StepperProps {
   steps: StepperStep[]
