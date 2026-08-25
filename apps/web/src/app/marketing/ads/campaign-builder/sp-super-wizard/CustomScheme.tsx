@@ -11,11 +11,13 @@
  * on the design-system primitives (the H10 look as components). Per-type keywords land
  * in CSW.2; the token-driven naming + live preview in CSW.3.
  */
-import { type Dispatch, type SetStateAction, Fragment, useEffect, useRef, useState } from 'react'
-import { Info, Plus, X, ChevronDown } from 'lucide-react'
-import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
+import { type Dispatch, type SetStateAction, Fragment, useEffect, useState } from 'react'
+import { Info, Plus, X } from 'lucide-react'
+import { Button, Checkbox, TokenChip, ToolbarButton } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
+import { Listbox } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 
 export type MatchTypeKey = 'BROAD' | 'PHRASE' | 'EXACT'
 export type TargetingKind = 'auto' | 'keyword' | 'product'
@@ -38,29 +40,19 @@ export const TOKEN_OPTIONS: Array<{ value: string; label: string }> = [
 ]
 
 function TokenSelect({ value, onChange, onRemove }: { value: string; onChange: (v: string) => void; onRemove: () => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLSpanElement>(null)
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-  const label = TOKEN_OPTIONS.find((o) => o.value === value)?.label ?? 'Please Select'
   return (
-    <span className="h10-spw-cs-token" ref={ref}>
-      <button type="button" className={`sel ${open ? 'open' : ''}`} onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className={value ? '' : 'ph'}>{label}</span>
-        <ChevronDown size={14} />
-      </button>
-      <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={14} />} label="Remove token" onClick={onRemove} />
-      {open && (
-        <div className="menu" role="listbox">
-          {TOKEN_OPTIONS.map((o) => (
-            <button type="button" key={o.value} role="option" aria-selected={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => { onChange(o.value); setOpen(false) }}>{o.label}</button>
-          ))}
-        </div>
-      )}
-    </span>
+    <TokenChip onRemove={onRemove} removeLabel="Remove token">
+      <Listbox
+        size="sm"
+        width={170}
+        options={TOKEN_OPTIONS}
+        value={value}
+        onChange={onChange}
+        ariaLabel="Name part"
+        emptyLabel="Please Select"
+        emptyIsPlaceholder
+      />
+    </TokenChip>
   )
 }
 

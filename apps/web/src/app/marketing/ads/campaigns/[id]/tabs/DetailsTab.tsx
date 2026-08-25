@@ -20,7 +20,7 @@
  * custom End-Date calendar popover, and the Product-Selection amazon badge + ASIN copy.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, Checkbox, Input, Radio, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, RadioCard, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
 import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
@@ -238,13 +238,15 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
           <p className="sub">Select a strategy to optimize your campaign bidding performance</p>
           <div className="h10-cd-card pad">
             {STRATEGIES.map((s) => (
-              <Radio
+              <RadioCard
                 key={s.key}
-                className={`h10-cd-radio ${form.strategy === s.key ? 'on' : ''}`}
+                variant="row"
                 name="strategy"
+                title={s.label}
+                description={s.desc}
+                selected={form.strategy === s.key}
                 checked={form.strategy === s.key}
                 onChange={() => set('strategy', s.key)}
-                label={<span className="rc"><span className="t">{s.label}</span><span className="d">{s.desc}</span></span>}
               />
             ))}
           </div>
@@ -254,13 +256,15 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
           <p className="sub">Sites are where your ads appear (websites or apps). Choose placements based on your campaign strategy.</p>
           <div className="h10-cd-card pad">
             {SITES.map((s) => (
-              <Radio
+              <RadioCard
                 key={s.key}
-                className={`h10-cd-radio ${form.sites === s.key ? 'on' : ''}`}
+                variant="row"
                 name="sites"
+                title={s.label}
+                description={s.desc}
+                selected={form.sites === s.key}
                 checked={form.sites === s.key}
                 onChange={() => set('sites', s.key)}
-                label={<span className="rc"><span className="t">{s.label}</span><span className="d">{s.desc}</span></span>}
               />
             ))}
           </div>

@@ -5,10 +5,13 @@
  * builder type. AI Goal is wired to the AI-Advertising New Product Goal builder;
  * the other types land in later phases. Reuses the shared `.h10-*` design system.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronDown } from 'lucide-react'
+import { Listbox } from '@/design-system/components'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
 import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube, IconReplicate, IconDisplay, IconBanner } from '../_shell/builder-icons'
 
@@ -49,8 +52,6 @@ function AmazonMark() {
 function ProfileSelect() {
   const [markets, setMarkets] = useState<string[]>(['IT'])
   const [sel, setSel] = useState('IT')
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let alive = true
     fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`)
@@ -61,27 +62,19 @@ function ProfileSelect() {
       }).catch(() => {})
     return () => { alive = false }
   }, [])
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
-  }, [])
-  const label = (m: string) => `${FLAG[m] ?? '🏳️'} ${MARKET_NAME[m] ?? m}`
   return (
-    <div className={`h10-cb-profile ${open ? 'open' : ''}`} ref={ref}>
-      <button type="button" className="h10-cb-profile-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className="amz"><AmazonMark /></span>
-        <span className="nm">{label(sel)}</span>
-        <ChevronDown size={16} />
-      </button>
-      {open && (
-        <div className="h10-cb-profile-pop" role="listbox">
-          {markets.map((m) => (
-            <button type="button" key={m} role="option" aria-selected={m === sel} className={`opt ${m === sel ? 'on' : ''}`} onClick={() => { setSel(m); setOpen(false) }}>
-              <span className="amz"><AmazonMark /></span><span>{label(m)}</span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="h10-cb-profile">
+      <Listbox
+        width={240}
+        value={sel}
+        onChange={setSel}
+        ariaLabel="Advertising profile"
+        options={markets.map((m) => ({
+          value: m,
+          label: `${FLAG[m] ?? '🏳️'} ${MARKET_NAME[m] ?? m}`,
+          leading: <AmazonMark />,
+        }))}
+      />
     </div>
   )
 }
