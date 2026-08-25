@@ -1,13 +1,10 @@
 {
   "note": "Files the two DS copies already differ on. This list may only SHRINK. A shared file absent here must stay byte-identical in both apps.",
-  "updatedAt": "2026-08-25",
-  "sharedFiles": 78,
+  "updatedAt": "2026-08-26",
+  "sharedFiles": 89,
   "differing": [
-    "components/DataGrid.tsx",
     "components/Drawer.tsx",
-    "components/index.ts",
     "patterns/index.ts",
-    "primitives/index.ts",
     "styles/components.css",
     "styles/patterns.css",
     "styles/primitives.css",
