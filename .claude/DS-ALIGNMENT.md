@@ -34,6 +34,17 @@ Measured on origin/main, both ends at the same commits and the same glob:
 because every other directory imports them). They belong to ONE session — see the prompts. Convert
 their internals only; do not change what they export, or you break every consumer at once.
 
+## STANDING RULE — everything new uses the DS
+
+Decided 2026-08-26 and enforced by `check-raw-primitives-ratchet` in pre-push: a file may keep the
+raw controls it has, may not gain one, and a file with no baseline entry is held at ZERO.
+
+The unconverted parts of the platform (`app/products`, `app/fulfillment`, …) are being left until
+those pages are rebuilt — that is a decision, not a backlog. But nothing new may add to them.
+
+**If the DS does not cover it, ADD IT TO THE DS.** Never hand-roll locally, never work around.
+File it in `.claude/DS-GAPS.md` with the measurement. See /DESIGN.md for the full mapping.
+
 ## The DS is at `apps/web/src/design-system/`
 - `primitives/` — **Button** (`primary|secondary|ghost|danger|link`, `md|sm`, `active`), ToolbarButton, tone
 - `components/` — Modal, Listbox, MultiSelect, Combobox, Menu, Tabs, Card, Banner, Toast,

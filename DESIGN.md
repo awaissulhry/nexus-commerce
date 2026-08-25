@@ -10,6 +10,41 @@ and fails the push if they are stale.
 
 ---
 
+## 🔴 Everything new uses the design system
+
+Decided 2026-08-26. The platform is converting a directory at a time, and the parts not yet
+reached — `app/products`, `app/fulfillment`, `app/settings` and the rest — are being left until
+those pages are rebuilt. That is deliberate: converting a page that is about to be rewritten is
+wasted work.
+
+**What must not happen meanwhile is the pile growing.** Enforced by
+`scripts/check-raw-primitives-ratchet.mjs` in `.githooks/pre-push`: a file may keep the raw
+controls it has, it may not gain one, and **a file with no baseline entry is held at ZERO** — so
+anything new starts on the design system.
+
+| instead of | use |
+|---|---|
+| `<button>` | `Button` · `ToolbarButton` · `FilterChip` · `TokenChip` · `SegmentedControl` |
+| `<input>` | `Input` · `Checkbox` · `Radio` · `DateField` |
+| `<select>` | `Listbox` · `Select` · `MultiSelect` · `Combobox` |
+| `<textarea>` | `Textarea` |
+| `<table>` | `DataGrid` (sortable, sticky, selectable, totals, expandable) · `WorkspaceGrid` |
+| a label + control + hint | `Field` |
+
+**If the design system does not cover it, add it to the design system.** Do not hand-roll it
+locally and do not work around it. File it in `.claude/DS-GAPS.md` with the measurement — the
+class, what is missing, and the contrast or geometry you measured. During the 2026-08 sweep **89
+of 98 gaps filed that way were closed**, which is why the console has a `Field`, a `TokenChip`, a
+`FilterChip`, an `xs` density tier across every control, expandable grid rows and a layering
+scale that it did not have before.
+
+This is not bureaucracy. Every hand-rolled control ships without the accessibility the DS
+component carries: that sweep found unlabelled icon buttons at **1.89:1** and **2.56:1** (under
+even the 3:1 non-text floor), a link failing AA on its own page ground, required markers and
+hints below AA, and a `SegmentedControl` that could not be reached by Tab at all.
+
+---
+
 ## 🔴 Read this first: the same names mean two different things
 
 `--text-*`, `--surface-*` and `--border-*` are defined **twice** in this codebase:

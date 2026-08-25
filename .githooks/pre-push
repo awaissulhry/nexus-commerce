@@ -87,6 +87,17 @@ node scripts/check-css-hex-ratchet.mjs --check || {
   exit 1
 }
 
+# Everything NEW must use the design system. The parts of the platform not yet converted
+# (app/products, app/fulfillment, …) are being left until those pages are rebuilt — a deliberate
+# decision. What must not happen meanwhile is the pile GROWING: a file may keep the raw controls
+# it has and may not gain one, and a file with no baseline entry is held at ZERO. Anything the DS
+# genuinely does not cover gets ADDED to the DS and filed in .claude/DS-GAPS.md — 89 of the 98
+# gaps filed during the sweep were closed that way, not worked around.
+node scripts/check-raw-primitives-ratchet.mjs --check || {
+  echo "❌ raw-primitive ratchet FAILED — see message above (rule + why: scripts/check-raw-primitives-ratchet.mjs header)"
+  exit 1
+}
+
 node scripts/check-alias-form.mjs --check || {
   echo "❌ alias-form guard FAILED — see message above (rule + why: scripts/check-alias-form.mjs header)"
   exit 1
