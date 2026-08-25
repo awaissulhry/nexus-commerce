@@ -500,8 +500,28 @@ which yielded to the handler's own `requestAnimationFrame` loop — drive it syn
 | | | |
 |---|---|---|
 | WG.2b | scope the 7 DOM queries to refs | ✅ 2026-08-25 |
-| WG.2a | the 4 hand-rolled call sites adopt the component, or get an explicit bare-table class | blocks the rename |
+| WG.2a | 3 of 4 hand-rolled sites settled — the eBay wizard steps now use `.eb-tablebox` | ✅ 2026-08-25 |
+| WG.2a′ | the 4th is `CampaignsGrid` — it is not a consumer to migrate, it is the thing that **becomes** WorkspaceGrid | folds into WG.3 |
 | WG.2c | extract `h10-am-link` / `h10-cd-field` / `h10-am-card` as their own concepts | they are not grid |
+
+**The WG.2a design call, and why it is not an abstraction.** The three eBay wizard tables used
+`.h10-am-grid` only as a scrollable bordered table container. Adopting `AdsDataGrid` would impose
+967 lines of column config, sorting and selection they do not want; inventing a shared
+`TableSurface` would build a cross-cutting concept on top of a DS `DataGrid` that #13 already
+retires. So each of the 18 rules they actually depend on gained an `.eb-tablebox` branch — no
+duplicated declarations, and the branches survive the rename.
+
+Which 18 was **measured**: render the shape in a real DOM, then test `el.matches()` for every
+`.h10-am-grid` selector. 17 of 148 matched. Three method notes worth keeping:
+
+- The probe first returned **0 matches** — Chrome blocks `cssRules` on `file://` stylesheets and the
+  try/catch hid it. Inline the CSS into a `<style>`. A zero has to be earned.
+- The first transform read a **comment as a selector** and spliced a class into it. Mask comments
+  with equal-length spaces before matching so offsets stay valid.
+- The pixel check earned its place: `.h10-am-card .h10-am-grid` removes the border when nested and
+  the matcher skipped it (the branch does not *start* with `.h10-am-grid`) — 127,336 differing
+  subpixels. After the fix, **0 in both the in-card and standalone cases**, with a non-white-pixel
+  count proving neither render was blank.
 | WG.2d | move the 265 rules, across all four stylesheets | only now safe |
 
 ### 🔴 The requirement: pinning must become an OPERATOR preference, not developer config
