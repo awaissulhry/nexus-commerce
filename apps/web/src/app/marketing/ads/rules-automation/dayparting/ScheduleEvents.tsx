@@ -256,12 +256,12 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
               {err && <div className="h10-ntm-err">{err}</div>}
             </div>
             <div className="h10-ntm-f">
-              <button type="button" className="cancel" onClick={() => { setArming(null); setArmPrev(null) }} disabled={busy}>Cancel</button>
+              <Button variant="quiet" onClick={() => { setArming(null); setArmPrev(null) }} disabled={busy}>Cancel</Button>
               <span className="grow" />
               {armPrev && !armPrev.expired && (
-                <button type="button" className="apply" disabled={busy} onClick={() => { const e = arming; setArming(null); setArmPrev(null); void setEnabled(e, true) }}>
+                <Button variant="primary" disabled={busy} onClick={() => { const e = arming; setArming(null); setArmPrev(null); void setEnabled(e, true) }}>
                   {busy ? 'Arming…' : 'Arm event'}
-                </button>
+                </Button>
               )}
             </div>
           </div>

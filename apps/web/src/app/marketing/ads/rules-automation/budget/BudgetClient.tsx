@@ -1008,11 +1008,11 @@ export function BudgetClient() {
                 )}
               </div>
               <div className="h10-ntm-f">
-                <button type="button" className="cancel" onClick={() => setTransferOpen(false)}>Cancel</button>
+                <Button variant="quiet" onClick={() => setTransferOpen(false)}>Cancel</Button>
                 <span className="grow" />
-                <button type="button" className="apply" disabled={writeBusy || !(Number(transferEur) > 0)} onClick={() => void doTransfer()}>
+                <Button variant="primary" disabled={writeBusy || !(Number(transferEur) > 0)} onClick={() => void doTransfer()}>
                   {writeBusy ? 'Working…' : `Move €${(Number(transferEur) || 0).toFixed(2)}/day`}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

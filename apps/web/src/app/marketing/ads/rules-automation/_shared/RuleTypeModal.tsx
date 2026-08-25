@@ -12,6 +12,7 @@
  * back to the first option, which is the behaviour every existing caller had.
  */
 import { useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import { RULE_TYPES } from './ruleTypes'
@@ -38,9 +39,9 @@ export function RuleTypeModal({ onClose, initial }: { onClose: () => void; initi
           ))}
         </div>
         <div className="h10-rtm-f">
-          <button type="button" className="cancel" onClick={onClose}>Cancel</button>
+          <Button variant="quiet" onClick={onClose}>Cancel</Button>
           <span className="grow" />
-          <button type="button" className="next" onClick={next}>Next</button>
+          <Button variant="primary" onClick={next}>Next</Button>
         </div>
       </div>
     </div>

@@ -194,10 +194,7 @@
 .h10-rtm-opt .t { font-size: 14.5px; font-weight: 700; color: #1f2c3d; }
 .h10-rtm-opt .d { font-size: 12.5px; color: var(--nds-pill-neutral-fg); line-height: 1.4; }
 .h10-rtm-f { display: flex; align-items: center; padding: 14px 24px 20px; }
-.h10-rtm-f .cancel { border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--nds-grey-700); cursor: pointer; }
 .h10-rtm-f .grow { flex: 1; }
-.h10-rtm-f .next { border: 0; background: var(--nds-blue-600); color: var(--nds-white); font: inherit; font-size: 14px; font-weight: 700; border-radius: 9px; padding: 10px 26px; cursor: pointer; }
-.h10-rtm-f .next:hover { background: var(--nds-blue-700); }
 
 /* ============================ Negative Targeting tab ======================= */
 .h10-nt-name { color: var(--nds-blue-600); font-weight: 600; font-size: 13px; text-decoration: none; }
@@ -245,12 +242,9 @@
 .h10-ntm-b:empty { display: none; }
 .h10-ntm-tog { display: inline-flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--nds-grey-800); font-weight: 600; }
 .h10-ntm-f { display: flex; align-items: center; padding: 12px 22px 18px; }
-.h10-ntm-f .cancel { border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--nds-grey-700); cursor: pointer; }
+/* DS-ALIGN — the footer's two actions are the DS `Button` (`quiet` + `primary`). Five different
+   places in this stylesheet used to spell that pair out; this is the last of them. */
 .h10-ntm-f .grow { flex: 1; }
-.h10-ntm-f .apply { border: 0; background: var(--nds-blue-600); color: var(--nds-white); font: inherit; font-size: 13.5px; font-weight: 700; border-radius: var(--nds-radius-lg); padding: 9px 20px; cursor: pointer; }
-.h10-ntm-f .apply:hover { background: var(--nds-blue-700); }
-.h10-ntm-f .apply.danger { background: var(--nds-red-500); }
-.h10-ntm-f .apply.danger:hover { background: #cf3b40; }
 
 /* ── R2 video-match refinements (verifier session) ── */
 /* metric-aware condition value: % suffix box (mirrors the € prefix box) */
@@ -1171,8 +1165,9 @@
 .h10-hist-cf p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--nds-pill-neutral-fg); }
 .h10-hist-cf-a { display: flex; justify-content: flex-end; gap: 8px; }
 .h10-hist-cf-a button { border-radius: var(--nds-radius-md); padding: 6px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
-.h10-hist-cf-a .cancel { border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-pill-neutral-fg); }
-.h10-hist-cf-a .danger { border: 1px solid var(--nds-red-700); background: var(--nds-red-700); color: var(--nds-white); }
+/* DS-ALIGN — the rollback confirm is `Button` + `Button variant="danger"`. The danger fill was
+   already `--nds-red-700`, which is exactly what the DS token resolves to, so this one converts
+   with no colour change at all. */
 .h10-hist-cf-a button:disabled { opacity: .5; cursor: default; }
 
 /* ── ACR.6 (R2) — fleet-impact strip above the rules grid ─────────────────────
@@ -3485,11 +3480,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-wmodal .rowlist .why i { font-style: normal; color: var(--nds-text-muted); }
 
 .h10-hv-wmodal .act { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-.h10-hv-wmodal .cancel { padding: 8px 14px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-wmodal .cancel:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
-.h10-hv-wmodal .go { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--nds-blue-600); border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-lg); font-size: 12.5px; font-weight: 800; color: var(--nds-white); cursor: pointer; }
-.h10-hv-wmodal .go:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); }
-.h10-hv-wmodal .go:disabled { opacity: .55; cursor: default; }
+/* DS-ALIGN — the promote dialog's actions are the DS `Button` at `sm`. */
 
 /* C7 — three outcomes, never one "done" */
 .h10-hv-wmodal .sum { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
@@ -5168,9 +5159,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-ar-pop .res.warn { color: #a2231d; }
 .h10-ar-pop .res em { display: block; font-style: normal; color: #7c8595; }
 .h10-ar-pop .acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 11px; }
-.h10-ar-pop .acts .cancel { border: 0; background: none; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ar-pop .acts .apply { border: 1px solid var(--nds-blue-600); background: var(--nds-blue-600); color: var(--nds-white); font-size: 12.5px; font-weight: 700; border-radius: var(--nds-radius-md); padding: 6px 13px; cursor: pointer; }
-.h10-ar-pop .acts .apply:disabled { background: #c3d3ea; border-color: #c3d3ea; cursor: default; }
+/* DS-ALIGN — the bulk-verb popover's actions are the DS `Button` at `sm`. */
 
 /* ── U13 — the "held" look, for a control that refuses but still ANSWERS ────────────────────────
    A control whose refusal carries a reason must not use the `disabled` attribute: a disabled form

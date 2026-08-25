@@ -17,6 +17,7 @@
  * Rendered in both places a schedule is looked at: the list's Activity drawer and the builder.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { History, RotateCcw } from 'lucide-react'
 import { gridFromWindows, type RankWin } from '../_rank/rank-grid-model'
 import { ChangeList } from './ScheduleActivity'
@@ -174,11 +175,11 @@ export function ScheduleVersions({ groupId, palette, compact = false }: {
               {' '}Bids already sent to Amazon are <b>not</b> reverted.
             </div>
             <div className="h10-ntm-f">
-              <button type="button" className="cancel" onClick={() => setConfirming(null)} disabled={busy}>Cancel</button>
+              <Button variant="quiet" onClick={() => setConfirming(null)} disabled={busy}>Cancel</Button>
               <span className="grow" />
-              <button type="button" className="apply" onClick={() => void restore(confirming)} disabled={busy}>
+              <Button variant="primary" onClick={() => void restore(confirming)} disabled={busy}>
                 {busy ? 'Restoring…' : 'Restore'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -47,6 +47,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, ArrowRight, ExternalLink, Loader2, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
@@ -266,10 +267,10 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
             </ul>
 
             <div className="act">
-              <button type="button" className="cancel" onClick={close}>Cancel</button>
-              <button type="button" className="go" onClick={() => void write()} disabled={busy || plan.promotable === 0}>
+              <Button size="sm" onClick={close}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={() => void write()} disabled={busy || plan.promotable === 0}>
                 {busy ? <><Loader2 size={13} className="spin" /> Writing…</> : plan.promotable === 0 ? 'Nothing can be promoted' : `Promote ${num(plan.promotable)} and negate at source`}
-              </button>
+              </Button>
             </div>
           </>
         ) : null}

@@ -369,10 +369,10 @@ export function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: str
               and each outcome is reported. The rule itself stays as it is; only this run is undone.
             </p>
             <div className="h10-hist-cf-a">
-              <button type="button" className="cancel" disabled={rbBusy} onClick={() => setConfirming(null)}>Cancel</button>
-              <button type="button" className="danger" disabled={rbBusy} onClick={() => void rollback(confirming)}>
+              <Button size="sm" disabled={rbBusy} onClick={() => setConfirming(null)}>Cancel</Button>
+              <Button variant="danger" size="sm" disabled={rbBusy} onClick={() => void rollback(confirming)}>
                 {rbBusy ? 'Rolling back…' : 'Roll back run'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

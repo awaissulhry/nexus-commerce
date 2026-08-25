@@ -224,12 +224,12 @@ export function ArBulkVerbs({ ids, names, onDone, onAssignRule }: {
               )}
 
               <div className="acts">
-                <button type="button" className="cancel" onClick={close}>{result ? 'Close' : 'Cancel'}</button>
-                <button
-                  type="button" className="apply"
+                <Button variant="quiet" size="sm" onClick={close}>{result ? 'Close' : 'Cancel'}</Button>
+                <Button
+                  variant="primary" size="sm"
                   disabled={busy || (v === 'acos' && !acosValid) || (v === 'bounds' && !boundsValid)}
                   onClick={() => void run(v)}
-                >{busy ? 'Writing…' : 'Apply'}</button>
+                >{busy ? 'Writing…' : 'Apply'}</Button>
               </div>
             </div>
           )}
