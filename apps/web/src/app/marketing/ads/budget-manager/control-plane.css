@@ -15,8 +15,6 @@
 .cp-insp-h .ttl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .cp-insp-h .ty { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); }
 .cp-insp-h b { font-size: 13.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-insp-h .x { border: none; background: none; font-size: 18px; line-height: 1; color: var(--nds-grey-450); cursor: pointer; padding: 0 2px; }
-.cp-insp-h .x:hover { color: var(--nds-grey-700); }
 .cp-insp-kpis { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; background: var(--nds-grey-25); border-radius: 9px; }
 .cp-insp-kpis span { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--nds-grey-900); }
 .cp-insp-kpis i { font-style: normal; font-weight: 500; color: var(--nds-grey-500); }

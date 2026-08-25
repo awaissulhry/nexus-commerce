@@ -29,6 +29,7 @@ import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icon
 import { InfoTip } from '../../campaigns/InfoTip'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { Textarea } from '@/design-system/primitives/Textarea'
 import { Drawer } from '@/design-system/components/Drawer'
 import { Tabs } from '@/design-system/components/Tabs'
@@ -197,7 +198,7 @@ export function AiGoalBuilder() {
   return (
     <div className="h10-aig">
       <header className="h10-aig-top">
-        <button type="button" className="x" onClick={() => router.push(exitTo)} aria-label="Close"><X size={20} /></button>
+        <ToolbarButton icon={<X size={20} />} label="Close" tooltip={false} onClick={() => router.push(exitTo)} />
         <span className="brand"><IconAtom size={22} /> AI Advertising</span>
         <span className="sep" />
         <span className="crumb">New Product Goal</span>
@@ -324,7 +325,7 @@ export function AiGoalBuilder() {
                         const b = budgetByAsin.get(p.asin)
                         return (
                         <li key={p.id} className={budgetMode}>
-                          <button type="button" className="del" onClick={() => removeProduct(p.id)} aria-label="Remove"><Trash2 size={15} /></button>
+                          <ToolbarButton icon={<Trash2 size={15} />} label={`Remove ${p.asin}`} tooltip={false} onClick={() => removeProduct(p.id)} />
                           <span className="c-prod"><span className="th">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : null}</span><span className="m"><span className="nm">{p.name}</span><span className="id">{p.asin || p.sku}{p.asin && p.sku ? ` · ${p.sku}` : ''}</span></span></span>
                           <span className="c-lqs"><span className="lqs"><BarChart3 size={11} /> {p.lqs.toFixed(1)}</span></span>
                           {budgetMode === 'strict' && <>
@@ -583,7 +584,7 @@ function KeywordEntry({ placeholder, text, setText, list, setList, max }: { plac
 function AddedPanel({ list, setList, max }: { list: string[]; setList: (v: string[]) => void; max: number }) {
   return (
     <div className="kw-added">
-      <div className="kw-added-h"><span>{list.length}/{max} Added</span><button type="button" className="rm" onClick={() => setList([])} disabled={!list.length}><Trash2 size={12} /> Remove All</button></div>
+      <div className="kw-added-h"><span>{list.length}/{max} Added</span><Button variant="link" size="sm" onClick={() => setList([])} disabled={!list.length}><Trash2 size={12} /> Remove All</Button></div>
       <div className="kw-added-col">Keyword</div>
       {list.length === 0 ? <div className="kw-added-empty"><ProductsEmptyArt /></div> : (
         <ul className="kw-added-list">{list.map((k) => <li key={k}>{k}<button type="button" onClick={() => setList(list.filter((x) => x !== k))} aria-label={`Remove ${k}`}><X size={12} /></button></li>)}</ul>

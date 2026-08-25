@@ -13,8 +13,8 @@
  * Palantir-style scenario → review → commit over the live ontology.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input, Select, SegmentedControl } from '@/design-system/primitives'
-import { Lock, History as HistoryIcon } from 'lucide-react'
+import { Button, Input, Select, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
+import { Lock, History as HistoryIcon, X } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -119,7 +119,7 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
   const typeLabel = t === 'campaign' ? 'Campaign' : t === 'adgroup' ? 'Ad group' : 'Target'
   return (
     <aside className="cp-insp">
-      <div className="cp-insp-h"><span className="ttl"><span className="ty">{typeLabel}</span><b title={node.name}>{node.name}</b></span><button type="button" className="x" aria-label="Close inspector" onClick={onClose}>×</button></div>
+      <div className="cp-insp-h"><span className="ttl"><span className="ty">{typeLabel}</span><b title={node.name}>{node.name}</b></span><ToolbarButton icon={<X size={16} />} label="Close inspector" tooltip={false} onClick={onClose} /></div>
       <div className="cp-insp-kpis">
         {camp ? <>
           <span><i>Current</i>{eur(camp.currentDailyCents)}/day</span>
@@ -195,7 +195,7 @@ function BulkPanel({ refs, allCamps, adGroups, targets, onStageMany, onClear }: 
   const bulkStatus = (status: 'ENABLED' | 'PAUSED') => onStageMany(childRefs.map((r) => ({ id: r.id, patch: { entityType: r.type, status } })))
   return (
     <aside className="cp-insp cp-bulk">
-      <div className="cp-insp-h"><span className="ttl"><span className="ty">Bulk</span><b>{refs.length} selected</b></span><button type="button" className="x" aria-label="Clear selection" onClick={onClear}>×</button></div>
+      <div className="cp-insp-h"><span className="ttl"><span className="ty">Bulk</span><b>{refs.length} selected</b></span><ToolbarButton icon={<X size={16} />} label="Clear selection" tooltip={false} onClick={onClear} /></div>
       <div className="cp-bulk-counts">{camps.length > 0 && <span>{camps.length} campaign{camps.length === 1 ? '' : 's'}</span>}{nAg > 0 && <span>{nAg} ad group{nAg === 1 ? '' : 's'}</span>}{nTg > 0 && <span>{nTg} target{nTg === 1 ? '' : 's'}</span>}</div>
       {camps.length > 0 && (
         <div className="cp-insp-sec">
