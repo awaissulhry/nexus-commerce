@@ -9,7 +9,7 @@
  * critique D-1 (read-only settings) and D-2 (raw-JSON criterion/prefs).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill } from '@/design-system/primitives'
 import { money } from '../../../../campaigns/_grid/format'
 import { EbDateField } from '../../../_lib/EbDateField'
 import { postEbayAds, type CampaignDetailPayload } from '../../../_lib'
@@ -112,7 +112,7 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
             <div className="h10-cd-card pad">
               <div className="h10-cd-field">
                 <label>Campaign name</label>
-                <input value={form.name} maxLength={80} onChange={(e) => set('name', e.target.value)} disabled={ended} />
+                <Input type="text" value={form.name} maxLength={80} aria-label="Campaign name" onChange={(e) => set('name', e.target.value)} disabled={ended} />
               </div>
               <p className="eb-be-hint" style={{ marginTop: 10 }}>
                 {strategy === 'GEN' && !c.isRulesBased && <>General (CPS) — <b>the ad rate lives on each ad</b>; the campaign default applied at creation only. Change rates on the Ads tab.</>}
@@ -136,12 +136,12 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
               <div className="eb-form-row">
                 <div className="h10-cd-field s">
                   <label>Start date</label>
-                  <input value={c.startDate.slice(0, 10)} disabled title="Start date is immutable once a campaign has launched" />
+                  <Input type="text" value={c.startDate.slice(0, 10)} disabled aria-label="Start date" title="Start date is immutable once a campaign has launched" readOnly />
                 </div>
                 <div className="h10-cd-field s">
                   <label>End date — blank = never expires</label>
                   {ended
-                    ? <input value={form.endDate || 'never'} disabled />
+                    ? <Input type="text" value={form.endDate || 'never'} disabled aria-label="End date" readOnly />
                     : <EbDateField ariaLabel="End date" width={170} value={form.endDate} min={new Date().toISOString().slice(0, 10)}
                         placeholder="never" clearLabel="clear — no end date" onChange={(v) => set('endDate', v)} />}
                 </div>
@@ -157,7 +157,7 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
                 <div className="eb-form-row" style={{ alignItems: 'center' }}>
                   <div className="h10-cd-field s">
                     <label>Daily budget ({currency})</label>
-                    <input type="number" min={1} step={0.5} value={form.budgetEur} onChange={(e) => set('budgetEur', e.target.value)} disabled={ended} />
+                    <Input type="number" min={1} step={0.5} value={form.budgetEur} aria-label={`Daily budget (${currency})`} onChange={(e) => set('budgetEur', e.target.value)} disabled={ended} />
                   </div>
                   <Pill tone={pillTone(c.budgetUpdatesToday >= 12 ? 'warn' : 'arch')} title="eBay hard limit: 15 budget updates per campaign per day — shown before you try, not as an error after.">
                     {c.budgetUpdatesToday} / 15 edits today
@@ -180,7 +180,7 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
                   <div className="eb-form-row" style={{ marginTop: 12 }}>
                     <div className="h10-cd-field s">
                       <label>Dynamic rate cap (%)</label>
-                      <input type="number" min={2} max={100} step={0.1} value={form.capPct} onChange={(e) => set('capPct', e.target.value)} disabled={ended} />
+                      <Input type="number" min={2} max={100} step={0.1} value={form.capPct} aria-label="Dynamic rate cap (%)" onChange={(e) => set('capPct', e.target.value)} disabled={ended} />
                     </div>
                   </div>
                 )}

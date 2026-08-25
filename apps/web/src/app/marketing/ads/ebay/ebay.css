@@ -227,6 +227,11 @@
 /* EV1 — full-width input inside a flexed field (Amazon wizard idiom) */
 .eb-input-full { width: 100%; }
 
+/* A DS `Input` inside a console field wrapper fills it, exactly as the raw input it replaced did
+   (`.h10-cd-field > input` is `width: 100%`). `.nds-field` is inline-flex, so without this it
+   shrinks to its content. 0,2,0 — not decided by stylesheet order. */
+.h10-cd-field > .nds-field { width: 100%; }
+
 /* EV2 — listing thumbnails (Products grid) + picker resolution select */
 .eb-nmw-thumb { display: flex; align-items: flex-start; gap: 8px; }
 .eb-nmw-thumb > .body { flex: 1; min-width: 0; display: block; overflow: hidden; }

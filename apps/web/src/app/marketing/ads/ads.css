@@ -678,8 +678,17 @@
 .h10-cd-field.s { max-width: 220px; }
 .h10-cd-field > label { display: block; font-size: 12.5px; font-weight: 600; color: #37495b; margin-bottom: 6px; }
 .h10-cd-field > label i { color: #c11208; font-style: normal; }
-.h10-cd-field input[type=text], .h10-cd-field input[type=number], .h10-cd-fakeselect { width: 100%; box-sizing: border-box; height: 38px; border: 1px solid #6d839f; border-radius: var(--nds-radius-lg); padding: 0 12px; font: inherit; font-size: 14px; color: var(--nds-grey-900); background: var(--nds-white); }
-.h10-cd-field input[readonly] { background: var(--nds-grey-25); color: var(--nds-grey-600); cursor: default; }
+/* DIRECT children only. These are 0,2,1 — class + attribute + element — which outranks the
+   design system's own `.nds-field > input` at 0,1,1. So a DS `<Input>` dropped into one of these
+   wrappers had its inner input styled by THIS rule, drawing a second bordered 38px box inside the
+   DS field's own border (measured on prod: a 187x40 wrapper around a 185x38 input). Specificity,
+   not load order, so no amount of stylesheet reordering could fix it from a route.
+   The combinator adds no specificity, so the `.h10-cd-pct` / `.h10-cd-date` overrides below still
+   beat this exactly as before. Verified before the change: every typed input under a
+   `.h10-cd-field` in all nine call sites is a direct child, and no `.h10-cd-pct`/`.h10-cd-date`
+   wrapper sits inside one — the Amazon detail form already moved to the DS `Field`. */
+.h10-cd-field > input[type=text], .h10-cd-field > input[type=number], .h10-cd-fakeselect { width: 100%; box-sizing: border-box; height: 38px; border: 1px solid #6d839f; border-radius: var(--nds-radius-lg); padding: 0 12px; font: inherit; font-size: 14px; color: var(--nds-grey-900); background: var(--nds-white); }
+.h10-cd-field > input[readonly] { background: var(--nds-grey-25); color: var(--nds-grey-600); cursor: default; }
 .h10-cd-fakeselect { display: flex; align-items: center; justify-content: space-between; color: var(--nds-grey-450); cursor: not-allowed; }
 
 .h10-cd-pct, .h10-cd-date { display: inline-flex; align-items: center; height: 38px; border: 1px solid #6d839f; border-radius: var(--nds-radius-lg); background: var(--nds-white); overflow: hidden; box-sizing: border-box; }
@@ -867,7 +876,7 @@
 .h10-cd-form { max-width: 1010px; }
 .h10-cd-card .h10-cd-field { max-width: 430px; }
 .h10-cd-card .h10-cd-field.s { max-width: 220px; }
-.h10-cd-field input[readonly] { background: var(--nds-white); color: var(--nds-grey-900); }
+.h10-cd-field > input[readonly] { background: var(--nds-white); color: var(--nds-grey-900); }
 .h10-cd-sec h2 { font-size: 18px; }
 .h10-cd-sec .sub { font-size: 13.5px; color: var(--nds-grey-600); }
 .h10-cd-card { padding: 22px 24px; }
