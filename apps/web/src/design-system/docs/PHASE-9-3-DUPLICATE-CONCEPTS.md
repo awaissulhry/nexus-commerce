@@ -502,7 +502,35 @@ which yielded to the handler's own `requestAnimationFrame` loop — drive it syn
 | WG.2b | scope the 7 DOM queries to refs | ✅ 2026-08-25 |
 | WG.2a | 3 of 4 hand-rolled sites settled — the eBay wizard steps now use `.eb-tablebox` | ✅ 2026-08-25 |
 | WG.2a′ | the 4th is `CampaignsGrid` — it is not a consumer to migrate, it is the thing that **becomes** WorkspaceGrid | folds into WG.3 |
-| WG.2c | extract `h10-am-link` / `h10-cd-field` / `h10-am-card` as their own concepts | they are not grid |
+| WG.2c | `h10-am-link` → DS `Button variant="link"`; `h10-am-card` → DS `.nds-card` | ✅ 2026-08-25 |
+| ~~WG.2c (field)~~ | `h10-cd-field` — **mis-scoped, removed from WG.2**, see below | not a grid blocker |
+
+**WG.2c closed, and one item removed from it.** Two of the three were genuinely grid-entangled:
+
+- `h10-am-link` — 67 uses, 36 files. **No DS equivalent existed**, so this added
+  `Button variant="link"`. It exposed a live bug: the class sets font-size and font-weight but
+  never `font-family`, and buttons do not inherit it while anchors do — so **47 link-buttons were
+  rendering in Arial** beside 18 identical-looking anchors in Inter. Four contextual rules
+  (`.nds-toast`, `.h10-mmbid/.h10-editpop` disabled, `.h10-bud-foot`, `.aig2-sug`) were retargeted;
+  all verified rendering.
+- `h10-am-card` — 14 sites, a class swap onto `.nds-card`. Background and radius matched exactly;
+  the border moves #d8dde4 → #e6e9ee because the DS chose `--nds-border-subtle` for cards (note
+  `--nds-border` IS grey-200 — a style intent, not a defect, and far below any threshold WCAG
+  applies to a container). The trap was `margin-top: 16px`, which the DS Card does not carry and
+  four stacked AutomationTab cards depend on; kept explicit as `.h10-cardstack` rather than a
+  scoped `.h10-shell .nds-card` rule that would silently re-style every future DS Card here.
+
+🔴 **`h10-cd-field` was mis-scoped into WG.2c and is removed from it.** Measured: **1 of its 43
+uses sits in a grid file, and that one is `bulkActions.tsx`** — the Bulk Actions modal, which lives
+in `_grid/` but is a *consumer* of the grid's `selectionActions` slot, not the grid. `AdsDataGrid`,
+`AdsFilterBar` and `FilterDropdown` use it **zero** times. It cannot block WG.2d.
+
+It is still a real gap, just a separate one: `.h10-cd-field` is a **field group** (label above,
+control below, bottom margin) and the DS has no such concept — `.nds-field` is an *input shell*
+(inline-flex bordered container with adornment slots) that would sit *inside* one. I had recorded
+them as the same concept by matching the class NAME; they are not. Closing it means designing a
+`FormField` primitive (label, required marker, info slot, width) across 43 call sites, with the
+input styling it currently also carries belonging to a separate text-input concept.
 
 **The WG.2a design call, and why it is not an abstraction.** The three eBay wizard tables used
 `.h10-am-grid` only as a scrollable bordered table container. Adopting `AdsDataGrid` would impose
