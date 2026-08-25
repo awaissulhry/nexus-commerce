@@ -196,7 +196,10 @@ export function UnifiedRankCockpit() {
         {view === 'cockpit' && (<>
           <span className="az-urc-ctl"><span>Window</span><Listbox ariaLabel="Window" width={96} value={String(lookback)} onChange={v => setLookback(Number(v))} options={LOOKBACKS.map(d => ({ value: String(d), label: `${d}d` }))} /></span>
           <span className="az-urc-ctl"><span>Show</span><Listbox ariaLabel="Show" width={116} value={statusFilter} onChange={v => setStatusFilter(v as 'active' | 'inactive' | 'all')} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'all', label: 'All' }]} /></span>
-          <span className="az-urc-search" style={{ border: 'none', padding: 0 }}>
+          {/* Class dropped, not just neutralised: `.az-urc-search input` sets font-size 12.5px at
+              (0,1,1), ties `.nds-field > input` and wins on load order. Only `position: relative`
+              is needed here — it anchors `.az-urc-results` below. */}
+          <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
             <Input
               leadingIcon={<Search size={13} />}
               suffix={!searchOpen ? <Kbd>⌘K</Kbd> : undefined}
