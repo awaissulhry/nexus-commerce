@@ -488,3 +488,91 @@ generic-aware scanning. A naive `<Name ...>` regex reported* **zero** *props for
 because every call site uses generic syntax (`<AdsDataGrid<CampaignRow>`) and the regex terminated
 on the generic's `>`.*
 
+
+---
+
+## Appendix B — a fourteenth concept: the modal (closed 2026-08-25)
+
+Unlike #13, this one **was** a straight swap, and it is now done: **16 of 16 ads-console
+modals render the DS `Modal`.** Recorded here because the reasons it looked hard were wrong,
+and the reasons it was actually hard were invisible to `tsc`.
+
+### The concept was duplicated three ways, not two
+
+| | shell | Esc | backdrop click | portal | accessible name |
+|---|---|---|---|---|---|
+| DS `Modal` | `.nds-modal` | ✅ `[open, onClose]` | ✅ | ✅ `createPortal` | ✗ → **fixed** |
+| ads `.h10-modal` markup ×14 | hand-rolled per site | ✗ (0 of 14) | ✅ | ✗ | each its own `aria-label` |
+| `ebay/_lib/H10Modal` | hand-rolled once | ✅ but on `[props]` | ✅ | ✗ | `aria-label={title}` |
+
+`H10Modal` was a **second `Modal`** with the same prop list (`open/onClose/title/subtitle/
+footer/children`). Its effect depended on `[props]` — a fresh object every render — so its keydown
+listener re-bound on every render. It now wraps the DS `Modal` and contributes only `.eb-form`,
+which moved all 14 eBay call sites in one edit.
+
+### What the DS was missing, found by converting rather than by reading
+
+1. **No accessible name.** `role="dialog" aria-modal="true"` with a rendered title that nothing
+   pointed at. Every ads modal carried its own `aria-label`, so a straight port would have *lost*
+   the name. Now `useId` + `aria-labelledby`, with `aria-label` accepted for the untitled case.
+2. **Footer right-aligned everything.** 11 of 16 ads modals split the footer with
+   `<span className="grow" />`. Added `.nds-modal-f .grow { flex: 1 }`; without it they would all
+   have silently collapsed right.
+3. **The scale stopped at xl/920.** `.h10-modal.neg` is 1040 and holds a keyword *table*. Added
+   `xxl` (1040) rather than narrow a table by 12% to satisfy a scale.
+
+### The trap: a class name is not a width
+
+Four ad-group pickers carry `className="h10-modal wide apm"`. `.wide{width:560px}` is line 336;
+`.apm{max-width:1000px;width:94vw}` is line 1352 — equal specificity, later wins. **They render at
+1000px and `wide` is dead on them.** `ebay`'s `wide` was the same lie by a different route: `.wide`
+(560) plus an inline `style={{width:760}}`.
+
+Sizing from the class name would have narrowed four pickers 1000→560. `tsc` green, no CSS error.
+Every width here was resolved with `getComputedStyle` on the real class *combination*.
+
+The mapping that resulted — and the one rule that overrode "nearest step":
+
+| was | → | why |
+|---|---|---|
+| `wide` 560 | `md` 560 | exact |
+| `bulk` 600 | `lg` 660 | nearest that doesn't squeeze; its content carries its own 6px margins |
+| `bm` 808 | `xl` 920 | widening only |
+| `aig-add` 920 | `xl` 920 | exact (it declared 860 at line 1580, then 920 at 1660 — the first was dead) |
+| `apm` 1000 | `xxl` 1040 | content width nets **+8px** (12px padding → 28px) |
+| `neg` 1040 | `xxl` 1040 | exact |
+| `eb wide` 760 | `xl` 920 | **not** the nearer `lg` 660 — see the rule |
+
+> **Never narrow a modal that holds a table.** It spared `neg` (a keyword table) and then
+> `ImportCsvModal` (`.eb-difftable`), where nearest-step would have cost 112px.
+
+### The screenshot that decided the body padding
+
+The ads shell pads its body `4px 12px` while header and footer sit at `18px`, so **every field
+label hangs 6px left of the modal title**. The DS aligns all three at 18px. The one visible cost —
+a targeting description rewrapping to two lines — is that misalignment being fixed. Measured
+before/after: panel 510.4 → 534.5px tall at 560px wide.
+
+### What CSS did after the markup left
+
+12 rules required `.h10-modal` on an *ancestor* and would have stopped matching silently. The five
+`.h10-modal.apm .apm-ctx*` rules were re-anchored to `.apm-ctx*`; 21 dead shell/variant rules were
+swept, along with `.eb-modal-f`. `.h10-modal-err` stays — `StrategyModal` still uses it.
+
+Two rules were already dead before this work: `.h10-modal.tc` (660px, **no tsx user at all**) and
+the first of `.aig-add`'s two width declarations.
+
+### The probe that would have gone green on nothing
+
+`scripts/_spw_a11y.mjs` asserts `(await p.$('.h10-modal')) === null` to prove Esc closed the modal.
+After conversion that selector matches nothing, so it would have reported **pass** for a modal it
+could no longer see. Eight `_spw_*` probes were retargeted to `.nds-modal*`.
+
+### Verification
+
+`tsc` clean; `ds-conformance-guard`, `check-css-hex-ratchet`, `check-alias-form` all exit 0; both
+workspace builds green on push. Every string literal was diffed old-vs-new across all 19 files —
+the only losses are shell class names, the `role`/`Close`/`Escape` strings the DS now owns, and
+six `aria-label`s superseded by the visible title.
+
+Shipped in `eda47fc6f`, `4d432be9c`, `4e5d3bb7b`.
