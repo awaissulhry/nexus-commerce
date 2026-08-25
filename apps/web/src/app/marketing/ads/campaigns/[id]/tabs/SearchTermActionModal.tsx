@@ -9,7 +9,8 @@
  */
 import { useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { X } from 'lucide-react'
+import { Modal } from '@/design-system/components'
+
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../FilterDropdown'
 
@@ -56,39 +57,40 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
   }
 
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={isKw ? 'Add as Keyword' : 'Add as Negative'}>
-        <div className="h10-modal-h"><b>{isKw ? 'Add as Keyword' : 'Add as Negative'}</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">{isKw
+    <Modal
+      open
+      onClose={onClose}
+      title={isKw ? 'Add as Keyword' : 'Add as Negative'}
+      subtitle={isKw
           ? `Add ${terms.length} search term${terms.length === 1 ? '' : 's'} as keyword targets in an ad group.`
-          : `Add ${terms.length} search term${terms.length === 1 ? '' : 's'} as campaign-level negative keywords.`}</div>
-        <div className="h10-modal-b">
-          <div className="h10-st-chips">
-            {terms.slice(0, 24).map((t) => <span key={t} className="chip" title={t}>{t}</span>)}
-            {terms.length > 24 && <span className="chip more">+{terms.length - 24} more</span>}
-          </div>
-          {isKw && (
-            <div className="h10-cd-field"><label>Ad Group</label>
-              <H10Select width="100%" value={adGroupId} onChange={setAdGroupId} options={adGroups.map((a) => ({ value: a.id, label: a.name || a.id }))} ariaLabel="Ad Group" />
-            </div>
-          )}
-          <div className="h10-cd-field"><label>Match Type</label>
-            <H10Select width="100%" value={matchType} onChange={setMatchType} options={isKw ? KW_MATCH : NEG_MATCH} ariaLabel="Match Type" />
-          </div>
-          {isKw && (
-            <div className="h10-cd-field s"><label>Bid</label>
-              <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" /></div>
-            </div>
-          )}
-          {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}
-          {err && <div className="h10-cd-modalerr">{err}</div>}
-        </div>
-        <div className="h10-modal-f">
-     <Button onClick={onClose}>Cancel</Button>
+          : `Add ${terms.length} search term${terms.length === 1 ? '' : 's'} as campaign-level negative keywords.`}
+      footer={
+        <>
+<Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
      <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? 'Adding…' : isKw ? 'Add Keywords' : 'Add Negatives'}</Button>
-        </div>
+        </>
+      }
+    >
+      <div className="h10-st-chips">
+        {terms.slice(0, 24).map((t) => <span key={t} className="chip" title={t}>{t}</span>)}
+        {terms.length > 24 && <span className="chip more">+{terms.length - 24} more</span>}
       </div>
-    </div>
+      {isKw && (
+        <div className="h10-cd-field"><label>Ad Group</label>
+          <H10Select width="100%" value={adGroupId} onChange={setAdGroupId} options={adGroups.map((a) => ({ value: a.id, label: a.name || a.id }))} ariaLabel="Ad Group" />
+        </div>
+      )}
+      <div className="h10-cd-field"><label>Match Type</label>
+        <H10Select width="100%" value={matchType} onChange={setMatchType} options={isKw ? KW_MATCH : NEG_MATCH} ariaLabel="Match Type" />
+      </div>
+      {isKw && (
+        <div className="h10-cd-field s"><label>Bid</label>
+          <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} aria-label="Bid" /></div>
+        </div>
+      )}
+      {result && <div className={result.fail ? 'h10-cd-modalerr' : 'h10-st-ok'}>{result.ok} added{result.fail ? ` · ${result.fail} failed` : ''}.</div>}
+      {err && <div className="h10-cd-modalerr">{err}</div>}
+    </Modal>
   )
 }

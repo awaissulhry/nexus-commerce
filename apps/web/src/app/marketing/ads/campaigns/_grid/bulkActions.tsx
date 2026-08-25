@@ -7,7 +7,8 @@
  */
 import { useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { X } from 'lucide-react'
+import { Modal } from '@/design-system/components'
+
 import { getBackendUrl } from '@/lib/backend-url'
 
 /** PATCH the same body to /api/advertising/<base>/<id> for every id (applyImmediately:false). */
@@ -24,21 +25,22 @@ export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€'
   const [busy, setBusy] = useState(false)
   const valid = Number(bid) > 0
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Adjust ${bidLabel}`}>
-        <div className="h10-modal-h"><b>Adjust {bidLabel}</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">Set the {bidLabel.toLowerCase()} for {count} selected {noun}{count === 1 ? '' : 's'}.</div>
-        <div className="h10-modal-b">
-          <div className="h10-cd-field s"><label>{bidLabel}</label>
-            <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} autoFocus aria-label={bidLabel} /></div>
-          </div>
-        </div>
-        <div className="h10-modal-f">
-     <Button onClick={onClose}>Cancel</Button>
+    <Modal
+      open
+      onClose={onClose}
+      title={<>Adjust {bidLabel}</>}
+      subtitle={<>Set the {bidLabel.toLowerCase()} for {count} selected {noun}{count === 1 ? '' : 's'}.</>}
+      footer={
+        <>
+<Button onClick={onClose}>Cancel</Button>
           <span className="grow" />
      <Button variant="primary" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onApply(Number(bid)) } finally { setBusy(false) } }}>{busy ? 'Applying…' : 'Apply'}</Button>
-        </div>
+        </>
+      }
+    >
+      <div className="h10-cd-field s"><label>{bidLabel}</label>
+        <div className="h10-cd-money"><span className="pf">{currency}</span><input type="number" min="0.02" step="0.01" value={bid} onChange={(e) => setBid(e.target.value)} autoFocus aria-label={bidLabel} /></div>
       </div>
-    </div>
+    </Modal>
   )
 }

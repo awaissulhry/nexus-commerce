@@ -11,6 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import { X, Search, PlusCircle, Check, Trash2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -115,72 +116,74 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
   }
 
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal wide apm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Products to Ad Group">
-        <div className="h10-modal-h"><b>Add Products to Ad Group</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-b">
-          <div className="h10-apm">
-            <div className="apm-left">
-              <div className="apm-tabs" role="tablist">
-                <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'on' : ''} onClick={() => setTab('search')}>Search for Products</button>
-                <button type="button" role="tab" aria-selected={tab === 'enter'} className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Products</button>
+    <Modal
+      open
+      onClose={onClose}
+      size="xxl"
+      title="Add Products to Ad Group"
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!added.length || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${added.length ? ` (${added.length})` : ''}`}</Button>
+        </>
+      }
+    >
+      <div className="h10-apm">
+        <div className="apm-left">
+          <div className="apm-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'on' : ''} onClick={() => setTab('search')}>Search for Products</button>
+            <button type="button" role="tab" aria-selected={tab === 'enter'} className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Products</button>
+          </div>
+          {tab === 'search' ? (
+            <>
+              <div className="apm-srow">
+                <div className="apm-search"><Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" /></div>
               </div>
-              {tab === 'search' ? (
-                <>
-                  <div className="apm-srow">
-                    <div className="apm-search"><Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by product name, ASIN, or SKU" aria-label="Search products" /></div>
-                  </div>
-                  <div className="apm-count">
-                    <span>{loading ? 'Searching…' : `Viewing ${results.length ? `1-${results.length}` : 0} of ${results.length} Products`}</span>
-                    <button type="button" className="apm-addall" disabled={!results.length} onClick={addAll}><PlusCircle size={14} /> Add All</button>
-                  </div>
-                  <div className="apm-list">
-                    {results.length === 0 ? <div className="apm-none">{loading ? '' : 'No products match your search.'}</div> : results.map((p) => {
-                      const on = addedKeys.has(keyOf(p))
-                      return (
-                        <div className="apm-item" key={keyOf(p)}>
-                          <Thumb p={p} />
-                          {Meta(p)}
-                          <button type="button" className={`apm-add ${on ? 'added' : ''}`} disabled={on} onClick={() => add(p)}>{on ? <><Check size={14} /> Added</> : <><PlusCircle size={14} /> Add</>}</button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="apm-enter">
-                  <textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Paste product names, ASINs, or SKUs (one per line)" aria-label="Enter products" />
-                  <button type="button" className="apm-enterbtn" disabled={!enterText.trim()} onClick={enterAdd}><PlusCircle size={14} /> Add Products</button>
-                </div>
-              )}
-            </div>
-
-            <div className="apm-right">
-              <div className="apm-rh"><span>{added.length} Products Added</span><button type="button" className="apm-removeall" disabled={!added.length} onClick={() => setAdded([])}><Trash2 size={14} /> Remove All</button></div>
-              <div className="apm-thead"><span>Product</span><span className="sv">Sponsored Videos <i className="new">New</i></span></div>
-              {added.length === 0 ? (
-                <div className="apm-rempty">No data</div>
-              ) : (
-                <div className="apm-rrows">
-                  {added.map((p) => (
-                    <div className="apm-rrow" key={keyOf(p)}>
+              <div className="apm-count">
+                <span>{loading ? 'Searching…' : `Viewing ${results.length ? `1-${results.length}` : 0} of ${results.length} Products`}</span>
+                <button type="button" className="apm-addall" disabled={!results.length} onClick={addAll}><PlusCircle size={14} /> Add All</button>
+              </div>
+              <div className="apm-list">
+                {results.length === 0 ? <div className="apm-none">{loading ? '' : 'No products match your search.'}</div> : results.map((p) => {
+                  const on = addedKeys.has(keyOf(p))
+                  return (
+                    <div className="apm-item" key={keyOf(p)}>
                       <Thumb p={p} />
                       {Meta(p)}
-                      <span className="sv">—</span>
-                      <button type="button" className="apm-x" onClick={() => remove(keyOf(p))} aria-label="Remove"><X size={15} /></button>
+                      <button type="button" className={`apm-add ${on ? 'added' : ''}`} disabled={on} onClick={() => add(p)}>{on ? <><Check size={14} /> Added</> : <><PlusCircle size={14} /> Add</>}</button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="apm-enter">
+              <textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Paste product names, ASINs, or SKUs (one per line)" aria-label="Enter products" />
+              <button type="button" className="apm-enterbtn" disabled={!enterText.trim()} onClick={enterAdd}><PlusCircle size={14} /> Add Products</button>
             </div>
-          </div>
-          {msg && <div className="h10-cd-modalerr">{msg}</div>}
+          )}
         </div>
-        <div className="h10-modal-f">
-     <Button onClick={onClose}>Cancel</Button>
-     <Button variant="primary" disabled={!added.length || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${added.length ? ` (${added.length})` : ''}`}</Button>
+
+        <div className="apm-right">
+          <div className="apm-rh"><span>{added.length} Products Added</span><button type="button" className="apm-removeall" disabled={!added.length} onClick={() => setAdded([])}><Trash2 size={14} /> Remove All</button></div>
+          <div className="apm-thead"><span>Product</span><span className="sv">Sponsored Videos <i className="new">New</i></span></div>
+          {added.length === 0 ? (
+            <div className="apm-rempty">No data</div>
+          ) : (
+            <div className="apm-rrows">
+              {added.map((p) => (
+                <div className="apm-rrow" key={keyOf(p)}>
+                  <Thumb p={p} />
+                  {Meta(p)}
+                  <span className="sv">—</span>
+                  <button type="button" className="apm-x" onClick={() => remove(keyOf(p))} aria-label="Remove"><X size={15} /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+      {msg && <div className="h10-cd-modalerr">{msg}</div>}
+    </Modal>
   )
 }

@@ -467,7 +467,6 @@
 .h10-am-grid tr.h10-am-total td.nm.fz { text-align: right; }
 
 /* CBN.2e.4 — Table Customization modal (H10 "Customize") */
-.h10-modal.tc { width: 660px; }
 .h10-tc-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px; }
 .h10-tc-head .ti { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-tc-all { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); cursor: pointer; }
@@ -1406,11 +1405,11 @@
 
 /* "Add Negative Target ASINs" reuses .h10-apm: a Campaign|Ad-group context strip atop, a
    single paste textarea (no search), and an ASIN-column staged list. */
-.h10-modal.apm .apm-ctx { display: flex; gap: 48px; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--nds-grey-100); }
-.h10-modal.apm .apm-ctx-c { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.h10-modal.apm .apm-ctx-c .lbl { font-size: 12.5px; color: var(--nds-text-muted); }
-.h10-modal.apm .apm-ctx-c .val { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--nds-grey-900); }
-.h10-modal.apm .apm-ctx-c .val svg { color: var(--nds-grey-900); flex-shrink: 0; }
+.apm-ctx { display: flex; gap: 48px; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--nds-grey-100); }
+.apm-ctx-c { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.apm-ctx-c .lbl { font-size: 12.5px; color: var(--nds-text-muted); }
+.apm-ctx-c .val { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--nds-grey-900); }
+.apm-ctx-c .val svg { color: var(--nds-grey-900); flex-shrink: 0; }
 .h10-apm .apm-thead .apm-sort { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; font: inherit; font-size: 11px; font-weight: 700; color: var(--nds-grey-500); text-transform: uppercase; letter-spacing: .03em; cursor: pointer; padding: 0; }
 .h10-apm .apm-thead .apm-sort svg { color: var(--nds-grey-300); }
 .h10-apm .apm-thead .apm-sort.asc svg, .h10-apm .apm-thead .apm-sort.desc svg { color: var(--nds-blue-600); }
@@ -1577,7 +1576,6 @@
 .h10-aig-card.adv .adv-note { font-size: 12.5px; line-height: 1.55; color: var(--nds-grey-600); margin: 0; }
 
 /* Add Products modal */
-.h10-modal.aig-add { width: 860px; max-width: 94vw; }
 .aig-add-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 8px 11px; color: var(--nds-grey-500); margin-bottom: 14px; }
 .aig-add-search input { flex: 1; border: none; outline: none; font: inherit; font-size: 13px; background: transparent; color: var(--nds-grey-900); }
 .aig-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }

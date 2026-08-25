@@ -13,6 +13,7 @@
  */
 import { useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -84,73 +85,75 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
   )
 
   return (
-    <div className="h10-modal-backdrop" onClick={onClose}>
-      <div className="h10-modal wide apm" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Keywords and Targets to Ad Group">
-        <div className="h10-modal-h"><b>Add Keywords &amp; Targets to Ad Group</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-b">
-          <div className="apm-ctx">
-            <div className="apm-ctx-c"><span className="lbl">Campaign</span><span className="val">{campaignName || '—'}</span></div>
-            <div className="apm-ctx-c"><span className="lbl">Ad group</span><span className="val"><Layers size={15} /> {adGroupName || '—'}</span></div>
+    <Modal
+      open
+      onClose={onClose}
+      size="xxl"
+      title={<>Add Keywords &amp; Targets to Ad Group</>}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!n || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${n ? ` (${n})` : ''}`}</Button>
+        </>
+      }
+    >
+      <div className="apm-ctx">
+        <div className="apm-ctx-c"><span className="lbl">Campaign</span><span className="val">{campaignName || '—'}</span></div>
+        <div className="apm-ctx-c"><span className="lbl">Ad group</span><span className="val"><Layers size={15} /> {adGroupName || '—'}</span></div>
+      </div>
+      <div className="h10-apm">
+        <div className="apm-left">
+          <div className="apm-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'keyword'} className={tab === 'keyword' ? 'on' : ''} onClick={() => { setTab('keyword'); setText('') }}>Keyword Targeting</button>
+            <button type="button" role="tab" aria-selected={tab === 'product'} className={tab === 'product' ? 'on' : ''} onClick={() => { setTab('product'); setText('') }}>Product Targeting</button>
           </div>
-          <div className="h10-apm">
-            <div className="apm-left">
-              <div className="apm-tabs" role="tablist">
-                <button type="button" role="tab" aria-selected={tab === 'keyword'} className={tab === 'keyword' ? 'on' : ''} onClick={() => { setTab('keyword'); setText('') }}>Keyword Targeting</button>
-                <button type="button" role="tab" aria-selected={tab === 'product'} className={tab === 'product' ? 'on' : ''} onClick={() => { setTab('product'); setText('') }}>Product Targeting</button>
-              </div>
-              {tab === 'keyword' ? (
-                <>
-                  <div className="apm-ctrl">
-                    <div className="apm-mt">
-                      <span className="lbl">Match Type:</span>
-                      {(['BROAD', 'PHRASE', 'EXACT'] as KMatch[]).map((m) => (
-                        <label key={m} className={matches[m] ? 'on' : ''}><input type="checkbox" checked={matches[m]} onChange={(e) => setMatches((p) => ({ ...p, [m]: e.target.checked }))} /> {TYPE_LABEL[m]}</label>
-                      ))}
-                    </div>
-                    {BidField}
-                  </div>
-                  <div className="apm-enter no-pad-top">
-                    <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Keywords" />
-                    <button type="button" className="apm-enterbtn" disabled={!text.trim() || !checkedMatches.length} onClick={stageKeywords}><PlusCircle size={14} /> Add Keywords</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="apm-ctrl">{BidField}</div>
-                  <div className="apm-enter no-pad-top">
-                    <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste product ASINs (one per line)" aria-label="Product ASINs" />
-                    <button type="button" className="apm-enterbtn" disabled={!text.trim()} onClick={stageProducts}><PlusCircle size={14} /> Add Products</button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="apm-right">
-              <div className="apm-rh"><span>{n} Target{n === 1 ? '' : 's'} Added</span><button type="button" className="apm-removeall" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</button></div>
-              <div className="apm-thead tgt"><button type="button" className={`apm-sort ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by target">Target <ChevronsUpDown size={12} /></button><span>Match Type</span><span>Bid</span><span /></div>
-              {n === 0 ? (
-                <div className="apm-rempty">No data</div>
-              ) : (
-                <div className="apm-rrows">
-                  {view.map((s) => (
-                    <div className="apm-rrow tgt" key={keyOf(s)}>
-                      <span className="ai"><span className="t" title={s.value}>{s.value}</span></span>
-                      <span className="apm-tcol">{s.kind === 'keyword' ? TYPE_LABEL[s.matchType ?? 'BROAD'] : 'Product'}</span>
-                      <span className="apm-bcol">€{s.bid.toFixed(2)}</span>
-                      <button type="button" className="apm-x" onClick={() => remove(keyOf(s))} aria-label={`Remove ${s.value}`}><X size={15} /></button>
-                    </div>
+          {tab === 'keyword' ? (
+            <>
+              <div className="apm-ctrl">
+                <div className="apm-mt">
+                  <span className="lbl">Match Type:</span>
+                  {(['BROAD', 'PHRASE', 'EXACT'] as KMatch[]).map((m) => (
+                    <label key={m} className={matches[m] ? 'on' : ''}><input type="checkbox" checked={matches[m]} onChange={(e) => setMatches((p) => ({ ...p, [m]: e.target.checked }))} /> {TYPE_LABEL[m]}</label>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-          {msg && <div className="h10-cd-modalerr">{msg}</div>}
+                {BidField}
+              </div>
+              <div className="apm-enter no-pad-top">
+                <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Keywords" />
+                <button type="button" className="apm-enterbtn" disabled={!text.trim() || !checkedMatches.length} onClick={stageKeywords}><PlusCircle size={14} /> Add Keywords</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="apm-ctrl">{BidField}</div>
+              <div className="apm-enter no-pad-top">
+                <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste product ASINs (one per line)" aria-label="Product ASINs" />
+                <button type="button" className="apm-enterbtn" disabled={!text.trim()} onClick={stageProducts}><PlusCircle size={14} /> Add Products</button>
+              </div>
+            </>
+          )}
         </div>
-        <div className="h10-modal-f">
-     <Button onClick={onClose}>Cancel</Button>
-     <Button variant="primary" disabled={!n || submitting} onClick={() => void submit()}>{submitting ? 'Adding…' : `Add to Ad Group${n ? ` (${n})` : ''}`}</Button>
+
+        <div className="apm-right">
+          <div className="apm-rh"><span>{n} Target{n === 1 ? '' : 's'} Added</span><button type="button" className="apm-removeall" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</button></div>
+          <div className="apm-thead tgt"><button type="button" className={`apm-sort ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by target">Target <ChevronsUpDown size={12} /></button><span>Match Type</span><span>Bid</span><span /></div>
+          {n === 0 ? (
+            <div className="apm-rempty">No data</div>
+          ) : (
+            <div className="apm-rrows">
+              {view.map((s) => (
+                <div className="apm-rrow tgt" key={keyOf(s)}>
+                  <span className="ai"><span className="t" title={s.value}>{s.value}</span></span>
+                  <span className="apm-tcol">{s.kind === 'keyword' ? TYPE_LABEL[s.matchType ?? 'BROAD'] : 'Product'}</span>
+                  <span className="apm-bcol">€{s.bid.toFixed(2)}</span>
+                  <button type="button" className="apm-x" onClick={() => remove(keyOf(s))} aria-label={`Remove ${s.value}`}><X size={15} /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+      {msg && <div className="h10-cd-modalerr">{msg}</div>}
+    </Modal>
   )
 }

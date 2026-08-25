@@ -30,9 +30,10 @@
  * the gate working. Consumers pass `onChange`/`onConfirm` and report the outcome their own way.
  */
 import { useState, type ReactNode } from 'react'
-import { ChevronDown, ExternalLink, Lightbulb, Pencil, X } from 'lucide-react'
+import { ChevronDown, ExternalLink, Lightbulb, Pencil } from 'lucide-react'
 import { HoverCard } from '../campaigns/FilterDropdown'
 import { Button, Pill } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 
 // ── the label maps, defined once ────────────────────────────────────────────────────────────────
 
@@ -301,21 +302,24 @@ export function StrategyModal({ strategy, busy, error, onConfirm, onClose }: {
 }) {
   const [v, setV] = useState(strategy ?? 'LEGACY_FOR_SALES')
   return (
-    <div className="h10-modal-backdrop" onClick={() => { if (!busy) onClose() }}>
-      <div className="h10-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Campaign Bidding Strategy">
-        <div className="h10-modal-h"><b>Campaign Bidding Strategy</b><button type="button" className="h10-modal-x" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-        <div className="h10-modal-sub">Select a strategy to optimize your campaign bidding performance</div>
-        <div className="h10-modal-b">
-          {STRATEGY_DEFS.map((s) => (
-            <label className={`h10-radio-card ${v === s.value ? 'on' : ''}`} key={s.value}>
-              <input type="radio" name="bidstrat" checked={v === s.value} onChange={() => setV(s.value)} />
-              <span className="rc-b"><span className="rc-t">{s.title}</span><span className="rc-d">{s.desc}</span></span>
-            </label>
-          ))}
-          {error && <p className="h10-modal-err" role="alert">{error}</p>}
-        </div>
-        <div className="h10-modal-f"><Button onClick={onClose} disabled={busy}>Cancel</Button><span className="grow" /><Button variant="primary" onClick={() => onConfirm(v)} disabled={busy}>{busy ? 'Saving…' : 'Confirm'}</Button></div>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      title="Campaign Bidding Strategy"
+      subtitle="Select a strategy to optimize your campaign bidding performance"
+      footer={
+        <>
+<Button onClick={onClose} disabled={busy}>Cancel</Button><span className="grow" /><Button variant="primary" onClick={() => onConfirm(v)} disabled={busy}>{busy ? 'Saving…' : 'Confirm'}</Button>
+        </>
+      }
+    >
+      {STRATEGY_DEFS.map((s) => (
+        <label className={`h10-radio-card ${v === s.value ? 'on' : ''}`} key={s.value}>
+          <input type="radio" name="bidstrat" checked={v === s.value} onChange={() => setV(s.value)} />
+          <span className="rc-b"><span className="rc-t">{s.title}</span><span className="rc-d">{s.desc}</span></span>
+        </label>
+      ))}
+      {error && <p className="h10-modal-err" role="alert">{error}</p>}
+    </Modal>
   )
 }
