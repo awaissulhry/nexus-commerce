@@ -10,25 +10,17 @@
 
 /* Ad-type chooser */
 .h10-sbsd-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 12px; }
-.h10-sbsd-type { text-align: left; background: var(--nds-white); border: 1.5px solid var(--nds-grey-150); border-radius: 9px; padding: 15px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: border-color .12s, background .12s; }
-.h10-sbsd-type:hover { border-color: #c2cdda; }
-.h10-sbsd-type.on { border-color: var(--nds-blue-600); background: var(--nds-grey-25); }
-.h10-sbsd-type b { font-size: 13.5px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-sbsd-type span { font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.5; }
 
 /* Fields */
 .h10-sbsd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-top: 12px; }
 .h10-sbsd-grid .f { display: flex; flex-direction: column; gap: 6px; }
 .h10-sbsd-grid .f.wide { grid-column: span 2; }
 .h10-sbsd-grid .f > span { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
-.h10-sbsd-grid input, .h10-sbsd-grid select { height: 36px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 0 10px; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); }
-.h10-sbsd-grid input:focus, .h10-sbsd-grid select:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
 
 /* SD tactic */
 .h10-sbsd-tactic { margin-top: 18px; display: flex; flex-direction: column; gap: 11px; }
 .h10-sbsd-tactic .lbl { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-sbsd-tactic .r { display: grid; grid-template-columns: 16px 1fr; gap: 10px; align-items: start; cursor: pointer; }
-.h10-sbsd-tactic .r input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: var(--nds-blue-600); cursor: pointer; }
 .h10-sbsd-tactic .r span { font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.5; }
 .h10-sbsd-tactic .r b { color: var(--nds-grey-900); font-weight: 600; }
 
@@ -41,12 +33,6 @@
 
 /* Actions */
 .h10-sbsd-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.h10-sbsd-btn { height: 38px; padding: 0 18px; border-radius: var(--nds-radius-md); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
-.h10-sbsd-btn.ghost { background: var(--nds-white); border-color: var(--nds-grey-200); color: var(--nds-grey-900); }
-.h10-sbsd-btn.ghost:hover:not(:disabled) { border-color: #c2cdda; background: var(--nds-grey-25); }
-.h10-sbsd-btn.primary { background: var(--nds-blue-600); color: var(--nds-white); }
-.h10-sbsd-btn.primary:hover:not(:disabled) { background: var(--nds-blue-700); }
-.h10-sbsd-btn:disabled { opacity: .5; cursor: not-allowed; }
 .h10-sbsd-hint { font-size: 12.5px; color: var(--nds-grey-500); }
 
 /* Payload preview */
@@ -58,8 +44,6 @@
 
 /* Product picker */
 .h10-sbsd-pick { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-.h10-sbsd-search { height: 36px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 0 11px; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); max-width: 520px; }
-.h10-sbsd-search:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
 .h10-sbsd-found { list-style: none; margin: 0; padding: 0; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); max-width: 720px; overflow: hidden; }
 .h10-sbsd-found li + li { border-top: 1px solid var(--nds-grey-100); }
 .h10-sbsd-found button { width: 100%; text-align: left; background: var(--nds-white); border: 0; padding: 10px 13px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; }
@@ -75,8 +59,6 @@
 .h10-sbsd-chips .chip button { border: 0; background: none; cursor: pointer; color: var(--nds-grey-500); font-size: 14px; line-height: 1; padding: 0 2px; }
 .h10-sbsd-chips .chip button:hover { color: #a12622; }
 
-.h10-sbsd-asins { border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 9px 11px; font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white); max-width: 520px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.h10-sbsd-asins:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31, 111, 222, .12); }
 .h10-sbsd-plan { margin-top: 14px; font-size: 12.5px; color: var(--nds-grey-600); }
 .h10-sbsd-plan .warn { color: #8a4b08; font-weight: 600; }
 
@@ -98,3 +80,15 @@
 .h10-sbsd-verify.bad b { color: var(--nds-grey-900); }
 .h10-sbsd-verify ul { margin: 9px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .h10-sbsd-verify .err { margin-top: 9px; color: var(--nds-grey-600); }
+
+/* ── DS alignment (2026-08-25) ────────────────────────────────────────────────
+   Every control on this surface is now a design-system primitive. What is left
+   here is size and monospace — the two things the DS deliberately does not fix
+   for a caller — plus the ONE colour that carries meaning: the launch tick keeps
+   its amber accent (`.h10-sbsd-enable input`, above), because that control turns
+   real spend on and reading like every other tick was never the intent. */
+.h10-sbsd-search { max-width: 520px; }
+.h10-sbsd-asins { max-width: 520px; min-height: 92px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.h10-sbsd-fld { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; max-width: 520px; }
+.h10-sbsd-fld.wide { max-width: none; }
+.h10-sbsd-flabel { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }

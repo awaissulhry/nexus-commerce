@@ -19,6 +19,9 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import './sb-sd.css'
 
 type AdType = 'SB' | 'SD'
@@ -341,10 +344,15 @@ export function SbSdBuilder() {
           <h3>Ad type</h3>
           <div className="h10-sbsd-types">
             {(['SD', 'SB'] as AdType[]).map((t) => (
-              <button type="button" key={t} className={`h10-sbsd-type ${t === type ? 'on' : ''}`} onClick={() => setType(t)}>
-                <b>{COPY[t].title}</b>
-                <span>{COPY[t].blurb}</span>
-              </button>
+              <RadioCard
+                key={t}
+                name="sbsd-adtype"
+                title={COPY[t].title}
+                description={COPY[t].blurb}
+                selected={t === type}
+                checked={t === type}
+                onChange={() => setType(t)}
+              />
             ))}
           </div>
           <p className="h10-sbsd-note">
@@ -358,35 +366,31 @@ export function SbSdBuilder() {
           <div className="h10-sbsd-grid">
             <label className="f">
               <span>Marketplace</span>
-              <select value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>
+              <Select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Marketplace">
                 {markets.map((m) => <option key={m} value={m}>{FLAG[m] ?? ''} {m}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="f wide">
               <span>Campaign name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`e.g. GALE ${type === 'SB' ? 'Brand' : 'Display'} ${marketplace}`} />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={`e.g. GALE ${type === 'SB' ? 'Brand' : 'Display'} ${marketplace}`} aria-label="Campaign name" />
             </label>
             <label className="f">
               <span>Daily budget (€)</span>
-              <input type="number" min="1" step="1" value={budget} onChange={(e) => setBudget(e.target.value)} />
+              <Input type="number" min="1" step="1" value={budget} onChange={(e) => setBudget(e.target.value)} aria-label="Daily budget in euro" />
             </label>
             <label className="f">
               <span>Default bid (€)</span>
-              <input type="number" min="0.02" step="0.01" value={defaultBid} onChange={(e) => setDefaultBid(e.target.value)} />
+              <Input type="number" min="0.02" step="0.01" value={defaultBid} onChange={(e) => setDefaultBid(e.target.value)} aria-label="Default bid in euro" />
             </label>
           </div>
 
           {type === 'SD' && (
             <div className="h10-sbsd-tactic">
               <span className="lbl">Targeting tactic</span>
-              <label className="r">
-                <input type="radio" checked={tactic === 'T00020'} onChange={() => setTactic('T00020')} />
-                <span><b>Contextual (T00020)</b> — product and category targeting on detail pages.</span>
-              </label>
-              <label className="r">
-                <input type="radio" checked={tactic === 'T00030'} onChange={() => setTactic('T00030')} />
-                <span><b>Audiences (T00030)</b> — views remarketing and interest audiences, on and off Amazon.</span>
-              </label>
+              <Radio className="r" name="sbsd-tactic" checked={tactic === 'T00020'} onChange={() => setTactic('T00020')}
+                label={<span><b>Contextual (T00020)</b> — product and category targeting on detail pages.</span>} />
+              <Radio className="r" name="sbsd-tactic" checked={tactic === 'T00030'} onChange={() => setTactic('T00030')}
+                label={<span><b>Audiences (T00030)</b> — views remarketing and interest audiences, on and off Amazon.</span>} />
             </div>
           )}
         </section>
@@ -398,9 +402,9 @@ export function SbSdBuilder() {
             elsewhere is not advertisable here.
           </p>
           <div className="h10-sbsd-pick">
-            <input
-              className="h10-sbsd-search" value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search your products by name, SKU or ASIN…"
+            <Input
+              value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search products"
+              placeholder="Search your products by name, SKU or ASIN…" fieldClassName="h10-sbsd-search"
             />
             {searching && <span className="h10-sbsd-hint">Searching…</span>}
             {found.length > 0 && (
@@ -443,11 +447,11 @@ export function SbSdBuilder() {
               and landing page are cloned from an existing SB campaign in {marketplace} — this
               account has no creative-asset upload flow, and Amazon will not accept an ad without them.
             </p>
-            <label className="f" style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 520 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1c2530' }}>Headline</span>
-              <input
-                className="h10-sbsd-search" value={headline} maxLength={50}
-                onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. RIDE IN STYLE"
+            <label className="h10-sbsd-fld">
+              <span className="h10-sbsd-flabel">Headline</span>
+              <Input
+                value={headline} maxLength={50} aria-label="Headline"
+                onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. RIDE IN STYLE" fieldClassName="h10-sbsd-search"
               />
               <span className="h10-sbsd-hint">{headline.length}/50 — shown beside your logo above the search results.</span>
             </label>
@@ -473,16 +477,15 @@ export function SbSdBuilder() {
             <div className="h10-sbsd-tactic">
               <span className="lbl">Match type</span>
               {(['EXACT', 'PHRASE', 'BROAD'] as const).map((m) => (
-                <label className="r" key={m}>
-                  <input type="radio" checked={sbMatch === m} onChange={() => setSbMatch(m)} />
-                  <span><b>{m[0] + m.slice(1).toLowerCase()}</b> — {m === 'EXACT' ? 'only this exact query.' : m === 'PHRASE' ? 'queries containing this phrase in order.' : 'the widest reach, and the loosest.'}</span>
-                </label>
+                <Radio className="r" key={m} name="sbsd-match" checked={sbMatch === m} onChange={() => setSbMatch(m)}
+                  label={<span><b>{m[0] + m.slice(1).toLowerCase()}</b> — {m === 'EXACT' ? 'only this exact query.' : m === 'PHRASE' ? 'queries containing this phrase in order.' : 'the widest reach, and the loosest.'}</span>} />
               ))}
             </div>
-            <label className="f" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1c2530' }}>Keywords — one per line</span>
-              <textarea
+            <label className="h10-sbsd-fld wide">
+              <span className="h10-sbsd-flabel">Keywords — one per line</span>
+              <Textarea
                 className="h10-sbsd-asins" rows={4} value={sbKeywords} onChange={(e) => setSbKeywords(e.target.value)}
+                aria-label="Keywords, one per line"
                 placeholder={'giacca moto estiva\ngiacca pelle uomo'}
               />
             </label>
@@ -504,17 +507,20 @@ export function SbSdBuilder() {
             </p>
             {tactic === 'T00020' && (
               <>
-                <label className="h10-sbsd-enable">
-                  <input type="checkbox" checked={defensive} onChange={(e) => setDefensive(e.target.checked)} />
-                  <span>
+                <Checkbox
+                  className="h10-sbsd-enable"
+                  checked={defensive}
+                  onChange={(e) => setDefensive(e.target.checked)}
+                  label={<>
                     <b>Defend my own detail pages.</b> Targets the products above with their own ads,
                     which walls competitors off the pages you already own.
-                  </span>
-                </label>
-                <label className="f" style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1c2530' }}>Competitor ASINs (optional)</span>
-                  <textarea
+                  </>}
+                />
+                <label className="h10-sbsd-fld wide">
+                  <span className="h10-sbsd-flabel">Competitor ASINs (optional)</span>
+                  <Textarea
                     className="h10-sbsd-asins" rows={3} value={rivalAsins} onChange={(e) => setRivalAsins(e.target.value)}
+                    aria-label="Competitor ASINs"
                     placeholder="B0XXXXXXXX B0YYYYYYYY — paste or space-separate"
                   />
                 </label>
@@ -530,14 +536,16 @@ export function SbSdBuilder() {
 
         <section className="h10-sbsd-sec">
           <h3>Launch state</h3>
-          <label className="h10-sbsd-enable">
-            <input type="checkbox" checked={startEnabled} onChange={(e) => setStartEnabled(e.target.checked)} />
-            <span>
+          <Checkbox
+            className="h10-sbsd-enable"
+            checked={startEnabled}
+            onChange={(e) => setStartEnabled(e.target.checked)}
+            label={<>
               <b>Start this campaign enabled.</b> Leave unticked and it is created PAUSED, which is
               the default for every SB/SD campaign. Tick this only if the budget above is the one
               you intend to spend from today.
-            </span>
-          </label>
+            </>}
+          />
           {startEnabled && (
             <div className="h10-sbsd-warn">
               This campaign will begin spending up to €{budgetNum || 0} per day as soon as Amazon accepts it.
@@ -546,12 +554,12 @@ export function SbSdBuilder() {
         </section>
 
         <div className="h10-sbsd-actions">
-          <button type="button" className="h10-sbsd-btn ghost" disabled={!valid || busy !== null} onClick={() => call(true)}>
+          <Button disabled={!valid || busy !== null} onClick={() => call(true)}>
             {busy === 'preview' ? 'Building…' : 'Preview payload'}
-          </button>
-          <button type="button" className="h10-sbsd-btn primary" disabled={!valid || !preview || busy !== null} onClick={() => call(false)}>
+          </Button>
+          <Button variant="primary" disabled={!valid || !preview || busy !== null} onClick={() => call(false)}>
             {busy === 'create' ? 'Creating…' : startEnabled ? 'Create ENABLED campaign' : 'Create paused campaign'}
-          </button>
+          </Button>
           {!preview && valid && <span className="h10-sbsd-hint">Preview the payload before creating.</span>}
         </div>
 
