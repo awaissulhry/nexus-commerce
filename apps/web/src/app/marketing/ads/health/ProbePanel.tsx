@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Stethoscope, Play, ChevronDown, ChevronRight, CheckCircle2, XCircle, Copy, Check, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/design-system/primitives'
 
 interface ProfileRow { profileId: string; marketplace: string; region: string; accountLabel: string | null; mode: string; isActive: boolean }
 interface ProbeResult {
@@ -148,13 +149,13 @@ export function ProbePanel() {
                     </button>
                   ))}
                 </span>
-                <button type="button" className="hl-pb-run" disabled={running || !selected} onClick={() => void run()}>
+                <Button variant="primary" size="sm" disabled={running || !selected} onClick={() => void run()}>
                   {running ? <><Loader2 size={13} className="hl-pb-spin" aria-hidden /> Probing…</> : <><Play size={13} aria-hidden /> Run probe suite</>}
-                </button>
+                </Button>
                 {report && (
-                  <button type="button" className="hl-pb-copy" onClick={() => void copy()} title="Copy the full JSON report">
+                  <Button size="sm" onClick={() => void copy()} title="Copy the full JSON report">
                     {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />} {copied ? 'Copied' : 'Copy JSON'}
-                  </button>
+                  </Button>
                 )}
               </div>
 
