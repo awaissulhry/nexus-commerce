@@ -23,9 +23,10 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 
 export interface SchedCampaign {
   id: string
@@ -263,7 +264,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
           <button type="button" className="pg" disabled={pg <= 1} onClick={() => setPage(pg - 1)} aria-label="Previous page"><ChevronLeft size={16} /></button>
           <span className="pgn">{pg}</span>
           <button type="button" className="pg" disabled={pg >= pages} onClick={() => setPage(pg + 1)} aria-label="Next page"><ChevronRight size={16} /></button>
-          <span className="pp">Rows per page: <H10Select width={72} options={[{ value: '25', label: '25' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} value={String(perPage)} onChange={(v) => { setPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" /></span>
+          <span className="pp">Rows per page: <Listbox width={72} options={[{ value: '25', label: '25' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} value={String(perPage)} onChange={(v) => { setPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" /></span>
         </div>
         )}
       </div>

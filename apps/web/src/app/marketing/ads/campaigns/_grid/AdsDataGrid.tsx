@@ -21,10 +21,11 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { Button } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
-import { H10Select, HoverCard } from '../FilterDropdown'
+import { HoverCard } from '../FilterDropdown'
 import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns'
 import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { enabledRank } from './enabledRank'
+import { Listbox } from '@/design-system/components'
 
 // FB.1 — the Filters panel now lives in ./AdsFilterBar so a PAGE can render it somewhere other than
 // directly above this card. The grid renders that same component, so there is exactly one filter-bar
@@ -284,7 +285,6 @@ export interface AdsDataGridProps<T> {
     onRowsPerPageChange: (n: number) => void
   }
 }
-
 
 // Consonant-y takes -ies ("8 Queries", not "8 Querys" — shipped, seen, fixed).
 const pluralize = (noun: string, n: number) => (n === 1 ? noun : /[^aeiou]y$/i.test(noun) ? `${noun.slice(0, -1)}ies` : `${noun}s`)
@@ -958,7 +958,7 @@ export function AdsDataGrid<T>({
         </div>
         {pagerCentered && <span className="grow" />}
         <div className="rpp">Rows per page:
-          <H10Select width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(perPage)} onChange={(v) => { if (server) server.onRowsPerPageChange(Number(v)); else setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
+          <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(perPage)} onChange={(v) => { if (server) server.onRowsPerPageChange(Number(v)); else setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
       </div>

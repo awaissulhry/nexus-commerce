@@ -14,12 +14,13 @@ import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../_grid/AdsDataGrid'
 import { STATUS_PILL } from '../../../../_grid/format'
-import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
+import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import { bulkPatch } from '../../../../_grid/bulkActions'
 import { AddNegativeTargetsModal } from './AddNegativeTargetsModal'
 import { AddNegativeKeywordsAgModal } from './AddNegativeKeywordsAgModal'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 interface NegT { id: string; expressionValue: string; expressionType?: string | null; kind?: string | null; status: string; isNegative?: boolean; createdAt?: string | null }
 interface NegRow { id: string; text: string; matchType: string; status: string; createdAt?: string | null }
@@ -46,7 +47,7 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
   const editMode = useMemo<GridEditMode<NegRow>>(() => ({
     label: `Edit Negative ${noun}s`,
     fields: [
-      { key: 'status', initial: (r) => r.status, render: (v, set) => <H10Select width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
+      { key: 'status', initial: (r) => r.status, render: (v, set) => <Listbox width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
     ],
     onApply: async (edits) => {
       await Promise.all(edits.filter((e) => e.values.status).map((e) =>

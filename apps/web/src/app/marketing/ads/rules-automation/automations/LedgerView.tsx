@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+import { Listbox } from '@/design-system/components'
 
 interface LedgerRow {
   id: string
@@ -86,8 +86,8 @@ export function LedgerView() {
       {err && <p className="h10-au-limiterr" role="alert"><AlertTriangle size={13} aria-hidden /> {err}</p>}
 
       <div className="h10-au-ledgerbar">
-        <H10Select width={130} options={[{ value: '1', label: 'Last day' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }]} value={days} onChange={setDays} ariaLabel="Window" />
-        <H10Select
+        <Listbox width={130} options={[{ value: '1', label: 'Last day' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }]} value={days} onChange={setDays} ariaLabel="Window" />
+        <Listbox
           width={260}
           options={[{ value: '', label: 'Every action type' }, ...(data?.summary.byActionType ?? []).map((t) => ({ value: t.actionType, label: `${t.actionType} (${t.count.toLocaleString('en-IE')})` }))]}
           value={actionType}

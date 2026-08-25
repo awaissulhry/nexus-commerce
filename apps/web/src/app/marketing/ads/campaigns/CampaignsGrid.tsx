@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Listbox, Modal } from '@/design-system/components'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
@@ -18,7 +18,7 @@ import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, Autom
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
-import { FilterDropdown, H10Select, HoverCard } from './FilterDropdown'
+import { FilterDropdown, HoverCard } from './FilterDropdown'
 import { enabledRank } from './_grid/enabledRank'
 import { AdManagerGraph } from './AdManagerGraph'
 import { InfoTip } from './InfoTip'
@@ -760,14 +760,14 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
             <div className="h10-bulk-row">
               <label className="ck"><input type="checkbox" checked={enStatus} onChange={() => setEnStatus((v) => !v)} aria-label="Change Campaign Status" /></label>
               <span className="it">Campaign Status</span>
-              <div className="ac"><H10Select width={150} options={STATUS_ACTIONS} value={statusVal} onChange={(v) => setStatusVal(v as typeof statusVal)} ariaLabel="Campaign status action" /></div>
+              <div className="ac"><Listbox width={150} options={STATUS_ACTIONS} value={statusVal} onChange={(v) => setStatusVal(v as typeof statusVal)} ariaLabel="Campaign status action" /></div>
             </div>
 
             <div className="h10-bulk-row">
               <label className="ck"><input type="checkbox" checked={enBudget} onChange={() => setEnBudget((v) => !v)} aria-label="Change Campaign Budget" /></label>
               <span className="it">Campaign Budget</span>
               <div className="ac">
-                <H10Select width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
+                <Listbox width={190} options={BUDGET_MODES} value={budgetMode} onChange={(v) => setBudgetMode(v as typeof budgetMode)} ariaLabel="Budget mode" />
                 <span className="h10-bulk-inp"><span className="pf">{budgetUnit}</span><input type="number" min="0" step="1" value={budgetVal} onChange={(e) => setBudgetVal(e.target.value)} aria-label="Budget value" /></span>
               </div>
             </div>
@@ -788,7 +788,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
               <label className="ck"><input type="checkbox" checked={enMult} onChange={() => setEnMult((v) => !v)} aria-label="Change Bid Multiplier" /></label>
               <span className="it">Bid Multiplier</span>
               <div className="ac">
-                <H10Select width={158} options={PLACEMENT_OPTS} value={placement} onChange={setPlacement} ariaLabel="Bid multiplier placement" />
+                <Listbox width={158} options={PLACEMENT_OPTS} value={placement} onChange={setPlacement} ariaLabel="Bid multiplier placement" />
                 <span className="set">Set</span>
                 <span className="h10-bulk-inp sf"><input type="number" min="0" step="1" value={multVal} onChange={(e) => setMultVal(e.target.value)} aria-label="Bid multiplier value" /><span className="sfx">%</span></span>
               </div>
@@ -797,7 +797,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
             <div className="h10-bulk-row">
               <label className="ck"><input type="checkbox" checked={enStrat} onChange={() => setEnStrat((v) => !v)} aria-label="Change Bidding Strategy" /></label>
               <span className="it">Bidding Strategy</span>
-              <div className="ac"><span className="set">Set</span><H10Select width={158} options={STRAT_OPTIONS} value={stratVal} onChange={setStratVal} ariaLabel="Bidding strategy" /></div>
+              <div className="ac"><span className="set">Set</span><Listbox width={158} options={STRAT_OPTIONS} value={stratVal} onChange={setStratVal} ariaLabel="Bidding strategy" /></div>
             </div>
           </div>
       ) : (
@@ -1992,7 +1992,7 @@ export function CampaignsGrid() {
           <button type="button" className="pgbtn" disabled={safePage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} aria-label="Next page">›</button>
         </div>
         <div className="rpp">Rows per page:
-          <H10Select width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
+          <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
       <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>

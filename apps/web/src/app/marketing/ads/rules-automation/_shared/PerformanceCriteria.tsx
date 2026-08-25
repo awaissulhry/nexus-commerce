@@ -8,7 +8,7 @@
  */
 import { X, Plus } from 'lucide-react'
 import { HIGH_ACOS_FLOOR, WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
-import { H10Select } from '../../campaigns/FilterDropdown'
+import { Listbox } from '@/design-system/components'
 
 export interface Condition {
   metric: string
@@ -214,8 +214,8 @@ export function PerformanceCriteria({ value, onChange, slug = 'keyword-harvestin
         return (
           <div className="h10-pc-row" key={i}>
             <span className="h10-pc-join">{i === 0 ? 'IF' : 'AND'}</span>
-            <H10Select width={260} options={metrics} value={c.metric} onChange={(v) => setCond(i, { metric: v })} ariaLabel="Metric" />
-            <H10Select width={300} options={PC_OPERATORS} value={c.op} onChange={(v) => setCond(i, { op: v })} ariaLabel="Operator" />
+            <Listbox width={260} options={metrics} value={c.metric} onChange={(v) => setCond(i, { metric: v })} ariaLabel="Metric" />
+            <Listbox width={300} options={PC_OPERATORS} value={c.op} onChange={(v) => setCond(i, { op: v })} ariaLabel="Operator" />
             <div className={`h10-pc-val ${unit}`}>{unit === 'eur' && <span className="u">€</span>}<input inputMode="decimal" value={c.value} onChange={(e) => setCond(i, { value: e.target.value })} placeholder="Value" aria-label="Value" />{unit === 'pct' && <span className="u">%</span>}</div>
             {value.conditions.length > 1 && <button type="button" className="h10-pc-rm" onClick={() => rmCond(i)} aria-label="Remove condition"><X size={14} /></button>}
           </div>

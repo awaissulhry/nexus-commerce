@@ -18,7 +18,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { DaypartingHeatmap, type HeatCell } from '../_schedule/DaypartingHeatmap'
 import { CHART_METRICS } from '../_schedule/scheduleConfig'
 import { metricVal, type RawCell } from '../_schedule/heatMetrics'
@@ -26,6 +26,7 @@ import { selectionToWindows, selectionHourCount } from './selectionToWindows'
 import { AddToScheduleModal, type ScheduleChoice } from './AddToScheduleModal'
 import { useRdData } from './_rd/RdData'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 
 /**
  * DPS.4b — whole weeks, not "last N days".
@@ -181,8 +182,8 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
           {/* FB.3d — no period select here any more: the page's ONE range control is the shared
               header picker, and a second window control an inch below it is the duplicate class
               this section keeps removing. */}
-          <H10Select width={210} options={scopeOptions} value={scope} onChange={setScope} ariaLabel="Heatmap schedule" />
-          <H10Select width={140} options={CHART_METRICS} value={metric} onChange={setMetric} ariaLabel="Heatmap metric" />
+          <Listbox width={210} options={scopeOptions} value={scope} onChange={setScope} ariaLabel="Heatmap schedule" />
+          <Listbox width={140} options={CHART_METRICS} value={metric} onChange={setMetric} ariaLabel="Heatmap metric" />
         </div>
       </div>
       {/* RDX/D1 — paint the hours you just read, and hand them to the builder as a template.
@@ -198,7 +199,7 @@ export function HourlyPerformance({ scopes, schedules = [], market = 'all', onSc
           </span>
           <span className="grow" />
           <span className="lbl">Hold</span>
-          <H10Select width={168} options={targetOpts} value={selTarget} onChange={setSelTarget} ariaLabel="Rank target for the selection" />
+          <Listbox width={168} options={targetOpts} value={selTarget} onChange={setSelTarget} ariaLabel="Rank target for the selection" />
           <input
             className="nm"
             value={tplName}

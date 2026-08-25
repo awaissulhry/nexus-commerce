@@ -16,13 +16,14 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Crosshair, Plus, Trash2, Sparkles, Wand2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import type { SchedCampaign } from '../_schedule/CampaignSection'
 import { DeliveryChip } from './DeliveryChip'
 import { RankTimeGrid } from './RankTimeGrid'
 import { DemandReadout, type DemandCell, type DemandProfile } from './DemandReadout'
 import { RankTargetEditor, type OvMap } from './RankTargetEditor'
 import { RankTemplateModal } from './RankTemplateModal'
+import { Listbox } from '@/design-system/components'
 
 export interface RankPlanHandle { save: (enabled: boolean) => Promise<void> }
 export interface RankPlanStatus { valid: boolean; busy: boolean; dirty: boolean; saved: boolean }
@@ -207,7 +208,7 @@ export const RankPlanBody = forwardRef<RankPlanHandle, { campaigns: SchedCampaig
               {campaigns.length > 1 && (
                 // OS.4 — a native dropdown listing every selected campaign. A portfolio-scoped plan
                 // can hold 11+ of them with near-identical names, so this needs the shared search.
-                <H10Select
+                <Listbox
                   width={230}
                   options={campaigns.map(c => ({ value: c.id, label: c.name }))}
                   value={demandCampaignId}

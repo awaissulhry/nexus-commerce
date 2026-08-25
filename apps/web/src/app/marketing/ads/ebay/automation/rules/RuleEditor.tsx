@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X } from 'lucide-react'
 import '../../ebay.css'
-import { H10Select } from '../../../campaigns/FilterDropdown'
+
 import { getEbayAds, postEbayAds } from '../../_lib'
 import {
   type AutomationRule, type RuleCondition, type RuleTrigger, type RuleActionDef, type RuleTemplate, type RuleVersionRow,
@@ -21,6 +21,7 @@ import {
   type RuleMetric, type RuleOp, type RuleBenchmark, conditionSentence, actionSentence, conditionValueLabel,
 } from '../_lib/rules'
 import { pillTone } from '../../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 interface CampaignLite { id: string; name: string; marketplace: string; fundingModel: string; status: string }
 interface PreviewOut { evaluated: number; matched: number; samples: Array<{ kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string }; from: unknown; to: unknown }> }
@@ -198,7 +199,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
             </div>
           </div>
           <div><label>Marketplace</label>
-            <span className="eb-dd dense"><H10Select ariaLabel="Marketplace" width={190} value={marketplace ?? ''} onChange={(v) => { setMarketplace(v || null); setPreview(null) }}
+            <span className="eb-dd dense"><Listbox ariaLabel="Marketplace" width={190} value={marketplace ?? ''} onChange={(v) => { setMarketplace(v || null); setPreview(null) }}
               options={[{ value: '', label: 'All eBay markets' }, ...MARKETS.map((m) => ({ value: m, label: m }))]} /></span>
           </div>
           <div><label>Campaigns</label>
@@ -233,7 +234,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           const benches = BENCH_FOR(trigger.scope, c.metric)
           return (
             <div key={i} className="eb-cond-row">
-              <span className="eb-dd dense"><H10Select ariaLabel="Metric" width={190} value={c.metric}
+              <span className="eb-dd dense"><Listbox ariaLabel="Metric" width={190} value={c.metric}
                 onChange={(v) => {
                   const metric = v as RuleMetric
                   const keepBench = c.benchmark && BENCH_FOR(trigger.scope, metric).includes(c.benchmark)
@@ -248,9 +249,9 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                 <input className="h10-cd-input eb-cond-num" type="number" min={0} max={7} value={c.excludeRecentDays ?? 0} aria-label="Exclude recent days"
                   onChange={(e) => setCond(i, { excludeRecentDays: Math.max(0, Math.min(7, Number(e.target.value) || 0)) })} />d
               </label>
-              <span className="eb-dd dense"><H10Select ariaLabel="Operator" width={90} value={c.op} onChange={(v) => setCond(i, { op: v as RuleOp })}
+              <span className="eb-dd dense"><Listbox ariaLabel="Operator" width={90} value={c.op} onChange={(v) => setCond(i, { op: v as RuleOp })}
                 options={(Object.keys(OP_LABELS) as RuleOp[]).map((o) => ({ value: o, label: OP_LABELS[o] }))} /></span>
-              <span className="eb-dd dense"><H10Select ariaLabel="Compare against" width={150} value={c.benchmark ?? '__abs'}
+              <span className="eb-dd dense"><Listbox ariaLabel="Compare against" width={150} value={c.benchmark ?? '__abs'}
                 onChange={(v) => {
                   if (v === '__abs') setCond(i, { benchmark: undefined, multiplier: undefined, threshold: c.threshold ?? 0 })
                   else setCond(i, { benchmark: v as RuleBenchmark, multiplier: c.multiplier ?? 1, threshold: undefined })
@@ -284,7 +285,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
         <h3>Action</h3>
         <div className="eb-form-row">
           <div><label>Then</label>
-            <span className="eb-dd dense"><H10Select ariaLabel="Action" width={280} value={action.type} onChange={(v) => { setAction({ type: v as RuleActionDef['type'], ...(v === 'adjust_ad_rate' ? { deltaPct: -10, minRatePct: 2 } : v === 'set_rate_to_breakeven_factor' ? { factor: 0.8, minRatePct: 2 } : v === 'bid_down_keyword' ? { bidDeltaPct: -20 } : {}) }); setPreview(null) }}
+            <span className="eb-dd dense"><Listbox ariaLabel="Action" width={280} value={action.type} onChange={(v) => { setAction({ type: v as RuleActionDef['type'], ...(v === 'adjust_ad_rate' ? { deltaPct: -10, minRatePct: 2 } : v === 'set_rate_to_breakeven_factor' ? { factor: 0.8, minRatePct: 2 } : v === 'bid_down_keyword' ? { bidDeltaPct: -20 } : {}) }); setPreview(null) }}
               options={ACTIONS_FOR_SCOPE[trigger.scope].map((t) => ({ value: t, label: ACTION_LABELS[t] }))} /></span>
           </div>
           {action.type === 'adjust_ad_rate' && (

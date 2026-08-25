@@ -7,8 +7,7 @@
  * searchable: when the in-popover search shows, type to filter, Enter picks the
  * first match, Esc closes. Styling lives in ads.css (.h10-dd-*).
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 import { searchOptions } from '@/lib/option-search'
 import { HoverCard as DsHoverCard } from '@/design-system/components'
@@ -122,119 +121,9 @@ export function FilterDropdown({
   )
 }
 
-// CBN.2h.7 — required single-select dropdown (H10-styled, never a native <select>).
-// The popover is portaled to <body> with fixed positioning so it's never clipped by
-// a scrolling modal body or the grid's overflow, and flips up near the viewport
-// bottom. Shares the .h10-dd-* styling so it stays consistent with FilterDropdown.
-export function H10Select({ options, value, onChange, ariaLabel, width, searchable, searchPlaceholder = 'Search…', held, onHeld }: {
-  options: Opt[]
-  value: string
-  onChange: (v: string) => void
-  ariaLabel?: string
-  width?: number | string
-  /** Force the in-popover search box. Otherwise it auto-shows past SEARCH_THRESHOLD options. */
-  searchable?: boolean
-  searchPlaceholder?: string
-  /**
-   * PLC-P3 — the select is LOCKED to its current value, and says so when you try to change it.
-   *
-   * 🔴 Deliberately NOT the `disabled` attribute. A disabled button takes no focus, no click and
-   * renders no tooltip, so the reason for the refusal lands on the one element in the DOM that
-   * cannot deliver it — the defect `scripts/check-silent-disabled.mjs` exists to stop, measured on
-   * 14 toggles across this section. Held keeps the control live: it focuses, it answers Enter, and
-   * `onHeld` is what it answers WITH.
-   *
-   * Additive and optional: all 45 existing call sites are byte-identical in behaviour.
-   */
-  held?: boolean
-  /** Called instead of opening the popover. Give the operator the reason here. */
-  onHeld?: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number; up: boolean } | null>(null)
-  const [q, setQ] = useState('')
-  const [active, setActive] = useState(0)
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const selected = options.find((o) => o.value === value)
-  // OS.2 — this control had no search at all, so picking a portfolio or campaign from a long list
-  // meant scroll-hunting. Ranked, token-based matching now (see lib/option-search).
-  const showSearch = searchable || options.length > SEARCH_THRESHOLD
-  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
-  const place = () => {
-    const el = btnRef.current; if (!el) return
-    const r = el.getBoundingClientRect()
-    const estH = Math.min(options.length, 7) * 36 + 12 + (showSearch ? 42 : 0)
-    const up = r.bottom + estH > window.innerHeight - 8
-    setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, width: r.width, up })
-  }
-  const close = () => { setOpen(false); setQ(''); setActive(0) }
-  const toggle = () => { if (held) { onHeld?.(); return } ; if (!open) { place(); setQ(''); setActive(0) } ; setOpen((o) => !o) }
-  const pick = (v: string) => { onChange(v); close() }
-  // Type to narrow, ↑/↓ to move, Enter to take the highlighted row, Esc to back out.
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); const m = matches[active]; if (m) pick(m.value) }
-    else if (e.key === 'Escape') { e.preventDefault(); close() }
-  }
-  // Runs once the pop is in the DOM and its real (content-driven) width is known — the only moment
-  // an overflow can be detected, since the width depends on the longest option label.
-  const edgeClamp = useCallback((el: HTMLDivElement | null) => {
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const overflow = r.right - (window.innerWidth - 8)
-    if (overflow > 0) el.style.left = `${Math.max(8, r.left - overflow)}px`
-  }, [])
-  return (
-    <div className="h10-dd" style={width != null ? { width } : undefined}>
-      <button ref={btnRef} type="button" className={`h10-dd-btn ${open ? 'open' : ''}${held ? ' held' : ''}`} onClick={toggle} aria-haspopup="listbox" aria-expanded={open} aria-disabled={held || undefined} aria-label={ariaLabel}>
-        <span>{selected?.label ?? ''}</span><ChevronDown size={14} />
-      </button>
-      {open && pos && createPortal(<>
-        <button type="button" className="h10-dd-back" aria-label="Close" onClick={close} />
-        {/* DPS.4 — the pop is positioned at the trigger's left and sized to its widest option, with
-            no right-edge clamp: a select near the right of the viewport holding long labels rendered
-            off-screen (measured 953px wide overflowing by 390px on Rank & Dayparting Schedules).
-            `maxWidth` keeps it on screen and `edgeClamp` slides it left only when it would spill —
-            a trigger with short options is positioned exactly as before. */}
-        <div
-          ref={edgeClamp}
-          className="h10-dd-pop fixed"
-          role="listbox"
-          style={{ top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 180), maxWidth: 'calc(100vw - 16px)', transform: pos.up ? 'translateY(-100%)' : undefined }}
-        >
-          {showSearch && (
-            <div className="h10-dd-search">
-              <Search size={13} />
-              <input
-                autoFocus
-                value={q}
-                onChange={(e) => { setQ(e.target.value); setActive(0) }}
-                onKeyDown={onKey}
-                placeholder={searchPlaceholder}
-                aria-label="Search options"
-              />
-            </div>
-          )}
-          <div className="h10-dd-list">
-            {matches.length === 0 ? (
-              <div className="h10-dd-empty">No matches</div>
-            ) : matches.map((o, i) => (
-              <button
-                type="button"
-                key={`${o.value}__${i}`}
-                className={`h10-dd-opt ${o.value === value ? 'on' : ''} ${showSearch && i === active ? 'active' : ''}`}
-                onClick={() => pick(o.value)}
-                onMouseEnter={() => showSearch && setActive(i)}
-                title={o.label}
-              >{o.label}</button>
-            ))}
-          </div>
-        </div>
-      </>, document.body)}
-    </div>
-  )
-}
+// H10Select was here. Retired 2026-08-25 — all 97 call sites now render the DS `Listbox`,
+// which grew `width`, `searchable` and a per-option `title` to receive them. Its `held`/`onHeld`
+// pair was NOT ported: a thoughtful alternative to `disabled` that no call site ever used.
 
 // CBN.3.8 — checkbox multi-select (H10's Status filter). Reuses the .h10-ms-* shell
 // shared with the Ad Manager. "Select All" is the first plain row (checked when all on,

@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock, AlertTriangle} from 'lucide-react'
-import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
+import { HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'
 import { getBackendUrl } from '@/lib/backend-url'
 // Single-sourced criteria config (also used by the SP Super Wizard's Step-3 rules).
@@ -20,6 +20,7 @@ import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSectio
 import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_BUDGET, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote } from './PerformanceCriteria'
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
+import { Listbox } from '@/design-system/components'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -1493,7 +1494,6 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 </div>
               )}
 
-
               {surface === 'search-terms' && !setupCollapsed && blocks.map((block, bi) => (
                 <MappingBlock
                   key={block.id}
@@ -1554,9 +1554,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
                             `placementScopedField` re-points the condition at it. Choosing a lane
                             opens the note below, because lane data is thinner than campaign data
                             and the window is usually why a lane rule matches nothing. */}
-                        {isPlacement && <H10Select width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => { setCond(g.id, i, { scope: v }); if (v !== 'campaign') setScopeNote(g.id) }} ariaLabel="Placement scope" />}
-                        <H10Select width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
-                        <H10Select width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
+                        {isPlacement && <Listbox width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => { setCond(g.id, i, { scope: v }); if (v !== 'campaign') setScopeNote(g.id) }} ariaLabel="Placement scope" />}
+                        <Listbox width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
+                        <Listbox width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
                           <span className={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}>
                             {u === 'eur' && <span className="pf">€</span>}
@@ -1608,8 +1608,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {isCampaign && (() => { const actions = isPlacement ? PLACEMENT_ACTIONS : isBidLike ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
                       <div className="cond then">
                         <span className="pill then">THEN</span>
-                        {isPlacement && <H10Select width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
-                        <H10Select width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
+                        {isPlacement && <Listbox width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
+                        <Listbox width={isPlacement ? 200 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
                         {/* C1 — a computed action ('none') has no number to take, so the box is
                             not rendered rather than rendered empty or disabled. A disabled input
                             beside a chosen action reads as "you forgot something". */}
@@ -1663,7 +1663,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 <div className="h10-rb-lookback rulewide">
                   <label>Lookback period</label>
                   <div className="lbrow">
-                    <H10Select width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
+                    <Listbox width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
                     {/* The settling-tail half of this sentence moved into the note below rather
                         than being said twice a line apart. */}
                     <span className="exc">Applies to every criteria block.</span>
@@ -1740,7 +1740,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       campaign×lane cells clear 20 clicks against 51 of 123 over 30. */}
                   {advLookback && (
                     <div className="lbrow">
-                      <H10Select width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
+                      <Listbox width={170} options={LOOKBACK_DAYS} value={lookbackDays} onChange={setLookbackDays} ariaLabel="Lookback period" />
                     </div>
                   )}
                   <PcWindowNote slug={slug} {...(advLookback ? { days: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {})} />
@@ -1752,24 +1752,24 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       due), so the copy states the one deviation: a fresh rule's first check. */}
                   <p>Set how often the rule should check the criteria. The first check runs within 15 minutes of creating the rule; after that, on this schedule.</p>
                   <div className="freqrow">
-                    <H10Select width={150} options={FREQUENCY} value={frequency} onChange={setFrequency} ariaLabel="Frequency" />
+                    <Listbox width={150} options={FREQUENCY} value={frequency} onChange={setFrequency} ariaLabel="Frequency" />
                     {frequency === 'Custom' && (<>
                       <span className="lbl">Every</span>
                       <input className="h10-rb-num" inputMode="numeric" placeholder="Please enter" value={everyN} onChange={(e) => setEveryN(e.target.value)} aria-label="Every (number)" />
-                      <H10Select width={130} options={INTERVAL} value={interval} onChange={setInterval} ariaLabel="Interval" />
+                      <Listbox width={130} options={INTERVAL} value={interval} onChange={setInterval} ariaLabel="Interval" />
                       {interval === 'Weeks' && (<>
                         <span className="lbl">on</span>
-                        <H10Select width={150} options={DAYS} value={onDay} onChange={setOnDay} ariaLabel="Day of week" />
+                        <Listbox width={150} options={DAYS} value={onDay} onChange={setOnDay} ariaLabel="Day of week" />
                       </>)}
                     </>)}
                     <span className="at">at</span>
-                    <H10Select width={200} options={TIMES} value={time} onChange={setTime} ariaLabel="Time" />
+                    <Listbox width={200} options={TIMES} value={time} onChange={setTime} ariaLabel="Time" />
                   </div>
                 </div>
                 <div className="advblock">
                   <b>Timezone</b>
                   <p>Select the timezone for this rule</p>
-                  <H10Select width={430} options={TIMEZONES} value={timezone} onChange={setTimezone} ariaLabel="Timezone" />
+                  <Listbox width={430} options={TIMEZONES} value={timezone} onChange={setTimezone} ariaLabel="Timezone" />
                 </div>
                 {isBudget && (
                 <div className="advblock">
@@ -1805,7 +1805,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 <div className="advblock">
                   <b>Marketplace</b>
                   <p>Limit this rule to a single marketplace — unscoped, it acts in every market</p>
-                  <H10Select width={260} options={MARKETS} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
+                  <Listbox width={260} options={MARKETS} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Marketplace scope" />
                 </div>
                 {isPlacement && (
                 <div className="advblock">
@@ -1840,7 +1840,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                       negatives confirm at Amazon ~99%; campaign-level ones have historically
                       confirmed 0 of 20. The select stays free; the fact rides beside it. */}
                   <p>Where to place the negative keyword / product target when this rule fires. Ad-group negatives are the ones that demonstrably land at Amazon in this account; campaign-level negatives have historically never confirmed.</p>
-                  <H10Select width={280} options={[{ value: 'adgroup', label: 'Ad Group' }, { value: 'campaign', label: 'Campaign' }, { value: 'both', label: 'Ad Group + Campaign' }]} value={negationLevel} onChange={(v) => setNegationLevel(v as 'adgroup' | 'campaign' | 'both')} ariaLabel="Negation level" />
+                  <Listbox width={280} options={[{ value: 'adgroup', label: 'Ad Group' }, { value: 'campaign', label: 'Campaign' }, { value: 'both', label: 'Ad Group + Campaign' }]} value={negationLevel} onChange={(v) => setNegationLevel(v as 'adgroup' | 'campaign' | 'both')} ariaLabel="Negation level" />
                 </div>
                 )}
                 {isHarvest && (
@@ -1851,7 +1851,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
                     {/* HP1 — H10's four modes, every one computed by the engine (the old
                         "Suggested bid" was a €0.75 constant). CPC = the term's own measured
                         cost-per-click in the rule's window — the going rate for that demand. */}
-                    <H10Select width={230} options={[
+                    <Listbox width={230} options={[
                       { value: 'cpc', label: 'Set to Current CPC' },
                       { value: 'cpcPlus', label: 'Current CPC + %' },
                       { value: 'adGroupDefault', label: 'Ad group default bid' },
@@ -2308,8 +2308,8 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
       <div className="srch"><Search size={14} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search'} aria-label={tab === 'Products' ? 'Search products' : 'Search ad groups'} /></div>
       <div className="tabs">{TABS.map((t) => <button key={t} type="button" className={t === tab ? 'on' : ''} onClick={() => setTab(t)}>{t}</button>)}</div>
       <div className="filters">
-        <div className="f"><label>Campaign Status</label><H10Select width={150} options={AG_STATUS} value={campStatus} onChange={setCampStatus} ariaLabel="Campaign status" /></div>
-        <div className="f"><label>Ad Groups Status</label><H10Select width={150} options={AG_STATUS} value={agStatus} onChange={setAgStatus} ariaLabel="Ad groups status" /></div>
+        <div className="f"><label>Campaign Status</label><Listbox width={150} options={AG_STATUS} value={campStatus} onChange={setCampStatus} ariaLabel="Campaign status" /></div>
+        <div className="f"><label>Ad Groups Status</label><Listbox width={150} options={AG_STATUS} value={agStatus} onChange={setAgStatus} ariaLabel="Ad groups status" /></div>
         <button type="button" className="addall"
           disabled={tab === 'Products' ? !fresh((groups ?? []).flatMap((g) => g.items)).length : !fresh(filtered).length}
           onClick={() => onAdd(tab === 'Products' ? fresh((groups ?? []).flatMap((g) => g.items)) : fresh(filtered))}>Add All</button>

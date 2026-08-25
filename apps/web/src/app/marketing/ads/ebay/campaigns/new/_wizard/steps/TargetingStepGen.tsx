@@ -11,10 +11,11 @@ import { useEffect, useState } from 'react'
 import { ListChecks, Wand2 } from 'lucide-react'
 import { money } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
-import { H10Select } from '../../../../../campaigns/FilterDropdown'
+
 import { postEbayAds } from '../../../../_lib'
 import type { CampaignPlan, SelectionRule } from '../plan'
 import { Button, Pill } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components'
 
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
 
@@ -106,7 +107,7 @@ export function TargetingStepGen({ plan, set }: { plan: CampaignPlan; set: (patc
 
           <div className="eb-form-row" style={{ marginTop: 14, alignItems: 'flex-end' }}>
             <div className="h10-cd-field s" style={{ maxWidth: 280 }}><label>Rate strategy <InfoTip tip="Fixed: one campaign-level % you control. Dynamic: eBay applies its daily suggested rate but never exceeds your cap." /></label>
-              <span className="eb-dd"><H10Select ariaLabel="Rate strategy" width="100%" value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
+              <span className="eb-dd"><Listbox ariaLabel="Rate strategy" width="100%" value={plan.adRateStrategy} onChange={(v) => set({ adRateStrategy: v as 'FIXED' | 'DYNAMIC' })}
                 options={[
                   { value: 'FIXED', label: 'Fixed — campaign-level %' },
                   { value: 'DYNAMIC', label: "Dynamic — eBay's daily suggestion under a cap" },

@@ -15,11 +15,12 @@ import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from
 import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS } from '../../_grid/format'
 import { pickMetricFilters } from '../../_grid/filters'
 import { bulkPatch, AdjustBidModal } from '../../_grid/bulkActions'
-import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
+import { StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CreateAdGroupModal } from './CreateAdGroupModal'
 import type { CampaignDetailData } from '../CampaignDetail'
 import { pillTone } from '../../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 interface AdGroupRow {
   id: string
@@ -110,7 +111,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
     label: 'Edit Groups',
     fields: [
       { key: '__first', initial: (r) => r.name, render: (v, set) => <input className="h10-edit-in" value={v} onChange={(e) => set(e.target.value)} aria-label="Ad group name" /> },
-      { key: 'status', initial: (r) => r.status, render: (v, set) => <H10Select width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
+      { key: 'status', initial: (r) => r.status, render: (v, set) => <Listbox width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
       { key: 'defaultBid', initial: (r) => (num(r.defaultBidCents) / 100).toFixed(2), render: (v, set) => <div className="h10-edit-money"><span className="cur">€</span><input inputMode="decimal" value={v} onChange={(e) => set(e.target.value)} aria-label="Default bid" /></div> },
     ],
     onApply: async (edits) => {

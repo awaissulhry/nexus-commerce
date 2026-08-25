@@ -25,7 +25,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { AlertTriangle } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+import { Listbox } from '@/design-system/components'
 
 export interface ScopeOptions {
   totalCampaigns: number
@@ -150,14 +150,14 @@ export function ScopeForm({
     <div className="h10-au-scope2">
       <div className="h10-au-scoperow">
         <span className="lbl">Where</span>
-        <H10Select
+        <Listbox
           width={148} ariaLabel="Market" value={market} onChange={setMarket}
           options={[
             { value: '', label: `All markets (${num(options.totalCampaigns)})` },
             ...markets.map((m) => ({ value: m.code, label: `${m.code} (${m.n})` })),
           ]}
         />
-        <H10Select
+        <Listbox
           width={150} ariaLabel="Campaign grain" value={where}
           onChange={(v) => setWhere(v as 'account' | 'portfolio' | 'campaign')}
           options={[
@@ -167,7 +167,7 @@ export function ScopeForm({
           ]}
         />
         {where === 'portfolio' && (
-          <H10Select
+          <Listbox
             width={196} searchable ariaLabel="Portfolio" value={pf} onChange={setPf}
             options={options.portfolios.map((p) => {
               const n = options.campaigns.filter((c) => c.portfolioId === p.externalPortfolioId).length
@@ -176,7 +176,7 @@ export function ScopeForm({
           />
         )}
         {where === 'campaign' && (
-          <H10Select
+          <Listbox
             width={236} searchable ariaLabel="Campaign" value={cp} onChange={setCp}
             options={options.campaigns
               .filter((c) => !market || c.marketplace === market)
@@ -187,7 +187,7 @@ export function ScopeForm({
 
       <div className="h10-au-scoperow">
         <span className="lbl">What</span>
-        <H10Select
+        <Listbox
           width={148} ariaLabel="Product grain" value={pMode}
           onChange={(v) => setPMode(v as 'all' | 'line' | 'variation')}
           options={[
@@ -197,7 +197,7 @@ export function ScopeForm({
           ]}
         />
         {pMode !== 'all' && (
-          <H10Select
+          <Listbox
             width={pMode === 'line' ? 300 : 196} searchable ariaLabel="Product line"
             value={lineId} onChange={(v) => { setLineId(v); setVariationId('') }}
             options={options.productLines.map((l) => ({
@@ -207,7 +207,7 @@ export function ScopeForm({
           />
         )}
         {pMode === 'variation' && chosenLine && (
-          <H10Select
+          <Listbox
             width={260} searchable ariaLabel="Variation" value={variationId} onChange={setVariationId}
             options={chosenLine.children.map((c) => ({
               value: c.id,

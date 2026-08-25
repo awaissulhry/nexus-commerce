@@ -55,8 +55,9 @@ import {
   ShieldCheck, Ban, Trash2, Plus, AlertTriangle, Check, Info, WifiOff, ChevronRight,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import type { NegSlotProps } from './slot-contract'
+import { Listbox } from '@/design-system/components'
 
 type Mode = 'WHITELIST' | 'BLACKLIST'
 type MatchType = 'CONTAINS' | 'PREFIX' | 'EXACT'
@@ -382,17 +383,17 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
             onKeyDown={(e) => { if (e.key === 'Enter') void addProtection() }}
             aria-label="Term"
           />
-          <H10Select
+          <Listbox
             ariaLabel="Protection mode" width={150} value={mode}
             onChange={(v) => setMode(v as Mode)}
             options={[{ value: 'WHITELIST', label: 'Never negate' }, { value: 'BLACKLIST', label: 'Always negate' }]}
           />
-          <H10Select
+          <Listbox
             ariaLabel="Match type" width={140} value={matchType}
             onChange={(v) => setMatchType(v as MatchType)}
             options={MATCH_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           />
-          <H10Select
+          <Listbox
             ariaLabel="Marketplace" width={130} value={marketplace}
             onChange={(v) => setMarketplace(v)}
             options={MARKETS.map((m) => ({ value: m, label: m || 'All markets' }))}

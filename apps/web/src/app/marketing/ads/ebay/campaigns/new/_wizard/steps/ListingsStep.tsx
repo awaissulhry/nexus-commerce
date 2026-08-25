@@ -12,10 +12,11 @@
 import { Fragment, useMemo, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, Copy, Plus, Search, Trash2, X } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
-import { H10Select } from '../../../../../campaigns/FilterDropdown'
+
 import { EbayMark } from '../../../../../_shell/EbayMark'
 import type { CampaignPlan, PlanListing } from '../plan'
 import { Pill } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components'
 
 const PAGE = 10
 
@@ -210,7 +211,7 @@ export function ListingsStep({ plan, set, listings, isPriority, loading }: {
                 <ListingMeta l={l} />
                 {l.conflict && (
                   <span className="eb-dd dense" title={`Already in "${l.conflict.campaignName}" at ${l.conflict.currentRatePct ?? '?'}% — one listing = one General campaign`}>
-                    <H10Select ariaLabel={`Conflict resolution for ${l.title ?? l.itemId}`} width={132}
+                    <Listbox ariaLabel={`Conflict resolution for ${l.title ?? l.itemId}`} width={132}
                       value={plan.resolutions[l.itemId] ?? 'skip'}
                       onChange={(v) => set({ resolutions: { ...plan.resolutions, [l.itemId]: v as 'include' | 'skip' | 'move' } })}
                       options={[

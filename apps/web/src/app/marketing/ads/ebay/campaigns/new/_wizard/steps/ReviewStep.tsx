@@ -11,12 +11,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
-import { H10Select } from '../../../../../campaigns/FilterDropdown'
+
 import { postEbayAds, getEbayAds } from '../../../../_lib'
 import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
 import { Button, Pill } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components'
 
 interface LaunchOut {
   ok: boolean; mode: string; campaignId: string
@@ -204,7 +205,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
           {plan.type === 'priority-manual' && included.length > 0 && plan.adGroups.length > 1 && (
             <label className="eb-neg-lbl">
               attach staged listings to
-              <span className="eb-dd dense"><H10Select ariaLabel="Ad group receiving the staged listings" width={150} value={attachName}
+              <span className="eb-dd dense"><Listbox ariaLabel="Ad group receiving the staged listings" width={150} value={attachName}
                 onChange={(v) => set({ attachGroup: v })}
                 options={plan.adGroups.map((g) => ({ value: g.name, label: g.name }))} /></span>
             </label>

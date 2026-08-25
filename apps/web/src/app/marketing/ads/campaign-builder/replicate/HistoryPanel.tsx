@@ -14,10 +14,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RotateCcw, TrendingUp, Trash2, Loader2, ChevronDown, ChevronRight, GitCompare } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { InfoTip } from '../../campaigns/InfoTip'
 import { Pill } from '@/design-system/primitives'
 import { pillTone } from '../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 interface Run {
   id: string; productToken: string; marketplace: string; status: string
@@ -209,7 +210,7 @@ export function DriftCheck({ market }: { market: string }) {
       <div className="row">
         <label className="h10-spw-field sm">
           <span className="lbl">Structure</span>
-          <H10Select
+          <Listbox
             width={220}
             options={[{ value: '', label: 'Choose…' }, ...saved.map((b) => ({ value: b.id, label: b.name }))]}
             value={bpId} onChange={setBpId} ariaLabel="Saved structure"

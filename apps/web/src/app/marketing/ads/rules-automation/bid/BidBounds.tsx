@@ -27,9 +27,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Check, Ruler, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import type { BidSlotProps } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
+import { Listbox } from '@/design-system/components'
 
 interface BidPolicy {
   id: string
@@ -165,15 +166,15 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
       )}
 
       <div className="h10-bud2-row">
-        <H10Select width={150} options={(['MARKET', 'PORTFOLIO', 'LINE'] as const).map((g) => ({ value: g, label: GRAIN_WORD[g] }))} value={grain} onChange={(v) => { setGrain(v as BidPolicy['grain']); setScopeId('') }} ariaLabel="Bound grain" />
-        <H10Select width={280} options={[{ value: '', label: 'Choose a scope…' }, ...scopeOpts]} value={scopeId} onChange={setScopeId} ariaLabel="Bound scope" searchable />
+        <Listbox width={150} options={(['MARKET', 'PORTFOLIO', 'LINE'] as const).map((g) => ({ value: g, label: GRAIN_WORD[g] }))} value={grain} onChange={(v) => { setGrain(v as BidPolicy['grain']); setScopeId('') }} ariaLabel="Bound grain" />
+        <Listbox width={280} options={[{ value: '', label: 'Choose a scope…' }, ...scopeOpts]} value={scopeId} onChange={setScopeId} ariaLabel="Bound scope" searchable />
         <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Floor" value={minEur} onChange={(e) => setMinEur(e.target.value)} aria-label="Bid floor in euros" /></span>
         <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Ceiling" value={maxEur} onChange={(e) => setMaxEur(e.target.value)} aria-label="Bid ceiling in euros" /></span>
     <Button variant="primary" disabled={busy || !scopeId || (!minEur.trim() && !maxEur.trim())} onClick={() => void savePolicy()}>Save bound</Button>
       </div>
 
       <div className="h10-bud2-row">
-        <H10Select
+        <Listbox
           width={320}
           options={[{ value: '', label: 'Set one campaign’s band…' }, ...campaigns.map((c) => ({ value: c.id, label: `${c.name}${c.minBidCents != null || c.maxBidCents != null ? ` (${c.minBidCents != null ? eur(c.minBidCents) : '—'}–${c.maxBidCents != null ? eur(c.maxBidCents) : '—'})` : ''}` }))]}
           value={campId}

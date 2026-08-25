@@ -15,9 +15,10 @@ import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from
 import { num, eur, int, STATUS_PILL, METRIC_TIPS } from '../../../../_grid/format'
 import { pickMetricFilters } from '../../../../_grid/filters'
 import { bulkPatch } from '../../../../_grid/bulkActions'
-import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
+import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 interface AdRow {
   id: string; asin?: string | null; sku?: string | null; name?: string | null; photoUrl?: string | null
@@ -57,7 +58,7 @@ export function AgAdsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | 
     label: 'Edit Ads',
     bulk: false,
     fields: [
-      { key: 'status', initial: (r) => r.status, render: (v, set) => <H10Select width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
+      { key: 'status', initial: (r) => r.status, render: (v, set) => <Listbox width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
     ],
     onApply: async (edits) => {
       await Promise.all(edits.filter((e) => e.values.status).map((e) =>

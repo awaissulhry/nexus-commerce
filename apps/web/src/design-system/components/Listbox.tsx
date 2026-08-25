@@ -9,6 +9,9 @@ export interface ListboxOption {
   value: string
   label: string
   disabled?: boolean
+  /** native tooltip for this option; defaults to the label, which is how a truncated
+   *  option stays readable (options are nowrap + ellipsis) */
+  title?: string
 }
 
 export interface ListboxProps {
@@ -65,7 +68,7 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
           {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
           {matches.map((o) => (
             <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
-              className={o.value === value ? 'on' : undefined}
+              className={o.value === value ? 'on' : undefined} title={o.title ?? o.label}
               onClick={() => { onChange(o.value); setOpen(false); setQ('') }}>
               {o.label}
             </button>

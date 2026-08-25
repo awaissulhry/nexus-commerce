@@ -6,10 +6,11 @@
  * preserved) with action-type/mode filters and cursor pagination.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { H10Select } from '../../../../campaigns/FilterDropdown'
+
 import { getEbayAds, actionSummary, type ActionRow } from '../../../_lib'
 import { Button, Pill } from '@/design-system/primitives'
 import { pillTone } from '../../../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 export function ActivityTab({ externalCampaignId }: { externalCampaignId: string }) {
   const [rows, setRows] = useState<ActionRow[] | null>(null)
@@ -40,9 +41,9 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
     <div className="nds-card h10-cardstack eb-rowlist" style={{ maxWidth: 1080 }}>
       <div className="eb-rowlist-bar">
         <p>Every write Nexus made to this campaign — immutable. Drift repairs and accepted eBay-side changes appear here too.</p>
-        <span className="eb-dd dense"><H10Select ariaLabel="Action type" width={180} value={typeFilter} onChange={setTypeFilter}
+        <span className="eb-dd dense"><Listbox ariaLabel="Action type" width={180} value={typeFilter} onChange={setTypeFilter}
           options={[{ value: 'all', label: 'All actions' }, ...types.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))]} /></span>
-        <span className="eb-dd dense"><H10Select ariaLabel="Mode" width={130} value={modeFilter} onChange={setModeFilter}
+        <span className="eb-dd dense"><Listbox ariaLabel="Mode" width={130} value={modeFilter} onChange={setModeFilter}
           options={[{ value: 'all', label: 'All modes' }, { value: 'live', label: 'live' }, { value: 'sandbox', label: 'sandbox' }, { value: 'local', label: 'local' }]} /></span>
       </div>
       {rows == null ? (

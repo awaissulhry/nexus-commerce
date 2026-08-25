@@ -41,7 +41,7 @@
 
 import { useMemo } from 'react'
 import { Info, X } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+import { Listbox } from '@/design-system/components'
 
 export interface ScopeOptionsPayload {
   campaigns: Array<{ id: string; name: string; marketplace: string | null; portfolioId: string | null }>
@@ -149,17 +149,17 @@ export function PlacementScopeBar({
 
         <span className="h10-plc-field">
           <span className="cap">Product line</span>
-          <H10Select options={lineOpts} value={scope.line} onChange={(v) => set({ line: v, campaign: '' })} ariaLabel="Product line" width={210} />
+          <Listbox options={lineOpts} value={scope.line} onChange={(v) => set({ line: v, campaign: '' })} ariaLabel="Product line" width={210} />
         </span>
 
         <span className="h10-plc-field">
           <span className="cap">Portfolio</span>
-          <H10Select options={pfOpts} value={scope.portfolio} onChange={(v) => set({ portfolio: v, campaign: '' })} ariaLabel="Portfolio" width={210} />
+          <Listbox options={pfOpts} value={scope.portfolio} onChange={(v) => set({ portfolio: v, campaign: '' })} ariaLabel="Portfolio" width={210} />
         </span>
 
         <span className="h10-plc-field">
           <span className="cap">Campaign</span>
-          <H10Select options={campOpts} value={scope.campaign} onChange={(v) => set({ campaign: v })} ariaLabel="Campaign" width={280} searchable />
+          <Listbox options={campOpts} value={scope.campaign} onChange={(v) => set({ campaign: v })} ariaLabel="Campaign" width={280} searchable />
         </span>
 
         <span className="h10-plc-sep" aria-hidden="true" />
@@ -168,7 +168,7 @@ export function PlacementScopeBar({
             before it rather than a fourth pill in the funnel. */}
         <span className="h10-plc-field">
           <span className="cap">Lane</span>
-          <H10Select
+          <Listbox
             options={LANE_OPTIONS.map((l) => ({ value: l.value, label: l.label }))}
             value={lane}
             onChange={(v) => onLaneChange(v as PlcLaneKey | 'all')}

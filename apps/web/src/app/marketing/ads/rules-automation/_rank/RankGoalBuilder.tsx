@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { ScheduleBuilder } from '../_schedule/ScheduleBuilder'
 import { CampaignSection, toCampaign, type SchedCampaign } from '../_schedule/CampaignSection'
 import { RankPlanBody, type RankPlanHandle, type RankPlanStatus } from './RankPlanBody'
@@ -22,6 +22,7 @@ import { ScheduleVersionsSection } from '../dayparting/ScheduleVersions'
 import { ArmPreview, type RankTargetLite } from '../dayparting/ArmPreview'
 import { ScheduleEvents } from '../dayparting/ScheduleEvents'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 
 // Adtomic-style atom mark — same glyph the other builders use in the top bar.
 function AtomMark({ size = 20 }: { size?: number }) {
@@ -267,7 +268,7 @@ export function RankGoalBuilder() {
                 {/* OS.4 — was a native dropdown: no search, and an account with many portfolios made
                     this a scroll-hunt at exactly the moment you are creating a schedule. H10Select
                     brings the shared ranked search and matches the rest of the console. */}
-                <H10Select
+                <Listbox
                   width={320}
                   options={[{ value: '', label: 'None — pick campaigns manually' }, ...portfolios.map((p) => ({ value: p.id, label: p.name }))]}
                   value={portfolioScope}

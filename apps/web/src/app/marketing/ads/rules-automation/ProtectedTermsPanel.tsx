@@ -25,9 +25,9 @@ import { Button } from '@/design-system/primitives'
 // lucide-react 0.263.1 has no ShieldX; Ban reads better for "always negate" anyway.
 import { ShieldCheck, Ban, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 // The console's own dropdown, used everywhere else under rules-automation. Also keeps
 // this panel off the DS-conformance ratchet, which counts raw form elements.
-import { H10Select } from '../campaigns/FilterDropdown'
 
 type Mode = 'WHITELIST' | 'BLACKLIST'
 
@@ -134,12 +134,12 @@ export function ProtectedTermsPanel() {
           onKeyDown={(e) => { if (e.key === 'Enter') void add() }}
           aria-label="Term"
         />
-        <H10Select
+        <Listbox
           ariaLabel="Protection mode" width={150} value={mode}
           onChange={(v) => setMode(v as Mode)}
           options={[{ value: 'WHITELIST', label: 'Never negate' }, { value: 'BLACKLIST', label: 'Always negate' }]}
         />
-        <H10Select
+        <Listbox
           ariaLabel="Marketplace" width={130} value={marketplace}
           onChange={(v) => setMarketplace(v)}
           options={MARKETS.map((m) => ({ value: m, label: m || 'All markets' }))}

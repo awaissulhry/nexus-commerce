@@ -22,10 +22,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import type { TargetPalette } from './ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
 import { pillTone } from '../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 type Phase = 'draft' | 'upcoming' | 'live' | 'past'
 interface EventRow {
@@ -280,8 +281,8 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
             <button type="button" role="tab" aria-selected={mode === 'template'} className={mode === 'template' ? 'on' : ''} onClick={() => setMode('template')}>Use a template</button>
           </div>
           {mode === 'rank'
-            ? <label>Rank to hold<H10Select width={260} options={rankOptions} value={rank} onChange={setRank} ariaLabel="Rank to hold" /></label>
-            : <label>Template<H10Select width={260} options={tplOptions.length ? tplOptions : [{ value: '', label: 'No templates saved yet' }]} value={templateId} onChange={setTemplateId} ariaLabel="Template" searchable /></label>}
+            ? <label>Rank to hold<Listbox width={260} options={rankOptions} value={rank} onChange={setRank} ariaLabel="Rank to hold" /></label>
+            : <label>Template<Listbox width={260} options={tplOptions.length ? tplOptions : [{ value: '', label: 'No templates saved yet' }]} value={templateId} onChange={setTemplateId} ariaLabel="Template" searchable /></label>}
           <p className="h10-evt-note">
             Created disarmed. Authoring an event ahead of time is the point; arming it ahead of time is
             what you want to avoid — arm it when you are ready.

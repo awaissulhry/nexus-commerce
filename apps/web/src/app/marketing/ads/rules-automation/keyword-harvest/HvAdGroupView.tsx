@@ -39,9 +39,10 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { NoDataIllus } from '../_shared/NoDataIllus'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { RuleTypeModal } from '../_shared/RuleTypeModal'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
+import { Listbox } from '@/design-system/components'
 
 const BUILDER = '/marketing/ads/rules-automation/builder/keyword-harvesting'
 
@@ -323,7 +324,7 @@ export function HvAdGroupView() {
          * the micro-study's two verbs, on the pathway, without touching the rest of the rule.
          */
         const assignSelect = assignable.length > 0 ? (
-          <H10Select
+          <Listbox
             width={130}
             options={[{ value: '', label: '+ Assign rule' }, ...assignable]}
             value=""

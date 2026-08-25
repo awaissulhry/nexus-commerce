@@ -20,9 +20,10 @@
  * AdSchedule rows and therefore N actors.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { fmtChangeValue } from '../../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 
 export interface Delivery { state: string; attempts: number; lastError: string | null }
 export interface ActRow {
@@ -120,7 +121,7 @@ export function ChangeList({ groupId, campaignId, showAllLink = true }: {
   return (
     <>
       <div className="h10-act-bar">
-        {members.length > 1 && <H10Select
+        {members.length > 1 && <Listbox
           width={260}
           options={campOptions}
           value={memberFilter}

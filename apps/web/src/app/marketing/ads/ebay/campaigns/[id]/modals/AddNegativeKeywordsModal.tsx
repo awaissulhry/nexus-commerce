@@ -6,9 +6,10 @@
  */
 import { useEffect, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { H10Select } from '../../../../campaigns/FilterDropdown'
+
 import { H10Modal, Err, ResultsList } from '../../../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome } from '../../../_lib'
+import { Listbox } from '@/design-system/components'
 
 export function AddNegativeKeywordsModal(props: {
   open: boolean; onClose: () => void; campaignId: string
@@ -50,10 +51,10 @@ export function AddNegativeKeywordsModal(props: {
       <SandboxBanner mode={mode} />
       <div className="eb-form-row">
         <div style={{ flex: 1 }}><label>Ad group</label>
-          <span className="eb-dd dense"><H10Select ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} /></span>
+          <span className="eb-dd dense"><Listbox ariaLabel="Ad group" width="100%" value={adGroupId} onChange={setAdGroupId} options={props.adGroups.map((g) => ({ value: g.id, label: g.name }))} /></span>
         </div>
         <div><label>Match</label>
-          <span className="eb-dd dense"><H10Select ariaLabel="Match type" width={130} value={matchType} onChange={(v) => setMatchType(v as 'EXACT' | 'PHRASE')} options={['EXACT', 'PHRASE'].map((m) => ({ value: m, label: m }))} /></span>
+          <span className="eb-dd dense"><Listbox ariaLabel="Match type" width={130} value={matchType} onChange={(v) => setMatchType(v as 'EXACT' | 'PHRASE')} options={['EXACT', 'PHRASE'].map((m) => ({ value: m, label: m }))} /></span>
         </div>
       </div>
       <div><label>Negatives — one per line</label><textarea className="eb-textarea" rows={4} value={text} onChange={(e) => setText(e.target.value)} /></div>

@@ -67,7 +67,7 @@ import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { MetricSelect } from '../_schedule/MetricSelect'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { GROUP_BY } from '../_schedule/scheduleConfig'
 import { HourlyPerformanceCard } from './HourlyPerformanceCard'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -77,6 +77,7 @@ import { SectionEmpty } from './SectionShell'
 // reads about whether a schedule is working. Same move as `bid/bidState.ts`.
 import { deliveryCell, localDayKey, scheduleStatus, type ScheduleDelivery } from './scheduleState'
 import { ScheduleContextStrip } from './ScheduleContextStrip'
+import { Listbox } from '@/design-system/components'
 
 /** W4 — `autoRefill` dropped (dead client state since BSP.2 removed its column); `enabled` added
  *  (the API always returned it; nothing read it). */
@@ -332,7 +333,7 @@ export function SchedulesSection({ market }: { market?: string }) {
               <MetricSelect value={metric1} onChange={setMetric1} dot="#0b2447" label="Metric 1" />
               {/* BSP-B3 — "Weekday × Hour" is the 7×24 grid, and the consumer the `cell` grain
                   was missing. Shares GROUP_BY with the builder plus this tab's own third option. */}
-              <H10Select
+              <Listbox
                 width={190}
                 options={[...GROUP_BY, { value: 'cell', label: 'Weekday × Hour' }]}
                 value={groupBy}

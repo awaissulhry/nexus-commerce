@@ -8,8 +8,8 @@
  */
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
-import { Modal } from '@/design-system/components'
+
+import { Listbox, Modal } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -45,7 +45,7 @@ export function PortfolioPicker({ value, onChange, market = 'IT' }: { value: str
   }
   return (
     <div className="h10-spw-pf">
-      <H10Select width={300} options={options} value={value} onChange={onChange} ariaLabel="Portfolio" />
+      <Listbox width={300} options={options} value={value} onChange={onChange} ariaLabel="Portfolio" />
       <button type="button" className="h10-spw-pf-new" onClick={() => setCreating(true)}><Plus size={13} /> Create portfolio</button>
       {creating && (
         <Modal open onClose={() => setCreating(false)} size="sm" title="Create portfolio"

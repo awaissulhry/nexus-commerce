@@ -12,10 +12,11 @@
 import { useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
-import { H10Select } from '../../../../../campaigns/FilterDropdown'
+
 import { postEbayAds } from '../../../../_lib'
 import { emptyGroup, SUGGEST_MARKETS, type CampaignPlan, type PlanAdGroup, type Seed } from '../plan'
 import { pillTone } from '../../../../../_shared/pillTone'
+import { Listbox } from '@/design-system/components'
 
 export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: Partial<CampaignPlan>) => void }) {
   const suggestAvailable = SUGGEST_MARKETS.has(plan.marketplace)
@@ -101,7 +102,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                       </td>
                       <td className="ed"><Pill tone={pillTone(s.source === 'MANUAL' ? 'ok' : 'arch')}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</Pill></td>
                       <td className="ed">
-                        <span className="eb-dd dense"><H10Select ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
+                        <span className="eb-dd dense"><Listbox ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
                           onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}
                           options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} /></span>
                       </td>
@@ -115,7 +116,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
 
           <div className="h10-cd-field" style={{ marginTop: 12, maxWidth: 520 }}>
             <label className="eb-neg-lbl">Negative keywords — one per line ·
-              <span className="eb-dd dense"><H10Select ariaLabel="Negative match type" width={110} value={g.negMatch}
+              <span className="eb-dd dense"><Listbox ariaLabel="Negative match type" width={110} value={g.negMatch}
                 onChange={(v) => setGroup(i, { negMatch: v as 'EXACT' | 'PHRASE' })}
                 options={[{ value: 'EXACT', label: 'EXACT' }, { value: 'PHRASE', label: 'PHRASE' }]} /></span>
             </label>

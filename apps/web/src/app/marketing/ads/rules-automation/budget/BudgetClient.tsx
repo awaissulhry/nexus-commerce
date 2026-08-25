@@ -71,8 +71,9 @@ import { WRITE_ACTIONS, type BudSlotProps } from './slot-contract'
 import { BudgetSections } from './BudgetSections'
 // Interim, until BUD.4 replaces it: rendered exactly as the tab rendered it, so nothing is lost in
 // the move off `?tab=budget`.
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { useAdsSync } from '../_shared/adsBus'
+import { Listbox } from '@/design-system/components'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 const MARKETS = ['IT', 'DE', 'FR', 'ES']
@@ -989,7 +990,7 @@ export function BudgetClient() {
               <div className="h10-ntm-b">
                 <label className="h10-bud-xferrow">
                   <span>From</span>
-                  <H10Select
+                  <Listbox
                     width={280}
                     options={[a, b].map((c) => ({ value: c.id, label: `${c.name} (€${(c.dailyBudgetCents / 100).toFixed(2)}/day)` }))}
                     value={from.id}

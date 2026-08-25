@@ -37,9 +37,10 @@ import { useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Anchor, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import type { BudSlotProps } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
+import { Listbox } from '@/design-system/components'
 
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
@@ -147,7 +148,7 @@ export function BudGuardrails({ campaigns, loading, reload }: BudSlotProps) {
       </div>
 
       <div className="h10-bud2-row">
-        <H10Select
+        <Listbox
           width={320}
           options={[{ value: '', label: 'Edit one campaign…' }, ...campaigns.map((c) => ({ value: c.id, label: `${c.name} (${eur(c.dailyBudgetCents)}${c.budgetBaselineCents != null ? ` · base ${eur(c.budgetBaselineCents)}` : ''})` }))]}
           value={editId}

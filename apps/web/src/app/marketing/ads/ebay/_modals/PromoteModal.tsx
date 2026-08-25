@@ -8,10 +8,11 @@
  */
 import { useEffect, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Modal, Err, ResultsList } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner, type WriteItemOutcome, type CampaignRow } from '../_lib'
+import { Listbox } from '@/design-system/components'
 
 export function PromoteModal(props: {
   open: boolean
@@ -83,7 +84,7 @@ export function PromoteModal(props: {
       <div className="eb-form-row">
         <div style={{ flex: 1 }}>
           <label>Target campaign (General, key-based)</label>
-          <span className="eb-dd dense"><H10Select ariaLabel="Target campaign" width="100%" value={campaignId} onChange={setCampaignId}
+          <span className="eb-dd dense"><Listbox ariaLabel="Target campaign" width="100%" value={campaignId} onChange={setCampaignId}
             options={campaigns.map((c) => ({ value: c.id, label: `${c.name} — ${c.status}${c.bidPercentage != null ? ` · default ${c.bidPercentage}%` : ''}` }))} /></span>
         </div>
         <div>

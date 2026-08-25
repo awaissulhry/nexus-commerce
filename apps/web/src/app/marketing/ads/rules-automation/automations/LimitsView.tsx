@@ -14,8 +14,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import type { ScopeOptions } from './ScopeForm'
+import { Listbox } from '@/design-system/components'
 
 interface Ceiling {
   id: string
@@ -168,8 +169,8 @@ export function LimitsView({ scopeOptions, global }: {
           </table>
         )}
         <div className="h10-au-limitadd">
-          <H10Select width={150} options={(['MARKET', 'PORTFOLIO', 'LINE', 'CAMPAIGN'] as const).map((g) => ({ value: g, label: GRAIN_WORD[g] }))} value={grain} onChange={(v) => { setGrain(v as Ceiling['grain']); setScopeId('') }} ariaLabel="Ceiling grain" />
-          <H10Select width={300} options={[{ value: '', label: 'Choose a scope…' }, ...scopeOpts]} value={scopeId} onChange={setScopeId} ariaLabel="Ceiling scope" searchable />
+          <Listbox width={150} options={(['MARKET', 'PORTFOLIO', 'LINE', 'CAMPAIGN'] as const).map((g) => ({ value: g, label: GRAIN_WORD[g] }))} value={grain} onChange={(v) => { setGrain(v as Ceiling['grain']); setScopeId('') }} ariaLabel="Ceiling grain" />
+          <Listbox width={300} options={[{ value: '', label: 'Choose a scope…' }, ...scopeOpts]} value={scopeId} onChange={setScopeId} ariaLabel="Ceiling scope" searchable />
           <span className="h10-au-limitcap"><span className="pf">€</span><input inputMode="decimal" placeholder="Daily cap" value={capEur} onChange={(e) => setCapEur(e.target.value)} aria-label="Daily cap in euros" /><span className="sf">/day</span></span>
      <Button variant="primary" disabled={busy || !scopeId} onClick={() => void save()}><Plus size={13} aria-hidden /> Ceiling</Button>
         </div>

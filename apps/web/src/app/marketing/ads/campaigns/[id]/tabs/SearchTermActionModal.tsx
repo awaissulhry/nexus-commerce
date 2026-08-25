@@ -9,10 +9,9 @@
  */
 import { useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Listbox, Modal } from '@/design-system/components'
 
 import { getBackendUrl } from '@/lib/backend-url'
-import { H10Select } from '../../FilterDropdown'
 
 const KW_MATCH = [{ value: 'EXACT', label: 'Exact' }, { value: 'PHRASE', label: 'Phrase' }, { value: 'BROAD', label: 'Broad' }]
 const NEG_MATCH = [{ value: 'NEGATIVE_EXACT', label: 'Negative Exact' }, { value: 'NEGATIVE_PHRASE', label: 'Negative Phrase' }]
@@ -78,11 +77,11 @@ export function SearchTermActionModal({ mode, terms, adGroups, externalCampaignI
       </div>
       {isKw && (
         <div className="h10-cd-field"><label>Ad Group</label>
-          <H10Select width="100%" value={adGroupId} onChange={setAdGroupId} options={adGroups.map((a) => ({ value: a.id, label: a.name || a.id }))} ariaLabel="Ad Group" />
+          <Listbox width="100%" value={adGroupId} onChange={setAdGroupId} options={adGroups.map((a) => ({ value: a.id, label: a.name || a.id }))} ariaLabel="Ad Group" />
         </div>
       )}
       <div className="h10-cd-field"><label>Match Type</label>
-        <H10Select width="100%" value={matchType} onChange={setMatchType} options={isKw ? KW_MATCH : NEG_MATCH} ariaLabel="Match Type" />
+        <Listbox width="100%" value={matchType} onChange={setMatchType} options={isKw ? KW_MATCH : NEG_MATCH} ariaLabel="Match Type" />
       </div>
       {isKw && (
         <div className="h10-cd-field s"><label>Bid</label>

@@ -19,8 +19,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { ChevronDown, ShieldCheck, Plus } from 'lucide-react'
-import { H10Select } from '../../campaigns/FilterDropdown'
+
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 
 interface OpenCampaign { id: string; name: string; marketplace: string | null; status: string; spendCents: number; impressions: number; clicks: number }
 interface Coverage {
@@ -186,7 +187,7 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
           )}
 
           <div className="h10-cov-act">
-            <H10Select
+            <Listbox
               width={280}
               options={[{ value: '', label: schedules.length ? 'Add selected to schedule…' : 'No schedules to add to yet' }, ...schedules]}
               value={target}

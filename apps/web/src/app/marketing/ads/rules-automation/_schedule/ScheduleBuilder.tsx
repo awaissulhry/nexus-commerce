@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { X, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search, Sparkles, Eye, AlertTriangle, CopyPlus } from 'lucide-react'
-import { H10Select, HoverCard } from '../../campaigns/FilterDropdown'
+import { HoverCard } from '../../campaigns/FilterDropdown'
 import { CampaignSection, type SchedCampaign } from './CampaignSection'
 import { MetricSelect } from './MetricSelect'
 import { DaypartingHeatmap, type HeatCell } from './DaypartingHeatmap'
@@ -22,6 +22,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 // (`recommendWindows` below) and is not touched by any of this.
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Listbox } from '@/design-system/components'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -434,7 +435,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
             <section id="sb-timezone" className="h10-rb-sec">
               <h2>Timezone</h2>
               <p className="h10-rb-desc">Select the timezone for this schedule.</p>
-              <H10Select width={430} options={TIMEZONES} value={timezone} onChange={setTimezone} ariaLabel="Timezone" />
+              <Listbox width={430} options={TIMEZONES} value={timezone} onChange={setTimezone} ariaLabel="Timezone" />
             </section>
             )}
 
@@ -482,9 +483,9 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                       <span className="h10-sb-date wide"><Calendar size={15} /><input value={periodLabel} readOnly aria-readonly="true" title={`Fixed at the last ${CHART_WINDOW_DAYS} days`} aria-label="Period" /></span></div>
                     {chartMode === 'line' && <>
                     <div className="f"><label>Group By <HoverCard text="Bucket the chart by hour of day or by day of week." placement="above"><span className="h10-sb-i" aria-hidden="true">ⓘ</span></HoverCard></label>
-                      <H10Select width={170} options={GROUP_BY} value={groupBy} onChange={setGroupBy} ariaLabel="Group by" /></div>
+                      <Listbox width={170} options={GROUP_BY} value={groupBy} onChange={setGroupBy} ariaLabel="Group by" /></div>
                     <div className="f"><label>Days of Week Included</label>
-                      <H10Select width={170} options={DAYS_OF_WEEK_FILTER} value={daysFilter} onChange={setDaysFilter} ariaLabel="Days of week included" /></div>
+                      <Listbox width={170} options={DAYS_OF_WEEK_FILTER} value={daysFilter} onChange={setDaysFilter} ariaLabel="Days of week included" /></div>
                     </>}
                   </div>
                 </div>
@@ -575,13 +576,13 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                       {isAllDay
                         ? <span className="h10-sb-allday" title="A Budget Multiplier applies for the whole day — the executor treats a window with no hours as covering that weekday.">All day</span>
                         : <>
-                          <H10Select width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.start} onChange={(v) => setWin(w.id, { start: v })} ariaLabel="Start time" />
+                          <Listbox width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.start} onChange={(v) => setWin(w.id, { start: v })} ariaLabel="Start time" />
                           <span className="dash">-</span>
-                          <H10Select width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.end} onChange={(v) => setWin(w.id, { end: v })} ariaLabel="End time" />
+                          <Listbox width={120} options={[{ value: '', label: 'Select time' }, ...TIME_OPTIONS]} value={w.end} onChange={(v) => setWin(w.id, { end: v })} ariaLabel="End time" />
                         </>}
                     </span>
                     <span className="adj">
-                      <H10Select width={200} options={[{ value: '', label: 'Select adjustment type' }, ...adjustments]} value={w.adj} onChange={(v) => setWin(w.id, { adj: v })} ariaLabel="Adjustment type" />
+                      <Listbox width={200} options={[{ value: '', label: 'Select adjustment type' }, ...adjustments]} value={w.adj} onChange={(v) => setWin(w.id, { adj: v })} ariaLabel="Adjustment type" />
                       {w.adj && adjNeedsValue(w.adj) && <span className="h10-sb-adjval"><input inputMode="decimal" value={w.value} onChange={(e) => setWin(w.id, { value: e.target.value })} placeholder={adjustments.find((a) => a.value === w.adj)?.unit === 'mult' ? '1.5' : adjustments.find((a) => a.value === w.adj)?.unit === 'eur' ? '€' : '%'} aria-label="Adjustment value" /></span>}
                     </span>
                     <span className="act">
