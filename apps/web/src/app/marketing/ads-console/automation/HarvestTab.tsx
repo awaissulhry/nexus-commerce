@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Sprout, Ban, RefreshCw, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
 import { TableSkel } from './_ui'
 import { downloadCsv } from './_csv'
@@ -73,14 +75,14 @@ export function HarvestTab() {
         <div className="az-stat"><div className="k">Wasted spend found</div><div className="v">{eur(wastedTotal)}</div><div className="s">last {windowDays} days</div></div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 2px 12px', flexWrap: 'wrap' }}>
-        <span className="ctl" style={{ cursor: 'default' }}>Window
-          <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} style={{ marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit', cursor: 'pointer' }}>{[14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} days</option>)}</select>
+        <span className="ctl" style={{ cursor: 'default', gap: 8 }}>Window
+          <Listbox ariaLabel="Harvest window" width={120} value={String(windowDays)} onChange={(v) => setWindowDays(Number(v))} options={[14, 30, 60, 90].map((d) => ({ value: String(d), label: `${d} days` }))} />
         </span>
         <span style={{ flex: 1 }} />
-        <button className="az-btn dark" disabled={busy || (negatives.length + graduations.length === 0)} onClick={() => void applyAll()}>{busy ? 'Applying…' : `Apply harvest (${negatives.length + graduations.length})`}</button>
+        <Button variant="primary" disabled={busy || (negatives.length + graduations.length === 0)} onClick={() => void applyAll()}>{busy ? 'Applying…' : `Apply harvest (${negatives.length + graduations.length})`}</Button>
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
-        <button className="az-iconbtn" onClick={() => downloadCsv(`harvest-${windowDays}d.csv`, [...graduations, ...negatives].map((t, idx) => ({ kind: idx < graduations.length ? 'graduate' : 'negate', query: t.query, campaign: campMap[t.externalCampaignId]?.name ?? t.externalCampaignId, marketplace: campMap[t.externalCampaignId]?.marketplace ?? '', adGroupId: t.externalAdGroupId, impressions: t.impressions, clicks: t.clicks, spendCents: t.costCents, orders: t.orders, salesCents: t.salesCents })))} title="Export CSV"><Download size={15} /></button>
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
+        <ToolbarButton icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv(`harvest-${windowDays}d.csv`, [...graduations, ...negatives].map((t, idx) => ({ kind: idx < graduations.length ? 'graduate' : 'negate', query: t.query, campaign: campMap[t.externalCampaignId]?.name ?? t.externalCampaignId, marketplace: campMap[t.externalCampaignId]?.marketplace ?? '', adGroupId: t.externalAdGroupId, impressions: t.impressions, clicks: t.clicks, spendCents: t.costCents, orders: t.orders, salesCents: t.salesCents })))} />
+        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
       <h4 style={{ margin: '4px 2px 8px', fontSize: 13.5 }}><Sprout size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5, color: 'var(--green)' }} />Graduate to exact keywords</h4>
       {tbl(graduations, 'grad')}

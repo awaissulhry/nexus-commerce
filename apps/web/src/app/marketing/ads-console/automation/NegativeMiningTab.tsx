@@ -11,6 +11,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ban, RefreshCw, Check, Download, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
 import { TableSkel } from './_ui'
 import { useAmazonLinks, buildAmazonCampaignHref } from './useAmazonLinks'
@@ -59,17 +61,17 @@ export function NegativeMiningTab() {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 2px 10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700 }}><Ban size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Negative-keyword mining</span>
-        <span className="ctl" style={{ cursor: 'default' }}>Min spend €<input type="number" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} style={{ width: 56, marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} /></span>
-        <select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', cursor: 'pointer' }} aria-label="Market"><option value="All">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+        <span className="ctl" style={{ cursor: 'default', gap: 8 }}>Min spend<Input type="number" aria-label="Minimum spend" prefix="€" value={minSpend} onChange={(e) => setMinSpend(e.target.value)} style={{ width: 56 }} /></span>
+        <Listbox ariaLabel="Market" width={140} value={mkt} onChange={setMkt} options={[{ value: 'All', label: 'All markets' }, ...markets.map((m) => ({ value: m, label: m }))]} />
         <span style={{ flex: 1 }} />
-        {sel.size > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void negateSelected()}>{busy ? 'Negating…' : `Negate ${sel.size}`}</button>}
-        <button className="az-iconbtn" onClick={() => downloadCsv('negative-keyword-candidates.csv', shown.map((c) => ({ query: c.query, matchType: c.matchType, campaign: campMap[c.campaignId]?.name ?? c.campaignId, marketplace: c.marketplace ?? '', adGroupId: c.adGroupId, impressions: c.totalImpressions, clicks: c.totalClicks, wastedSpendEur: c.totalCostUnits, status: done.has(key(c)) ? 'negated' : 'candidate' })))} title="Export CSV"><Download size={15} /></button>
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} className={loading ? 'az-spin' : ''} /></button>
+        {sel.size > 0 && <Button variant="primary" disabled={busy} onClick={() => void negateSelected()}>{busy ? 'Negating…' : `Negate ${sel.size}`}</Button>}
+        <ToolbarButton icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv('negative-keyword-candidates.csv', shown.map((c) => ({ query: c.query, matchType: c.matchType, campaign: campMap[c.campaignId]?.name ?? c.campaignId, marketplace: c.marketplace ?? '', adGroupId: c.adGroupId, impressions: c.totalImpressions, clicks: c.totalClicks, wastedSpendEur: c.totalCostUnits, status: done.has(key(c)) ? 'negated' : 'candidate' })))} />
+        <ToolbarButton icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">
           <thead><tr>
-            <th className="l" style={{ width: 36 }}><input type="checkbox" className="az-check" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.filter((c) => !done.has(key(c))).map(key)) : new Set())} /></th>
+            <th className="l" style={{ width: 36 }}><Checkbox aria-label="Select all candidates" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.filter((c) => !done.has(key(c))).map(key)) : new Set())} /></th>
             <th className="l">Search term</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Wasted spend</th><th className="l">Status</th>
           </tr></thead>
           <tbody>
@@ -77,7 +79,7 @@ export function NegativeMiningTab() {
             {!loading && shown.length === 0 && <tr><td className="az-empty" colSpan={8}>No wasted-spend terms above this threshold. Clean.</td></tr>}
             {shown.map((c, i) => { const k = key(c); const isDone = done.has(k); return (
               <tr key={`${k}-${i}`} className={sel.has(k) ? 'sel' : ''}>
-                <td className="l"><input type="checkbox" className="az-check" disabled={isDone} checked={sel.has(k) || isDone} onChange={() => toggle(c)} /></td>
+                <td className="l"><Checkbox aria-label={`Select ${c.query}`} disabled={isDone} checked={sel.has(k) || isDone} onChange={() => toggle(c)} /></td>
                 <td className="l" style={{ fontWeight: 500 }}>{c.query}</td>
                 <td className="l"><span className="az-badge paused">{(c.matchType || '').replace(/_/g, ' ').toLowerCase()}</span></td>
                 <td className="l">{(() => { const cm = campMap[c.campaignId]; const amzHref = buildAmazonCampaignHref(c.campaignId, c.marketplace, profileMap); return (<><div>{cm ? <a className="cn" href={campaignHref(cm.id)} target="_blank" rel="noopener noreferrer">{cm.name}</a> : <span className="sub">{c.campaignId}</span>}</div><div className="sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{c.marketplace} · AG {c.adGroupId}{amzHref && <a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Amazon <ExternalLink size={9} /></a>}</div></>) })()}</td>

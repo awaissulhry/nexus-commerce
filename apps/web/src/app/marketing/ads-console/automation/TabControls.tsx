@@ -8,6 +8,8 @@
  */
 
 import { Calendar, Globe } from 'lucide-react'
+import { Listbox } from '@/design-system/components/Listbox'
+import { DateField } from '@/design-system/components/DateField'
 
 export interface RangeValue { marketplace: string; days: number; start: string; end: string; custom: boolean }
 export const DEFAULT_RANGE: RangeValue = { marketplace: 'All', days: 30, start: '', end: '', custom: false }
@@ -24,22 +26,24 @@ export const rangeLabel = (v: RangeValue) => (v.custom && v.start && v.end ? `${
 
 export function TabControls({ value, onChange, markets }: { value: RangeValue; onChange: (v: RangeValue) => void; markets?: string[] }) {
   const mkts = markets && markets.length ? ['All', ...markets.filter((m) => m && m !== 'All')] : MARKETS
-  const ctl: React.CSSProperties = { border: '1px solid var(--border)', borderRadius: 6, padding: '6px 9px', font: 'inherit', cursor: 'pointer', background: '#fff' }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--ink2)', fontSize: 12 }}><Globe size={13} />
-        <select value={value.marketplace} onChange={(e) => onChange({ ...value, marketplace: e.target.value })} style={ctl} aria-label="Market">{mkts.map((m) => <option key={m} value={m}>{m === 'All' ? 'All markets' : m}</option>)}</select>
+        <Listbox ariaLabel="Market" width={140} value={value.marketplace} onChange={(m) => onChange({ ...value, marketplace: m })} options={mkts.map((m) => ({ value: m, label: m === 'All' ? 'All markets' : m }))} />
       </span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--ink2)', fontSize: 12 }}><Calendar size={13} />
-        <select value={value.custom ? 'custom' : String(value.days)} onChange={(e) => { const v = e.target.value; if (v === 'custom') { const end = new Date().toISOString().slice(0, 10); const s = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10); onChange({ ...value, custom: true, start: value.start || s, end: value.end || end }) } else onChange({ ...value, custom: false, days: Number(v) }) }} style={ctl} aria-label="Date range">
-          {PRESETS.map((d) => <option key={d} value={d}>Last {d} days</option>)}
-          <option value="custom">Custom…</option>
-        </select>
+        <Listbox
+          ariaLabel="Date range"
+          width={150}
+          value={value.custom ? 'custom' : String(value.days)}
+          onChange={(v) => { if (v === 'custom') { const end = new Date().toISOString().slice(0, 10); const s = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10); onChange({ ...value, custom: true, start: value.start || s, end: value.end || end }) } else onChange({ ...value, custom: false, days: Number(v) }) }}
+          options={[...PRESETS.map((d) => ({ value: String(d), label: `Last ${d} days` })), { value: 'custom', label: 'Custom…' }]}
+        />
       </span>
       {value.custom && <>
-        <input type="date" value={value.start} max={value.end || undefined} onChange={(e) => onChange({ ...value, start: e.target.value })} style={{ ...ctl, cursor: 'text' }} aria-label="Start date" />
+        <DateField ariaLabel="Start date" value={value.start} max={value.end || undefined} clearable={false} onChange={(v) => onChange({ ...value, start: v })} />
         <span style={{ color: 'var(--ink3)' }}>→</span>
-        <input type="date" value={value.end} min={value.start || undefined} onChange={(e) => onChange({ ...value, end: e.target.value })} style={{ ...ctl, cursor: 'text' }} aria-label="End date" />
+        <DateField ariaLabel="End date" value={value.end} min={value.start || undefined} clearable={false} onChange={(v) => onChange({ ...value, end: v })} />
       </>}
     </span>
   )

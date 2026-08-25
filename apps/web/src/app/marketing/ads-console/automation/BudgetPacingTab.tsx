@@ -9,6 +9,8 @@
 import { useEffect, useState } from 'react'
 import { Wallet, Plus, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface PlanRow { id: string; marketplace: string; tag?: string | null; month: string; monthlyBudgetCents: number; autoPacing: boolean; stopOverSpend: boolean; spendCents: number | null; pct: number | null; expectedPct: number | null; status: string }
 interface Resp { month: string; daysInMonth: number; dayOfMonth: number; rows: PlanRow[]; totals: { budgetCents: number; spendCents: number; pct: number | null } }
@@ -46,11 +48,11 @@ export function BudgetPacingTab() {
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
         <h4><Plus size={15} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />New monthly budget</h4>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Marketplace<br /><select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ marginTop: 4, border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', cursor: 'pointer' }}>{MARKETS.map((m) => <option key={m}>{m}</option>)}</select></label>
-          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Monthly budget (€)<br /><input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} style={{ marginTop: 4, border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', width: 130 }} /></label>
-          <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={autoPace} onChange={(e) => setAutoPace(e.target.checked)} style={{ marginRight: 6 }} />Auto-pace evenly</label>
-          <label className="az-rowstat" style={{ fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={stopOver} onChange={(e) => setStopOver(e.target.checked)} style={{ marginRight: 6 }} />Stop at cap (never overspend)</label>
-          <button className="az-btn dark" disabled={busy} onClick={() => void create()}>Create</button>
+          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Marketplace<br /><Listbox ariaLabel="Marketplace" width={130} value={mkt} onChange={setMkt} options={MARKETS.map((m) => ({ value: m, label: m }))} /></label>
+          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Monthly budget<br /><Input type="number" prefix="€" value={budget} onChange={(e) => setBudget(e.target.value)} style={{ width: 100 }} /></label>
+          <Checkbox checked={autoPace} onChange={(e) => setAutoPace(e.target.checked)} label="Auto-pace evenly" />
+          <Checkbox checked={stopOver} onChange={(e) => setStopOver(e.target.checked)} label="Stop at cap (never overspend)" />
+          <Button variant="primary" disabled={busy} onClick={() => void create()}>Create</Button>
         </div>
       </div>
 

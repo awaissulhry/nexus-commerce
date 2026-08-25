@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { Gauge, Pause, Play, Save, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input, RadioCard } from '@/design-system/primitives'
 
 interface State { autonomy?: string; halted?: boolean; haltReason?: string | null; maxHourlySpendCentsEur?: number | null; maxActionsPerHour?: number | null; effectivelyStopped?: boolean }
 const LEVELS = [
@@ -39,10 +40,17 @@ export function GuardrailsTab() {
         <p>How much the engine is allowed to do without you. Current: <b>{s?.autonomy ?? '—'}</b>.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10 }}>
           {LEVELS.map((l) => (
-            <button key={l.k} onClick={() => void setLevel(l.k)} disabled={busy} style={{ textAlign: 'left', border: `1.5px solid ${s?.autonomy === l.k ? 'var(--navy)' : 'var(--border)'}`, background: s?.autonomy === l.k ? 'var(--bg2)' : '#fff', borderRadius: 10, padding: '12px 14px', cursor: 'pointer' }}>
-              <div style={{ fontWeight: 700 }}>{l.label}{s?.autonomy === l.k ? ' ✓' : ''}</div>
-              <div style={{ color: 'var(--ink2)', fontSize: 12, marginTop: 3 }}>{l.desc}</div>
-            </button>
+            <RadioCard
+              key={l.k}
+              name="autonomy-level"
+              value={l.k}
+              title={l.label}
+              description={l.desc}
+              selected={s?.autonomy === l.k}
+              checked={s?.autonomy === l.k}
+              disabled={busy}
+              onChange={() => void setLevel(l.k)}
+            />
           ))}
         </div>
       </div>
@@ -51,9 +59,9 @@ export function GuardrailsTab() {
         <h4><ShieldCheck size={15} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />Hard ceilings</h4>
         <p>Absolute limits the engine can never exceed in an hour — a backstop above every rule’s own guardrails.</p>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max spend affected / hour (€)<br /><input type="number" value={hourly} placeholder="no limit" onChange={(e) => setHourly(e.target.value)} style={{ marginTop: 4, border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', width: 140 }} /></label>
-          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max actions / hour<br /><input type="number" value={actions} placeholder="no limit" onChange={(e) => setActions(e.target.value)} style={{ marginTop: 4, border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', width: 140 }} /></label>
-          <button className="az-btn dark" disabled={busy} onClick={() => void saveThresholds()}><Save size={14} />Save guardrails</button>
+          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max spend affected / hour<br /><Input type="number" prefix="€" value={hourly} placeholder="no limit" onChange={(e) => setHourly(e.target.value)} style={{ width: 110 }} /></label>
+          <label style={{ fontSize: 12, color: 'var(--ink2)' }}>Max actions / hour<br /><Input type="number" value={actions} placeholder="no limit" onChange={(e) => setActions(e.target.value)} style={{ width: 140 }} /></label>
+          <Button variant="primary" disabled={busy} onClick={() => void saveThresholds()}><Save size={14} />Save guardrails</Button>
           {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
         </div>
       </div>
@@ -62,8 +70,8 @@ export function GuardrailsTab() {
         <h4>Global kill-switch</h4>
         <p>Engine is <b style={{ color: s?.effectivelyStopped ? '#cc1100' : 'var(--green)' }}>{s?.effectivelyStopped ? 'HALTED' : 'running'}</b>{s?.haltReason ? ` — ${s.haltReason}` : ''}. One click stops/starts every automation instantly.</p>
         {s?.halted
-          ? <button className="az-btn dark" disabled={busy} onClick={() => void toggleHalt()}><Play size={14} />Resume all automation</button>
-          : <button className="az-btn" disabled={busy} onClick={() => void toggleHalt()} style={{ color: '#cc1100', borderColor: '#f4c7c0' }}><Pause size={14} />Halt all automation</button>}
+          ? <Button variant="primary" disabled={busy} onClick={() => void toggleHalt()}><Play size={14} />Resume all automation</Button>
+          : <Button variant="danger" disabled={busy} onClick={() => void toggleHalt()}><Pause size={14} />Halt all automation</Button>}
       </div>
     </div>
   )

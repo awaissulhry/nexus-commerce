@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Swords, RefreshCw, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Checkbox, ToolbarButton } from '@/design-system/primitives'
 import { TabControls, DEFAULT_RANGE, rangeQuery, type RangeValue } from './TabControls'
 import { TableSkel } from './_ui'
 import { downloadCsv } from './_csv'
@@ -41,11 +42,11 @@ export function SovTab() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 2px 10px' }}>
         <span style={{ fontWeight: 700 }}><Swords size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Share of voice by query</span>
-        <label className="az-rowstat" style={{ color: 'var(--ink2)', fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={onlyFlags} onChange={(e) => setOnlyFlags(e.target.checked)} style={{ marginRight: 6 }} />Flagged only</label>
+        <Checkbox checked={onlyFlags} onChange={(e) => setOnlyFlags(e.target.checked)} label="Flagged only" />
         <span style={{ flex: 1 }} />
         <TabControls value={range} onChange={setRange} />
-        <button className="az-iconbtn" onClick={() => downloadCsv('share-of-voice.csv', rows.map((r) => ({ query: r.query, sovPct: r.sovPct, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, cvr: r.cvr, cpcCents: r.cpcCents, orders: r.orders, campaigns: r.campaignCount, flag: r.flag ?? '' })))} title="Export CSV"><Download size={15} /></button>
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
+        <ToolbarButton icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv('share-of-voice.csv', rows.map((r) => ({ query: r.query, sovPct: r.sovPct, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, cvr: r.cvr, cpcCents: r.cpcCents, orders: r.orders, campaigns: r.campaignCount, flag: r.flag ?? '' })))} />
+        <ToolbarButton icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">

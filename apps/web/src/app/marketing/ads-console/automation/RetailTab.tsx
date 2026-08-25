@@ -11,6 +11,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ShieldAlert, RefreshCw, PauseCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Camp { campaignId: string; name: string; marketplace: string; status: string; products: number; outOfStock: number; lostBuyBox: number; uncompetitive: number; unknown: number; verdict: string; reason: string }
 const num = (n: number) => new Intl.NumberFormat('en-US').format(n)
@@ -47,11 +49,11 @@ export function RetailTab() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 2px 10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700 }}><ShieldAlert size={15} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Retail readiness</span>
-        <select value={mkt} onChange={(e) => setMkt(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', font: 'inherit', cursor: 'pointer' }} aria-label="Market"><option value="All">All markets</option>{markets.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+        <Listbox ariaLabel="Market" width={140} value={mkt} onChange={setMkt} options={[{ value: 'All', label: 'All markets' }, ...markets.map((m) => ({ value: m, label: m }))]} />
         <span style={{ flex: 1 }} />
-        {flagged.length > 0 && <button className="az-btn dark" disabled={busy} onClick={() => void applyAll()}><PauseCircle size={14} />Min bid · {flagged.length} flagged</button>}
+        {flagged.length > 0 && <Button variant="primary" disabled={busy} onClick={() => void applyAll()}><PauseCircle size={14} />Min bid · {flagged.length} flagged</Button>}
         {msg && <span style={{ color: 'var(--ink2)', fontSize: 12 }}>{msg}</span>}
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
+        <ToolbarButton icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
       <div className="az-tablewrap">
         <table className="az-table">
