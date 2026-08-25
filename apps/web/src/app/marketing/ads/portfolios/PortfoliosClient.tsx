@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { RefreshCw, Plus, Pencil, Archive, Wallet, Search } from 'lucide-react'
+import { RefreshCw, Plus, Pencil, Archive, Wallet, Search, X } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
 import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
@@ -192,11 +192,16 @@ function PortfoliosInner() {
 
       <div className="pf-toolbar">
         {rows.length > 0 && (
-          <span className="pf-search">
-            <Search size={14} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search portfolios…" aria-label="Search portfolios" />
-            {q && <button type="button" onClick={() => setQ('')} aria-label="Clear search">×</button>}
-          </span>
+          <Input
+            fieldClassName="pf-searchfield"
+            size="sm"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search portfolios…"
+            aria-label="Search portfolios"
+            leadingIcon={<Search size={14} />}
+            suffix={q ? <ToolbarButton icon={<X size={13} />} label="Clear search" tooltip={false} size="sm" onClick={() => setQ('')} /> : undefined}
+          />
         )}
         {lastSynced && <span className="pf-synced">Last synced {ago(lastSynced)}</span>}
         <div className="pf-toolbar-r">

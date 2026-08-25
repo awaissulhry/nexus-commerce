@@ -61,10 +61,11 @@
 
 /* OS.6 — portfolio search. Sits at the left of the toolbar so it reads before the sync/create
    actions on the right; the toolbar already uses flex, so it needs no layout change. */
-.pf-search { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 6px 10px; min-width: 240px; color: var(--nds-grey-500); background: var(--nds-white); }
-.pf-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: var(--nds-grey-900); }
-.pf-search input::placeholder { color: var(--nds-grey-400); }
-.pf-search button { border: none; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: var(--nds-grey-500); padding: 0 2px; }
+.pf-searchfield { min-width: 240px; }
+/* The clear × rides in the DS field's `suffix`, which is a SHADED UNIT adornment (the € / %
+   slot) — the only trailing slot `Input` has. Filed as a DS gap; until it grows a trailing
+   ACTION slot, cancel the three declarations that make a shaded box, and nothing else. */
+.pf-searchfield .ad.suf { background: none; border-left: 0; padding: 0 6px 0 0; }
 
 /* ACR.6 — the name is the door to the Family Cockpit. */
 .pf-name-link { color: var(--nds-blue-600); text-decoration: none; cursor: pointer; }

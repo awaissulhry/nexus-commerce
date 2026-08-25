@@ -275,74 +275,82 @@ export function FamilyCockpitClient() {
               <Button variant="secondary" size="sm" disabled={busy != null} onClick={() => void bulkLiveWrites(false)}>All read-only</Button>
             </span>
           </div>
-          <div className="fc-tablewrap">
-            <table className="fc-table">
-              <thead><tr>
-                <th className="l">Campaign</th><th>Status</th><th>Automation writes</th>
-                <th>Budget/day</th><th>30d spend</th><th>30d sales</th><th>ACOS</th>
-                <th>Bounds</th><th>Schedules</th><th>Delivery</th>
-              </tr></thead>
-              <tbody>
-                {ck.campaigns.map((c) => (
-                  <tr
-                    key={c.id}
-                    className={c.status !== 'ENABLED' ? 'off' : ''}
-                    {...ruleDropProps((rule) => void bindRule(rule, { scopeCampaignId: c.id }, c.name))}
+          <DataGrid<Campaign>
+            className="fc-grid fc-camps" size="sm"
+            rows={ck.campaigns}
+            rowKey={(c) => c.id}
+            rowClassName={(c) => (c.status !== 'ENABLED' ? 'off' : '')}
+            rowProps={(c) => ruleDropProps((rule) => void bindRule(rule, { scopeCampaignId: c.id }, c.name))}
+            columns={[
+              {
+                key: 'name', label: 'Campaign', width: 320,
+                render: (c) => <span className="fc-campname" title={c.name}>{c.name}</span>,
+              },
+              {
+                key: 'status', label: 'Status', align: 'right', width: 104,
+                render: (c) => (
+                  <Button
+                    variant="quiet" size="xs" className={`fc-status ${c.status.toLowerCase()}`}
+                    disabled={busy === c.id || c.status === 'ARCHIVED'}
+                    title={c.status === 'ENABLED' ? 'Pause this campaign' : c.status === 'PAUSED' ? 'Enable this campaign' : 'Archived'}
+                    onClick={() => void patchCampaign(c.id, { status: c.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' })}
                   >
-                    <td className="l" title={c.name}>{c.name}</td>
-                    <td>
-                      <Button
-                        variant="quiet" size="xs" className={`fc-status ${c.status.toLowerCase()}`}
-                        disabled={busy === c.id || c.status === 'ARCHIVED'}
-                        title={c.status === 'ENABLED' ? 'Pause this campaign' : c.status === 'PAUSED' ? 'Enable this campaign' : 'Archived'}
-                        onClick={() => void patchCampaign(c.id, { status: c.status === 'ENABLED' ? 'PAUSED' : 'ENABLED' })}
-                      >
-                        {c.status === 'ENABLED' ? <><Pause size={11} /> on</> : c.status === 'PAUSED' ? <><Play size={11} /> paused</> : 'archived'}
-                      </Button>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`fc-switch ${c.liveWritesEnabled ? 'on' : ''}`}
-                        disabled={busy === c.id}
-                        title={c.liveWritesEnabled
-                          ? 'Automation may write bids/budgets to this campaign. Click to make it read-only.'
-                          : 'Read-only: every engine write to this campaign is refused at the gate. Click to allow.'}
-                        onClick={() => void toggleLiveWrites(c)}
-                      >
-                        {c.liveWritesEnabled ? <><Check size={11} /> writable</> : <><X size={11} /> read-only</>}
-                      </button>
-                    </td>
-                    <td className="num">
-                      <Input
-                        size="xs" fieldClassName="fc-numfield"
-                        value={budgetEdit[c.id] ?? c.dailyBudgetEur.toFixed(2)}
-                        onChange={(e) => setBudgetEdit((m) => ({ ...m, [c.id]: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter') return
-                          const v = Number(budgetEdit[c.id])
-                          if (Number.isFinite(v) && v > 0 && v !== c.dailyBudgetEur) void patchCampaign(c.id, { dailyBudget: v })
-                        }}
-                        aria-label={`Daily budget for ${c.name}`}
-                      />
-                    </td>
-                    <td className="num">{eur(c.spend30dCents)}</td>
-                    <td className="num">{eur(c.sales30dCents)}</td>
-                    <td className="num">{pct(c.acos30d, 0)}</td>
-                    <td className="num" title="min / max bid the write gate enforces">
-                      {c.minBidCents != null ? `${c.minBidCents}¢` : '—'} / {c.maxBidCents != null ? `${c.maxBidCents}¢` : '—'}
-                    </td>
-                    <td className="num">{c.schedules || '—'}</td>
-                    <td>
-                      {c.deliveryStatus === 'NOT_DELIVERING'
-                        ? <span className="fc-deliv bad" title={c.deliveryReasons.join(', ')}>not serving</span>
-                        : c.deliveryStatus === 'DELIVERING' ? <span className="fc-deliv ok">serving</span> : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    {c.status === 'ENABLED' ? <><Pause size={11} /> on</> : c.status === 'PAUSED' ? <><Play size={11} /> paused</> : 'archived'}
+                  </Button>
+                ),
+              },
+              {
+                key: 'writes', label: 'Automation writes', align: 'right', width: 148,
+                render: (c) => (
+                  <Button
+                    size="xs"
+                    className={`fc-switch ${c.liveWritesEnabled ? 'on' : ''}`}
+                    disabled={busy === c.id}
+                    title={c.liveWritesEnabled
+                      ? 'Automation may write bids/budgets to this campaign. Click to make it read-only.'
+                      : 'Read-only: every engine write to this campaign is refused at the gate. Click to allow.'}
+                    onClick={() => void toggleLiveWrites(c)}
+                  >
+                    {c.liveWritesEnabled ? <><Check size={11} /> writable</> : <><X size={11} /> read-only</>}
+                  </Button>
+                ),
+              },
+              {
+                key: 'budget', label: 'Budget/day', align: 'right', numeric: true, width: 116,
+                render: (c) => (
+                  <Input
+                    size="xs" fieldClassName="fc-numfield"
+                    value={budgetEdit[c.id] ?? c.dailyBudgetEur.toFixed(2)}
+                    onChange={(e) => setBudgetEdit((m) => ({ ...m, [c.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      const v = Number(budgetEdit[c.id])
+                      if (Number.isFinite(v) && v > 0 && v !== c.dailyBudgetEur) void patchCampaign(c.id, { dailyBudget: v })
+                    }}
+                    aria-label={`Daily budget for ${c.name}`}
+                  />
+                ),
+              },
+              { key: 'spend', label: '30d spend', align: 'right', numeric: true, width: 104, render: (c) => eur(c.spend30dCents) },
+              { key: 'sales', label: '30d sales', align: 'right', numeric: true, width: 104, render: (c) => eur(c.sales30dCents) },
+              { key: 'acos', label: 'ACOS', align: 'right', numeric: true, width: 84, render: (c) => pct(c.acos30d, 0) },
+              {
+                key: 'bounds', label: 'Bounds', align: 'right', numeric: true, width: 108,
+                render: (c) => (
+                  <span title="min / max bid the write gate enforces">
+                    {c.minBidCents != null ? `${c.minBidCents}¢` : '—'} / {c.maxBidCents != null ? `${c.maxBidCents}¢` : '—'}
+                  </span>
+                ),
+              },
+              { key: 'schedules', label: 'Schedules', align: 'right', numeric: true, width: 100, render: (c) => c.schedules || '—' },
+              {
+                key: 'delivery', label: 'Delivery', align: 'right', width: 108,
+                render: (c) => (c.deliveryStatus === 'NOT_DELIVERING'
+                  ? <span className="fc-deliv bad" title={c.deliveryReasons.join(', ')}>not serving</span>
+                  : c.deliveryStatus === 'DELIVERING' ? <span className="fc-deliv ok">serving</span> : '—'),
+              },
+            ]}
+          />
 
           <div className="fc-sec-head"><h2>Products</h2>
             <span className="fc-sec-sub">{ck.products.length} advertised in this family — the &ldquo;several products, same keywords&rdquo; this cockpit exists for</span>
@@ -391,11 +399,11 @@ export function FamilyCockpitClient() {
             <>
               <div className="fc-autorow">
                 <div><span className="k">Status</span><span className="v">
-                  <button type="button" className={`fc-switch ${covSet.enabled ? 'on' : ''}`} disabled={covSetBusy}
+                  <Button size="xs" className={`fc-switch ${covSet.enabled ? 'on' : ''}`} disabled={covSetBusy}
                     title={covSet.enabled ? 'The engine reads this set. Click to make it a draft again.' : 'Draft — the engine ignores it. Click to enable.'}
                     onClick={() => void patchCovSet({ enabled: !covSet.enabled })}>
                     {covSet.enabled ? <><Check size={11} /> engine reads this</> : <><X size={11} /> draft</>}
-                  </button>
+                  </Button>
                 </span></div>
                 <div><span className="k">Terms</span><span className="v">{covSet.terms.filter((t) => t.status === 'ACTIVE').length} active · {covSet.terms.length} total</span></div>
                 <div><span className="k">Daily cap</span><span className="v">
@@ -484,12 +492,12 @@ export function FamilyCockpitClient() {
                     label: <span title="Control terms are held out: the engine never touches them, so week-over-week share moves are attributable to the engine rather than the market.">Control</span>,
                     align: 'right',
                     render: (t) => (
-                      <button type="button" className={`fc-switch ${t.isControl ? 'on' : ''}`}
+                      <Button size="xs" className={`fc-switch ${t.isControl ? 'on' : ''}`}
                         disabled={covSetBusy}
                         title={t.isControl ? 'Held out — the engine never touches this term. Click to hand it to the engine.' : 'Engine-managed. Click to hold it out as a control.'}
                         onClick={() => void patchCovTerm(t.id, { isControl: !t.isControl })}>
                         {t.isControl ? 'control' : 'engine'}
-                      </button>
+                      </Button>
                     ),
                   },
                   {
