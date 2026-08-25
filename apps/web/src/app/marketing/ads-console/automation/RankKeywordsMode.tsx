@@ -15,6 +15,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, RefreshCw, Zap } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
@@ -87,10 +89,10 @@ export function RankKeywordsMode() {
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 12, lineHeight: 1.5 }}>Pick the keywords you want to win and bid them to win it. Each row shows your bid, performance and how much of the auction you hold (Share of Voice). “Bid to win” beats the query’s going CPC; changes are queued (sandbox) + clamped by your CPC ceiling.</div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 2px 12px', flexWrap: 'wrap' }}>
-        <select value={market} onChange={(e) => setMarket(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 9px', font: 'inherit', cursor: 'pointer' }} aria-label="Market">{MARKETS.map((m) => <option key={m}>{m === 'All' ? 'All markets' : m}</option>)}</select>
-        <div className="az-search" style={{ minWidth: 200, padding: '6px 10px' }}><Search size={14} /><input placeholder="Find a keyword" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <Listbox ariaLabel="Market" width={140} value={market} onChange={setMarket} options={MARKETS.map((m) => ({ value: m, label: m === 'All' ? 'All markets' : m }))} />
+        <Input leadingIcon={<Search size={14} />} aria-label="Find a keyword" placeholder="Find a keyword" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 170 }} />
         <span style={{ flex: 1 }} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
 
       {/* push controls */}
@@ -99,18 +101,18 @@ export function RankKeywordsMode() {
         {([['win', 'Bid to win'], ['boost', 'Boost %'], ['set', 'Set bid']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setMode(k)} style={{ border: `1.5px solid ${mode === k ? 'var(--navy)' : 'var(--border)'}`, background: mode === k ? '#fff' : 'transparent', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>{l}</button>
         ))}
-        {mode === 'boost' && <label style={{ fontSize: 12, color: 'var(--ink2)' }}>+<input type="number" value={boostPct} onChange={(e) => setBoostPct(Number(e.target.value))} style={{ width: 56, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} />% of current bid</label>}
-        {mode === 'set' && <label style={{ fontSize: 12, color: 'var(--ink2)' }}>€<input type="number" step="0.05" value={setEur} onChange={(e) => setSetEur(e.target.value)} style={{ width: 70, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} /> per click</label>}
-        {mode === 'win' && <label style={{ fontSize: 12, color: 'var(--ink2)' }}>bid <input type="number" value={winMult} onChange={(e) => setWinMult(Number(e.target.value))} style={{ width: 60, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} />% of the going CPC</label>}
+        {mode === 'boost' && <label style={{ fontSize: 12, color: 'var(--ink2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Input type="number" aria-label="Boost percent" prefix="+" suffix="%" value={boostPct} onChange={(e) => setBoostPct(Number(e.target.value))} style={{ width: 52 }} />of current bid</label>}
+        {mode === 'set' && <label style={{ fontSize: 12, color: 'var(--ink2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Input type="number" step="0.05" aria-label="Bid per click" prefix="€" value={setEur} onChange={(e) => setSetEur(e.target.value)} style={{ width: 62 }} />per click</label>}
+        {mode === 'win' && <label style={{ fontSize: 12, color: 'var(--ink2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>bid<Input type="number" aria-label="Percent of going CPC" suffix="%" value={winMult} onChange={(e) => setWinMult(Number(e.target.value))} style={{ width: 56 }} />of the going CPC</label>}
         <span style={{ flex: 1 }} />
-        <button className="az-btn dark" disabled={busy || sel.size === 0} onClick={() => void apply()}><Zap size={14} />{busy ? 'Queuing…' : `Apply to ${sel.size} keyword(s)`}</button>
+        <Button variant="primary" disabled={busy || sel.size === 0} onClick={() => void apply()}><Zap size={14} />{busy ? 'Queuing…' : `Apply to ${sel.size} keyword(s)`}</Button>
       </div>
       {msg && <div style={{ color: msg.includes('Queued') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{msg}</div>}
 
       <div className="az-tablewrap">
         <table className="az-table">
           <thead><tr>
-            <th className="l" style={{ width: 32 }}><input type="checkbox" className="az-check" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((t) => t.id)) : new Set())} /></th>
+            <th className="l" style={{ width: 32 }}><Checkbox aria-label="Select all keywords" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((t) => t.id)) : new Set())} /></th>
             <th className="l">Keyword</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Bid</th><th>SoV</th><th>Impr.</th><th>ACOS</th><th>ROAS</th><th>New bid</th>
           </tr></thead>
           <tbody>
@@ -118,7 +120,7 @@ export function RankKeywordsMode() {
             {rows !== null && shown.length === 0 && <tr><td className="az-empty" colSpan={10}>No keyword targets {market === 'All' ? '' : `in ${market}`} match.</td></tr>}
             {shown.map((t) => { const s = sovFor(t); const nb = targetBid(t); const up = nb > t.bidCents; return (
               <tr key={t.id} className={sel.has(t.id) ? 'sel' : ''}>
-                <td className="l"><input type="checkbox" className="az-check" checked={sel.has(t.id)} onChange={() => toggle(t.id)} /></td>
+                <td className="l"><Checkbox aria-label={`Select ${t.text}`} checked={sel.has(t.id)} onChange={() => toggle(t.id)} /></td>
                 <td className="l" style={{ fontWeight: 500 }}>{t.text}</td>
                 <td className="l"><span className="sub">{(t.matchType ?? '').replace('SEARCH_', '').replace('_', ' ').toLowerCase() || '—'}</span></td>
                 <td className="l"><a className="cn" href={campaignHref(t.campaignId)} target="_blank" rel="noopener noreferrer">{t.campaignName}</a><div className="sub">{t.marketplace ?? ''}</div></td>

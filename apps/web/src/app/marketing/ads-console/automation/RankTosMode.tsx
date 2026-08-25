@@ -12,6 +12,8 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, Check } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['All', 'IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK']
@@ -68,12 +70,12 @@ export function RankTosMode({ onSaved }: { onSaved: () => void }) {
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 12, lineHeight: 1.5 }}>Your real <b>top-of-search impression share</b> per campaign (Amazon’s metric), with the autonomous loop’s recommendation to hold your target. Set the target, then create the hold-IS automation — it raises the Top-of-Search multiplier only while you’re below target and ACOS is in budget, and eases off otherwise (least cost).</div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 14px', border: '1px solid var(--divider)', borderRadius: 10, marginBottom: 12, flexWrap: 'wrap', background: 'var(--bg2)' }}>
-        <select value={market} onChange={(e) => setMarket(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 9px', font: 'inherit', cursor: 'pointer' }} aria-label="Market">{MARKETS.map((m) => <option key={m}>{m === 'All' ? 'All markets' : m}</option>)}</select>
-        <label style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Target IS <input type="number" min={1} max={100} value={targetIS} onChange={(e) => setTargetIS(Math.max(1, Math.min(100, Number(e.target.value))))} style={{ width: 60, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px', font: 'inherit', fontWeight: 700 }} />%</label>
-        <label style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Max ACOS <input type="number" min={1} max={200} value={targetAcos} onChange={(e) => setTargetAcos(Math.max(1, Math.min(200, Number(e.target.value))))} style={{ width: 60, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px', font: 'inherit' }} />%</label>
+        <Listbox ariaLabel="Market" width={140} value={market} onChange={setMarket} options={MARKETS.map((m) => ({ value: m, label: m === 'All' ? 'All markets' : m }))} />
+        <label style={{ fontSize: 12.5, color: 'var(--ink2)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>Target IS <Input type="number" min={1} max={100} aria-label="Target impression share" suffix="%" value={targetIS} onChange={(e) => setTargetIS(Math.max(1, Math.min(100, Number(e.target.value))))} style={{ width: 56, fontWeight: 700 }} /></label>
+        <label style={{ fontSize: 12.5, color: 'var(--ink2)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>Max ACOS <Input type="number" min={1} max={200} aria-label="Maximum ACOS" suffix="%" value={targetAcos} onChange={(e) => setTargetAcos(Math.max(1, Math.min(200, Number(e.target.value))))} style={{ width: 56 }} /></label>
         <span style={{ flex: 1 }} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
-        <button className="az-btn dark" disabled={busy} onClick={() => void createRule()}><Check size={14} />{busy ? 'Creating…' : 'Create hold-IS automation'}</button>
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
+        <Button variant="primary" disabled={busy} onClick={() => void createRule()}><Check size={14} />{busy ? 'Creating…' : 'Create hold-IS automation'}</Button>
       </div>
       {msg && <div style={{ color: msg.includes('Created') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{msg}</div>}
       {!hasIS && rows.length > 0 && <div style={{ color: 'var(--ink2)', fontSize: 11.5, marginBottom: 10 }}>Top-of-Search IS isn’t populated yet — it fills in after the TOS-IS ingest runs. Recommendations fall back to ACOS until then.</div>}

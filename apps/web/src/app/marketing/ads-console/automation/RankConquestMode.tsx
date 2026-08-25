@@ -13,6 +13,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Crosshair, RefreshCw, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
@@ -69,28 +71,31 @@ export function RankConquestMode() {
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 12, lineHeight: 1.5 }}>Place your ads <b>on competitor product pages</b> by targeting their ASINs. Pick the ad group to host the targets, paste competitor ASINs, set a bid, and create them. New targets are queued (sandbox).</div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 2px 12px', flexWrap: 'wrap' }}>
-        <select value={market} onChange={(e) => { setMarket(e.target.value); setAdGroupId('') }} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 9px', font: 'inherit', cursor: 'pointer' }} aria-label="Market">{MARKETS.map((m) => <option key={m}>{m === 'All' ? 'All markets' : m}</option>)}</select>
+        <Listbox ariaLabel="Market" width={140} value={market} onChange={(v) => { setMarket(v); setAdGroupId('') }} options={MARKETS.map((m) => ({ value: m, label: m === 'All' ? 'All markets' : m }))} />
         <span style={{ flex: 1 }} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
 
       <div className="az-eng-card" style={{ marginBottom: 16 }}>
         <h4><Crosshair size={14} style={{ verticalAlign: 'text-bottom', marginRight: 5 }} />Target competitor ASINs</h4>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
           <label style={{ fontSize: 12.5 }}>Host ad group
-            <select value={adGroupId} onChange={(e) => setAdGroupId(e.target.value)} style={{ display: 'block', marginTop: 4, minWidth: 320, maxWidth: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 9px', font: 'inherit', cursor: 'pointer' }}>
-              <option value="">{rows === null ? 'Loading…' : adGroups.length ? 'Select an ad group…' : 'No ad groups found'}</option>
-              {adGroups.map((g) => <option key={g.adGroupId} value={g.adGroupId}>{g.campaignName} → {g.adGroupName}{g.marketplace ? ` (${g.marketplace})` : ''}</option>)}
-            </select>
+            <Listbox
+              ariaLabel="Host ad group"
+              width={420}
+              value={adGroupId}
+              onChange={setAdGroupId}
+              options={[{ value: '', label: rows === null ? 'Loading…' : adGroups.length ? 'Select an ad group…' : 'No ad groups found' }, ...adGroups.map((g) => ({ value: g.adGroupId, label: `${g.campaignName} → ${g.adGroupName}${g.marketplace ? ` (${g.marketplace})` : ''}` }))]}
+            />
           </label>
           <label style={{ fontSize: 12.5 }}>Competitor ASINs <span style={{ color: 'var(--ink3)', fontWeight: 400 }}>(one per line or comma-separated)</span>
-            <textarea value={asins} onChange={(e) => setAsins(e.target.value)} placeholder="B0XXXXXXXX, B0YYYYYYYY…" rows={3} style={{ display: 'block', marginTop: 4, width: '100%', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', font: 'inherit', resize: 'vertical' }} />
+            <Textarea value={asins} onChange={(e) => setAsins(e.target.value)} placeholder="B0XXXXXXXX, B0YYYYYYYY…" rows={3} style={{ marginTop: 4, minHeight: 76 }} />
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <label style={{ fontSize: 12.5 }}>Bid €<input type="number" step="0.05" value={bid} onChange={(e) => setBid(e.target.value)} style={{ width: 80, marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', font: 'inherit' }} /></label>
+            <label style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>Bid<Input type="number" step="0.05" prefix="€" aria-label="Bid" value={bid} onChange={(e) => setBid(e.target.value)} style={{ width: 62 }} /></label>
             <span style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{validAsins.length} valid{invalidAsins.length ? ` · ${invalidAsins.length} invalid` : ''}</span>
             <span style={{ flex: 1 }} />
-            <button className="az-btn dark" disabled={busy || !adGroupId || validAsins.length === 0} onClick={() => void create()}><Plus size={14} />{busy ? 'Creating…' : `Create ${validAsins.length} target(s)`}</button>
+            <Button variant="primary" disabled={busy || !adGroupId || validAsins.length === 0} onClick={() => void create()}><Plus size={14} />{busy ? 'Creating…' : `Create ${validAsins.length} target(s)`}</Button>
           </div>
           {msg && <div style={{ color: msg.includes('Created') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600 }}>{msg}</div>}
         </div>

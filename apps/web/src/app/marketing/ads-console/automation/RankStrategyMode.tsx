@@ -15,6 +15,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, RefreshCw, Gauge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
 const MARKETS = ['IT', 'DE', 'FR', 'ES', 'NL', 'BE', 'SE', 'PL', 'IE', 'UK', 'All']
@@ -77,10 +79,10 @@ export function RankStrategyMode() {
       <div style={{ color: 'var(--ink2)', fontSize: 12.5, marginBottom: 12, lineHeight: 1.5 }}>Set how each campaign’s bid flexes in the auction, and cap the cost. <b>Up &amp; down</b> is the aggressive rank strategy (Amazon raises bids up to +100% on likely conversions); a <b>CPC ceiling</b> keeps that from overpaying. Changes are queued (sandbox).</div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 2px 12px', flexWrap: 'wrap' }}>
-        <select value={market} onChange={(e) => setMarket(e.target.value)} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '6px 9px', font: 'inherit', cursor: 'pointer' }} aria-label="Market">{MARKETS.map((m) => <option key={m}>{m === 'All' ? 'All markets' : m}</option>)}</select>
-        <div className="az-search" style={{ minWidth: 200, padding: '6px 10px' }}><Search size={14} /><input placeholder="Find a campaign" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <Listbox ariaLabel="Market" width={140} value={market} onChange={setMarket} options={MARKETS.map((m) => ({ value: m, label: m === 'All' ? 'All markets' : m }))} />
+        <Input leadingIcon={<Search size={14} />} aria-label="Find a campaign" placeholder="Find a campaign" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 170 }} />
         <span style={{ flex: 1 }} />
-        <button className="az-iconbtn" onClick={load} title="Refresh"><RefreshCw size={15} /></button>
+        <ToolbarButton variant="boxed" icon={<RefreshCw size={15} />} label="Refresh" onClick={load} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid var(--divider)', borderRadius: 10, marginBottom: 12, flexWrap: 'wrap', background: 'var(--bg2)' }}>
@@ -88,18 +90,18 @@ export function RankStrategyMode() {
         {STRATS.map((s) => (
           <button key={s.k} onClick={() => setStrat(s.k)} title={s.hint} style={{ border: `1.5px solid ${strat === s.k ? 'var(--navy)' : 'var(--border)'}`, background: strat === s.k ? '#fff' : 'transparent', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>{s.label}</button>
         ))}
-        <label className="az-rowstat" style={{ fontSize: 12, color: 'var(--ink2)', cursor: 'pointer', marginLeft: 6 }}><input type="checkbox" checked={ceilOn} onChange={(e) => setCeilOn(e.target.checked)} style={{ marginRight: 6 }} />CPC ceiling
-          {ceilOn && <input type="number" step="0.1" min={1} max={10} value={ceilMult} onChange={(e) => setCeilMult(Math.max(1, Math.min(10, Number(e.target.value))))} style={{ width: 56, margin: '0 4px', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', font: 'inherit' }} />}{ceilOn && '×'}
-        </label>
+        <span className="az-rowstat" style={{ fontSize: 12, color: 'var(--ink2)', marginLeft: 6, gap: 8 }}><Checkbox checked={ceilOn} onChange={(e) => setCeilOn(e.target.checked)} label="CPC ceiling" />
+          {ceilOn && <Input type="number" step="0.1" min={1} max={10} aria-label="CPC ceiling multiple" suffix="×" value={ceilMult} onChange={(e) => setCeilMult(Math.max(1, Math.min(10, Number(e.target.value))))} style={{ width: 52 }} />}
+        </span>
         <span style={{ flex: 1 }} />
-        <button className="az-btn dark" disabled={busy || sel.size === 0} onClick={() => void apply()}><Gauge size={14} />{busy ? 'Queuing…' : `Apply to ${sel.size}`}</button>
+        <Button variant="primary" disabled={busy || sel.size === 0} onClick={() => void apply()}><Gauge size={14} />{busy ? 'Queuing…' : `Apply to ${sel.size}`}</Button>
       </div>
       {msg && <div style={{ color: msg.includes('Queued') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{msg}</div>}
 
       <div className="az-tablewrap">
         <table className="az-table">
           <thead><tr>
-            <th className="l" style={{ width: 32 }}><input type="checkbox" className="az-check" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((c) => c.id)) : new Set())} /></th>
+            <th className="l" style={{ width: 32 }}><Checkbox aria-label="Select all campaigns" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((c) => c.id)) : new Set())} /></th>
             <th className="l">Campaign</th><th className="l">Market</th><th className="l">Current strategy</th><th>Daily budget</th><th>ACOS</th><th>ROAS</th>
           </tr></thead>
           <tbody>
@@ -107,7 +109,7 @@ export function RankStrategyMode() {
             {rows !== null && shown.length === 0 && <tr><td className="az-empty" colSpan={7}>No campaigns {market === 'All' ? '' : `in ${market}`} match.</td></tr>}
             {shown.map((c) => (
               <tr key={c.id} className={sel.has(c.id) ? 'sel' : ''}>
-                <td className="l"><input type="checkbox" className="az-check" checked={sel.has(c.id)} onChange={() => toggle(c.id)} /></td>
+                <td className="l"><Checkbox aria-label={`Select ${c.name}`} checked={sel.has(c.id)} onChange={() => toggle(c.id)} /></td>
                 <td className="l" style={{ fontWeight: 500 }}><a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a></td>
                 <td className="l"><span className="sub">{c.marketplace ?? '—'}</span></td>
                 <td className="l"><span className="az-badge" style={{ background: 'var(--bg3)', color: 'var(--ink2)' }}>{c.biddingStrategy ? (STRAT_LABEL[c.biddingStrategy] ?? c.biddingStrategy) : 'Default'}</span></td>
