@@ -211,10 +211,10 @@
       "rawColor": 1807
     },
     "marketing/ads": {
-      "select": 34,
+      "select": 33,
       "date": 3,
-      "fontSize": 12,
-      "hex": 40,
+      "fontSize": 9,
+      "hex": 39,
       "legacyKit": 0,
       "rawColor": 0
     },
