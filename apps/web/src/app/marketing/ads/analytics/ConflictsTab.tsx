@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 
 interface Contender {
   campaignId: string
@@ -144,13 +145,14 @@ export function ConflictsTab({ market }: { market: string }) {
           </p>
         </div>
         <div className="cov-controls">
-          <label className="cvf-check">
-            <input type="checkbox" checked={crossOnly} onChange={(e) => setCrossOnly(e.target.checked)} />
-            <span>Cross-portfolio only</span>
-          </label>
-          <button type="button" className="cov-btn" onClick={() => void load(market)} disabled={loading}>
+          <Checkbox
+            checked={crossOnly}
+            onChange={(e) => setCrossOnly(e.target.checked)}
+            label="Cross-portfolio only"
+          />
+          <Button size="sm" onClick={() => void load(market)} disabled={loading}>
             <RefreshCw size={13} /> {loading ? 'Loading…' : 'Refresh'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -161,10 +163,14 @@ export function ConflictsTab({ market }: { market: string }) {
       <div className="cov-sec-head">
         <h2>Contests</h2>
         <span className="cov-sec-count">{contests.length} shown · worst first</span>
-        <label className="cov-search">
-          <Search size={13} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter terms" />
-        </label>
+        <Input
+          fieldClassName="cov-search"
+          leadingIcon={<Search size={13} aria-hidden />}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter terms"
+          aria-label="Filter terms"
+        />
       </div>
 
       <div className="cvf-list">
@@ -178,10 +184,12 @@ export function ConflictsTab({ market }: { market: string }) {
           return (
             <section className="cvf-card" key={key}>
               <header className="cvf-head">
-                <button type="button" className="cvf-disc" onClick={() => toggle(key)}
-                  aria-expanded={isOpen} aria-label={isOpen ? 'Hide dormant claims' : 'Show all claims'}>
-                  {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
+                <ToolbarButton
+                  icon={isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  label={isOpen ? 'Hide dormant claims' : 'Show all claims'}
+                  active={isOpen}
+                  onClick={() => toggle(key)}
+                />
                 <span className="cvf-term">{c.term}</span>
                 <span className="cvf-match">{c.matchType}</span>
                 {c.crossPortfolio && <span className="cvf-tag cross">{c.portfolios} portfolios</span>}

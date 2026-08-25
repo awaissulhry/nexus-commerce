@@ -25,10 +25,6 @@
 .cov-controls { display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
 .cov-field { display: flex; flex-direction: column; gap: 5px; }
 .cov-field span { font-size: 11.5px; font-weight: 600; color: #46536a; text-transform: uppercase; letter-spacing: 0.03em; }
-.cov-field select {
-  font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white);
-  border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 6px 9px; min-width: 190px;
-}
 
 /* ── headroom ────────────────────────────────────────────────────────────── */
 .cov-head-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); overflow: hidden; }
@@ -69,9 +65,8 @@
 /* No keyword at all on a real market. */
 .cov-table td.none { color: #8a6320; font-weight: 600; }
 
-.cov-search { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 9px; background: var(--nds-white); }
-.cov-search input { border: 0; outline: 0; font-size: 12.5px; color: var(--nds-grey-900); width: 160px; background: transparent; }
-.cov-search svg { color: var(--nds-grey-500); flex-shrink: 0; }
+/* Only placement and width: the DS `Input` owns the border, radius, padding and icon. */
+.cov-search { margin-left: auto; width: 210px; }
 
 @media (max-width: 900px) {
   .cov-top { flex-direction: column; gap: 14px; }
@@ -98,13 +93,6 @@
 .cov-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
 .cov-sec-count { font-size: 12px; color: var(--nds-grey-500); }
 
-.cov-btn {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  font-size: 12px; color: #46536a; background: var(--nds-white);
-  border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 7px 11px; cursor: pointer;
-}
-.cov-btn:hover:not(:disabled) { background: var(--nds-grey-50); border-color: var(--nds-grey-300); }
-.cov-btn:disabled { opacity: 0.55; cursor: default; }
 
 .cov-foot { font-size: 12px; color: var(--nds-grey-500); margin: 18px 0 0; line-height: 1.55; max-width: 92ch; }
 
@@ -131,14 +119,8 @@
 
 /* ── ACR.2.3 · tabs ──────────────────────────────────────────────────────────
    Tabs rather than routes: §4.1 adds no sidebar entries, and both views answer one question. */
-.cov-tabs { display: flex; gap: 2px; margin: 0 24px 14px; border-bottom: 1px solid var(--nds-grey-150); }
-.cov-tabs button {
-  font-size: 12.5px; font-weight: 550; color: var(--nds-text-muted); background: transparent;
-  border: 0; border-bottom: 2px solid transparent; padding: 9px 14px; cursor: pointer;
-  margin-bottom: -1px;
-}
-.cov-tabs button:hover { color: #46536a; }
-.cov-tabs button.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
+/* Only the page gutter: the DS `Tabs` owns the bar, the hairline and the indicator. */
+.cov-tabs { margin: 0 24px 14px; }
 
 /* ── ACR.2.3 · conflicts ─────────────────────────────────────────────────────
    One card per contest. Dormant contenders are hidden by default: `giacca moto uomo` is claimed
@@ -150,12 +132,6 @@
   display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
   padding: 10px 14px 9px; border-bottom: 1px solid var(--nds-grey-75); background: var(--nds-white);
 }
-.cvf-disc {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; padding: 0; flex-shrink: 0;
-  border: 1px solid var(--nds-grey-150); border-radius: 5px; background: var(--nds-white); color: var(--nds-text-muted); cursor: pointer;
-}
-.cvf-disc:hover { background: var(--nds-grey-50); color: #46536a; }
 .cvf-term { font-size: 13px; font-weight: 650; color: var(--nds-grey-900); }
 .cvf-match {
   font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: var(--nds-text-muted);
@@ -198,8 +174,6 @@
 }
 .cvf-more:hover { background: var(--nds-grey-50); color: #46536a; }
 
-.cvf-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #46536a; cursor: pointer; }
-.cvf-check input { accent-color: var(--nds-blue-600); }
 
 .cov > .cvf-list { margin-left: 24px; margin-right: 24px; }
 

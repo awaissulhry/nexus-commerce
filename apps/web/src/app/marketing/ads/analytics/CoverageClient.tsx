@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input, Select } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ConflictsTab } from './ConflictsTab'
 // Self-contained: this page borrows no class from the Control Room's stylesheet. Reusing
@@ -140,16 +142,15 @@ export function CoverageClient() {
 
       {/* Tabs, not routes: §4.1 keeps the sidebar untouched, and both views answer one
           question — how much of page one we hold, and who of ours is fighting over it. */}
-      <div className="cov-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'coverage'}
-          className={tab === 'coverage' ? 'on' : undefined} onClick={() => setTab('coverage')}>
-          Coverage scoreboard
-        </button>
-        <button type="button" role="tab" aria-selected={tab === 'conflicts'}
-          className={tab === 'conflicts' ? 'on' : undefined} onClick={() => setTab('conflicts')}>
-          Conflicts
-        </button>
-      </div>
+      <Tabs
+        className="cov-tabs"
+        active={tab}
+        onChange={(id) => setTab(id as 'coverage' | 'conflicts')}
+        tabs={[
+          { id: 'coverage', label: 'Coverage scoreboard' },
+          { id: 'conflicts', label: 'Conflicts' },
+        ]}
+      />
 
       {tab === 'conflicts' && <ConflictsTab market={market} />}
 
@@ -188,8 +189,9 @@ export function CoverageClient() {
             <div className="cov-controls">
               <label className="cov-field">
                 <span>Week</span>
-                <select
+                <Select
                   value={week ?? ''}
+                  style={{ minWidth: 190 }}
                   onChange={(e) => { setWeek(e.target.value); void load(market, e.target.value) }}
                 >
                   {board.weeks.map((w) => (
@@ -197,11 +199,11 @@ export function CoverageClient() {
                       {w.startDate}{w.measured ? '' : ' · not measured'}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
-              <button type="button" className="cov-btn" onClick={() => void load(market, week)} disabled={loading}>
+              <Button size="sm" onClick={() => void load(market, week)} disabled={loading}>
                 <RefreshCw size={13} /> {loading ? 'Loading…' : 'Refresh'}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -237,10 +239,14 @@ export function CoverageClient() {
           <div className="cov-sec-head">
             <h2>Every term</h2>
             <span className="cov-sec-count">{rows.length} shown · largest market first</span>
-            <label className="cov-search">
-              <Search size={13} />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter terms" />
-            </label>
+            <Input
+              fieldClassName="cov-search"
+              leadingIcon={<Search size={13} aria-hidden />}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Filter terms"
+              aria-label="Filter terms"
+            />
           </div>
 
           <div className="cov-tablewrap">
