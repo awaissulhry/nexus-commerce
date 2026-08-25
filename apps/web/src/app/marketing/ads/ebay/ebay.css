@@ -26,6 +26,14 @@
 .eb-sandbox { border: 1px solid #f0d9a8; background: #fdf3d3; color: #9a6700; border-radius: var(--nds-radius-lg); padding: 8px 12px; font-size: 12px; }
 .eb-sandbox code { font-size: 11px; background: rgba(122, 91, 0, 0.08); padding: 1px 4px; border-radius: 4px; }
 
+/* The freshness footnote under a grid. It had no rule at all, so it rendered at the browser
+   default 16px — larger than every other string on these pages, which run 11 to 15 — flush
+   against the card above it (margin-top 0, gap 0). Measured on prod 2026-08-25.
+   Size joins the file's existing meta register; the INK is deliberately left at body strength
+   rather than `.eb-meta`'s grey-600, so nothing about this loses contrast (15.48:1, unchanged).
+   Whether a footnote should also be greyed is a visibility call, and not one to make in passing. */
+.eb-fresh { margin-top: 10px; font-size: 12.5px; line-height: 1.5; color: var(--nds-grey-900); }
+
 .eb-be-hint { font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.5; }
 .eb-be-hint b { color: var(--nds-amber-600); }
 .eb-be-hint code { font-size: 10.5px; background: var(--nds-grey-75); padding: 1px 4px; border-radius: 4px; }
