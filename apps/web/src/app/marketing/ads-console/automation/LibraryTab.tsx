@@ -12,6 +12,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Plus, Sliders, Check, Trash2 } from 'lucide-react'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { AUTOMATIONS, CATEGORIES, AUTOMATION_COUNT, type AutomationDef } from './automations'
 import { PLAYBOOKS, playbookAutomations } from './playbooks'
 import { loadCustomPlaybooks, deleteCustomPlaybook, type CustomPlaybook } from './customPlaybooks'
@@ -88,8 +90,8 @@ export function LibraryTab({ ruleNames, busy, onAdd, onAddMany, onEnablePlaybook
                   <div className="foot">
                     <span className="grow" />
                     {all
-                      ? <button className="az-btn" onClick={onGoActive}><Check size={14} />Active ({have})</button>
-                      : <button className="az-btn dark" disabled={busy === `pb:${pb.id}`} onClick={() => void onEnablePlaybook(pb.id)}>{busy === `pb:${pb.id}` ? 'Adding…' : have > 0 ? `Add ${autos.length - have} more` : 'Activate playbook'}</button>}
+                      ? <Button onClick={onGoActive}><Check size={14} />Active ({have})</Button>
+                      : <Button variant="primary" disabled={busy === `pb:${pb.id}`} onClick={() => void onEnablePlaybook(pb.id)}>{busy === `pb:${pb.id}` ? 'Adding…' : have > 0 ? `Add ${autos.length - have} more` : 'Activate playbook'}</Button>}
                   </div>
                 </div>
               )
@@ -107,7 +109,7 @@ export function LibraryTab({ ruleNames, busy, onAdd, onAddMany, onEnablePlaybook
                     <div className="top"><span className="ic"><PlaybookIcon /></span><span className="nm">{pb.name}</span><button className="az-kebab" onClick={() => setCustomPbs(deleteCustomPlaybook(pb.id))} title="Delete saved strategy" style={{ color: '#cc1100' }}><Trash2 size={14} /></button></div>
                     <div className="goal">Saved strategy · {autos.length} automations</div>
                     <div className="chips">{autos.map((a) => <span key={a.id} className={`chip ${ruleNames.has(a.name) ? 'on' : ''}`}>{a.name}</span>)}</div>
-                    <div className="foot"><span className="grow" />{all ? <button className="az-btn" onClick={onGoActive}><Check size={14} />Active</button> : <button className="az-btn dark" disabled={busy === `cpb:${pb.id}`} onClick={() => void onActivateCustom(pb)}>{busy === `cpb:${pb.id}` ? 'Adding…' : 'Activate'}</button>}</div>
+                    <div className="foot"><span className="grow" />{all ? <Button onClick={onGoActive}><Check size={14} />Active</Button> : <Button variant="primary" disabled={busy === `cpb:${pb.id}`} onClick={() => void onActivateCustom(pb)}>{busy === `cpb:${pb.id}` ? 'Adding…' : 'Activate'}</Button>}</div>
                   </div>
                 )
               })}
@@ -124,30 +126,34 @@ export function LibraryTab({ ruleNames, busy, onAdd, onAddMany, onEnablePlaybook
         </div>
 
         <div className="az-lib-bar">
-          <div className="az-search" style={{ minWidth: 280 }}><Search size={15} /><input placeholder="Search by name or what it does — e.g. “pause”, “budget”, “acos”…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <Input leadingIcon={<Search size={15} />} aria-label="Search automations" placeholder="Search by name or what it does — e.g. “pause”, “budget”, “acos”…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 320 }} />
           <span className="cnt">{filtered.length} of {AUTOMATION_COUNT}</span>
-          {filtered.length > 0 && <button className="az-link" onClick={selectAllShown}>Select all</button>}
-          {sel.size > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><b>{sel.size} selected</b><button className="az-btn dark" disabled={busy === 'bulk'} onClick={addSelected}>{busy === 'bulk' ? 'Adding…' : `Add ${sel.size}`}</button><button className="az-link" onClick={() => setSel(new Set())}>Clear</button></span>}
+          {filtered.length > 0 && <Button variant="link" onClick={selectAllShown}>Select all</Button>}
+          {sel.size > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><b>{sel.size} selected</b><Button variant="primary" disabled={busy === 'bulk'} onClick={addSelected}>{busy === 'bulk' ? 'Adding…' : `Add ${sel.size}`}</Button><Button variant="link" onClick={() => setSel(new Set())}>Clear</Button></span>}
           <span className="grow" />
-          <span className="ctl" style={{ cursor: 'default' }}>Sort
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'flagship' | 'name' | 'category')} style={{ marginLeft: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '5px 7px', font: 'inherit', cursor: 'pointer' }}>
-              <option value="flagship">Flagship first</option><option value="name">Name (A–Z)</option><option value="category">Category</option>
-            </select>
+          <span className="ctl" style={{ cursor: 'default', display: 'inline-flex', alignItems: 'center', gap: 8 }}>Sort
+            <Listbox
+              ariaLabel="Sort automations"
+              width={160}
+              value={sortBy}
+              onChange={(v) => setSortBy(v as 'flagship' | 'name' | 'category')}
+              options={[{ value: 'flagship', label: 'Flagship first' }, { value: 'name', label: 'Name (A–Z)' }, { value: 'category', label: 'Category' }]}
+            />
           </span>
-          <button className="az-btn dark" onClick={onBuildCustom}><Plus size={15} />Build custom rule</button>
+          <Button variant="primary" onClick={onBuildCustom}><Plus size={15} />Build custom rule</Button>
         </div>
 
         <div className="az-cats">{CATEGORIES.map((c) => <button key={c} className={`az-cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}{c !== 'All' && <span style={{ opacity: .55, marginLeft: 5 }}>{catCounts[c] ?? 0}</span>}</button>)}</div>
 
         {filtered.length === 0
-          ? <div className="az-lib-empty">No automations match “<b>{q}</b>”{cat !== 'All' ? <> in <b>{cat}</b></> : null}. <button className="az-link" onClick={() => { setQ(''); setCat('All') }}>Clear filters</button> or <button className="az-link" onClick={onBuildCustom}>build a custom rule</button>.</div>
+          ? <div className="az-lib-empty">No automations match “<b>{q}</b>”{cat !== 'All' ? <> in <b>{cat}</b></> : null}. <Button variant="link" inline onClick={() => { setQ(''); setCat('All') }}>Clear filters</Button> or <Button variant="link" inline onClick={onBuildCustom}>build a custom rule</Button>.</div>
           : <div className="az-libgrid">
             {filtered.map((t) => {
               const added = ruleNames.has(t.name)
               const mech = MECH.get(t.id)
               return (
                 <div key={t.id} className={`az-tmpl ${t.marquee ? 'marquee' : ''} ${sel.has(t.id) ? 'picked' : ''}`}>
-                  <div className="top"><input type="checkbox" className="az-check" checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /><span className="ic"><CatIcon cat={t.category} /></span><span className="nm">{t.name}</span>{t.marquee && <span className="flag">Flagship</span>}</div>
+                  <div className="top"><Checkbox checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /><span className="ic"><CatIcon cat={t.category} /></span><span className="nm">{t.name}</span>{t.marquee && <span className="flag">Flagship</span>}</div>
                   <div className="cat">{t.category}</div>
                   <div className="d">{t.desc}</div>
                   {mech && (
@@ -160,15 +166,15 @@ export function LibraryTab({ ruleNames, busy, onAdd, onAddMany, onEnablePlaybook
                     <span className="trg">{trgLabel(t.trigger)}</span>
                     <span className="grow" />
                     {added
-                      ? <button className="az-btn" onClick={onGoActive}><Check size={14} />In rules</button>
-                      : <><button className="az-btn" onClick={() => onConfigure(t)} title="Configure parameters"><Sliders size={13} />Configure</button><button className="az-btn dark" disabled={busy === t.id} onClick={() => void onAdd(t)}>{busy === t.id ? '…' : 'Add'}</button></>}
+                      ? <Button onClick={onGoActive}><Check size={14} />In rules</Button>
+                      : <><Button onClick={() => onConfigure(t)} title="Configure parameters"><Sliders size={13} />Configure</Button><Button variant="primary" disabled={busy === t.id} onClick={() => void onAdd(t)}>{busy === t.id ? '…' : 'Add'}</Button></>}
                   </div>
                 </div>
               )
             })}
           </div>}
 
-        <div className="az-lib-foot">Every automation is distinct and fully configurable — hit <b>Configure</b> to tune it, or <b>Add</b> with smart defaults (select several for a bulk add). All are added <b>disabled + dry-run</b>; turn them on from <button className="az-link" onClick={onGoActive}>Active rules</button>. Need something bespoke? <button className="az-link" onClick={onBuildCustom}>Build a custom rule</button>.</div>
+        <div className="az-lib-foot">Every automation is distinct and fully configurable — hit <b>Configure</b> to tune it, or <b>Add</b> with smart defaults (select several for a bulk add). All are added <b>disabled + dry-run</b>; turn them on from <Button variant="link" inline onClick={onGoActive}>Active rules</Button>. Need something bespoke? <Button variant="link" inline onClick={onBuildCustom}>Build a custom rule</Button>.</div>
       </section>
     </div>
   )
