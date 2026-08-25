@@ -465,8 +465,12 @@ export function TokenCatalog() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <Input placeholder="Plain input" />
             <Input leadingIcon={<Search size={15} />} placeholder="Search campaigns" />
-            <Input prefix="€" placeholder="0.00" size={6} />
-            <Input suffix="%" placeholder="0" size={4} />
+            <Input prefix="€" placeholder="0.00" style={{ flex: 'none', width: 76 }} />
+            <Input suffix="%" placeholder="0" style={{ flex: 'none', width: 58 }} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 10 }}>
+            <Input size="sm" placeholder="sm — 12.5px" />
+            <Input size="xs" placeholder="xs — dense grid tier" />
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Select</div>

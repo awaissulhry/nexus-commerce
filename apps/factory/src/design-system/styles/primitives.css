@@ -733,3 +733,36 @@
   outline-offset: 2px;
   box-shadow: none;
 }
+
+/* ── xs · the dense tier ───────────────────────────────────────────────────
+   11.5px text, 4px/9px padding, ~23px tall. For controls inside a grid row, where `sm`
+   (12.5px / 6px 11px, ~28px) adds height to every row of the grid. Derived by census — see
+   primitives/size.ts for the counts and why there is no step at 12px. */
+.nds-btn.xs {
+  padding: 4px 9px;
+  font-size: 11.5px;
+  gap: 5px;
+}
+
+/* Input also gains `sm`, which it never had: the console's dense number boxes are 12.5px and
+   were reaching for a size the primitive did not offer. */
+.nds-field.sm > input { padding: 5px 9px; font-size: 12.5px; }
+.nds-field.sm .lead   { padding-left: 9px; }
+.nds-field.sm .ad     { padding: 0 8px; }
+.nds-field.xs > input { padding: 4px 9px; font-size: 11.5px; }
+.nds-field.xs .lead   { padding-left: 8px; }
+.nds-field.xs .ad     { padding: 0 7px; }
+
+.nds-select.sm select { padding: 5px 26px 5px 9px; font-size: 12.5px; }
+.nds-select.sm .chev  { right: 8px; }
+.nds-select.xs select { padding: 4px 24px 4px 9px; font-size: 11.5px; }
+.nds-select.xs .chev  { right: 7px; }
+
+/* Track and knob scale together: knob + 2px inset either side = track height, and the travel is
+   what is left over. Getting this wrong parks the knob short of the end in the `on` state. */
+.nds-toggle.sm         { width: 26px; height: 15px; }
+.nds-toggle.sm::after  { width: 11px; height: 11px; }
+.nds-toggle.sm.on::after { transform: translateX(11px); }
+.nds-toggle.xs         { width: 24px; height: 14px; }
+.nds-toggle.xs::after  { width: 10px; height: 10px; }
+.nds-toggle.xs.on::after { transform: translateX(10px); }

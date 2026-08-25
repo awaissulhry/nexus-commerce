@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link' | 'quiet'
-export type ButtonSize = 'md' | 'sm'
+export type ButtonSize = 'md' | 'sm' | 'xs'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** `secondary` (white + border) is the base look; `primary` = blue fill; `ghost` = blue outline;
@@ -46,7 +46,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export function Button({ variant = 'secondary', size = 'md', type = 'button', active, inline, className, children, ...rest }: ButtonProps) {
-  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'sm' ? 'sm' : '', active ? 'on' : '', inline ? 'inline' : '', className ?? '']
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', inline ? 'inline' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (

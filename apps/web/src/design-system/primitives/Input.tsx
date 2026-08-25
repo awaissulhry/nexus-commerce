@@ -1,6 +1,7 @@
 import type { InputHTMLAttributes, ReactNode } from 'react'
+import type { Size } from './size'
 
-export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
+export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix' | 'size'> {
   /** leading glyph (e.g. a search icon) inside the field */
   leadingIcon?: ReactNode
   /** shaded prefix adornment (e.g. `€`) */
@@ -9,6 +10,11 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   suffix?: ReactNode
   /** class for the bordered field wrapper (the input itself takes `className`) */
   fieldClassName?: string
+  /**
+   * `xs` is the dense grid-cell tier. Shadows the native numeric `size` attribute, which is
+   * omitted above — it sets a character-count width nobody wants on a styled field.
+   */
+  size?: Extract<Size, 'xs' | 'sm' | 'md'>
 }
 
 /**
@@ -16,8 +22,8 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
  * a bordered wrapper that owns hover/focus, with optional leading icon and
  * shaded €/% unit adornments. Requires `styles/primitives.css`.
  */
-export function Input({ leadingIcon, prefix, suffix, fieldClassName, disabled, ...rest }: InputProps) {
-  const cls = ['nds-field', disabled ? 'disabled' : '', fieldClassName ?? ''].filter(Boolean).join(' ')
+export function Input({ leadingIcon, prefix, suffix, fieldClassName, size = 'md', disabled, ...rest }: InputProps) {
+  const cls = ['nds-field', size === 'md' ? '' : size, disabled ? 'disabled' : '', fieldClassName ?? ''].filter(Boolean).join(' ')
   return (
     <span className={cls}>
       {prefix != null && <span className="ad pre">{prefix}</span>}
