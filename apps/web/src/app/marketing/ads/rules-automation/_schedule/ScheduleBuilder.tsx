@@ -650,7 +650,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                           <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={r.start} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, start: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude start date" /></div>
                         <div className="f"><label>Exclude End</label>
                           <Input fieldClassName="h10-sb-date" leadingIcon={<Calendar size={15} />} value={r.end} onChange={(e) => setExcludeRanges((rs) => rs.map((x) => x.id === r.id ? { ...x, end: e.target.value } : x))} placeholder="MM/DD/YYYY" aria-label="Exclude end date" /></div>
-                        <ToolbarButton tone="danger" className="h10-sb-exdel" icon={<X size={14} />} label="Remove this exclude range" tooltip={false} onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))} />
+                        <ToolbarButton tone="danger" icon={<X size={14} />} label="Remove this exclude range" tooltip={false} onClick={() => setExcludeRanges((rs) => rs.filter((x) => x.id !== r.id))} />
                       </div>
                     ))}
                     <Button onClick={() => setExcludeRanges((rs) => [...rs, { id: _wid++, start: '', end: '' }])}><Plus size={13} /> Add exclude range</Button>

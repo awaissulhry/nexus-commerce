@@ -216,14 +216,14 @@ export function HvThresholds({ criteria, attrition, census, scope, push, reload,
         <span className="act">
           {/* Hidden, not disabled: with nothing changed there is nothing to save, so no button. */}
           {dirty && (
-            <button type="button" className="h10-hv-save" onClick={() => void write('PUT')} disabled={saving === 'saving' || loading}>
+            <Button variant="primary" size="xs" onClick={() => void write('PUT')} disabled={saving === 'saving' || loading}>
               <Save size={12} /> {saving === 'saving' ? 'Saving…' : p.hasOwn ? `Update the ${GRAIN_LABEL[p.saveGrain]} policy` : `Save for ${saveTarget}`}
-            </button>
+            </Button>
           )}
           {p.hasOwn && !dirty && (
-            <button type="button" className="h10-hv-unset" onClick={() => void write('DELETE')} disabled={saving === 'saving'} title={`Remove this ${GRAIN_LABEL[p.saveGrain]} policy so the scope inherits from above`}>
+            <Button size="xs" onClick={() => void write('DELETE')} disabled={saving === 'saving'} title={`Remove this ${GRAIN_LABEL[p.saveGrain]} policy so the scope inherits from above`}>
               <Trash2 size={12} /> Remove this {GRAIN_LABEL[p.saveGrain]} policy
-            </button>
+            </Button>
           )}
           {saving === 'saved' && <span className="ok"><Check size={12} /> Saved</span>}
         </span>

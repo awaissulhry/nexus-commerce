@@ -559,9 +559,9 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
                             </span>
                             <span className="ca">
                               {c.decision ? (
-                                <button type="button" className="h10-ngp-act undo" disabled={busy} onClick={() => void unmark(g.protectedTerm, c)}>Undo</button>
+                                <Button size="xs" disabled={busy} onClick={() => void unmark(g.protectedTerm, c)}>Undo</Button>
                               ) : (
-                                <button type="button" className="h10-ngp-act" disabled={busy} onClick={() => void mark(g.protectedTerm, c)}>Mark intended</button>
+                                <Button size="xs" disabled={busy} onClick={() => void mark(g.protectedTerm, c)}>Mark intended</Button>
                               )}
                             </span>
                           </div>
@@ -604,7 +604,7 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
                                   </span>
                                   <span className="ac">
                                     {/* 🔴 Hidden, not disabled, when the campaign is not on the write allowlist. */}
-                                    {r.removable && <button type="button" className="h10-ngp-act sm" onClick={() => push({ retire: r.id, retireTerm: r.term })}>Remove…</button>}
+                                    {r.removable && <Button size="xs" onClick={() => push({ retire: r.id, retireTerm: r.term })}>Remove…</Button>}
                                   </span>
                                 </li>
                               ))}

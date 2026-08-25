@@ -40,7 +40,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { ToolbarButton } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Info, ShieldCheck, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps, NegMatchType, NegAttribution } from './slot-contract'
@@ -296,9 +296,9 @@ export function NegTermDrawer({ scope, push, focus, view }: NegSlotProps) {
                     selection over a term row. A term is not an Amazon object; every bulk action is
                     N real writes reporting N outcomes. */}
                 {data.negations.some((n) => n.status !== 'ARCHIVED') && (
-                  <button type="button" className="h10-ngd-bulk" onClick={() => push({ retireTerm: data.term.key })}>
+                  <Button size="xs" className="h10-ngd-bulk" onClick={() => push({ retireTerm: data.term.key })}>
                     Remove several…
-                  </button>
+                  </Button>
                 )}
               </h4>
               <ul className="h10-ngd-negs">
