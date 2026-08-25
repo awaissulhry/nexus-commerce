@@ -16,6 +16,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { RefreshCw, ChevronDown, History } from 'lucide-react'
+import { Button, Spinner } from '@/design-system/primitives'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 import { MarketSelect } from './MarketSelect'
@@ -157,11 +158,16 @@ export function AdsPageHeader({
             already there. Navigates in place rather than a new tab — this is top-level console
             navigation, unlike the drawer's link, where a new tab exists to preserve the drawer. */}
         {showChangeLog && pathname !== changeLogHref && (
-          <Link className="h10-hbtn ghost" href={changeLogHref} title="Every change Nexus made to this account — what changed, what caused it, and whether it reached the channel">
-            <History size={14} /> Change Log
-          </Link>
+          <Button asChild variant="ghost">
+            <Link href={changeLogHref} title="Every change Nexus made to this account — what changed, what caused it, and whether it reached the channel">
+              <History size={14} /> Change Log
+            </Link>
+          </Button>
         )}
-        {showDataSync && <button type="button" className="h10-hbtn ghost" onClick={onDataSync} disabled={syncing}><RefreshCw size={14} className={syncing ? 'spin' : ''} /> Data Sync</button>}
+        {/* The spinning state is the DS Spinner, not `<RefreshCw className="spin">`: the only rule
+            that animated that icon was `.h10-hbtn .spin`, so dropping `.h10-hbtn` would have left
+            a silently motionless "spinner". */}
+        {showDataSync && <Button variant="ghost" onClick={onDataSync} disabled={syncing}>{syncing ? <Spinner size={14} /> : <RefreshCw size={14} />} Data Sync</Button>}
 
         {showDateRange && <DateRangePicker value={shownRange} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
@@ -183,14 +189,14 @@ export function AdsPageHeader({
             otherwise the Action ▾ dropdown. */}
         {primaryAction ? (
           primaryAction.href
-            ? <Link href={primaryAction.href} className="h10-hbtn primary">{primaryAction.icon}{primaryAction.label}</Link>
-            : <button type="button" className="h10-hbtn primary" onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</button>
+            ? <Button asChild variant="primary"><Link href={primaryAction.href}>{primaryAction.icon}{primaryAction.label}</Link></Button>
+            : <Button variant="primary" onClick={primaryAction.onClick}>{primaryAction.icon}{primaryAction.label}</Button>
         ) : actions?.length ? (
           // RPT.1 — only render Action ▾ when there is at least one action. Pages with
           // neither `primaryAction` nor `actions` (Change Log, Reporting) were showing a
           // primary button that opened an empty popover.
           <div className="h10-hsel">
-            <button type="button" className="h10-hbtn primary" onClick={() => setOpen(open === 'action' ? '' : 'action')}><ChevronDown size={14} /> Action</button>
+            <Button variant="primary" aria-haspopup="menu" aria-expanded={open === 'action'} onClick={() => setOpen(open === 'action' ? '' : 'action')}><ChevronDown size={14} /> Action</Button>
             {open === 'action' && <>
               <button type="button" className="h10-menu-back" aria-label="Close" onClick={close} />
               <div className="h10-menu right">

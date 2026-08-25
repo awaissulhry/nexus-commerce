@@ -13,10 +13,18 @@
  *                   "where is Poland?" has a visible answer) but are
  *                   disabled and labelled, never silently dropped.
  *
- * Styling reuses the existing .h10-hsel / .h10-hbtn / .h10-menu chrome. The
- * ads tree is the deliberate Helium-10 pixel-match world and is allowlisted
- * out of the DS ratchet (scripts/ds-conformance-guard.mjs); APS.4 is where
- * this moves to the design system along with the rest of the picker.
+ * Styling reuses the existing .h10-hsel / .h10-hbtn / .h10-menu chrome.
+ *
+ * 🔴 CORRECTED 2026-08-26 — this used to say the ads tree "is allowlisted out of the DS ratchet".
+ * That stopped being true on 2026-08-25: `marketing/ads/` LEFT the guard's ALLOW list and is now
+ * enforced at its own frozen baseline (see the comment at ds-conformance-guard.mjs:34). Nothing is
+ * asked of the existing code, but it is no longer exempt, and the old wording would tell the next
+ * reader that converting this file is out of policy. It is not — it is the planned APS.4 work.
+ *
+ * Why the picker is still hand-rolled: `.h10-menu button` (0,1,1) restyles any button inside the
+ * menu, so a DS control cannot be dropped in one row at a time — it is all-or-nothing, and the
+ * menu carries multi-select with an explicit Apply, disabled rows that explain themselves, flags
+ * and sub-labels that neither Listbox nor MultiSelect expresses today.
  */
 
 import { useState } from 'react'
