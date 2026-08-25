@@ -36,7 +36,7 @@
  */
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Check, Pencil } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { hasBidState } from './bidState'
 import { BID_STAGED_EVENT } from './BidStagedTray'
@@ -167,7 +167,7 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
               {result.failed > 0 && <> <b>{result.failed} failed.</b></>}
               {result.clamps > 0 && <> {result.clamps} clamped to the CPC ceiling before staging.</>}
             </p>
-            <div className="h10-bd4-row"><button type="button" className="h10-bd4-primary" onClick={onDone}>Done</button></div>
+            <div className="h10-bd4-row"><Button variant="primary" size="sm" onClick={onDone}>Done</Button></div>
           </>
         ) : (
           <>
@@ -200,10 +200,10 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
             {err != null && <p className="h10-bd4-err" role="alert"><AlertTriangle size={13} aria-hidden /> {err}</p>}
 
             <div className="h10-bd4-row">
-              <button type="button" className="h10-bd4-cancel" disabled={busy} onClick={onClose}>Cancel</button>
-              <button type="button" className="h10-bd4-primary" disabled={busy || !valid || !plan || plan.entries.length === 0} onClick={() => void submit()}>
+              <Button size="sm" disabled={busy} onClick={onClose}>Cancel</Button>
+              <Button variant="primary" size="sm" disabled={busy || !valid || !plan || plan.entries.length === 0} onClick={() => void submit()}>
                 {busy ? 'Staging…' : `Stage ${plan?.entries.length ?? 0} write${(plan?.entries.length ?? 0) === 1 ? '' : 's'}`}
-              </button>
+              </Button>
             </div>
             <p className="h10-bd4-foot">Every write goes through the gate (bounds · ceilings · caps decide per row) and then a 5-minute cancellable hold. Nothing reaches Amazon from this dialog directly.</p>
           </>

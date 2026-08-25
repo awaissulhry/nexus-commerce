@@ -39,7 +39,7 @@
 
 import { useMemo, useState } from 'react'
 import { Plus, Trash2, AlertTriangle } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { calendarTotal, materialiseCalendar, type CalendarDay } from './planMath'
 
 const pctFmt = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)}%`
@@ -114,9 +114,9 @@ export function CalendarEditor({
           onChange={(e) => setDay(e.target.value)} placeholder="Day" aria-label="Day of month" />
         <Input size="sm" fieldClassName="h10-bsp-calin" type="number" min={0} max={100} step="0.5" value={pct} disabled={disabled}
           onChange={(e) => setPct(e.target.value)} placeholder="%" aria-label="Percentage of the monthly cap" />
-        <button type="button" className="h10-bsp-btn sm" onClick={add} disabled={disabled || !day || !pct}>
+        <Button size="sm" onClick={add} disabled={disabled || !day || !pct}>
           <Plus size={12} /> Weight
-        </button>
+        </Button>
       </div>
 
       {/* 🔴 The over-100 case is shown, never silently rescaled. The server normalises by its own

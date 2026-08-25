@@ -619,8 +619,9 @@
 .h10-trgrid-bar .grow { flex: 1; }
 .h10-tr-swatch { font: inherit; font-size: 11.5px; font-weight: 700; border: 1px solid rgba(0,0,0,.1); border-radius: var(--nds-radius-sm); padding: 4px 10px; cursor: pointer; }
 .h10-tr-swatch.on { outline: 2px solid var(--nds-blue-600); outline-offset: 1px; }
-.h10-tr-mini { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-sm); padding: 4px 9px; cursor: pointer; }
-.h10-tr-mini:hover { background: var(--nds-grey-150); }
+/* DS-ALIGN — the grid's toolbar buttons are the DS `Button` at `xs`. The class is kept only so
+   the bar's own layout rules can still reach them. */
+.h10-tr-mini { flex: none; }
 .h10-trgrid-table { user-select: none; }
 .h10-tr-hrow, .h10-tr-drow { display: grid; grid-template-columns: 46px repeat(24, 1fr); gap: 2px; }
 .h10-tr-drow { margin-top: 2px; }
@@ -2686,15 +2687,17 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-in { width: 100%; }
 .nds-field > .h10-bsp-in { font-variant-numeric: tabular-nums; }
 
-.h10-bsp-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); font-size: 12px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-bsp-btn:hover:not(:disabled) { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
-.h10-bsp-btn:disabled { opacity: 1; color: var(--nds-grey-450); cursor: not-allowed; }
-.h10-bsp-btn.primary { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-bsp-btn.primary:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); color: var(--nds-white); }
-.h10-bsp-btn.primary:disabled { background: #b7cdf0; border-color: #b7cdf0; color: var(--nds-white); }
-.h10-bsp-btn.danger { background: #b3261e; border-color: var(--nds-note-error-icon); color: var(--nds-white); }
+/* DS-ALIGN — the plan editor's neutral and primary actions are the DS `Button` at `sm`. The one
+   that stays is the DELETE, and only because of a measurement: white on this #b3261e is 6.54:1
+   where the DS `danger` token (#c0392b) is 5.44:1, and a substitution may only ever raise
+   contrast. It goes the moment that token is darkened — filed in .claude/DS-GAPS.md. */
+.h10-bsp-btn.danger {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; cursor: pointer;
+  border-radius: var(--nds-radius-lg); font-size: 12px; font-weight: 700;
+  background: #b3261e; border: 1px solid var(--nds-note-error-icon); color: var(--nds-white);
+}
 .h10-bsp-btn.danger:hover:not(:disabled) { background: #8c1d17; border-color: #8c1d17; }
-.h10-bsp-btn.sm { padding: 5px 9px; font-size: 11.5px; }
+.h10-bsp-btn.danger:disabled { opacity: .5; cursor: not-allowed; }
 .h10-bsp-saverow { display: flex; gap: 7px; }
 
 /* ── the two live switches ────────────────────────────────────────────────────────────────────
@@ -4623,9 +4626,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd4-err { margin: 0 0 10px; font-size: 12.5px; color: #b42318; display: flex; align-items: center; gap: 6px; }
 .h10-bd4-ok { margin: 0 0 12px; font-size: 12.5px; color: #116b3a; display: flex; align-items: flex-start; gap: 6px; line-height: 1.5; }
 .h10-bd4-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-.h10-bd4-cancel { padding: 7px 14px; font-size: 12.5px; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); cursor: pointer; }
-.h10-bd4-primary { padding: 7px 14px; font-size: 12.5px; color: var(--nds-white); background: var(--nds-blue-600); border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); cursor: pointer; }
-.h10-bd4-primary:disabled { background: #9db9dd; border-color: #9db9dd; cursor: default; }
+/* DS-ALIGN — the dialog's two actions are the DS `Button` at `sm`. */
 .h10-bd4-foot { margin: 10px 0 0; font-size: 11.5px; color: var(--nds-text-muted); line-height: 1.5; }
 .h10-bd4-tray { background: #fffdf4; border: 1px solid #e8dfae; border-radius: var(--nds-radius-xl); padding: 12px 16px; margin-top: 16px; }
 .h10-bd4-tray h4 { margin: 0 0 8px; font-size: 12.5px; color: #6b5a10; display: flex; align-items: center; gap: 6px; }
@@ -4909,11 +4910,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    confirmation before a bulk write, and its edge is the last caution the operator sees. */
 .h10-plc3-confirmin { width: 150px; border-color: #c68a2e; }
 .h10-plc3-actions { display: flex; align-items: center; gap: 8px; }
-.h10-plc3-btn { font: inherit; font-size: 12px; font-weight: 700; padding: 7px 14px; border-radius: var(--nds-radius-lg); border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-900); cursor: pointer; }
-.h10-plc3-btn:hover:not(:disabled) { border-color: var(--nds-grey-400); }
-.h10-plc3-btn.primary { border-color: var(--nds-blue-700); background: var(--nds-blue-700); color: var(--nds-white); }
-.h10-plc3-btn.primary:hover:not(:disabled) { background: #14509c; border-color: #14509c; }
-.h10-plc3-btn:disabled { opacity: .5; cursor: default; }
+/* DS-ALIGN — the placement panel's actions are the DS `Button` at `sm`. */
 
 /* ── the refusal renderer — the gate's own sentence, never paraphrased ──────────────────────── */
 .h10-plc3-refusal { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #f0c9c9; border-radius: 9px; background: #fdecec; color: #8f2828; font-size: 11.5px; line-height: 1.55; }

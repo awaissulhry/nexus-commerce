@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, ExternalLink, Mail, Eye, Send, CheckCircle2, Undo2, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -434,16 +435,20 @@ export function ActivityTab() {
                       Put <strong>{c.field}</strong> back to <strong>{c.oldValue ?? 'its previous value'}</strong>?
                       This writes to Amazon.
                     </span>
+                    {/* 🔴 NOT `variant="danger"`. This red is #a3342b — white on it measures
+                        6.81:1, where the DS token (#c0392b) measures 5.44:1. Both pass AA, but a
+                        substitution may only ever RAISE contrast, so the commit step keeps its own
+                        colour until the DS token is darkened. Filed in .claude/DS-GAPS.md. */}
                     <button type="button" className="acr-undo-btn go" disabled={undoing === c.id} onClick={() => void doUndo(c)}>
                       {undoing === c.id ? 'Undoing…' : 'Yes, undo'}
                     </button>
-                    <button type="button" className="acr-undo-btn" onClick={() => setConfirming(null)}>Cancel</button>
+                    <Button size="xs" onClick={() => setConfirming(null)}>Cancel</Button>
                   </div>
                 ) : (
                   <div className="acr-undo">
-                    <button type="button" className="acr-undo-btn" onClick={() => { setConfirming(c.id); setUndoMsg(null) }}>
+                    <Button size="xs" onClick={() => { setConfirming(c.id); setUndoMsg(null) }}>
                       <Undo2 size={12} /> Undo
-                    </button>
+                    </Button>
                     {undoMsg?.id === c.id && <span className={`acr-undo-msg ${undoMsg.ok ? 'ok' : 'bad'}`}>{undoMsg.text}</span>}
                   </div>
                 )

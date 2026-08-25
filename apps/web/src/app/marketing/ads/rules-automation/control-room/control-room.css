@@ -749,16 +749,17 @@ a.acr-refresh { text-decoration: none; }
 .acr-undo.blocked { color: var(--nds-grey-450); font-style: italic; }
 .acr-undo.confirming { color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb; border-radius: var(--nds-radius-sm); padding: 7px 10px; }
 .acr-undo.confirming strong { color: #6b4d15; font-weight: 650; }
-.acr-undo-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11.5px; font-weight: 550; color: #56637a;
-  background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 5px; padding: 3px 9px; cursor: pointer;
-}
-.acr-undo-btn:hover:not(:disabled) { background: var(--nds-grey-50); color: var(--nds-grey-700); }
-.acr-undo-btn:disabled { color: var(--nds-grey-400); cursor: not-allowed; }
+/* DS-ALIGN — the Undo and Cancel steps are the DS `Button` at `xs`. Only the COMMITTING step
+   keeps its own fill: white on this #a3342b measures 6.81:1 where the DS `danger` token is
+   5.44:1, and a substitution may only raise contrast. */
 /* The committing step is the only one tinted — the first click must not look like the action. */
-.acr-undo-btn.go { color: var(--nds-white); background: #a3342b; border-color: #a3342b; }
+.acr-undo-btn.go {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font-size: 11.5px; font-weight: 550; padding: 4px 9px; border-radius: 5px;
+  color: var(--nds-white); background: #a3342b; border: 1px solid #a3342b;
+}
 .acr-undo-btn.go:hover:not(:disabled) { background: #8f2d25; }
+.acr-undo-btn.go:disabled { opacity: .55; cursor: not-allowed; }
 .acr-undo-msg { font-size: 11.5px; }
 .acr-undo-msg.ok { color: var(--nds-success-text); }
 .acr-undo-msg.bad { color: #a3342b; }

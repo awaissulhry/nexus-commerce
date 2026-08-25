@@ -32,7 +32,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Check, ExternalLink, Target } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { BIDDER_LABEL, type BidCampaignRow } from './types'
 
@@ -82,7 +82,7 @@ export function BidGoalDialog({ campaign, onClose, onDone }: {
         {note != null ? (
           <>
             <p className="h10-bd4-ok" role="status"><Check size={13} aria-hidden /> {note}</p>
-            <div className="h10-bd4-row"><button type="button" className="h10-bd4-primary" onClick={onDone}>Done</button></div>
+            <div className="h10-bd4-row"><Button variant="primary" size="sm" onClick={onDone}>Done</Button></div>
           </>
         ) : (
           <>
@@ -102,11 +102,11 @@ export function BidGoalDialog({ campaign, onClose, onDone }: {
                   Target ACoS (%)
                   <Input type="number" value={pct} min={1} max={100} step="1" placeholder="e.g. 30" onChange={(e) => setPct(e.target.value)} />
                 </label>
-                <button type="button" className="h10-bd4-primary" disabled={busy || !valid} onClick={() => void save(false)}>
+                <Button variant="primary" size="sm" disabled={busy || !valid} onClick={() => void save(false)}>
                   {busy ? 'Saving…' : 'Declare goal'}
-                </button>
+                </Button>
                 {campaign.bidder === 'goal' && (
-                  <button type="button" className="h10-bd4-cancel" disabled={busy} onClick={() => void save(true)}>Clear goal</button>
+                  <Button size="sm" disabled={busy} onClick={() => void save(true)}>Clear goal</Button>
                 )}
               </div>
             </div>
@@ -115,7 +115,7 @@ export function BidGoalDialog({ campaign, onClose, onDone }: {
               <b>Manual</b> and <b>no bidder</b> are outcomes, not choices: manual means a person moved a bid here within 60 days; no bidder means nothing did. Neither can be assigned.
             </p>
             {err != null && <p className="h10-bd4-err" role="alert"><AlertTriangle size={13} aria-hidden /> {err}</p>}
-            <div className="h10-bd4-row"><button type="button" className="h10-bd4-cancel" disabled={busy} onClick={onClose}>Close</button></div>
+            <div className="h10-bd4-row"><Button size="sm" disabled={busy} onClick={onClose}>Close</Button></div>
           </>
         )}
       </div>

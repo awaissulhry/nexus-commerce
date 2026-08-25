@@ -9,6 +9,7 @@
  * Demand overlay (RGD.3), Edit-targets (RGD.4) and Templates (RGD.5) wire in via the opt-in props.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import {
   compileRankGrid, gridFromWindows, rankGridCounts, describeRankGrid,
   targetColor, textOn, BASELINE, BASELINE_COLOR, BASELINE_TEXT,
@@ -89,17 +90,17 @@ export function RankTimeGrid({ windows, onWindowsChange, targets, baselineKey, d
           <button key={p.key || 'baseline'} type="button" className={`h10-tr-swatch ${brush === p.key ? 'on' : ''}`} style={{ background: p.color, color: p.text }} onClick={() => setBrush(p.key)} title={p.key === BASELINE ? 'Clear back to the baseline (no window)' : `Hold ${p.name} during painted hours`}>{p.name}</button>
         ))}
         <span className="grow" />
-        {onEditTargets && <button type="button" className="h10-tr-mini" onClick={onEditTargets} title="Customize what each colour does (placement %, bids), or add your own">✎ Edit targets</button>}
-        {onUseDemandPeaks && <button type="button" className="h10-tr-mini" onClick={onUseDemandPeaks} title="Auto-paint the recommended rank windows from where the family actually sells">✨ Use demand peaks</button>}
-        <button type="button" className="h10-tr-mini" onClick={fillAll} title="Fill the whole week with the current brush">Fill all</button>
-        <button type="button" className="h10-tr-mini" onClick={clearAll} title="Clear every window back to baseline">Clear</button>
+        {onEditTargets && <Button size="xs" className="h10-tr-mini" onClick={onEditTargets} title="Customize what each colour does (placement %, bids), or add your own">✎ Edit targets</Button>}
+        {onUseDemandPeaks && <Button size="xs" className="h10-tr-mini" onClick={onUseDemandPeaks} title="Auto-paint the recommended rank windows from where the family actually sells">✨ Use demand peaks</Button>}
+        <Button size="xs" className="h10-tr-mini" onClick={fillAll} title="Fill the whole week with the current brush">Fill all</Button>
+        <Button size="xs" className="h10-tr-mini" onClick={clearAll} title="Clear every window back to baseline">Clear</Button>
       </div>
       <div className="h10-trgrid-bar">
         <span className="lbl">Bulk:</span>
-        <button type="button" className="h10-tr-mini" onClick={copyMonWeekdays} title="Copy Monday's row to Tue–Fri">Mon→weekdays</button>
-        <button type="button" className="h10-tr-mini" onClick={copyMonEveryday} title="Copy Monday's row to every day">Mon→all</button>
+        <Button size="xs" className="h10-tr-mini" onClick={copyMonWeekdays} title="Copy Monday's row to Tue–Fri">Mon→weekdays</Button>
+        <Button size="xs" className="h10-tr-mini" onClick={copyMonEveryday} title="Copy Monday's row to every day">Mon→all</Button>
         <span className="grow" />
-        {onOpenTemplates && <button type="button" className="h10-tr-mini" onClick={onOpenTemplates} title="Save / load named schedule templates (reusable across products & campaigns)">Templates…</button>}
+        {onOpenTemplates && <Button size="xs" className="h10-tr-mini" onClick={onOpenTemplates} title="Save / load named schedule templates (reusable across products & campaigns)">Templates…</Button>}
       </div>
 
       <div className="h10-trgrid-table" role="group" aria-label="Weekly rank schedule grid, 7 days by 24 hours. Press 1 to clear, 2 onward to pick a rank target, then click or drag to paint." onMouseLeave={() => { painting.current = false }}>

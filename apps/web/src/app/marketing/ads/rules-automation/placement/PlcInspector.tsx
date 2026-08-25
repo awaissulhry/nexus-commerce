@@ -31,6 +31,7 @@
  *     the ledger always (it is fetched by id, not from the view).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, Loader2, Pin, PinOff, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -173,10 +174,10 @@ export function PlcInspector({ campaignId, lanes, onClose, onChanged }: {
                     ? <><b>Placement is pinned</b> — held by hand. Every automation write to this campaign&rsquo;s multipliers is refused at the gate, and the refusal says so.</>
                     : <><b>Placement is not pinned.</b> Pinning it refuses every automation write to this campaign&rsquo;s multipliers — including the rank engine&rsquo;s — until it is cleared.</>}
                 </span>
-                <button type="button" className="h10-plc3-btn" onClick={togglePin} disabled={pinBusy}>
+                <Button size="sm" onClick={togglePin} disabled={pinBusy}>
                   {pinBusy ? <Loader2 size={12} aria-hidden /> : pinned ? <PinOff size={12} aria-hidden /> : <Pin size={12} aria-hidden />}
                   {' '}{pinned ? 'Unpin placement' : 'Pin placement'}
-                </button>
+                </Button>
               </>
             )}
             {pinErr && <span role="alert" style={{ color: '#8f2828', fontWeight: 700 }}>{pinErr}</span>}

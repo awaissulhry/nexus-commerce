@@ -44,7 +44,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, ShieldAlert, X } from 'lucide-react'
-import { Input, Select } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export type LaneKey = 'top' | 'rest' | 'product'
@@ -261,9 +261,9 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                 <option value="all">Every status</option>
               </Select>
             </label>
-            <button type="button" className="h10-plc3-btn" onClick={loadPreview} disabled={!pctValid || loading || running}>
+            <Button size="sm" onClick={loadPreview} disabled={!pctValid || loading || running}>
               {loading ? <><Loader2 size={12} className="spin" /> Checking…</> : 'Preview'}
-            </button>
+            </Button>
           </div>
 
           {!pctValid && <p className="h10-plc3-refusal"><AlertTriangle size={13} aria-hidden /><span>A multiplier is a whole number between 0 and 900.</span></p>}
@@ -385,16 +385,16 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
             </label>
           ) : <span />}
           <div className="h10-plc3-actions">
-            <button type="button" className="h10-plc3-btn" onClick={onClose} disabled={running}>{outcomes ? 'Close' : 'Cancel'}</button>
+            <Button size="sm" onClick={onClose} disabled={running}>{outcomes ? 'Close' : 'Cancel'}</Button>
             {!outcomes && (
-              <button
-                type="button" className="h10-plc3-btn primary"
+              <Button
+                variant="primary" size="sm"
                 onClick={commit}
                 disabled={!preview || writable.length === 0 || !confirmed || running}
                 title={!preview ? 'Preview first' : writable.length === 0 ? 'Nothing in this scope would be written' : undefined}
               >
                 {running ? <><Loader2 size={12} className="spin" /> Writing…</> : `Write ${writable.length} campaign${writable.length === 1 ? '' : 's'}`}
-              </button>
+              </Button>
             )}
           </div>
         </div>

@@ -47,7 +47,7 @@ import { boostedDays, burnDownSeries, forecastDisclosure, materialiseCalendar, s
 import { CalendarEditor } from './CalendarEditor'
 import { EnforcementPreview } from './EnforcementPreview'
 import type { AdsMode, BudgetManagerResult, BudgetPlanRow, EnforcementResult, WriteOutcome } from './slot-contract'
-import { Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 
 const eur = (c: number) => `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const eur0 = (c: number) => `€${Math.round(c / 100).toLocaleString('en-IE')}`
@@ -232,14 +232,14 @@ export function PlanEditor({
 
       {dirty && (
         <div className="h10-bsp-saverow">
-          <button type="button" className="h10-bsp-btn primary" disabled={busy || (capDraft.trim() !== '' && capParsed == null)} onClick={saveEdits}>
+          <Button variant="primary" size="sm" disabled={busy || (capDraft.trim() !== '' && capParsed == null)} onClick={saveEdits}>
             {busy ? 'Saving…' : 'Save'}
-          </button>
-          <button type="button" className="h10-bsp-btn" disabled={busy} onClick={() => {
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => {
             setCapDraft(capCents ? (capCents / 100).toFixed(2) : '')
             setCalDraft(boostedDays(row?.calendar ?? [], daysInMonth))
             onResetOutcome()
-          }}>Discard</button>
+          }}>Discard</Button>
         </div>
       )}
 
@@ -309,11 +309,13 @@ export function PlanEditor({
       {row?.id && (
         confirmDelete ? (
           <div className="h10-bsp-saverow">
+            {/* 🔴 NOT `variant="danger"`: this red is #b3261e (white on it, 6.54:1) and the DS
+                token is #c0392b (5.44:1). Lower is not an allowed substitution. */}
             <button type="button" className="h10-bsp-btn danger" disabled={busy}
               onClick={() => { setConfirmDelete(false); onDeletePlan(row.id as string) }}>
               Delete the {marketplace} plan
             </button>
-            <button type="button" className="h10-bsp-btn" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep it</button>
+            <Button size="sm" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep it</Button>
           </div>
         ) : (
           <button type="button" className="h10-bsp-del" disabled={busy} onClick={() => setConfirmDelete(true)}>
