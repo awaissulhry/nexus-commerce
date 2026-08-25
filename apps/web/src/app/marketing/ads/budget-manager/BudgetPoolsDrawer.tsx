@@ -21,8 +21,8 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus, X, FlaskConical, PlayCircle, ChevronDown, Wallet } from 'lucide-react'
-import { Drawer } from '@/design-system/components'
-import { Button, Input } from '@/design-system/primitives'
+import { DataGrid, Drawer } from '@/design-system/components'
+import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Strategy = 'STATIC' | 'PROFIT_WEIGHTED' | 'URGENCY_WEIGHTED'
@@ -134,15 +134,15 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
         <span className="bp-meta">Cooldown {pool.coolDownMinutes}m · max shift {pool.maxShiftPerRebalancePct}%</span>
       </div>
 
-      <div className="bp-strat" role="radiogroup" aria-label="Allocation strategy">
-        {STRATEGIES.map((s) => (
-          <button key={s.key} type="button" role="radio" aria-checked={pool.strategy === s.key} title={s.blurb}
-            className={`bp-stratb ${pool.strategy === s.key ? 'on' : ''}`} disabled={busy != null}
-            onClick={() => { if (pool.strategy !== s.key) void patch({ strategy: s.key }, 'strategy') }}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="bp-strat"
+        size="sm"
+        ariaLabel="Allocation strategy"
+        disabled={busy != null}
+        value={pool.strategy}
+        onChange={(v) => { if (pool.strategy !== v) void patch({ strategy: v as Strategy }, 'strategy') }}
+        options={STRATEGIES.map((s) => ({ value: s.key, label: <span title={s.blurb}>{s.label}</span> }))}
+      />
       <p className="bp-strat-blurb">{STRATEGIES.find((s) => s.key === pool.strategy)?.blurb}</p>
 
       <div className="bp-sec-h">Allocations <em>{pool.allocations.length}</em></div>
@@ -160,9 +160,11 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
                 {c && <span className="bd">{eur(Math.round(Number(c.dailyBudget) * 100))}/d</span>}
                 <span className="tg">target {a.targetSharePct}%</span>
                 <span className="mm">min {eur(a.minDailyBudgetCents)}{a.maxDailyBudgetCents != null ? ` · max ${eur(a.maxDailyBudgetCents)}` : ''}</span>
-                <button type="button" className="bp-x" aria-label="Remove allocation" disabled={busy === a.id} onClick={() => void removeAllocation(a.id)}>
-                  {busy === a.id ? <Loader2 size={13} className="bp-spin" /> : <X size={13} />}
-                </button>
+                <ToolbarButton
+                  size="sm" tone="danger" tooltip={false}
+                  icon={busy === a.id ? <Loader2 size={13} className="bp-spin" /> : <X size={13} />}
+                  label="Remove allocation" disabled={busy === a.id} onClick={() => void removeAllocation(a.id)}
+                />
               </div>
             )
           })}
@@ -194,30 +196,29 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
           {preview.proposed.length === 0 ? (
             <div className="bp-empty">Nothing to move — every allocation is already where the strategy would put it.</div>
           ) : (
-            <div className="bp-scroll">
-              <table className="bp-tbl">
-                <thead><tr><th>Mkt</th><th>Campaign</th><th className="r">Current</th><th className="r">Proposed</th><th className="r">Δ</th><th>Clamp</th></tr></thead>
-                <tbody>
-                  {preview.proposed.map((p) => (
-                    <tr key={p.allocationId}>
-                      <td className="mono">{p.marketplace}</td>
-                      <td className="mono trunc" title={p.campaignId ?? ''}>{byId.get(p.campaignId ?? '')?.name ?? p.campaignId?.slice(0, 10) ?? '—'}</td>
-                      <td className="r">{eur(p.oldBudgetCents)}</td>
-                      <td className="r">{eur(p.proposedBudgetCents)}</td>
-                      <td className={`r ${p.shiftCents > 0 ? 'pos' : p.shiftCents < 0 ? 'neg' : ''}`}>{p.shiftCents > 0 ? '+' : ''}{eur(p.shiftCents)}</td>
-                      <td className="clamp">{p.clampedReason ?? ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataGrid<ProposedRow>
+              className="bp-tbl"
+              maxHeight={260}
+              rows={preview.proposed}
+              rowKey={(r) => r.allocationId}
+              columns={[
+                { key: 'mkt', label: 'Mkt', render: (r) => <span className="mono">{r.marketplace}</span> },
+                { key: 'campaign', label: 'Campaign', render: (r) => <span className="mono trunc" title={r.campaignId ?? ''}>{byId.get(r.campaignId ?? '')?.name ?? r.campaignId?.slice(0, 10) ?? '—'}</span> },
+                { key: 'current', label: 'Current', align: 'right', render: (r) => eur(r.oldBudgetCents) },
+                { key: 'proposed', label: 'Proposed', align: 'right', render: (r) => eur(r.proposedBudgetCents) },
+                { key: 'delta', label: 'Δ', align: 'right', render: (r) => <span className={r.shiftCents > 0 ? 'pos' : r.shiftCents < 0 ? 'neg' : ''}>{r.shiftCents > 0 ? '+' : ''}{eur(r.shiftCents)}</span> },
+                { key: 'clamp', label: 'Clamp', render: (r) => <span className="clamp">{r.clampedReason ?? ''}</span> },
+              ]}
+            />
           )}
         </div>
       )}
 
-      <button type="button" className="bp-hist-t" aria-expanded={historyOpen} onClick={() => setHistoryOpen((o) => !o)}>
-        Rebalance history ({pool.rebalances?.length ?? 0}) <ChevronDown size={14} className={historyOpen ? 'open' : ''} />
-      </button>
+      <div className="bp-hist-t">
+        <Button variant="link" size="sm" aria-expanded={historyOpen} onClick={() => setHistoryOpen((o) => !o)}>
+          Rebalance history ({pool.rebalances?.length ?? 0}) <ChevronDown size={14} className={historyOpen ? 'open' : ''} />
+        </Button>
+      </div>
       {historyOpen && (
         (pool.rebalances?.length ?? 0) === 0
           ? <div className="bp-empty">Nothing recorded yet — run a dry-run above.</div>
@@ -297,11 +298,14 @@ export function BudgetPoolsDrawer({ open, onClose, toast }: { open: boolean; onC
                 <label><span>Name</span><Input size="sm" fieldClassName="bp-new-in" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. GALE — IT/DE/FR" aria-label="Pool name" /></label>
                 <label><span>Budget €/day</span><Input size="sm" fieldClassName="bp-new-in" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} aria-label="Daily budget" /></label>
               </div>
-              <div className="bp-strat" role="radiogroup" aria-label="Allocation strategy">
-                {STRATEGIES.map((s) => (
-                  <button key={s.key} type="button" role="radio" aria-checked={strategy === s.key} title={s.blurb} className={`bp-stratb ${strategy === s.key ? 'on' : ''}`} onClick={() => setStrategy(s.key)}>{s.label}</button>
-                ))}
-              </div>
+              <SegmentedControl
+                className="bp-strat"
+                size="sm"
+                ariaLabel="Allocation strategy"
+                value={strategy}
+                onChange={(v) => setStrategy(v as Strategy)}
+                options={STRATEGIES.map((s) => ({ value: s.key, label: <span title={s.blurb}>{s.label}</span> }))}
+              />
               <p className="bp-strat-blurb">{STRATEGIES.find((s) => s.key === strategy)?.blurb}</p>
               {error && <div className="bp-err">{error}</div>}
               <div className="bp-new-a">
@@ -323,14 +327,18 @@ export function BudgetPoolsDrawer({ open, onClose, toast }: { open: boolean; onC
             <div className="bp-list">
               {pools.map((p) => (
                 <div className={`bp-item ${expanded === p.id ? 'open' : ''}`} key={p.id}>
-                  <button type="button" className="bp-item-h" aria-expanded={expanded === p.id} onClick={() => setExpanded((x) => (x === p.id ? null : p.id))}>
+                  <Button
+                    variant="quiet" block className="bp-item-h"
+                    aria-expanded={expanded === p.id}
+                    onClick={() => setExpanded((x) => (x === p.id ? null : p.id))}
+                  >
                     <span className="nm">{p.name}</span>
                     <span className={`tag ${p.enabled ? (p.dryRun ? 'dry' : 'ok') : 'off'}`}>{p.enabled ? (p.dryRun ? 'Dry-run' : 'Live') : 'Disabled'}</span>
                     <span className="tag strat">{STRATEGY_LABEL[p.strategy]}</span>
                     <span className="bd">{eur(p.totalDailyBudgetCents)}/d</span>
                     <span className="al">{p._count?.allocations ?? 0} alloc</span>
                     <ChevronDown size={15} className={`chev ${expanded === p.id ? 'open' : ''}`} />
-                  </button>
+                  </Button>
                   {expanded === p.id && <PoolBody poolId={p.id} onChanged={() => void load()} toast={toast} />}
                 </div>
               ))}

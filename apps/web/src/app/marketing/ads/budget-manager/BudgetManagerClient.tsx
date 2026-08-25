@@ -259,7 +259,7 @@ function FaqDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div className="bm-faq">
         {FAQ.map((f, i) => (
           <div className={`bm-faq-item ${openIdx === i ? 'open' : ''}`} key={i}>
-            <button type="button" className="bm-faq-q" aria-expanded={openIdx === i} onClick={() => setOpenIdx((x) => (x === i ? -1 : i))}>{f.q}<ChevronDown size={16} /></button>
+            <Button variant="quiet" block className="bm-faq-q" aria-expanded={openIdx === i} onClick={() => setOpenIdx((x) => (x === i ? -1 : i))}>{f.q}<ChevronDown size={16} className="chev" /></Button>
             {openIdx === i && <p className="bm-faq-a">{f.a}</p>}
           </div>
         ))}
@@ -338,7 +338,7 @@ export function BudgetManagerClient() {
     { key: 'nextMonthBudget', label: 'Next Month Budget', metric: false, sortable: true, sortValue: (r) => r.nextMonthBudgetCents ?? -1, render: (r) => (
       editingNext === r.marketplace
         ? <Input size="xs" fieldClassName="bm-nextedit" prefix="€" autoFocus inputMode="decimal" value={nextDraft} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" />
-        : <button type="button" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null ? eur(r.nextMonthBudgetCents) : <span className="ph">Set budget</span>}<Pencil size={11} /></button>
+        : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null ? eur(r.nextMonthBudgetCents) : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
     ) },
   ], [editingNext, nextDraft, month, result]) // eslint-disable-line react-hooks/exhaustive-deps
 

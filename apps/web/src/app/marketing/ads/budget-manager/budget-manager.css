@@ -62,8 +62,9 @@
 .bm-cellv i.st-no-budget { color: var(--nds-grey-450); }
 
 /* next month budget editable cell */
-.bm-nextbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); background: none; border: 1px solid transparent; border-radius: var(--nds-radius-md); padding: 4px 8px; cursor: pointer; }
-.bm-nextbtn:hover { background: var(--nds-grey-75); border-color: var(--nds-grey-150); }
+/* an inline value-edit trigger: DS `Button variant="quiet" size="xs"` owns the
+   borderless-until-hover box; these are the cell type and the two muted marks. */
+.bm-nextbtn { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
 .bm-nextbtn svg { color: var(--nds-grey-400); }
 .bm-nextbtn .ph { color: var(--nds-grey-400); font-weight: 500; }
 .bm-nextedit { width: 116px; min-width: 0; }
@@ -124,7 +125,10 @@
 /* FAQ drawer */
 .bm-faq { display: flex; flex-direction: column; }
 .bm-faq-item { border-bottom: 1px solid var(--nds-grey-100); }
-.bm-faq-q { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-900); padding: 14px 2px; cursor: pointer; }
+/* the row IS the disclosure: DS `Button variant="quiet" block`. What is left is the
+   type scale and pushing the chevron to the far edge, which `block` (flex-start) does not do. */
+.bm-faq-q { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); padding: 12px 2px; }
+.bm-faq-q .chev { margin-left: auto; }
 .bm-faq-q svg { color: var(--nds-grey-450); flex-shrink: 0; transition: transform 0.15s; }
 .bm-faq-item.open .bm-faq-q svg { transform: rotate(180deg); }
 .bm-faq-a { margin: 0 2px 14px; font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.55; }
@@ -223,11 +227,8 @@
 .bp-warn { font-size: 11.5px; color: #8a5a00; background: #fff4e0; border-radius: var(--nds-radius-md); padding: 6px 9px; margin-bottom: 8px; }
 .bp-prev { margin-top: 10px; border-top: 1px solid var(--nds-grey-100); padding-top: 10px; }
 .bp-prev-h { font-size: 12px; font-weight: 800; color: var(--nds-grey-900); margin-bottom: 8px; }
-.bp-scroll { overflow-x: auto; border: 1px solid var(--nds-grey-100); border-radius: 9px; }
-.bp-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.bp-tbl th { background: var(--nds-grey-25); text-align: left; padding: 6px 9px; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); border-bottom: 1px solid var(--nds-grey-150); white-space: nowrap; }
-.bp-tbl th.r, .bp-tbl td.r { text-align: right; }
-.bp-tbl td { padding: 5px 9px; border-top: 1px solid var(--nds-grey-50); color: #37495b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The preview grid is the DS `DataGrid`; these are cell treatments it has no
+   opinion about — a monospace id, a truncation cap, and the sign colours. */
 .bp-tbl .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
 .bp-tbl .trunc { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .bp-tbl .pos { color: #067d62; font-weight: 700; }
