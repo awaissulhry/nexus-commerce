@@ -158,7 +158,7 @@
   animation: sba-pulse 2.4s ease-in-out infinite;
 }
 .sba-fresh.s-live .sba-freshword {
-  color: #14724d;
+  color: var(--nds-success-text);
 }
 .sba-fresh.s-reading .sba-freshdot {
   border-radius: 50%;
@@ -190,7 +190,7 @@
   background: var(--nds-red-700);
 }
 .sba-fresh.s-error .sba-freshword {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 
 .sba-freshbtn {
@@ -249,7 +249,7 @@
   gap: 4px;
   flex-shrink: 0;
   font-weight: 550;
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
   text-decoration: underline;
 }
 
@@ -532,7 +532,7 @@
 }
 .sba-marker.o-bad {
   background: #fdeceb;
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 
 .sba-body {
@@ -598,13 +598,13 @@
   color: #8a6320;
 }
 .sba-state.o-bad {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 .sba-risk {
   font-weight: 600;
 }
 .sba-risk.r-high {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 .sba-risk.r-medium {
   color: #8a6320;
@@ -631,7 +631,7 @@
   overflow-wrap: anywhere;
 }
 .sba-detail.bad {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 
 /* The gutter: tabular so the column is a column, and 13px because it is a
@@ -869,7 +869,7 @@
   color: #8a6320 !important;
 }
 .sba-dbad {
-  color: #9c2f2a !important;
+  color: var(--nds-danger-text) !important;
   overflow-wrap: anywhere;
 }
 
@@ -885,7 +885,7 @@
   color: var(--nds-grey-900);
 }
 .sba-step.bad::marker {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 .sba-steplabel {
   display: block;
@@ -959,7 +959,7 @@
 .sba-sev.s-high,
 .sba-sev.s-critical {
   background: #fdeceb;
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 .sba-sev.s-medium {
   background: #fff4e2;
@@ -1075,10 +1075,10 @@
    this uses three of the four. */
 .sba-needs.s-clean .sba-needsicon,
 .sba-needs.s-settled .sba-needsicon {
-  color: #14724d;
+  color: var(--nds-success-text);
 }
 .sba-needs.s-failing-severe .sba-needsicon {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 .sba-needs.s-failing-limit .sba-needsicon,
 .sba-needs.s-failing-test .sba-needsicon,
@@ -1123,7 +1123,7 @@
   margin-top: 2px;
 }
 .sba-needsrow.severe .sba-rowicon {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 .sba-needsrow.mild .sba-rowicon {
   color: #8a6320;

@@ -1232,16 +1232,16 @@
 .h10-au-stat.writing { border-color: #f0c9a8; background: #fff9f3; }
 .h10-au-stat.writing .v { color: #b4530e; }
 .h10-au-stat.ready { border-color: #b9dcc6; background: #f4fbf6; }
-.h10-au-stat.ready .v { color: #14724d; }
+.h10-au-stat.ready .v { color: var(--nds-success-text); }
 
 /* ── Banners ─────────────────────────────────────────────────────────────────────────── */
 .h10-au-banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 13px; margin-bottom: 10px; border-radius: 9px; font-size: 12px; line-height: 1.55; }
 .h10-au-banner svg { flex-shrink: 0; margin-top: 2px; }
 .h10-au-banner.err { background: #fdeaea; color: #a02c2c; }
-.h10-au-banner.warn { background: #fff6e8; color: #8a5316; }
+.h10-au-banner.warn { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-au-banner.ok { background: var(--nds-blue-50); color: #1f4f8f; }
 .h10-au-gradrule { display: flex; align-items: flex-start; gap: 9px; padding: 10px 13px; margin-bottom: 10px; border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-grey-25); font-size: 11.5px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-au-gradrule svg { flex-shrink: 0; margin-top: 2px; color: #14724d; }
+.h10-au-gradrule svg { flex-shrink: 0; margin-top: 2px; color: var(--nds-success-text); }
 
 /* ── First column: swatch · name · badges ────────────────────────────────────────────── */
 .h10-au-namew { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -1254,7 +1254,7 @@
 .h10-au-badge.writes { background: #fdf0e3; color: #a34909; }
 /* W1 — provenance: predates the 2026-08-20 cutover, machine-created. Same tone as the grid chip. */
 .h10-au-badge.legacy { background: #faf3e3; color: #7a5a12; }
-.h10-au-badge.ready { background: #e7f5ed; color: #14724d; }
+.h10-au-badge.ready { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-au-badge.conf { background: #fdeaea; color: #a02c2c; }
 /* Appears on row hover; always focusable so the drawer is reachable from the keyboard. */
 .h10-au-open { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 7px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; opacity: 0; transition: opacity .12s; }
@@ -1279,7 +1279,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    consequence rather than a selection. */
 .h10-au-notch.on.auto { background: #b4530e; color: var(--nds-white); }
 /* The notch a rule has EARNED. Highlighted, never pre-selected and never auto-clicked. */
-.h10-au-notch.earned { background: #e7f5ed; color: #14724d; box-shadow: inset 0 0 0 1px #b9dcc6; }
+.h10-au-notch.earned { background: #e7f5ed; color: var(--nds-success-text); box-shadow: inset 0 0 0 1px #b9dcc6; }
 
 /* ── Cells ───────────────────────────────────────────────────────────────────────────── */
 .h10-au-trg { font-size: 11.5px; color: var(--nds-grey-600); }
@@ -1291,7 +1291,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-week em { font-style: normal; }
 .h10-au-week i { font-style: normal; font-weight: 700; }
 .h10-au-week i.bad { color: var(--nds-red-700); }
-.h10-au-week i.cap { color: #8a5316; }
+.h10-au-week i.cap { color: var(--nds-warning-text); }
 .h10-au-never { color: #667080; }
 .h10-au-rowconf td { background: #fffaf8; }
 
@@ -1333,7 +1333,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-nowrite { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--nds-grey-75); font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
 /* A parameter the engine will refuse. Amber rather than red: the rule is not broken, one of
    its numbers is in the wrong unit, and the server declines it rather than acting. */
-.h10-au-problem { display: flex; align-items: flex-start; gap: 5px; margin-top: 4px; padding: 5px 8px; border-radius: 6px; background: #fff6e8; color: #8a5316; font-size: 10.5px; line-height: 1.5; }
+.h10-au-problem { display: flex; align-items: flex-start; gap: 5px; margin-top: 4px; padding: 5px 8px; border-radius: 6px; background: #fff6e8; color: var(--nds-warning-text); font-size: 10.5px; line-height: 1.5; }
 .h10-au-problem svg { flex-shrink: 0; margin-top: 2px; }
 .h10-au-desc { margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
 
@@ -1341,8 +1341,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-conf svg, .h10-au-ceiling svg, .h10-au-grad svg, .h10-au-capped svg { flex-shrink: 0; margin-top: 2px; }
 .h10-au-conf { background: #fdeaea; color: #a02c2c; }
 .h10-au-ceiling { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-au-capped { background: #fff6e8; color: #8a5316; }
-.h10-au-grad.ready { background: #e7f5ed; color: #14724d; }
+.h10-au-capped { background: #fff6e8; color: var(--nds-warning-text); }
+.h10-au-grad.ready { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-au-grad.failing { background: #fdeaea; color: #a02c2c; }
 .h10-au-grad.unseen, .h10-au-grad.unreviewed, .h10-au-grad.building { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 
@@ -1381,7 +1381,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-scoperow .lbl { flex: 0 0 42px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: #667080; }
 /* Scope is the one lane that spans the drawer — it holds two rows of controls, not one. */
 .h10-au-lane.wide { margin-top: 14px; }
-.h10-au-reach.bad { padding: 8px 11px; border-radius: 8px; background: #fff6e8; color: #8a5316; display: flex; align-items: flex-start; gap: 7px; }
+.h10-au-reach.bad { padding: 8px 11px; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); display: flex; align-items: flex-start; gap: 7px; }
 .h10-au-reach.bad svg { flex-shrink: 0; margin-top: 2px; }
 .h10-au-reach.bad b { color: #8a2020; }
 
@@ -1407,7 +1407,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-note .lnk { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 
 /* What a scope CANNOT reach. Amber, not red: the view is correct, its reach is partial. */
-.h10-kt-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-kt-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; }
 .h10-kt-blind svg { flex-shrink: 0; margin-top: 2px; }
 .h10-kt-blind b { font-weight: 800; color: #7a4512; }
 
@@ -1443,20 +1443,20 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-am-grid td.nm .h10-kt-kw .t { color: var(--nds-grey-900); }
 .h10-kt-kw .bd, .h10-kt-kw .ac { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-kt-kw .bd { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-kt-kw .ac { background: #fff6e8; color: #8a5316; }
+.h10-kt-kw .ac { background: #fff6e8; color: var(--nds-warning-text); }
 
 /* A blank is not a zero: `not measured` is a value with words, `0.00%` is a measurement. */
 .h10-kt-share { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-900); }
-.h10-kt-share.zero { color: #8a5316; }
+.h10-kt-share.zero { color: var(--nds-warning-text); }
 .h10-kt-nm { padding: 1px 7px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 700; }
 .h10-kt-nd { color: #667080; }
 
 /* Every row states the age of what it shows. Stale is a value, not an absence. */
 .h10-kt-age { display: inline-flex; align-items: baseline; gap: 6px; font-size: 11.5px; color: var(--nds-grey-900); white-space: nowrap; }
 .h10-kt-age i { font-style: normal; padding: 1px 5px; border-radius: 5px; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.h10-kt-age.fresh i { background: #e7f5ed; color: #14724d; }
+.h10-kt-age.fresh i { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-kt-age.ageing i { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-kt-age.stale i { background: #fff6e8; color: #8a5316; }
+.h10-kt-age.stale i { background: #fff6e8; color: var(--nds-warning-text); }
 
 .h10-kt-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
 .h10-kt-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
@@ -1488,7 +1488,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ng-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-ng-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-ng-said b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-ng-blind { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-ng-blind { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-ng-blind svg { flex: none; margin-top: 3px; }
 .h10-ng-blind b { font-weight: 800; }
 
@@ -1499,16 +1499,16 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ng-cell b { font-size: 20px; font-weight: 800; line-height: 1.15; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-ng-cell span { font-size: 11.5px; font-weight: 600; line-height: 1.35; color: var(--nds-grey-600); }
 .h10-ng-cell.on { border-color: var(--nds-blue-600); background: var(--nds-blue-100); }
-.h10-ng-cell.on b, .h10-ng-cell.on span { color: #10457f; }
-.h10-ng-cell.warn b { color: #8a5316; }
+.h10-ng-cell.on b, .h10-ng-cell.on span { color: var(--nds-info-text); }
+.h10-ng-cell.warn b { color: var(--nds-warning-text); }
 .h10-ng-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
 .h10-ng-cell.warn.on b, .h10-ng-cell.warn.on span { color: #7a4812; }
 .h10-ng-cell.muted b { color: #667080; }
 /* The live tone. Named `live`, not `on`: `on` is the SELECTED class on the same element, and a tone
    called `on` made the "blocking now" cell render permanently selected — measured on prod, where
    two of five cells claimed to be the active filter at once. */
-.h10-ng-cell.live b { color: #14724d; }
-.h10-ng-cell.live.on { border-color: #14724d; background: #e7f5ed; }
+.h10-ng-cell.live b { color: var(--nds-success-text); }
+.h10-ng-cell.live.on { border-color: var(--nds-success-text); background: #e7f5ed; }
 .h10-ng-cell.live.on b, .h10-ng-cell.live.on span { color: #0f5b3d; }
 
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
@@ -1520,32 +1520,32 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ng-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-ng-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ng-term .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
-.h10-ng-term .fl.warn { background: #fff6e8; color: #8a5316; }
-.h10-ng-term .fl.camp { background: var(--nds-blue-100); color: #10457f; }
+.h10-ng-term .fl.warn { background: #fff6e8; color: var(--nds-warning-text); }
+.h10-ng-term .fl.camp { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 /* ── cells ──────────────────────────────────────────────────────────────────────────────────── */
 .h10-ng-mt { display: inline-flex; align-items: baseline; gap: 5px; font-size: 12px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-ng-mt i { font-style: normal; padding: 1px 5px; border-radius: 4px; background: #fff6e8; color: #8a5316; font-size: 10px; font-weight: 800; }
+.h10-ng-mt i { font-style: normal; padding: 1px 5px; border-radius: 4px; background: #fff6e8; color: var(--nds-warning-text); font-size: 10px; font-weight: 800; }
 .h10-ng-sc { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.h10-ng-sc .camp { font-size: 11.5px; font-weight: 800; color: #10457f; }
+.h10-ng-sc .camp { font-size: 11.5px; font-weight: 800; color: var(--nds-info-text); }
 .h10-ng-sc .ag { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ng-sc i { font-style: normal; font-size: 10.5px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ng-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
 .h10-ng-st { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-ng-st.enabled { background: #e7f5ed; color: #14724d; }
+.h10-ng-st.enabled { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-ng-st.paused { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-ng-st.archived { background: var(--nds-grey-75); color: #667080; }
 .h10-ng-am { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; }
-.h10-ng-am.yes { background: #e7f5ed; color: #14724d; }
-.h10-ng-am.no { background: #fff6e8; color: #8a5316; }
+.h10-ng-am.yes { background: #e7f5ed; color: var(--nds-success-text); }
+.h10-ng-am.no { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-ng-bl { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; }
-.h10-ng-bl.on { background: #e7f5ed; color: #14724d; }
+.h10-ng-bl.on { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-ng-bl.off { background: var(--nds-grey-75); color: #667080; }
 .h10-ng-dt { display: inline-flex; align-items: baseline; gap: 4px; font-size: 11.5px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-ng-dt i { font-style: normal; font-size: 10px; color: #667080; }
 .h10-ng-by { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-ng-by.unattributed, .h10-ng-by.actor-not-recorded { font-weight: 600; font-style: italic; color: #667080; }
-.h10-ng-by.engine { color: #10457f; }
+.h10-ng-by.engine { color: var(--nds-info-text); }
 .h10-ng-by.multi { font-weight: 600; color: var(--nds-grey-600); }
 .h10-ng-nd { color: #667080; }
 
@@ -1582,7 +1582,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* The view's single period, in the toolbar. Amber when the gate could not find a whole week —
    the same amber the truncated-week sentence above the grid uses, so the two read as one fact. */
-.h10-kt-win i.bad { background: #fff6e8; color: #8a5316; }
+.h10-kt-win i.bad { background: #fff6e8; color: var(--nds-warning-text); }
 
 /* ── KT.2 — the watchlist picker and editor ───────────────────────────────────────────────────
    Appended at EOF, `h10-kt-*` only. The `.lnk`, `.h10-kt-note` and `.h10-kt-blind` families are
@@ -1621,13 +1621,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    in one place and failing in another is why contrast is measured against the COMPOSITED
    background rather than the palette. */
 .h10-kt-wlrow .ct { color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
-.h10-kt-wlrow .df { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: #14724d; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.h10-kt-wlrow .df { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: var(--nds-success-text); font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
 .h10-kt-wlnew { display: flex; gap: 7px; width: 100%; }
 .h10-kt-wlnew input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 12px; color: var(--nds-grey-900); border: 1px solid var(--nds-grey-150); border-radius: 8px; padding: 7px 10px; }
 
 /* D4 — a control that destroys says what it destroys, to how many things, and whether it can be
    undone. Amber for "removes from a list", not red: nothing reaches Amazon and no bid moves. */
-.h10-kt-danger { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 0; padding: 10px 12px; border-radius: 9px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; width: 100%; }
+.h10-kt-danger { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 0; padding: 10px 12px; border-radius: 9px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; width: 100%; }
 .h10-kt-danger b { font-weight: 800; color: #7a4512; }
 .h10-kt-danger .acts { display: flex; gap: 8px; }
 .h10-am-btn.danger { color: #a02c2c; }
@@ -1645,8 +1645,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bd-note svg { flex: none; margin-top: 3px; color: #667080; }
 .h10-bd-note b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-bd-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
-.h10-bd-note.bad svg { color: #8a5316; }
+.h10-bd-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-bd-note.bad svg { color: var(--nds-warning-text); }
 .h10-bd-note.bad b { color: #7a4512; }
 .h10-bd-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bd-said b { font-weight: 800; color: var(--nds-grey-900); }
@@ -1658,8 +1658,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-cell b { font-size: 20px; font-weight: 800; line-height: 1.15; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-bd-cell span { font-size: 11.5px; font-weight: 600; line-height: 1.35; color: var(--nds-grey-600); }
 .h10-bd-cell.on { border-color: var(--nds-blue-600); background: var(--nds-blue-100); }
-.h10-bd-cell.on b, .h10-bd-cell.on span { color: #10457f; }
-.h10-bd-cell.live b { color: #14724d; }
+.h10-bd-cell.on b, .h10-bd-cell.on span { color: var(--nds-info-text); }
+.h10-bd-cell.live b { color: var(--nds-success-text); }
 .h10-bd-cell.muted b { color: #667080; }
 /* A cell you cannot click must not look like one you can. */
 .h10-bd-cell.flat { cursor: default; }
@@ -1680,7 +1680,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-mkt { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-bd-bid { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-bd-acos { font-variant-numeric: tabular-nums; }
-.h10-bd-acos.hi { color: #8a5316; font-weight: 800; }
+.h10-bd-acos.hi { color: var(--nds-warning-text); font-weight: 800; }
 .h10-bd-tg { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-900); }
 .h10-bd-tg i { font-style: normal; font-size: 10px; font-weight: 600; color: #667080; }
 .h10-bd-range { font-variant-numeric: tabular-nums; color: var(--nds-grey-900); }
@@ -1750,7 +1750,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-hv-said b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-hv-blind { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-blind { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-hv-blind svg { flex: none; margin-top: 3px; }
 .h10-hv-blind b { font-weight: 800; }
 
@@ -1765,7 +1765,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-lede .sub { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: #667080; }
 .h10-hv-lede .sub svg { flex: none; margin-top: 3px; color: #667080; }
 .h10-hv-lede .sub b { color: var(--nds-grey-900); }
-.h10-hv-lede .caveat { display: flex; align-items: flex-start; gap: 7px; padding: 8px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; color: #8a5316; }
+.h10-hv-lede .caveat { display: flex; align-items: flex-start; gap: 7px; padding: 8px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; color: var(--nds-warning-text); }
 .h10-hv-lede .caveat svg { flex: none; margin-top: 3px; }
 .h10-hv-lede .caveat b { color: #7a4812; }
 .h10-hv-lede .lnk { display: inline-flex; align-items: center; gap: 2px; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; }
@@ -1777,15 +1777,15 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-cell b { font-size: 20px; font-weight: 800; line-height: 1.15; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-hv-cell span { font-size: 11.5px; font-weight: 600; line-height: 1.35; color: var(--nds-grey-600); }
 .h10-hv-cell.on { border-color: var(--nds-blue-600); background: var(--nds-blue-100); }
-.h10-hv-cell.on b, .h10-hv-cell.on span { color: #10457f; }
-.h10-hv-cell.warn b { color: #8a5316; }
+.h10-hv-cell.on b, .h10-hv-cell.on span { color: var(--nds-info-text); }
+.h10-hv-cell.warn b { color: var(--nds-warning-text); }
 .h10-hv-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
 .h10-hv-cell.warn.on b, .h10-hv-cell.warn.on span { color: #7a4812; }
 .h10-hv-cell.muted b { color: #667080; }
 /* The tone is `live`, never `on`: `on` is the SELECTED class on the same element, and NEG.1
    measured a tone called `on` rendering two of five cells as the active filter at once. */
-.h10-hv-cell.live b { color: #14724d; }
-.h10-hv-cell.live.on { border-color: #14724d; background: #e7f5ed; }
+.h10-hv-cell.live b { color: var(--nds-success-text); }
+.h10-hv-cell.live.on { border-color: var(--nds-success-text); background: #e7f5ed; }
 .h10-hv-cell.live.on b, .h10-hv-cell.live.on span { color: #0f5b3d; }
 
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
@@ -1803,7 +1803,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-hv-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-hv-term .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
-.h10-hv-term .fl.warn { background: #fff6e8; color: #8a5316; }
+.h10-hv-term .fl.warn { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-hv-term .fl.neg { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 
 /* ── cells ──────────────────────────────────────────────────────────────────────────────────── */
@@ -1814,15 +1814,15 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-src i > b { flex: none; padding: 0 5px; border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 /* AUTO is where discovery happens, and it is exactly what the rule path cannot see — so it is the
    one that carries colour. MANUAL is the unremarkable case and stays grey. */
-.h10-hv-src i > b.tt.auto { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-src i > b.tt.auto { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-src i > b.tt.manual { background: var(--nds-grey-75); color: #667080; }
 .h10-hv-nd { color: #667080; }
 
 /* Matched via — the column that separates a tautology from a discovery. */
 .h10-hv-mv { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .h10-hv-mv b { padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; letter-spacing: .02em; }
-.h10-hv-mv b.ex { background: #fff6e8; color: #8a5316; }
-.h10-hv-mv b.au { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-mv b.ex { background: #fff6e8; color: var(--nds-warning-text); }
+.h10-hv-mv b.au { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-mv i { font-style: italic; font-size: 10.5px; color: #667080; }
 /* EVERY order came from an EXACT match, not merely some of them — so this row is offering to
    create the keyword that produced its own traffic. Distinct from an amber chip beside a phrase
@@ -1833,21 +1833,21 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-st { display: inline-flex; flex-direction: column; gap: 1px; min-width: 0; }
 .h10-hv-st { font-size: 11px; font-weight: 800; color: var(--nds-grey-600); }
 .h10-hv-st i { font-style: normal; font-size: 10px; font-weight: 600; color: #667080; }
-.h10-hv-st.new { color: #14724d; }
+.h10-hv-st.new { color: var(--nds-success-text); }
 .h10-hv-st.already-exact-here { color: #667080; }
-.h10-hv-st.exact-elsewhere { color: #10457f; }
-.h10-hv-st.local-only { color: #8a5316; }
+.h10-hv-st.exact-elsewhere { color: var(--nds-info-text); }
+.h10-hv-st.local-only { color: var(--nds-warning-text); }
 
 .h10-hv-neg { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-size: 12px; font-weight: 800; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
-.h10-hv-neg.on { color: #8a5316; }
+.h10-hv-neg.on { color: var(--nds-warning-text); }
 .h10-hv-neg i { font-style: normal; font-size: 10px; font-weight: 600; color: #667080; }
 
 .h10-hv-kind { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-hv-kind.product { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-kind.product { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 /* ── grid chrome ────────────────────────────────────────────────────────────────────────────── */
 .h10-hv-copy { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-copy:hover { background: var(--nds-blue-100); color: #10457f; border-color: var(--nds-blue-600); }
+.h10-hv-copy:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
 .h10-hv-win { font-size: 11px; font-weight: 700; color: #667080; font-variant-numeric: tabular-nums; }
 .h10-hv-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
 .h10-hv-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
@@ -1914,7 +1914,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
 .h10-plc-note b { font-weight: 800; color: var(--nds-grey-900); }
 
-.h10-plc-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-plc-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; }
 .h10-plc-blind svg { flex-shrink: 0; margin-top: 2px; }
 .h10-plc-blind b { font-weight: 800; color: #7a4512; }
 
@@ -1946,7 +1946,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-mkt { display: inline-block; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10.5px; font-weight: 800; letter-spacing: .03em; }
 
 .h10-plc-st { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; }
-.h10-plc-st.enabled { background: #e7f5ed; color: #14724d; }
+.h10-plc-st.enabled { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-plc-st.paused { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-plc-st.archived { background: var(--nds-grey-75); color: #667080; }
 
@@ -1956,9 +1956,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-lane.product { background: #f4f1f8; color: #4b3b78; }
 
 .h10-plc-mult { font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-plc-mult.hot { color: #8a5316; }
+.h10-plc-mult.hot { color: var(--nds-warning-text); }
 .h10-plc-roas { font-variant-numeric: tabular-nums; }
-.h10-plc-roas.good { color: #14724d; font-weight: 700; }
+.h10-plc-roas.good { color: var(--nds-success-text); font-weight: 700; }
 .h10-plc-roas.bad { color: #9c2b2b; font-weight: 700; }
 .h10-plc-is { display: inline-flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; color: var(--nds-grey-900); white-space: nowrap; }
 .h10-plc-is i { font-style: normal; padding: 1px 5px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; }
@@ -2066,7 +2066,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-bsp-chip.s-on-track .hd i { color: #146c43; }
 .h10-bsp-chip.s-over     .hd i { color: #b3261e; }
-.h10-bsp-chip.s-under    .hd i { color: #8a5316; }
+.h10-bsp-chip.s-under    .hd i { color: var(--nds-warning-text); }
 .h10-bsp-chip.s-no-budget .hd i { color: var(--nds-grey-600); }
 
 .h10-bsp-sum { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12px; color: var(--nds-grey-600); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -2075,7 +2075,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-sum b.bad { color: #b3261e; }
 .h10-bsp-sum s { text-decoration: none; color: #667080; }
 .h10-bsp-plan { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-bsp-plan:hover { background: var(--nds-blue-100); color: #10457f; border-color: var(--nds-blue-600); }
+.h10-bsp-plan:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
 
 /* ── the spine's explanation, OUTSIDE the sticky block ─────────────────────────────────────────
    Inside, an appearing note would change the pinned block's height. Out here it scrolls with the
@@ -2105,7 +2105,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-railfacts dt { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); }
 .h10-bsp-railfacts dd { margin: 0; font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-bsp-railfacts dd.bad { color: #b3261e; }
-.h10-bsp-raillink { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; font-size: 12px; font-weight: 700; color: #10457f; text-decoration: none; }
+.h10-bsp-raillink { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--nds-info-text); text-decoration: none; }
 .h10-bsp-raillink:hover { background: var(--nds-blue-100); border-color: var(--nds-blue-600); }
 
 /* ── a section ────────────────────────────────────────────────────────────────────────────────── */
@@ -2173,7 +2173,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngd-title h3 { margin: 0; font-size: 16px; font-weight: 800; color: var(--nds-grey-900); word-break: break-word; }
 .h10-ngd-title p { margin: 3px 0 0; font-size: 12px; color: var(--nds-grey-600); }
 .h10-ngd-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ngd-close:hover { background: var(--nds-blue-100); color: #10457f; }
+.h10-ngd-close:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 .h10-ngd-sec { padding: 14px 0 0; }
 .h10-ngd-sec h4 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
@@ -2187,9 +2187,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngd-three .cell i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-ngd-three .cell em { font-style: normal; font-size: 10.5px; line-height: 1.4; color: #667080; }
 .h10-ngd-three .cell.cool { background: #e7f5ed; border-color: #bfe0cd; }
-.h10-ngd-three .cell.cool b { color: #14724d; }
+.h10-ngd-three .cell.cool b { color: var(--nds-success-text); }
 .h10-ngd-three .cell.hot { background: #fff6e8; border-color: #f0dcbe; }
-.h10-ngd-three .cell.hot b { color: #8a5316; }
+.h10-ngd-three .cell.hot b { color: var(--nds-warning-text); }
 
 .h10-ngd-lawnote { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 8px 11px; background: var(--nds-grey-75); border-radius: 8px; font-size: 11.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-ngd-lawnote svg { flex: none; margin-top: 3px; color: #667080; }
@@ -2201,7 +2201,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngd-perf .m b { font-size: 13.5px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-ngd-perf .m i { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .02em; color: #667080; }
 .h10-ngd-window { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: #667080; }
-.h10-ngd-hist { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-ngd-hist { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-ngd-hist svg { flex: none; margin-top: 3px; }
 .h10-ngd-hist b { font-weight: 800; }
 
@@ -2212,8 +2212,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngd-runs .nm { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .h10-ngd-runs .nm b { font-size: 12px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ngd-runs .nm i { font-style: normal; font-size: 10.5px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-ngd-runs .unk { font-style: normal; font-size: 10px; font-weight: 700; color: #8a5316; }
-.h10-ngd-runs .ovl { flex: none; padding: 1px 6px; border-radius: 5px; background: #8a5316; color: var(--nds-white); font-size: 10px; font-weight: 800; }
+.h10-ngd-runs .unk { font-style: normal; font-size: 10px; font-weight: 700; color: var(--nds-warning-text); }
+.h10-ngd-runs .ovl { flex: none; padding: 1px 6px; border-radius: 5px; background: var(--nds-warning-text); color: var(--nds-white); font-size: 10px; font-weight: 800; }
 .h10-ngd-runs .mt { flex: none; font-size: 10.5px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 
 /* ── every negation ─────────────────────────────────────────────────────────────────────────── */
@@ -2225,37 +2225,37 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngd-negs li.ovl { background: #fff6e8; border-color: #f0dcbe; }
 .h10-ngd-negs .sc { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .h10-ngd-negs .sc b { font-size: 12px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-ngd-negs .sc b.camp { color: #10457f; }
+.h10-ngd-negs .sc b.camp { color: var(--nds-info-text); }
 .h10-ngd-negs .sc i { font-style: normal; font-size: 10.5px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ngd-negs .fl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
 .h10-ngd-negs .fl span { padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; }
 .h10-ngd-negs .fl .mt { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-ngd-negs .fl .mk { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-ngd-negs .fl .st.enabled { background: #e7f5ed; color: #14724d; }
+.h10-ngd-negs .fl .st.enabled { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-ngd-negs .fl .st.paused, .h10-ngd-negs .fl .st.archived { background: var(--nds-grey-75); color: #667080; }
-.h10-ngd-negs .fl .am.yes { background: #e7f5ed; color: #14724d; }
-.h10-ngd-negs .fl .am.no { background: #fff6e8; color: #8a5316; }
-.h10-ngd-negs .fl .bl { background: var(--nds-blue-100); color: #10457f; }
-.h10-ngd-negs .fl .ov { background: #8a5316; color: var(--nds-white); }
+.h10-ngd-negs .fl .am.yes { background: #e7f5ed; color: var(--nds-success-text); }
+.h10-ngd-negs .fl .am.no { background: #fff6e8; color: var(--nds-warning-text); }
+.h10-ngd-negs .fl .bl { background: var(--nds-blue-100); color: var(--nds-info-text); }
+.h10-ngd-negs .fl .ov { background: var(--nds-warning-text); color: var(--nds-white); }
 .h10-ngd-negs .meta { grid-row: 1; grid-column: 2; text-align: right; font-size: 10.5px; color: #667080; white-space: nowrap; }
 .h10-ngd-negs .meta .by { font-weight: 700; color: var(--nds-grey-900); }
 .h10-ngd-negs .meta .by.unattributed, .h10-ngd-negs .meta .by.actor-not-recorded { font-weight: 600; font-style: italic; color: #667080; }
-.h10-ngd-negs .meta .by.engine { color: #10457f; }
+.h10-ngd-negs .meta .by.engine { color: var(--nds-info-text); }
 
 /* ── the remainder sentence ─────────────────────────────────────────────────────────────────── */
-.h10-ngd-rem { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 10px 12px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 9px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-ngd-rem { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 10px 12px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 9px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-ngd-rem.ok { background: var(--nds-grey-75); border-color: var(--nds-grey-150); color: var(--nds-grey-600); }
 .h10-ngd-rem svg { flex: none; margin-top: 3px; }
 .h10-ngd-rem b { font-weight: 800; }
 .h10-ngd-rem.ok b { color: var(--nds-grey-900); }
 
-.h10-ngd-prot { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 9px 11px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #14724d; }
+.h10-ngd-prot { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 9px 11px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-success-text); }
 .h10-ngd-prot svg { flex: none; margin-top: 3px; }
 .h10-ngd-prot b { font-weight: 800; }
 .h10-ngd-msg { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-ngd-msg.sm { font-size: 11.5px; color: #667080; }
 .h10-ngd-msg b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-ngd-bad { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; color: #8a5316; }
+.h10-ngd-bad { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; color: var(--nds-warning-text); }
 .h10-ngd-bad svg { flex: none; margin-top: 2px; }
 .h10-ngd-foot { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--nds-grey-150); font-size: 11px; line-height: 1.6; color: #667080; }
 
@@ -2292,8 +2292,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-feed i { font-style: normal; padding: 2px 7px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-weight: 700; font-size: 10.5px; }
 /* Age is a value, not an absence: fresh · ageing · stale, and stale still shows its number. */
 .h10-sov-feed.fresh b { color: #1c6b3f; }
-.h10-sov-feed.ageing b { color: #8a5316; }
-.h10-sov-feed.stale { border-color: #f0d9b5; background: #fff6e8; color: #8a5316; }
+.h10-sov-feed.ageing b { color: var(--nds-warning-text); }
+.h10-sov-feed.stale { border-color: #f0d9b5; background: #fff6e8; color: var(--nds-warning-text); }
 .h10-sov-feed.stale b { color: #7a4512; }
 .h10-sov-feed.stale i { background: #f7e9d4; color: #7a4512; }
 
@@ -2301,7 +2301,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-note { display: flex; align-items: flex-start; gap: 7px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
 .h10-sov-note svg { flex-shrink: 0; margin-top: 2px; color: #667080; }
 .h10-sov-note b { font-weight: 800; color: var(--nds-grey-900); }
-.h10-sov-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-sov-blind { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; }
 .h10-sov-blind svg { flex-shrink: 0; margin-top: 2px; }
 .h10-sov-blind b { font-weight: 800; color: #7a4512; }
 .h10-sov-note .lnk, .h10-sov-blind .lnk, .h10-sov-empty .lnk { font: inherit; font-size: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
@@ -2333,7 +2333,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-listsel { font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-grey-75); border: 0; border-radius: 7px; padding: 6px 9px; cursor: pointer; max-width: 260px; }
 .h10-sov-win { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: #667080; }
 .h10-sov-win i { font-style: normal; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-weight: 700; font-variant-numeric: tabular-nums; }
-.h10-sov-win i.bad { background: #fff6e8; color: #8a5316; }
+.h10-sov-win i.bad { background: #fff6e8; color: var(--nds-warning-text); }
 
 /* ── the first column ───────────────────────────────────────────────────────────────────────── */
 .h10-sov-q { display: flex; align-items: center; gap: 7px; min-width: 0; }
@@ -2344,7 +2344,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    specificity rather than `!important`, so SOV.5 deletes one rule when the drawer makes it real. */
 .h10-sov-q .bd, .h10-sov-q .ls { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-sov-q .bd { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-sov-q .ls { background: var(--nds-blue-100); color: #10457f; }
+.h10-sov-q .ls { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 /* ── the one metric column, and its four blank-states ───────────────────────────────────────────
    Four states, four treatments. A blank that means four things is worse than no column, and that
@@ -2356,19 +2356,19 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
      no row this week / never measured   two different absences, two different sentences
    ─────────────────────────────────────────────────────────────────────────────────────────────── */
 .h10-sov-share { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-900); }
-.h10-sov-share.zero { color: #8a5316; }
-.h10-sov-share i { font-style: normal; font-size: 10px; font-weight: 600; color: #8a5316; }
-.h10-sov-nc { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: #fff6e8; color: #8a5316; }
+.h10-sov-share.zero { color: var(--nds-warning-text); }
+.h10-sov-share i { font-style: normal; font-size: 10px; font-weight: 600; color: var(--nds-warning-text); }
+.h10-sov-nc { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: #fff6e8; color: var(--nds-warning-text); }
 .h10-sov-nm { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-sov-nm.muted { background: transparent; color: #9099a6; font-weight: 600; }
 .h10-sov-nd { color: #9099a6; }
 .h10-sov-mkt { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-sov-ac { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-600); }
-.h10-sov-ac.many { color: #8a5316; }
+.h10-sov-ac.many { color: var(--nds-warning-text); }
 .h10-sov-age { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-sov-age i { font-style: normal; padding: 1px 5px; border-radius: 4px; background: var(--nds-grey-75); color: #667080; font-size: 10px; font-weight: 700; }
 .h10-sov-age.fresh i { background: #e7f5ec; color: #1c6b3f; }
-.h10-sov-age.ageing i { background: #fff6e8; color: #8a5316; }
+.h10-sov-age.ageing i { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-sov-age.stale i { background: #fdeaea; color: #a33a3a; }
 
 /* ── empty state ────────────────────────────────────────────────────────────────────────────── */
@@ -2429,8 +2429,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-note svg { flex: none; margin-top: 3px; color: #667080; }
 .h10-bud-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-bud-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 4px; border-radius: 4px; background: #fdeed5; color: #7a4512; }
-.h10-bud-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
-.h10-bud-note.bad svg { color: #8a5316; }
+.h10-bud-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-bud-note.bad svg { color: var(--nds-warning-text); }
 .h10-bud-note.bad b { color: #7a4512; }
 .h10-bud-said { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-bud-said b { font-weight: 800; color: var(--nds-grey-900); }
@@ -2445,9 +2445,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-cell b { font-size: 19px; font-weight: 800; line-height: 1.15; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-bud-cell span { font-size: 11px; font-weight: 600; line-height: 1.3; color: var(--nds-grey-600); }
 .h10-bud-cell.on { border-color: var(--nds-blue-600); background: var(--nds-blue-100); }
-.h10-bud-cell.on b, .h10-bud-cell.on span { color: #10457f; }
+.h10-bud-cell.on b, .h10-bud-cell.on span { color: var(--nds-info-text); }
 /* The two cells that carry the finding. #8a5316 on #fff is 5.6:1; on #fff6e8 it is 5.2:1. */
-.h10-bud-cell.bad b { color: #8a5316; }
+.h10-bud-cell.bad b { color: var(--nds-warning-text); }
 .h10-bud-cell.muted b { color: #667080; }
 
 /* ── campaign row cells ────────────────────────────────────────────────────────────────────── */
@@ -2459,16 +2459,16 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-rule .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A rule that changes budgets on its own and only ever lowers them. The one flag on this page that
    is meant to stop the eye. */
-.h10-bud-rule .fl.cut { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-bud-rule .fl.cut { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
 .h10-bud-mkt { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
 
 /* The budget itself, and the floor flag that explains why a trim does nothing to it. */
 .h10-bud-amt { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-bud-amt.floor { color: #8a5316; }
-.h10-bud-amt i { flex: none; font-style: normal; padding: 1px 5px; border-radius: 5px; background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.h10-bud-amt.floor { color: var(--nds-warning-text); }
+.h10-bud-amt i { flex: none; font-style: normal; padding: 1px 5px; border-radius: 5px; background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
 
 .h10-bud-util { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-900); }
-.h10-bud-util.hi { color: #8a5316; }
+.h10-bud-util.hi { color: var(--nds-warning-text); }
 /* "7-day avg" rides the number itself, because the averaging window IS the caveat and a tooltip
    nobody opens is not where a caveat belongs. */
 .h10-bud-util i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
@@ -2476,11 +2476,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-moved { display: inline-flex; flex-direction: column; gap: 1px; min-width: 0; }
 .h10-bud-moved b { font-size: 11.5px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-bud-moved i { font-style: normal; font-size: 10px; color: #667080; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-bud-moved em { font-style: normal; font-size: 9.5px; font-weight: 800; color: #8a5316; text-transform: uppercase; letter-spacing: .02em; }
+.h10-bud-moved em { font-style: normal; font-size: 9.5px; font-weight: 800; color: var(--nds-warning-text); text-transform: uppercase; letter-spacing: .02em; }
 
 .h10-bud-delta { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--nds-grey-900); }
-.h10-bud-delta.down { color: #8a5316; }
-.h10-bud-delta.up { color: #14724d; }
+.h10-bud-delta.down { color: var(--nds-warning-text); }
+.h10-bud-delta.up { color: var(--nds-success-text); }
 /* 🔴 No `opacity` here. It was `.85`, which composites #14724d on white to 4.34:1 against the 4.5
    this 9.5px text needs — measured on the deployed page, not guessed, because getComputedStyle
    reports the DECLARED colour and would have said 5.1:1 and passed. The size and weight already
@@ -2489,12 +2489,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-bud-w, .h10-bud-still, .h10-bud-ref, .h10-bud-wrote { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nds-grey-900); }
 .h10-bud-w i, .h10-bud-still i, .h10-bud-ref i, .h10-bud-wrote i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
-.h10-bud-wrote.hot { color: #8a5316; font-weight: 800; }
+.h10-bud-wrote.hot { color: var(--nds-warning-text); font-weight: 800; }
 
 /* The gate. "cut only locally" is the whole correction on this page, so it is a word, not a tick. */
 .h10-bud-gate { font-size: 11px; font-weight: 800; }
-.h10-bud-gate.on { color: #14724d; }
-.h10-bud-gate.off { color: #8a5316; }
+.h10-bud-gate.on { color: var(--nds-success-text); }
+.h10-bud-gate.off { color: var(--nds-warning-text); }
 
 .h10-bud-rules { background: none; border: 0; padding: 0; font: inherit; font-weight: 800; color: var(--nds-blue-600); text-decoration: underline; cursor: pointer; font-variant-numeric: tabular-nums; }
 
@@ -2502,18 +2502,18 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-lvl { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
 .h10-bud-lvl.off { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-bud-lvl.observe { background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-bud-lvl.propose { background: var(--nds-blue-100); color: #10457f; }
+.h10-bud-lvl.propose { background: var(--nds-blue-100); color: var(--nds-info-text); }
 /* AUTO is the only level that reaches a budget without being asked. */
-.h10-bud-lvl.auto { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-bud-lvl.auto { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
 .h10-bud-pctc { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.h10-bud-pctc.cut { color: #8a5316; }
-.h10-bud-pctc.raise { color: #14724d; }
+.h10-bud-pctc.cut { color: var(--nds-warning-text); }
+.h10-bud-pctc.raise { color: var(--nds-success-text); }
 .h10-bud-pctc i { font-style: normal; font-size: 9.5px; font-weight: 600; color: #667080; }
 .h10-bud-trig { font-size: 11px; color: var(--nds-grey-600); }
 .h10-bud-cond { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--nds-grey-600); }
 .h10-bud-scopec { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); }
 /* Every one of the six rules is account-wide, and that is the defect the column exists to show. */
-.h10-bud-scopec.wide { color: #8a5316; }
+.h10-bud-scopec.wide { color: var(--nds-warning-text); }
 .h10-bud-when { font-size: 11px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-bud-ns { font-size: 10.5px; font-style: italic; color: #667080; }
 .h10-bud-nd { color: #667080; }
@@ -2528,7 +2528,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bud-seg { display: inline-flex; padding: 2px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; }
 .h10-bud-seg .seg { padding: 4px 12px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-bud-seg .seg.on { background: var(--nds-white); color: var(--nds-grey-900); box-shadow: 0 1px 2px rgba(28, 37, 48, .12); }
-.h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bud-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bud-stale:hover { background: #fdeed5; }
 .h10-bud-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
 .h10-bud-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
@@ -2575,7 +2575,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-sharecell i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 /* A real number sourced from a product we are not advertising on the term. Amber, like the real
    zero: the value is true, what it is evidence OF is not what the column implies. */
-.h10-kt-share.offterm { color: #8a5316; text-decoration: underline dotted 1px; text-underline-offset: 3px; }
+.h10-kt-share.offterm { color: var(--nds-warning-text); text-decoration: underline dotted 1px; text-underline-offset: 3px; }
 
 /* Folded into the keyword cell's chip row, beside `N OF OURS`. */
 .h10-kt-kw .nc { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; background: #fdeaea; color: #8a2020; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
@@ -2623,8 +2623,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-note svg { flex: none; margin-top: 3px; color: #667080; }
 .h10-ar-note b { font-weight: 800; color: var(--nds-grey-900); }
 /* Broke — the read failed. Amber, and the only state on this page that is allowed to look wrong. */
-.h10-ar-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
-.h10-ar-note.bad svg, .h10-ar-note.bad b { color: #8a5316; }
+.h10-ar-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-ar-note.bad svg, .h10-ar-note.bad b { color: var(--nds-warning-text); }
 .h10-ar-note.bad .h10-ar-lnk { color: #7a4512; }
 /* Refused — the scope cannot resolve. A refusal is not a failure: it is the system working, and it
    gets its own colour so an operator never reads "this is broken" where the answer is "this asks
@@ -2641,7 +2641,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.
    🔴 It cannot appear today — `GET /advertising/apply-rules/cursor` does not exist and a failed
    poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
-.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-ar-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-ar-stale:hover { background: #fdeed5; }
 /* U13 — a refused bid-automation flip, in the toolbar slot the staleness chip uses. Danger, not
    warning: the stale chip means "there is more to see", this means "your write did not happen".
@@ -2670,7 +2670,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* 🔴 Enabled + not delivering + gate shut. Resuming a paused campaign does NOT re-open the write
    gate — the write is refused at `campaign_allowlist` and the gate's own comment calls that the
    intended trade — so this row is one nothing may correct. Amber, and only on that intersection. */
-.h10-ar-flag { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 999px; background: #8a5316; color: var(--nds-white); font-style: normal; font-size: 9px; font-weight: 800; }
+.h10-ar-flag { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 999px; background: var(--nds-warning-text); color: var(--nds-white); font-style: normal; font-size: 9px; font-weight: 800; }
 /* Absence, said once and the same way everywhere: no portfolio, no product line, no reported
    delivery. It is a measurement, not a placeholder, and never the same glyph as a zero. */
 .h10-ar-nd { font-size: 11px; font-style: italic; color: #667080; }
@@ -2680,7 +2680,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; max-width: 560px; margin: 0 auto; padding: 8px 0; }
 .h10-ar-empty b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-ar-empty span { font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-ar-empty.bad b { color: #8a5316; }
+.h10-ar-empty.bad b { color: var(--nds-warning-text); }
 .h10-ar-empty.refused b { color: #414a7a; }
 
 @media (max-width: 1100px) {
@@ -2699,8 +2699,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-month { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; }
 .h10-bsp-month b { min-width: 104px; text-align: center; font-size: 11.5px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-bsp-month button { display: inline-flex; padding: 2px; background: none; border: 0; border-radius: 5px; color: var(--nds-grey-600); cursor: pointer; }
-.h10-bsp-month button:hover { background: var(--nds-blue-100); color: #10457f; }
-.h10-bsp-month .today { padding: 2px 7px; font-size: 10.5px; font-weight: 800; color: #10457f; }
+.h10-bsp-month button:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
+.h10-bsp-month .today { padding: 2px 7px; font-size: 10.5px; font-weight: 800; color: var(--nds-info-text); }
 
 /* ── the plan editor ──────────────────────────────────────────────────────────────────────── */
 .h10-bsp-plan { display: flex; flex-direction: column; gap: 10px; }
@@ -2719,10 +2719,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-in:disabled { background: var(--nds-grey-25); color: #667080; }
 
 .h10-bsp-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-bsp-btn:hover:not(:disabled) { background: var(--nds-blue-100); color: #10457f; border-color: var(--nds-blue-600); }
+.h10-bsp-btn:hover:not(:disabled) { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
 .h10-bsp-btn:disabled { opacity: 1; color: var(--nds-grey-450); cursor: not-allowed; }
 .h10-bsp-btn.primary { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-bsp-btn.primary:hover:not(:disabled) { background: #10457f; border-color: #10457f; color: var(--nds-white); }
+.h10-bsp-btn.primary:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); color: var(--nds-white); }
 .h10-bsp-btn.primary:disabled { background: #b7cdf0; border-color: #b7cdf0; color: var(--nds-white); }
 .h10-bsp-btn.danger { background: #b3261e; border-color: #b3261e; color: var(--nds-white); }
 .h10-bsp-btn.danger:hover:not(:disabled) { background: #8c1d17; border-color: #8c1d17; }
@@ -2762,7 +2762,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-callist { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; }
 .h10-bsp-callist li { display: flex; align-items: center; gap: 8px; padding: 4px 7px; background: var(--nds-white); border: 1px solid var(--nds-grey-100); border-radius: 6px; font-size: 11.5px; }
 .h10-bsp-callist .d { font-weight: 700; color: var(--nds-grey-900); }
-.h10-bsp-callist .p { font-weight: 800; color: #10457f; font-variant-numeric: tabular-nums; }
+.h10-bsp-callist .p { font-weight: 800; color: var(--nds-info-text); font-variant-numeric: tabular-nums; }
 .h10-bsp-callist .e { margin-left: auto; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
 .h10-bsp-callist button { display: inline-flex; padding: 3px; background: none; border: 0; border-radius: 5px; color: #667080; cursor: pointer; }
 .h10-bsp-callist button:hover:not(:disabled) { background: #fdecea; color: #b3261e; }
@@ -2803,9 +2803,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bsp-note.ok { background: #e7f6ed; color: #0f5132; }
 .h10-bsp-note.ok b { color: #0f5132; }
 .h10-bsp-note.warn { background: #fdf3e3; color: #6b4310; }
-.h10-bsp-note.warn svg { color: #8a5316; }
+.h10-bsp-note.warn svg { color: var(--nds-warning-text); }
 .h10-bsp-note.warn b { color: #6b4310; }
-.h10-bsp-empty.refused .ico { color: #8a5316; }
+.h10-bsp-empty.refused .ico { color: var(--nds-warning-text); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════
    SOV.1 — the Δ, click share, and the colour scale.
@@ -2823,7 +2823,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-stat b { font-size: 15px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; line-height: 1.25; }
 .h10-sov-stat b.up { color: #1c6b3f; }
 .h10-sov-stat b.down { color: #a33a3a; }
-.h10-sov-stat b.none { font-size: 12px; font-weight: 700; color: #8a5316; }
+.h10-sov-stat b.none { font-size: 12px; font-weight: 700; color: var(--nds-warning-text); }
 .h10-sov-stat em { font-style: normal; font-size: 10.5px; color: #667080; font-variant-numeric: tabular-nums; }
 
 /* ── the Δ cell ─────────────────────────────────────────────────────────────────────────────────
@@ -2846,12 +2846,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-sov-share.b1 { color: var(--nds-grey-500); }
 .h10-sov-share.b2 { color: var(--nds-grey-600); }
 .h10-sov-share.b3 { color: var(--nds-grey-900); }
-.h10-sov-share.b4 { color: #10457f; }
+.h10-sov-share.b4 { color: var(--nds-info-text); }
 .h10-sov-share.b5 { color: #0a3a6b; background: var(--nds-blue-100); border-radius: 5px; padding: 1px 6px; }
 .h10-sov-share.thin { color: #9099a6; font-weight: 600; background: none; padding: 0; }
 
 /* ── the stated sort floor ──────────────────────────────────────────────────────────────────── */
-.h10-sov-win i.floor { background: #fff6e8; color: #8a5316; }
+.h10-sov-win i.floor { background: #fff6e8; color: var(--nds-warning-text); }
 
 @media (max-width: 1200px) {
   .h10-sov-summary { gap: 6px; }
@@ -2884,8 +2884,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-cellsub { font-size: 10.5px; font-weight: 600; line-height: 1.4; color: var(--nds-grey-600); }
 .h10-plc-cell.on { border-color: var(--nds-blue-700); background: var(--nds-blue-100); }
 .h10-plc-cell.on .h10-plc-cellnum b, .h10-plc-cell.on .h10-plc-celllab { color: #0e3f74; }
-.h10-plc-cell.on .h10-plc-cellnum i, .h10-plc-cell.on .h10-plc-cellsub { color: #10457f; }
-.h10-plc-cell.warn .h10-plc-cellnum b { color: #8a5316; }
+.h10-plc-cell.on .h10-plc-cellnum i, .h10-plc-cell.on .h10-plc-cellsub { color: var(--nds-info-text); }
+.h10-plc-cell.warn .h10-plc-cellnum b { color: var(--nds-warning-text); }
 .h10-plc-cell.warn.on { border-color: #c68a2e; background: #fff6e8; }
 .h10-plc-cell.warn.on .h10-plc-cellnum b, .h10-plc-cell.warn.on .h10-plc-celllab { color: #6d3f10; }
 .h10-plc-cell.warn.on .h10-plc-cellnum i, .h10-plc-cell.warn.on .h10-plc-cellsub { color: #7a4812; }
@@ -2901,7 +2901,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-plc-lanehead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .h10-plc-lanehead b { font-size: 12px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-plc-lanehead i { font-style: normal; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.h10-plc-lanehead i.good { color: #14724d; }
+.h10-plc-lanehead i.good { color: var(--nds-success-text); }
 .h10-plc-lanehead i.bad { color: #9c2b2b; }
 .h10-plc-lanebar { display: flex; height: 6px; border-radius: 4px; overflow: hidden; background: var(--nds-grey-100); }
 .h10-plc-lanebar span { display: block; height: 100%; }
@@ -2954,8 +2954,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* ── Bidder ────────────────────────────────────────────────────────────────────────────────────
    `No bidder` is the page's largest finding, so it is the one value that carries a colour. */
 .h10-bd-bidder { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-bd-bidder.sched { color: #10457f; }
-.h10-bd-bidder.goal { color: #14724d; }
+.h10-bd-bidder.sched { color: var(--nds-info-text); }
+.h10-bd-bidder.goal { color: var(--nds-success-text); }
 .h10-bd-bidder.manual { color: var(--nds-grey-600); }
 .h10-bd-bidder.none { padding: 1px 7px; border-radius: 5px; background: #fdeee9; color: #9a3412; font-weight: 800; font-size: 10.5px; letter-spacing: .02em; }
 
@@ -2980,13 +2980,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd-states { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .h10-bd-chip { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
 .h10-bd-chip.bad { background: #fdeee9; color: #9a3412; }
-.h10-bd-chip.warn { background: #fff6e8; color: #8a5316; }
+.h10-bd-chip.warn { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-bd-chip.mute { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 
 /* ── Effective max CPC ─────────────────────────────────────────────────────────────────────────
    A derived ceiling, so it is quieter than Bid — which is a fact Amazon holds. */
 .h10-bd-eff { display: inline-flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; color: var(--nds-grey-900); }
-.h10-bd-eff i { font-style: normal; font-size: 9.5px; font-weight: 800; color: #8a5316; }
+.h10-bd-eff i { font-style: normal; font-size: 9.5px; font-weight: 800; color: var(--nds-warning-text); }
 
 /* Campaigns view: how many bids sit above this campaign's own ceiling. */
 .h10-bd-oob { font-variant-numeric: tabular-nums; font-weight: 800; color: #9a3412; }
@@ -3017,7 +3017,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* the number nudger */
 .h10-hv-step { display: inline-flex; align-items: stretch; border: 1px solid var(--nds-grey-150); border-radius: 7px; overflow: hidden; background: var(--nds-white); }
 .h10-hv-step button { width: 24px; border: 0; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; }
-.h10-hv-step button:hover:not(:disabled) { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-step button:hover:not(:disabled) { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-step button:disabled { color: #a8b0ba; cursor: default; }
 .h10-hv-step input { width: 46px; border: 0; text-align: center; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; background: transparent; }
 .h10-hv-step input::-webkit-outer-spin-button, .h10-hv-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -3035,20 +3035,20 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-clear:hover { background: var(--nds-blue-100); color: var(--nds-grey-900); }
 .h10-hv-field { display: flex; flex-direction: column; gap: 4px; }
 .h10-hv-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: #667080; }
-.h10-hv-field.over .cap { color: #10457f; }
-.h10-hv-field .cap i { margin-left: 5px; padding: 0 4px; border-radius: 4px; background: var(--nds-blue-100); color: #10457f; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.h10-hv-field.over .cap { color: var(--nds-info-text); }
+.h10-hv-field .cap i { margin-left: 5px; padding: 0 4px; border-radius: 4px; background: var(--nds-blue-100); color: var(--nds-info-text); font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 
 .h10-hv-acos { display: inline-flex; align-items: center; gap: 6px; }
 .h10-hv-ceil { padding: 4px 8px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-ceil:hover { background: var(--nds-blue-100); color: #10457f; border-color: var(--nds-blue-600); }
-.h10-hv-ceil.off { background: #fff6e8; border-color: #f0dcbe; color: #8a5316; }
+.h10-hv-ceil:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
+.h10-hv-ceil.off { background: #fff6e8; border-color: #f0dcbe; color: var(--nds-warning-text); }
 
 /* the two segmented controls */
 .h10-hv-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: 7px; overflow: hidden; }
 .h10-hv-seg .seg { padding: 5px 10px; border: 0; background: var(--nds-white); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-hv-seg .seg + .seg { border-left: 1px solid var(--nds-grey-150); }
 .h10-hv-seg .seg:hover { background: var(--nds-grey-75); }
-.h10-hv-seg .seg.on { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-seg .seg.on { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 /* ── the attrition: what each criterion removed ───────────────────────────────────────────────
    A single surviving count tells you nothing about which knob to turn. */
@@ -3056,16 +3056,16 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-attr .base { color: #667080; }
 .h10-hv-attr .stp { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 8px; background: var(--nds-grey-75); border-radius: 7px; }
 .h10-hv-attr .stp b { font-weight: 700; color: var(--nds-grey-900); }
-.h10-hv-attr .stp i { font-style: normal; font-weight: 800; color: #8a5316; font-variant-numeric: tabular-nums; }
+.h10-hv-attr .stp i { font-style: normal; font-weight: 800; color: var(--nds-warning-text); font-variant-numeric: tabular-nums; }
 .h10-hv-attr .stp.nil i { color: #667080; font-weight: 600; }
 /* A step that removed a NEW candidate is the one to look at: `new` is the only status that
    represents something to create. */
 .h10-hv-attr .stp.new { background: #fff6e8; }
 .h10-hv-attr .stp.new em { font-style: normal; color: #7a4812; }
-.h10-hv-attr .out { margin-left: auto; padding: 3px 10px; background: var(--nds-blue-100); border-radius: 7px; color: #10457f; font-weight: 700; }
+.h10-hv-attr .out { margin-left: auto; padding: 3px 10px; background: var(--nds-blue-100); border-radius: 7px; color: var(--nds-info-text); font-weight: 700; }
 .h10-hv-attr .out b { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
-.h10-hv-critwarn { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; padding: 8px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-critwarn { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; padding: 8px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-hv-critwarn svg { flex: none; margin-top: 3px; }
 .h10-hv-critwarn b { font-weight: 800; color: #7a4812; }
 
@@ -3075,18 +3075,18 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-pol .txt svg { flex: none; margin-top: 3px; color: #667080; }
 .h10-hv-pol .txt b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-pol .act { display: inline-flex; align-items: center; gap: 8px; }
-.h10-hv-pol .ok { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: #14724d; }
+.h10-hv-pol .ok { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: var(--nds-success-text); }
 .h10-hv-save { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-blue-600); border: 1px solid var(--nds-blue-600); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-white); cursor: pointer; }
-.h10-hv-save:hover:not(:disabled) { background: #10457f; border-color: #10457f; }
+.h10-hv-save:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); }
 .h10-hv-save:disabled { opacity: .6; cursor: default; }
 .h10-hv-unset { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-unset:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: #8a5316; }
+.h10-hv-unset:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: var(--nds-warning-text); }
 
 /* D4 — a save changes what every operator in that scope sees by default, so it gets a full
    sentence rather than a tooltip. */
-.h10-hv-critsay { margin: 9px 0 0; padding: 8px 11px; background: var(--nds-blue-100); border-radius: 8px; font-size: 12px; line-height: 1.65; color: #10457f; }
+.h10-hv-critsay { margin: 9px 0 0; padding: 8px 11px; background: var(--nds-blue-100); border-radius: 8px; font-size: 12px; line-height: 1.65; color: var(--nds-info-text); }
 .h10-hv-critsay b { font-weight: 800; color: #0d3763; }
-.h10-hv-critsay code { padding: 0 4px; border-radius: 4px; background: var(--nds-white); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #10457f; }
+.h10-hv-critsay code { padding: 0 4px; border-radius: 4px; background: var(--nds-white); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-info-text); }
 
 @media (max-width: 1200px) {
   .h10-hv-attr .out { margin-left: 0; }
@@ -3101,13 +3101,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    amber #8a5316 are already the fresh/stale colours on the age chip, so a share that fell reads the
    same way as a number that needs attention elsewhere on the page. */
 .h10-kt-delta { display: inline-flex; align-items: baseline; gap: 6px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
-.h10-kt-delta .up { font-weight: 700; color: #14724d; }
-.h10-kt-delta .down { font-weight: 700; color: #8a5316; }
+.h10-kt-delta .up { font-weight: 700; color: var(--nds-success-text); }
+.h10-kt-delta .down { font-weight: 700; color: var(--nds-warning-text); }
 .h10-kt-delta .flat { font-weight: 700; color: var(--nds-grey-600); }
 /* The gap. Neutral at 7 days, amber past it — 9 of 96 rows span 14–35 days and calling those a
    week-over-week change is the defect this page keeps removing. */
 .h10-kt-delta i { font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-kt-delta i.wide { background: #fff6e8; color: #8a5316; }
+.h10-kt-delta i.wide { background: #fff6e8; color: var(--nds-warning-text); }
 
 .h10-kt-spend { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--nds-grey-900); }
 
@@ -3127,7 +3127,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngd-rm { margin-left: 8px; padding: 1px 7px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 800; color: #8a2020; cursor: pointer; }
 .h10-ngd-rm:hover { background: #fdeeee; border-color: #d99; }
 .h10-ngd-bulk { margin-left: auto; padding: 2px 8px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 6px; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ngd-bulk:hover { background: var(--nds-blue-100); color: #10457f; border-color: var(--nds-blue-600); }
+.h10-ngd-bulk:hover { background: var(--nds-blue-100); color: var(--nds-info-text); border-color: var(--nds-blue-600); }
 
 /* ── the dialog ──────────────────────────────────────────────────────────────────────────────── */
 .h10-ngr-back { position: fixed; inset: 0; z-index: 1300; background: rgba(28, 37, 48, .42); border: 0; padding: 0; cursor: pointer; }
@@ -3140,7 +3140,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngr-head { position: sticky; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 0 12px; background: var(--nds-white); border-bottom: 1px solid var(--nds-grey-150); }
 .h10-ngr-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-ngr-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ngr-close:hover:not(:disabled) { background: var(--nds-blue-100); color: #10457f; }
+.h10-ngr-close:hover:not(:disabled) { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-ngr-close:disabled { opacity: .5; cursor: not-allowed; }
 
 .h10-ngr-lede { margin: 14px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--nds-grey-900); }
@@ -3153,7 +3153,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
   border-radius: 8px; font-size: 12px; line-height: 1.6;
 }
 .h10-ngr-rem svg, .h10-ngr-warn svg, .h10-ngr-note svg, .h10-ngr-bad svg { flex: none; margin-top: 3px; }
-.h10-ngr-rem { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
+.h10-ngr-rem { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
 /* Irreversibility is the loudest thing in this dialog, and it is the only red. */
 .h10-ngr-warn { background: #fdeeee; border: 1px solid #e8c4c4; color: #8a2020; }
 .h10-ngr-note { background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); color: var(--nds-grey-600); }
@@ -3166,7 +3166,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-ngr-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
 .h10-ngr-pick .seg { padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-ngr-pick .seg.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: #10457f; }
+.h10-ngr-pick .seg.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: var(--nds-info-text); }
 
 .h10-ngr-reason { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 0; }
 .h10-ngr-reason span { font-size: 11px; font-weight: 700; color: #667080; }
@@ -3181,12 +3181,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngr-sum .cell b { font-size: 17px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-ngr-sum .cell i { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-ngr-sum .cell.retired { background: var(--nds-blue-100); }
-.h10-ngr-sum .cell.retired b { color: #10457f; }
+.h10-ngr-sum .cell.retired b { color: var(--nds-info-text); }
 .h10-ngr-sum .cell.local { background: #e7f5ed; }
-.h10-ngr-sum .cell.local b { color: #14724d; }
+.h10-ngr-sum .cell.local b { color: var(--nds-success-text); }
 /* 🔴 A refusal is a FACT, not an error, and must not look like a success that has not refreshed. */
 .h10-ngr-sum .cell.refused { background: #fff6e8; }
-.h10-ngr-sum .cell.refused b { color: #8a5316; }
+.h10-ngr-sum .cell.refused b { color: var(--nds-warning-text); }
 .h10-ngr-sum .cell.failed { background: #fdeeee; }
 .h10-ngr-sum .cell.failed b { color: #8a2020; }
 
@@ -3195,7 +3195,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ngr-outcomes li.refused { background: #fff6e8; border-color: #f0dcbe; }
 .h10-ngr-outcomes li.failed { background: #fdeeee; border-color: #e8c4c4; }
 .h10-ngr-outcomes .k { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 800; color: var(--nds-grey-600); white-space: nowrap; }
-.h10-ngr-outcomes li.refused .k { color: #8a5316; }
+.h10-ngr-outcomes li.refused .k { color: var(--nds-warning-text); }
 .h10-ngr-outcomes li.failed .k { color: #8a2020; }
 .h10-ngr-outcomes .sc { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ngr-outcomes .rs { grid-column: 1 / -1; font-size: 10.5px; line-height: 1.5; color: #667080; }
@@ -3241,8 +3241,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-drtable th.n, .h10-kt-drtable td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .h10-kt-drtable td { padding: 6px 8px; border-bottom: 1px solid var(--nds-grey-75); color: var(--nds-grey-900); }
 .h10-kt-drtable td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-grey-600); }
-.h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #14724d; background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
-.h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #8a5316; background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
+.h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-success-text); background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
+.h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-warning-text); background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
 
 /* the campaign list — collapsed, because `giacca moto` has 53 campaigns and 73 ad groups */
 .h10-kt-drcamps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -3251,7 +3251,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-drcamps .row:hover { background: var(--nds-grey-25); }
 .h10-kt-drcamps .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .h10-kt-drcamps .st { flex-shrink: 0; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-grey-600); background: var(--nds-grey-75); padding: 1px 6px; border-radius: 5px; }
-.h10-kt-drcamps .st[data-s="ENABLED"] { color: #14724d; background: #e7f5ed; }
+.h10-kt-drcamps .st[data-s="ENABLED"] { color: var(--nds-success-text); background: #e7f5ed; }
 .h10-kt-drcamps .ct, .h10-kt-drcamps .mt, .h10-kt-drcamps .bid { flex-shrink: 0; font-size: 10.5px; color: #667080; font-variant-numeric: tabular-nums; }
 .h10-kt-drcamps .bid { font-weight: 700; color: var(--nds-grey-900); }
 .h10-kt-drcamps .groups { list-style: none; margin: 0; padding: 0 10px 7px 30px; display: flex; flex-direction: column; gap: 4px; background: var(--nds-grey-25); }
@@ -3268,14 +3268,14 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-tc .spend-bar { fill: var(--nds-blue-600); opacity: .82; }
 /* the feed's silence: shaded, named, and behind everything else */
 .h10-kt-tc .silence rect { fill: #fff6e8; }
-.h10-kt-tc .silence text { font-size: 9.5px; fill: #8a5316; font-weight: 600; }
+.h10-kt-tc .silence text { font-size: 9.5px; fill: var(--nds-warning-text); font-weight: 600; }
 .h10-kt-tc-none { margin: 0; font-size: 12px; color: #667080; }
 .h10-kt-tc-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 6px 0 0; font-size: 10.5px; color: #667080; }
 .h10-kt-tc-legend .k { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--nds-grey-600); }
 .h10-kt-tc-legend .k::before { content: ''; width: 10px; height: 10px; border-radius: 2px; }
 .h10-kt-tc-legend .k.share::before { background: #0b2447; }
 .h10-kt-tc-legend .k.spend::before { background: var(--nds-blue-600); }
-.h10-kt-tc-legend .note { color: #8a5316; }
+.h10-kt-tc-legend .note { color: var(--nds-warning-text); }
 
 /* the drawer's own copies of the page's shared note styles — it portals out, so it cannot rely on
    anything scoped to .h10-rules-page above it */
@@ -3293,28 +3293,28 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-dest .ag { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-hv-dest i { display: flex; align-items: center; gap: 5px; font-style: normal; font-size: 10.5px; color: #667080; min-width: 0; }
 .h10-hv-dest i > b.rl { flex: none; padding: 0 5px; border-radius: 4px; background: var(--nds-grey-75); color: #667080; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
-.h10-hv-dest i > b.rl.exact { background: #e7f5ed; color: #14724d; }
+.h10-hv-dest i > b.rl.exact { background: #e7f5ed; color: var(--nds-success-text); }
 
 .h10-hv-destbtn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 2px 6px; background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer; min-width: 0; width: 100%; }
 .h10-hv-destbtn:hover { background: var(--nds-blue-100); border-color: var(--nds-blue-600); }
-.h10-hv-destbtn i.src { font-style: normal; padding: 0 5px; border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; background: #e7f5ed; color: #14724d; }
+.h10-hv-destbtn i.src { font-style: normal; padding: 0 5px; border-radius: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; background: #e7f5ed; color: var(--nds-success-text); }
 .h10-hv-destbtn i.src.resolved-unique { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 /* An unresolved destination is an ACTION, not a value — it reads as something to do. */
-.h10-hv-destbtn .pickme { padding: 3px 8px; border-radius: 6px; background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; font-size: 11px; font-weight: 800; }
+.h10-hv-destbtn .pickme { padding: 3px 8px; border-radius: 6px; background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; }
 .h10-hv-destbtn.amb:hover .pickme { background: #ffeed3; }
-.h10-hv-destnone { font-size: 11.5px; font-weight: 700; color: #8a5316; }
+.h10-hv-destnone { font-size: 11.5px; font-weight: 700; color: var(--nds-warning-text); }
 
 /* 🔴 the coupling, in one cell */
 .h10-hv-neg2 { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; }
-.h10-hv-neg2.yes { background: #e7f5ed; color: #14724d; }
-.h10-hv-neg2.no { background: #fff6e8; color: #8a5316; }
+.h10-hv-neg2.yes { background: #e7f5ed; color: var(--nds-success-text); }
+.h10-hv-neg2.no { background: #fff6e8; color: var(--nds-warning-text); }
 
 /* destination-relative status — never replaces the source-relative one */
 .h10-hv-dst { display: inline-block; padding: 1px 6px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-hv-dst.will-create { background: #e7f5ed; color: #14724d; }
+.h10-hv-dst.will-create { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-hv-dst.undecided { background: var(--nds-grey-75); color: #667080; }
-.h10-hv-dst.no-destination { background: #fff6e8; color: #8a5316; }
-.h10-hv-dst.destination-local-only { background: #fff6e8; color: #8a5316; }
+.h10-hv-dst.no-destination { background: #fff6e8; color: var(--nds-warning-text); }
+.h10-hv-dst.destination-local-only { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-hv-dst.would-duplicate { background: #fdecec; color: #9a2c2c; }
 
 /* ── the section summary ─────────────────────────────────────────────────────────────────── */
@@ -3327,10 +3327,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-dcell:hover { border-color: var(--nds-blue-600); }
 .h10-hv-dcell b { font-size: 18px; font-weight: 800; line-height: 1.15; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-hv-dcell span { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); }
-.h10-hv-dcell.warn b { color: #8a5316; }
+.h10-hv-dcell.warn b { color: var(--nds-warning-text); }
 .h10-hv-dcell.on { border-color: var(--nds-blue-600); background: var(--nds-blue-100); }
 
-.h10-hv-destsum .couple { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-destsum .couple { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-hv-destsum .couple svg { flex: none; margin-top: 3px; }
 .h10-hv-destsum .couple b { font-weight: 800; color: #7a4812; }
 .h10-hv-destsum .couple.compete { background: #fdecec; border-color: #f0c9c9; color: #9a2c2c; }
@@ -3344,22 +3344,22 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-picker .hd i { display: block; margin-top: 2px; font-style: normal; font-size: 11.5px; color: #667080; }
 .h10-hv-picker .hd i b { font-size: 11.5px; color: var(--nds-grey-900); }
 .h10-hv-picker .cls { padding: 4px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-picker .cls:hover { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-picker .cls:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 .h10-hv-picker .negate { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 9px 11px; border-radius: 8px; font-size: 12px; line-height: 1.6; }
 .h10-hv-picker .negate .tag { flex: none; padding: 1px 7px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
 .h10-hv-picker .negate.yes { background: #e7f5ed; color: #0f5b3d; }
-.h10-hv-picker .negate.yes .tag { background: #14724d; color: var(--nds-white); }
+.h10-hv-picker .negate.yes .tag { background: var(--nds-success-text); color: var(--nds-white); }
 .h10-hv-picker .negate.no { background: #fff6e8; color: #7a4812; }
-.h10-hv-picker .negate.no .tag { background: #8a5316; color: var(--nds-white); }
+.h10-hv-picker .negate.no .tag { background: var(--nds-warning-text); color: var(--nds-white); }
 
 .h10-hv-picker .compete { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 10px; padding: 9px 11px; background: #fdecec; border: 1px solid #f0c9c9; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #9a2c2c; }
 .h10-hv-picker .compete svg { flex: none; margin-top: 3px; }
 .h10-hv-picker .compete b { font-weight: 800; color: #7d1f1f; }
-.h10-hv-picker .none { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-picker .none { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-hv-picker .none svg { flex: none; margin-top: 3px; }
 .h10-hv-picker .none b { font-weight: 800; color: #7a4812; }
-.h10-hv-picker .lnk { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #10457f; text-decoration: underline; background: none; border: 0; padding: 0; font-size: inherit; cursor: pointer; }
+.h10-hv-picker .lnk { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--nds-info-text); text-decoration: underline; background: none; border: 0; padding: 0; font-size: inherit; cursor: pointer; }
 .h10-hv-picker .lead { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-hv-picker .lead b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-picker .lead code { padding: 0 4px; border-radius: 4px; background: var(--nds-grey-75); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
@@ -3367,18 +3367,18 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-picker .opts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
 .h10-hv-picker .opts .pick { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) auto auto; align-items: center; gap: 12px; width: 100%; padding: 8px 11px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 8px; cursor: pointer; text-align: left; }
 .h10-hv-picker .opts .pick:hover:not(:disabled) { border-color: var(--nds-blue-600); background: var(--nds-grey-25); }
-.h10-hv-picker .opts li.on .pick { border-color: #14724d; background: #e7f5ed; }
+.h10-hv-picker .opts li.on .pick { border-color: var(--nds-success-text); background: #e7f5ed; }
 .h10-hv-picker .opts .why { font-size: 11px; line-height: 1.45; color: #667080; }
 .h10-hv-picker .opts .clamp { font-size: 11px; font-weight: 700; color: var(--nds-grey-600); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.h10-hv-picker .opts .on-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; color: #14724d; }
+.h10-hv-picker .opts .on-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; color: var(--nds-success-text); }
 .h10-hv-picker .opts .go { color: #a8b0ba; }
 
 .h10-hv-picker .neg { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; font-size: 12px; line-height: 1.55; color: var(--nds-grey-600); cursor: pointer; }
 .h10-hv-picker .neg input { margin-top: 2px; }
 .h10-hv-picker .neg b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-picker .rm { display: inline-flex; align-items: center; gap: 5px; margin: 10px 0 0; padding: 6px 11px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-picker .rm:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: #8a5316; }
-.h10-hv-picker .ok { display: flex; align-items: center; gap: 5px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: #14724d; }
+.h10-hv-picker .rm:hover:not(:disabled) { background: #fff6e8; border-color: #f0dcbe; color: var(--nds-warning-text); }
+.h10-hv-picker .ok { display: flex; align-items: center; gap: 5px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: var(--nds-success-text); }
 .h10-hv-picker .bad { display: flex; align-items: center; gap: 5px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: #9a2c2c; }
 
 @media (max-width: 1200px) {
@@ -3399,7 +3399,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-nga-head p { margin: 0; font-size: 12px; color: var(--nds-grey-600); }
 .h10-nga-head p b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-nga-win { margin-left: 5px; padding: 2px 7px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 6px; font: inherit; font-size: 11px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-nga-win.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: #10457f; }
+.h10-nga-win.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: var(--nds-info-text); }
 
 .h10-nga-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0 0; }
 .h10-nga-tabs .cell { display: flex; flex-direction: column; gap: 1px; align-items: flex-start; padding: 10px 12px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 10px; text-align: left; cursor: pointer; }
@@ -3407,9 +3407,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-nga-tabs .cell span { font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); }
 /* Zero is a RESULT here, so it is green rather than grey — grey reads as "not measured". */
 .h10-nga-tabs .cell.ok { background: #e7f5ed; border-color: #bfe0cd; }
-.h10-nga-tabs .cell.ok b { color: #14724d; }
+.h10-nga-tabs .cell.ok b { color: var(--nds-success-text); }
 .h10-nga-tabs .cell.warn { background: #fff6e8; border-color: #f0dcbe; }
-.h10-nga-tabs .cell.warn b { color: #8a5316; }
+.h10-nga-tabs .cell.warn b { color: var(--nds-warning-text); }
 .h10-nga-tabs .cell.hot { background: #fdeeee; border-color: #e8c4c4; }
 .h10-nga-tabs .cell.hot b { color: #8a2020; }
 .h10-nga-tabs .cell.on { outline: 2px solid var(--nds-blue-600); outline-offset: -2px; }
@@ -3425,21 +3425,21 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-nga-rows .lnk { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; font-weight: 800; color: var(--nds-grey-900); cursor: pointer; }
 .h10-nga-rows .lnk:hover { color: var(--nds-blue-600); text-decoration: underline; }
 .h10-nga-rows .t em { font-style: normal; padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; }
-.h10-nga-rows .t em.mk { background: var(--nds-blue-100); color: #10457f; }
-.h10-nga-rows .t em.thin { background: #fff6e8; color: #8a5316; }
+.h10-nga-rows .t em.mk { background: var(--nds-blue-100); color: var(--nds-info-text); }
+.h10-nga-rows .t em.thin { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-nga-rows .sc { font-size: 11px; color: #667080; }
 .h10-nga-rows .m { font-size: 11.5px; line-height: 1.55; color: var(--nds-grey-600); }
 .h10-nga-rows .three { font-size: 11px; color: #667080; font-variant-numeric: tabular-nums; }
 .h10-nga-rows .three b { font-weight: 800; color: var(--nds-grey-900); }
 /* The question, not a claim: what removing it MIGHT recover. */
-.h10-nga-rows .q { font-size: 11.5px; font-style: italic; color: #8a5316; }
+.h10-nga-rows .q { font-size: 11.5px; font-style: italic; color: var(--nds-warning-text); }
 .h10-nga-act { align-self: flex-start; margin-top: 3px; padding: 3px 9px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 6px; font: inherit; font-size: 11px; font-weight: 800; color: #8a2020; cursor: pointer; }
 .h10-nga-act:hover { background: #fdeeee; border-color: #d99; }
 /* Hidden, not disabled, is the page's law — so a locked row states the reason instead of showing
    a button that would silently refuse. */
 .h10-nga-locked { align-self: flex-start; margin-top: 3px; font-size: 10.5px; font-style: italic; color: #667080; }
 
-.h10-nga-zero { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 9px; font-size: 12px; line-height: 1.6; color: #14724d; }
+.h10-nga-zero { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; background: #e7f5ed; border: 1px solid #bfe0cd; border-radius: 9px; font-size: 12px; line-height: 1.6; color: var(--nds-success-text); }
 .h10-nga-zero svg { flex: none; margin-top: 3px; }
 .h10-nga-zero b { font-weight: 800; }
 /* "Nothing to check" is not "nothing wrong" — neutral, not green, so an absence of subjects
@@ -3466,14 +3466,14 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    popover at z-index 200 — this dialog contains no select, by design. */
 
 .h10-hv-promote { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--nds-blue-600); border: 1px solid var(--nds-blue-600); border-radius: 7px; font-size: 12px; font-weight: 700; color: var(--nds-white); cursor: pointer; }
-.h10-hv-promote:hover { background: #10457f; border-color: #10457f; }
+.h10-hv-promote:hover { background: var(--nds-info-text); border-color: var(--nds-info-text); }
 
 .h10-hv-wmodal { position: fixed; inset: 0; z-index: 150; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(18, 26, 36, .45); }
 .h10-hv-wmodal .card { width: min(920px, 100%); max-height: 86vh; overflow-y: auto; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; padding: 16px 18px; box-shadow: 0 18px 48px rgba(18, 26, 36, .22); }
 .h10-hv-wmodal .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
 .h10-hv-wmodal .hd b { font-size: 15px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-wmodal .x { padding: 4px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 6px; color: var(--nds-grey-600); cursor: pointer; line-height: 0; }
-.h10-hv-wmodal .x:hover { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-wmodal .x:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-wmodal .load { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--nds-grey-600); }
 .h10-hv-wmodal .bad { display: flex; align-items: center; gap: 7px; padding: 9px 11px; background: #fdecec; border: 1px solid #f0c9c9; border-radius: 8px; font-size: 12px; color: #9a2c2c; }
 .h10-hv-wmodal .spin { animation: h10hvspin 1s linear infinite; }
@@ -3481,15 +3481,15 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* D4 — the sentence, before anything happens */
 .h10-hv-wmodal .say { padding: 12px 14px; background: var(--nds-blue-100); border-radius: 10px; margin: 0 0 12px; }
-.h10-hv-wmodal .say p { margin: 0; font-size: 13px; line-height: 1.65; color: #10457f; }
+.h10-hv-wmodal .say p { margin: 0; font-size: 13px; line-height: 1.65; color: var(--nds-info-text); }
 .h10-hv-wmodal .say p + p { margin-top: 9px; }
 .h10-hv-wmodal .say b { font-weight: 800; color: #0d3763; }
 .h10-hv-wmodal .say .note { font-size: 11.5px; color: var(--nds-grey-600); }
 .h10-hv-wmodal .say .note code { padding: 0 4px; border-radius: 4px; background: var(--nds-white); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.h10-hv-wmodal .rev { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: #8a5316; }
+.h10-hv-wmodal .rev { display: flex; align-items: flex-start; gap: 7px; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-hv-wmodal .rev svg { flex: none; margin-top: 3px; }
 .h10-hv-wmodal .rev b { font-weight: 800; color: #7a4812; }
-.h10-hv-wmodal .lnk { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #10457f; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.h10-hv-wmodal .lnk { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--nds-info-text); text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 
 /* one row per candidate — what would happen to each, or why it cannot */
 .h10-hv-wmodal .rowlist { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -3503,27 +3503,27 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-wmodal .rowlist .bid { text-align: right; font-variant-numeric: tabular-nums; }
 .h10-hv-wmodal .rowlist .bid b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
 .h10-hv-wmodal .rowlist .bid i { display: block; font-style: normal; font-size: 10px; color: #667080; }
-.h10-hv-wmodal .rowlist .bid i.clamp { color: #8a5316; font-weight: 700; }
+.h10-hv-wmodal .rowlist .bid i.clamp { color: var(--nds-warning-text); font-weight: 700; }
 .h10-hv-wmodal .rowlist .neg { padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
-.h10-hv-wmodal .rowlist .neg.yes { background: #e7f5ed; color: #14724d; }
-.h10-hv-wmodal .rowlist .neg.no { background: #fff6e8; color: #8a5316; }
-.h10-hv-wmodal .rowlist .why { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.55; color: #8a5316; }
+.h10-hv-wmodal .rowlist .neg.yes { background: #e7f5ed; color: var(--nds-success-text); }
+.h10-hv-wmodal .rowlist .neg.no { background: #fff6e8; color: var(--nds-warning-text); }
+.h10-hv-wmodal .rowlist .why { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.55; color: var(--nds-warning-text); }
 .h10-hv-wmodal .rowlist .why svg { flex: none; margin-top: 2px; }
 .h10-hv-wmodal .rowlist .why b { font-weight: 800; color: #7a4812; }
 .h10-hv-wmodal .rowlist .why i { font-style: normal; color: #667080; }
 
 .h10-hv-wmodal .act { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .h10-hv-wmodal .cancel { padding: 8px 14px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 8px; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-wmodal .cancel:hover { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-wmodal .cancel:hover { background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-wmodal .go { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--nds-blue-600); border: 1px solid var(--nds-blue-600); border-radius: 8px; font-size: 12.5px; font-weight: 800; color: var(--nds-white); cursor: pointer; }
-.h10-hv-wmodal .go:hover:not(:disabled) { background: #10457f; border-color: #10457f; }
+.h10-hv-wmodal .go:hover:not(:disabled) { background: var(--nds-info-text); border-color: var(--nds-info-text); }
 .h10-hv-wmodal .go:disabled { opacity: .55; cursor: default; }
 
 /* C7 — three outcomes, never one "done" */
 .h10-hv-wmodal .sum { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .h10-hv-wmodal .sum b { padding: 4px 11px; border-radius: 7px; font-size: 12.5px; font-weight: 800; }
-.h10-hv-wmodal .sum b.ok { background: #e7f5ed; color: #14724d; }
-.h10-hv-wmodal .sum b.ref { background: #fff6e8; color: #8a5316; }
+.h10-hv-wmodal .sum b.ok { background: #e7f5ed; color: var(--nds-success-text); }
+.h10-hv-wmodal .sum b.ref { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-hv-wmodal .sum b.fail { background: #fdecec; color: #9a2c2c; }
 .h10-hv-wmodal .sum i { font-style: normal; font-size: 11px; color: #667080; }
 .h10-hv-wmodal .outs { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -3533,9 +3533,9 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-wmodal .outs .t { font-weight: 700; color: var(--nds-grey-900); }
 .h10-hv-wmodal .outs .d { color: var(--nds-grey-600); line-height: 1.55; }
 .h10-hv-wmodal .outs .d b { font-weight: 800; }
-.h10-hv-wmodal .outs .d b.ok { color: #14724d; }
-.h10-hv-wmodal .outs .d b.warn { color: #8a5316; }
-.h10-hv-wmodal .outs .d b.ref { color: #8a5316; }
+.h10-hv-wmodal .outs .d b.ok { color: var(--nds-success-text); }
+.h10-hv-wmodal .outs .d b.warn { color: var(--nds-warning-text); }
+.h10-hv-wmodal .outs .d b.ref { color: var(--nds-warning-text); }
 .h10-hv-wmodal .outs .d b.fail { color: #9a2c2c; }
 .h10-hv-wmodal .outs .d b.muted { color: #667080; font-weight: 600; }
 .h10-hv-wmodal .outs .d i { font-style: normal; font-size: 10.5px; color: #667080; }
@@ -3553,29 +3553,29 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-viewseg .seg { padding: 7px 16px; border: 0; background: var(--nds-white); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-hv-viewseg .seg + .seg { border-left: 1px solid var(--nds-grey-150); }
 .h10-hv-viewseg .seg:hover { background: var(--nds-grey-75); }
-.h10-hv-viewseg .seg.on { background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-viewseg .seg.on { background: var(--nds-blue-100); color: var(--nds-info-text); }
 
 /* 🔴 the four outcomes — four different failures, so four different colours, and the two that are
    OUR fault (never reached Amazon) read as warnings rather than as neutral facts. */
 .h10-hv-oc { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 800; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-hv-oc.served { background: #e7f5ed; color: #14724d; }
+.h10-hv-oc.served { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-hv-oc.never-served { background: var(--nds-grey-75); color: #667080; }
 .h10-hv-oc.not-measured { background: var(--nds-grey-75); color: #667080; font-style: italic; }
-.h10-hv-oc.local-only { background: #fff6e8; color: #8a5316; }
+.h10-hv-oc.local-only { background: #fff6e8; color: var(--nds-warning-text); }
 
 /* opening bid → current bid. Two numbers, never a chart — session 9 owns the curve. */
 .h10-hv-bid2 { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; }
 .h10-hv-bid2 b { font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); }
 /* the tilde marks a RECONSTRUCTED opening bid, so "we recorded it" and "we inferred it" are not
    the same number on screen. */
-.h10-hv-bid2 b em { font-style: normal; margin-left: 2px; color: #8a5316; font-weight: 800; }
+.h10-hv-bid2 b em { font-style: normal; margin-left: 2px; color: var(--nds-warning-text); font-weight: 800; }
 .h10-hv-bid2 i { font-style: normal; font-size: 10.5px; color: #667080; }
 
 /* the comparison table — dense, and the harvested rows are the ones being asked about */
 .h10-hv-cmp { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 11.5px; }
 .h10-hv-cmp th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--nds-grey-150); font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
 .h10-hv-cmp td { padding: 5px 8px; border-bottom: 1px solid var(--nds-grey-75); color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
-.h10-hv-cmp tr.me td { background: var(--nds-blue-100); color: #10457f; font-weight: 700; }
+.h10-hv-cmp tr.me td { background: var(--nds-blue-100); color: var(--nds-info-text); font-weight: 700; }
 .h10-hv-conf { margin: 9px 0 0; padding-left: 18px; font-size: 11.5px; line-height: 1.6; color: #667080; }
 .h10-hv-conf li + li { margin-top: 3px; }
 
@@ -3921,7 +3921,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* Closed: one line and an affordance, never a control that looks live and is not. */
 .h10-hva-shut { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 14px 0 0; padding: 10px 14px; border: 1px solid var(--nds-grey-150); border-radius: 8px; background: var(--nds-white); }
 .h10-hva-shut > span { font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.5; }
-.h10-hva-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; font-size: 12.5px; font-weight: 800; color: #10457f; cursor: pointer; }
+.h10-hva-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; font-size: 12.5px; font-weight: 800; color: var(--nds-info-text); cursor: pointer; }
 .h10-hva-toggle:hover { text-decoration: underline; }
 .h10-hva-toggle.on { color: var(--nds-grey-900); }
 
@@ -3932,13 +3932,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hva-dial { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .h10-hva-dial i { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
 .h10-hva-dial b { font-size: 13px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-hva-dial em { font-style: normal; font-size: 10.5px; font-weight: 800; color: #8a5316; }
+.h10-hva-dial em { font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--nds-warning-text); }
 
 /* The finding the panel exists for. The one loud thing on a panel that spends nothing. */
 .h10-hva-thesis { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; padding: 10px 12px; border: 1px solid #f0d9b5; border-radius: 8px; background: #fff9f0; font-size: 12px; line-height: 1.65; color: var(--nds-grey-600); }
-.h10-hva-thesis > svg { flex: none; margin-top: 2px; color: #8a5316; }
+.h10-hva-thesis > svg { flex: none; margin-top: 2px; color: var(--nds-warning-text); }
 .h10-hva-thesis b { color: var(--nds-grey-900); font-weight: 800; }
-.h10-hva-thesis code { padding: 1px 5px; border-radius: 4px; background: var(--nds-grey-75); font-size: 11px; color: #10457f; }
+.h10-hva-thesis code { padding: 1px 5px; border-radius: 4px; background: var(--nds-grey-75); font-size: 11px; color: var(--nds-info-text); }
 
 /* First column: the actor, its type, and what it is for.
    🔴 Measured on prod: the shared grid puts `white-space: nowrap` on its sticky first column and
@@ -3952,14 +3952,14 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hva-name b { font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); white-space: normal; overflow-wrap: anywhere; }
 .h10-hva-name i { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 100%; font-style: normal; font-size: 10.5px; color: #667080; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; }
 .h10-hva-name .tag { align-self: flex-start; margin-top: 1px; padding: 0 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; background: var(--nds-grey-75); color: var(--nds-grey-600); }
-.h10-hva-name .tag.engine { background: var(--nds-blue-100); color: #10457f; }
-.h10-hva-name .tag.operator { background: #e7f5ed; color: #14724d; }
+.h10-hva-name .tag.engine { background: var(--nds-blue-100); color: var(--nds-info-text); }
+.h10-hva-name .tag.operator { background: #e7f5ed; color: var(--nds-success-text); }
 
 /* A level is never rendered without its ceiling (C2). */
 .h10-hva-lvl { display: inline-flex; flex-direction: column; gap: 0; }
 .h10-hva-lvl .lv { font-size: 12px; font-weight: 800; color: var(--nds-grey-600); }
-.h10-hva-lvl .lv.auto { color: #8a5316; }
-.h10-hva-lvl .lv.propose { color: #10457f; }
+.h10-hva-lvl .lv.auto { color: var(--nds-warning-text); }
+.h10-hva-lvl .lv.propose { color: var(--nds-info-text); }
 .h10-hva-lvl .lv.off { color: #667080; }
 .h10-hva-lvl i { font-style: normal; font-size: 10px; color: #667080; }
 
@@ -3970,20 +3970,20 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hva-n { font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-hva-dash { font-size: 12.5px; color: #667080; }
 .h10-hva-landed { font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
-.h10-hva-landed.short { color: #8a5316; }
+.h10-hva-landed.short { color: var(--nds-warning-text); }
 .h10-hva-ref { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0; font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 800; color: var(--nds-grey-600); }
 .h10-hva-ref i { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: #667080; }
 
 .h10-hva-open { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); font-size: 11px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; white-space: nowrap; }
 .h10-hva-open:hover { background: var(--nds-grey-75); }
-.h10-hva-open.on { border-color: #cfe0f6; background: var(--nds-blue-100); color: #10457f; }
+.h10-hva-open.on { border-color: #cfe0f6; background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hva-open svg { flex: none; }
 
 /* Stated vs executed — the half nothing has ever rendered. */
 .h10-hva-detail { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--nds-grey-150); border-radius: 8px; background: var(--nds-grey-25); }
 .h10-hva-detail .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 18px; }
 .h10-hva-detail h5 { margin: 0 0 6px; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #667080; }
-.h10-hva-code { display: block; padding: 7px 9px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); font-size: 11.5px; color: #10457f; overflow-x: auto; }
+.h10-hva-code { display: block; padding: 7px 9px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); font-size: 11.5px; color: var(--nds-info-text); overflow-x: auto; }
 .h10-hva-none { margin: 0; font-size: 11.5px; font-style: italic; color: #667080; line-height: 1.55; }
 .h10-hva-exec { margin: 0; padding: 0; list-style: none; }
 .h10-hva-exec li { padding: 4px 0; border-bottom: 1px solid var(--nds-grey-100); font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.5; }
@@ -3991,19 +3991,19 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hva-exec li i { display: block; font-style: normal; font-size: 10px; color: #667080; }
 
 .h10-hva-held { margin: 10px 0 0; font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.6; }
-.h10-hva-held b { color: #10457f; font-weight: 800; }
+.h10-hva-held b { color: var(--nds-info-text); font-weight: 800; }
 .h10-hva-clash { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 11px; border: 1px solid #f0d9b5; border-radius: 7px; background: #fff9f0; font-size: 11.5px; line-height: 1.6; color: var(--nds-grey-600); }
-.h10-hva-clash > svg { flex: none; margin-top: 2px; color: #8a5316; }
+.h10-hva-clash > svg { flex: none; margin-top: 2px; color: var(--nds-warning-text); }
 .h10-hva-clash b { color: var(--nds-grey-900); font-weight: 800; }
 
 .h10-hva-gaps, .h10-hva-latent { margin: 10px 0 0; padding: 0; list-style: none; }
 .h10-hva-gaps li, .h10-hva-latent li { padding: 8px 0; border-top: 1px solid var(--nds-grey-100); }
 .h10-hva-gaps li b, .h10-hva-latent li b { font-size: 12px; font-weight: 800; color: var(--nds-grey-900); }
-.h10-hva-gaps li .n, .h10-hva-latent li .n { margin-left: 7px; padding: 1px 6px; border-radius: 5px; background: #fff6e8; font-size: 10.5px; font-weight: 800; color: #8a5316; font-variant-numeric: tabular-nums; }
+.h10-hva-gaps li .n, .h10-hva-latent li .n { margin-left: 7px; padding: 1px 6px; border-radius: 5px; background: #fff6e8; font-size: 10.5px; font-weight: 800; color: var(--nds-warning-text); font-variant-numeric: tabular-nums; }
 .h10-hva-gaps li i, .h10-hva-latent li i { display: block; margin-top: 3px; font-style: normal; font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.6; }
 .h10-hva-gaps li em, .h10-hva-latent li em { display: block; margin-top: 3px; font-style: normal; font-size: 10.5px; font-weight: 700; color: #667080; }
 
-.h10-hva-link { display: inline-flex; align-items: center; gap: 4px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: #10457f; }
+.h10-hva-link { display: inline-flex; align-items: center; gap: 4px; margin: 10px 0 0; font-size: 11.5px; font-weight: 700; color: var(--nds-info-text); }
 .h10-hva-link:hover { text-decoration: underline; }
 
 .h10-hva-foot { margin: 14px 0 0; }
@@ -4011,7 +4011,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hva-reach { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.6; }
 .h10-hva-reach > svg { flex: none; margin-top: 2px; color: #667080; }
 .h10-hva-note { margin: 5px 0 0; font-size: 11.5px; color: #667080; line-height: 1.65; }
-.h10-hva-note code { padding: 1px 5px; border-radius: 4px; background: var(--nds-grey-75); font-size: 11px; color: #10457f; }
+.h10-hva-note code { padding: 1px 5px; border-radius: 4px; background: var(--nds-grey-75); font-size: 11px; color: var(--nds-info-text); }
 .h10-hva-note b { color: var(--nds-grey-600); font-weight: 800; }
 
 @media (max-width: 980px) {
@@ -4812,7 +4812,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* 🔴 The gap between the last audited value and the live bid. Amber, not red: nothing is broken —
    the record is incomplete, which is a different thing and a different response. */
-.h10-bd3-dangle { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 11.5px; line-height: 1.6; color: #8a5316; }
+.h10-bd3-dangle { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; padding: 9px 11px; background: #fff6e8; border: 1px solid #f0dcbe; border-radius: 8px; font-size: 11.5px; line-height: 1.6; color: var(--nds-warning-text); }
 .h10-bd3-dangle svg { flex: none; margin-top: 3px; }
 .h10-bd3-dangle b { font-weight: 800; color: #7a4512; }
 
@@ -4825,7 +4825,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* The undo STATE. Not a button — S4 wires the write, and a disabled control is its own lie. */
 .h10-bd3-undo { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-style: normal; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; background: var(--nds-grey-75); color: #667080; }
-.h10-bd3-undo.ok { background: #e7f5ed; color: #14724d; }
+.h10-bd3-undo.ok { background: #e7f5ed; color: var(--nds-success-text); }
 
 /* The log gained three columns (Who · Why · Landed), so it needs to breathe and to scroll inside
    itself rather than widening the drawer. */
@@ -4916,7 +4916,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-plc3-tallycell b { font-size: 18px; font-weight: 800; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .h10-plc3-tallycell span { font-size: 10.5px; font-weight: 600; line-height: 1.4; color: var(--nds-grey-600); }
 .h10-plc3-tallycell.warn { border-color: #f0dcbe; background: #fff6e8; }
-.h10-plc3-tallycell.warn b { color: #8a5316; }
+.h10-plc3-tallycell.warn b { color: var(--nds-warning-text); }
 .h10-plc3-tallycell.warn span { color: #7a4812; }
 .h10-plc3-tallycell.stop { border-color: #f0c9c9; background: #fdecec; }
 .h10-plc3-tallycell.stop b { color: #8f2828; }
@@ -4931,7 +4931,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-plc3-rows td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-plc3-rows .skip { padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; white-space: nowrap; }
 .h10-plc3-rows .rev { padding: 1px 6px; border-radius: 5px; background: #fff6e8; color: #7a4812; font-size: 10px; font-weight: 800; white-space: nowrap; }
-.h10-plc3-rows .go { padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: #14724d; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.h10-plc3-rows .go { padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: var(--nds-success-text); font-size: 10px; font-weight: 800; white-space: nowrap; }
 
 /* the confirm footer */
 .h10-plc3-pf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--nds-grey-150); }
@@ -4985,7 +4985,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    it is the only red-tinted block on the page.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 
-.h10-sov-decline { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 11.5px; line-height: 1.55; }
+.h10-sov-decline { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11.5px; line-height: 1.55; }
 .h10-sov-decline svg { flex-shrink: 0; margin-top: 2px; }
 .h10-sov-decline b { font-weight: 800; color: #7a4512; }
 .h10-sov-decline .lnk { font: inherit; font-size: inherit; font-weight: 800; color: #7a4512; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
@@ -5028,7 +5028,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-method b { font-weight: 800; color: var(--nds-grey-900); }
 
 /* The approximate marker. Amber, not red: an approximation is not an error. */
-.h10-bsp-approx { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 800; color: #8a5316; }
+.h10-bsp-approx { display: inline-block; margin-left: 5px; font-size: 12px; font-weight: 800; color: var(--nds-warning-text); }
 
 /* ── grid cells ───────────────────────────────────────────────────────────────────────────── */
 .h10-bsp-mkt { font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); }
@@ -5038,7 +5038,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* Over 100% is NORMAL — Amazon overshoots a daily budget and settles the month. It is marked,
    deliberately, in the same amber the approximate flag uses rather than in an error red. */
 .h10-bsp-ratio { font-size: 12px; font-weight: 700; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; }
-.h10-bsp-ratio.over { color: #8a5316; }
+.h10-bsp-ratio.over { color: var(--nds-warning-text); }
 .h10-bsp-lw { font-size: 11.5px; color: var(--nds-grey-600); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-bsp-lw i { font-style: normal; font-weight: 700; color: var(--nds-grey-900); }
 
@@ -5050,7 +5050,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-open:hover { text-decoration: underline; }
 
 /* ── the one affordance that leaves the page (§8.13 · D9) ─────────────────────────────────── */
-.h10-bsp-cause { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: #10457f; text-decoration: none; white-space: nowrap; }
+.h10-bsp-cause { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--nds-info-text); text-decoration: none; white-space: nowrap; }
 .h10-bsp-cause:hover { background: var(--nds-blue-100); border-color: var(--nds-blue-600); }
 
 /* ── the campaign rail ────────────────────────────────────────────────────────────────────── */
@@ -5061,7 +5061,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-days .v { font-weight: 700; color: var(--nds-grey-900); }
 .h10-bsp-days .b { color: #667080; }
 .h10-bsp-days .r { margin-left: auto; font-weight: 800; color: var(--nds-grey-600); }
-.h10-bsp-days li.on .r { color: #8a5316; }
+.h10-bsp-days li.on .r { color: var(--nds-warning-text); }
 
 .h10-bsp-writes { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; }
 .h10-bsp-writes li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 5px 7px; background: var(--nds-white); border: 1px solid var(--nds-grey-100); border-radius: 6px; font-size: 11px; }
@@ -5071,7 +5071,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-bsp-writes .v b { font-weight: 800; color: var(--nds-grey-900); }
 /* PENDING is IN FLIGHT, not failed — 488 of 2,387 writes sit here and a red badge would describe
    a working queue as a broken one (substrate §5.8). */
-.h10-bsp-writes .p { padding: 1px 6px; background: var(--nds-blue-100); border-radius: 5px; font-size: 10px; font-weight: 800; color: #10457f; white-space: nowrap; }
+.h10-bsp-writes .p { padding: 1px 6px; background: var(--nds-blue-100); border-radius: 5px; font-size: 10px; font-weight: 800; color: var(--nds-info-text); white-space: nowrap; }
 
 /* ── HV.10 · the market picker's multi-select ───────────────────────────────────────────────
    Appended at EOF. The checkbox glyph and the commit row only render when a page passes
@@ -5080,7 +5080,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-menu-foot { display: flex; align-items: center; gap: 8px; padding: 7px 10px 3px; margin-top: 4px; border-top: 1px solid var(--nds-grey-150); }
 .h10-menu-foot .mk-cancel { flex: none; padding: 4px 10px; border: 1px solid var(--nds-grey-150); border-radius: 6px; background: var(--nds-white); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .h10-menu-foot .mk-cancel:hover { background: var(--nds-grey-75); }
-.h10-menu-foot .mk-apply { flex: 1; padding: 4px 10px; border: 1px solid #10457f; border-radius: 6px; background: #10457f; font-size: 11.5px; font-weight: 800; color: var(--nds-white); cursor: pointer; text-align: center; }
+.h10-menu-foot .mk-apply { flex: 1; padding: 4px 10px; border: 1px solid var(--nds-info-text); border-radius: 6px; background: var(--nds-info-text); font-size: 11.5px; font-weight: 800; color: var(--nds-white); cursor: pointer; text-align: center; }
 .h10-menu-foot .mk-apply:hover { background: #0d3868; }
 
 /* 🔴 PLC.3 — the bulk trigger's label wrapped onto a second line.
@@ -5147,7 +5147,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-hv-pathway .h10-bktoggle.sm.on span { left: 13px; }
 .h10-hv-detach { border: 0; background: none; color: var(--nds-grey-450); cursor: pointer; display: inline-flex; padding: 2px; border-radius: 5px; }
 .h10-hv-detach:hover { color: var(--nds-red-500); background: #fdecec; }
-.h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: .01em; background: var(--nds-blue-100); color: #10457f; }
+.h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: .01em; background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-mt.neg { background: #fdeceb; color: #a2231d; }
 
 /* ── U7 — an empty-state sentence inside the grid must be allowed to WRAP ──────────────────────
@@ -5290,7 +5290,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    banner is amber for a ceiling refusal. Contrast measured on prod against each cell's own
    ground (reference_contrast_probe_own_background) — figures recorded in the B2 commit. */
 .h10-rg-look { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: #16202b; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.h10-rg-look.unsettled { color: #8a5316; }
+.h10-rg-look.unsettled { color: var(--nds-warning-text); }
 .h10-rg-look.unsettled svg { flex-shrink: 0; }
 .h10-rg-look.none { font-weight: 500; font-style: italic; color: #6b7280; }
 
@@ -5315,7 +5315,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rg-act.waiting:hover, .h10-rg-act.wrote:hover { text-decoration: underline; }
 .h10-rg-act.wrote { color: #16202b; font-weight: 500; }
 .h10-rg-act.wrote em { font-style: normal; font-weight: 500; color: #6b7280; }
-.h10-rg-act.never { color: #8a5316; }
+.h10-rg-act.never { color: var(--nds-warning-text); }
 .h10-rg-act.never svg { flex-shrink: 0; }
 .h10-rg-act.quiet { font-weight: 500; color: #6b7280; }
 .h10-rg-act.unknown { font-weight: 500; font-style: italic; color: #6b7280; }
@@ -5474,7 +5474,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rb-prev .ptable.budp .ptr span:not(.term) { flex: 0 0 96px; }
 .h10-rb-prev .ptable.budp .pthr span:last-child,
 .h10-rb-prev .ptable.budp .ptr .newb { flex: 0 0 168px; }
-.h10-rb-prev .ptr .newb .pnote { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: #8a5316; }
+.h10-rb-prev .ptr .newb .pnote { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: var(--nds-warning-text); }
 .h10-rb-prev .pfoot { margin: 0; padding: 12px 22px 16px; border-top: 1px solid var(--nds-grey-100); font-size: 12px; color: var(--nds-grey-600); }
 .h10-rb-prev .pfoot b { color: var(--nds-grey-900); font-weight: 800; }
 
@@ -5534,7 +5534,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rb-prev .ptable.plcp .ptr .newb { flex: 0 0 150px; }
 /* The engine marker sits UNDER the current value, in the same amber the guardrail note uses —
    both say "this number is not what you think it is". #8a5316 is 5.31:1 on white. */
-.h10-rb-prev .ptr span .pnote.eng { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: #8a5316; }
+.h10-rb-prev .ptr span .pnote.eng { display: block; font-style: normal; font-weight: 600; font-size: 10.5px; color: var(--nds-warning-text); }
 /* The hour + governance sentence: its own line under the census, never inline with it. It
    qualifies every row above, so it must not read as one more count. */
 .h10-rb-prev .pfoot .phour { display: block; margin-top: 7px; color: #626c7c; line-height: 1.55; }
@@ -5588,7 +5588,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    because "this rule cannot act" is not the same register as "here is how this step works".
    Both are declared explicitly — a transparent background would borrow whatever sits behind it. */
 .h10-rb-banner.warn { background: #fdf3e3; color: #4a3b23; }
-.h10-rb-banner.warn svg { color: #8a5316; } /* 5.3:1 on the amber ground; #b06f12 measured 3.73 */
+.h10-rb-banner.warn svg { color: var(--nds-warning-text); } /* 5.3:1 on the amber ground; #b06f12 measured 3.73 */
 .h10-rb-banner.warn b { color: #2f2513; font-weight: 800; }
 
 /* A HELD Create button. Deliberately NOT `:disabled` — a disabled button renders no tooltip and
@@ -5623,7 +5623,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-rb-prev .ptable.ktp .ptr span.down { color: #b0341d; font-weight: 700; }
 /* The per-row suppression tag, under the keyword it belongs to. */
 .h10-rb-prev .ptr .term .pnote.sup {
-  display: block; font-style: normal; font-weight: 700; font-size: 10.5px; color: #8a5316;
+  display: block; font-style: normal; font-weight: 700; font-size: 10.5px; color: var(--nds-warning-text);
 }
 /* The census warning. Amber, block-level, and above the timestamp line. */
 .h10-rb-prev .pfoot .pwarn {
@@ -5644,7 +5644,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
   font-size: 12.5px; line-height: 1.5; color: #4a5462;
 }
 .h10-ktp-strip b { color: var(--nds-grey-900); font-weight: 800; }
-.h10-ktp-strip .warn { color: #8a5316; font-weight: 700; }
+.h10-ktp-strip .warn { color: var(--nds-warning-text); font-weight: 700; }
 .h10-ktp-strip .sep { color: var(--nds-grey-300); }
 
 @media (prefers-color-scheme: dark) {

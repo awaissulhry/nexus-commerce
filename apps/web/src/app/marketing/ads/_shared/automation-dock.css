@@ -47,7 +47,7 @@
 .adock-cat i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .adock-cat.on { background: var(--nds-blue-50); border-color: #c8d8f5; color: #2a5399; }
 
-.adock-err { font-size: 11.5px; color: #9c2f2a; padding: 10px 14px; }
+.adock-err { font-size: 11.5px; color: var(--nds-danger-text); padding: 10px 14px; }
 .adock-loading { font-size: 12px; color: var(--nds-grey-500); padding: 12px 14px; }
 
 .adock-list { list-style: none; margin: 0; padding: 4px 6px; overflow-y: auto; flex: 1; }
@@ -90,7 +90,7 @@
 .adock-notch.on.off { background: #7a869a; }
 .adock-notch.on.observe { background: #4d5b6e; }
 .adock-notch.on.propose { background: #2a5399; }
-.adock-notch.on.auto { background: #14724d; }
+.adock-notch.on.auto { background: var(--nds-success-text); }
 
 /* Drop feedback — applied by ruleDropProps to ANY registered target on any page. */
 .rule-drop-hover { outline: 2px dashed var(--nds-blue-600) !important; outline-offset: -2px; background: var(--nds-blue-50) !important; }

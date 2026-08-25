@@ -2878,7 +2878,7 @@
 .h10-rc-none { color: var(--nds-grey-500); font-size: 12.5px; }
 .h10-rc-num { font-size: 12.5px; color: var(--nds-grey-800); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-rc-bidrule { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12.5px; font-weight: 600; color: var(--nds-grey-700); }
-.h10-rc-bidrule.auto { color: #10457f; }
+.h10-rc-bidrule.auto { color: var(--nds-info-text); }
 .h10-rc-bidrule .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rc-reach { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #7c8595; white-space: nowrap; }
 /* C1 — the merged Bid Rule cell: <algorithm> · <owner>, one line, on both grids.
@@ -2892,14 +2892,14 @@
 .h10-rc-bidrule2 > :nth-child(2)::before { content: ''; display: inline-block; width: 1px; height: 11px; margin-right: 6px; background: var(--nds-grey-200); vertical-align: -1px; }
 .h10-rc-owner { display: inline-flex; align-items: center; gap: 4px; min-width: 0; font-size: 12px; color: #6b7383; }
 .h10-rc-owner .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-rc-owner.auto { color: #10457f; font-weight: 600; }
+.h10-rc-owner.auto { color: var(--nds-info-text); font-weight: 600; }
 /* D2 — Budget Rule, in the same chassis as Bid Rule: 12.5px, 13px icon, 6px gap, ellipsis, and
    `max-width: 100%` rather than a px cap. #3a4452 is 9.87:1 on the #fff row. */
 .h10-rc-bud { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; font-size: 12.5px; color: var(--nds-grey-700); }
 .h10-rc-bud .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A single assigned rule is a LINK to its configuration — H10's own behaviour. #10457f is 9.63:1
    and carries an underline on hover, so the affordance is not colour alone. */
-a.h10-rc-bud.one { color: #10457f; font-weight: 600; text-decoration: none; }
+a.h10-rc-bud.one { color: var(--nds-info-text); font-weight: 600; text-decoration: none; }
 a.h10-rc-bud.one:hover .t { text-decoration: underline; }
 a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 2px; border-radius: 3px; }
 /* An uncommitted staged change. Amber like the staleness chip, because both mean "this is not
@@ -2999,11 +2999,11 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
 /* D3 — the global Apply bar. Sticks to the bottom of the viewport so a staged change is never
    scrolled out of sight and forgotten, which is the failure mode of a footer that scrolls away. */
 .h10-ar-applybar { position: sticky; bottom: 0; z-index: 30; display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px; border: 1px solid #e2b86a; border-radius: 10px; background: #fff6e8; box-shadow: 0 -2px 10px rgba(20,30,50,.08); }
-.h10-ar-applybar .n { font-size: 12.5px; font-weight: 800; color: #8a5316; }
+.h10-ar-applybar .n { font-size: 12.5px; font-weight: 800; color: var(--nds-warning-text); }
 .h10-ar-applybar .er { font-size: 12px; font-weight: 700; color: #8c2f22; }
 .h10-ar-applybar .grow { flex: 1 1 auto; }
 
-.h10-rc-staged { flex: 0 0 auto; padding: 1px 5px; border-radius: 4px; background: #fff6e8; border: 1px solid #e2b86a; color: #8a5316; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.h10-rc-staged { flex: 0 0 auto; padding: 1px 5px; border-radius: 4px; background: #fff6e8; border: 1px solid #e2b86a; color: var(--nds-warning-text); font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
 /* "no owner" is a real reading, so it is muted but not italic — italic is reserved for `unknown`,
    which is an ABSENCE of data. It deliberately does NOT get its own lighter colour: the obvious
    pick (#8a93a1, what `.h10-rc-none` uses) measures 3.10:1 on white and fails AA for body text.
@@ -3042,12 +3042,12 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
 .h10-am-fpanel .h10-ra-note svg { flex: none; margin-top: 3px; color: #667080; }
 .h10-am-fpanel .h10-ra-note b { font-weight: 800; color: var(--nds-grey-900); }
 .h10-am-fpanel .h10-ra-note .lnk { font: inherit; font-weight: 700; color: var(--nds-blue-600); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
-.h10-am-fpanel .h10-ra-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: #8a5316; }
-.h10-am-fpanel .h10-ra-note.bad svg { color: #8a5316; }
+.h10-am-fpanel .h10-ra-note.bad { background: #fff6e8; border: 1px solid #f0dcbe; color: var(--nds-warning-text); }
+.h10-am-fpanel .h10-ra-note.bad svg { color: var(--nds-warning-text); }
 .h10-am-fpanel .h10-ra-note.bad b { color: #7a4512; }
 .h10-am-fpanel .h10-ra-note.bad .lnk { color: #7a4512; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator. */
-.h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 11px; font-weight: 800; cursor: pointer; }
+.h10-bd-stale { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #c68a2e; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 11px; font-weight: 800; cursor: pointer; }
 .h10-bd-stale:hover { background: #fdeed5; }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════

@@ -161,6 +161,33 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // 9.0b substitution has a legal target, like every other tone.
   { name: '--nds-info-strong', value: 'var(--nds-blue-700)' },
 
+  // ── status TEXT — the tier this system was missing ───────────────────────────────────────────
+  // Every tone had `-soft` (a background) and `-strong` (a fill/border), and nothing for TEXT ON
+  // that soft background. So the ads console computed its own and wrote the ratios into ads.css
+  // ("#8a5316 on #fff6e8 is 5.89:1 — computed, not guessed"). Measured 2026-08-25, on each tone's
+  // own `-soft`:
+  //
+  //            -strong today            these
+  //   success  4.57  ✓                  5.40  ✓
+  //   warning  3.39  ✗ FAILS AA         5.69  ✓
+  //   danger   4.63  ✓                  6.27  ✓
+  //   info     5.20  ✓                  8.39  ✓
+  //
+  // The warning row is why this is a fix and not a tidy-up: `--nds-warning` on
+  // `--nds-warning-soft` is 3.39:1, so anyone using the system as intended today ships
+  // inaccessible warning text. The console was not diverging from the design system here — it hit
+  // a gap and solved it correctly, three years of ratios ahead of the tokens.
+  //
+  // LITERAL values, not `var(--nds-*-800)`, and deliberately. These were derived from a contrast
+  // requirement, not from a ramp position: #10457f is 17.7 ΔE from the existing --nds-blue-800,
+  // so folding it into the ramp would move 74 declarations visibly to satisfy a naming
+  // convention. A semantic token carrying its own computed value is the honest shape — the same
+  // one --nds-rail-* already uses.
+  { name: '--nds-success-text', value: '#14724d' },
+  { name: '--nds-warning-text', value: '#8a5316' },
+  { name: '--nds-danger-text', value: '#9c2f2a' },
+  { name: '--nds-info-text', value: '#10457f' },
+
   // status pills
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
   { name: '--nds-pill-success-bg', value: pill.ok.bg },

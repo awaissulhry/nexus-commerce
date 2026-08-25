@@ -106,6 +106,10 @@
   --nds-info-soft: var(--nds-blue-100);
   --nds-info: var(--nds-blue-600);
   --nds-info-strong: var(--nds-blue-700);
+  --nds-success-text: #14724d;
+  --nds-warning-text: #8a5316;
+  --nds-danger-text: #9c2f2a;
+  --nds-info-text: #10457f;
 
   /* ── status pills (tone-named: success/warning/neutral/danger) ── */
   --nds-pill-success-fg: var(--nds-blue-900);

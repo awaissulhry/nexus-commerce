@@ -201,10 +201,10 @@
   color: #6b7688;
 }
 .aq-gate-line.ok {
-  color: #14724d;
+  color: var(--nds-success-text);
 }
 .aq-gate-line.ok svg {
-  color: #14724d;
+  color: var(--nds-success-text);
 }
 
 .aq-halt {
@@ -251,7 +251,7 @@
   border-bottom: 0;
 }
 .aq-gateunknown .aq-gate-head svg {
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }
 
 .aq-gate-head {
@@ -319,7 +319,7 @@
 }
 .aq-cond.met .aq-condstate {
   background: #f1faf5;
-  color: #14724d;
+  color: var(--nds-success-text);
 }
 
 .aq-condbody {
@@ -416,7 +416,7 @@
 }
 .aq-can {
   background: #f1faf5;
-  color: #14724d;
+  color: var(--nds-success-text);
 }
 
 .aq-gate-foot {
@@ -1725,5 +1725,5 @@
   flex-basis: 100%;
   font-size: 11.5px;
   /* #9c2f2a on the parked row's #f3faf5 = 6.24:1. */
-  color: #9c2f2a;
+  color: var(--nds-danger-text);
 }

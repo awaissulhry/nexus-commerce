@@ -13,7 +13,7 @@
 /* SG.1 — the bulk outcome report. OUTSIDE the selection popover so a partial result survives
    it (a success used to unmount its own refusal list — the W2 lesson). Amber: refusals are
    governed stops, never failures, and must not wear the failure red. */
-.h10-sug-report { margin-top: 12px; padding: 10px 14px; border: 1px solid #f0dcbe; border-radius: 8px; background: #fff6e8; color: #8a5316; font-size: 12.5px; }
+.h10-sug-report { margin-top: 12px; padding: 10px 14px; border: 1px solid #f0dcbe; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); font-size: 12.5px; }
 .h10-sug-report b { display: block; font-weight: 800; margin-bottom: 4px; }
 .h10-sug-report ul { margin: 0 0 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 .h10-sug-report .nm { font-weight: 700; }
@@ -86,8 +86,8 @@
 .h10-sug-iconbtn.no:hover { border-color: var(--nds-danger-strong); color: var(--nds-danger-strong); background: var(--nds-danger-soft); }
 .h10-sug-iconbtn:disabled { opacity: .55; cursor: default; }
 /* the pause verb is ARMED by its first click (3.5s) — the second click is the real write */
-.h10-sug-iconbtn.pz:hover { border-color: #c68a2e; color: #8a5316; background: #fff6e8; }
-.h10-sug-iconbtn.pz.armed { border-color: #c68a2e; color: #8a5316; background: #fdeed5; box-shadow: 0 0 0 2px #f0dcbe; }
+.h10-sug-iconbtn.pz:hover { border-color: #c68a2e; color: var(--nds-warning-text); background: #fff6e8; }
+.h10-sug-iconbtn.pz.armed { border-color: #c68a2e; color: var(--nds-warning-text); background: #fdeed5; box-shadow: 0 0 0 2px #f0dcbe; }
 
 /* SG.2 — metric + value cells */
 .h10-sug-num { font-variant-numeric: tabular-nums; }
@@ -96,17 +96,17 @@
 
 /* SG.2b — the staged verbs: the FILL is the staged state (H10's blue-boxed ✓/✕) */
 .h10-sug-iconbtn.ok.on { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-sug-iconbtn.no.on { background: #8a5316; border-color: #8a5316; color: var(--nds-white); }
+.h10-sug-iconbtn.no.on { background: var(--nds-warning-text); border-color: var(--nds-warning-text); color: var(--nds-white); }
 /* SG.9 — ⏸ is a MUTE now (stop suggesting), so it wears the quiet slate fill rather than the
    amber "armed, about to write" treatment its pause ancestor used. Nothing reaches Amazon. */
 .h10-sug-iconbtn.pz.on { background: var(--nds-text-2); border-color: var(--nds-text-2); color: var(--nds-white); }
 
 /* SG.9 — the REAL pause, rehoused in the drawer. Amber because this one does write. */
 .h10-sug-pausebox { border: 1px solid #f0dcbe; border-radius: 10px; padding: 12px 14px; background: #fff6e8; }
-.h10-sug-pausebox h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #8a5316; }
+.h10-sug-pausebox h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--nds-warning-text); }
 .h10-sug-pausebox p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }
 .h10-sug-pausebox p b { color: var(--nds-text); }
-.h10-sug-armed { border-color: #c68a2e !important; color: #8a5316 !important; background: #fdeed5 !important; box-shadow: 0 0 0 2px #f0dcbe; }
+.h10-sug-armed { border-color: #c68a2e !important; color: var(--nds-warning-text) !important; background: #fdeed5 !important; box-shadow: 0 0 0 2px #f0dcbe; }
 
 /* Discard Changes uses the app-wide `.h10-am-link` idiom (ads.css) — the button-vocabulary
    ratchet is at zero new idioms, and a link-style verb already has one class. */
@@ -141,7 +141,7 @@
 .h10-sug-mt.mt-b { background: #0ea5c6; }
 .h10-sug-mt.mt-p { background: #7c5cff; }
 .h10-sug-mt.mt-a { background: var(--nds-blue-600); }
-.h10-sug-mt.mt-n { background: #8a5316; }
+.h10-sug-mt.mt-n { background: var(--nds-warning-text); }
 
 /* SG.2b — Reason (criteria) + Destinations cells */
 .h10-sug-reason { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--nds-text-2); }
@@ -214,7 +214,7 @@
 /* B4 (2026-08-20) — the truncation notice. Amber and inline with the toolbar, because it
    qualifies every count and tile above it: when the server has more rows than it sent, the
    page is describing a prefix. Not a toast — it is true for as long as the list is capped. */
-.h10-sug-trunc { display: inline-flex; align-items: center; padding: 4px 10px; margin-right: 12px; border-radius: 7px; background: #fff6e8; color: #8a5316; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.h10-sug-trunc { display: inline-flex; align-items: center; padding: 4px 10px; margin-right: 12px; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
 
 /* ── SG.2f — the approve-hover card (H10's "Rule: Add New Keywords" popover). Portaled to
    body (the ✓ lives in a right-pinned sticky cell) and it stays open under the pointer so
@@ -266,7 +266,7 @@
 .h10-sug-dl { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 .h10-sug-dl.ok { background: #e6f6f1; color: #067d62; }
 .h10-sug-dl.pd { background: var(--nds-surface-sunken); color: var(--nds-text-2); }
-.h10-sug-dl.rf { background: #fff6e8; color: #8a5316; }
+.h10-sug-dl.rf { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-sug-dl.fl { background: #fdeceb; color: var(--nds-danger-strong); }
 .h10-sug-dl.uk { background: transparent; color: var(--nds-text-3); }
 .h10-sug-dlblock { border: 1px solid var(--nds-border-subtle); border-radius: 10px; padding: 12px 14px; background: var(--nds-surface-sunken); }

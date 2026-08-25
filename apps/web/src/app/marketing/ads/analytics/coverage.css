@@ -65,7 +65,7 @@
 .cov-bar-v { min-width: 52px; text-align: right; font-weight: 600; color: var(--nds-grey-900); }
 
 /* Two or more of ours on one page — the thing that turned out NOT to be the constraint. */
-.cov-table td.multi { color: #14724d; font-weight: 650; }
+.cov-table td.multi { color: var(--nds-success-text); font-weight: 650; }
 /* No keyword at all on a real market. */
 .cov-table td.none { color: #8a6320; font-weight: 600; }
 
@@ -92,7 +92,7 @@
 .cov-banner svg { flex-shrink: 0; margin-top: 1px; }
 .cov-banner.warn { background: #fff8ec; border: 1px solid #ecd9ae; color: #8a6320; }
 /* An unmeasured week is not a warning about the account, it is a hole in the evidence. */
-.cov-banner.err { background: #fdf2f2; border: 1px solid #e6bcba; color: #9c2f2a; }
+.cov-banner.err { background: #fdf2f2; border: 1px solid #e6bcba; color: var(--nds-danger-text); }
 
 .cov-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 9px; }
 .cov-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -185,7 +185,7 @@
 .cvf-table tbody tr:last-child td { border-bottom: 0; }
 .cvf-table tr.champ td { background: #f5faf7; }
 .cvf-table tr.dormant td { color: #a6b0bd; }
-.cvf-table td.bad { color: #9c2f2a; font-weight: 600; }
+.cvf-table td.bad { color: var(--nds-danger-text); font-weight: 600; }
 .cvf-table td.tos { color: #94501c; font-weight: 600; }
 .cvf-pfcell { color: #7b8798; }
 .cvf-pfcell em { font-style: normal; color: var(--nds-grey-400); }
