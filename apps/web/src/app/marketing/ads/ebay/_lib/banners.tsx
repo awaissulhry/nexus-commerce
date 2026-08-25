@@ -42,22 +42,6 @@ export function FreshnessLine({ f }: { f: Freshness | undefined }) {
   )
 }
 
-export function StrategyChip({ fundingModel, targetingType, channels }: { fundingModel: string; targetingType?: string | null; channels?: string[] }) {
-  const offsite = (channels ?? []).includes('OFF_SITE')
-  const label = offsite ? 'Offsite' : fundingModel === 'COST_PER_CLICK' ? (targetingType === 'SMART' ? 'Priority · Smart' : 'Priority') : 'General'
-  const cls = offsite ? 'eb-chip--offsite' : fundingModel === 'COST_PER_CLICK' ? 'eb-chip--cpc' : 'eb-chip--cps'
-  return <span className={`eb-chip ${cls}`}>{label}</span>
-}
-
-export function StatusChip({ status }: { status: string }) {
-  const cls =
-    status === 'RUNNING' || status === 'ACTIVE' ? 'eb-chip--run'
-    : status === 'PAUSED' ? 'eb-chip--pause'
-    : status === 'STALE' ? 'eb-chip--stale'
-    : 'eb-chip--end'
-  return <span className={`eb-chip ${cls}`}>{status}</span>
-}
-
 export function BreakEvenCell({ pct, status }: { pct: number | null; status: string | null }) {
   if (pct != null) return <span>{pctP(pct)}</span>
   if (status === 'MISSING_COGS') return <span className="eb-chip eb-chip--warn" title="No product cost on file — break-even can't be computed. This listing is manual-only for automations.">add cost</span>
