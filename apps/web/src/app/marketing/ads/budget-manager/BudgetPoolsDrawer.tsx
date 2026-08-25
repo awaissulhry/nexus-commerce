@@ -177,9 +177,9 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
 
       <div className="bp-sec-h">Rebalance</div>
       <div className="bp-reb">
-        <button type="button" className="bp-btn warn" disabled={busy != null} onClick={() => void rebalance(true)}>
+        <Button variant="warning" size="sm" disabled={busy != null} onClick={() => void rebalance(true)}>
           {busy === 'preview' ? <Loader2 size={13} className="bp-spin" /> : <FlaskConical size={13} />} Dry-run preview
-        </button>
+        </Button>
         <Button variant="primary" size="sm" disabled={busy != null} onClick={() => void rebalance(false)}>
           {busy === 'commit' ? <Loader2 size={13} className="bp-spin" /> : <PlayCircle size={13} />} Run rebalance
         </Button>

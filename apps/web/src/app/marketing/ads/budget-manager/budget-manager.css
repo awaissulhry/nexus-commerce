@@ -156,10 +156,6 @@
 .bp-stat b { display: block; margin-top: 2px; font-size: 13.5px; color: var(--nds-grey-900); font-variant-numeric: tabular-nums; }
 .bp-stat b.warn { color: var(--nds-amber-600); }
 
-.bp-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: #37495b; border-radius: var(--nds-radius-lg); padding: 6px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
-.bp-btn:hover:not(:disabled) { background: var(--nds-grey-25); }
-.bp-btn:disabled { opacity: 0.45; cursor: default; }
-.bp-btn.warn { border-color: #f0d9a8; color: #8a5a00; background: #fff9ef; }
 .bp-newb { margin-bottom: 12px; }
 .bp-spin { animation: bp-rot 0.9s linear infinite; }
 @keyframes bp-rot { to { transform: rotate(360deg); } }
