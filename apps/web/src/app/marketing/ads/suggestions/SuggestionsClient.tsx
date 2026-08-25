@@ -41,6 +41,7 @@ import { ScopeNotes } from '../rules-automation/_shared/ScopeNotes'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Select } from '@/design-system/primitives/Select'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { Tabs, type TabItem } from '@/design-system/components/Tabs'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
@@ -1152,9 +1153,12 @@ function SuggestionsInner() {
         render: (s: Suggestion) => {
           if (s.delivery?.state === 'refused' || s.delivery?.state === 'failed') {
             return (
-              <button type="button" className="h10-sug-iconbtn" disabled={!!busy[s.id]} aria-label="Restore to pending — this write never landed" title="Restore to pending — this write never landed at Amazon" onClick={() => void act(s.id, 'restore')}>
-                <RotateCcw size={14} />
-              </button>
+              <ToolbarButton
+                variant="boxed" tooltip={false} icon={<RotateCcw size={14} />} disabled={!!busy[s.id]}
+                label="Restore to pending — this write never landed"
+                title="Restore to pending — this write never landed at Amazon"
+                onClick={() => void act(s.id, 'restore')}
+              />
             )
           }
           if (s.undo?.rolledBack) return <span className="h10-sug-applied">Undone</span>
@@ -1181,18 +1185,23 @@ function SuggestionsInner() {
         key: 'act', label: 'Unmute', metric: false, sortable: false, freezeRight: true, width: 88,
         tip: 'Resume suggestions for this keyword/target. Its muted rows return to the queue and the engine may propose for it again on the next evaluation.',
         render: (s: Suggestion) => (
-          <button type="button" className="h10-sug-iconbtn" disabled={!!busy[s.id] || bulkBusy} aria-label="Resume suggestions for this entity" title="Resume suggestions — the engine may propose for it again" onClick={() => void runOps([{ id: s.id, kind: 'unmute' }])}>
-            <Volume2 size={14} />
-          </button>
+          <ToolbarButton
+            variant="boxed" tooltip={false} icon={<Volume2 size={14} />} disabled={!!busy[s.id] || bulkBusy}
+            label="Resume suggestions for this entity"
+            title="Resume suggestions — the engine may propose for it again"
+            onClick={() => void runOps([{ id: s.id, kind: 'unmute' }])}
+          />
         ),
       } as GridColumn<Suggestion>,
     ] : [
       {
         key: 'act', label: 'Restore', metric: false, sortable: false, freezeRight: true, width: 84,
         render: (s: Suggestion) => (
-          <button type="button" className="h10-sug-iconbtn" disabled={!!busy[s.id]} aria-label="Restore to pending" title="Restore to pending" onClick={() => void act(s.id, 'restore')}>
-            <RotateCcw size={14} />
-          </button>
+          <ToolbarButton
+            variant="boxed" tooltip={false} icon={<RotateCcw size={14} />} disabled={!!busy[s.id]}
+            label="Restore to pending" title="Restore to pending"
+            onClick={() => void act(s.id, 'restore')}
+          />
         ),
       } as GridColumn<Suggestion>,
     ]),
@@ -1448,9 +1457,12 @@ function SuggestionsInner() {
                 {
                   key: 'rs', label: 'Restore', metric: false, sortable: false, freezeRight: true, width: 84,
                   render: (r: AiDecision) => (
-                    <button type="button" className="h10-sug-iconbtn" disabled={bulkBusy} aria-label="Restore to proposed" title="Restore to proposed — the plan re-evaluates it on its next tick" onClick={() => void aiRunOps([{ id: r.id, kind: 'restore' }])}>
-                      <RotateCcw size={14} />
-                    </button>
+                    <ToolbarButton
+                      variant="boxed" tooltip={false} icon={<RotateCcw size={14} />} disabled={bulkBusy}
+                      label="Restore to proposed"
+                      title="Restore to proposed — the plan re-evaluates it on its next tick"
+                      onClick={() => void aiRunOps([{ id: r.id, kind: 'restore' }])}
+                    />
                   ),
                 } as GridColumn<AiDecision>,
               ]),

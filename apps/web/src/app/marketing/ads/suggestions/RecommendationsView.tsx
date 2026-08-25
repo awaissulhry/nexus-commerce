@@ -32,6 +32,7 @@ import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
 import { useMergedFilters } from '../rules-automation/_shared/useMergedFilters'
 import { ScopeNotes } from '../rules-automation/_shared/ScopeNotes'
 import { Button } from '@/design-system/primitives/Button'
+import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Modal } from '@/design-system/components/Modal'
 import { Drawer } from '@/design-system/components/Drawer'
@@ -338,9 +339,12 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         key: 'unmute', label: 'Unmute', metric: false, sortable: false, freezeRight: true, width: 88,
         tip: 'Let the engines raise this recommendation again when the data still warrants it.',
         render: (r: Recommendation) => (
-          <button type="button" className="h10-sug-iconbtn" disabled={busy === r.id} aria-label="Resume suggesting this recommendation" title="Resume — the engines may raise it again" onClick={() => void unmuteRec(r.id)}>
-            <Volume2 size={14} />
-          </button>
+          <ToolbarButton
+            variant="boxed" tooltip={false} icon={<Volume2 size={14} />} disabled={busy === r.id}
+            label="Resume suggesting this recommendation"
+            title="Resume — the engines may raise it again"
+            onClick={() => void unmuteRec(r.id)}
+          />
         ),
       } as GridColumn<Recommendation>,
     ] : [
