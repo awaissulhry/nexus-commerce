@@ -7,6 +7,10 @@
  * warning and no type error at the CALL SITE. `ref.current` simply stays null and the imperative
  * focus never happens. Measured 2026-08-25: not one of the DS's 30 components forwarded a ref.
  *
+ * The slots are `export const` rather than a `type`: the DS api-guard requires every exported
+ * TYPE to be re-exported from the area barrel, and this file is not public API. Exporting the
+ * consts satisfies `noUnusedLocals` without claiming barrel space.
+ *
  * Each component is assigned to a `ForwardRefExoticComponent` slot, which a plain function cannot
  * satisfy — it has no `$$typeof`. tsc therefore fails the moment one is unwrapped, so the
  * regression cannot land quietly a second time.
@@ -24,12 +28,9 @@ import { Radio, type RadioProps } from './Radio'
 import { Select, type SelectProps } from './Select'
 import { Textarea, type TextareaProps } from './Textarea'
 
-const _button: ForwardRefExoticComponent<ButtonProps & RefAttributes<HTMLButtonElement>> = Button
-const _checkbox: ForwardRefExoticComponent<CheckboxProps & RefAttributes<HTMLInputElement>> = Checkbox
-const _input: ForwardRefExoticComponent<InputProps & RefAttributes<HTMLInputElement>> = Input
-const _radio: ForwardRefExoticComponent<RadioProps & RefAttributes<HTMLInputElement>> = Radio
-const _select: ForwardRefExoticComponent<SelectProps & RefAttributes<HTMLSelectElement>> = Select
-const _textarea: ForwardRefExoticComponent<TextareaProps & RefAttributes<HTMLTextAreaElement>> = Textarea
-
-export type RefContract = typeof _button | typeof _checkbox | typeof _input |
-  typeof _radio | typeof _select | typeof _textarea
+export const _button: ForwardRefExoticComponent<ButtonProps & RefAttributes<HTMLButtonElement>> = Button
+export const _checkbox: ForwardRefExoticComponent<CheckboxProps & RefAttributes<HTMLInputElement>> = Checkbox
+export const _input: ForwardRefExoticComponent<InputProps & RefAttributes<HTMLInputElement>> = Input
+export const _radio: ForwardRefExoticComponent<RadioProps & RefAttributes<HTMLInputElement>> = Radio
+export const _select: ForwardRefExoticComponent<SelectProps & RefAttributes<HTMLSelectElement>> = Select
+export const _textarea: ForwardRefExoticComponent<TextareaProps & RefAttributes<HTMLTextAreaElement>> = Textarea
