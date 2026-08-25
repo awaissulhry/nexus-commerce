@@ -756,23 +756,46 @@ Two of these invert the usual picture, and both matter:
   one from `campaigns/FilterDropdown`, via five different relative paths. Its API differs too
   (`card: ReactNode` vs `text` + `placement` + `delay`), so it is not a drop-in either way.
 
-### 🔴 A fifteenth concept, and the worst shape yet: `GridToolbar`
+### ⚠️ CORRECTED — `GridToolbar` has TWO implementations, not three
 
-**53 files render a `<GridToolbar>` and they mean three different components:**
+**The first version of this section was wrong and is corrected here.** It claimed 53 render sites
+split three ways, with **14 local definitions**. There are none. Resolved properly:
 
-    32  @/app/_shared/grid-lens
-    14  (defined locally, in the file that renders it)
-     7  @/design-system/patterns
+    45  @/app/_shared/grid-lens
+     8  @/design-system/patterns
+     0  local
 
-Fourteen separate local definitions under a name that already exists twice elsewhere. Nothing in
-the toolchain can see this — each file compiles, each renders something toolbar-shaped. It was
-found only by resolving the import for every render site rather than counting the name.
+The error: the detector matched imports with `import[^\n]*\bGridToolbar\b[^\n]*from`, which
+requires the name and the `from` on **one line**. Forty-five of these files use multi-line
+`import { … }` blocks, so the name was never seen — and because the same files obviously *rendered*
+the component, "imported from nowhere" got read as "defined locally". Resolving a symbol means
+parsing the whole import statement, braces included, not grepping a line.
+
+That is the second time today a single-line assumption produced a confident wrong answer, and both
+were in *measurement* code rather than product code — where a wrong number is indistinguishable
+from a right one.
+
+**What is actually true**, and still worth reconciling: the two are different components sharing a
+name. The DS `GridToolbar` is a 37-line row — count, children, right-aligned actions, `.nds-toolbar`.
+The grid-lens one is 130 lines with twelve named slots (search, quickFilter, filter, sort, columns,
+density, autoRefresh, freshness, savedViews, shortcuts, trailing, sticky) and is **Tailwind-styled**
+(`bg-slate-200 dark:bg-slate-700`), so it belongs to the legacy world, not the DS. The honest
+relationship is composition: the DS one is the row, the grid-lens one is a composed toolbar that
+could sit on top of it.
+
+🔴 **But 45 of the 53 sites are commerce workspaces** — products, listings, customers, pricing,
+fulfillment (inbound, outbound, returns, stock, replenishment, purchase-orders) — the surface being
+rebuilt. Reconciling a component whose main consumer is scheduled for replacement is the same
+mistake as porting `DataGrid` into the factory fork. **Deferred, deliberately**, not blocked.
+
+Two smaller ones measured the same way and standing: `FilterBar` has 3 implementations across 5
+sites (3 DS, 1 local, 1 `./_components/FilterBar`), `Pagination` 2 across 5 (4 DS, 1 local).
 
 ### Revised WG.3
 
 | | | |
 |---|---|---|
-| WG.3a | reconcile `GridToolbar` — 3 implementations, 53 render sites | the biggest, and not grid-specific |
+| ~~WG.3a~~ | `GridToolbar` — 2 implementations (45 grid-lens / 8 DS, **0 local**), and 45 sites are commerce pages being rebuilt | deferred, deliberately |
 | WG.3b | reconcile `HoverCard` — DS version has 0 users, APIs differ | small |
 | WG.3c | `H10Select` → `Listbox`, or justify keeping a second select | 370 LOC vs a DS primitive with 313 uses |
 | WG.3d | `AdsFilterBar` → `FilterBar`/`FilterPanel` | comparable size, real API diff |
