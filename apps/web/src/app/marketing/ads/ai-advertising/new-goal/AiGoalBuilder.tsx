@@ -28,6 +28,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icons'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { Select } from '@/design-system/primitives/Select'
+import { Input } from '@/design-system/primitives/Input'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -198,7 +199,7 @@ export function AiGoalBuilder() {
         <span className="sep" />
         <span className="crumb">New Product Goal</span>
         <span className="grow" />
-        <button type="button" className="launch" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</button>
+        <Button variant="primary" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
       </header>
 
       <div className="h10-aig-body">
@@ -241,15 +242,15 @@ export function AiGoalBuilder() {
               <div className="aig2-dials">
                 <div className="aig2-dial">
                   <span className="lbl">Target ACoS <InfoTip tip="The efficiency target the AI steers toward. Strategy presets scale it — Liquidate and Impression & Click deliberately run above it while they work." /></span>
-                  <span className="h10-aig-money sm"><input inputMode="numeric" value={targetAcos} onChange={(e) => setTargetAcos(e.target.value)} placeholder="30" /><span className="pf">%</span></span>
+                  <Input fieldClassName="aig-money narrow" suffix="%" inputMode="numeric" value={targetAcos} onChange={(e) => setTargetAcos(e.target.value)} placeholder="30" />
                 </div>
                 <div className="aig2-dial">
                   <span className="lbl">Min Bid (Optional) <InfoTip tip="The AI never bids below this. Empty = the 5¢ account floor." /></span>
-                  <span className="h10-aig-money sm"><span className="pf">€</span><input inputMode="decimal" value={bidMin} onChange={(e) => setBidMin(e.target.value)} placeholder="0.05" /></span>
+                  <Input fieldClassName="aig-money narrow" prefix="€" inputMode="decimal" value={bidMin} onChange={(e) => setBidMin(e.target.value)} placeholder="0.05" />
                 </div>
                 <div className="aig2-dial">
                   <span className="lbl">Max Bid (Optional) <InfoTip tip="The AI never bids above this. Empty = the €3.00 default ceiling." /></span>
-                  <span className="h10-aig-money sm"><span className="pf">€</span><input inputMode="decimal" value={bidMax} onChange={(e) => setBidMax(e.target.value)} placeholder="3.00" /></span>
+                  <Input fieldClassName="aig-money narrow" prefix="€" inputMode="decimal" value={bidMax} onChange={(e) => setBidMax(e.target.value)} placeholder="3.00" />
                 </div>
                 <div className="aig2-dial"><span className="sub">These become the plan&apos;s guardrails. Every AI decision stays inside them, and every one is proposed for your approval until you graduate the goal.</span></div>
               </div>
@@ -285,7 +286,7 @@ export function AiGoalBuilder() {
               {budgetMode === 'shared' && (
                 <div className="h10-aig-sub">
                   <h3>Total Budget</h3>
-                  <span className="h10-aig-money"><span className="pf">€</span><input inputMode="decimal" value={sharedBudget} onChange={(e) => setSharedBudget(e.target.value)} placeholder="Please enter" /></span>
+                  <Input fieldClassName="aig-money" prefix="€" inputMode="decimal" value={sharedBudget} onChange={(e) => setSharedBudget(e.target.value)} placeholder="Please enter" />
                   {suggest && suggest.budgets.length > 0 && (
                     <div className="aig2-srcnote">
                       {suggest.budgets.some((b) => b.hasHistory)
@@ -388,7 +389,7 @@ export function AiGoalBuilder() {
     <Button onClick={() => router.push(exitTo)}>Cancel</Button>
         <span className="grow" />
         {launchPhase === 'failed' && <span className="err">{launchResult.message}</span>}
-        <button type="button" className="launch" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</button>
+        <Button variant="primary" disabled={!valid || launching} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
       </footer>
 
       {showAddProducts && <AddProductsModal selected={products} onClose={() => setShowAddProducts(false)} onApply={(ps) => { setProducts(ps); setShowAddProducts(false) }} />}

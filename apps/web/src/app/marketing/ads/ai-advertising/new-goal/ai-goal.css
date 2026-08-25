@@ -62,3 +62,14 @@
 .aig2-launch .sum { font-size: 12.5px; color: var(--nds-text-2); margin-bottom: 14px; line-height: 1.5; }
 .aig2-launch .errs { font-size: 12px; color: #9a6b00; background: var(--nds-note-warn-bg); border-radius: var(--nds-radius-lg); padding: 8px 11px; margin-bottom: 14px; max-height: 120px; overflow-y: auto; }
 .aig2-launch .btns { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* AIAD DS alignment (2026-08-25) — the four guardrail money fields are the design system's
+   `Input` with its shaded €/% adornment, which is what `.h10-aig-money` in ads.css was
+   hand-rolling. These are `fieldClassName`s and carry WIDTH ONLY: border, radius, padding,
+   focus ring and the adornment all belong to the primitive.
+
+   `narrow`, not `sm`: `fieldClassName` lands on the same element as the primitive's own size
+   class, so a class literally named `sm` would silently switch the field to the DS `sm` tier
+   as well as applying this width. */
+.aig-money { width: 220px; min-width: 0; }
+.aig-money.narrow { width: 124px; }
