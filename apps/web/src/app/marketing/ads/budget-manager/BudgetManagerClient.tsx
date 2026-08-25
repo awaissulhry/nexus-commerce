@@ -15,7 +15,7 @@
  * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
@@ -130,17 +130,17 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
       <div className="bm-set">
         <label className="bm-set-field">
           <span className="lbl">Monthly budget</span>
-          <span className="bm-eurin"><span className="pf">€</span><input inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" aria-label="Monthly budget" /></span>
+          <Input fieldClassName="bm-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" aria-label="Monthly budget" />
           <span className="hint">{budgetCents > 0 ? `≈ ${eur(Math.round(perDay))}/day even across ${dim} days` : 'Set a monthly cap for this market.'}</span>
         </label>
 
         <div className="bm-set-controls">
-          <label className="bm-swrow"><span><b>Auto Pacing</b><em>Distribute the monthly budget across the month automatically.</em></span><button type="button" className={`h10-bktoggle ${autoPacing ? 'on' : ''}`} role="switch" aria-checked={autoPacing} aria-label="Auto Pacing" onClick={() => setAutoPacing((v) => !v)}><span /></button></label>
-          <label className="bm-swrow"><span><b>Stop Over Spend</b><em>When the monthly cap is reached, suppress delivery (bid-floor, never pause).</em></span><button type="button" className={`h10-bktoggle ${stopOverSpend ? 'on' : ''}`} role="switch" aria-checked={stopOverSpend} aria-label="Stop Over Spend" onClick={() => setStopOverSpend((v) => !v)}><span /></button></label>
+          <label className="bm-swrow"><span><b>Auto Pacing</b><em>Distribute the monthly budget across the month automatically.</em></span><Toggle checked={autoPacing} onChange={setAutoPacing} aria-label="Auto Pacing" /></label>
+          <label className="bm-swrow"><span><b>Stop Over Spend</b><em>When the monthly cap is reached, suppress delivery (bid-floor, never pause).</em></span><Toggle checked={stopOverSpend} onChange={setStopOverSpend} aria-label="Stop Over Spend" /></label>
         </div>
 
         <div className="bm-set-dist">
-          <label className="bm-swrow tight"><span><b>Custom daily distribution</b><em>Weight specific days (tentpole events) instead of an even split.</em></span><button type="button" className={`h10-bktoggle ${custom ? 'on' : ''}`} role="switch" aria-checked={custom} aria-label="Custom daily distribution" onClick={() => setCustom((v) => !v)}><span /></button></label>
+          <label className="bm-swrow tight"><span><b>Custom daily distribution</b><em>Weight specific days (tentpole events) instead of an even split.</em></span><Toggle checked={custom} onChange={setCustom} aria-label="Custom daily distribution" /></label>
           {custom && <>
             <div className="bm-cal-tools">
        <Button onClick={() => setCal(Array(dim).fill(evenPct))}>Distribute evenly</Button>
@@ -214,7 +214,7 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
             <div className="bm-more-seg">
               {(['ENABLED', 'PAUSED', 'ALL'] as const).map((s) => (<button type="button" key={s} className={statusFilter === s ? 'on' : ''} onClick={() => setStatusFilter(s)}>{s === 'ENABLED' ? 'Enabled' : s === 'PAUSED' ? 'Paused' : 'All'}</button>))}
             </div>
-            <span className="bm-more-search"><Search size={13} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" aria-label="Search campaigns" /></span>
+            <Input fieldClassName="bm-more-search" leadingIcon={<Search size={13} />} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" aria-label="Search campaigns" />
             <span className="bm-more-count">{shown.length} of {camps.length}</span>
           </div>
           {shown.length === 0 ? <div className="bm-more-empty">No campaigns match this filter.</div> : (
@@ -224,8 +224,8 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
                 <div className="bm-more-row" key={c.id}>
                   <span className="nm"><span className={`bm-cdot ${c.status === 'ENABLED' ? 'on' : c.status === 'PAUSED' ? 'pa' : 'ar'}`} />{c.name}</span>
                   <span className="db">{eur(c.dailyBudgetCents)}</span>
-                  <span className="lim"><input inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} /></span>
-                  <span className="lim"><input inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} /></span>
+                  <Input fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} />
+                  <Input fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} />
                 </div>
               ))}
             </div>
@@ -343,8 +343,8 @@ export function BudgetManagerClient() {
 
   const renderFirst = (r: Row): ReactNode => (
     <span className="bm-first">
-      <button type="button" className="bm-ic" aria-label={`More for ${mktName(r.marketplace)}`} onClick={() => setMoreFor(r)}><MoreVertical size={15} /></button>
-      <button type="button" className="bm-ic" aria-label={`Settings for ${mktName(r.marketplace)}`} onClick={() => setSettingsFor(r)}><Settings size={14} /></button>
+      <ToolbarButton icon={<MoreVertical size={15} />} label={`More for ${mktName(r.marketplace)}`} onClick={() => setMoreFor(r)} />
+      <ToolbarButton icon={<Settings size={14} />} label={`Settings for ${mktName(r.marketplace)}`} onClick={() => setSettingsFor(r)} />
       <span className="bm-flag">{FLAG[r.marketplace] ?? '🌐'}</span>
       <span className="bm-mkt">{mktName(r.marketplace)}{r.tag ? <em> · {r.tag}</em> : null}{r.campaignLimitCount > 0 ? <span className="bm-lim" title={`${r.campaignLimitCount} campaign limit${r.campaignLimitCount === 1 ? '' : 's'}`}>{r.campaignLimitCount} limit{r.campaignLimitCount === 1 ? '' : 's'}</span> : null}</span>
       {r.projectedOverspend && <span className="bm-warn" title={`Projected month-end spend ${eur(r.forecastSpendCents)} exceeds budget`}><AlertTriangle size={13} /></span>}
@@ -363,10 +363,10 @@ export function BudgetManagerClient() {
       />
 
       <div className="bm-monthbar">
-        <button type="button" className="bm-mnav" aria-label="Previous month" onClick={() => setMonth(shiftM(month, -1))}><ChevronLeft size={16} /></button>
+        <ToolbarButton variant="boxed" icon={<ChevronLeft size={16} />} label="Previous month" onClick={() => setMonth(shiftM(month, -1))} />
         <b>{monthLabel(month)}</b>
-        <button type="button" className="bm-mnav" aria-label="Next month" onClick={() => setMonth(shiftM(month, 1))}><ChevronRight size={16} /></button>
-        {month !== nowMonth() && <button type="button" className="bm-today" onClick={() => setMonth(nowMonth())}>This month</button>}
+        <ToolbarButton variant="boxed" icon={<ChevronRight size={16} />} label="Next month" onClick={() => setMonth(shiftM(month, 1))} />
+        {month !== nowMonth() && <Button variant="link" size="sm" onClick={() => setMonth(nowMonth())}>This month</Button>}
         {result && <span className="bm-mb-sum">Budget <b>{eur(result.totals.budgetCents)}</b> · Spent <b>{eur(result.totals.spendCents)}</b>{result.totals.pct != null && <em> ({pctTxt(result.totals.pct)})</em>}</span>}
         <span className="bm-grow" />
     <Button onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</Button>
