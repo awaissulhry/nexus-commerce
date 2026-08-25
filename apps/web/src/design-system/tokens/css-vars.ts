@@ -204,7 +204,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-pill-warning-bg', value: 'var(--nds-amber-soft)' },
   { name: '--nds-pill-neutral-fg', value: pill.arch.fg },
   { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
-  { name: '--nds-pill-danger-fg', value: 'var(--nds-danger-strong)' },
+  // NOT --nds-danger-strong: `.dark` overrides that to #f79289 while --nds-danger-soft stays
+  // light, so the dark danger pill was #f79289 on #fde8e8 — 1.9:1, illegible. --nds-danger-text
+  // has no dark override: 6.27:1 in BOTH themes (was 4.63 light / 1.9 dark).
+  { name: '--nds-pill-danger-fg', value: 'var(--nds-danger-text)' },
   { name: '--nds-pill-danger-bg', value: 'var(--nds-danger-soft)' },
 
   // ── Tier 3: program / targeting chips ────────────────────────────

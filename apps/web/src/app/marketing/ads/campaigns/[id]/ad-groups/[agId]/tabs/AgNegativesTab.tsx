@@ -9,7 +9,7 @@
  * (The "+ Negative" creation flow is ad-group-scoped follow-up; the grid + edit ship now.)
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../_grid/AdsDataGrid'
@@ -19,6 +19,7 @@ import { bulkPatch } from '../../../../_grid/bulkActions'
 import { AddNegativeTargetsModal } from './AddNegativeTargetsModal'
 import { AddNegativeKeywordsAgModal } from './AddNegativeKeywordsAgModal'
 import type { AdGroupDetailData } from '../AdGroupDetail'
+import { pillTone } from '../../../../../_shared/pillTone'
 
 interface NegT { id: string; expressionValue: string; expressionType?: string | null; kind?: string | null; status: string; isNegative?: boolean; createdAt?: string | null }
 interface NegRow { id: string; text: string; matchType: string; status: string; createdAt?: string | null }
@@ -37,7 +38,7 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
   const [showAdd, setShowAdd] = useState(false)
 
   const columns: GridColumn<NegRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'matchType', label: 'Match Type', metric: false, sortable: true, render: (r) => titleCase(r.matchType), sortValue: (r) => titleCase(r.matchType), total: '' },
     { key: 'dateAdded', label: 'Date Added', metric: false, sortable: true, render: (r) => fmtDate(r.createdAt), sortValue: (r) => (r.createdAt ? Date.parse(r.createdAt) : 0), total: '' },
   ], [])

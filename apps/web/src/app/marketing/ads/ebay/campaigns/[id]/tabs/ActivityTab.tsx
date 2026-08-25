@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { H10Select } from '../../../../campaigns/FilterDropdown'
 import { getEbayAds, actionSummary, type ActionRow } from '../../../_lib'
 import { Button, Pill } from '@/design-system/primitives'
+import { pillTone } from '../../../../_shared/pillTone'
 
 export function ActivityTab({ externalCampaignId }: { externalCampaignId: string }) {
   const [rows, setRows] = useState<ActionRow[] | null>(null)
@@ -56,8 +57,8 @@ export function ActivityTab({ externalCampaignId }: { externalCampaignId: string
               <div key={a.id} className="eb-row">
                 <span className="dim eb-ts-col">{new Date(a.createdAt).toLocaleString('en-GB')}</span>
                 <Pill tone="neutral">{a.actionType.replace(/_/g, ' ')}</Pill>
-                {mode && <span className={`h10-pill ${mode === 'live' ? 'ok' : 'warn'}`}>{mode}</span>}
-                <span className={`h10-pill ${a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn'}`}>{a.channelResponseStatus.toLowerCase()}</span>
+                {mode && <Pill tone={pillTone(mode === 'live' ? 'ok' : 'warn')}>{mode}</Pill>}
+                <Pill tone={pillTone(a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn')}>{a.channelResponseStatus.toLowerCase()}</Pill>
                 <span>{actionSummary(a)}</span>
               </div>
             )

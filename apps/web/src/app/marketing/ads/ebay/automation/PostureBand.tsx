@@ -6,9 +6,10 @@
  * switch, plus the digest cross-link the critique flagged as missing.
  */
 import Link from 'next/link'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { useEffect, useState } from 'react'
 import { postEbayAds, eurC } from '../_lib'
+import { pillTone } from '../../_shared/pillTone'
 
 export interface StatePayload {
   state: { globalMode: string; halted: boolean; haltReason: string | null }
@@ -52,9 +53,9 @@ export function PostureBand({ state, busy, act }: {
         <h4>Monthly ceilings</h4>
         <div className="eb-posture-ceil">
           {state?.ceilings.map((cl) => (
-            <span key={cl.marketplace} className={`h10-pill ${cl.pct >= 80 ? 'warn' : 'arch'}`} title="MTD attributed ad fees vs the monthly cap (General has no native cap — this is it)">
+            <Pill tone={pillTone(cl.pct >= 80 ? 'warn' : 'arch')} title="MTD attributed ad fees vs the monthly cap (General has no native cap — this is it)">
               {cl.marketplace.replace('EBAY_', '')}: {eurC(cl.mtdCents)} / {eurC(cl.capCents)} · {cl.pct}%
-            </span>
+            </Pill>
           ))}
           <label className="eb-posture-caplbl">EBAY_IT €
             <input className="h10-cd-input" style={{ width: 76, marginLeft: 6 }} type="number" min={10} value={capInput} onChange={(e) => setCapInput(e.target.value)} />

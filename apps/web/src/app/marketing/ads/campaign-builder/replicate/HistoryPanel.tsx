@@ -16,6 +16,8 @@ import { RotateCcw, TrendingUp, Trash2, Loader2, ChevronDown, ChevronRight, GitC
 import { getBackendUrl } from '@/lib/backend-url'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { InfoTip } from '../../campaigns/InfoTip'
+import { Pill } from '@/design-system/primitives'
+import { pillTone } from '../../_shared/pillTone'
 
 interface Run {
   id: string; productToken: string; marketplace: string; status: string
@@ -132,7 +134,7 @@ export function HistoryPanel({ market, onReplicateAgain }: {
               <b>{r.productToken}</b>
               <span className="m">{when(r)}{r.launchMode === 'floor' ? ' · created at the bid floor' : ''}</span>
             </span>
-            <span className={`h10-pill ${r.status === 'APPLIED' ? 'ok' : r.status === 'FAILED' ? 'bad' : r.status === 'ROLLED_BACK' ? '' : 'warn'}`}>{r.status.replace('_', ' ').toLowerCase()}</span>
+            <Pill tone={pillTone(r.status === 'APPLIED' ? 'ok' : r.status === 'FAILED' ? 'bad' : r.status === 'ROLLED_BACK' ? '' : 'warn')}>{r.status.replace('_', ' ').toLowerCase()}</Pill>
             <span className="stat">
               {r.liveCampaigns}/{r.campaigns} campaigns live
               {r.notOnAmazon.length > 0 && <span className="bad"> · {r.notOnAmazon.length} never reached Amazon</span>}

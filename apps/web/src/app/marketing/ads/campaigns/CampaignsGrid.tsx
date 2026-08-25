@@ -8,7 +8,7 @@
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
@@ -24,6 +24,7 @@ import { AdManagerGraph } from './AdManagerGraph'
 import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
+import { pillTone } from '../_shared/pillTone'
 
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
@@ -226,7 +227,7 @@ interface DeliveryState {
 /**
  * ACR.1.6b — `bad` was doing two incompatible jobs, and doing neither.
  *
- * Measured on prod: `.h10-pill.bad` has never been defined in ads.css. Every pill using it
+ * Measured on prod (2026-08-24): `.h10-pill.bad` was undefined in ads.css. Every pill using it
  * rendered with a transparent background and default body-colour text — 18 "Gated" pills on
  * the first page alone, beside "Live" as a proper blue chip. The single state an operator
  * most needs to notice was the one that did not look like a state at all.
@@ -802,7 +803,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
       ) : (
           <div className="h10-bulk-review">
             <div className="rh">Changes</div>
-            {changes.status && <div className="rr"><span className="f">Campaign Status</span><span className="v"><span className={`h10-pill ${STATUS_RESULT[changes.status.value].cls}`}>{STATUS_RESULT[changes.status.value].label}</span></span></div>}
+            {changes.status && <div className="rr"><span className="f">Campaign Status</span><span className="v"><Pill tone={pillTone(STATUS_RESULT[changes.status.value].cls)}>{STATUS_RESULT[changes.status.value].label}</Pill></span></div>}
             {changes.budget && <div className="rr"><span className="f">Campaign Budget</span><span className="v">{changes.budget.mode === 'set' ? eur(changes.budget.value) : `${changes.budget.mode === 'incPct' ? 'Increase' : 'Decrease'} by ${changes.budget.value}%`}</span></div>}
             {changes.automation != null && <div className="rr"><span className="f">Bid Automation</span><span className="v"><span className="h10-rv-pill">{changes.automation ? 'On' : 'Off'}</span></span></div>}
             {changes.acos != null && <div className="rr"><span className="f">Target ACoS</span><span className="v">{changes.acos.toFixed(2)}%</span></div>}
@@ -1534,9 +1535,9 @@ export function CampaignsGrid() {
           ? `Last verified against Amazon: ${new Date(d.verifiedAt).toLocaleString()}`
           : 'Never verified against Amazon')
         return (
-          <span className={`h10-pill ${p.cls}`} title={bits.join('\n')}>
+          <Pill tone={pillTone(p.cls)} title={bits.join('\n')}>
             {p.label}{d?.pending ? ` ${d.pending}` : ''}{d?.stale ? ' \u29D7' : ''}
-          </span>
+          </Pill>
         )
       }
       /**

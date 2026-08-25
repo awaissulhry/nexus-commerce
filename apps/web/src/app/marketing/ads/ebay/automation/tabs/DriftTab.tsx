@@ -6,8 +6,9 @@
  * Structural move only — rendering and Re-apply/Accept semantics unchanged.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { getEbayAds, postEbayAds, eurC } from '../../_lib'
+import { pillTone } from '../../../_shared/pillTone'
 
 interface DriftRow {
   campaignId: string; externalCampaignId: string; campaignName: string; marketplace: string
@@ -31,7 +32,7 @@ export function DriftTab({ busy, act, bump }: { busy: boolean; act: (fn: () => P
         <div className="empty ctr">No drift — everything on eBay matches what Nexus last set.</div>
       ) : drifts.map((d) => (
         <div key={`${d.campaignId}-${d.kind}-${d.listingId ?? 'campaign'}`} className="eb-row">
-          <span className={`h10-pill ${d.kind === 'ad_removed' ? 'warn' : 'arch'}`}>{d.kind.replace(/_/g, ' ')}</span>
+          <Pill tone={pillTone(d.kind === 'ad_removed' ? 'warn' : 'arch')}>{d.kind.replace(/_/g, ' ')}</Pill>
           <span className="nm6">{d.campaignName}</span>
           <span className="dim">{d.listingId ?? ''}</span>
           <span>

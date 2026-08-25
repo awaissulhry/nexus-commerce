@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
 import { Button, Pill } from '@/design-system/primitives'
+import { pillTone } from '../../../../_shared/pillTone'
 
 const POSTURES = [
   { id: 'INHERIT', label: 'Inherit', tip: 'Follow the global dial (Rules & Automation hub)' },
@@ -108,7 +109,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <div className="empty">No rules apply here.</div>
         ) : data.rules.map((r) => (
           <div key={r.id} className="eb-row">
-            <span className={`h10-pill ${r.enabled ? 'ok' : 'arch'}`}>{r.enabled ? 'on' : 'off'}</span>
+            <Pill tone={pillTone(r.enabled ? 'ok' : 'arch')}>{r.enabled ? 'on' : 'off'}</Pill>
             <span className="nm6">{r.name}</span>
             <Pill tone="neutral">{r.mode}</Pill>
             <Pill tone="neutral">{r.scoped ? 'bound to this campaign' : 'global'}</Pill>
@@ -160,7 +161,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <div className="h10-cd-card pad">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
               <b className="eb-strong">Rate Discovery</b>
-              <span className={`h10-pill ${rd.status === 'ACTIVE' ? 'ok' : rd.status === 'COMPLETE' ? 'arch' : 'warn'}`}>{rd.status}</span>
+              <Pill tone={pillTone(rd.status === 'ACTIVE' ? 'ok' : rd.status === 'COMPLETE' ? 'arch' : 'warn')}>{rd.status}</Pill>
               <Pill tone="neutral">{rd.floorPct}% → {rd.capPct}% · {rd.stepPct}% steps · {rd.dwellDays}-day windows</Pill>
               {rd.currentPct != null && <Pill tone="success">now at {rd.currentPct}%</Pill>}
               {rd.bestPct != null && <Pill tone="success" title="Best net-of-fees attributed sales per day">best: {rd.bestPct}%</Pill>}
@@ -194,7 +195,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
           <div className="empty">No drift — everything matches what Nexus last set.</div>
         ) : data.drifts.map((d) => (
           <div key={`${d.kind}-${d.listingId ?? 'campaign'}`} className="eb-row">
-            <span className={`h10-pill ${d.kind === 'ad_removed' ? 'warn' : 'arch'}`}>{d.kind.replace(/_/g, ' ')}</span>
+            <Pill tone={pillTone(d.kind === 'ad_removed' ? 'warn' : 'arch')}>{d.kind.replace(/_/g, ' ')}</Pill>
             <span className="dim">{d.listingId ?? ''}</span>
             <span>Nexus set <b>{d.kind === 'budget' ? money(d.nexusValue) : `${d.nexusValue}%`}</b> · eBay now <b>{d.ebayValue == null ? 'removed' : d.kind === 'budget' ? money(d.ebayValue) : `${d.ebayValue}%`}</b></span>
             <span className="grow" style={{ flex: 1 }} />

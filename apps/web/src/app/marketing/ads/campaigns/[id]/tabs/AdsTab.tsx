@@ -6,7 +6,7 @@
  * windowed metrics in cents). The first column is the product (thumb + title + ASIN/SKU).
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../_grid/AdsDataGrid'
 import { num, eur, int, STATUS_PILL, METRIC_TIPS } from '../../_grid/format'
@@ -14,6 +14,7 @@ import { pickMetricFilters } from '../../_grid/filters'
 import { bulkPatch } from '../../_grid/bulkActions'
 import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
 import type { CampaignDetailData } from '../CampaignDetail'
+import { pillTone } from '../../../_shared/pillTone'
 
 interface AdRow {
   id: string; asin?: string | null; sku?: string | null; name?: string | null; photoUrl?: string | null
@@ -49,7 +50,7 @@ export function AdsTab({ campaign, dateRange }: { campaign: CampaignDetailData |
   const tot = (vr: typeof rows) => vr.reduce((a, r) => ({ spend: a.spend + spendOf(r), sales: a.sales + salesOf(r), impr: a.impr + num(r.impressions), clicks: a.clicks + num(r.clicks), orders: a.orders + num(r.orders) }), { spend: 0, sales: 0, impr: 0, clicks: 0, orders: 0 })
 
   const columns: GridColumn<AdRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },
     { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },
     { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => (salesOf(r) ? `${(spendOf(r) / salesOf(r) * 100).toFixed(2)}%` : '—'), sortValue: (r) => (salesOf(r) ? spendOf(r) / salesOf(r) * 100 : 0), filterValue: (r) => (salesOf(r) ? spendOf(r) / salesOf(r) * 100 : 0), total: (vr) => { const T = tot(vr); return T.sales ? `${(T.spend / T.sales * 100).toFixed(2)}%` : '—' } },

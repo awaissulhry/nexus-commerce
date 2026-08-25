@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { money } from '../../../../campaigns/_grid/format'
 import { postEbayAds } from '../../../_lib'
 import { Pill } from '@/design-system/primitives'
+import { pillTone } from '../../../../_shared/pillTone'
 
 interface SelectionRule { brands?: string[]; categoryIds?: string[]; categoryScope?: string; listingConditionIds?: string[]; minPrice?: number; maxPrice?: number }
 interface Preview { count: number; totalLive: number; sample: Array<{ itemId: string; title: string | null; priceCents: number | null }>; note: string | null }
@@ -32,9 +33,9 @@ export function CriterionCard({ criterion, marketplace, onClone }: { criterion: 
   return (
     <div className="h10-cd-card pad">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span className={`h10-pill ${autoSelect ? 'ok' : 'arch'}`} title="eBay re-evaluates matching listings daily: matches are added, non-matches removed — including newly created listings.">
+        <Pill tone={pillTone(autoSelect ? 'ok' : 'arch')} title="eBay re-evaluates matching listings daily: matches are added, non-matches removed — including newly created listings.">
           auto-select future listings: {autoSelect ? 'ON' : 'OFF'}
-        </span>
+        </Pill>
         {preview && <Pill tone="neutral">{preview.count} of {preview.totalLive} live listings match now</Pill>}
       </div>
       {rules.length === 0 ? (

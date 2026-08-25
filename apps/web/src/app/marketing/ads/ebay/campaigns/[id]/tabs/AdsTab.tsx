@@ -9,7 +9,7 @@
  * read-only (eBay manages Offsite CPC).
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { ExternalLink } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../campaigns/_grid/AdsDataGrid'
 import { pct, money } from '../../../../campaigns/_grid/format'
@@ -73,7 +73,7 @@ export function AdsTab({ data, campaignId, strategy, reload, say, onAddListings 
     }] : []),
     {
       key: 'breakeven', label: 'Break-even', tip: 'Max profitable rate = contribution margin ÷ total sale amount, from your product costs.',
-      render: (r) => (r.breakEvenAdRatePct != null ? pct(r.breakEvenAdRatePct / 100) : r.economicsStatus === 'MISSING_PRICE' ? <span className="h10-pill arch">no price</span> : <span className="h10-pill warn" title="No product cost on file — enter it on the Products page">add cost</span>),
+      render: (r) => (r.breakEvenAdRatePct != null ? pct(r.breakEvenAdRatePct / 100) : r.economicsStatus === 'MISSING_PRICE' ? <Pill tone="neutral">no price</Pill> : <Pill tone="warning" title="No product cost on file — enter it on the Products page">add cost</Pill>),
       sortValue: (r) => r.breakEvenAdRatePct ?? -1,
     },
     { key: 'price', label: 'Price', render: (r) => money(r.priceCents, currency), sortValue: (r) => r.priceCents ?? -1 },

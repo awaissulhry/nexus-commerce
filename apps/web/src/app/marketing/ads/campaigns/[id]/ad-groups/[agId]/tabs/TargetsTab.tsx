@@ -10,7 +10,7 @@
  * Status + Bid (PATCH /advertising/ad-targets/:id; status + bid sync to Amazon, deploy-gated).
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { AddKeywordsTargetsModal } from './AddKeywordsTargetsModal'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../../../_grid/AdsDataGrid'
@@ -20,6 +20,7 @@ import { bulkPatch, AdjustBidModal } from '../../../../_grid/bulkActions'
 import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { AdGroupDetailData } from '../AdGroupDetail'
+import { pillTone } from '../../../../../_shared/pillTone'
 
 interface TargetRow {
   id: string
@@ -57,7 +58,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
   )
 
   const columns: GridColumn<TargetRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'bid', label: 'Bid', render: (r) => eur(num(r.bidCents) / 100), sortValue: (r) => num(r.bidCents), filterValue: (r) => num(r.bidCents) / 100, total: '' },
     { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },
     { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },

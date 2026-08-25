@@ -8,7 +8,7 @@
  * parity placeholders where Amazon has no data source, exactly as the Ad Manager treats them).
  */
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import Link from 'next/link'
 import { Plus, Layers, ExternalLink } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../_grid/AdsDataGrid'
@@ -19,6 +19,7 @@ import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CreateAdGroupModal } from './CreateAdGroupModal'
 import type { CampaignDetailData } from '../CampaignDetail'
+import { pillTone } from '../../../_shared/pillTone'
 
 interface AdGroupRow {
   id: string
@@ -61,7 +62,7 @@ export function AdGroupsTab({ campaign, campaignId, onRefresh }: { campaign: Cam
   // no ad-group-level data source, exactly as the Ad Manager treats them. Header (i) tips
   // pull from the shared METRIC_TIPS so they match the filter tooltips verbatim.
   const columns: GridColumn<AdGroupRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'defaultBid', label: 'Default Bid', render: (r) => eur(num(r.defaultBidCents) / 100), sortValue: (r) => num(r.defaultBidCents), total: '' },
     { key: 'target', label: 'Target', tip: 'Number of keyword/product targets in this ad group', render: (r) => <span className="h10-tgt">{int(r.targets?.length ?? 0)}<ExternalLink size={13} className="og" /></span>, sortValue: (r) => r.targets?.length ?? 0, total: (vr) => { const T = tot(vr); return int(T.targets) } },
     { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },

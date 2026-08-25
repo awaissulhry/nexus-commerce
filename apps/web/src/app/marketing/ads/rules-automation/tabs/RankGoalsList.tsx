@@ -11,7 +11,7 @@
  * builder's target palette, and persisted group-level enable/pause.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from '../dayparting/_rd/rdFilters'
@@ -29,6 +29,7 @@ import { useRdUrlState } from '../dayparting/_rd/useRdUrlState'
 import { GRAIN_LABEL, boundBy, groupMatchesScope } from '../dayparting/_rd/scope'
 import type { RdGroupScope } from '../dayparting/_rd/types'
 import { getBackendUrl } from '@/lib/backend-url'
+import { pillTone } from '../../_shared/pillTone'
 
 interface RankRow {
   id: string; name: string; baseline: string; baselineKey: string; baselineColor: string | null
@@ -278,7 +279,7 @@ export function RankGoalsList() {
       key: 'health', label: 'Health', metric: false, sortable: true,
       sortValue: (r) => ({ bad: 0, warn: 1, muted: 2, ok: 3 })[r.health.tone],
       tip: 'Whether this schedule is actually working. Status only tells you whether it is switched on.',
-      render: (r) => <span className={`h10-pill ${r.health.tone}`} title={r.health.detail}>{r.health.label}</span>,
+      render: (r) => <Pill tone={pillTone(r.health.tone)} title={r.health.detail}>{r.health.label}</Pill>,
     },
     // RDX/B4 — hidden by default: the page's job is control, and four metric columns would push
     // Health and Now-holding off a narrow screen. One click in Customise brings them back.
@@ -308,7 +309,7 @@ export function RankGoalsList() {
         return <span>{sl > 0 ? `${Math.round((c / sl) * 1000) / 10}%` : '\u2014'}</span>
       },
     },
-    { key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.enabled ? 0 : 1), render: (r) => <span className={`h10-pill ${r.enabled ? 'ok' : 'warn'}`}>{r.enabled ? 'Active' : 'Paused'}</span> },
+    { key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.enabled ? 0 : 1), render: (r) => <Pill tone={pillTone(r.enabled ? 'ok' : 'warn')}>{r.enabled ? 'Active' : 'Paused'}</Pill> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [tmetaState])
 

@@ -7,7 +7,7 @@
  * only what the engine recorded.
  */
 import Link from 'next/link'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { H10Modal } from '../../_lib/modal'
 import { eurC } from '../../_lib'
 import { type WhyReasoning, conditionSentence, CENTS_METRICS, PCT_METRICS, type RuleCondition } from '../_lib/rules'
@@ -43,7 +43,7 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
                 <td>{conditionSentence(c)}</td>
                 <td>{fmtVal(c, c.value)}</td>
                 <td>{fmtVal(c, c.cmp)}</td>
-                <td>{c.pass === true ? <span className="h10-pill ok">met</span> : c.pass === false ? <span className="h10-pill arch">not met</span> : <span className="h10-pill arch" title="Recorded before ER3.2 — per-condition values weren't captured">n/a</span>}</td>
+                <td>{c.pass === true ? <Pill tone="success">met</Pill> : c.pass === false ? <Pill tone="neutral">not met</Pill> : <Pill tone="neutral" title="Recorded before ER3.2 — per-condition values weren't captured">n/a</Pill>}</td>
               </tr>
             ))}
           </tbody>

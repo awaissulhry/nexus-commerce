@@ -5,7 +5,7 @@
  * C1). Used by the Ad Manager.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 
@@ -50,7 +50,7 @@ export function ImportCsvModal(props: { open: boolean; onClose: () => void; onDo
             {diff.map((r) => (
               <tr key={r.row}>
                 <td>{r.row}</td><td>{r.kind}</td><td>{r.target}</td><td>{r.from}</td><td>{r.to}</td>
-                <td>{r.error ? <span className="h10-pill warn">{r.error}</span> : r.note ? <span className="h10-pill warn">{r.note}</span> : <span className="h10-pill ok">ok</span>}</td>
+                <td>{r.error ? <Pill tone="warning">{r.error}</Pill> : r.note ? <Pill tone="warning">{r.note}</Pill> : <Pill tone="success">ok</Pill>}</td>
               </tr>
             ))}
           </tbody>

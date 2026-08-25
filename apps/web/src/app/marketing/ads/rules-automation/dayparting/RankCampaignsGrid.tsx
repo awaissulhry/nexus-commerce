@@ -27,6 +27,7 @@ import { GrainSwitch } from './_rd/GrainSwitch'
 import { CeilingCell, GoalCell, ModeCell, PlacementCell, SignalCell } from './_rd/RuntimeCells'
 import type { RdCampaignRow } from './_rd/types'
 import { Pill } from '@/design-system/primitives'
+import { pillTone } from '../../_shared/pillTone'
 
 const builderHref = (groupId: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule?groupId=${groupId}`
 
@@ -182,7 +183,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     },
     {
       key: 'status', label: 'Status', metric: false, sortable: true, sortValue: (r) => (r.scheduleEnabled ? 0 : 1),
-      render: (r) => <span className={`h10-pill ${r.scheduleEnabled ? 'ok' : 'warn'}`}>{r.scheduleEnabled ? 'Active' : 'Paused'}</span>,
+      render: (r) => <Pill tone={pillTone(r.scheduleEnabled ? 'ok' : 'warn')}>{r.scheduleEnabled ? 'Active' : 'Paused'}</Pill>,
     },
   ], [palette, portfolioNames, lineLabel, setUrl])
 

@@ -6,10 +6,11 @@
  * the 2×-daily note, guarded write.
  */
 import { useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 import { money } from '../../campaigns/_grid/format'
+import { pillTone } from '../../_shared/pillTone'
 
 export function GridBudgetModal(props: {
   open: boolean; onClose: () => void
@@ -42,7 +43,7 @@ export function GridBudgetModal(props: {
       <div className="eb-form-row" style={{ alignItems: 'center' }}>
         <div><label>Daily budget ({props.currency})</label>
           <input className="h10-cd-input" style={{ width: 140 }} type="number" min={1} step={0.5} value={value} onChange={(e) => setValue(e.target.value)} /></div>
-        <span className={`h10-pill ${props.usedToday >= 12 ? 'warn' : 'arch'}`} title="eBay hard limit: 15 budget updates per campaign per day">{props.usedToday} / 15 edits today</span>
+        <Pill tone={pillTone(props.usedToday >= 12 ? 'warn' : 'arch')} title="eBay hard limit: 15 budget updates per campaign per day">{props.usedToday} / 15 edits today</Pill>
       </div>
       <p className="eb-be-hint">Current: <b>{money(props.currentCents, props.currency)}</b>/day · eBay may spend up to 2× the daily budget on a single day (monthly cap = 30.4× daily).</p>
       <Err msg={error} />

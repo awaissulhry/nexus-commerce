@@ -10,11 +10,12 @@
  * (AU/DE/GB/US only — stated honestly for the rest).
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
 import { postEbayAds } from '../../../../_lib'
 import { emptyGroup, SUGGEST_MARKETS, type CampaignPlan, type PlanAdGroup, type Seed } from '../plan'
+import { pillTone } from '../../../../../_shared/pillTone'
 
 export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: Partial<CampaignPlan>) => void }) {
   const suggestAvailable = SUGGEST_MARKETS.has(plan.marketplace)
@@ -98,7 +99,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                           <span className="t">{s.text}</span>
                         </label>
                       </td>
-                      <td className="ed"><span className={`h10-pill ${s.source === 'MANUAL' ? 'ok' : 'arch'}`}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</span></td>
+                      <td className="ed"><Pill tone={pillTone(s.source === 'MANUAL' ? 'ok' : 'arch')}>{s.source === 'ASPECT/FREQUENT' ? 'aspects' : s.source.toLowerCase()}</Pill></td>
                       <td className="ed">
                         <span className="eb-dd dense"><H10Select ariaLabel={`Match type for ${s.text}`} width={110} value={s.matchType}
                           onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}

@@ -19,12 +19,13 @@
  * weeks early is the mistake the feature exists to prevent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { CalendarClock, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import type { TargetPalette } from './ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
+import { pillTone } from '../../_shared/pillTone'
 
 type Phase = 'draft' | 'upcoming' | 'live' | 'past'
 interface EventRow {
@@ -162,7 +163,7 @@ export function ScheduleEvents({ groupId, palette, targetKeys }: {
           : items.length === 0 ? <div className="h10-evt-empty">No event overrides. The weekly plan runs every week.</div>
           : items.map((e) => (
             <div className={`h10-evt-r ${e.phase}`} key={e.id}>
-              <span className={`h10-pill ${PHASE_TONE[e.phase]}`}>{PHASE_LABEL[e.phase]}</span>
+              <Pill tone={pillTone(PHASE_TONE[e.phase])}>{PHASE_LABEL[e.phase]}</Pill>
               <span className="body">
                 <span className="nm">{e.name}</span>
                 <span className="meta">{fmt(e.startsAt)} → {fmt(e.endsAt)} · {describe(e)}</span>

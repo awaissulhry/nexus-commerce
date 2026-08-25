@@ -20,6 +20,7 @@ import {
   METRIC_LABELS, OP_LABELS, BENCH_LABELS, ACTIONS_FOR_SCOPE, ACTION_LABELS, CENTS_METRICS, PCT_METRICS,
   type RuleMetric, type RuleOp, type RuleBenchmark, conditionSentence, actionSentence, conditionValueLabel,
 } from '../_lib/rules'
+import { pillTone } from '../../../_shared/pillTone'
 
 interface CampaignLite { id: string; name: string; marketplace: string; fundingModel: string; status: string }
 interface PreviewOut { evaluated: number; matched: number; samples: Array<{ kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string }; from: unknown; to: unknown }> }
@@ -161,7 +162,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
       <div className="eb-editor-head">
         <Link href="/marketing/ads/ebay/automation" className="h10-am-link">← Rules &amp; Automation</Link>
         <h2>{isEdit ? 'Edit rule' : 'New rule'}</h2>
-        {isEdit && enabled != null && <span className={`h10-pill ${enabled ? 'ok' : 'arch'}`}>{enabled ? 'enabled' : 'disabled'}</span>}
+        {isEdit && enabled != null && <Pill tone={pillTone(enabled ? 'ok' : 'arch')}>{enabled ? 'enabled' : 'disabled'}</Pill>}
         <span className="eb-chip">{trigger.scope === 'CPS_AD' ? 'CPS ads' : 'CPC keywords'}</span>
       </div>
 
@@ -219,7 +220,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                   onChange={(e) => { setScopeIds((ids) => (e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id))); setPreview(null) }} />
                 <span>{c.name}</span>
                 <span className="eb-chip">{c.marketplace.replace('EBAY_', '')}</span>
-                <span className={`h10-pill ${c.status === 'RUNNING' ? 'ok' : 'arch'}`}>{c.status}</span>
+                <Pill tone={pillTone(c.status === 'RUNNING' ? 'ok' : 'arch')}>{c.status}</Pill>
               </label>
             ))}
           </div>

@@ -28,6 +28,7 @@ import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { fmtChangeValue } from '../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Pill } from '@/design-system/primitives'
+import { pillTone } from '../_shared/pillTone'
 
 interface Origin { kind: string; id: string | null; name: string }
 interface Delivery { state: string; attempts: number; lastError: string | null }
@@ -257,7 +258,7 @@ export function ChangeLogClient() {
     {
       key: 'source', label: 'Source', metric: false, sortable: true, sortValue: (r) => r.source,
       tip: 'Who caused the change — derived from the recorded actor, never guessed.',
-      render: (r) => { const s = SOURCE_LABELS[r.source] ?? SOURCE_LABELS.system; return <span className={`h10-pill ${s.cls}`} title={s.tip}>{s.label}</span> },
+      render: (r) => { const s = SOURCE_LABELS[r.source] ?? SOURCE_LABELS.system; return <Pill tone={pillTone(s.cls)} title={s.tip}>{s.label}</Pill> },
     },
     {
       // The differentiator: not "an automation did this" but WHICH one, by name.
@@ -310,9 +311,9 @@ export function ChangeLogClient() {
       render: (r) => (
         r.delivery
           ? (
-            <span className={`h10-pill ${DELIVERY_TONE[r.delivery.state] ?? 'arch'}`} title={r.delivery.lastError ?? `${r.delivery.attempts} attempt${r.delivery.attempts === 1 ? '' : 's'}`}>
+            <Pill tone={pillTone(DELIVERY_TONE[r.delivery.state] ?? 'arch')} title={r.delivery.lastError ?? `${r.delivery.attempts} attempt${r.delivery.attempts === 1 ? '' : 's'}`}>
               {r.delivery.state.toLowerCase().replace('_', ' ')}{r.delivery.attempts > 1 ? ` ×${r.delivery.attempts}` : ''}
-            </span>
+            </Pill>
           )
           : <span className="h10-cl-none" title="No delivery record for this change.">no record</span>
       ),

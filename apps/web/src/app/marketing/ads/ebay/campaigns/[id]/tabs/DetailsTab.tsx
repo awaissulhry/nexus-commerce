@@ -9,12 +9,13 @@
  * critique D-1 (read-only settings) and D-2 (raw-JSON criterion/prefs).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { money } from '../../../../campaigns/_grid/format'
 import { EbDateField } from '../../../_lib/EbDateField'
 import { postEbayAds, type CampaignDetailPayload } from '../../../_lib'
 import type { Strategy } from '../tabs'
 import { CriterionCard } from './CriterionCard'
+import { pillTone } from '../../../../_shared/pillTone'
 
 interface FormState { name: string; endDate: string; budgetEur: string; capPct: string }
 
@@ -158,9 +159,9 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
                     <label>Daily budget ({currency})</label>
                     <input type="number" min={1} step={0.5} value={form.budgetEur} onChange={(e) => set('budgetEur', e.target.value)} disabled={ended} />
                   </div>
-                  <span className={`h10-pill ${c.budgetUpdatesToday >= 12 ? 'warn' : 'arch'}`} title="eBay hard limit: 15 budget updates per campaign per day — shown before you try, not as an error after.">
+                  <Pill tone={pillTone(c.budgetUpdatesToday >= 12 ? 'warn' : 'arch')} title="eBay hard limit: 15 budget updates per campaign per day — shown before you try, not as an error after.">
                     {c.budgetUpdatesToday} / 15 edits today
-                  </span>
+                  </Pill>
                 </div>
                 <p className="eb-be-hint" style={{ marginTop: 10 }}>Current: <b>{money(c.dailyBudgetCents, currency)}</b>/day · eBay may spend up to 2× the daily budget on a single day (monthly cap = 30.4× daily). Budget decreases after overspend apply the next day.</p>
               </div>

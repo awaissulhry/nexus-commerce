@@ -361,7 +361,6 @@
 .h10-am-grid th.st, .h10-am-grid td.st { text-align: left; white-space: nowrap; }
 .h10-pill { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 5px; padding: 3px 9px; white-space: nowrap; }
 .h10-pill.ok { color: var(--nds-blue-900); background: var(--nds-pill-success-bg); }
-.h10-pill.warn { color: #9a6700; background: #fdf3d3; }
 .h10-pill.arch { color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); }
 
 .h10-am-grid tr.sk td { border-bottom: 1px solid var(--nds-grey-75); }
@@ -2840,7 +2839,6 @@
    write" are the containment boundary working, not faults, and 134 of 216
    campaigns are in it. */
 .h10-pill.bad { color: #a3342b; background: #fdeceb; }
-.h10-pill.muted { color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); }
 
 /* ACR.1.6c — `caution` was referenced and never defined, so the super-wizard's
    ADVICE ("that's a lot of campaigns — consider trimming") rendered in the exact

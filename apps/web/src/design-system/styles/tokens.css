@@ -118,7 +118,7 @@
   --nds-pill-warning-bg: var(--nds-amber-soft);
   --nds-pill-neutral-fg: #6b7480;
   --nds-pill-neutral-bg: var(--nds-grey-100);
-  --nds-pill-danger-fg: var(--nds-danger-strong);
+  --nds-pill-danger-fg: var(--nds-danger-text);
   --nds-pill-danger-bg: var(--nds-danger-soft);
 
   /* ── Tier 3: program / targeting chips ── */

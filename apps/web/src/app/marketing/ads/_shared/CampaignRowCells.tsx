@@ -34,6 +34,7 @@ import { ChevronDown, ExternalLink, Lightbulb, Pencil } from 'lucide-react'
 import { HoverCard } from '../campaigns/FilterDropdown'
 import { Button, Pill } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
+import { pillTone } from './pillTone'
 
 // ── the label maps, defined once ────────────────────────────────────────────────────────────────
 
@@ -141,10 +142,10 @@ export function StatusCell({ status, name, onChange }: {
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const sp = STATUS_PILL[status] ?? { label: status, cls: '' }
-  if (!onChange) return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span>
+  if (!onChange) return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill>
   return (
     <span className="h10-statuscell">
-      <span className={`h10-pill ${sp.cls}`}>{sp.label}</span>
+      <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill>
       <button
         type="button" className="ch" aria-label={`Change status for ${name}`} aria-expanded={menu != null}
         onClick={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setMenu({ x: Math.max(8, r.right - 156), y: r.bottom + 5 }) }}
@@ -220,8 +221,9 @@ export function AutomationCell({ managed, missing, pins, boundRuleNames, account
   ].filter(Boolean).join('\n')
   return (
     <span className="h10-auto-cell" title={tip}>
-      {/* Own class rather than `h10-pill bad`: that modifier is used by the delivery column but has
-          never been defined in ads.css, so it renders uncoloured. */}
+      {/* Own class rather than a danger Pill: this is a compound cell (state + pins + rule
+          count), not a single chip. (`.h10-pill.bad` WAS undefined when this was written; it is
+          defined now, and the tone lives in _shared/pillTone.ts.) */}
       <span className={`h10-auto-state ${managed ? 'on' : 'off'}`}>{managed ? 'Managed' : 'Off-limits'}</span>
       {shown.map(([k, s]) => <span key={k} className="h10-auto-pin">{s}</span>)}
       {bound.length > 0 && <span className="h10-auto-rules">{bound.length}</span>}
@@ -270,12 +272,12 @@ export function AmazonDeliveryCell({ status, reasons }: { status?: string | null
     return <Pill tone="success" title={`Amazon reports this campaign is serving.${why ? `\nReason codes: ${why}` : ''}`}>Delivering</Pill>
   }
   return (
-    <span
-      className="h10-pill warn"
+    <Pill
+      tone="warning"
       title={`Amazon reports this campaign is NOT serving${why ? `, because: ${why}` : ''}.\nThis is Amazon's own view of the campaign, not whether our last write reached them — the Write Delivery column answers that.`}
     >
       Not delivering{why ? ` · ${why}` : ''}
-    </span>
+    </Pill>
   )
 }
 

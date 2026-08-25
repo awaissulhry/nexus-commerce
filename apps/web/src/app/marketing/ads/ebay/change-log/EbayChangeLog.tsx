@@ -13,6 +13,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_
 import '../ebay.css'
 import { getEbayAds, actionSummary, SOURCE_LABELS, type ActionRow } from '../_lib'
 import { Button, Pill } from '@/design-system/primitives'
+import { pillTone } from '../../_shared/pillTone'
 
 const PAGE = 200
 
@@ -40,7 +41,7 @@ export function EbayChangeLog() {
   const columns: GridColumn<ActionRow>[] = useMemo(() => [
     {
       key: 'source', label: 'Source', metric: false, sortValue: (a) => a.source ?? '',
-      render: (a) => { const s = SOURCE_LABELS[a.source ?? 'operator'] ?? SOURCE_LABELS.operator; return <span className={`h10-pill ${s.cls}`} title={s.tip}>{s.label}</span> },
+      render: (a) => { const s = SOURCE_LABELS[a.source ?? 'operator'] ?? SOURCE_LABELS.operator; return <Pill tone={pillTone(s.cls)} title={s.tip}>{s.label}</Pill> },
     },
     { key: 'action', label: 'Action', metric: false, sortValue: (a) => a.actionType, render: (a) => <Pill tone="neutral">{a.actionType.replace(/_/g, ' ')}</Pill> },
     { key: 'change', label: 'Change', metric: false, sortable: false, render: (a) => <span className="eb-cl-change" title={actionSummary(a)}>{actionSummary(a) || '—'}</span> },
@@ -50,8 +51,8 @@ export function EbayChangeLog() {
         const mode = String((a.payloadAfter as { _mode?: string } | null)?._mode ?? '')
         return (
           <span className="eb-cl-result">
-            <span className={`h10-pill ${a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn'}`}>{a.channelResponseStatus.toLowerCase()}</span>
-            {mode && mode !== 'accept' && <span className={`h10-pill ${mode === 'live' ? 'ok' : 'arch'}`}>{mode}</span>}
+            <Pill tone={pillTone(a.channelResponseStatus === 'SUCCESS' ? 'ok' : 'warn')}>{a.channelResponseStatus.toLowerCase()}</Pill>
+            {mode && mode !== 'accept' && <Pill tone={pillTone(mode === 'live' ? 'ok' : 'arch')}>{mode}</Pill>}
             {a.rolledBackAt && <Pill tone="warning" title={`Rolled back ${new Date(a.rolledBackAt).toLocaleString('en-GB')}`}>rolled back</Pill>}
           </span>
         )

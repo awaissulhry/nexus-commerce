@@ -796,8 +796,6 @@
    whether the schedule is actually working. `ok`/`warn` already exist in ads.css; a failing
    write needs a tone that cannot be mistaken for a warning, and an idle schedule needs one
    that recedes rather than competing with the rows that need attention. */
-.h10-pill.bad { color: #a3211a; background: #fbdedb; }
-.h10-pill.muted { color: var(--nds-pill-neutral-fg); background: var(--nds-grey-100); }
 /* The active rank differs from the baseline only while a window is open — that is the moment
    the operator most needs to notice, so the chip gains weight instead of staying uniform. */
 .h10-rg-chip.live { border-color: var(--nds-blue-600); box-shadow: 0 0 0 1px rgba(31,111,222,.18); font-weight: 700; }

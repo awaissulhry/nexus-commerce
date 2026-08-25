@@ -8,7 +8,7 @@
  * &negative=1, filtered to isNegative===true (deploy-safe vs an API predating the flag).
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../_grid/AdsDataGrid'
@@ -17,6 +17,7 @@ import { H10Select, StatusOptions, AD_STATUS_OPTS } from '../../FilterDropdown'
 import { bulkPatch } from '../../_grid/bulkActions'
 import { AddNegativeKeywordsModal } from './AddNegativeKeywordsModal'
 import type { CampaignDetailData } from '../CampaignDetail'
+import { pillTone } from '../../../_shared/pillTone'
 
 interface NegRow { id: string; text: string; matchType: string; status: string; createdAt?: string | null }
 const titleCase = (s?: string | null) => (s ? s.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—')
@@ -46,7 +47,7 @@ export function NegativeTargetsTab({ campaign }: { campaign: CampaignDetailData 
   }, [cid, bump])
 
   const columns: GridColumn<NegRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <span className={`h10-pill ${sp.cls}`}>{sp.label}</span> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'matchType', label: 'Match Type', metric: false, sortable: true, render: (r) => titleCase(r.matchType), sortValue: (r) => titleCase(r.matchType), total: '' },
     { key: 'dateAdded', label: 'Date Added', metric: false, sortable: true, render: (r) => fmtDate(r.createdAt), sortValue: (r) => (r.createdAt ? Date.parse(r.createdAt) : 0), total: '' },
   ], [])
