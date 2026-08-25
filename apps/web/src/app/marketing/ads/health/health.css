@@ -79,10 +79,10 @@
 /* ── ACR.6 (R12) — endpoint probe panel ───────────────────────────────────────
    Collapsed by default: it is a diagnostic, and every run costs about a dozen
    real Amazon requests. */
-/* `Button block variant="link"` supplies the full-width row and the reset; `.hl-sec-h` beside it
-   supplies the section-header type. Only the two the DS link variant sets differently remain,
-   at 0,2,0 so neither depends on load order. */
-.nds-btn.hl-pb-t { padding: 0; color: var(--nds-grey-900); }
+/* `Button block variant="quiet"` supplies the full-width row, the reset and the hover reveal;
+   `.hl-sec-h` beside it supplies the section-header type. Only the inset is different, and it is
+   written at 0,3,0 so a two-class DS rule cannot beat it by load order. */
+.nds-btn.block.hl-pb-t { padding: 4px 0; }
 .hl-pb-t svg.open { transform: rotate(180deg); }
 .hl-pb-lede { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .hl-pb-ctl { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 11px; }

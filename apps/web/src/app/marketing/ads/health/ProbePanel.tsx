@@ -117,7 +117,7 @@ export function ProbePanel() {
 
   return (
     <div className="hl-section" id="hl-probe">
-      <Button block variant="link" className="hl-sec-h hl-pb-t" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <Button block variant="quiet" className="hl-sec-h hl-pb-t" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Stethoscope size={15} aria-hidden /> Endpoint probe
         <span className="hl-chip">diagnostic</span>
         <span className="grow" />

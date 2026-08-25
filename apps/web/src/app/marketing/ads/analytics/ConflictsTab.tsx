@@ -250,7 +250,7 @@ export function ConflictsTab({ market }: { market: string }) {
               )}
 
               {!isOpen && dormant.length > 0 && (
-                <Button block variant="link" className="cvf-more" onClick={() => toggle(key)}>
+                <Button block variant="quiet" className="cvf-more" onClick={() => toggle(key)}>
                   + {dormant.length} more {dormant.length === 1 ? 'campaign claims' : 'campaigns claim'} this term but took no impressions in {board.windowDays} days
                 </Button>
               )}
