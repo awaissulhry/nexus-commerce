@@ -15,7 +15,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Clock, FlaskConical, GraduationCap, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ScopeForm, type ScopeOptions, type ScopeValue } from './ScopeForm'
@@ -137,7 +137,7 @@ export function RuleDetail({
             </b>
             <span>{rule.categoryLabel}{rule.marketplace ? ` · ${rule.marketplace}` : ''}</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} aria-hidden /></button>
+          <ToolbarButton className="h10-au-close" icon={<X size={18} aria-hidden />} label="Close" tooltip={false} onClick={onClose} />
         </div>
 
         <div className="h10-au-db">

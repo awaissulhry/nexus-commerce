@@ -31,7 +31,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { X, Play, AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -140,7 +140,7 @@ export function LeverDrawer({ engine, onClose, onRan }: {
             <p>{engine.what}</p>
             {engine.cron && <code className="acr-dw-cron">{engine.cron}</code>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="acr-dw-x"><X size={18} /></button>
+          <ToolbarButton className="acr-dw-x" icon={<X size={18} />} label="Close" tooltip={false} onClick={onClose} />
         </header>
 
         <div className="acr-dw-b">

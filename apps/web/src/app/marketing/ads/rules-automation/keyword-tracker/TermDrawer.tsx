@@ -31,6 +31,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -132,7 +133,7 @@ export function TermDrawer({
               {data?.period && <> · week of <b>{dayMonth(data.period)}</b> ({data.periodAgeDays}d old)</>}
             </p>
           </div>
-          <button type="button" className="h10-kt-dr-x" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <ToolbarButton variant="boxed" icon={<X size={16} />} label="Close" tooltip={false} onClick={onClose} />
         </header>
 
         {err && <p className="h10-kt-blind"><AlertTriangle size={13} /><span>{err}</span></p>}

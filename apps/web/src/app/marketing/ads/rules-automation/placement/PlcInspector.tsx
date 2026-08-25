@@ -31,7 +31,7 @@
  *     the ledger always (it is fetched by id, not from the view).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, Loader2, Pin, PinOff, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -141,7 +141,7 @@ export function PlcInspector({ campaignId, lanes, onClose, onChanged }: {
             <b>{head?.name ?? 'Campaign'}</b>
             <span>{head ? <>{head.marketplace ?? '—'} · {head.status.toLowerCase()} · placement</> : 'outside the current filters — lane facts not loaded; the ledger below is fetched by id'}</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} aria-hidden /></button>
+          <ToolbarButton className="h10-au-close" icon={<X size={18} aria-hidden />} label="Close" tooltip={false} onClick={onClose} />
         </div>
         <div className="h10-au-db">
           {head != null && (

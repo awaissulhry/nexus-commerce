@@ -40,6 +40,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Info, ShieldCheck, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps, NegMatchType, NegAttribution } from './slot-contract'
@@ -158,7 +159,7 @@ export function NegTermDrawer({ scope, push, focus, view }: NegSlotProps) {
               </p>
             )}
           </div>
-          <button type="button" className="h10-ngd-close" onClick={close} aria-label="Close"><X size={15} /></button>
+          <ToolbarButton variant="boxed" className="h10-ngd-close" icon={<X size={15} />} label="Close" tooltip={false} onClick={close} />
         </header>
 
         {data && data.term.protectedBy.length > 0 && (

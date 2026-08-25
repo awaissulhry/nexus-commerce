@@ -19,6 +19,7 @@
  * as the same kind of object in the same console.
  */
 import { useCallback, useEffect, useState } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { X } from 'lucide-react'
 import { ChangeList } from './ScheduleActivity'
 import { ScheduleVersions, type TargetPalette } from './ScheduleVersions'
@@ -66,7 +67,7 @@ export function ScheduleActivityDrawer({ group, palette, initialTab = 'next24', 
           {/* Retitled from "History" when the forward view landed: two of the three panels are
               still history, but the drawer as a whole is no longer only about the past. */}
           <div><b>Schedule</b><span title={group.name}>{group.name}</span></div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={onClose} />
         </div>
 
         {/* FB.3e — real tab semantics: each tab names the panel it controls, the panel names the

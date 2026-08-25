@@ -47,7 +47,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, ArrowRight, ExternalLink, Loader2, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
@@ -138,7 +138,7 @@ export function HvPromote({ scope, push, reload, confirm }: HvSlotProps) {
       <div className="card">
         <div className="hd">
           <b>{result ? 'What happened' : `Promote ${num(ids.length)} candidate${ids.length === 1 ? '' : 's'}`}</b>
-          <button type="button" className="x" onClick={close} aria-label="Close"><X size={14} /></button>
+          <ToolbarButton variant="boxed" icon={<X size={14} />} label="Close" tooltip={false} onClick={close} />
         </div>
 
         {busy && !plan && <p className="load"><Loader2 size={14} className="spin" /> Working out exactly what this would do…</p>}

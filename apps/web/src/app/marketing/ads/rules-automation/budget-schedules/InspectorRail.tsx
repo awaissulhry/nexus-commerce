@@ -32,6 +32,7 @@
  */
 
 import type { ReactNode } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { X } from 'lucide-react'
 import type { BspOpen } from './urlState'
 
@@ -88,9 +89,7 @@ export function InspectorRail({
     <aside className="h10-bsp-rail" aria-label={heading}>
       <div className="h10-bsp-railhd">
         <b title={heading}>{heading}</b>
-        <button type="button" onClick={onClose} aria-label="Close inspector">
-          <X size={14} />
-        </button>
+        <ToolbarButton icon={<X size={14} />} label="Close inspector" tooltip={false} onClick={onClose} />
       </div>
 
       <div className="h10-bsp-railbd">

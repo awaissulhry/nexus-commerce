@@ -462,11 +462,8 @@
   font-size: 11px; color: #46536a; background: var(--nds-grey-75);
   border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 2px 6px;
 }
-.acr-dw-x {
-  flex-shrink: 0; background: none; border: none; cursor: pointer;
-  color: var(--nds-text-muted); padding: 3px; border-radius: 5px; line-height: 0;
-}
-.acr-dw-x:hover { background: var(--nds-grey-75); color: var(--nds-grey-700); }
+/* DS-ALIGN — the drawer close is the DS `ToolbarButton`; only the no-shrink is ours. */
+.acr-dw-x { flex-shrink: 0; }
 
 .acr-dw-b { padding: 16px 18px 40px; overflow-y: auto; flex: 1; }
 .acr-dw-b .acr-sec-head { margin-top: 24px; }

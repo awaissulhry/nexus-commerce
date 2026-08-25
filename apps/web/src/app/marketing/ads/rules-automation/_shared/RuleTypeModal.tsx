@@ -12,7 +12,7 @@
  * back to the first option, which is the behaviour every existing caller had.
  */
 import { useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import { RULE_TYPES } from './ruleTypes'
@@ -28,7 +28,7 @@ export function RuleTypeModal({ onClose, initial }: { onClose: () => void; initi
       <div className="h10-rtm" role="dialog" aria-label="Select a Rule Type" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="h10-rtm-h">
           <b>Select a Rule Type</b>
-          <button type="button" className="x" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={onClose} />
         </div>
         <div className="h10-rtm-b">
           {RULE_TYPES.map((rt) => (

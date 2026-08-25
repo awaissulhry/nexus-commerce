@@ -23,6 +23,7 @@
  * (an ENABLED keyword target), because a declared bid that never serves is its own finding.
  */
 import { useEffect, useState } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -91,7 +92,7 @@ export function SovRowDrawer({ query, market, scope, onClose }: {
             <b>{query}</b>
             <span>{market} · share of voice{d?.scope.asinScoped ? ` · ${d.scope.asins} scoped ASINs` : ' · whole market'}</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} aria-hidden /></button>
+          <ToolbarButton className="h10-au-close" icon={<X size={18} aria-hidden />} label="Close" tooltip={false} onClick={onClose} />
         </div>
         <div className="h10-au-db">
           {err != null ? (

@@ -44,7 +44,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, ShieldAlert, X } from 'lucide-react'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export type LaneKey = 'top' | 'rest' | 'product'
@@ -234,7 +234,7 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
               <b>The search box is deliberately not part of it</b>: it narrows what you are looking at, not what you act on.
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" disabled={running}><X size={18} aria-hidden /></button>
+          <ToolbarButton icon={<X size={18} aria-hidden />} label="Close" tooltip={false} onClick={onClose} disabled={running} />
         </div>
 
         <div className="h10-plc3-pb">

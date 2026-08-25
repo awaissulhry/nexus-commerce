@@ -43,7 +43,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import {
   AlertTriangle, Check, Info, Download, ShieldCheck, TrendingUp, WifiOff, X, ChevronRight,
@@ -428,7 +428,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
           <div className="box">
             <div className="hd">
               <b>Negate “{target.gram}” as a negative phrase</b>
-              <button type="button" className="x" aria-label="Close" onClick={() => { setResult(null); push({ negate: '' }) }}><X size={14} /></button>
+              <ToolbarButton icon={<X size={14} />} label="Close" tooltip={false} onClick={() => { setResult(null); push({ negate: '' }) }} />
             </div>
 
             {!result ? (

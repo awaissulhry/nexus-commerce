@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Input, Textarea } from '@/design-system/primitives'
+import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Check, Download, Plus, Star, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -182,7 +182,7 @@ export function WatchlistPanel({
               : <>{market} has no watchlist. Create one below, or copy the terms out of a coverage set.</>}
           </p>
         </div>
-        <button type="button" className="h10-kt-wlclose" onClick={onClose} aria-label="Close watchlist editor"><X size={15} /></button>
+        <ToolbarButton variant="boxed" icon={<X size={15} />} label="Close watchlist editor" tooltip={false} onClick={onClose} />
       </div>
 
       {err && <p className="h10-kt-blind"><AlertTriangle size={13} /><span>{err}</span></p>}

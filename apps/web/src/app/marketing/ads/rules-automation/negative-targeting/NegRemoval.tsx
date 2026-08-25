@@ -46,7 +46,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -212,7 +212,7 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
       <div className="h10-ngr" role="dialog" aria-modal="true" aria-label="Stop blocking this term">
         <header className="h10-ngr-head">
           <h3>{result ? 'What happened' : single ? 'Stop blocking this term here?' : `Stop blocking “${ctx?.term.display ?? retireTerm}”?`}</h3>
-          <button type="button" className="h10-ngr-close" onClick={close} disabled={busy} aria-label="Close"><X size={15} /></button>
+          <ToolbarButton variant="boxed" className="h10-ngr-close" icon={<X size={15} />} label="Close" tooltip={false} onClick={close} disabled={busy} />
         </header>
 
         {loading && <p className="h10-ngr-msg"><Loader2 size={13} className="spin" /> Loading the term’s numbers…</p>}

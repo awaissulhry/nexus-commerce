@@ -13,6 +13,7 @@
  * cannot drift visually.
  */
 import { useEffect } from 'react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
 import type { Level } from './ModeNotches'
 
@@ -76,7 +77,7 @@ export function EngineDetail({ engine, onClose }: { engine: EngineActor; onClose
             </b>
             <span>{engine.scope ?? 'account-wide'}</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} aria-hidden /></button>
+          <ToolbarButton className="h10-au-close" icon={<X size={18} aria-hidden />} label="Close" tooltip={false} onClick={onClose} />
         </div>
         <div className="h10-au-db">
           {engine.warning && (
