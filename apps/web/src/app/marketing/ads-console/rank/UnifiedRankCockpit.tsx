@@ -228,8 +228,11 @@ export function UnifiedRankCockpit() {
         </>)}
         <span className="sp" />
         <span className={`az-urc-chip ${tone}`} title="Global automation posture (all advertising rules)">{tone === 'off' ? <AlertTriangle size={12} /> : <Zap size={12} />} {autonomyLabel}</span>
+        {/* `.az-urc-undo` dropped: its `button` rule (0,1,1) sizes any button inside it 30x30 and
+            beats `.nds-tbtn.boxed`'s 28x28 on load order, so the DS icon buttons were rendering
+            at the page's spec, not the DS's. Only the flex row is needed here. */}
         {view === 'cockpit' && (
-          <div className="az-urc-undo">
+          <div style={{ display: 'inline-flex', gap: 2 }}>
             <ToolbarButton variant="boxed" icon={<Undo2 size={15} />} label="Undo" shortcut="⌘Z" description="Undo the last change" disabled={!canUndo} onClick={() => void undo()} />
             <ToolbarButton variant="boxed" icon={<Redo2 size={15} />} label="Redo" shortcut="⇧⌘Z" description="Redo the last undone change" disabled={!canRedo} onClick={() => void redo()} />
           </div>
