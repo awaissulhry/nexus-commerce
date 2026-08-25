@@ -26,7 +26,7 @@
 
 /* Launch state — deliberately heavier than the rest; this is the money control. */
 .h10-sbsd-enable { display: grid; grid-template-columns: 16px 1fr; gap: 11px; align-items: start; cursor: pointer; margin-top: 12px; }
-.h10-sbsd-enable input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: #d9822b; cursor: pointer; }
+.h10-sbsd-enable input { margin: 2px 0 0; }
 .h10-sbsd-enable span { font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.55; max-width: 760px; }
 .h10-sbsd-enable b { color: var(--nds-grey-900); font-weight: 600; }
 .h10-sbsd-warn { margin-top: 12px; font-size: 12.5px; font-weight: 600; color: #8a4b08; background: #fdf5ec; border: 1px solid #f4dcc0; border-radius: var(--nds-radius-md); padding: 10px 13px; }
@@ -85,8 +85,10 @@
    Every control on this surface is now a design-system primitive. What is left
    here is size and monospace — the two things the DS deliberately does not fix
    for a caller — plus the ONE colour that carries meaning: the launch tick keeps
-   its amber accent (`.h10-sbsd-enable input`, above), because that control turns
-   real spend on and reading like every other tick was never the intent. */
+   its amber accent — which is the DS's `tone="warning"` now that `Checkbox` has
+   one, not a hand-declared hex. That also RAISED it: the white tick was 2.93:1 on
+   #d9822b and is 6.31:1 on --nds-warning-text. All that is left here is the 2px
+   optical nudge that aligns a 15px box with the first line of a two-line label. */
 .h10-sbsd-search { max-width: 520px; }
 .h10-sbsd-asins { max-width: 520px; min-height: 92px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .h10-sbsd-fld { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; max-width: 520px; }

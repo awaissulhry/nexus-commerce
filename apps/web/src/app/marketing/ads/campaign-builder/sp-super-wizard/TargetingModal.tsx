@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { Modal } from '@/design-system/components'
-import { Button, Input, Radio, Textarea, Toggle } from '@/design-system/primitives'
+import { Button, Input, Radio, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -69,7 +69,7 @@ function NegKeywordEditor({ manual, auto, onChange }: { manual: NegKeyword[]; au
                 <div className="h10-neg-row" key={`m|${n.text}|${n.matchType}|${i}`}>
                   <span className="kw" title={n.text}>{n.text}</span>
                   <span className={`h10-neg-mtag ${n.matchType === 'PHRASE' ? 'ph' : 'ex'}`}>{negMatchLabel(n.matchType)}</span>
-                  <button type="button" className="rm" onClick={() => onChange(manual.filter((_, idx) => idx !== i))} aria-label={`Remove ${n.text}`}><X size={13} /></button>
+                  <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={13} />} label={`Remove ${n.text}`} onClick={() => onChange(manual.filter((_, idx) => idx !== i))} />
                 </div>
               ))}
             </>

@@ -16,7 +16,7 @@ import { RotateCcw, TrendingUp, Trash2, Loader2, ChevronDown, ChevronRight, GitC
 import { getBackendUrl } from '@/lib/backend-url'
 
 import { InfoTip } from '../../campaigns/InfoTip'
-import { Button, Input, Pill } from '@/design-system/primitives'
+import { Button, Input, Pill, ToolbarButton } from '@/design-system/primitives'
 import { pillTone } from '../../_shared/pillTone'
 import { Field, Listbox } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
@@ -97,9 +97,12 @@ export function HistoryPanel({ market, onReplicateAgain }: {
           <p className="h10-rep-hist-none">None saved. You can save one at the end of a run — it stores what you replicated so you do not have to rebuild the selection.</p>
         ) : saved.map((b) => (
           <div className="h10-rep-hist-row" key={b.id}>
-            <button type="button" className="exp" onClick={() => setOpenBp(openBp === b.id ? null : b.id)} aria-expanded={openBp === b.id} aria-label="Show what is inside" title="Show which campaign roles this saved structure contains">
-              {openBp === b.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
+            <ToolbarButton
+              size="sm" tooltip={false} aria-expanded={openBp === b.id}
+              icon={openBp === b.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              label="Show what is inside" title="Show which campaign roles this saved structure contains"
+              onClick={() => setOpenBp(openBp === b.id ? null : b.id)}
+            />
             <span className="nm"><b>{b.name}</b><span className="m">{b.marketplace} · captured from {b.productToken}</span></span>
             <span className="stat">
               {b.stats ? `${b.stats.campaigns} campaigns · ${b.stats.positives} targets · ${b.stats.negatives} negatives` : '—'}
@@ -110,9 +113,7 @@ export function HistoryPanel({ market, onReplicateAgain }: {
               </InfoTip>
             )}
             <InfoTip tip={`Delete the saved structure "${b.name}". This only removes the saved recipe — campaigns it has already created are untouched.`}>
-              <button type="button" className="cutbtn" disabled={busy === b.id} onClick={() => void deleteBlueprint(b.id)} aria-label={`Delete ${b.name}`}>
-                <Trash2 size={13} />
-              </button>
+              <ToolbarButton size="sm" tooltip={false} tone="danger" icon={<Trash2 size={13} />} label={`Delete ${b.name}`} disabled={busy === b.id} onClick={() => void deleteBlueprint(b.id)} />
             </InfoTip>
             {openBp === b.id && (
               <div className="detail">
@@ -146,16 +147,16 @@ export function HistoryPanel({ market, onReplicateAgain }: {
             </span>
             {r.launchMode === 'floor' && r.liveCampaigns > 0 && (
               <InfoTip tip={`Takes this run's ${r.liveCampaigns} campaigns off the €0.02 floor and up to the bids it was planned at. This is when they start spending.`}>
-                <button type="button" className="h10-rep-bulkbtn" disabled={busy === r.id} onClick={() => void act(r.id, 'raise-bids')}>
+                <Button size="sm" disabled={busy === r.id} onClick={() => void act(r.id, 'raise-bids')}>
                   <TrendingUp size={13} aria-hidden /> Raise bids
-                </button>
+                </Button>
               </InfoTip>
             )}
             {r.liveCampaigns > 0 && (
               <InfoTip tip={`Archives all ${r.liveCampaigns} campaigns this run created, as one unit. Spending stops. Archived is permanent on Amazon — they cannot be brought back, so this means re-running the replication, not undoing it.`}>
-                <button type="button" className="h10-rep-bulkbtn danger" disabled={busy === r.id} onClick={() => void act(r.id, 'rollback')}>
+                <Button variant="danger-outline" size="sm" disabled={busy === r.id} onClick={() => void act(r.id, 'rollback')}>
                   <RotateCcw size={13} aria-hidden /> Roll back
-                </button>
+                </Button>
               </InfoTip>
             )}
             {busy === r.id && <Loader2 size={14} className="spin" aria-hidden />}

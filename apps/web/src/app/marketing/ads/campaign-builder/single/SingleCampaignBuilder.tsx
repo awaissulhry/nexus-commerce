@@ -17,7 +17,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { Button, Checkbox, Input, Radio, Toggle } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -442,8 +442,8 @@ export function SingleCampaignBuilder() {
                     ) : campaignRules.map((r) => (
                       <div className="trow" key={r.id}>
                         <span className="rname">
-                          <button type="button" className="ic" aria-label={`Edit ${r.name}`}><Pencil size={13} /></button>
-                          <button type="button" className="ic del" onClick={() => removeRule(r.id)} aria-label={`Delete ${r.name}`}><Trash2 size={13} /></button>
+                          <ToolbarButton size="sm" tooltip={false} icon={<Pencil size={13} />} label={`Edit ${r.name}`} />
+                          <ToolbarButton size="sm" tooltip={false} tone="danger" icon={<Trash2 size={13} />} label={`Delete ${r.name}`} onClick={() => removeRule(r.id)} />
                           {r.name}
                         </span>
                         <span className="rtype">{r.type}</span>
@@ -541,9 +541,9 @@ export function SingleCampaignBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <Button onClick={goBack}>Back</Button>}
+        {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
-        <Button variant="primary" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching}>
+        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching}>
           {step < 2 ? 'Continue' : launching ? 'Launching…' : 'Launch Campaign'}
         </Button>
       </footer>

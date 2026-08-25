@@ -355,7 +355,7 @@ export function LaunchStep({
           : launchMode === 'floor'
             ? `Creates all of this in Amazon ${market} at the €0.02 bid floor, so it exists and syncs but cannot meaningfully spend. Takes a few minutes; you can close the tab while it runs.`
             : `Creates all of this in Amazon ${market} at the planned bids and commits €${t.dailyBudgetTotal.toFixed(2)}/day from the moment it lands. Takes a few minutes; you can close the tab while it runs.`}>
-          <Button variant="primary" disabled={!plan.allowed || launching} onClick={onLaunch}>
+          <Button variant="primary" size="lg" disabled={!plan.allowed || launching} onClick={onLaunch}>
             {launching
               ? <><Loader2 size={14} className="spin" aria-hidden /> Creating…</>
               : launchMode === 'floor'
@@ -425,9 +425,9 @@ function ResultPanel({
         <span className="grow" />
         {c.campaigns > 0 && (
           <InfoTip tip={`Archives all ${c.campaigns} campaigns this run created, as one unit. Spending stops. Archived is Amazon's permanent state — they cannot be un-archived, so a rollback means re-running the replication from scratch, not undoing it.`}>
-            <button type="button" className="h10-rep-bulkbtn danger" disabled={busy} onClick={onRollback}>
+            <Button variant="danger-outline" size="sm" disabled={busy} onClick={onRollback}>
               <RotateCcw size={13} aria-hidden /> Roll the whole run back
-            </button>
+            </Button>
           </InfoTip>
         )}
       </div>

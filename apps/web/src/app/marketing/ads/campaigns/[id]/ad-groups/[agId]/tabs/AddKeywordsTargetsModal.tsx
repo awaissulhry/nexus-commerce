@@ -12,7 +12,7 @@
  *   product → POST /advertising/targets/create  { adGroupId, kind:'PRODUCT', value, bidEur }
  */
 import { useMemo, useState } from 'react'
-import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -147,7 +147,7 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
                   <span className="ai"><span className="t" title={s.value}>{s.value}</span></span>
                   <span className="apm-tcol">{s.kind === 'keyword' ? TYPE_LABEL[s.matchType ?? 'BROAD'] : 'Product'}</span>
                   <span className="apm-bcol">€{s.bid.toFixed(2)}</span>
-                  <button type="button" className="apm-x" onClick={() => remove(keyOf(s))} aria-label={`Remove ${s.value}`}><X size={15} /></button>
+                  <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={15} />} label={`Remove ${s.value}`} onClick={() => remove(keyOf(s))} />
                 </div>
               ))}
             </div>

@@ -8,7 +8,7 @@
  * canvas (P-D) renders/edit this same config. See docs/ai-control-autopilot-spec.md.
  */
 import { Megaphone, Target, Scale, ShoppingCart, Trophy, Sparkles } from 'lucide-react'
-import { Input, RadioCard, Toggle } from '@/design-system/primitives'
+import { CheckboxCard, Input, RadioCard, Toggle } from '@/design-system/primitives'
 import { InfoTip } from '../../campaigns/InfoTip'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -111,10 +111,14 @@ export function AiControlPanel({ value, onChange }: { value: AiControlConfig; on
         <p className="h10-spw-desc">Which levers the AI manages. Harvesting & negation run through the shared Rule&nbsp;Setting engine — the AI sets their thresholds.</p>
         <div className="h10-ai-modules">
           {MODULES.map((m) => (
-            <label key={m.key} className={`h10-ai-mod ${value.modules[m.key] ? 'on' : ''}`}>
-              <input type="checkbox" checked={value.modules[m.key]} onChange={() => toggleM(m.key)} />
-              <span>{m.label}{m.note && <span className="note">{m.note}</span>}</span>
-            </label>
+            <CheckboxCard
+              key={m.key}
+              title={m.label}
+              description={m.note}
+              selected={value.modules[m.key]}
+              checked={value.modules[m.key]}
+              onChange={() => toggleM(m.key)}
+            />
           ))}
         </div>
       </div>

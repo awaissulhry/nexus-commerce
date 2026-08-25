@@ -48,9 +48,9 @@ export function CampaignSettings({ c, onBudget, onStrategy, onPlacement, onRenam
         <InfoTip tip={c.removed
           ? 'Put this campaign back into the plan.'
           : 'Leave this campaign out of the replication — its ad groups, targets and product ads with it. Reversible until you launch.'}>
-          <button type="button" className={`cutbtn ${c.removed ? 'on' : ''}`} onClick={onRemove}>
+          <Button size="sm" variant={c.removed ? 'tonal' : 'secondary'} onClick={onRemove}>
             {c.removed ? <><RotateCcw size={13} /> Restore campaign</> : <><Trash2 size={13} /> Don’t create this campaign</>}
-          </button>
+          </Button>
         </InfoTip>
       </div>
 
@@ -111,14 +111,14 @@ export function AdGroupSettings({ g, allAsins, onBid, onAsins, onRename, onRemov
         </div>
         <div className="acts">
           <InfoTip tip="Add keywords or negatives of your own to this ad group. Anything you add goes through the same self-competition check as a copied keyword.">
-            <button type="button" className="ghost" onClick={onAdd}><Plus size={13} /> Add targets</button>
+            <Button size="sm" onClick={onAdd}><Plus size={13} /> Add targets</Button>
           </InfoTip>
           <InfoTip tip={g.removed
             ? 'Put this ad group back into the plan.'
             : 'Leave this ad group out. If it is the campaign’s only one, the campaign will not be created either.'}>
-            <button type="button" className={`cutbtn ${g.removed ? 'on' : ''}`} onClick={onRemove}>
+            <Button size="sm" variant={g.removed ? 'tonal' : 'secondary'} onClick={onRemove}>
               {g.removed ? <><RotateCcw size={13} /> Restore</> : <><Trash2 size={13} /> Don’t create</>}
-            </button>
+            </Button>
           </InfoTip>
         </div>
       </div>
@@ -189,9 +189,9 @@ export function ChangesDrawer({ open, onClose, changes, setEdits, onClearAll }: 
               </div>
               <div className="d">{c.detail}</div>
               <InfoTip tip="Reverse just this one change and leave the rest as they are.">
-                <button type="button" className="un" onClick={() => setEdits(c.undo)} aria-label={`Undo: ${c.subject} ${c.detail}`}>
+                <Button variant="link" size="xs" className="un" onClick={() => setEdits(c.undo)} aria-label={`Undo: ${c.subject} ${c.detail}`}>
                   <Undo2 size={12} aria-hidden /> Undo
-                </button>
+                </Button>
               </InfoTip>
             </li>
           ))}

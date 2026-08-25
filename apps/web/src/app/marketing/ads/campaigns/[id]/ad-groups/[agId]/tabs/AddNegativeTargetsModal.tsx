@@ -10,7 +10,7 @@
  * silent live push). No search pane: a negative-target ASIN is an arbitrary competitor ASIN.
  */
 import { useMemo, useState } from 'react'
-import { Button, Textarea } from '@/design-system/primitives'
+import { Button, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -88,7 +88,7 @@ export function AddNegativeTargetsModal({ adGroupId, adGroupName, campaignName, 
                 <div className="apm-rrow asin" key={a}>
                   <span className="apm-azc" aria-hidden><svg viewBox="0 0 24 24" width="10" height="10"><path d="M3.6 13.4c4.7 3.1 11.6 3.1 16.4.2" fill="none" stroke="#ff9900" strokeWidth="2.4" strokeLinecap="round" /><path d="M17.2 14.7l3.2-1.2-.8 3.3z" fill="#ff9900" /></svg></span>
                   <span className="ai"><span className="t">{a}</span></span>
-                  <button type="button" className="apm-x" onClick={() => remove(a)} aria-label={`Remove ${a}`}><X size={15} /></button>
+                  <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={15} />} label={`Remove ${a}`} onClick={() => remove(a)} />
                 </div>
               ))}
             </div>

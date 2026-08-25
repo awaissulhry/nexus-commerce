@@ -20,7 +20,7 @@
  * custom End-Date calendar popover, and the Product-Selection amazon badge + ASIN copy.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, Checkbox, Input, Radio, Toggle } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
 import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
@@ -550,7 +550,7 @@ function ProductSelection({ campaign }: { campaign: CampaignDetailData | null })
                 {p.asin || p.sku ? (
                   <span className="m">
                     <span className="asin">{p.asin || p.sku}</span>
-                    {p.asin ? <button type="button" className="cp" onClick={() => copy(p.asin as string)} aria-label="Copy ASIN" title={copied === p.asin ? 'Copied' : 'Copy ASIN'}>{copied === p.asin ? <Check size={12} /> : <Copy size={12} />}</button> : null}
+                    {p.asin ? <ToolbarButton size="sm" tooltip={false} icon={copied === p.asin ? <Check size={12} /> : <Copy size={12} />} label="Copy ASIN" title={copied === p.asin ? 'Copied' : 'Copy ASIN'} onClick={() => copy(p.asin as string)} /> : null}
                   </span>
                 ) : null}
               </div>

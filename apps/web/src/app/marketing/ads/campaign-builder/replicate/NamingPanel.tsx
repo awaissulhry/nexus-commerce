@@ -14,7 +14,7 @@
  * once), then a prefix and suffix.
  */
 import { Plus, Trash2, AlertTriangle, Wand2 } from 'lucide-react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -91,9 +91,7 @@ export function NamingPanel({
             <input value={r.from} onChange={(e) => setRep(i, { from: e.target.value })} placeholder="find" aria-label={`Find text ${i + 1}`} />
             <span className="arr" aria-hidden>→</span>
             <input value={r.to} onChange={(e) => setRep(i, { to: e.target.value })} placeholder="replace with" aria-label={`Replace with ${i + 1}`} />
-            <button type="button" className="del" onClick={() => setNaming({ ...naming, replacements: naming.replacements.filter((_, j) => j !== i) })} aria-label={`Remove replacement ${i + 1}`}>
-              <Trash2 size={13} />
-            </button>
+            <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<Trash2 size={13} />} label={`Remove replacement ${i + 1}`} onClick={() => setNaming({ ...naming, replacements: naming.replacements.filter((_, j) => j !== i) })} />
           </div>
         ))}
         <span><Button variant="link" size="sm" onClick={() => setNaming({ ...naming, replacements: [...naming.replacements, { from: '', to: '' }] })}>

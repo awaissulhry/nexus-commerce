@@ -8,7 +8,7 @@
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, Pill, Toggle } from '@/design-system/primitives'
+import { Button, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Listbox, Modal, Pagination } from '@/design-system/components'
 import Link from 'next/link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
@@ -666,7 +666,7 @@ function FilterLibrary({ library, onApply, onDelete, onClose }: {
             {library.map((p, i) => (
               <div className="h10-libpop-row" key={i}>
                 <button type="button" className="nm" onClick={() => onApply(p)}>{p.name}</button>
-                <button type="button" className="del" onClick={() => onDelete(i)} aria-label={`Delete ${p.name}`}><Trash2 size={13} /></button>
+                <ToolbarButton size="sm" tooltip={false} tone="danger" icon={<Trash2 size={13} />} label={`Delete ${p.name}`} onClick={() => onDelete(i)} />
               </div>
             ))}
           </div>

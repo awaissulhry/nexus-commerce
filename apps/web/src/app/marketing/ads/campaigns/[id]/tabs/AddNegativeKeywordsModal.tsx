@@ -8,7 +8,7 @@
  * Shell is the Nexus DS <Modal> (size xxl). Endpoint already on prod (frontend-only).
  */
 import { useState } from 'react'
-import { Button, Radio, Textarea } from '@/design-system/primitives'
+import { Button, Radio, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -100,7 +100,7 @@ export function AddNegativeKeywordsModal({ campaignName, badge, externalCampaign
               <div className="h10-neg-row" key={`${s.keyword}|${s.matchType}|${i}`}>
                 <span className="kw" title={s.keyword}>{s.keyword}</span>
                 <span className="mt">{mtLabel(s.matchType)}</span>
-                <button type="button" className="rm" onClick={() => setStaged((p) => p.filter((_, idx) => idx !== i))} aria-label={`Remove ${s.keyword}`}><X size={13} /></button>
+                <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={13} />} label={`Remove ${s.keyword}`} onClick={() => setStaged((p) => p.filter((_, idx) => idx !== i))} />
               </div>
             ))}
           </div>

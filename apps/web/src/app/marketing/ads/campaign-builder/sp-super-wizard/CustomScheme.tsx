@@ -13,7 +13,7 @@
  */
 import { type Dispatch, type SetStateAction, Fragment, useEffect, useRef, useState } from 'react'
 import { Info, Plus, X, ChevronDown } from 'lucide-react'
-import { Button, Checkbox } from '@/design-system/primitives'
+import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
@@ -52,7 +52,7 @@ function TokenSelect({ value, onChange, onRemove }: { value: string; onChange: (
         <span className={value ? '' : 'ph'}>{label}</span>
         <ChevronDown size={14} />
       </button>
-      <button type="button" className="x" onClick={onRemove} aria-label="Remove token"><X size={14} /></button>
+      <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={14} />} label="Remove token" onClick={onRemove} />
       {open && (
         <div className="menu" role="listbox">
           {TOKEN_OPTIONS.map((o) => (
@@ -140,7 +140,7 @@ export function CustomScheme({ keywordTypes, setKeywordTypes, targetingTypes, se
                   <Button size="sm" variant={kt.keywords.length ? 'secondary' : 'ghost'} onClick={() => setKwEditIdx(kwEditIdx === idx ? null : idx)}>{kt.keywords.length > 0 ? `${kt.keywords.length} keyword${kt.keywords.length === 1 ? '' : 's'}` : '+ Keywords'}</Button>
                   {kwEditIdx === idx && <KeywordPopup initial={kt.keywords} onApply={(kws) => setKeywords(idx, kws)} onClose={() => setKwEditIdx(null)} />}
                 </span>
-                <button type="button" className="rm" onClick={() => removeKw(idx)} aria-label={`Remove ${kt.name}`}><X size={14} /></button>
+                <ToolbarButton style={{ marginLeft: 'auto' }} size="sm" tone="danger" tooltip={false} icon={<X size={14} />} label={`Remove ${kt.name}`} onClick={() => removeKw(idx)} />
               </div>
             ))}
             <div><Button variant="ghost" size="sm" onClick={addKw}><Plus size={13} /> Add</Button></div>

@@ -509,6 +509,7 @@ export function SbSdBuilder() {
               <>
                 <Checkbox
                   className="h10-sbsd-enable"
+                  tone="warning"
                   checked={defensive}
                   onChange={(e) => setDefensive(e.target.checked)}
                   label={<>
@@ -538,6 +539,7 @@ export function SbSdBuilder() {
           <h3>Launch state</h3>
           <Checkbox
             className="h10-sbsd-enable"
+            tone="warning"
             checked={startEnabled}
             onChange={(e) => setStartEnabled(e.target.checked)}
             label={<>

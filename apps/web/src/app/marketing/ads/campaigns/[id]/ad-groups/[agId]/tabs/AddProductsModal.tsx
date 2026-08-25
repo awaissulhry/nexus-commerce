@@ -10,7 +10,7 @@
  * placeholder (no SV creative source yet), exactly as the campaign grids treat such fields.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input, Textarea } from '@/design-system/primitives'
+import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Search, PlusCircle, Check, Trash2, Copy } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -177,7 +177,7 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
                   <Thumb p={p} />
                   {Meta(p)}
                   <span className="sv">—</span>
-                  <button type="button" className="apm-x" onClick={() => remove(keyOf(p))} aria-label="Remove"><X size={15} /></button>
+                  <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={15} />} label="Remove" onClick={() => remove(keyOf(p))} />
                 </div>
               ))}
             </div>

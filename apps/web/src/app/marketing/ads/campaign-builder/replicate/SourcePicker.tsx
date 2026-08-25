@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Search, Layers, Loader2 } from 'lucide-react'
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button } from '@/design-system/primitives'
+import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
@@ -61,7 +61,7 @@ function TriBox({ checked, indeterminate, onChange, label }: {
 }) {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => { if (ref.current) ref.current.indeterminate = !checked && indeterminate }, [checked, indeterminate])
-  return <input ref={ref} type="checkbox" checked={checked} onChange={onChange} aria-label={label} />
+  return <Checkbox ref={ref} checked={checked} onChange={onChange} aria-label={label} />
 }
 
 /** A structure someone saved earlier, so it can be replicated again. */
@@ -259,9 +259,12 @@ export function SourcePicker({ market, selected, setSelected, onChange, onPickBl
           return (
             <div className="h10-rep-pf" key={key}>
               <div className={`h10-rep-row pf ${picked > 0 ? 'on' : ''}`}>
-                <button type="button" className="exp" onClick={() => setOpenPf((s) => openSet(s, key))} aria-expanded={open} aria-label={open ? 'Collapse' : 'Expand'}>
-                  {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                </button>
+                <ToolbarButton
+                  size="sm" tooltip={false} aria-expanded={open}
+                  icon={open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                  label={open ? 'Collapse' : 'Expand'}
+                  onClick={() => setOpenPf((s) => openSet(s, key))}
+                />
                 <TriBox checked={ids.length > 0 && picked === ids.length} indeterminate={picked > 0} onChange={() => togglePortfolio(p)} label={`Select all of ${p.name}`} />
                 <span className="nm">
                   {p.name}
@@ -277,9 +280,12 @@ export function SourcePicker({ market, selected, setSelected, onChange, onPickBl
                 return (
                   <div key={c.id}>
                     <div className={`h10-rep-row cmp ${cSel > 0 ? 'on' : ''}`}>
-                      <button type="button" className="exp" onClick={() => setOpenC((s) => openSet(s, c.id))} aria-expanded={cOpen} aria-label={cOpen ? 'Collapse ad groups' : 'Expand ad groups'}>
-                        {cOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      </button>
+                      <ToolbarButton
+                        size="sm" tooltip={false} aria-expanded={cOpen}
+                        icon={cOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        label={cOpen ? 'Collapse ad groups' : 'Expand ad groups'}
+                        onClick={() => setOpenC((s) => openSet(s, c.id))}
+                      />
                       <TriBox checked={cAll} indeterminate={cSel > 0} onChange={() => toggleCampaign(c)} label={`Select ${c.name}`} />
                       <span className="nm">
                         {c.name}

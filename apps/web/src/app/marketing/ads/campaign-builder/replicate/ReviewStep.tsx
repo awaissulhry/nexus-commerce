@@ -27,7 +27,7 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Layers, Trash2, RotateCcw,
   Search, SlidersHorizontal, Check, X,
 } from 'lucide-react'
-import { Button } from '@/design-system/primitives'
+import { Button, ToolbarButton } from '@/design-system/primitives'
 import { InfoTip } from '../../campaigns/InfoTip'
 import {
   viewPlan, conflictGroups, dropConflicts, restoreConflicts, describeChanges,
@@ -283,7 +283,7 @@ export function ReviewStep({
             <div className="h10-rep-search">
               <Search size={15} aria-hidden />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a keyword, ad group or campaign" aria-label="Filter the plan" />
-              {q && <button type="button" className="clr" onClick={() => setQ('')} aria-label="Clear search" title="Clear the search"><X size={13} /></button>}
+              {q && <ToolbarButton size="sm" tooltip={false} icon={<X size={13} />} label="Clear search" title="Clear the search" style={{ position: 'absolute', right: 8 }} onClick={() => setQ('')} />}
             </div>
             <InfoTip tip="Everything you have changed from the source structure, each item individually reversible. Nothing here has reached Amazon.">
               <button type="button" className={`h10-rep-chg ${changes.length ? 'on' : ''}`} onClick={() => setChangesOpen(true)}>
@@ -545,10 +545,12 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
                   <InfoTip tip={c.removed
                     ? `Put ${c.name} back into the plan.`
                     : `Leave ${c.name} out of this replication entirely — its ad groups, targets and product ads with it. Reversible until you launch.`}>
-                    <button type="button" className={`cutbtn ${c.removed ? 'on' : ''}`} onClick={() => onRemove(c.id)}
-                      aria-label={c.removed ? `Restore ${c.name}` : `Don’t create ${c.name}`}>
-                      {c.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
-                    </button>
+                    <ToolbarButton
+                      size="sm" tooltip={false} tone={c.removed ? 'neutral' : 'danger'} active={c.removed}
+                      icon={c.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
+                      label={c.removed ? `Restore ${c.name}` : `Don’t create ${c.name}`}
+                      onClick={() => onRemove(c.id)}
+                    />
                   </InfoTip>
                 </td>
               </tr>

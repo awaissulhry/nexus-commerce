@@ -10,7 +10,7 @@
  * returns denied → never a silent live push).
  */
 import { useMemo, useState } from 'react'
-import { Button, Radio, Textarea } from '@/design-system/primitives'
+import { Button, Radio, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { X, Trash2, Layers, PlusCircle, ChevronsUpDown } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -103,7 +103,7 @@ export function AddNegativeKeywordsAgModal({ externalCampaignId, externalAdGroup
                 <div className="apm-rrow kw" key={keyOf(s)}>
                   <span className="ai"><span className="t" title={s.keyword}>{s.keyword}</span></span>
                   <span className="apm-mtcol">{mtLabel(s.matchType)}</span>
-                  <button type="button" className="apm-x" onClick={() => remove(keyOf(s))} aria-label={`Remove ${s.keyword}`}><X size={15} /></button>
+                  <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={15} />} label={`Remove ${s.keyword}`} onClick={() => remove(keyOf(s))} />
                 </div>
               ))}
             </div>

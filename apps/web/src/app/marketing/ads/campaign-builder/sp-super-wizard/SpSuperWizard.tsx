@@ -299,10 +299,10 @@ export function SpSuperWizard() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <Button onClick={goBack}>Back</Button>}
+        {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
-        <Button variant="primary" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching}>
+        <Button variant="primary" size="lg" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching}>
           {step < 3 ? 'Next' : launching ? 'Launching…' : 'Launch'}
         </Button>
       </footer>

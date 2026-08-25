@@ -15,7 +15,7 @@
  */
 import { useMemo, useState, type ReactNode } from 'react'
 import { AlertTriangle, Trash2, RotateCcw, Check, Pencil } from 'lucide-react'
-import { Select, Checkbox } from '@/design-system/primitives'
+import { Checkbox, Select, ToolbarButton } from '@/design-system/primitives'
 import { InfoTip } from '../../campaigns/InfoTip'
 import type { TargetView } from './edit-model'
 import { MATCH_TYPES, NEGATIVE_MATCH_TYPES } from './replicate-types'
@@ -210,10 +210,12 @@ export function TargetTable({
                     : r.conflict
                       ? `Drop "${r.expression}" — it will not be created, which resolves its conflict. Applies to every ad group carrying this keyword, not just this row.`
                       : `Drop "${r.expression}" — it will not be created. Nothing on Amazon changes until you launch.`}>
-                    <button type="button" className={`cutbtn ${r.removed ? 'on' : ''}`} onClick={() => onRemove(r)}
-                      aria-label={r.removed ? `Restore ${r.expression}` : `Drop ${r.expression}`}>
-                      {r.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
-                    </button>
+                    <ToolbarButton
+                      size="sm" tooltip={false} tone={r.removed ? 'neutral' : 'danger'} active={r.removed}
+                      icon={r.removed ? <RotateCcw size={14} /> : <Trash2 size={14} />}
+                      label={r.removed ? `Restore ${r.expression}` : `Drop ${r.expression}`}
+                      onClick={() => onRemove(r)}
+                    />
                   </InfoTip>
                 </td>
               </tr>

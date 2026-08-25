@@ -11,7 +11,7 @@
 import { type Dispatch, type SetStateAction, useState } from 'react'
 import { X, Layers, Pencil, RotateCcw, Plus, Trash2, ChevronDown } from 'lucide-react'
 import { Menu, Modal } from '@/design-system/components'
-import { Button, Checkbox, Input, Radio, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, Textarea, ToolbarButton } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -328,6 +328,7 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
                 { id: 'kw', label: 'Keyword campaigns', onSelect: () => selectBy((c) => c.kind === 'keyword') },
                 { id: 'auto', label: 'Auto', onSelect: () => selectBy((c) => c.kind === 'auto') },
                 { id: 'pat', label: 'Product (PAT)', onSelect: () => selectBy((c) => c.kind === 'pat') },
+                { id: 'sep', label: null, separator: true },
                 { id: 'broad', label: 'Match type: Broad', onSelect: () => selectBy((c) => singleMatch(c.matchType) === 'BROAD') },
                 { id: 'phrase', label: 'Match type: Phrase', onSelect: () => selectBy((c) => singleMatch(c.matchType) === 'PHRASE') },
                 { id: 'exact', label: 'Match type: Exact', onSelect: () => selectBy((c) => singleMatch(c.matchType) === 'EXACT') },
@@ -347,7 +348,7 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
           <div className={`h10-spw-cset-row ${selected.has(c.id) ? 'sel' : ''}`} key={c.id}>
             <div className="ck"><Checkbox checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></div>
             <div className="ag">
-              <button type="button" className="del" onClick={() => del(c.id)} aria-label={`Remove ${c.name}`}><X size={16} /></button>
+              <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={16} />} label={`Remove ${c.name}`} onClick={() => del(c.id)} />
               <div className="agb">
                 <input value={c.name} onChange={(e) => upd(c.id, { name: e.target.value })} aria-label="Campaign name" />
                 <div className="sub"><Layers size={13} /> {c.adGroupName}</div>

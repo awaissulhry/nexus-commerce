@@ -37,7 +37,7 @@
  */
 import { type Dispatch, type SetStateAction, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, Plus, Check, Trash2, Copy, ChevronsUpDown, ChevronRight, ChevronDown, X, Save } from 'lucide-react'
-import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Pagination } from '@/design-system/components'
 // A shared component must not depend on its HOST importing these. Eight of the
 // nine call sites happen to, but ai-advertising/new-goal does NOT — so the DS
@@ -139,7 +139,7 @@ function ProductIdent({ p, copyable, trailing }: { p: SpwProduct; copyable?: boo
         <>
           <AmazonBadge size={14} />
           <span className="code">{p.asin}</span>
-          {copyable ? <button type="button" className="cp" title="Copy ASIN" onClick={() => copy(p.asin)}><Copy size={12} /></button> : null}
+          {copyable ? <ToolbarButton size="sm" tooltip={false} icon={<Copy size={12} />} label="Copy ASIN" title="Copy ASIN" onClick={() => copy(p.asin)} /> : null}
           {/* The SKU rides along even when an ASIN exists: operators recognise
               their own SKUs (GALE-JACKET) and do not memorise ASINs. It
               truncates before the ASIN or the variation count do, and carries
@@ -151,7 +151,7 @@ function ProductIdent({ p, copyable, trailing }: { p: SpwProduct; copyable?: boo
         <>
           <span className="h10-spw-ps-skutag">SKU</span>
           <span className="code">{p.sku}</span>
-          {copyable && p.sku ? <button type="button" className="cp" title="Copy SKU" onClick={() => copy(p.sku)}><Copy size={12} /></button> : null}
+          {copyable && p.sku ? <ToolbarButton size="sm" tooltip={false} icon={<Copy size={12} />} label="Copy SKU" title="Copy SKU" onClick={() => copy(p.sku)} /> : null}
         </>
       )}
       {trailing}
@@ -590,7 +590,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                     <Fragment key={p.id}>
                       <div className="row">
                         {isFamily
-                          ? <button type="button" className="exp" onClick={() => toggleExpand(p)} aria-label={open ? 'Collapse variations' : 'Expand variations'} aria-expanded={open}>{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+                          ? <ToolbarButton size="sm" tooltip={false} icon={open ? <ChevronDown size={15} /> : <ChevronRight size={15} />} label={open ? 'Collapse variations' : 'Expand variations'} aria-expanded={open} onClick={() => toggleExpand(p)} />
                           : <span className="exp-sp" />}
                         <Thumb p={p} />
                         <span className="m">
@@ -692,7 +692,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                 {sponsoredVideo && (
                   <Checkbox className="h10-spw-ps-sv" title="Run a Sponsored Brands video for this product" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
                 )}
-                <button type="button" className="x" onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`}><X size={14} /></button>
+                <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={14} />} label={`Remove ${p.name}`} onClick={() => remove(p.id)} />
               </div>
             ))
           )}

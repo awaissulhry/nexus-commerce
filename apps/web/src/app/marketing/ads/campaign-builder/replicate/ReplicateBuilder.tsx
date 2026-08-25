@@ -572,7 +572,7 @@ export function ReplicateBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <Button onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</Button>}
+        {step > 1 && <Button size="lg" onClick={() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s))}>Back</Button>}
         <span className="grow" />
         {step < 3 && <PlanBar planning={planning} err={planErr} preview={preview} missing={missing} />}
         {/* Step 3 carries its own launch button — a second "Next" there would be
@@ -580,6 +580,7 @@ export function ReplicateBuilder() {
         {step < 3 && (
           <Button
             variant="primary"
+            size="lg"
             disabled={step === 1 && !canAdvance}
             onClick={() => setStep((s) => (s < 3 ? ((s + 1) as StepN) : s))}
           >
@@ -587,7 +588,7 @@ export function ReplicateBuilder() {
           </Button>
         )}
         {step === 3 && result && (
-          <Button variant="primary" onClick={() => router.push('/marketing/ads/campaigns')}>
+          <Button variant="primary" size="lg" onClick={() => router.push('/marketing/ads/campaigns')}>
             Go to Ad Manager
           </Button>
         )}

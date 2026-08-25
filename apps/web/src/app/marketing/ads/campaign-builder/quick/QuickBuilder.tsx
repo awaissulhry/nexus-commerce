@@ -311,13 +311,13 @@ export function QuickBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <Button onClick={goBack}>Back</Button>}
+        {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
         {step === 1 ? (
-          <Button variant="primary" onClick={goNext} disabled={!canNext}>Next</Button>
+          <Button variant="primary" size="lg" onClick={goNext} disabled={!canNext}>Next</Button>
         ) : (
-          <Button variant="primary" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</Button>
+          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>
