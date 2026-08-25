@@ -158,8 +158,6 @@
 .bp-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: #37495b; border-radius: var(--nds-radius-lg); padding: 6px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .bp-btn:hover:not(:disabled) { background: var(--nds-grey-25); }
 .bp-btn:disabled { opacity: 0.45; cursor: default; }
-.bp-btn.primary { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.bp-btn.primary:hover:not(:disabled) { background: var(--nds-blue-700); }
 .bp-btn.warn { border-color: #f0d9a8; color: #8a5a00; background: #fff9ef; }
 .bp-newb { margin-bottom: 12px; }
 .bp-spin { animation: bp-rot 0.9s linear infinite; }
@@ -168,10 +166,14 @@
 .bp-new { border: 1px solid var(--nds-blue-200); background: var(--nds-imgup-surface); border-radius: 11px; padding: 12px 13px; margin-bottom: 12px; }
 .bp-new-h { font-size: 12.5px; font-weight: 800; color: var(--nds-grey-900); margin-bottom: 9px; }
 .bp-new-f { display: grid; grid-template-columns: 2fr 1fr; gap: 9px; }
-.bp-new-f label { display: flex; flex-direction: column; gap: 3px; }
-.bp-new-f span { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
-.bp-new-f input, .bp-addrow input { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 6px 9px; font-size: 12.5px; color: var(--nds-grey-900); background: var(--nds-white); }
-.bp-new-f input:focus, .bp-addrow input:focus { outline: 2px solid var(--nds-blue-200); outline-offset: -1px; }
+.bp-new-f label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+/* `> label > span:first-child`, NOT `.bp-new-f span`. The DS Input renders its field as a
+   <span>, so the loose descendant selector matched the CONTROL as well as its caption and set
+   the text inside it to 9px/800 uppercase. Measured: the input came out font-weight 800 where
+   it had been 400 — invisible in the diff and green under tsc. */
+.bp-new-f > label > span:first-child { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
+/* DS Input `fieldClassName`s — width/placement only; the primitive owns the rest. */
+.bp-new-in { width: 100%; min-width: 0; }
 .bp-new-a { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 .bp-strat { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); overflow: hidden; margin-top: 10px; }
@@ -219,7 +221,8 @@
 .bp-x { border: 0; background: none; color: #c25b5e; cursor: pointer; padding: 2px; display: inline-flex; }
 .bp-x:hover:not(:disabled) { color: var(--nds-note-error-icon); }
 .bp-addrow { display: flex; gap: 7px; margin-top: 8px; }
-.bp-addrow input { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.bp-add-f { flex: 1; min-width: 0; }
+.bp-add-f > input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }  /* campaign IDs */
 
 .bp-reb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bp-err { margin-top: 8px; font-size: 11.5px; color: var(--nds-note-error-icon); background: #fdeaea; border-radius: var(--nds-radius-md); padding: 7px 10px; }

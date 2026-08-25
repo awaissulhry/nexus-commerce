@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus, X, FlaskConical, PlayCircle, ChevronDown, Wallet } from 'lucide-react'
 import { Drawer } from '@/design-system/components'
+import { Button, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type Strategy = 'STATIC' | 'PROFIT_WEIGHTED' | 'URGENCY_WEIGHTED'
@@ -168,10 +169,10 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
         </div>
       )}
       <div className="bp-addrow">
-        <input value={addingId} onChange={(e) => setAddingId(e.target.value)} placeholder="Campaign ID" aria-label="Campaign ID to add" onKeyDown={(e) => { if (e.key === 'Enter') void addAllocation() }} />
-        <button type="button" className="bp-btn" disabled={busy === 'add' || !addingId.trim()} onClick={() => void addAllocation()}>
+        <Input size="xs" fieldClassName="bp-add-f" value={addingId} onChange={(e) => setAddingId(e.target.value)} placeholder="Campaign ID" aria-label="Campaign ID to add" onKeyDown={(e) => { if (e.key === 'Enter') void addAllocation() }} />
+        <Button size="sm" disabled={busy === 'add' || !addingId.trim()} onClick={() => void addAllocation()}>
           {busy === 'add' ? <Loader2 size={13} className="bp-spin" /> : <Plus size={13} />} Add
-        </button>
+        </Button>
       </div>
 
       <div className="bp-sec-h">Rebalance</div>
@@ -179,9 +180,9 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
         <button type="button" className="bp-btn warn" disabled={busy != null} onClick={() => void rebalance(true)}>
           {busy === 'preview' ? <Loader2 size={13} className="bp-spin" /> : <FlaskConical size={13} />} Dry-run preview
         </button>
-        <button type="button" className="bp-btn primary" disabled={busy != null} onClick={() => void rebalance(false)}>
+        <Button variant="primary" size="sm" disabled={busy != null} onClick={() => void rebalance(false)}>
           {busy === 'commit' ? <Loader2 size={13} className="bp-spin" /> : <PlayCircle size={13} />} Run rebalance
-        </button>
+        </Button>
         <span className="bp-meta">Preview ignores the cooldown. A real run honours this pool’s dry-run flag.</span>
       </div>
       {error && <div className="bp-err">{error}</div>}
@@ -293,8 +294,8 @@ export function BudgetPoolsDrawer({ open, onClose, toast }: { open: boolean; onC
             <div className="bp-new">
               <div className="bp-new-h">New budget pool</div>
               <div className="bp-new-f">
-                <label><span>Name</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. GALE — IT/DE/FR" aria-label="Pool name" /></label>
-                <label><span>Budget €/day</span><input inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} aria-label="Daily budget" /></label>
+                <label><span>Name</span><Input size="sm" fieldClassName="bp-new-in" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. GALE — IT/DE/FR" aria-label="Pool name" /></label>
+                <label><span>Budget €/day</span><Input size="sm" fieldClassName="bp-new-in" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} aria-label="Daily budget" /></label>
               </div>
               <div className="bp-strat" role="radiogroup" aria-label="Allocation strategy">
                 {STRATEGIES.map((s) => (
@@ -304,12 +305,12 @@ export function BudgetPoolsDrawer({ open, onClose, toast }: { open: boolean; onC
               <p className="bp-strat-blurb">{STRATEGIES.find((s) => s.key === strategy)?.blurb}</p>
               {error && <div className="bp-err">{error}</div>}
               <div className="bp-new-a">
-                <button type="button" className="bp-btn" onClick={() => { setCreating(false); setError(null) }}>Cancel</button>
-                <button type="button" className="bp-btn primary" disabled={busy} onClick={() => void create()}>{busy ? <Loader2 size={13} className="bp-spin" /> : null} Create pool</button>
+                <Button size="sm" onClick={() => { setCreating(false); setError(null) }}>Cancel</Button>
+                <Button variant="primary" size="sm" disabled={busy} onClick={() => void create()}>{busy ? <Loader2 size={13} className="bp-spin" /> : null} Create pool</Button>
               </div>
             </div>
           ) : (
-            <button type="button" className="bp-btn primary bp-newb" onClick={() => setCreating(true)}><Plus size={13} /> New pool</button>
+            <Button variant="primary" size="sm" className="bp-newb" onClick={() => setCreating(true)}><Plus size={13} /> New pool</Button>
           )}
 
           {pools.length === 0 && !creating ? (
