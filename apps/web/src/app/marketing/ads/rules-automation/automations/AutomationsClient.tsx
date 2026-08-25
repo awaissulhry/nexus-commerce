@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import Link from 'next/link'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1027,39 +1028,38 @@ export function AutomationsClient() {
       })()}
 
       {bulk && (
-        <div className="h10-ntm-back" onClick={() => setBulk(null)}>
-          <div className="h10-ntm" role="dialog" aria-modal="true" aria-label={bulk.kind === 'delete' ? 'Delete automations' : 'Set mode'} onClick={(e) => e.stopPropagation()}>
-            <div className="h10-ntm-h">
-              <b>{bulk.kind === 'delete' ? `Delete ${sel.size} automation${sel.size === 1 ? '' : 's'}` : `Set ${sel.size} to ${LEVEL_WORD[bulk.level]}`}</b>
-            </div>
-            <div className="h10-ntm-sub">
-              {bulk.kind === 'delete'
-                ? 'Their execution history goes with them. This cannot be undone.'
-                : bulkPreview && bulkPreview.refused > 0
-                  ? `${bulkPreview.total - bulkPreview.refused} of ${bulkPreview.total} will change. ${bulkPreview.refused} sit above their graduation ceiling and the server will refuse them: ${bulkPreview.names.slice(0, 3).join(', ')}${bulkPreview.names.length > 3 ? '…' : ''}.`
-                  : `All ${bulkPreview?.total ?? sel.size} will change. Each is checked against its own ceiling by the server.`}
-              {nonRuleSel > 0 && ` ${nonRuleSel} selected ${nonRuleSel === 1 ? 'row is not a rule' : 'rows are not rules'} (engines/observed) and will be skipped — their posture is not set from this page.`}
-            </div>
-            {bulk.kind === 'mode' && bulk.level === 'AUTO' && bulkPreview && bulkPreview.willWrite > 0 && (
-              <div className="h10-ntm-b">
-                <p className="h10-au-note danger">
-                  <ShieldAlert size={13} aria-hidden />
-                  <span>
-                    <b>{bulkPreview.willWrite} of these can change real campaigns.</b> On Auto they act
-                    without asking, inside their daily caps and the account write gate.
-                  </span>
-                </p>
-              </div>
-            )}
-            <div className="h10-ntm-f">
-              <button type="button" className="cancel" onClick={() => setBulk(null)}>Cancel</button>
-              <span className="grow" />
-              <button type="button" className={`apply ${bulk.kind === 'delete' ? 'danger' : ''}`} disabled={busy === 'bulk'} onClick={() => void doBulk()}>
-                {busy === 'bulk' ? 'Working…' : bulk.kind === 'delete' ? 'Delete' : `Set ${LEVEL_WORD[bulk.level]}`}
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setBulk(null)}
+          title={bulk.kind === 'delete' ? `Delete ${sel.size} automation${sel.size === 1 ? '' : 's'}` : `Set ${sel.size} to ${LEVEL_WORD[bulk.level]}`}
+          footer={<>
+            <Button variant="secondary" size="sm" onClick={() => setBulk(null)}>Cancel</Button>
+            <Button
+              variant={bulk.kind === 'delete' ? 'danger' : 'primary'} size="sm"
+              disabled={busy === 'bulk'} onClick={() => void doBulk()}
+            >
+              {busy === 'bulk' ? 'Working…' : bulk.kind === 'delete' ? 'Delete' : `Set ${LEVEL_WORD[bulk.level]}`}
+            </Button>
+          </>}
+        >
+          <p className="h10-ntm-say">
+            {bulk.kind === 'delete'
+              ? 'Their execution history goes with them. This cannot be undone.'
+              : bulkPreview && bulkPreview.refused > 0
+                ? `${bulkPreview.total - bulkPreview.refused} of ${bulkPreview.total} will change. ${bulkPreview.refused} sit above their graduation ceiling and the server will refuse them: ${bulkPreview.names.slice(0, 3).join(', ')}${bulkPreview.names.length > 3 ? '…' : ''}.`
+                : `All ${bulkPreview?.total ?? sel.size} will change. Each is checked against its own ceiling by the server.`}
+            {nonRuleSel > 0 && ` ${nonRuleSel} selected ${nonRuleSel === 1 ? 'row is not a rule' : 'rows are not rules'} (engines/observed) and will be skipped — their posture is not set from this page.`}
+          </p>
+          {bulk.kind === 'mode' && bulk.level === 'AUTO' && bulkPreview && bulkPreview.willWrite > 0 && (
+            <p className="h10-au-note danger">
+              <ShieldAlert size={13} aria-hidden />
+              <span>
+                <b>{bulkPreview.willWrite} of these can change real campaigns.</b> On Auto they act
+                without asking, inside their daily caps and the account write gate.
+              </span>
+            </p>
+          )}
+        </Modal>
       )}
     </div>
   )

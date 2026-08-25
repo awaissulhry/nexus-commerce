@@ -20,6 +20,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import { MoreHorizontal, Pencil, Trash2, BookmarkPlus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 
 export interface RowTarget {
   id: string
@@ -162,47 +164,46 @@ function RowDialog({ kind, row, onClose, onRenamed, onDeleted }: {
   const CTA: Record<Dialog, string> = { rename: 'Rename', template: 'Save template', delete: 'Delete' }
 
   return (
-    <div className="h10-ntm-back" onClick={() => { if (!busy) onClose() }}>
-      <div className="h10-ntm" role="dialog" aria-modal="true" aria-label={TITLE[kind]} onClick={(e) => e.stopPropagation()}>
-        <div className="h10-ntm-h"><b>{TITLE[kind]}</b></div>
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      title={TITLE[kind]}
+      footer={<>
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>{done ? 'Close' : 'Cancel'}</Button>
+        {!done && (
+          <Button
+            variant={kind === 'delete' ? 'danger' : 'primary'} size="sm"
+            onClick={() => void submit()} disabled={busy}
+          >
+            {busy ? 'Working…' : CTA[kind]}
+          </Button>
+        )}
+      </>}
+    >
+      <p className="h10-ntm-say">
+        {kind === 'rename' && <>Renaming changes the schedule only — its campaigns, windows and baseline are untouched.</>}
+        {kind === 'template' && <>Saves this schedule&rsquo;s {windowCount} window{windowCount === 1 ? '' : 's'} and its baseline as a reusable template. The schedule itself is not changed.</>}
+        {/* Every consequence, stated. A campaign is not "released" to some default — the engine
+            simply stops holding a rank for it, and whatever bid it last set on Amazon stays. */}
+        {kind === 'delete' && (
+          <>
+            Deletes <b>{row.name}</b> and removes the schedule from its <b>{row.campaigns}</b> campaign{row.campaigns === 1 ? '' : 's'}.
+            The rank loop stops holding a rank for {row.campaigns === 1 ? 'it' : 'them'}; the bids it last set on Amazon <b>stay as they are</b> — nothing is reverted.
+            This cannot be undone.
+          </>
+        )}
+      </p>
 
-        <div className="h10-ntm-sub">
-          {kind === 'rename' && <>Renaming changes the schedule only — its campaigns, windows and baseline are untouched.</>}
-          {kind === 'template' && <>Saves this schedule&rsquo;s {windowCount} window{windowCount === 1 ? '' : 's'} and its baseline as a reusable template. The schedule itself is not changed.</>}
-          {/* Every consequence, stated. A campaign is not "released" to some default — the engine
-              simply stops holding a rank for it, and whatever bid it last set on Amazon stays. */}
-          {kind === 'delete' && (
-            <>
-              Deletes <b>{row.name}</b> and removes the schedule from its <b>{row.campaigns}</b> campaign{row.campaigns === 1 ? '' : 's'}.
-              The rank loop stops holding a rank for {row.campaigns === 1 ? 'it' : 'them'}; the bids it last set on Amazon <b>stay as they are</b> — nothing is reverted.
-              This cannot be undone.
-            </>
-          )}
-        </div>
-
-        <div className="h10-ntm-b">
-          {done ? <div className="h10-ntm-ok">{done}</div> : kind === 'delete' ? null : (
-            <input
-              className="h10-rb-input" style={{ width: '100%' }} autoFocus
-              value={value} onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') void submit() }}
-              aria-label={kind === 'rename' ? 'Schedule name' : 'Template name'}
-              placeholder={kind === 'rename' ? 'Schedule name' : 'Template name'}
-            />
-          )}
-          {err && <div className="h10-ntm-err">{err}</div>}
-        </div>
-
-        <div className="h10-ntm-f">
-          <button type="button" className="cancel" onClick={onClose} disabled={busy}>{done ? 'Close' : 'Cancel'}</button>
-          <span className="grow" />
-          {!done && (
-            <button type="button" className={`apply ${kind === 'delete' ? 'danger' : ''}`} onClick={() => void submit()} disabled={busy}>
-              {busy ? 'Working…' : CTA[kind]}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+      {done ? <div className="h10-ntm-ok">{done}</div> : kind === 'delete' ? null : (
+        <Input
+          fieldClassName="h10-ntm-field" autoFocus
+          value={value} onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void submit() }}
+          aria-label={kind === 'rename' ? 'Schedule name' : 'Template name'}
+          placeholder={kind === 'rename' ? 'Schedule name' : 'Template name'}
+        />
+      )}
+      {err && <div className="h10-ntm-err">{err}</div>}
+    </Modal>
   )
 }

@@ -16,10 +16,12 @@
  * plan rather than by trusting its name.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { X, Trash2, Check } from 'lucide-react'
+import { Trash2, Check } from 'lucide-react'
 import { WeekShape } from './WeekShape'
 import type { TargetPalette } from './ScheduleVersions'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 
 interface Template {
   id: string; name: string; windows: unknown[]; defaultTargetKey: string | null; updatedAt: string
@@ -87,69 +89,64 @@ export function TemplateLibrary({ groupIds, groupNames, palette, onClose, onAppl
   }
 
   return (
-    <div className="h10-ntm-back" onClick={() => { if (!busy) onClose() }}>
-      <div className="h10-ntm wide" role="dialog" aria-modal="true" aria-label="Apply a template" onClick={(e) => e.stopPropagation()}>
-        <div className="h10-ntm-h">
-          <b>Apply a template</b>
-          <button type="button" className="x" onClick={onClose} aria-label="Close"><X size={17} /></button>
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      /* `md` is 560px — the width `.h10-ntm.wide` actually rendered. Two rules declared that
+         class, 620px then 560px, and at equal specificity the later one had been winning. */
+      size="md"
+      title="Apply a template"
+      subtitle={<>
+        {/* Stated plainly, because this REPLACES a plan on schedules that may be live. */}
+        Replaces the windows and baseline on <b>{groupIds.length}</b> selected schedule{groupIds.length === 1 ? '' : 's'}
+        {groupNames.length > 0 && <> — {groupNames.slice(0, 3).join(', ')}{groupNames.length > 3 ? ` +${groupNames.length - 3} more` : ''}</>}.
+        Campaigns, portfolio scope and armed/paused state are untouched.
+      </>}
+      footer={<>
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>{msg ? 'Close' : 'Cancel'}</Button>
+        {!msg && (
+          <Button variant="primary" size="sm" disabled={!chosen || busy} onClick={() => void apply()}>
+            {busy ? 'Applying…' : <><Check size={14} /> Apply to {groupIds.length}</>}
+          </Button>
+        )}
+      </>}
+    >
+      {items === null ? (
+        <div className="h10-hist-msg">Loading templates…</div>
+      ) : items.length === 0 ? (
+        <div className="h10-hist-msg">
+          No templates yet. Save one from any schedule&rsquo;s ⋯ menu — &ldquo;Save as template&rdquo; stores its
+          windows and baseline for reuse here.
         </div>
-
-        <div className="h10-ntm-sub">
-          {/* Stated plainly, because this REPLACES a plan on schedules that may be live. */}
-          Replaces the windows and baseline on <b>{groupIds.length}</b> selected schedule{groupIds.length === 1 ? '' : 's'}
-          {groupNames.length > 0 && <> — {groupNames.slice(0, 3).join(', ')}{groupNames.length > 3 ? ` +${groupNames.length - 3} more` : ''}</>}.
-          Campaigns, portfolio scope and armed/paused state are untouched.
+      ) : (
+        <div className="h10-tpl-list">
+          {items.map((t) => (
+            <label key={t.id} className={`h10-tpl-r ${picked === t.id ? 'on' : ''}`}>
+              <input type="radio" name="tpl" checked={picked === t.id} onChange={() => setPicked(t.id)} />
+              <span className="body">
+                <span className="nm">{t.name}</span>
+                <span className="meta">
+                  {windowCount(t)} window{windowCount(t) === 1 ? '' : 's'}
+                  {t.defaultTargetKey ? ` · baseline ${palette.name(t.defaultTargetKey)}` : ' · no baseline'}
+                </span>
+              </span>
+              {/* Pick by looking at the plan, not by trusting the name. */}
+              <WeekShape
+                windows={t.windows}
+                baselineKey={t.defaultTargetKey ?? ''}
+                colorOf={palette.color}
+                nameOf={palette.name}
+                baselineName={t.defaultTargetKey ? palette.name(t.defaultTargetKey) : 'Baseline'}
+              />
+              <button type="button" className="del" aria-label={`Delete ${t.name}`} title="Delete this template" onClick={(e) => { e.preventDefault(); void remove(t) }}>
+                <Trash2 size={13} />
+              </button>
+            </label>
+          ))}
         </div>
-
-        <div className="h10-ntm-b">
-          {items === null ? (
-            <div className="h10-hist-msg">Loading templates…</div>
-          ) : items.length === 0 ? (
-            <div className="h10-hist-msg">
-              No templates yet. Save one from any schedule&rsquo;s ⋯ menu — &ldquo;Save as template&rdquo; stores its
-              windows and baseline for reuse here.
-            </div>
-          ) : (
-            <div className="h10-tpl-list">
-              {items.map((t) => (
-                <label key={t.id} className={`h10-tpl-r ${picked === t.id ? 'on' : ''}`}>
-                  <input type="radio" name="tpl" checked={picked === t.id} onChange={() => setPicked(t.id)} />
-                  <span className="body">
-                    <span className="nm">{t.name}</span>
-                    <span className="meta">
-                      {windowCount(t)} window{windowCount(t) === 1 ? '' : 's'}
-                      {t.defaultTargetKey ? ` · baseline ${palette.name(t.defaultTargetKey)}` : ' · no baseline'}
-                    </span>
-                  </span>
-                  {/* Pick by looking at the plan, not by trusting the name. */}
-                  <WeekShape
-                    windows={t.windows}
-                    baselineKey={t.defaultTargetKey ?? ''}
-                    colorOf={palette.color}
-                    nameOf={palette.name}
-                    baselineName={t.defaultTargetKey ? palette.name(t.defaultTargetKey) : 'Baseline'}
-                  />
-                  <button type="button" className="del" aria-label={`Delete ${t.name}`} title="Delete this template" onClick={(e) => { e.preventDefault(); void remove(t) }}>
-                    <Trash2 size={13} />
-                  </button>
-                </label>
-              ))}
-            </div>
-          )}
-          {err && <div className="h10-ntm-err">{err}</div>}
-          {msg && <div className="h10-ntm-ok">{msg}</div>}
-        </div>
-
-        <div className="h10-ntm-f">
-          <button type="button" className="cancel" onClick={onClose} disabled={busy}>{msg ? 'Close' : 'Cancel'}</button>
-          <span className="grow" />
-          {!msg && (
-            <button type="button" className="apply" disabled={!chosen || busy} onClick={() => void apply()}>
-              {busy ? 'Applying…' : <><Check size={14} /> Apply to {groupIds.length}</>}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+      )}
+      {err && <div className="h10-ntm-err">{err}</div>}
+      {msg && <div className="h10-ntm-ok">{msg}</div>}
+    </Modal>
   )
 }

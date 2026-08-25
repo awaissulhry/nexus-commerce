@@ -13,9 +13,10 @@
  * server call with `dryRun` flipped, so what is approved is exactly what lands.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
 import { searchOptions } from '@/lib/option-search'
 import type { RankWin } from './selectionToWindows'
 
@@ -90,94 +91,89 @@ export function AddToScheduleModal({ schedules, windows, hours, targetName, targ
   const name = (k: string | null) => (k ? targetsByKey.get(k) ?? k : 'nothing')
   const nothingChanges = !!diff && diff.changed.length === 0
 
-  if (typeof document === 'undefined') return null
-
-  return createPortal(
-    <div className="h10-ntm-back" onClick={() => { if (!busy) onClose() }}>
-      <div className="h10-ntm wide" role="dialog" aria-modal="true" aria-label="Add hours to a schedule" onClick={(e) => e.stopPropagation()}>
-        <div className="h10-ntm-h"><b>Add {hours} hour{hours === 1 ? '' : 's'} to a schedule</b></div>
-        <div className="h10-ntm-sub">
-          These hours will hold <b>{targetName}</b>. They are <b>added</b> to the schedule you pick —
-          its existing windows are kept, and the painted hours win only where the two overlap.
-        </div>
-
-        <div className="h10-ntm-b">
-          {!picked ? (
-            <>
-              <input
-                className="h10-rb-input" style={{ width: '100%' }} autoFocus
-                value={q} onChange={(e) => setQ(e.target.value)}
-                placeholder="Search schedules…" aria-label="Search schedules"
-              />
-              <div className="h10-d2-list">
-                {shown.length === 0
-                  ? <div className="h10-d2-empty">No schedule matches “{q}”.</div>
-                  : shown.map((s) => (
-                    <button type="button" key={s.value} className="h10-d2-opt" onClick={() => void preview(s)}>{s.label}</button>
-                  ))}
-              </div>
-            </>
-          ) : (
-            <div className="h10-d2-diff">
-              <div className="pick">
-                <b>{picked.label}</b>
-                <button type="button" className="chg" onClick={() => { setPicked(null); setDiff(null); setErr('') }}>Change</button>
-              </div>
-
-              {busy && !diff && <div className="h10-d2-empty">Working out what would change…</div>}
-
-              {diff && (nothingChanges ? (
-                /* Worth saying plainly rather than showing an empty diff: the schedule already
-                   holds this target in every painted hour, so applying would be a no-op. */
-                <div className="h10-d2-none">
-                  <b>Nothing would change.</b> This schedule already holds {targetName} in {hours === 1 ? 'that hour' : 'all of those hours'}.
-                </div>
-              ) : (
-                <>
-                  <div className="sum">
-                    {diff.addedHours > 0 && <span><b>{diff.addedHours}</b> hour{diff.addedHours === 1 ? '' : 's'} newly governed</span>}
-                    {/* Retargeting is the one that can surprise — those hours already had a plan. */}
-                    {diff.retargetedHours > 0 && <span className="warn"><b>{diff.retargetedHours}</b> hour{diff.retargetedHours === 1 ? '' : 's'} change target</span>}
-                    <span className="muted">{diff.unchangedHours} of 168 untouched</span>
-                  </div>
-
-                  <div className="rows">
-                    {diff.changed.map((c) => (
-                      <div className="r" key={`${c.dow}-${c.hour}`}>
-                        <span className="t">{DAYS[c.dow]} {hh(c.hour)}</span>
-                        <span className="f">{name(c.from)}</span>
-                        <span className="a">→</span>
-                        <span className="v">{name(c.to)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* A paused schedule stays paused — merging cannot arm anything. Said here so
-                      nobody expects the hours to start running. */}
-                  {!groupEnabled && (
-                    <div className="h10-d2-note">
-                      <AlertTriangle size={13} />
-                      <span>This schedule is <b>off</b>. Adding hours does not turn it on — nothing will reach Amazon until it is armed.</span>
-                    </div>
-                  )}
-                </>
+  return (
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      /* `md` is 560px — the width `.h10-ntm.wide` actually rendered, two declarations deep. */
+      size="md"
+      title={`Add ${hours} hour${hours === 1 ? '' : 's'} to a schedule`}
+      subtitle={<>
+        These hours will hold <b>{targetName}</b>. They are <b>added</b> to the schedule you pick —
+        its existing windows are kept, and the painted hours win only where the two overlap.
+      </>}
+      footer={<>
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+        {picked && diff && !nothingChanges && (
+          <Button variant="primary" size="sm" onClick={() => void commit()} disabled={busy}>
+            {busy ? 'Adding…' : `Add to ${picked.label}`}
+          </Button>
+        )}
+      </>}
+    >
+      {!picked ? (
+        <>
+          <Input
+            fieldClassName="h10-ntm-field" autoFocus
+            value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Search schedules…" aria-label="Search schedules"
+          />
+          <div className="h10-d2-list">
+            {shown.length === 0
+              ? <div className="h10-d2-empty">No schedule matches “{q}”.</div>
+              : shown.map((s) => (
+                <button type="button" key={s.value} className="h10-d2-opt" onClick={() => void preview(s)}>{s.label}</button>
               ))}
-            </div>
-          )}
-          {err && <div className="h10-ntm-err">{err}</div>}
-        </div>
+          </div>
+        </>
+      ) : (
+        <div className="h10-d2-diff">
+          <div className="pick">
+            <b>{picked.label}</b>
+            <button type="button" className="chg" onClick={() => { setPicked(null); setDiff(null); setErr('') }}>Change</button>
+          </div>
 
-        <div className="h10-ntm-f">
-          <button type="button" className="cancel" onClick={onClose} disabled={busy}>Cancel</button>
-          <span className="grow" />
-          {picked && diff && !nothingChanges && (
-            <button type="button" className="apply" onClick={() => void commit()} disabled={busy}>
-              {busy ? 'Adding…' : `Add to ${picked.label}`}
-            </button>
-          )}
+          {busy && !diff && <div className="h10-d2-empty">Working out what would change…</div>}
+
+          {diff && (nothingChanges ? (
+            /* Worth saying plainly rather than showing an empty diff: the schedule already
+               holds this target in every painted hour, so applying would be a no-op. */
+            <div className="h10-d2-none">
+              <b>Nothing would change.</b> This schedule already holds {targetName} in {hours === 1 ? 'that hour' : 'all of those hours'}.
+            </div>
+          ) : (
+            <>
+              <div className="sum">
+                {diff.addedHours > 0 && <span><b>{diff.addedHours}</b> hour{diff.addedHours === 1 ? '' : 's'} newly governed</span>}
+                {/* Retargeting is the one that can surprise — those hours already had a plan. */}
+                {diff.retargetedHours > 0 && <span className="warn"><b>{diff.retargetedHours}</b> hour{diff.retargetedHours === 1 ? '' : 's'} change target</span>}
+                <span className="muted">{diff.unchangedHours} of 168 untouched</span>
+              </div>
+
+              <div className="rows">
+                {diff.changed.map((c) => (
+                  <div className="r" key={`${c.dow}-${c.hour}`}>
+                    <span className="t">{DAYS[c.dow]} {hh(c.hour)}</span>
+                    <span className="f">{name(c.from)}</span>
+                    <span className="a">→</span>
+                    <span className="v">{name(c.to)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* A paused schedule stays paused — merging cannot arm anything. Said here so
+                  nobody expects the hours to start running. */}
+              {!groupEnabled && (
+                <div className="h10-d2-note">
+                  <AlertTriangle size={13} />
+                  <span>This schedule is <b>off</b>. Adding hours does not turn it on — nothing will reach Amazon until it is armed.</span>
+                </div>
+              )}
+            </>
+          ))}
         </div>
-      </div>
-    </div>,
-    document.body,
+      )}
+      {err && <div className="h10-ntm-err">{err}</div>}
+    </Modal>
   )
 }

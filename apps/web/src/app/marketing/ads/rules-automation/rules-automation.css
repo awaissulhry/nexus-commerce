@@ -5653,4 +5653,5 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    the dialog asks and the switch it asks it with. `globals.css` resets every margin to 0, so
    without this the two touch.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
-.h10-ntm-say + .h10-ntm-tog { margin-top: 11px; }
+.h10-ntm-say + * { margin-top: 11px; }
+.h10-ntm-field { width: 100%; }
