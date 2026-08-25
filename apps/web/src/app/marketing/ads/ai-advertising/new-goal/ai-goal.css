@@ -91,3 +91,22 @@
    Only the spacing below the bar was this page's; `.nds-tabs` already matches its shape —
    flex, 4px gap, 1px bottom hairline — and adds tablist/tab roles it never had. */
 .aig-seedtabs { margin-bottom: 12px; }
+
+/* AIAD DS alignment, second pass — the three controls that ads.css was shadowing.
+   `.h10-aig-field input`, `.h10-aig-adv input` and `.h10-dd-search input` were all
+   class-plus-element descendant selectors, which beat `.nds-field > input` on specificity, not
+   just on load order — a DS Input dropped inside any of them rendered a second bordered box
+   inside the field's own. All three wrappers had exactly ONE call site in the whole repo, this
+   page, so the twelve rules are deleted rather than scoped around. What is left below is only
+   what the DS does not own. */
+.aig-name { width: 100%; min-width: 0; }
+.aig-dd-search { width: 100%; min-width: 0; margin-bottom: 5px; }
+/* `.nds-check` centres a one-line label; this one is a title over a paragraph. */
+/* `aig-advalloc`, not `aig-adv` — this file ALREADY had an `.aig-adv` (the Advanced Targeting
+   drawer body, `display:flex; flex-direction:column; gap:22px`). Reusing the name merged the two:
+   the checkbox inherited `flex-direction: column` and a 22px gap and rendered 75px tall against
+   the 56px it replaced. Measured, not spotted by reading. */
+.aig-advalloc { margin-top: 16px; align-items: flex-start; }
+.aig-advalloc > input { margin-top: 1px; }
+.aig-advalloc .t { display: block; font-size: 13.5px; font-weight: 700; color: var(--nds-text); }
+.aig-advalloc .d { display: block; font-size: 12px; line-height: 1.5; color: var(--nds-text-2); margin-top: 3px; }

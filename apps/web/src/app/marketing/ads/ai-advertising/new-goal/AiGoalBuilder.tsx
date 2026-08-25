@@ -30,6 +30,7 @@ import { InfoTip } from '../../campaigns/InfoTip'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
 import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
+import { Checkbox } from '@/design-system/primitives/Checkbox'
 import { Textarea } from '@/design-system/primitives/Textarea'
 import { Drawer } from '@/design-system/components/Drawer'
 import { Tabs } from '@/design-system/components/Tabs'
@@ -214,7 +215,7 @@ export function AiGoalBuilder() {
             <div className="h10-aig-card">
               <label className="h10-aig-field">
                 <span className="lbl">Goal Name <i className="req">*</i></span>
-                <input value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder="Enter a goal name" />
+                <Input fieldClassName="aig-name" value={goalName} onChange={(e) => setGoalName(e.target.value)} placeholder="Enter a goal name" />
               </label>
               <label className="h10-aig-field">
                 <span className="lbl">Marketplace <i className="req">*</i> <InfoTip tip="The Amazon marketplace the AI launches these campaigns in. Everything on this page — suggestions, budgets, the preview — is scoped to it." /></span>
@@ -279,11 +280,15 @@ export function AiGoalBuilder() {
                   ))}
                 </div>
                 {budgetMode === 'strict' && (
-                  <label className="h10-aig-adv">
-                    <input type="checkbox" checked={advAlloc} onChange={(e) => setAdvAlloc(e.target.checked)} />
-                    <span className="t">Advanced Allocation</span>
-                    <span className="d">When the campaign&apos;s budget is exhausted, AI will analyze the spending capacity and effectiveness of a campaign and allocate the budget more efficiently to the campaign under that goal.</span>
-                  </label>
+                  <Checkbox
+                    className="aig-advalloc"
+                    checked={advAlloc}
+                    onChange={(e) => setAdvAlloc(e.target.checked)}
+                    label={<>
+                      <span className="t">Advanced Allocation</span>
+                      <span className="d">When the campaign&apos;s budget is exhausted, AI will analyze the spending capacity and effectiveness of a campaign and allocate the budget more efficiently to the campaign under that goal.</span>
+                    </>}
+                  />
                 )}
               </div>
 
@@ -552,7 +557,7 @@ function AddSeedKeywords({ suggest, loading, hasProducts, seeds, setSeeds, tab, 
             )}
             {tab === 'list' && (
               <div className="h10-aig-folderbox">
-                <div className="h10-dd-search"><Search size={13} /><input value={folderQ} onChange={(e) => setFolderQ(e.target.value)} placeholder="Search for a folder" /></div>
+                <Input size="sm" fieldClassName="aig-dd-search" leadingIcon={<Search size={13} />} value={folderQ} onChange={(e) => setFolderQ(e.target.value)} placeholder="Search for a folder" aria-label="Search for a folder" />
                 <div className="h10-aig-folderempty"><Folder size={18} /> No keyword folders yet</div>
               </div>
             )}

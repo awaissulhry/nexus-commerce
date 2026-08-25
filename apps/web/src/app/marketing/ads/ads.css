@@ -113,10 +113,6 @@
 .h10-dd-btn > span.ph { color: var(--nds-grey-400); }
 .h10-dd-btn svg { color: var(--nds-grey-500); flex-shrink: 0; }
 .h10-dd.open .h10-dd-btn { border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
-.h10-dd-search { display: flex; align-items: center; gap: 7px; padding: 7px 9px; margin-bottom: 5px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); color: var(--nds-grey-500); }
-.h10-dd-search svg { flex-shrink: 0; }
-.h10-dd-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: var(--nds-grey-900); }
-.h10-dd-search input::placeholder { color: var(--nds-grey-400); }
 .h10-dd-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .h10-dd-opt { flex-shrink: 0; display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 13px; color: var(--nds-grey-800); padding: 8px 9px; border-radius: var(--nds-radius-md); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .h10-dd-opt:hover { background: var(--nds-grey-50); }
@@ -1211,9 +1207,6 @@
 .h10-aig-field { display: flex; flex-direction: column; gap: 6px; max-width: 430px; }
 .h10-aig-field .lbl { font-size: 13px; font-weight: 600; color: #37495b; }
 .h10-aig-field .req { color: #e0322a; font-style: normal; }
-.h10-aig-field input { border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 9px 12px; font: inherit; font-size: 13.5px; color: var(--nds-grey-900); }
-.h10-aig-field input::placeholder { color: #9eaebd; }
-.h10-aig-field input:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
 
 /* Select AI Target cards */
 .h10-aig-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -1307,10 +1300,6 @@
 .h10-aia-empty p { font-size: 13.5px; line-height: 1.6; color: var(--nds-grey-600); max-width: 540px; margin: 0 0 22px; }
 
 /* ── AI Goal builder — deep config (product table, keywords, drawer, modal) ──── */
-.h10-aig-adv { display: grid; grid-template-columns: 18px 1fr; column-gap: 9px; align-items: start; margin-top: 16px; cursor: pointer; }
-.h10-aig-adv input { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--nds-blue-600); }
-.h10-aig-adv .t { font-size: 13.5px; font-weight: 700; color: var(--nds-grey-900); grid-column: 2; }
-.h10-aig-adv .d { grid-column: 2; font-size: 12px; line-height: 1.5; color: var(--nds-grey-600); margin-top: 3px; }
 .h10-aig-psel .psel-head { display: grid; align-items: center; background: var(--nds-grey-25); border-bottom: 1px solid var(--nds-grey-150); padding: 10px 14px; font-size: 11.5px; font-weight: 700; color: #475467; }
 .h10-aig-psel .psel-head.strict { grid-template-columns: 34px 1fr 110px 170px 150px; }
 .h10-aig-psel .psel-head.shared { grid-template-columns: 34px 1fr 110px; }
@@ -2442,7 +2431,6 @@
 .h10-dd-opt.active::before { content: ''; position: absolute; left: 2px; width: 3px; height: 20px; border-radius: 2px; background: var(--nds-blue-600); }
 .h10-dd-opt { position: relative; }
 /* The multi-select popover scrolls, so its search box must stay put while the list moves under it. */
-.h10-ms-pop .h10-dd-search { position: sticky; top: 0; z-index: 1; background: var(--nds-white); }
 
 /* ── HX.5 — account Change Log ─────────────────────────────────────────────────────────────
    Mirrors the eBay change log's chrome so both channels read the same way. */
