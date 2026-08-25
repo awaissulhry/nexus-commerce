@@ -75,7 +75,7 @@
   --nds-text-strong: var(--nds-grey-700);
   --nds-text-disabled: var(--nds-grey-400);
   --nds-text-inverse: var(--nds-white);
-  --nds-text-link: var(--nds-blue-600);
+  --nds-text-link: #1a60c4;
   --nds-bg: var(--nds-grey-50);
   --nds-surface: var(--nds-white);
   --nds-surface-raised: var(--nds-grey-25);

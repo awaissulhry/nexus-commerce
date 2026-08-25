@@ -63,7 +63,7 @@
   --nds-text-strong: var(--nds-grey-700);
   --nds-text-disabled: var(--nds-grey-400);
   --nds-text-inverse: var(--nds-white);
-  --nds-text-link: var(--nds-blue-600);
+  --nds-text-link: #1a60c4;
   --nds-tooltip-light-fg: var(--nds-grey-900);
   --nds-tooltip-light-fg-2: var(--nds-grey-600);
   --nds-bg: var(--nds-grey-50);

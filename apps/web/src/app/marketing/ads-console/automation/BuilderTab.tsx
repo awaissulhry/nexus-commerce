@@ -14,6 +14,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Check, FlaskConical, ShieldCheck, Wand2, Settings2, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { marketLabel } from '../_shared/amazonLinks'
 import {
   TRIGGERS, OPS, ACTIONS, triggerDef, fieldDef, actionDef,
@@ -133,20 +135,20 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
   // ── render pieces ───────────────────────────────────────────────────────────
   const paramInput = (ai: number, a: ActRow) => (actionDef(a.type)?.params ?? []).map((p) => {
     const v = a.params[p.k] ?? ''
-    if (p.kind === 'sel') return <select key={p.k} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)}>{p.options?.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
-    if (p.kind === 'text') return <input key={p.k} type="text" placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} style={{ flex: 1, minWidth: 160 }} />
-    return <span key={p.k} className="az-bld-num"><input type="number" step="any" placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} title={p.label} /><i>{paramSuffix(p.kind)}</i></span>
+    if (p.kind === 'sel') return <Listbox key={p.k} ariaLabel={p.label} width={170} value={v} onChange={(nv) => setActParam(ai, p.k, nv)} options={(p.options ?? []).map((o) => ({ value: o.v, label: o.l }))} />
+    if (p.kind === 'text') return <Input key={p.k} type="text" aria-label={p.label} placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} style={{ minWidth: 160 }} />
+    return <span key={p.k} className="az-bld-num"><Input type="number" step="any" aria-label={p.label} placeholder={p.label} value={v} onChange={(e) => setActParam(ai, p.k, e.target.value)} title={p.label} style={{ width: 74 }} /><i>{paramSuffix(p.kind)}</i></span>
   })
 
   const footer = (
     <div className="az-bld-foot">
       <div className="az-bld-preview"><Sparkles size={14} /><span>{previewSentence}</span></div>
       <div className="az-bld-actions">
-        <label className="az-bld-name"><span>Rule name</span><input placeholder="e.g. Cut bids when ACOS ≥ 45%" value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <button className="az-btn" disabled={!valid || saving !== false} onClick={() => void create(true)}><FlaskConical size={14} />{saving === 'test' ? 'Testing…' : 'Create & test'}</button>
-        <button className="az-btn dark" disabled={!valid || saving !== false} onClick={() => void create(false)}><Check size={15} />{saving === 'save' ? 'Creating…' : 'Create rule'}</button>
+        <label className="az-bld-name"><span>Rule name</span><Input placeholder="e.g. Cut bids when ACOS ≥ 45%" value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <Button disabled={!valid || saving !== false} onClick={() => void create(true)}><FlaskConical size={14} />{saving === 'test' ? 'Testing…' : 'Create & test'}</Button>
+        <Button variant="primary" disabled={!valid || saving !== false} onClick={() => void create(false)}><Check size={15} />{saving === 'save' ? 'Creating…' : 'Create rule'}</Button>
       </div>
-      {(msg || testMsg) && <div className="az-bld-msg">{msg && <span className="ok"><Check size={13} /> {msg} <button className="az-link" onClick={onGoActive}>Go to Active rules →</button></span>}{testMsg && <span className="test">{testMsg}</span>}</div>}
+      {(msg || testMsg) && <div className="az-bld-msg">{msg && <span className="ok"><Check size={13} /> {msg} <Button variant="link" inline onClick={onGoActive}>Go to Active rules →</Button></span>}{testMsg && <span className="test">{testMsg}</span>}</div>}
       <div className="az-bld-safe"><ShieldCheck size={13} /> New rules always start <b>disabled + dry-run</b>. Caps and the kill-switch still apply once live.</div>
     </div>
   )
@@ -155,14 +157,16 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
     <div className="az-fp-sec">
       <h4>Guardrails &amp; scope</h4>
       <div className="az-bld-caps">
-        <label><span>Max runs / day</span><input type="number" value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} /></label>
-        <label><span>Max €/day affected</span><input type="number" value={maxSpend} onChange={(e) => setMaxSpend(e.target.value)} /></label>
-        <label><span>Max € per action <i>(optional)</i></span><input type="number" placeholder="—" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} /></label>
+        <label><span>Max runs / day</span><Input type="number" value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} /></label>
+        <label><span>Max spend / day</span><Input type="number" prefix="€" value={maxSpend} onChange={(e) => setMaxSpend(e.target.value)} /></label>
+        <label><span>Max spend per action <i>(optional)</i></span><Input type="number" prefix="€" placeholder="—" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} /></label>
         <label><span>Marketplace</span>
-          <select value={scope} onChange={(e) => setScope(e.target.value)}>
-            <option value="">All markets</option>
-            {conns.map((c) => <option key={c.marketplace} value={c.marketplace}>{marketLabel(c.marketplace)}</option>)}
-          </select>
+          <Listbox
+            ariaLabel="Marketplace scope"
+            value={scope}
+            onChange={setScope}
+            options={[{ value: '', label: 'All markets' }, ...conns.map((c) => ({ value: c.marketplace, label: marketLabel(c.marketplace) }))]}
+          />
         </label>
       </div>
     </div>
@@ -204,26 +208,26 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
               {groups.flatMap((g, gi) => g.map((c, ri) => c.field ? (
                 <label key={`c${gi}-${ri}`} className="az-knob">
                   <span>{fieldDef(c.field)?.label} {opSym(c.op)}</span>
-                  <span className="in"><input type="number" step="any" value={c.value} onChange={(e) => setCond(gi, ri, { value: e.target.value })} /><i>{fieldSuffix(fieldDef(c.field)?.unit ?? 'num')}</i></span>
+                  <span className="in"><Input type="number" step="any" aria-label={fieldDef(c.field)?.label} value={c.value} onChange={(e) => setCond(gi, ri, { value: e.target.value })} style={{ width: 110, fontSize: 15, fontWeight: 600 }} /><i>{fieldSuffix(fieldDef(c.field)?.unit ?? 'num')}</i></span>
                 </label>
               ) : null))}
               {acts.flatMap((a, ai) => (actionDef(a.type)?.params ?? []).filter((p) => p.kind !== 'text').map((p) => (
                 <label key={`a${ai}-${p.k}`} className="az-knob">
                   <span>{actionDef(a.type)?.label}: {p.label}</span>
                   {p.kind === 'sel'
-                    ? <select value={a.params[p.k] ?? ''} onChange={(e) => setActParam(ai, p.k, e.target.value)}>{p.options?.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
-                    : <span className="in"><input type="number" step="any" value={a.params[p.k] ?? ''} onChange={(e) => setActParam(ai, p.k, e.target.value)} /><i>{paramSuffix(p.kind)}</i></span>}
+                    ? <Listbox ariaLabel={p.label} width={180} value={a.params[p.k] ?? ''} onChange={(nv) => setActParam(ai, p.k, nv)} options={(p.options ?? []).map((o) => ({ value: o.v, label: o.l }))} />
+                    : <span className="in"><Input type="number" step="any" aria-label={p.label} value={a.params[p.k] ?? ''} onChange={(e) => setActParam(ai, p.k, e.target.value)} style={{ width: 110, fontSize: 15, fontWeight: 600 }} /><i>{paramSuffix(p.kind)}</i></span>}
                 </label>
               )))}
               {groups.every((g) => g.every((c) => !c.field)) && acts.every((a) => (actionDef(a.type)?.params ?? []).filter((p) => p.kind !== 'text').length === 0) && <div className="az-bld-nilknob">This goal needs no numbers — it runs as-is. Continue to name &amp; ship.</div>}
             </div>
-            <div className="az-bld-nav"><button className="az-btn" onClick={() => setStep(1)}><ArrowLeft size={14} />Back</button><button className="az-btn dark" onClick={() => setStep(3)}>Next<ArrowRight size={14} /></button><button className="az-link" onClick={() => setMode('advanced')}>Fine-tune in Advanced</button></div>
+            <div className="az-bld-nav"><Button onClick={() => setStep(1)}><ArrowLeft size={14} />Back</Button><Button variant="primary" onClick={() => setStep(3)}>Next<ArrowRight size={14} /></Button><Button variant="link" onClick={() => setMode('advanced')}>Fine-tune in Advanced</Button></div>
           </div>
         )}
 
         {step === 3 && <>
           {capsRow}
-          <div className="az-bld-nav"><button className="az-btn" onClick={() => setStep(2)}><ArrowLeft size={14} />Back</button></div>
+          <div className="az-bld-nav"><Button onClick={() => setStep(2)}><ArrowLeft size={14} />Back</Button></div>
           {footer}
         </>}
       </>}
@@ -232,9 +236,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
       {mode === 'advanced' && <>
         <div className="az-fp-sec">
           <h4>When (trigger)</h4>
-          <select className="az-bld-select" value={trigger} onChange={(e) => changeTrigger(e.target.value)}>
-            {TRIGGERS.map((t) => <option key={t.t} value={t.t}>{t.label}</option>)}
-          </select>
+          <Listbox ariaLabel="Trigger" width={280} value={trigger} onChange={changeTrigger} options={TRIGGERS.map((t) => ({ value: t.t, label: t.label }))} />
           <div className="az-bld-hint">{triggerDef(trigger)?.hint}</div>
         </div>
 
@@ -245,19 +247,17 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
               {gi > 0 && <div className="az-bld-or">OR</div>}
               {g.map((c, ri) => (
                 <div className="az-fp-row" key={ri}>
-                  <select value={c.field} onChange={(e) => setCond(gi, ri, { field: e.target.value })}>
-                    {suggestedFields(trigger).map((f) => <option key={f.f} value={f.f}>{f.label}</option>)}
-                  </select>
-                  <select value={c.op} onChange={(e) => setCond(gi, ri, { op: e.target.value })}>{OPS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
-                  {c.op !== 'exists' && <input type={['in', 'contains'].includes(c.op) ? 'text' : 'number'} step="any" value={c.value} onChange={(e) => setCond(gi, ri, { value: e.target.value })} placeholder={c.op === 'in' ? 'a, b, c' : 'value'} />}
+                  <Listbox ariaLabel="Condition field" width={230} value={c.field} onChange={(v) => setCond(gi, ri, { field: v })} options={suggestedFields(trigger).map((f) => ({ value: f.f, label: f.label }))} />
+                  <Listbox ariaLabel="Operator" width={150} value={c.op} onChange={(v) => setCond(gi, ri, { op: v })} options={OPS.map((o) => ({ value: o.v, label: o.l }))} />
+                  {c.op !== 'exists' && <Input type={['in', 'contains'].includes(c.op) ? 'text' : 'number'} step="any" aria-label="Condition value" value={c.value} onChange={(e) => setCond(gi, ri, { value: e.target.value })} placeholder={c.op === 'in' ? 'a, b, c' : 'value'} style={{ width: 84 }} />}
                   <span className="az-bld-unit">{fieldSuffix(fieldDef(c.field)?.unit ?? 'num')}</span>
                   <button className="az-kebab" onClick={() => removeRow(gi, ri)} style={{ color: '#cc1100' }} aria-label="Remove condition"><Trash2 size={14} /></button>
                 </div>
               ))}
-              <button className="az-link" onClick={() => addRow(gi)}><Plus size={13} /> Add condition (AND)</button>
+              <Button variant="link" onClick={() => addRow(gi)}><Plus size={13} /> Add condition (AND)</Button>
             </div>
           ))}
-          <button className="az-link az-bld-orbtn" onClick={addGroup}><Plus size={13} /> Add OR group</button>
+          <Button variant="link" style={{ marginTop: 10 }} onClick={addGroup}><Plus size={13} /> Add OR group</Button>
         </div>
 
         <div className="az-fp-sec">
@@ -271,7 +271,7 @@ export function BuilderTab({ onSaved, onGoActive }: { onSaved: () => void; onGoA
               <button className="az-kebab" onClick={() => removeAct(ai)} style={{ color: '#cc1100' }} aria-label="Remove action"><Trash2 size={14} /></button>
             </div>
           ))}
-          <button className="az-link" onClick={() => setActs((r) => [...r, { type: 'notify', params: seedParams('notify') }])}><Plus size={13} /> Add action</button>
+          <Button variant="link" onClick={() => setActs((r) => [...r, { type: 'notify', params: seedParams('notify') }])}><Plus size={13} /> Add action</Button>
           <div className="az-bld-hint">{actionDef(acts[acts.length - 1]?.type ?? '')?.desc}</div>
         </div>
 
