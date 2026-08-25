@@ -18,7 +18,17 @@ Read the component before using it. `components/README.md` and `patterns/README.
 ## 🔴 Rule 1 — you may NOT edit the design system
 `design-system/**` is owned by the DS session alone. Six sessions editing shared files is how
 one concept ends up with five spellings.
-**Found a gap (no `.seg` segmented control, no icon-only button, a missing variant)?**
+**Known DS coverage, corrected 2026-08-25 by measurement — read this before reporting a gap:**
+- **Icon-only buttons are already covered.** `primitives/ToolbarButton` takes `icon` + `label`
+  (which becomes the `aria-label`) + `active` (`aria-pressed`) + `badge` + tooltip. The console's
+  boxed icon buttons (`.az-iconbtn`, `.h10-sug-iconbtn`, `.rec-iconbtn`) map straight onto it.
+  Do NOT report these as a gap; convert them.
+- **A `Segmented` control is genuinely missing** and the DS session is building it. Leave the
+  console's 20 `-seg` spellings alone until it lands.
+- **The bare icon button** (`.x` ×29, `.rm` ×14 — `border:none; background:none`) is a real gap,
+  also with the DS session. Note that none of those 43 call sites has an `aria-label` today.
+
+**Found some OTHER gap, or a missing variant?**
 STOP on that case, leave the original markup untouched, and write one line to
 `.claude/DS-GAPS.md` (append, never rewrite: `- <class> → <what's missing> — <file:line>`).
 Then move on. Do not invent a local workaround. Do not extend the DS.
