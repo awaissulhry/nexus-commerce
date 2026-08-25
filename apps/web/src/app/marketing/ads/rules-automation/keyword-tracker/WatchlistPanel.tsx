@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Check, Download, Plus, Star, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -200,9 +201,9 @@ export function WatchlistPanel({
             placeholder={'giacca moto estiva\ncasco modulare'}
             disabled={!activeId || busy}
           />
-          <button type="button" className="h10-am-btn primary" onClick={addTerms} disabled={!activeId || busy || !paste.trim()}>
+          <Button variant="primary" onClick={addTerms} disabled={!activeId || busy || !paste.trim()}>
             <Plus size={13} /> Add to “{active?.name ?? '—'}”
-          </button>
+          </Button>
         </section>
 
         {/* ── import ──────────────────────────────────────────────────── */}
@@ -214,9 +215,9 @@ export function WatchlistPanel({
           </p>
           {sources.length === 0 && <p className="cap">No coverage set exists for {market}.</p>}
           {sources.map((s) => (
-            <button key={s.id} type="button" className="h10-am-btn" onClick={() => importSet(s.id)} disabled={!activeId || busy}>
+            <Button key={s.id} onClick={() => importSet(s.id)} disabled={!activeId || busy}>
               <Download size={13} /> {s.name} · {num(s.terms)} terms
-            </button>
+            </Button>
           ))}
         </section>
 
@@ -247,9 +248,9 @@ export function WatchlistPanel({
                 </span>
               </p>
             ) : (
-              <button type="button" className="h10-am-btn" onClick={() => setConfirm('remove-terms')} disabled={busy}>
+              <Button onClick={() => setConfirm('remove-terms')} disabled={busy}>
                 <Trash2 size={13} /> Remove {num(sel.size)} selected
-              </button>
+              </Button>
             )
           )}
         </section>
@@ -273,14 +274,14 @@ export function WatchlistPanel({
               placeholder={`New ${market} list name`}
               aria-label="New list name"
             />
-            <button type="button" className="h10-am-btn" onClick={createList} disabled={busy || !newName.trim()}>
+            <Button onClick={createList} disabled={busy || !newName.trim()}>
               <Plus size={13} /> Create
-            </button>
+            </Button>
           </div>
           {active && !active.isDefault && (
-            <button type="button" className="h10-am-btn" onClick={makeDefault} disabled={busy}>
+            <Button onClick={makeDefault} disabled={busy}>
               <Star size={13} /> Make this the list {market} opens on
-            </button>
+            </Button>
           )}
           {active && (
             confirm === 'delete-list' ? (

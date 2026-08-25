@@ -17,6 +17,7 @@
  * work that doesn't exist.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { ChevronDown, ShieldCheck, Plus } from 'lucide-react'
 import { H10Select } from '../../campaigns/FilterDropdown'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -194,9 +195,9 @@ export function CoveragePanel({ market, schedules, onChanged, days = 30 }: {
               searchable
               searchPlaceholder="Search schedules…"
             />
-            <button type="button" className="h10-am-btn primary" disabled={!target || !sel.size || busy} onClick={() => void addToSchedule()}>
+            <Button variant="primary" disabled={!target || !sel.size || busy} onClick={() => void addToSchedule()}>
               <Plus size={13} /> {busy ? 'Adding…' : `Add ${sel.size || ''}`.trim()}
-            </button>
+            </Button>
             {msg && <span className="h10-cov-msg">{msg}</span>}
           </div>
         </div>

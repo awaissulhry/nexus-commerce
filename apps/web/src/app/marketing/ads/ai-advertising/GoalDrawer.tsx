@@ -7,6 +7,7 @@
  * through the Control Room's evidence-based graduation path, never flipped on from a drawer.
  */
 import { useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { Rocket } from 'lucide-react'
 import { Drawer } from '@/design-system/components/Drawer'
@@ -147,9 +148,9 @@ export function GoalDrawer({ goalId, onClose, onMutated, onLaunch, launching }: 
                   <b>Not launched yet</b>
                   <span>Launching builds the campaign scaffold and starts the AI in propose-only mode.</span>
                 </div>
-                <button type="button" className="h10-am-btn primary" disabled={launching} onClick={() => onLaunch(g.id)}>
+                <Button variant="primary" disabled={launching} onClick={() => onLaunch(g.id)}>
                   <Rocket size={13} /> {launching ? 'Launching…' : 'Launch'}
-                </button>
+                </Button>
               </div>
             </section>
           ) : plan && (

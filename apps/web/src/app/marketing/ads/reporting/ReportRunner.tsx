@@ -29,6 +29,7 @@
  * only who computes the rows changed.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import Link from 'next/link'
 import { ArrowLeft, RefreshCw, Settings2, Share2, Sigma, AlertTriangle } from 'lucide-react'
 import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
@@ -540,9 +541,9 @@ export function ReportRunner({ reportId }: { reportId: string }) {
             )}
           </div>
 
-          <button type="button" className="h10-am-btn" onClick={() => setMetricsOpen(true)}>
+          <Button onClick={() => setMetricsOpen(true)}>
             <Sigma size={13} /> Metrics
-          </button>
+          </Button>
 
           <div className="h10-custwrap">
             {/* R6 — one control for every way this report leaves the console. Download, share

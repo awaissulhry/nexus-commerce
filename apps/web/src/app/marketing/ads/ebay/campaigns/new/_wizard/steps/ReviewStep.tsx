@@ -293,9 +293,9 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
             {plan.rateDiscovery.on && isGen && !isRules ? <>, <b>1 discovery plan</b></> : null}
           </span>
           <span className="grow" style={{ flex: 1 }} />
-          <button type="button" className="h10-am-btn primary" disabled={busy || gaps.length > 0 || unacked.length > 0} onClick={() => void launch()}>
+          <Button variant="primary" disabled={busy || gaps.length > 0 || unacked.length > 0} onClick={() => void launch()}>
             {busy ? 'Launching…' : 'Launch campaign'}
-          </button>
+          </Button>
         </div>
         {error && <ul className="eb-results" style={{ marginTop: 8 }}><li className="err">{error}</li></ul>}
       </div>

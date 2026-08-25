@@ -1433,9 +1433,9 @@ export function ApplyRulesClient() {
           {assignErr && <span className="er" role="status">{assignErr}</span>}
           <span className="grow" />
      <Button disabled={assignBusy} aria-disabled={assignBusy} onClick={() => { setAssignStaged(new Map()); setAssignErr(null) }}>Discard</Button>
-          <button type="button" className="h10-am-btn primary" disabled={assignBusy} aria-disabled={assignBusy} onClick={() => void applyAssignments()}>
+          <Button variant="primary" disabled={assignBusy} aria-disabled={assignBusy} onClick={() => void applyAssignments()}>
             {assignBusy ? 'Applying…' : 'Apply'}
-          </button>
+          </Button>
         </div>
       )}
       {editPop && editPop.kind === 'tacos' && (

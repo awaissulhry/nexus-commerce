@@ -32,7 +32,7 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink, Lightbulb, Pencil, X } from 'lucide-react'
 import { HoverCard } from '../campaigns/FilterDropdown'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 // ── the label maps, defined once ────────────────────────────────────────────────────────────────
 
@@ -314,7 +314,7 @@ export function StrategyModal({ strategy, busy, error, onConfirm, onClose }: {
           ))}
           {error && <p className="h10-modal-err" role="alert">{error}</p>}
         </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose} disabled={busy}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" onClick={() => onConfirm(v)} disabled={busy}>{busy ? 'Saving…' : 'Confirm'}</button></div>
+        <div className="h10-modal-f"><Button onClick={onClose} disabled={busy}>Cancel</Button><span className="grow" /><Button variant="primary" onClick={() => onConfirm(v)} disabled={busy}>{busy ? 'Saving…' : 'Confirm'}</Button></div>
       </div>
     </div>
   )

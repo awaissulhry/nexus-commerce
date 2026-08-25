@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 // lucide-react 0.263.1 has no ShieldX; Ban reads better for "always negate" anyway.
 import { ShieldCheck, Ban, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -151,9 +152,9 @@ export function ProtectedTermsPanel() {
           className="h10-pt-input reason" value={reason} placeholder="Why (optional)"
           onChange={(e) => setReason(e.target.value)} aria-label="Reason"
         />
-        <button type="button" className="h10-am-btn primary" disabled={busy || !term.trim()} onClick={() => void add()}>
+        <Button variant="primary" disabled={busy || !term.trim()} onClick={() => void add()}>
           <Plus size={13} /> Protect
-        </button>
+        </Button>
       </div>
       {err && <div className="h10-d2-note bad"><AlertTriangle size={13} /><span>{err}</span></div>}
 

@@ -138,9 +138,9 @@ export function BudGuardrails({ campaigns, loading, reload }: BudSlotProps) {
       {note && <p className="h10-bud2-ok" role="status"><Check size={13} aria-hidden /> {note}</p>}
 
       <div className="h10-bud2-row">
-        <button type="button" className="h10-am-btn primary" disabled={busy} onClick={() => void capture()}>
+        <Button variant="primary" disabled={busy} onClick={() => void capture()}>
           <Anchor size={13} aria-hidden /> Capture baselines for {census.capturable + (overwrite ? census.withBaseline : 0)} campaign{(census.capturable + (overwrite ? census.withBaseline : 0)) === 1 ? '' : 's'} in scope
-        </button>
+        </Button>
         <label className="h10-bud2-chk" title="Re-capture campaigns that already carry a baseline, from their CURRENT budget. Only do this if the current budgets are the ones you want anchored.">
           <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} /> overwrite existing baselines
         </label>

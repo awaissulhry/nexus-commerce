@@ -16,7 +16,7 @@ import { EbayMark } from '../../../_shell/EbayMark'
 import { HoverCard } from '../../../campaigns/FilterDropdown'
 import { getEbayAds, EBAY_MARKETS } from '../../_lib'
 import type { BuilderTemplate } from './_wizard/plan'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 const FLAG: Record<string, string> = { EBAY_IT: '🇮🇹', EBAY_DE: '🇩🇪', EBAY_FR: '🇫🇷', EBAY_ES: '🇪🇸', EBAY_GB: '🇬🇧' }
 
@@ -120,9 +120,9 @@ export function EbayCampaignChooser() {
               return (
                 <HoverCard key={t.key} placement="below"
                   text={`${t.strategy === 'CPS' ? 'General (CPS)' : 'Priority manual (CPC)'} · ${t.rulePacks.length} rule pack(s)${t.endDays ? ` · ${t.endDays}-day end date` : ''}${t.key === 'catch_all' ? ' · rules-based with auto-select ON (the true catch-all)' : ''}${disabled ? ' · unavailable on eBay Spain' : ''}`}>
-                  <button type="button" className="h10-am-btn" disabled={disabled} onClick={() => pick(type, t.key)}>
+                  <Button disabled={disabled} onClick={() => pick(type, t.key)}>
                     {t.label}
-                  </button>
+                  </Button>
                 </HoverCard>
               )
             })}

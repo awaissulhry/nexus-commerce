@@ -607,7 +607,7 @@ function AddProductsModal({ selected, onClose, onApply }: { selected: Prod[]; on
         <div className="h10-modal-b">
           <ProductSelection products={picked} setProducts={setPicked} />
         </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!picked.length} onClick={apply}>Add Products</button></div>
+        <div className="h10-modal-f"><Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" disabled={!picked.length} onClick={apply}>Add Products</Button></div>
       </div>
     </div>
   )
@@ -629,7 +629,7 @@ function AdvancedTargetingDrawer({ productTargets, excludeAsins, onClose, onSave
           <div className="dfield"><div className="dl"><span>Exclude ASINs <InfoTip tip="Stop your ads from showing on these ASINs." /></span><span className="cnt">{eaN} Added</span></div>
             <textarea value={ea} onChange={(e) => setEa(e.target.value)} placeholder="Enter product ASINs you do not want to target, one per line" /></div>
         </div>
-        <div className="df"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" disabled={!ptN && !eaN} onClick={() => onSave(lines(pt), lines(ea))}>Save</button></div>
+        <div className="df"><Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" disabled={!ptN && !eaN} onClick={() => onSave(lines(pt), lines(ea))}>Save</Button></div>
       </aside>
     </div>
   )

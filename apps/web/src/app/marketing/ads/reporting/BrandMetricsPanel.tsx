@@ -35,6 +35,7 @@
  * they belong to. Choosing among the deeper nodes is BM.3's filter, not this.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Info } from 'lucide-react'
 import { HoverCard } from '../campaigns/FilterDropdown'
 import { BenchmarkCard } from './BenchmarkCard'
@@ -304,9 +305,9 @@ export function BrandMetricsPanel({ params, markets, onPickMarket }: {
         </p>
         <div className="rpt-bm-markets">
           {markets.map((m) => (
-            <button key={m} type="button" className="h10-am-btn" onClick={() => onPickMarket(m)}>
+            <Button key={m} onClick={() => onPickMarket(m)}>
               {m}
-            </button>
+            </Button>
           ))}
         </div>
       </section>

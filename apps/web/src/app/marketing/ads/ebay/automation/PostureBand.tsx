@@ -6,6 +6,7 @@
  * switch, plus the digest cross-link the critique flagged as missing.
  */
 import Link from 'next/link'
+import { Button } from '@/design-system/primitives'
 import { useEffect, useState } from 'react'
 import { postEbayAds, eurC } from '../_lib'
 
@@ -68,10 +69,10 @@ export function PostureBand({ state, busy, act }: {
 
       <section className="eb-posture-seg" aria-label="Kill switch">
         <h4>Kill switch</h4>
-        <button type="button" className="h10-am-btn" disabled={busy || state?.state.halted}
-          onClick={() => void act(() => postEbayAds('/automation/state', { halted: true, haltReason: 'operator kill switch' }), 'HALTED')}>
+        <Button disabled={busy || state?.state.halted}
+ onClick={() => void act(() => postEbayAds('/automation/state', { halted: true, haltReason: 'operator kill switch' }), 'HALTED')}>
           ⛔ Halt everything
-        </button>
+        </Button>
         <p className="eb-posture-hint">
           {state?.state.halted ? `Halted — ${state.state.haltReason ?? 'no reason recorded'}` : 'Stops every rule and pending apply instantly.'}
           {' · '}<Link href="/marketing/ads/ebay/digest" className="h10-am-link">Weekly digest →</Link>

@@ -126,7 +126,7 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
 
   return (
     <Modal open onClose={onClose} title={`${FLAG[row.marketplace] ?? '🏳️'} ${mktName(row.marketplace)} — ${monthLabel(month)}`} subtitle="Set the monthly budget and how it is distributed across the month." size="lg"
-      footer={<><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><button type="button" className="h10-am-btn primary" disabled={saving || (custom && Math.abs(sum - 100) > 0.5)} onClick={save}>{saving ? 'Saving…' : 'Save budget'}</button></>}>
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || (custom && Math.abs(sum - 100) > 0.5)} onClick={save}>{saving ? 'Saving…' : 'Save budget'}</Button></>}>
       <div className="bm-set">
         <label className="bm-set-field">
           <span className="lbl">Monthly budget</span>

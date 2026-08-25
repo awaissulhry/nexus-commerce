@@ -49,6 +49,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import {
   ShieldCheck, Ban, Trash2, Plus, AlertTriangle, Check, Info, WifiOff, ChevronRight,
@@ -400,9 +401,9 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
             className="h10-ngp-input reason" value={reason} placeholder="Why (optional)"
             onChange={(e) => setReason(e.target.value)} aria-label="Reason"
           />
-          <button type="button" className="h10-am-btn primary" disabled={busy || !term.trim()} onClick={() => void addProtection()}>
+          <Button variant="primary" disabled={busy || !term.trim()} onClick={() => void addProtection()}>
             <Plus size={13} /> Protect
-          </button>
+          </Button>
         </div>
         <p className="h10-ngp-blurb">{MATCH_OPTIONS.find((o) => o.value === matchType)!.blurb(term.trim().toLowerCase())}</p>
         <p className="h10-ngp-note sm">

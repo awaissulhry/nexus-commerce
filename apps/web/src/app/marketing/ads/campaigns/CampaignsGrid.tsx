@@ -806,7 +806,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
               {changes.strategy && <div className="rr"><span className="f">Bidding Strategy</span><span className="v">{changes.strategy.label}</span></div>}
             </div>
           </div>
-          <div className="h10-modal-f"><button type="button" className="h10-am-link back" onClick={() => setStep(1)}>Back</button><span className="grow" /><button type="button" className="h10-am-btn primary" onClick={() => onSubmit(changes)}>Submit Changes</button></div>
+          <div className="h10-modal-f"><button type="button" className="h10-am-link back" onClick={() => setStep(1)}>Back</button><span className="grow" /><Button variant="primary" onClick={() => onSubmit(changes)}>Submit Changes</Button></div>
         </>)}
       </div>
     </div>
@@ -851,7 +851,7 @@ function BidMultiplierModal({ campaign, onConfirm, onClose }: { campaign: Camp; 
           {boost('Amazon Business Bid Boost', 'Further increase bids across placements on Amazon Business.', 'Further increase bids across placements on Amazon Business', business, () => setBusiness((v) => !v), 'Enable Amazon Business Bid Boost')}
           {boost('Audience Bid Modifier', 'Increase bids on a custom audience created in Amazon Marketing cloud (AMC). The percentage value set is the percentage of the original bid including any other bid adjustments such as placement bidding. For example, a placement bidding with 50% adjustment on a $1.00 bid would increase the bid to $1.50, and a Audience Bid Modifier with 100% adjustment would further increase the bid to $3.00.', null, audience, () => setAudience((v) => !v), 'Enable Audience Bid Modifier')}
         </div>
-        <div className="h10-modal-f"><button type="button" className="h10-am-btn" onClick={onClose}>Cancel</button><span className="grow" /><button type="button" className="h10-am-btn primary" onClick={() => onConfirm({ tos: norm(tos), pdp: norm(pdp), ros: norm(ros) })}>Confirm</button></div>
+        <div className="h10-modal-f"><Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" onClick={() => onConfirm({ tos: norm(tos), pdp: norm(pdp), ros: norm(ros) })}>Confirm</Button></div>
       </div>
     </div>
   )
