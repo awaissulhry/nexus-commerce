@@ -8,6 +8,9 @@
  * <AdsDataGrid> extracted in 3.2.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignDetailHeader } from '../../_shell/CampaignDetailHeader'
@@ -145,7 +148,7 @@ export function CampaignDetail({ id }: { id: string }) {
 
       <div className="h10-cd-body">
         {error
-          ? <div className="h10-cd-error">Couldn’t load this campaign — {error}. <button type="button" onClick={() => void load()}>Retry</button></div>
+          ? <div className="h10-cd-error">Couldn’t load this campaign — {error}. <Button variant="link" size="sm" onClick={() => void load()}>Retry</Button></div>
           : activeTab === 'history'
             // Scoped to this campaign, reading the same unified feed as the account-wide log, so a
             // row here and a row there can never disagree about what happened.

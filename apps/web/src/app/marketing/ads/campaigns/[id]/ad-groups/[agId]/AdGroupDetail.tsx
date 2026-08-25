@@ -9,6 +9,9 @@
  * campaign- and ad-group-level grids stay in lockstep.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
+import '@/design-system/styles/tokens.css'
+import '@/design-system/styles/primitives.css'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignDetailHeader } from '../../../../_shell/CampaignDetailHeader'
@@ -122,7 +125,7 @@ export function AdGroupDetail({ campaignId, adGroupId }: { campaignId: string; a
 
       <div className="h10-cd-body">
         {error
-          ? <div className="h10-cd-error">Couldn’t load this ad group — {error}. <button type="button" onClick={() => void load()}>Retry</button></div>
+          ? <div className="h10-cd-error">Couldn’t load this ad group — {error}. <Button variant="link" size="sm" onClick={() => void load()}>Retry</Button></div>
           : loading && !ag
             ? <TabSkeleton loading />
             : activeTab === 'targets'
