@@ -51,7 +51,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
-import { Select } from '@/design-system/primitives'
+import { Input, Select } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -717,14 +717,13 @@ export function BidClient() {
   }
 
   const searchBox = (
-    <span className="h10-bd-search">
-      <input
-        type="search" defaultValue={q} placeholder="Search target, campaign or ad group…"
-        aria-label="Search"
-        onKeyDown={(e) => { if (e.key === 'Enter') push({ q: (e.target as HTMLInputElement).value }) }}
-        onBlur={(e) => { if (e.target.value !== q) push({ q: e.target.value }) }}
-      />
-    </span>
+    <Input
+      size="xs" fieldClassName="h10-bd-search"
+      type="search" defaultValue={q} placeholder="Search target, campaign or ad group…"
+      aria-label="Search"
+      onKeyDown={(e) => { if (e.key === 'Enter') push({ q: (e.target as HTMLInputElement).value }) }}
+      onBlur={(e) => { if (e.target.value !== q) push({ q: e.target.value }) }}
+    />
   )
 
   const toolbarLeft = (

@@ -50,7 +50,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Select } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
@@ -707,15 +707,14 @@ export function BudgetClient() {
   }
 
   const searchBox = (
-    <span className="h10-bud-search">
-      <input
-        type="search" defaultValue={q}
-        placeholder={view === 'campaigns' ? 'Search campaigns…' : 'Search rules…'}
-        aria-label="Search"
-        onKeyDown={(e) => { if (e.key === 'Enter') push({ q: (e.target as HTMLInputElement).value }) }}
-        onBlur={(e) => { if (e.target.value !== q) push({ q: e.target.value }) }}
-      />
-    </span>
+    <Input
+      size="xs" fieldClassName="h10-bud-search"
+      type="search" defaultValue={q}
+      placeholder={view === 'campaigns' ? 'Search campaigns…' : 'Search rules…'}
+      aria-label="Search"
+      onKeyDown={(e) => { if (e.key === 'Enter') push({ q: (e.target as HTMLInputElement).value }) }}
+      onBlur={(e) => { if (e.target.value !== q) push({ q: e.target.value }) }}
+    />
   )
 
   const toolbarLeft = (

@@ -52,7 +52,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Select } from '@/design-system/primitives'
+import { Button, Input, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, Search } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1105,18 +1105,18 @@ export function ShareOfVoiceClient() {
                   currentQs={params.toString()}
                   onApply={(qs) => router.replace(qs ? `?${qs}` : '?', { scroll: false })}
                 />
-                <span className="h10-sov-search">
-                  <Search size={13} />
-                  <input
-                    value={qDraft}
-                    onChange={(e) => setQDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') push({ q: qDraft.trim() }) }}
-                    onBlur={() => { if (qDraft.trim() !== q) push({ q: qDraft.trim() }) }}
-                    placeholder="Search queries…"
-                    aria-label="Search queries"
-                  />
-                  {q && <button type="button" className="x" onClick={() => { setQDraft(''); push({ q: '' }) }} aria-label="Clear search">×</button>}
-                </span>
+                <Input
+                  size="xs"
+                  fieldClassName="h10-sov-search"
+                  leadingIcon={<Search size={13} />}
+                  value={qDraft}
+                  onChange={(e) => setQDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') push({ q: qDraft.trim() }) }}
+                  onBlur={() => { if (qDraft.trim() !== q) push({ q: qDraft.trim() }) }}
+                  placeholder="Search queries…"
+                  aria-label="Search queries"
+                  suffix={q ? <button type="button" className="x" onClick={() => { setQDraft(''); push({ q: '' }) }} aria-label="Clear search">×</button> : undefined}
+                />
 
                 {/* Not decoration: with ONE period rendered, this decides WHICH. At 4 weeks ES and
                     FR have no complete week inside the bound and both fall to the truncated-week

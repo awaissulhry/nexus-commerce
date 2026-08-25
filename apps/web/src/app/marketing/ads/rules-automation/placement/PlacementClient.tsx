@@ -63,6 +63,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
@@ -939,20 +940,18 @@ export function PlacementClient() {
         pagerCentered
         toolbarLeft={(
           <span className="h10-plc-tools">
-            <span className="h10-plc-search">
-              <Search size={12} />
-              <input
-                value={qDraft}
-                onChange={(e) => setQDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') push({ q: qDraft.trim() }) }}
-                onBlur={() => { if (qDraft.trim() !== q) push({ q: qDraft.trim() }) }}
-                placeholder="Search campaigns…"
-                aria-label="Search campaigns"
-              />
-              {q && (
-                <button type="button" aria-label="Clear search" onClick={() => push({ q: '' })}><X size={12} /></button>
-              )}
-            </span>
+            <Input
+              size="xs"
+              fieldClassName="h10-plc-search"
+              leadingIcon={<Search size={12} />}
+              value={qDraft}
+              onChange={(e) => setQDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') push({ q: qDraft.trim() }) }}
+              onBlur={() => { if (qDraft.trim() !== q) push({ q: qDraft.trim() }) }}
+              placeholder="Search campaigns…"
+              aria-label="Search campaigns"
+              suffix={q ? <button type="button" aria-label="Clear search" onClick={() => push({ q: '' })}><X size={12} /></button> : undefined}
+            />
             {/* PLC.3 — the scope-bulk trigger. It opens a PREVIEW, never a write: the label says
                 so, because a button that writes on click is the wrong shape for an action whose
                 blast radius is "every campaign in the current scope". */}

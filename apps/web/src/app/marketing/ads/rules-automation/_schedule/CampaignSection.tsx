@@ -23,6 +23,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -208,13 +209,14 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
           {/* The Products tab searches PRODUCTS (SKU or title) — the list it filters is products —
               so the box must not keep promising campaigns. H10 changes the same placeholder per
               tab ("Search for Product Title、ASIN or SKU"). */}
-          <input
+          <Input
+            fieldClassName="cp-searchfield"
+            leadingIcon={<Search size={16} />}
             value={q}
             onChange={(e) => { setQ(e.target.value); setPage(1) }}
             placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for Campaigns'}
             aria-label={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for campaigns'}
           />
-          <Search size={16} className="ic" />
         </div>
         <div className="cp-statusrow">
           <span className="lbl">Campaign Status:</span>

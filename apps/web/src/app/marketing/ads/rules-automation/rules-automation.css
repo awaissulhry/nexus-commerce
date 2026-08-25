@@ -276,11 +276,11 @@
 /* B1: inline campaign picker (Budget Rule Setup) — two-panel, matches the H10 recording */
 .h10-rb-camps { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; align-items: start; }
 .h10-rb-camps .cp-left, .h10-rb-camps .cp-right { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); background: var(--nds-white); overflow: hidden; display: flex; flex-direction: column; }
-.cp-search { position: relative; padding: 12px 12px 4px; }
-.cp-search input { width: 100%; height: 38px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 36px 0 12px; font: inherit; font-size: 13px; color: var(--nds-grey-900); }
-.cp-search input:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.13); }
-.cp-search input::placeholder { color: var(--nds-grey-400); }
-.cp-search .ic { position: absolute; right: 24px; top: 21px; color: var(--nds-grey-500); pointer-events: none; }
+.cp-search { padding: 12px 12px 4px; }
+/* DS-ALIGN — the DS `Input`. The icon moves from an absolutely-positioned overlay on the
+   right to the primitive's `leadingIcon` slot, which is why `.cp-search` no longer needs to be
+   a positioning context for it. */
+.cp-searchfield { width: 100%; }
 .cp-statusrow { display: flex; align-items: center; gap: 14px; padding: 8px 12px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--nds-grey-100); }
 .cp-statusrow .rads { display: inline-flex; align-items: center; gap: 14px; }
 .cp-statusrow .lbl { font-size: 13px; font-weight: 600; color: var(--nds-grey-800); }
@@ -1683,8 +1683,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid chrome ───────────────────────────────────────────────────────────────────────────── */
 .h10-bd-win { display: inline-flex; align-items: center; gap: 8px; }
-.h10-bd-search input { font: inherit; font-size: 11.5px; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 9px; width: 250px; }
-.h10-bd-search input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Input` at `xs`; only the width of the box is this toolbar's.
+   🔴 The width goes on the FIELD, not the input: `.nds-field > input` is `flex: 1`, whose
+   `flex-basis: 0%` beats any `width` set on the input itself. Measured — a 250px rule on the
+   input rendered an 872px box. */
+.h10-bd-search { width: 250px; }
 /* .h10-bd-stale — SG.1: MOVED to ads.css (StaleBanner gained its first consumer outside this
    section). One definition, in the sheet every /marketing/ads page loads. */
 
@@ -1708,7 +1711,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 }
 @media (max-width: 900px) {
   .h10-bd-census { grid-template-columns: repeat(2, 1fr); }
-  .h10-bd-search input { width: 100%; }
+  .h10-bd-search { width: 100%; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -1901,13 +1904,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── the toolbar: one search box and one lane control ────────────────────────────────────────── */
 .h10-plc-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.h10-plc-search { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); background: var(--nds-white); }
-.h10-plc-search svg { flex-shrink: 0; color: var(--nds-text-muted); }
-.h10-plc-search input { font: inherit; font-size: 11.5px; color: var(--nds-grey-900); background: transparent; border: 0; padding: 6px 0; width: 200px; }
-.h10-plc-search input:focus { outline: none; }
-.h10-plc-search:focus-within { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
-.h10-plc-search button { display: inline-flex; align-items: center; font: inherit; color: var(--nds-text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
-.h10-plc-search button:hover { color: var(--nds-grey-900); }
+/* DS-ALIGN — the DS `Input` at `xs`; the clear button rides in the `suffix` slot. */
+.h10-plc-search { width: 236px; }
+.h10-plc-search .ad.suf { padding: 0 7px 0 2px; background: none; border-left: 0; }
+.h10-plc-search .ad.suf button { display: inline-flex; align-items: center; font: inherit; color: var(--nds-text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
+.h10-plc-search .ad.suf button:hover { color: var(--nds-grey-900); }
 
 .h10-plc-lanes { display: inline-flex; gap: 4px; padding: 2px; background: var(--nds-grey-75); border-radius: 9px; }
 .h10-plc-lanes .seg { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); background: transparent; border: 0; border-radius: var(--nds-radius-md); padding: 4px 11px; cursor: pointer; transition: background .12s, color .12s; }
@@ -1969,13 +1970,13 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .nds-wsgrid td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
 
 @media (max-width: 1200px) {
-  .h10-plc-search input { width: 150px; }
+  .h10-plc-search { width: 186px; }
 }
 @media (max-width: 900px) {
   .h10-plc-scoperow { gap: 10px; }
   .h10-plc-field { flex: 1 1 190px; }
   .h10-plc-sep { display: none; }
-  .h10-plc-search input { width: 100%; }
+  .h10-plc-search { width: 100%; }
 }
 
 /* ── BID.S0b — the derived target name ─────────────────────────────────────────────────────────
@@ -2292,10 +2293,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid toolbar ───────────────────────────────────────────────────────────────────────────── */
 .h10-sov-tools { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.h10-sov-search { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); background: var(--nds-white); }
-.h10-sov-search svg { flex-shrink: 0; color: var(--nds-text-muted); }
-.h10-sov-search input { width: 168px; border: 0; outline: 0; background: none; font: inherit; font-size: 11.5px; color: var(--nds-grey-900); }
-.h10-sov-search input::placeholder { color: #9099a6; }
+/* DS-ALIGN — the DS `Input` at `xs` carries the box, the leading icon and the focus ring.
+   The clear affordance rides in the `suffix` slot, so it drops the shaded adornment the slot
+   normally paints and keeps its own hit area. */
+.h10-sov-search { width: 196px; }
+.h10-sov-search .ad.suf { padding: 0 6px 0 2px; background: none; border-left: 0; }
 .h10-sov-search .x { border: 0; background: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--nds-text-muted); cursor: pointer; }
 .h10-sov-search .x:hover { color: var(--nds-grey-900); }
 .h10-sov-weeks { display: inline-flex; align-items: center; gap: 7px; }
@@ -2352,7 +2354,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 @media (max-width: 1200px) {
   .h10-sov-band { gap: 6px; }
-  .h10-sov-search input { width: 130px; }
+  .h10-sov-search { width: 158px; }
 }
 
 /* ── DS token pin ──────────────────────────────────────────────────────────────────────────────
@@ -2493,8 +2495,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 /* ── grid chrome ───────────────────────────────────────────────────────────────────────────── */
 .h10-bud-win { display: inline-flex; align-items: center; gap: 8px; }
-.h10-bud-search input { font: inherit; font-size: 11.5px; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 9px; width: 230px; }
-.h10-bud-search input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Input` at `xs`. Width on the field — see `.h10-bd-search` above. */
+.h10-bud-search { width: 230px; }
 /* The grain segment. Its own class rather than `.h10-svt-seg`, which carries a `margin: … 24px`
    that would inset it past every other block on this page — see the gutter note at the top. */
 .h10-bud-seg { display: inline-flex; padding: 2px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); }
@@ -2527,7 +2529,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 }
 @media (max-width: 900px) {
   .h10-bud-census { grid-template-columns: repeat(2, 1fr); }
-  .h10-bud-search input { width: 100%; }
+  .h10-bud-search { width: 100%; }
 }
 
 /* ── KT.5 — the coverage state, the share bound, and the one health line ──────────────────────
@@ -2604,8 +2606,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-ar-tools { display: inline-flex; align-items: center; gap: 10px; }
 .h10-ar-tools .h10-svt-seg { margin: 0; padding: 2px; }
 .h10-ar-tools .h10-svt-seg .seg { font-size: 11.5px; padding: 4px 11px; }
-.h10-ar-search input { font: inherit; font-size: 11.5px; color: var(--nds-grey-900); background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); padding: 5px 9px; width: 230px; }
-.h10-ar-search input:focus { outline: 2px solid var(--nds-blue-600); outline-offset: -1px; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Input` at `xs`. Width on the field — see `.h10-bd-search` above. */
+.h10-ar-search { width: 230px; }
 /* The cursor poll found a change. It offers; it never reorders the grid under a reading operator.
    🔴 It cannot appear today — `GET /advertising/apply-rules/cursor` does not exist and a failed
    poll is silent by design — and it is styled now so the section that lands the route adds no CSS. */
@@ -2648,7 +2650,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 @media (max-width: 1100px) {
   .h10-ar-tools { flex-wrap: wrap; gap: 8px; }
-  .h10-ar-search input { width: 100%; }
+  .h10-ar-search { width: 100%; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════

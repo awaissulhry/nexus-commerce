@@ -64,7 +64,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1110,13 +1110,12 @@ export function ApplyRulesClient() {
   // (`?page=` had the same shape of hole and does NOT have this problem — a page number means the
   // same thing whatever a row is — so it is bridged below.)
   const searchBox = (
-    <span className="h10-ar-search">
-      <input
-        type="search" defaultValue={q} placeholder="Search by name…" aria-label="Search"
-        onKeyDown={(e) => { if (e.key === 'Enter') push({ q: (e.target as HTMLInputElement).value }) }}
-        onBlur={(e) => { if (e.target.value !== q) push({ q: e.target.value }) }}
-      />
-    </span>
+    <Input
+      size="xs" fieldClassName="h10-ar-search"
+      type="search" defaultValue={q} placeholder="Search by name…" aria-label="Search"
+      onKeyDown={(e) => { if (e.key === 'Enter') push({ q: (e.target as HTMLInputElement).value }) }}
+      onBlur={(e) => { if (e.target.value !== q) push({ q: e.target.value }) }}
+    />
   )
 
   const toolbarLeft = (
