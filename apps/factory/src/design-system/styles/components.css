@@ -632,31 +632,38 @@
 
 /* ── HoverCard (rich hover panel) ────────────────────────────────── */
 .nds-hovercard {
-  position: relative;
   display: inline-flex;
+  align-items: center;
 }
-.nds-hovercard > .hc {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  width: max-content;
-  max-width: 280px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
+/* Portaled to <body> at fixed coordinates — an absolutely-positioned card is clipped by any
+   scroll container, and the surfaces that want one are grids with overflow:auto. */
+.nds-hovercard-card {
+  position: fixed;
+  z-index: 90;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-pop);
-  padding: 12px 14px;
-  opacity: 0;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: nowrap;
   pointer-events: none;
-  transition: opacity 0.12s ease;
 }
-.nds-hovercard:hover > .hc,
-.nds-hovercard:focus-within > .hc {
-  opacity: 1;
-  pointer-events: auto;
+.nds-hovercard-card.above {
+  transform: translateY(-100%);
+}
+.nds-hovercard-card .r1 {
+  color: var(--nds-text-strong);
+  font-weight: 500;
+}
+.nds-hovercard-card .r .k {
+  color: var(--nds-text);
+  font-weight: 700;
+}
+.nds-hovercard-card .r .v {
+  color: var(--nds-text-2);
+  font-weight: 400;
 }
 
 /* ── DateRangePicker ─────────────────────────────────────────────── */

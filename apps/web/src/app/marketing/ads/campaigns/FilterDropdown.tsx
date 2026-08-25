@@ -7,10 +7,11 @@
  * searchable: when the in-popover search shows, type to filter, Enter picks the
  * first match, Esc closes. Styling lives in ads.css (.h10-dd-*).
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { searchOptions } from '@/lib/option-search'
+import { HoverCard as DsHoverCard } from '@/design-system/components'
 
 /** FB.3 — `title` is the hover explanation for ONE option. Placement's four placement-lane
  *  strings are per-option facts ("PLACEMENT_TOP. The only lane Amazon publishes an impression
@@ -319,52 +320,24 @@ export function StatusOptions({ value, onChange, options = AD_STATUS_OPTS }: { v
   )
 }
 
-// CBN.2h.7 — custom hover tooltip (H10's campaign info card). Replaces the native
+// CBN.2h.7 — the campaign info card. The implementation now lives in the DS `HoverCard`
+// (portaled + fixed so it escapes the grid's overflow, viewport-clamped, above↔below flip,
+// shared warm window). This wrapper exists only to feed it the console's own suppression
+// signal — the DS must not know what `col-dragging` means. Originally: a custom tooltip
+// replacing the native
 // `title=` (OS-styled + delayed) with a styled card, portaled + fixed so it escapes
 // the grid's overflow and renders above the row, anchored at the trigger.
 // Module-level so all HoverCards share the "warm" window: once one tooltip has
 // just hidden, moving onto another shows it immediately (H10's skip-delay). A
 // cold hover (none recently shown) waits `delay` ms before appearing.
-let lastHcHide = 0
-export function HoverCard({ rows, text, placement = 'above', delay = 0, children }: { rows?: Array<[string, string]>; text?: string; placement?: 'above' | 'below'; delay?: number; children: ReactNode }) {
-  const [pos, setPos] = useState<{ top: number; left: number; place: 'above' | 'below' } | null>(null)
-  const ref = useRef<HTMLSpanElement>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const place = () => { if (document.body.classList.contains('col-dragging')) return; const el = ref.current; if (el) { const r = el.getBoundingClientRect(); setPos({ top: placement === 'below' ? r.bottom + 6 : r.top - 6, left: r.left, place: placement }) } }
-  const show = () => {
-    if (document.body.classList.contains('col-dragging')) return
-    clearTimeout(timer.current)
-    const warm = performance.now() - lastHcHide < 350
-    if (delay > 0 && !warm) timer.current = setTimeout(place, delay)
-    else place()
-  }
-  const hide = () => { clearTimeout(timer.current); lastHcHide = performance.now(); setPos(null) }
-  useEffect(() => () => clearTimeout(timer.current), [])
-  // Keep the card fully on-screen: clamp horizontally to the viewport, and flip
-  // above↔below when the chosen side has no room. Runs after the card mounts so
-  // it can measure the card's real size; the guard prevents a re-render loop.
-  useLayoutEffect(() => {
-    if (!pos || !cardRef.current || !ref.current) return
-    const c = cardRef.current.getBoundingClientRect()
-    const a = ref.current.getBoundingClientRect()
-    const vw = window.innerWidth, vh = window.innerHeight, m = 8
-    let left = pos.left, place = pos.place
-    if (left + c.width > vw - m) left = vw - m - c.width
-    if (left < m) left = m
-    if (place === 'above' && a.top - c.height - 6 < m) place = 'below'
-    else if (place === 'below' && a.bottom + c.height + 6 > vh - m) place = 'above'
-    const top = place === 'below' ? a.bottom + 6 : a.top - 6
-    if (left !== pos.left || place !== pos.place || top !== pos.top) setPos({ top, left, place })
-  }, [pos])
-  return (
-    <span className="h10-hc-anchor" ref={ref} onMouseEnter={show} onMouseLeave={hide}>
-      {children}
-      {pos && createPortal(
-        <div ref={cardRef} className={`h10-hc ${pos.place}`} style={{ top: pos.top, left: pos.left }} role="tooltip">
-          {text != null ? <div className="r1">{text}</div> : (rows ?? []).map(([k, v]) => <div className="r" key={k}><b className="k">{k}:</b> <span className="v">{v}</span></div>)}
-        </div>, document.body,
-      )}
-    </span>
-  )
+const colDragging = () => document.body.classList.contains('col-dragging')
+
+export function HoverCard(props: {
+  rows?: Array<[string, string]>
+  text?: string
+  placement?: 'above' | 'below'
+  delay?: number
+  children: ReactNode
+}) {
+  return <DsHoverCard {...props} shouldSuppress={colDragging} />
 }

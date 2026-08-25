@@ -721,12 +721,13 @@ export function TokenCatalog() {
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Hover card</div>
           <HoverCard
-            card={
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Sponsored Products · Auto</div>
-                <div style={{ fontSize: 12, color: 'var(--nds-text-3)' }}>Created 12 Mar 2026 · 3 ad groups · €1,284 spend</div>
-              </div>
-            }
+            rows={[
+              ['Campaign', 'Sponsored Products · Auto'],
+              ['Created', '12 Mar 2026'],
+              ['Ad groups', '3'],
+              ['Spend', '€1,284'],
+            ]}
+            delay={300}
           >
             <span style={{ color: 'var(--nds-primary)', fontWeight: 600, borderBottom: '1px dashed var(--nds-primary-ghost-border)' }}>Hover for details</span>
           </HoverCard>
