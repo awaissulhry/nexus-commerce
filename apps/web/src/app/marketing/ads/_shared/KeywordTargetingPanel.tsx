@@ -13,7 +13,7 @@
  */
 import { useState } from 'react'
 import { Trash2, X, ChevronsUpDown, ChevronDown, Plus } from 'lucide-react'
-import { ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Tabs } from '@/design-system/components/Tabs'
 import './keyword-targeting.css'
 
@@ -101,8 +101,10 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
             </div>
           ) : tab === 'enter' ? (
             <div className="h10-scb-tgt-enter">
-              <textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Enter keywords" />
-              <button type="button" className="h10-scb-tgt-add" disabled={!enterText.trim()} onClick={() => { addMany(enterText.split('\n')); setEnterText('') }}><Plus size={13} /> Add</button>
+              {/* minHeight pins the old 150px: the DS default is 168 and this textarea sits beside
+                  a fixed-height basket, so the extra 18px would unbalance the two panels. */}
+              <Textarea value={enterText} onChange={(e) => setEnterText(e.target.value)} placeholder="Enter one keyword per line" aria-label="Enter keywords" style={{ minHeight: 150 }} />
+              <Button variant="primary" style={{ alignSelf: 'flex-start' }} disabled={!enterText.trim()} onClick={() => { addMany(enterText.split('\n')); setEnterText('') }}><Plus size={13} /> Add</Button>
             </div>
           ) : (
             <div className="h10-scb-tgt-mylist">No saved keyword lists yet. Build one from the keyword research tools, then add it here.</div>
@@ -123,7 +125,7 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
             {keywords.length === 0 ? <div className="h10-spw-ps-nodata">No data</div> : keywords.map((k, i) => (
               <div className="row" key={`${k.text}|${k.matchType}|${i}`}>
                 <span className="h10-scb-tgt-kw bskt" title={k.text}>{k.text} <span className={`h10-scb-tgt-mtag ${k.matchType.toLowerCase()}`}>{MATCH_LABEL[k.matchType]}</span></span>
-                {bids && <span className="h10-scb-tgt-bid"><span className="pf">{currency}</span><input inputMode="decimal" value={k.bidEur} onChange={(e) => setKwBid(i, e.target.value)} placeholder="0.00" aria-label={`Bid for ${k.text}`} /></span>}
+                {bids && <Input prefix={currency} inputMode="decimal" value={k.bidEur} onChange={(e) => setKwBid(i, e.target.value)} placeholder="0.00" aria-label={`Bid for ${k.text}`} style={{ width: 56 }} />}
                 <ToolbarButton size="sm" tooltip={false} icon={<X size={14} />} label={`Remove ${k.text}`} onClick={() => removeKw(i)} />
               </div>
             ))}
@@ -142,8 +144,8 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
               <label className={negMatch === 'PHRASE' ? 'on' : ''}><input type="radio" name="scb-negmatch" checked={negMatch === 'PHRASE'} onChange={() => setNegMatch('PHRASE')} /> Negative Phrase</label>
             </div>
             <div className="h10-scb-tgt-enter">
-              <textarea value={negText} onChange={(e) => setNegText(e.target.value)} placeholder="Enter or paste negative keywords here" aria-label="Negative keywords" />
-              <button type="button" className="h10-scb-tgt-add" disabled={!negText.trim()} onClick={addNeg}>Add Negative Keywords</button>
+              <Textarea value={negText} onChange={(e) => setNegText(e.target.value)} placeholder="Enter or paste negative keywords here" aria-label="Negative keywords" style={{ minHeight: 150 }} />
+              <Button variant="primary" style={{ alignSelf: 'flex-start' }} disabled={!negText.trim()} onClick={addNeg}>Add Negative Keywords</Button>
             </div>
           </div>
           <div className="h10-spw-ps-right">

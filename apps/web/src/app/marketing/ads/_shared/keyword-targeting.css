@@ -19,17 +19,13 @@
 .h10-scb-tgt-mtag.phrase { background: #fff3e0; color: #b76b00; }
 .h10-scb-tgt-mtag.exact { background: var(--nds-blue-100); color: var(--nds-blue-600); }
 
-/* per-keyword bid cell in the basket */
-.h10-scb-tgt-bid { display: inline-flex; align-items: center; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); overflow: hidden; height: 30px; width: 92px; flex-shrink: 0; }
-.h10-scb-tgt-bid .pf { padding: 0 7px; color: var(--nds-grey-500); font-size: 12px; background: var(--nds-grey-50); align-self: stretch; display: inline-flex; align-items: center; }
-.h10-scb-tgt-bid input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13px; padding: 0 7px; color: var(--nds-grey-900); }
+/* The per-keyword bid cell, the textarea rules and the Add button are GONE — the markup uses the
+   DS `Input` (prefix slot), `Textarea` and `Button` now. `.h10-scb-tgt-enter textarea` in
+   particular had to go rather than merely stop being used: at (0,1,1) it BEATS `.nds-textarea`
+   (0,1,0), so leaving it would have made the DS component render as this stylesheet. */
 
-/* Enter New Keywords textarea + Add / My List empty */
+/* Enter New Keywords layout + My List empty */
 .h10-scb-tgt-enter { display: flex; flex-direction: column; gap: 10px; }
-.h10-scb-tgt-enter textarea { min-height: 150px; resize: vertical; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 10px 11px; font: inherit; font-size: 13px; color: var(--nds-grey-900); }
-.h10-scb-tgt-enter textarea:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
-.h10-scb-tgt-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-white); background: var(--nds-blue-600); border: none; border-radius: var(--nds-radius-lg); padding: 8px 16px; cursor: pointer; }
-.h10-scb-tgt-add:disabled { background: #b9c6da; cursor: default; }
 .h10-scb-tgt-mylist { padding: 30px 16px; text-align: center; color: var(--nds-grey-500); font-size: 12.5px; line-height: 1.5; }
 
 /* Advanced Negative Keywords toggle */
