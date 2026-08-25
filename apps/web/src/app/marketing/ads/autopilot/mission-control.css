@@ -22,9 +22,6 @@
 .mc-actbar-group { position: relative; }
 .mc-pop { position: absolute; left: 0; bottom: 42px; display: flex; align-items: center; gap: 6px;
   background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-xl); padding: 8px; box-shadow: 0 10px 30px rgba(20, 28, 38, 0.16); }
-.mc-seg { display: flex; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); overflow: hidden; }
-.mc-seg button { border: 0; background: var(--nds-white); padding: 5px 8px; font-size: 11px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.mc-seg button.on { background: var(--nds-blue-600); color: var(--nds-white); }
 /* Passed as the DS Input's `fieldClassName`: the popover's width, nothing else. Its border,
    radius, padding and focus ring are the primitive's and must not be restated here — this
    file loads AFTER primitives.css, so anything repeated would silently win. */

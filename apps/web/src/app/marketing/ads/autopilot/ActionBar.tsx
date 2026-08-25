@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Button } from '@/design-system/primitives/Button'
+import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Input } from '@/design-system/primitives/Input'
 import type { ActionSpec } from '../_canvas/actions'
 
@@ -49,13 +50,12 @@ export function ActionBar({
         </Button>
         {budgetOpen && (
           <div className="mc-pop">
-            <div className="mc-seg">
-              {(['incPct', 'decPct', 'set'] as const).map((m) => (
-                <button key={m} type="button" className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
-                  {m === 'incPct' ? '+%' : m === 'decPct' ? '−%' : 'Set €'}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              size="sm"
+              value={mode}
+              onChange={(v) => setMode(v as 'incPct' | 'decPct' | 'set')}
+              options={[{ value: 'incPct', label: '+%' }, { value: 'decPct', label: '−%' }, { value: 'set', label: 'Set €' }]}
+            />
             <Input
               fieldClassName="mc-pop-input"
               value={value}

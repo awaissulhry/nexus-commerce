@@ -31,6 +31,7 @@ import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
 import { Textarea } from '@/design-system/primitives/Textarea'
 import { Drawer } from '@/design-system/components/Drawer'
+import { Tabs } from '@/design-system/components/Tabs'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -516,11 +517,16 @@ function AddSeedKeywords({ suggest, loading, hasProducts, seeds, setSeeds, tab, 
       ) : (
         <div className="h10-aig-kwgrid">
           <div className="kw-left">
-            <div className="h10-aig-seedtabs">
-              <button type="button" className={tab === 'suggested' ? 'on' : ''} onClick={() => setTab('suggested')}>Suggested <i>{kws.length > 98 ? '99+' : kws.length}</i></button>
-              <button type="button" className={tab === 'list' ? 'on' : ''} onClick={() => setTab('list')}>Add from List</button>
-              <button type="button" className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter Keywords</button>
-            </div>
+            <Tabs
+              className="aig-seedtabs"
+              active={tab}
+              onChange={(id) => setTab(id as 'suggested' | 'list' | 'enter')}
+              tabs={[
+                { id: 'suggested', label: 'Suggested', count: kws.length },
+                { id: 'list', label: 'Add from List' },
+                { id: 'enter', label: 'Enter Keywords' },
+              ]}
+            />
             {tab === 'suggested' && (
               loading ? <div className="aig2-pempty"><Spinner /> Reading your search-term history…</div>
                 : kws.length === 0 ? <div className="aig2-pempty">No search-term evidence yet for these products — enter keywords manually, or launch with the Auto campaign only and let the harvest discover them.</div>

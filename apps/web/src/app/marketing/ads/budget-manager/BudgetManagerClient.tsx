@@ -15,7 +15,7 @@
  * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Input, Toggle, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
@@ -211,9 +211,13 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
         : camps.length === 0 ? <div className="bm-more-empty">No campaigns in {mktName(row.marketplace)}.</div>
         : (<>
           <div className="bm-more-filter">
-            <div className="bm-more-seg">
-              {(['ENABLED', 'PAUSED', 'ALL'] as const).map((s) => (<button type="button" key={s} className={statusFilter === s ? 'on' : ''} onClick={() => setStatusFilter(s)}>{s === 'ENABLED' ? 'Enabled' : s === 'PAUSED' ? 'Paused' : 'All'}</button>))}
-            </div>
+            <SegmentedControl
+              size="sm"
+              className="bm-seg"
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v as 'ENABLED' | 'PAUSED' | 'ALL')}
+              options={[{ value: 'ENABLED', label: 'Enabled' }, { value: 'PAUSED', label: 'Paused' }, { value: 'ALL', label: 'All' }]}
+            />
             <Input size="sm" fieldClassName="bm-more-search" leadingIcon={<Search size={13} />} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search campaigns…" aria-label="Search campaigns" />
             <span className="bm-more-count">{shown.length} of {camps.length}</span>
           </div>

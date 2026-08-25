@@ -85,3 +85,9 @@
 .aig-adv-f .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-text-strong); }
 .aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-grey-500); }
 .aig-adv-f .nds-textarea { min-height: 120px; }
+
+/* The keyword-source picker is the DS `Tabs` now (it was an underline bar hand-rolled at
+   ads.css:1344-1347, which is out of scope and whose four rules are unreachable from here).
+   Only the spacing below the bar was this page's; `.nds-tabs` already matches its shape —
+   flex, 4px gap, 1px bottom hairline — and adds tablist/tab roles it never had. */
+.aig-seedtabs { margin-bottom: 12px; }

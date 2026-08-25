@@ -13,7 +13,7 @@
  * Palantir-style scenario → review → commit over the live ontology.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Input, Select, SegmentedControl } from '@/design-system/primitives'
 import { Lock, History as HistoryIcon } from 'lucide-react'
 import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
@@ -146,7 +146,7 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
           </div>
         </> : <>
           <label className="cp-fld"><span>{t === 'adgroup' ? 'Default bid' : 'Bid'} €</span><Input fieldClassName="cp-eurin" prefix="€" inputMode="decimal" value={bid} onChange={(e) => stageBid(e.target.value)} aria-label="Bid" /></label>
-          <div className="cp-fld"><span>Status</span><div className="cp-statusbtns">{(['ENABLED', 'PAUSED', 'ARCHIVED'] as const).map((s) => (<button type="button" key={s} className={effStatus === s ? 'on' : ''} onClick={() => stageStatus(s)}>{s === 'ENABLED' ? 'Enable' : s === 'PAUSED' ? 'Pause' : 'Archive'}</button>))}</div></div>
+          <div className="cp-fld"><span>Status</span><SegmentedControl size="sm" value={effStatus} onChange={(v) => stageStatus(v as 'ENABLED' | 'PAUSED' | 'ARCHIVED')} options={[{ value: 'ENABLED', label: 'Enable' }, { value: 'PAUSED', label: 'Pause' }, { value: 'ARCHIVED', label: 'Archive' }]} /></div>
         </>}
         {staged && <Button variant="link" size="sm" className="cp-clear" onClick={() => { onClear(); setBudget(camp ? (camp.currentDailyCents / 100).toFixed(2) : ''); setMin(''); setMax(''); setBid(!camp ? (curBidCents / 100).toFixed(2) : '') }}>Clear staged change</Button>}
       </div>
@@ -154,6 +154,10 @@ function Inspector({ node, rootCampaignId, staged, onStage, onClear, onClose }: 
       {camp && settings && (
         <div className="cp-insp-sec">
           <div className="cp-sec-h">Bidding</div>
+          {/* NOT SegmentedControl — see .claude/DS-GAPS.md. `effStrat` is `string | undefined` (a
+              campaign may have no recorded bidding strategy), and the primitive requires a
+              selected `value`: with none matching, every segment gets `tabIndex={-1}` and the
+              whole group drops out of the tab order. These three buttons are reachable today. */}
           <div className="cp-fld"><span>Strategy</span><div className="cp-statusbtns">{STRAT.map(([v, l]) => (<button type="button" key={v} className={effStrat === v ? 'on' : ''} onClick={() => stageStrat(v)}>{l}</button>))}</div></div>
           <label className="cp-fld"><span>Target ACoS</span><Input fieldClassName="cp-eurin pct" suffix="%" inputMode="decimal" value={acos} onChange={(e) => stageAcos(e.target.value)} placeholder="—" aria-label="Target ACoS" /></label>
           <div className="cp-fld"><span>Placement multipliers</span><div className="cp-pl3">
