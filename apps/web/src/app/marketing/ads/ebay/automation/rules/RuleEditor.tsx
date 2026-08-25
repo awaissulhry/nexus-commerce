@@ -192,8 +192,8 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
         <div className="eb-form-row">
           <div><label>Entities</label>
             <div className="eb-posture-dial">
-              <button type="button" className={`h10-am-btn ${trigger.scope === 'CPS_AD' ? 'on' : ''}`} onClick={() => switchScope('CPS_AD')}>CPS ads</button>
-              <button type="button" className={`h10-am-btn ${trigger.scope === 'CPC_KEYWORD' ? 'on' : ''}`} onClick={() => switchScope('CPC_KEYWORD')}>CPC keywords</button>
+              <Button active={trigger.scope === 'CPS_AD'} aria-pressed={trigger.scope === 'CPS_AD'} onClick={() => switchScope('CPS_AD')}>CPS ads</Button>
+              <Button active={trigger.scope === 'CPC_KEYWORD'} aria-pressed={trigger.scope === 'CPC_KEYWORD'} onClick={() => switchScope('CPC_KEYWORD')}>CPC keywords</Button>
             </div>
           </div>
           <div><label>Marketplace</label>
@@ -202,11 +202,11 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           </div>
           <div><label>Campaigns</label>
             <div className="eb-posture-dial">
-              <button type="button" className={`h10-am-btn ${scopeIds.length === 0 ? 'on' : ''}`} onClick={() => { setScopeIds([]); setPreview(null) }}>Global</button>
-              <button type="button" className={`h10-am-btn ${scopeIds.length > 0 ? 'on' : ''}`} title="Bind the rule to specific campaigns"
-                onClick={() => { if (scopeIds.length === 0 && eligibleCampaigns[0]) { setScopeIds([eligibleCampaigns[0].id]); setPreview(null) } }}>
+              <Button active={scopeIds.length === 0} aria-pressed={scopeIds.length === 0} onClick={() => { setScopeIds([]); setPreview(null) }}>Global</Button>
+              <Button active={scopeIds.length > 0} aria-pressed={scopeIds.length > 0} title="Bind the rule to specific campaigns"
+ onClick={() => { if (scopeIds.length === 0 && eligibleCampaigns[0]) { setScopeIds([eligibleCampaigns[0].id]); setPreview(null) } }}>
                 Specific ({scopeIds.length})
-              </button>
+              </Button>
             </div>
           </div>
         </div>

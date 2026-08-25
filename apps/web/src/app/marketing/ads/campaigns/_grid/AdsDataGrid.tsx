@@ -836,7 +836,7 @@ export function AdsDataGrid<T>({
         {toolbarRight}
         {customizable && (
           <>
-            <button type="button" className={`h10-am-btn ${showCustomize ? 'on' : ''}`} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</button>
+            <Button active={showCustomize} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</Button>
             {/**
               * SGX3 — the SHARED dialog, not a second implementation.
               *

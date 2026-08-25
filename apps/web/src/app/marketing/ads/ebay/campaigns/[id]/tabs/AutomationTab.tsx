@@ -73,8 +73,8 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span className="eb-cap">Posture</span>
           {POSTURES.map((m) => (
-            <button key={m.id} type="button" className={`h10-am-btn ${p.posture === m.id ? 'on' : ''}`} title={m.tip} disabled={busy}
-              onClick={() => void savePolicy({ posture: m.id }, `posture → ${m.id}`)}>{m.label}</button>
+            <Button key={m.id} active={p.posture === m.id} aria-pressed={p.posture === m.id} title={m.tip} disabled={busy}
+ onClick={() => void savePolicy({ posture: m.id }, `posture → ${m.id}`)}>{m.label}</Button>
           ))}
           <Pill tone="neutral" title="The global dial this campaign inherits from">global: {data.globalMode}{data.halted ? ' · HALTED' : ''}</Pill>
           <span className="grow" style={{ flex: 1 }} />

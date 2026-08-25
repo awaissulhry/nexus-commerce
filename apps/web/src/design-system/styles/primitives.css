@@ -79,6 +79,23 @@
   filter: none;
 }
 
+/* Engaged/selected action button. Mirrors the ads console's `.h10-am-btn.on` exactly — the
+   primary fill — so a toggled column picker or an active mode reads as engaged.
+
+   Keyed on a CLASS, deliberately, unlike `.nds-tbtn[aria-pressed='true']` above. ToolbarButton is
+   always a toggle, so it can own its aria. `Button` is generic: the call sites needing this are a
+   MIX — a columns/export popover trigger is a DISCLOSURE (`aria-expanded`) while a mode selector
+   is a TOGGLE (`aria-pressed`). Emitting `aria-pressed` for all of them would put the wrong thing
+   in the a11y tree, which is worse than leaving the caller to state it. `ButtonProps.active`
+   documents that obligation. */
+.nds-btn.on {
+  background: var(--nds-primary);
+  border-color: var(--nds-primary);
+  color: var(--nds-text-inverse);
+}
+.nds-btn.on:hover { background: var(--nds-primary-hover); }
+.nds-btn.on svg { color: var(--nds-text-inverse); }
+
 .nds-btn.ghost {
   background: var(--nds-surface);
   border-color: var(--nds-primary-ghost-border);

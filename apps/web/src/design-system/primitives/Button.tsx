@@ -10,6 +10,15 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
   /**
+   * Engaged/selected — the primary fill, matching the ads console's `.on`.
+   *
+   * Visual ONLY. It does not emit aria, because the correct attribute depends on what the button
+   * does: a popover trigger is a disclosure (`aria-expanded`), a mode selector is a toggle
+   * (`aria-pressed`). Pass the right one alongside; `ToolbarButton` can emit `aria-pressed`
+   * itself only because it is always a toggle.
+   */
+  active?: boolean
+  /**
    * Defaults to `'button'`, NOT the HTML default of `'submit'`.
    *
    * A design-system button that submits the nearest form unless told otherwise is a footgun: it
@@ -23,8 +32,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * The canonical button. Matches the H10 action button (.h10-am-btn) spec,
  * tokenized. Requires `styles/primitives.css`.
  */
-export function Button({ variant = 'secondary', size = 'md', type = 'button', className, children, ...rest }: ButtonProps) {
-  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'sm' ? 'sm' : '', className ?? '']
+export function Button({ variant = 'secondary', size = 'md', type = 'button', active, className, children, ...rest }: ButtonProps) {
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'sm' ? 'sm' : '', active ? 'on' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (

@@ -507,15 +507,14 @@ export function ReportRunner({ reportId }: { reportId: string }) {
         customizable={false}
         toolbarRight={<>
           <div className="h10-custwrap">
-            <button
-              type="button"
-              className={`h10-am-btn ${colsOpen ? 'on' : ''}`}
-              onClick={() => setColsOpen((v) => !v)}
-              aria-haspopup="dialog"
-              aria-expanded={colsOpen}
-            >
+            <Button
+ active={colsOpen}
+ onClick={() => setColsOpen((v) => !v)}
+ aria-haspopup="dialog"
+ aria-expanded={colsOpen}
+ >
               <Settings2 size={13} /> Customize
-            </button>
+            </Button>
             {colsOpen && (
               <>
                 <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setColsOpen(false)} />
@@ -551,16 +550,15 @@ export function ReportRunner({ reportId }: { reportId: string }) {
                 LIBRARY page: to schedule the report in front of you meant saving it, leaving,
                 scrolling and finding it again in a dropdown. They answer one question, so they
                 are one menu, on the report. */}
-            <button
-              type="button"
-              className={`h10-am-btn ${exportOpen ? 'on' : ''}`}
-              onClick={() => setExportOpen((v) => !v)}
-              aria-haspopup="dialog"
-              aria-expanded={exportOpen}
-              disabled={exporting !== null}
-            >
+            <Button
+ active={exportOpen}
+ onClick={() => setExportOpen((v) => !v)}
+ aria-haspopup="dialog"
+ aria-expanded={exportOpen}
+ disabled={exporting !== null}
+ >
               <Share2 size={13} /> {exporting ? 'Preparing…' : 'Deliver'}
-            </button>
+            </Button>
             {exportOpen && (
               <>
                 <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setExportOpen(false)} />

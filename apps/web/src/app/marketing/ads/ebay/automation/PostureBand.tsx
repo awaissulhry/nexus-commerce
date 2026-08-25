@@ -38,11 +38,11 @@ export function PostureBand({ state, busy, act }: {
         <h4>Posture</h4>
         <div className="eb-posture-dial">
           {(['OFF', 'SUGGEST', 'AUTO'] as const).map((m) => (
-            <button key={m} type="button" className={`h10-am-btn ${state?.state.globalMode === m ? 'on' : ''}`} disabled={busy}
-              title={MODE_HELP[m]}
-              onClick={() => void act(() => postEbayAds('/automation/state', { globalMode: m }), `mode → ${m}`)}>
+            <Button key={m} active={state?.state.globalMode === m} aria-pressed={state?.state.globalMode === m} disabled={busy}
+ title={MODE_HELP[m]}
+ onClick={() => void act(() => postEbayAds('/automation/state', { globalMode: m }), `mode → ${m}`)}>
               {m === 'OFF' ? 'Off' : m === 'SUGGEST' ? 'Suggest' : 'Auto'}
-            </button>
+            </Button>
           ))}
         </div>
         <p className="eb-posture-hint">{MODE_HELP[state?.state.globalMode ?? 'OFF']}</p>

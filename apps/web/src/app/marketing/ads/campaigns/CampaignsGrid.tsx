@@ -1862,8 +1862,8 @@ export function CampaignsGrid() {
       {/* toolbar — H10 selection-aware actions (CBN.2h.6) */}
       <div className="h10-am-toolbar">
         <span className="cnt">{sel.size > 0 ? <b>{`Selected ${sel.size} Campaign${sel.size > 1 ? 's' : ''}`}</b> : `Viewing ${viewStart}-${viewEnd} of ${filtered.length} Campaigns`}</span>
-        <button type="button" className={`h10-am-btn ${sel.size > 0 ? 'on' : ''}`} disabled={sel.size === 0} onClick={() => setShowBulk(true)}><ListChecks size={13} /> Bulk Actions</button>
-        <button type="button" className={`h10-am-btn ${mode === 'edit' ? 'on' : ''}`} onClick={() => setMode(mode === 'edit' ? 'metrics' : 'edit')}><Pencil size={13} /> Edit Campaigns</button>
+        <Button active={sel.size > 0} disabled={sel.size === 0} onClick={() => setShowBulk(true)}><ListChecks size={13} /> Bulk Actions</Button>
+        <Button active={mode === 'edit'} aria-pressed={mode === 'edit'} onClick={() => setMode(mode === 'edit' ? 'metrics' : 'edit')}><Pencil size={13} /> Edit Campaigns</Button>
         <div className="h10-bulkwrap">
      <Button disabled={sel.size === 0} onClick={() => setPortfolioMenu((v) => !v)}><Plus size={13} /> Portfolio</Button>
           {portfolioMenu && sel.size > 0 && <>
@@ -1900,7 +1900,7 @@ export function CampaignsGrid() {
         </>}
         <span className="grow" />
         <div className="h10-custwrap">
-          <button type="button" className={`h10-am-btn ${showCustomize ? 'on' : ''}`} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</button>
+          <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</Button>
           {showCustomize && <CustomizePanel visible={colVisible} onChange={onColsChange} onReset={resetCols} onClose={() => setShowCustomize(false)} />}
         </div>
         {/* Was a dead control — an H10 pixel-match placeholder with no onClick,
