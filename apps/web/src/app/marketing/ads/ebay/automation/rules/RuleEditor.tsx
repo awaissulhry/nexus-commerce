@@ -8,7 +8,7 @@
  * rule DEFINITIONS only — eBay state never changes from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Checkbox, Input, Pill } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Input, Pill } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, X } from 'lucide-react'
@@ -171,8 +171,8 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
         <div className="eb-tpl-row" aria-label="Templates">
           <span className="eb-be-hint">Start from:</span>
           {templates.map((t) => (
-            <button key={t.name} type="button" className={`eb-kind-chip ${template === t.name ? 'on' : ''}`}
-              onClick={() => applyRule({ ...t, marketplace: 'EBAY_IT', scope: null })}>{t.name}</button>
+            <FilterChip key={t.name} pressed={template === t.name}
+              onClick={() => applyRule({ ...t, marketplace: 'EBAY_IT', scope: null })}>{t.name}</FilterChip>
           ))}
         </div>
       )}
@@ -184,7 +184,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
             <Input fieldClassName="eb-input-full" maxLength={80} value={name} placeholder="e.g. Fee creep-down (IT)" aria-label="Rule name" onChange={(e) => setName(e.target.value)} />
           </div>
           {suggestedName && !name && (
-            <button type="button" className="eb-kind-chip" title="Use the suggested name" onClick={() => setName(suggestedName.slice(0, 80))}>{suggestedName}</button>
+            <FilterChip title="Use the suggested name" onClick={() => setName(suggestedName.slice(0, 80))}>{suggestedName}</FilterChip>
           )}
         </div>
       </section>
@@ -246,11 +246,11 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                 }}
                 options={(Object.keys(METRIC_LABELS) as RuleMetric[]).map((m) => ({ value: m, label: METRIC_LABELS[m] }))} /></span>
               <label className="eb-cond-lbl">last
-                <input className="h10-cd-input eb-cond-num" type="number" min={1} max={90} value={c.windowDays} aria-label="Window days"
+                <Input size="sm" fieldClassName="eb-cond-num" type="number" min={1} max={90} value={c.windowDays} aria-label="Window days"
                   onChange={(e) => setCond(i, { windowDays: Math.max(1, Math.min(90, Number(e.target.value) || 1)) })} />d
               </label>
               <label className="eb-cond-lbl" title="Skip the most recent days — eBay reconciles attribution for ~72h">excl.
-                <input className="h10-cd-input eb-cond-num" type="number" min={0} max={7} value={c.excludeRecentDays ?? 0} aria-label="Exclude recent days"
+                <Input size="sm" fieldClassName="eb-cond-num" type="number" min={0} max={7} value={c.excludeRecentDays ?? 0} aria-label="Exclude recent days"
                   onChange={(e) => setCond(i, { excludeRecentDays: Math.max(0, Math.min(7, Number(e.target.value) || 0)) })} />d
               </label>
               <span className="eb-dd dense"><Listbox ariaLabel="Operator" width={90} value={c.op} onChange={(v) => setCond(i, { op: v as RuleOp })}
@@ -263,12 +263,12 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
                 options={[{ value: '__abs', label: 'value' }, ...benches.map((b) => ({ value: b, label: BENCH_LABELS[b] }))]} /></span>
               {c.benchmark ? (
                 <label className="eb-cond-lbl">×
-                  <input className="h10-cd-input eb-cond-num" type="number" min={0.1} max={10} step={0.1} value={c.multiplier ?? 1} aria-label="Multiplier"
+                  <Input size="sm" fieldClassName="eb-cond-num" type="number" min={0.1} max={10} step={0.1} value={c.multiplier ?? 1} aria-label="Multiplier"
                     onChange={(e) => setCond(i, { multiplier: Number(e.target.value) || 1 })} />
                 </label>
               ) : (
                 <label className="eb-cond-lbl">{unitFor(c.metric)}
-                  <input className="h10-cd-input eb-cond-num wide" type="number" step="any" value={fromWire(c.metric, c.threshold)} aria-label="Threshold"
+                  <Input size="sm" fieldClassName="eb-cond-num wide" type="number" step="any" value={fromWire(c.metric, c.threshold)} aria-label="Threshold"
                     onChange={(e) => setCond(i, { threshold: e.target.value === '' ? undefined : toWire(c.metric, Number(e.target.value)) })} />
                 </label>
               )}
@@ -294,19 +294,19 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           </div>
           {action.type === 'adjust_ad_rate' && (
             <div><label>Step %</label>
-              <input className="h10-cd-input eb-cond-num wide" type="number" min={-90} max={300} step={1} value={action.deltaPct ?? -10}
+              <Input size="sm" fieldClassName="eb-cond-num wide" type="number" min={-90} max={300} step={1} value={action.deltaPct ?? -10}
                 onChange={(e) => { setAction((a) => ({ ...a, deltaPct: Number(e.target.value) })); setPreview(null) }} />
             </div>
           )}
           {action.type === 'set_rate_to_breakeven_factor' && (
             <div><label>× break-even</label>
-              <input className="h10-cd-input eb-cond-num wide" type="number" min={0.1} max={1.5} step={0.05} value={action.factor ?? 0.8}
+              <Input size="sm" fieldClassName="eb-cond-num wide" type="number" min={0.1} max={1.5} step={0.05} value={action.factor ?? 0.8}
                 onChange={(e) => { setAction((a) => ({ ...a, factor: Number(e.target.value) })); setPreview(null) }} />
             </div>
           )}
           {action.type === 'bid_down_keyword' && (
             <div><label>Bid step %</label>
-              <input className="h10-cd-input eb-cond-num wide" type="number" min={-90} max={-1} step={1} value={action.bidDeltaPct ?? -20}
+              <Input size="sm" fieldClassName="eb-cond-num wide" type="number" min={-90} max={-1} step={1} value={action.bidDeltaPct ?? -20}
                 onChange={(e) => { setAction((a) => ({ ...a, bidDeltaPct: Number(e.target.value) })); setPreview(null) }} />
             </div>
           )}
@@ -321,12 +321,12 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
           <Pill tone="success" title="Per-campaign Protected / posture / caps from the campaign's Automation tab apply after the break-even clamp">campaign policy caps</Pill>
           {(action.type === 'adjust_ad_rate' || action.type === 'set_rate_to_breakeven_factor') && (
             <label className="eb-cond-lbl">rate floor
-              <input className="h10-cd-input eb-cond-num" type="number" min={2} max={100} step={0.5} value={action.minRatePct ?? 2} aria-label="Rate floor %"
+              <Input size="sm" fieldClassName="eb-cond-num" type="number" min={2} max={100} step={0.5} value={action.minRatePct ?? 2} aria-label="Rate floor %"
                 onChange={(e) => { setAction((a) => ({ ...a, minRatePct: Number(e.target.value) })); setPreview(null) }} />%
             </label>
           )}
           <label className="eb-cond-lbl">cooldown
-            <input className="h10-cd-input eb-cond-num" type="number" min={1} max={720} value={cooldownHours} aria-label="Cooldown hours"
+            <Input size="sm" fieldClassName="eb-cond-num" type="number" min={1} max={720} value={cooldownHours} aria-label="Cooldown hours"
               onChange={(e) => setCooldownHours(Math.max(1, Math.min(720, Number(e.target.value) || 24)))} />h
           </label>
         </div>

@@ -1,0 +1,19 @@
+/**
+ * HX.11 — one rule, and only because the DS cannot carry it.
+ *
+ * The by-origin chips are the DS `FilterChip`. The origin name is the one thing that component
+ * has no opinion about: `.nds-fchip` is `white-space: nowrap`, and an origin here can be a whole
+ * rule name ("Bid rule: Fee creep-down (IT)"), which pushed the chip past the row. The legacy
+ * `.h10-cl-sum .chip .n` capped it at 190px with an ellipsis; the full text stays reachable in
+ * the chip's `title`, exactly as before.
+ *
+ * Written at 0,2,0 (`.nds-fchip.h10-cl-chip`) so the cap cannot be decided by which stylesheet
+ * the bundler happens to emit last.
+ */
+.nds-fchip.h10-cl-chip .t {
+  display: inline-block;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}

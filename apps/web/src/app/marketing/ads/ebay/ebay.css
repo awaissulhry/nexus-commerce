@@ -105,9 +105,6 @@
 
 /* ER3.2 — suggestions queue (delta 6) */
 .eb-kind-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
-.eb-kind-chip { border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: var(--nds-radius-full); font-size: 12px; font-weight: 600; color: #475467; padding: 4px 12px; cursor: pointer; }
-.eb-kind-chip:hover { border-color: var(--nds-blue-600); color: var(--nds-blue-600); }
-.eb-kind-chip.on { background: var(--nds-blue-100); border-color: var(--nds-blue-600); color: var(--nds-blue-900); }
 .eb-decide-cell { display: inline-flex; align-items: center; gap: 6px; }
 .eb-why-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .eb-why-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nds-grey-500); padding: 4px 8px; border-bottom: 1px solid var(--nds-grey-100); }
@@ -287,7 +284,13 @@
 .h10-open.promote { background: #2d9d5f; }
 .h10-open.negative { background: var(--nds-amber-600); }
 
-.h10-cd-input.over-be { border-color: var(--nds-red-500); }
+/* The rate cells are the DS `Input` at the dense tier; only their column widths and the
+   over-break-even warning border stay here. 0,2,0 so the border wins over `.nds-field` outright.
+   `.h10-cd-input` itself survives for the ONE field the DS cannot reach: the Rates step's cap
+   box lives inside a `.h10-cd-field`, whose ads.css rule outranks `.nds-field > input`. */
+.nds-field.eb-rate-cell { width: 74px; }
+.nds-field.eb-bid-cell { width: 70px; }
+.nds-field.over-be { border-color: var(--nds-red-500); }
 .eb-panel.warn { border-color: #f0d9a8; background: #fdf3d3; }
 .eb-panel.warn .eb-panel-head h3 { color: #9a6700; }
 .h10-cd-card.danger { border-color: #f0d4d4; }

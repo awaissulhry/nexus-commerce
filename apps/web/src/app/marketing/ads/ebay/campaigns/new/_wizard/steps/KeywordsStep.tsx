@@ -10,7 +10,7 @@
  * (AU/DE/GB/US only — stated honestly for the rest).
  */
 import { useState } from 'react'
-import { Button, Pill, Textarea } from '@/design-system/primitives'
+import { Button, Input, Pill, Textarea } from '@/design-system/primitives'
 import { Tabs } from '@/design-system/components'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
@@ -112,7 +112,7 @@ export function KeywordsStep({ plan, set }: { plan: CampaignPlan; set: (patch: P
                           onChange={(v) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, matchType: v as Seed['matchType'] } : x)) })}
                           options={[{ value: 'PHRASE', label: 'Phrase' }, { value: 'EXACT', label: 'Exact' }, { value: 'BROAD', label: 'Broad' }]} /></span>
                       </td>
-                      <td className="num"><input className="h10-cd-input" style={{ width: 70 }} type="number" min={0.05} step={0.05} value={s.bidEur} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, bidEur: e.target.value } : x)) })} /></td>
+                      <td className="num"><Input size="sm" fieldClassName="eb-bid-cell" aria-label="Seed bid €" type="number" min={0.05} step={0.05} value={s.bidEur} onChange={(e) => setGroup(i, { seeds: g.seeds.map((x, j) => (j === k ? { ...x, bidEur: e.target.value } : x)) })} /></td>
                     </tr>
                   ))}
                 </tbody>

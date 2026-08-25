@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from 'react'
 import { PerformanceGraph } from '@/design-system/components/PerformanceGraph'
+import { FilterChip } from '@/design-system/primitives'
 import type { TrendPayload } from '../_lib'
 
 type View = 'fees_sales' | 'fees_acos' | 'clicks_impr'
@@ -34,9 +35,11 @@ export function TrendCard({ trend, loading }: { trend: TrendPayload | null; load
     <div className="dash-card">
       <div className="dash-card-h">
         <span>Performance trend</span>
-        <span className="eb-dash-views" role="tablist" aria-label="Chart metrics">
+        {/* `role="group"`, not `tablist`: these chips have no tabpanels — they choose which
+            series the chart draws — and the DS `FilterChip` states that with `aria-pressed`. */}
+        <span className="eb-dash-views" role="group" aria-label="Chart metrics">
           {VIEWS.map((v) => (
-            <button key={v.id} type="button" role="tab" aria-selected={view === v.id} className={`eb-kind-chip ${view === v.id ? 'on' : ''}`} onClick={() => setView(v.id)}>{v.label}</button>
+            <FilterChip key={v.id} pressed={view === v.id} onClick={() => setView(v.id)}>{v.label}</FilterChip>
           ))}
         </span>
       </div>

@@ -167,12 +167,11 @@
 .cvf-pfcell em { font-style: normal; color: var(--nds-grey-400); }
 .cvf-star { color: #1a8a5a; margin-right: 5px; font-size: 11px; }
 
-.cvf-more {
-  display: block; width: 100%; text-align: left;
-  font-size: 11.5px; color: var(--nds-text-muted); background: var(--nds-white);
-  border: 0; border-top: 1px solid var(--nds-grey-75); padding: 7px 14px; cursor: pointer;
-}
-.cvf-more:hover { background: var(--nds-grey-50); color: #46536a; }
+/* `Button block` supplies the full-width left-aligned row; the separator belongs to the card,
+   not to the button, so it stays here. 0,2,0 so the inset and the hairline are not decided by
+   which stylesheet loads last. */
+.nds-btn.cvf-more { border-top: 1px solid var(--nds-grey-75); border-radius: 0; padding: 7px 14px; font-size: 11.5px; }
+.nds-btn.cvf-more:hover { background: var(--nds-grey-50); text-decoration: none; }
 
 
 .cov > .cvf-list { margin-left: 24px; margin-right: 24px; }

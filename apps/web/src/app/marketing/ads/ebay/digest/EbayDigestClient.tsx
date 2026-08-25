@@ -7,7 +7,7 @@
  * week-over-week ▲▼ deltas. Generate now / Mark reviewed semantics unchanged.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, FilterChip } from '@/design-system/primitives'
 import Link from 'next/link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import '../ebay.css'
@@ -87,14 +87,16 @@ export function EbayDigestClient() {
         markets={[]} market="all" onMarketChange={() => {}} />
       <div className="eb-controls">
         {weeks.length > 0 && (
-          <span className="eb-week-chips" role="tablist" aria-label="Digest weeks">
+          <span className="eb-week-chips" role="group" aria-label="Digest weeks">
             {weeks.map((w) => (
-              <button key={w.id} type="button" role="tab" aria-selected={digest?.id === w.id}
-                className={`eb-kind-chip ${digest?.id === w.id ? 'on' : ''}`}
+              <FilterChip
+                key={w.id}
+                pressed={digest?.id === w.id}
                 title={w.reviewedAt ? `Reviewed ${new Date(w.reviewedAt).toLocaleDateString('en-GB')}` : 'Not yet reviewed'}
-                onClick={() => void reload(w.id)}>
+                onClick={() => void reload(w.id)}
+              >
                 {new Date(w.weekStart).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}{w.reviewedAt ? ' ✓' : ''}
-              </button>
+              </FilterChip>
             ))}
           </span>
         )}

@@ -27,9 +27,10 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_gri
 import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { fmtChangeValue } from '../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Pill, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, FilterChip, Pill, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { pillTone } from '../_shared/pillTone'
+import './changelog.css'
 
 interface Origin { kind: string; id: string | null; name: string }
 interface Delivery { state: string; attempts: number; lastError: string | null }
@@ -364,17 +365,17 @@ export function ChangeLogClient() {
         <div className="h10-cl-sum">
           <span className="lbl">By origin</span>
           {summary.slice(0, 10).map((o) => (
-            <button
-              type="button"
+            <FilterChip
               key={o.name}
-              className={`chip ${originFilter === o.name ? 'on' : ''} ${o.failed > 0 ? 'bad' : ''}`}
+              className="h10-cl-chip"
+              pressed={originFilter === o.name}
+              count={o.count}
+              badge={o.failed > 0 ? `${o.failed} failed` : undefined}
               onClick={() => setOriginFilter(originFilter === o.name ? null : o.name)}
               title={`${o.kind} · ${o.count} change${o.count === 1 ? '' : 's'}${o.failed > 0 ? `, ${o.failed} failed to reach Amazon` : ''}`}
             >
-              <span className="n">{o.name}</span>
-              <span className="c">{o.count}</span>
-              {o.failed > 0 && <span className="f">{o.failed} failed</span>}
-            </button>
+              {o.name}
+            </FilterChip>
           ))}
           {originFilter && <Button variant="link" onClick={() => setOriginFilter(null)}>Clear</Button>}
         </div>

@@ -12,6 +12,8 @@ import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-r
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ProbePanel } from './ProbePanel'
 import { getBackendUrl } from '@/lib/backend-url'
+import { FilterChip } from '@/design-system/primitives'
+import { Card } from '@/design-system/components'
 import { intl } from '../_canvas/format'
 import './health.css'
 
@@ -135,26 +137,26 @@ export function HealthClient() {
 
       {/* Summary tiles */}
       <div className="hl-tiles">
-        <button type="button" className="hl-tile" onClick={() => document.getElementById('hl-alerts')?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="hl-tile" onClick={() => document.getElementById('hl-alerts')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Active alerts</div>
           <div className="hl-tile-v">{loading ? '…' : totalAlerts}</div>
           <div className={`hl-tile-sub ${(alerts?.alerts ?? []).some((a) => a.severity === 'high') ? 'danger' : totalAlerts ? 'warn' : 'ok'}`}>{(alerts?.alerts ?? []).filter((a) => a.severity === 'high').length} high · {(alerts?.alerts ?? []).filter((a) => a.severity === 'medium').length} medium</div>
-        </button>
-        <button type="button" className="hl-tile" onClick={() => document.getElementById('hl-retail')?.scrollIntoView({ behavior: 'smooth' })}>
+        </Card>
+        <Card className="hl-tile" onClick={() => document.getElementById('hl-retail')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Wasted spend (retail)</div>
           <div className="hl-tile-v">{loading ? '…' : retail?.summary?.pause ?? 0}</div>
           <div className={`hl-tile-sub ${(retail?.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail?.summary?.pause ?? 0} pause · {retail?.summary?.watch ?? 0} watch</div>
-        </button>
-        <button type="button" className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
+        </Card>
+        <Card className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Automation</div>
           <div className="hl-tile-v">{loading ? '…' : `${au?.rules?.live ?? 0}/${au?.rules?.total ?? 0}`}</div>
           <div className={`hl-tile-sub ${au?.risks?.noManaging ? 'warn' : 'ok'}`}>{au?.risks?.noManaging ? 'no live rules managing' : 'live rules active'}</div>
-        </button>
-        <button type="button" className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
+        </Card>
+        <Card className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Budget-suppressed</div>
           <div className="hl-tile-v">{loading ? '…' : budget?.totals?.suppressing ?? 0}</div>
           <div className={`hl-tile-sub ${(budget?.totals?.suppressing ?? 0) ? 'warn' : 'ok'}`}>{(budget?.totals?.suppressing ?? 0) ? 'delivery capped' : 'none capped'}</div>
-        </button>
+        </Card>
       </div>
 
       {/* Alerts */}
@@ -162,10 +164,16 @@ export function HealthClient() {
         <div className="hl-sec-h"><AlertTriangle size={15} /> Active alerts <span className="hl-chip">{totalAlerts}</span><span className="grow" />
           <span className="hl-filters">
             {(['all', 'high', 'medium'] as const).map((s) => (
-              <button key={s} type="button" className={`hl-fchip${sevFilter === s ? ' on' : ''}`} onClick={() => setSevFilter(s)}>{s === 'all' ? 'All' : s}</button>
+              <FilterChip key={s} pressed={sevFilter === s} onClick={() => setSevFilter(s)}>{s === 'all' ? 'All' : s}</FilterChip>
             ))}
             {(['acos_breach', 'zero_sales', 'spend_spike', 'sales_drop'] as const).map((t) => (
-              <button key={t} type="button" className={`hl-fchip${typeFilter === t ? ' on' : ''}`} disabled={!(alerts?.counts?.[t])} onClick={() => setTypeFilter(typeFilter === t ? 'all' : t)}>{ALERT_LABEL[t]} {alerts?.counts?.[t] ? `(${alerts.counts[t]})` : ''}</button>
+              <FilterChip
+                key={t}
+                pressed={typeFilter === t}
+                disabled={!(alerts?.counts?.[t])}
+                count={alerts?.counts?.[t] || undefined}
+                onClick={() => setTypeFilter(typeFilter === t ? 'all' : t)}
+              >{ALERT_LABEL[t]}</FilterChip>
             ))}
           </span>
         </div>

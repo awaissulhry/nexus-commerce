@@ -14,7 +14,7 @@ import { Gauge, SlidersHorizontal } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { effRate, includedListings, SUGGEST_MARKETS, type CampaignPlan, type PlanListing } from '../plan'
-import { Pill, Toggle } from '@/design-system/primitives'
+import { Input, Pill, Toggle } from '@/design-system/primitives'
 
 export function RatesStep({ plan, set, listings }: {
   plan: CampaignPlan
@@ -101,7 +101,7 @@ export function RatesStep({ plan, set, listings }: {
                           <td className="ed"><div className="nmw"><span className="t" title={l.title ?? l.itemId}>{l.title ?? l.itemId}</span><span className="mk">{l.itemId.slice(-6)}</span></div></td>
                           <td className="num">{l.breakEvenPct != null ? pct(l.breakEvenPct / 100) : <Pill tone="warning">add cost</Pill>}</td>
                           <td className="num">
-                            <input className={`h10-cd-input ${over ? 'over-be' : ''}`} style={{ width: 74 }} type="number" min={2} max={100} step={0.1}
+                            <Input size="sm" fieldClassName={`eb-rate-cell${over ? ' over-be' : ''}`} aria-label="Ad rate %" type="number" min={2} max={100} step={0.1}
                               value={plan.perRate[l.itemId] ?? (plan.globalRate !== '' ? plan.globalRate : l.computedRatePct ?? '')}
                               title={l.rateSource}
                               onChange={(e) => set({ perRate: { ...plan.perRate, [l.itemId]: e.target.value } })} />

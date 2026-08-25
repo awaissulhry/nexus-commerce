@@ -14,7 +14,7 @@ import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGr
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { kindLabel, type WhyReasoning } from '../_lib/rules'
 import { WhyModal } from '../modals/WhyModal'
-import { Button, Pill } from '@/design-system/primitives'
+import { Button, FilterChip, Pill } from '@/design-system/primitives'
 
 export interface SuggestionRow {
   id: string; kind: string; status: string; ruleId: string | null
@@ -142,10 +142,13 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
           The suggestion from your digest was already decided — see the <b>Applied</b> tab or the Change Log.
         </p>
       )}
-      <div className="eb-kind-chips" role="tablist" aria-label="Suggestion kinds">
-        <button type="button" role="tab" aria-selected={kind === 'all'} className={`eb-kind-chip ${kind === 'all' ? 'on' : ''}`} onClick={() => setKind('all')}>All · {rows.length}</button>
+      {/* `role="group"`, not `tablist`: these facets filter the grid below rather than swapping
+          tabpanels, which is what the DS `FilterChip`'s `aria-pressed` says. The counts move out
+          of the label into the chip's own count slot. */}
+      <div className="eb-kind-chips" role="group" aria-label="Suggestion kinds">
+        <FilterChip pressed={kind === 'all'} count={rows.length} onClick={() => setKind('all')}>All</FilterChip>
         {kinds.map(([k, n]) => (
-          <button key={k} type="button" role="tab" aria-selected={kind === k} className={`eb-kind-chip ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>{kindLabel(k)} · {n}</button>
+          <FilterChip key={k} pressed={kind === k} count={n} onClick={() => setKind(k)}>{kindLabel(k)}</FilterChip>
         ))}
       </div>
       <AdsDataGrid<SuggestionRow>
