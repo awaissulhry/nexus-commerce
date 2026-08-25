@@ -25,6 +25,7 @@ import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
 import { pillTone } from '../_shared/pillTone'
+import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns'
 
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
@@ -329,6 +330,14 @@ const DEFAULT_VISIBLE = ALL_KEYS
 // key would otherwise be invisible to everyone who has ever opened Customize Columns.
 // Bumped whenever a column is ADDED: the visible set is persisted per operator, so a new key
 // would otherwise stay invisible to everyone who has ever opened Customize Columns.
+// The Customize dialog is the DS `PreferencesModal` — the same one all 59 other ads pages open.
+// `__first` is the Campaign identity column: it is rendered outside the column list and cannot be
+// hidden or moved, so it says `locked` on screen rather than silently refusing.
+const CUSTOMIZE_COLUMNS: PreferencesColumnSpec[] = [
+  { key: '__first', label: 'Campaign', locked: true },
+  ...ALL_COLS.map((c) => ({ key: c.key, label: c.label })),
+]
+const CUSTOMIZE_DEFAULT = ['__first', ...DEFAULT_VISIBLE]
 const COLS_KEY = 'h10-am-columns-v5' // v3: AX2.1 Amazon Delivery · v4: ACR.1.6 Automation · v5: ADM-H P4 Amazon Delivery split from Write Delivery
 
 // Physical grid columns. Most checklist items are one column; "Bid Algorithm"
@@ -667,33 +676,9 @@ function FilterLibrary({ library, onApply, onDelete, onClose }: {
   )
 }
 
-// ── Table Customization (H10 "Customize") — flat 4-column popover anchored under
-// the Customize button. Campaign is locked (always shown); every other column
-// toggles live (no Apply/Cancel/Reset). A transparent backdrop closes it.
-function CustomizePanel({ visible, onChange, onReset, onClose }: { visible: string[]; onChange: (v: string[]) => void; onReset: () => void; onClose: () => void }) {
-  const ref = useClickAway<HTMLDivElement>(onClose) // close on outside click — no blocking backdrop, so the page + grid stay scrollable
-  const vis = new Set(visible)
-  const allOn = ALL_KEYS.every((k) => vis.has(k))
-  const toggle = (k: string) => { const n = new Set(vis); if (n.has(k)) n.delete(k); else n.add(k); onChange([...n]) }
-  return (
-    <div className="h10-custpop" ref={ref} role="dialog" aria-label="Table Customization">
-        <div className="h10-custpop-h">Table Customization<button type="button" className="h10-custpop-reset" onClick={onReset}>Reset to default</button></div>
-        <div className="h10-custpop-colsh">
-          <span className="ti">Columns</span>
-          <label className="h10-custpop-all"><input type="checkbox" ref={(el) => { if (el) el.indeterminate = !allOn && vis.size > 0 }} checked={allOn} onChange={() => onChange(allOn ? [] : [...ALL_KEYS])} /> Select All</label>
-        </div>
-        <div className="h10-custpop-grid">
-          <label className="h10-custpop-ck locked"><input type="checkbox" checked readOnly disabled /> <span>Campaign</span></label>
-          {ALL_COLS.map((c) => (
-            <label className="h10-custpop-ck" key={c.key}>
-              <input type="checkbox" checked={vis.has(c.key)} onChange={() => toggle(c.key)} />
-              <span>{c.label}</span>
-            </label>
-          ))}
-        </div>
-    </div>
-  )
-}
+// CustomizePanel was here — a flat 4-column popover with live toggles and no Apply step.
+// Retired 2026-08-25: the operator opened Customize on this page and got a different dialog
+// from every other grid in the console. It is the DS `PreferencesModal` now.
 
 // ── Bulk Actions (CBN.2h.6) — H10's separate two-step modal. Step 1 is a checkbox
 // table (Item · Action): tick a row to enable that change and set its value; the
@@ -1076,16 +1061,15 @@ export function CampaignsGrid() {
     setCampaignSel(p.campaigns ?? []); setRanges(p.ranges ?? {}); setShowLibrary(false)
   }
   const deletePreset = (i: number) => persistLibrary(library.filter((_, idx) => idx !== i))
-  // live show/hide from the Customize popover (no Apply step; persists each toggle)
-  const onColsChange = (visible: string[]) => {
+  // The dialog returns ONE ordered list — order and visibility from a single source, so the drag
+  // handle cannot disagree with the checkboxes. Hidden columns keep their relative order behind it.
+  const onCustomizeConfirm = (next: { visibleColumns: string[] }) => {
+    const visible = next.visibleColumns.filter((k) => k !== '__first' && COL_BY_KEY[k])
+    const order = [...visible, ...colOrder.filter((k) => !visible.includes(k))]
     setColVisible(visible)
-    try { localStorage.setItem(COLS_KEY, JSON.stringify({ order: colOrder, visible })) } catch { /* ignore */ }
-  }
-  // restore H10's default column order + visibility (undoes drag-reorder + hides)
-  const resetCols = () => {
-    setColOrder(ALL_KEYS)
-    setColVisible(DEFAULT_VISIBLE)
-    try { localStorage.setItem(COLS_KEY, JSON.stringify({ order: ALL_KEYS, visible: DEFAULT_VISIBLE })) } catch { /* ignore */ }
+    setColOrder(order)
+    setShowCustomize(false)
+    try { localStorage.setItem(COLS_KEY, JSON.stringify({ order, visible })) } catch { /* ignore */ }
   }
   // column hover highlight — toggle .colhi on the column's cells via DOM (NOT React
   // state) so sweeping across headers never re-renders the 100-row grid.
@@ -1920,7 +1904,24 @@ export function CampaignsGrid() {
         <span className="grow" />
         <div className="h10-custwrap">
           <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</Button>
-          {showCustomize && <CustomizePanel visible={colVisible} onChange={onColsChange} onReset={resetCols} onClose={() => setShowCustomize(false)} />}
+          <PreferencesModal
+            open={showCustomize}
+            onClose={() => setShowCustomize(false)}
+            title="Table Customization"
+            allColumns={CUSTOMIZE_COLUMNS}
+            defaultVisible={CUSTOMIZE_DEFAULT}
+            value={{
+              visibleColumns: ['__first', ...colOrder.filter((k) => colVisible.includes(k))],
+              stickyFirstColumn: true, stickyLastColumn: true, pageSize: 100, sortBy: 'name', sortDir: 'asc',
+            }}
+            onConfirm={onCustomizeConfirm}
+            /* the grid already has a footer page-size picker and sortable headers; a second control
+               for one setting is the same inconsistency in another costume. And this grid has no
+               right-frozen column, so a "sticky last" toggle would be a control that does nothing. */
+            pageSizeChoices={[]}
+            sortFieldOptions={[]}
+            showSticky={false}
+          />
         </div>
         {/* Was a dead control — an H10 pixel-match placeholder with no onClick,
             which is its own small lie: a button that looks like it works. Now it
