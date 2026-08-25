@@ -565,6 +565,42 @@
   box-shadow: var(--nds-shadow-menu);
   padding: 5px;
 }
+/* A picker's popover must not inherit a narrow trigger's width — the ads console's rows-per-page
+   select is 84px and its options are not. Scoped to Listbox so Combobox is untouched. */
+.nds-listbox .nds-combo-pop {
+  min-width: 210px;
+}
+.nds-combo-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  margin-bottom: 5px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-3);
+}
+.nds-combo-search svg {
+  flex-shrink: 0;
+}
+.nds-combo-search input {
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+  width: 100%;
+  background: transparent;
+  color: var(--nds-text);
+}
+.nds-combo-search input::placeholder {
+  color: var(--nds-text-disabled);
+}
+.nds-combo-empty {
+  padding: 12px 9px;
+  font-size: 12.5px;
+  color: var(--nds-text-3);
+  text-align: center;
+}
 .nds-combo-pop button {
   display: block;
   width: 100%;
