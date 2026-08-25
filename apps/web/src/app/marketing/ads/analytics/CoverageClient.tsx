@@ -23,7 +23,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, Select } from '@/design-system/primitives'
-import { Tabs } from '@/design-system/components'
+import { DataGrid, Tabs, type Column } from '@/design-system/components'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ConflictsTab } from './ConflictsTab'
 // Self-contained: this page borrows no class from the Control Room's stylesheet. Reusing
@@ -31,6 +31,57 @@ import { ConflictsTab } from './ConflictsTab'
 // imported by the Control Room and nothing else — a cross-page dependency that only shows up
 // in the browser.
 import './coverage.css'
+
+/**
+ * The term grid's columns. Out here rather than inline so the render stays readable at eleven of
+ * them, and so each one carries its own `sortValue` — a `null` share is NOT a zero share, so it
+ * sorts as -1 and lands with the unknowns rather than among the genuinely invisible terms.
+ */
+function coverageColumns(maxShare: number, tosIsMeasured: boolean): Array<Column<Row>> {
+  const num = (v: number | null) => (v == null ? -1 : v)
+  const tip = (label: string, title: string) => <span title={title}>{label}</span>
+  return [
+    { key: 'term', label: 'Search term', sortable: true, sortValue: (r) => r.term, render: (r) => r.term },
+    { key: 'marketImpressions', label: 'Market impressions', align: 'right', sortable: true, sortValue: (r) => r.marketImpressions, render: (r) => intl(r.marketImpressions) },
+    { key: 'ourImpressions', label: 'Ours', align: 'right', sortable: true, sortValue: (r) => num(r.ourImpressions), render: (r) => intl(r.ourImpressions) },
+    {
+      key: 'share', label: 'Share of page one', align: 'right', width: 200, sortable: true, sortValue: (r) => num(r.share),
+      render: (r) => (
+        <span className="cov-sharecell">
+          <span className="cov-bar" aria-hidden><span className="cov-bar-fill" style={{ width: `${barWidth(r.share, maxShare)}%` }} /></span>
+          <span className="cov-bar-v">{pct(r.share)}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'ourAsins', label: tip('Ours on page', 'How many of OUR ASINs appear on this SERP. Context — presence is not the constraint.'),
+      prefsLabel: 'Ours on page', align: 'right', sortable: true, sortValue: (r) => r.ourAsins,
+      render: (r) => <span className={r.ourAsins > 1 ? 'multi' : undefined}>{r.ourAsins || '—'}</span>,
+    },
+    {
+      key: 'pwScore', label: tip('Position-weighted', "Share re-expressed in top-of-search-equivalent units: share × (top mix + rest mix × the account's own measured rest:top CTR ratio)."),
+      prefsLabel: 'Position-weighted', align: 'right', sortable: true, sortValue: (r) => num(r.pwScore),
+      render: (r) => <span className="pw" title={POSITION_WHY[r.positionBasis] || undefined}>{r.pwScore != null ? pct(r.pwScore) : <span className="cov-unk">—</span>}</span>,
+    },
+    {
+      key: 'topMix', label: tip('Top mix', 'Share of our paid search impressions that sat in top-of-search, from the placement mix of the campaigns holding this term.'),
+      prefsLabel: 'Top mix', align: 'right', sortable: true, sortValue: (r) => num(r.topMix),
+      render: (r) => <span title={POSITION_WHY[r.positionBasis] || undefined}>{r.topMix != null ? pctOf(r.topMix) : <span className="cov-unk">—</span>}</span>,
+    },
+    {
+      key: 'tosIS', label: tip('ToS-IS', "Amazon's own top-of-search impression share for the holding campaigns."),
+      prefsLabel: 'ToS-IS', align: 'right', sortable: true, sortValue: (r) => num(r.tosIS),
+      render: (r) => <span title={tosIsMeasured ? undefined : 'Amazon has not returned this metric yet — the ingest is fixed but has not run.'}>{r.tosIS != null ? pctOf(r.tosIS) : <span className="cov-unk">—</span>}</span>,
+    },
+    {
+      key: 'targets', label: tip('Keywords', 'Non-negative keywords targeting this exact term in this marketplace.'),
+      prefsLabel: 'Keywords', align: 'right', sortable: true, sortValue: (r) => r.targets,
+      render: (r) => <span className={r.targets === 0 ? 'none' : undefined}>{r.targets || 'none'}</span>,
+    },
+    { key: 'marketPurchases', label: 'Market buys', align: 'right', sortable: true, sortValue: (r) => r.marketPurchases, render: (r) => intl(r.marketPurchases) },
+    { key: 'ourPurchases', label: 'Ours', align: 'right', sortable: true, sortValue: (r) => num(r.ourPurchases), render: (r) => intl(r.ourPurchases) },
+  ]
+}
 
 interface Row {
   term: string
@@ -249,53 +300,17 @@ export function CoverageClient() {
             />
           </div>
 
-          <div className="cov-tablewrap">
-            <table className="cov-table">
-              <thead>
-                <tr>
-                  <th className="l">Search term</th>
-                  <th>Market impressions</th>
-                  <th>Ours</th>
-                  <th className="share">Share of page one</th>
-                  <th title="How many of OUR ASINs appear on this SERP. Context — presence is not the constraint.">Ours on page</th>
-                  <th title="Share re-expressed in top-of-search-equivalent units: share × (top mix + rest mix × the account's own measured rest:top CTR ratio).">Position-weighted</th>
-                  <th title="Share of our paid search impressions that sat in top-of-search, from the placement mix of the campaigns holding this term.">Top mix</th>
-                  <th title="Amazon's own top-of-search impression share for the holding campaigns.">ToS-IS</th>
-                  <th title="Non-negative keywords targeting this exact term in this marketplace.">Keywords</th>
-                  <th>Market buys</th>
-                  <th>Ours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.term}>
-                    <td className="l">{r.term}</td>
-                    <td>{intl(r.marketImpressions)}</td>
-                    <td>{intl(r.ourImpressions)}</td>
-                    <td className="share">
-                      <span className="cov-bar" aria-hidden>
-                        <span className="cov-bar-fill" style={{ width: `${barWidth(r.share, maxShare)}%` }} />
-                      </span>
-                      <span className="cov-bar-v">{pct(r.share)}</span>
-                    </td>
-                    <td className={r.ourAsins > 1 ? 'multi' : undefined}>{r.ourAsins || '—'}</td>
-                    <td className="pw" title={POSITION_WHY[r.positionBasis] || undefined}>
-                      {r.pwScore != null ? pct(r.pwScore) : <span className="cov-unk">—</span>}
-                    </td>
-                    <td title={POSITION_WHY[r.positionBasis] || undefined}>
-                      {r.topMix != null ? pctOf(r.topMix) : <span className="cov-unk">—</span>}
-                    </td>
-                    <td title={board.tosIsMeasured ? undefined : 'Amazon has not returned this metric yet — the ingest is fixed but has not run.'}>
-                      {r.tosIS != null ? pctOf(r.tosIS) : <span className="cov-unk">—</span>}
-                    </td>
-                    <td className={r.targets === 0 ? 'none' : undefined}>{r.targets || 'none'}</td>
-                    <td>{intl(r.marketPurchases)}</td>
-                    <td>{intl(r.ourPurchases)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* The eleven-column term table is the DS `DataGrid`. It gains sortable headers, which
+              this surface never had — "largest market first" was the only order available, and the
+              question "where is our share worst" needed it. Seeded to that original order so the
+              first paint is unchanged. */}
+          <DataGrid<Row>
+            className="cov-termgrid"
+            rows={rows}
+            rowKey={(r) => r.term}
+            initialSort={{ key: 'marketImpressions', dir: 'desc' }}
+            columns={coverageColumns(maxShare, board.tosIsMeasured)}
+          />
 
           <p className="cov-foot">
             Search Query Performance, weekly, from Amazon Brand Analytics. &ldquo;Ours on page&rdquo; counts

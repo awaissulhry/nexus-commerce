@@ -40,30 +40,21 @@
 .cov-head-kw.none { color: #8a6320; font-weight: 650; }
 
 /* ── the table ───────────────────────────────────────────────────────────── */
-.cov-tablewrap { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); overflow-x: auto; }
-.cov-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.cov-table th {
-  text-align: right; padding: 9px 12px; font-size: 10.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500);
-  border-bottom: 1px solid var(--nds-grey-150); white-space: nowrap; background: var(--nds-white);
-}
-.cov-table th.l, .cov-table td.l { text-align: left; }
-.cov-table td { padding: 7px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-50); color: var(--nds-grey-700); font-variant-numeric: tabular-nums; }
-.cov-table tbody tr:last-child td { border-bottom: 0; }
-.cov-table tbody tr:hover td { background: var(--nds-grey-25); }
-.cov-table td.l { color: var(--nds-grey-900); font-weight: 500; }
+/* The term table is the DS `DataGrid`, which owns the wrapper, the header, the cell padding, the
+   hover and the right-alignment (`align: 'right'` -> `.r`). What is left is only this grid's own
+   vocabulary: tabular numerals, the share bar cell, and the three state inks. */
+.cov-termgrid .nds-grid { font-variant-numeric: tabular-nums; }
+.cov-sharecell { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
 
 /* Share is the point of the page, so it gets the width and the only chart ink. */
-.cov-table th.share, .cov-table td.share { width: 200px; }
-.cov-table td.share { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
 .cov-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--nds-grey-100); overflow: hidden; min-width: 60px; }
 .cov-bar-fill { display: block; height: 100%; background: var(--nds-blue-600); border-radius: 3px; }
 .cov-bar-v { min-width: 52px; text-align: right; font-weight: 600; color: var(--nds-grey-900); }
 
 /* Two or more of ours on one page — the thing that turned out NOT to be the constraint. */
-.cov-table td.multi { color: var(--nds-success-text); font-weight: 650; }
+.cov-termgrid .multi { color: var(--nds-success-text); font-weight: 650; }
 /* No keyword at all on a real market. */
-.cov-table td.none { color: #8a6320; font-weight: 600; }
+.cov-termgrid .none { color: #8a6320; font-weight: 600; }
 
 /* Only placement and width: the DS `Input` owns the border, radius, padding and icon. */
 .cov-search { margin-left: auto; width: 210px; }
@@ -100,7 +91,7 @@
 .cov > .cov-top,
 .cov > .cov-banner,
 .cov > .cov-sec-head,
-.cov > .cov-tablewrap,
+.cov > .cov-termgrid,
 .cov > .cov-headroom,
 .cov > .cov-foot { margin-left: 24px; margin-right: 24px; }
 
@@ -109,7 +100,7 @@
    same ink weight as share. An unknown reads as a muted dash with a tooltip that names the
    reason — never as 0%, which on this board would assert we are absent from the top of the
    page rather than admitting we cannot see it. */
-.cov-table td.pw { font-weight: 650; color: var(--nds-grey-900); }
+.cov-termgrid .pw { font-weight: 650; color: var(--nds-grey-900); }
 .cov-unk { color: var(--nds-grey-400); }
 .cov-hero-pw {
   font-size: 12px; color: #46536a; margin: 7px 0 0; max-width: 74ch; line-height: 1.55;
@@ -150,19 +141,15 @@
 .cvf-champ strong { color: var(--nds-grey-900); font-weight: 650; }
 .cvf-pf { color: var(--nds-grey-500); }
 
-.cvf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.cvf-table th {
-  text-align: right; padding: 7px 12px; font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500);
-  border-bottom: 1px solid var(--nds-grey-75); white-space: nowrap;
-}
-.cvf-table th.l, .cvf-table td.l { text-align: left; }
-.cvf-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid var(--nds-grey-25); color: var(--nds-grey-700); font-variant-numeric: tabular-nums; }
-.cvf-table tbody tr:last-child td { border-bottom: 0; }
-.cvf-table tr.champ td { background: #f5faf7; }
-.cvf-table tr.dormant td { color: #a6b0bd; }
-.cvf-table td.bad { color: var(--nds-danger-text); font-weight: 600; }
-.cvf-table td.tos { color: #94501c; font-weight: 600; }
+/* One contest's contenders, as the DS `DataGrid`. The card already draws a border and clips to
+   its own radius, so the grid wrapper drops both rather than nesting a box in a box — 0,2,0, so
+   it is not decided by which stylesheet loads last. */
+.nds-grid-wrap.cvf-grid { border: 0; border-radius: 0; background: transparent; }
+.cvf-grid .nds-grid { font-size: 12px; font-variant-numeric: tabular-nums; }
+.cvf-grid tr.champ td { background: #f5faf7; }
+.cvf-grid tr.dormant td { color: #a6b0bd; }
+.cvf-grid .bad { color: var(--nds-danger-text); font-weight: 600; }
+.cvf-grid .tos { color: #94501c; font-weight: 600; }
 .cvf-pfcell { color: var(--nds-text-muted); }
 .cvf-pfcell em { font-style: normal; color: var(--nds-grey-400); }
 .cvf-star { color: #1a8a5a; margin-right: 5px; font-size: 11px; }

@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 
 interface Contender {
   campaignId: string
@@ -87,6 +88,36 @@ const intl = (v: number) => v.toLocaleString('en-IE')
  * contenders and says so in a field.
  */
 const isBlind = (c: Contest) => !c.championHasEvidence
+
+/**
+ * A contest's contender rows. The champion star and the two state inks (over-target ACOS, a
+ * non-zero top-of-search bias) stay exactly as they were — only the table shell changes.
+ */
+function contenderColumns(c: Contest, blind: boolean): Array<Column<Contender>> {
+  return [
+    {
+      key: 'campaign', label: 'Campaign', sortable: true, sortValue: (x) => x.campaignName,
+      render: (x) => (
+        <>
+          {x.campaignId === c.championId && !blind && <span className="cvf-star" aria-label="champion">★</span>}
+          {x.campaignName}
+        </>
+      ),
+    },
+    { key: 'portfolio', label: 'Portfolio', sortable: true, sortValue: (x) => x.portfolioName, render: (x) => <span className="cvf-pfcell">{x.portfolioId ? x.portfolioName : <em>unfiled</em>}</span> },
+    { key: 'bid', label: 'Bid', align: 'right', sortable: true, sortValue: (x) => x.bidCents, render: (x) => (x.bidCents / 100).toFixed(2) },
+    { key: 'impressions', label: 'Impressions', align: 'right', sortable: true, sortValue: (x) => x.impressions, render: (x) => intl(x.impressions) },
+    { key: 'clicks', label: 'Clicks', align: 'right', sortable: true, sortValue: (x) => x.clicks, render: (x) => intl(x.clicks) },
+    { key: 'spend', label: 'Spend', align: 'right', sortable: true, sortValue: (x) => x.spendCents, render: (x) => eur(x.spendCents) },
+    { key: 'sales', label: 'Sales', align: 'right', sortable: true, sortValue: (x) => x.salesCents, render: (x) => eur(x.salesCents) },
+    { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (x) => x.acos ?? -1, render: (x) => <span className={x.acos != null && x.acos > 1 ? 'bad' : undefined}>{pct(x.acos)}</span> },
+    {
+      key: 'tos', label: <span title="Top-of-search placement bias. Two contenders above 0% are pushing for the same slot.">ToS bias</span>,
+      prefsLabel: 'ToS bias', align: 'right', sortable: true, sortValue: (x) => x.tosBias,
+      render: (x) => <span className={x.tosBias > 0 ? 'tos' : undefined}>{x.tosBias > 0 ? `${x.tosBias}%` : '—'}</span>,
+    },
+  ]
+}
 
 export function ConflictsTab({ market }: { market: string }) {
   const [board, setBoard] = useState<Board | null>(null)
@@ -214,39 +245,13 @@ export function ConflictsTab({ market }: { market: string }) {
                   bare header row over nothing — which reads as a failed load rather than as
                   "every claimant here is dormant". The disclosure below carries the count. */}
               {shown.length > 0 && (
-              <table className="cvf-table">
-                <thead>
-                  <tr>
-                    <th className="l">Campaign</th>
-                    <th className="l">Portfolio</th>
-                    <th>Bid</th>
-                    <th>Impressions</th>
-                    <th>Clicks</th>
-                    <th>Spend</th>
-                    <th>Sales</th>
-                    <th>ACOS</th>
-                    <th title="Top-of-search placement bias. Two contenders above 0% are pushing for the same slot.">ToS bias</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((x) => (
-                    <tr key={x.campaignId} className={x.campaignId === c.championId ? 'champ' : x.impressions === 0 ? 'dormant' : undefined}>
-                      <td className="l">
-                        {x.campaignId === c.championId && !isBlind(c) && <span className="cvf-star" aria-label="champion">★</span>}
-                        {x.campaignName}
-                      </td>
-                      <td className="l cvf-pfcell">{x.portfolioId ? x.portfolioName : <em>unfiled</em>}</td>
-                      <td>{(x.bidCents / 100).toFixed(2)}</td>
-                      <td>{intl(x.impressions)}</td>
-                      <td>{intl(x.clicks)}</td>
-                      <td>{eur(x.spendCents)}</td>
-                      <td>{eur(x.salesCents)}</td>
-                      <td className={x.acos != null && x.acos > 1 ? 'bad' : undefined}>{pct(x.acos)}</td>
-                      <td className={x.tosBias > 0 ? 'tos' : undefined}>{x.tosBias > 0 ? `${x.tosBias}%` : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                <DataGrid<Contender>
+                  className="cvf-grid"
+                  rows={shown}
+                  rowKey={(x) => x.campaignId}
+                  rowClassName={(x) => (x.campaignId === c.championId ? 'champ' : x.impressions === 0 ? 'dormant' : undefined)}
+                  columns={contenderColumns(c, isBlind(c))}
+                />
               )}
 
               {!isOpen && dormant.length > 0 && (
