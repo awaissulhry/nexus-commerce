@@ -21,11 +21,13 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { Button } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Settings2, Download, Pencil, Search, X } from 'lucide-react'
-import { HoverCard } from '../FilterDropdown'
 import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns'
 import { AdsFilterBar, stripServerKeys, isServerKey } from './AdsFilterBar'
 import { enabledRank } from './enabledRank'
-import { Listbox } from '@/design-system/components'
+
+// The DS HoverCard takes a suppression check rather than knowing what a column drag is.
+const colDragging = () => document.body.classList.contains('col-dragging')
+import { HoverCard, Listbox } from '@/design-system/components'
 
 // FB.1 — the Filters panel now lives in ./AdsFilterBar so a PAGE can render it somewhere other than
 // directly above this card. The grid renders that same component, so there is exactly one filter-bar
@@ -886,10 +888,10 @@ export function AdsDataGrid<T>({
               {visibleCols.map((c) => (
                 <th key={c.key} className={`${alignClass(c)}${sort?.key === c.key ? ' sorted' : ''}${fzrClass(c)}`} style={fzrStyle(c)}>
                   {c.sortable === false
-                    ? <span className="hl">{c.tip ? <HoverCard text={c.tip} placement="above" delay={600}><span>{c.label}</span></HoverCard> : c.label}</span>
+                    ? <span className="hl">{c.tip ? <HoverCard text={c.tip} placement="above" delay={600} shouldSuppress={colDragging}><span>{c.label}</span></HoverCard> : c.label}</span>
                     : <button type="button" className="sortable" onClick={() => onSort(c.key)}>
                         {c.tip
-                          ? <HoverCard text={c.tip} placement="above" delay={600}><span className="hl">{c.label} {sortIcon(c.key)}</span></HoverCard>
+                          ? <HoverCard text={c.tip} placement="above" delay={600} shouldSuppress={colDragging}><span className="hl">{c.label} {sortIcon(c.key)}</span></HoverCard>
                           : <span className="hl">{c.label} {sortIcon(c.key)}</span>}
                       </button>}
                 </th>

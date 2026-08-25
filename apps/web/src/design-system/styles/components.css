@@ -754,6 +754,7 @@
   text-align: center;
 }
 .nds-combo-pop button {
+  position: relative;
   display: block;
   width: 100%;
   text-align: left;
@@ -765,6 +766,23 @@
   padding: 8px 9px;
   border-radius: var(--nds-radius-md);
   cursor: pointer;
+}
+/* Keyboard-navigated row. Shown only while the search box is present — otherwise a default
+   active index of 0 would make the first row look permanently selected. */
+.nds-combo-pop button.active {
+  background: var(--nds-surface-hover);
+}
+.nds-combo-pop button.active.on {
+  background: var(--nds-primary-soft);
+}
+.nds-combo-pop button.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--nds-primary);
 }
 .nds-combo-pop button:hover {
   background: var(--nds-surface-hover);

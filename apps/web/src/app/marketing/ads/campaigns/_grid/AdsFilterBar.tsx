@@ -26,8 +26,7 @@
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
 import { ChevronDown } from 'lucide-react'
-import { FilterDropdown } from '../FilterDropdown'
-import { MultiSelect } from '@/design-system/components'
+import { Listbox, MultiSelect } from '@/design-system/components'
 import { InfoTip } from '../InfoTip'
 import type { GridFilter, FilterState, RangeVal } from './AdsDataGrid'
 
@@ -117,7 +116,7 @@ export function AdsFilterBar({
             {filters.map((f) => f.kind === 'select' ? (
               <div className={`ffield ${f.wide ? 'wide' : ''}`} key={f.key}>
                 <span>{f.label}{f.tip && <InfoTip tip={f.tip} />}</span>
-                <FilterDropdown
+                <Listbox
                   options={f.options}
                   value={(value[f.key] as string) ?? ''}
                   onChange={(v) => setKey(f.key, v)}

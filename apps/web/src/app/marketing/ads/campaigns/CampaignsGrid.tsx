@@ -18,7 +18,7 @@ import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, Autom
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
-import { FilterDropdown, HoverCard } from './FilterDropdown'
+import { HoverCard } from './FilterDropdown'
 import { enabledRank } from './_grid/enabledRank'
 import { AdManagerGraph } from './AdManagerGraph'
 import { InfoTip } from './InfoTip'
@@ -952,6 +952,11 @@ export function CampaignsGrid() {
   // WG.2b — this page hand-rolls its grid, and every DOM interaction below used to reach it with
   // `document.querySelector('.h10-am-grid')`, which returns the FIRST match on the page and ties
   // the behaviour to a class name the WorkspaceGrid extraction has to rename.
+  // Two ⛔ placeholder filters: they were uncontrolled <FilterDropdown>s that remembered their own
+  // selection and told nobody. Listbox is controlled, so the state is explicit now — the surfaces
+  // stay on the roadmap and behave exactly as before.
+  const [bidAutoFilter, setBidAutoFilter] = useState('')
+  const [ruleFilter, setRuleFilter] = useState('')
   const gridElRef = useRef<HTMLDivElement | null>(null)
   const colHiRef = useRef<string | null>(null) // header hover → column highlight, toggled via direct DOM (no grid re-render)
   // pointer-based column reorder — smooth chip + live drop-indicator driven by
@@ -1829,7 +1834,7 @@ export function CampaignsGrid() {
 
             <div className="frow">
               <div className="ffield wide"><span>Portfolio</span>
-                <FilterDropdown options={portfolios.map((p) => ({ value: p.id, label: p.label }))} value={portfolio} onChange={setPortfolio} emptyLabel="Select a Portfolio" emptyIsPlaceholder searchable searchPlaceholder="Search portfolios…" ariaLabel="Portfolio" />
+                <Listbox options={portfolios.map((p) => ({ value: p.id, label: p.label }))} value={portfolio} onChange={setPortfolio} emptyLabel="Select a Portfolio" emptyIsPlaceholder searchable searchPlaceholder="Search portfolios…" ariaLabel="Portfolio" />
               </div>
               <div className="ffield wide"><span>Campaign</span>
                 <CampaignMultiSelect names={campaignNames} selected={campaignSel} onChange={setCampaignSel} />
@@ -1842,10 +1847,10 @@ export function CampaignsGrid() {
                 <MultiSelect options={STATUS_OPTS} selected={statuses} onChange={setStatuses} ariaLabel="Status" />
               </div>
               <div className="ffield"><span>Bid Automation</span>
-                <FilterDropdown options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} emptyLabel="All" ariaLabel="Bid Automation" />
+                <Listbox options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]} value={bidAutoFilter} onChange={setBidAutoFilter} emptyLabel="All" ariaLabel="Bid Automation" />
               </div>
               <div className="ffield"><span>Rule</span>
-                <FilterDropdown options={[{ value: 'has', label: 'Has rules' }, { value: 'none', label: 'No rules' }]} emptyLabel="All campaigns" ariaLabel="Rule" />
+                <Listbox options={[{ value: 'has', label: 'Has rules' }, { value: 'none', label: 'No rules' }]} value={ruleFilter} onChange={setRuleFilter} emptyLabel="All campaigns" ariaLabel="Rule" />
               </div>
 
               {RANGE_FIELDS.map((f) => (
