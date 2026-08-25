@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import { Trash2, X, ChevronsUpDown, ChevronDown, Plus } from 'lucide-react'
 import { ToolbarButton } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components/Tabs'
 import './keyword-targeting.css'
 
 export type KwMatch = 'BROAD' | 'PHRASE' | 'EXACT'
@@ -68,10 +69,14 @@ export function KeywordTargetingPanel({ keywords, setKeywords, negKeywords, setN
     <div className="h10-scb-tgt">
       <div className="h10-spw-ps">
         <div className="h10-spw-ps-left">
-          <div className="h10-spw-ps-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={tab === 'suggested'} className={tab === 'suggested' ? 'on' : ''} onClick={() => setTab('suggested')}>Suggested Keywords</button>
-            <button type="button" role="tab" aria-selected={tab === 'enter'} className={tab === 'enter' ? 'on' : ''} onClick={() => setTab('enter')}>Enter New Keywords</button>
-            <button type="button" role="tab" aria-selected={tab === 'mylist'} className={tab === 'mylist' ? 'on' : ''} onClick={() => setTab('mylist')}>Add from My List</button>
+          {/* `.h10-spw-ps-tabs` dropped, not kept: its `button` rule (0,1,1) would restyle
+              `.nds-tab`. Only its 14px bottom margin is re-homed here. */}
+          <div style={{ marginBottom: 14 }}>
+            <Tabs
+              tabs={[{ id: 'suggested', label: 'Suggested Keywords' }, { id: 'enter', label: 'Enter New Keywords' }, { id: 'mylist', label: 'Add from My List' }]}
+              active={tab}
+              onChange={(id) => setTab(id as 'suggested' | 'enter' | 'mylist')}
+            />
           </div>
           <div className="h10-scb-tgt-mt">
             {!lockedMatch && <>

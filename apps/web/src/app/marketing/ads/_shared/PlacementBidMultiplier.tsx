@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Search, Plus, Check, X } from 'lucide-react'
 import { ToolbarButton } from '@/design-system/primitives'
+import { Tabs } from '@/design-system/components/Tabs'
 import { InfoTip } from '../campaigns/InfoTip'
 
 export type PlacementBids = { tos: string; pdp: string; ros: string; videoBoost: boolean; abBoost: boolean; abBoostPct: string; audienceMod: boolean }
@@ -91,9 +92,14 @@ function AudiencePicker() {
   return (
     <div className="h10-cd-aud">
       <div className="aud-left">
-        <div className="aud-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={src === 'AMC'} className={src === 'AMC' ? 'on' : ''} onClick={() => setSrc('AMC')}>From AMC</button>
-          <button type="button" role="tab" aria-selected={src === 'AMAZON'} className={src === 'AMAZON' ? 'on' : ''} onClick={() => setSrc('AMAZON')}>From Amazon</button>
+        {/* `.aud-tabs` dropped, not kept: its `button` rule (0,2,1) would restyle `.nds-tab`.
+            Only its 12px bottom margin is re-homed here. */}
+        <div style={{ marginBottom: 12 }}>
+          <Tabs
+            tabs={[{ id: 'AMC', label: 'From AMC' }, { id: 'AMAZON', label: 'From Amazon' }]}
+            active={src}
+            onChange={(id) => setSrc(id as 'AMC' | 'AMAZON')}
+          />
         </div>
         {src === 'AMC' ? (
           <>
