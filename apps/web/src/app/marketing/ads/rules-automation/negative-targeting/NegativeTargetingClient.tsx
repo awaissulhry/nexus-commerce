@@ -40,6 +40,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { SegmentedControl } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -616,18 +617,15 @@ export function NegativeTargetingClient() {
 /** The two grains, never blurred — and the control that says which one you are looking at. */
 function ViewToggle({ view, push }: { view: 'negations' | 'terms'; push: (p: Record<string, string>) => void }) {
   return (
-    <span className="h10-svt-seg" role="tablist" aria-label="Grain">
-      {([['negations', 'Negations'], ['terms', 'Terms']] as const).map(([v, label]) => (
-        <button
-          key={v} type="button" role="tab" aria-selected={view === v}
-          className={`seg ${view === v ? 'on' : ''}`}
-          onClick={() => push({ view: v })}
-          title={v === 'negations'
-            ? 'One row per AdTarget — what Amazon stores, and what later gets archived'
-            : 'One row per term — what an operator reasons about. 2,059 negations over 258 terms'}
-        >{label}</button>
-      ))}
-    </span>
+    <SegmentedControl
+      ariaLabel="Grain"
+      value={view}
+      onChange={(v) => push({ view: v })}
+      options={[
+        { value: 'negations', label: <span title="One row per AdTarget — what Amazon stores, and what later gets archived">Negations</span> },
+        { value: 'terms', label: <span title="One row per term — what an operator reasons about. 2,059 negations over 258 terms">Terms</span> },
+      ]}
+    />
   )
 }
 

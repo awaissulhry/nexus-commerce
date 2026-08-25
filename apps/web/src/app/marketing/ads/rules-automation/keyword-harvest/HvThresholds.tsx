@@ -44,7 +44,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, SegmentedControl } from '@/design-system/primitives'
 import { AlertTriangle, Check, Info, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps, HarvestCriteria, HvPolicyGrain } from './slot-contract'
@@ -142,18 +142,23 @@ export function HvThresholds({ criteria, attrition, census, scope, push, reload,
         </Field>
 
         <Field label="Window" over={over.has('windowDays')}>
-          <span className="h10-hv-seg" role="group" aria-label="Window">
-            {[30, 60, 90].map((d) => (
-              <button key={d} type="button" className={`seg ${c.windowDays === d ? 'on' : ''}`} onClick={() => set({ [PARAM.windowDays]: String(d) })}>{d}d</button>
-            ))}
-          </span>
+          <SegmentedControl
+            ariaLabel="Window"
+            size="sm"
+            value={String(c.windowDays)}
+            onChange={(v) => set({ [PARAM.windowDays]: v })}
+            options={[30, 60, 90].map((d) => ({ value: String(d), label: `${d}d` }))}
+          />
         </Field>
 
         <Field label="Match type" over={over.has('excludeExactMatched')} tip="A term is harvestable only where it arrived through a LOOSER match than the one we would create: auto and product expressions → phrase/exact, broad → phrase/exact, phrase → exact. A term whose every order came via an EXACT match is offering to create the very keyword that produced the traffic. Product targets are exempt.">
-          <span className="h10-hv-seg" role="group" aria-label="Match type">
-            <button type="button" className={`seg ${c.excludeExactMatched ? 'on' : ''}`} onClick={() => set({ [PARAM.excludeExactMatched]: 'harvestable' })}>harvestable</button>
-            <button type="button" className={`seg ${!c.excludeExactMatched ? 'on' : ''}`} onClick={() => set({ [PARAM.excludeExactMatched]: 'all' })}>any match</button>
-          </span>
+          <SegmentedControl
+            ariaLabel="Match type"
+            size="sm"
+            value={c.excludeExactMatched ? 'harvestable' : 'all'}
+            onChange={(v) => set({ [PARAM.excludeExactMatched]: v })}
+            options={[{ value: 'harvestable', label: 'harvestable' }, { value: 'all', label: 'any match' }]}
+          />
         </Field>
 
         {criteria.overridden.length > 0 && (

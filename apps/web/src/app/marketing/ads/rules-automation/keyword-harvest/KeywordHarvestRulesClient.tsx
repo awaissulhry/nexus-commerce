@@ -81,6 +81,7 @@ export function KeywordHarvestRulesClient() {
           class keeps the pill's placement styles. */}
       <div className="h10-hv-viewseg">
         <SegmentedControl
+          ariaLabel="View"
           value={view === 'ad-groups' ? 'ad-groups' : 'rules'}
           onChange={(v) => push({ view: v === 'ad-groups' ? 'ad-groups' : '' })}
           options={[{ value: 'rules', label: 'Rules View' }, { value: 'ad-groups', label: 'Ad Group View' }]}

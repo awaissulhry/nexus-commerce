@@ -50,7 +50,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
@@ -719,18 +719,16 @@ export function BudgetClient() {
 
   const toolbarLeft = (
     <>
-      <span className="h10-bud-seg" role="tablist" aria-label="Grain">
-        {([['campaigns', 'Campaigns'], ['rules', 'Rules']] as const).map(([v, label]) => (
-          <button
-            key={v} type="button" role="tab" aria-selected={view === v}
-            className={`seg ${view === v ? 'on' : ''}`}
-            onClick={() => push({ view: v })}
-            title={v === 'campaigns'
-              ? 'One row per campaign — the grain a budget is actually set at'
-              : 'One row per rule — what may change a budget, by how much, and what it did'}
-          >{label}</button>
-        ))}
-      </span>
+      <SegmentedControl
+        ariaLabel="Grain"
+        size="sm"
+        value={view}
+        onChange={(v) => push({ view: v })}
+        options={[
+          { value: 'campaigns', label: <span title="One row per campaign — the grain a budget is actually set at">Campaigns</span> },
+          { value: 'rules', label: <span title="One row per rule — what may change a budget, by how much, and what it did">Rules</span> },
+        ]}
+      />
       {searchBox}
     </>
   )

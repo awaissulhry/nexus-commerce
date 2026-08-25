@@ -46,7 +46,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -344,15 +344,18 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
 
                 {/* ── bulk: which rows ─────────────────────────────────────────────────── */}
                 {!single && (
-                  <div className="h10-ngr-pick" role="group" aria-label="Which negations">
-                    {([
-                      ['in-scope', `In your scope (${num(ctx.negations.filter((n) => n.inScope && n.status !== 'ARCHIVED').length)})`],
-                      ['live', `Only the ones blocking now (${num(ctx.negations.filter((n) => n.blockingNow).length)})`],
-                      ['all', `All of them (${num(ctx.negations.filter((n) => n.status !== 'ARCHIVED').length)})`],
-                    ] as const).map(([v, label]) => (
-                      <button key={v} type="button" className={`seg ${pick === v ? 'on' : ''}`} onClick={() => setPick(v)}>{label}</button>
-                    ))}
-                  </div>
+                  <SegmentedControl
+                    className="h10-ngr-pick"
+                    ariaLabel="Which negations"
+                    size="sm"
+                    value={pick}
+                    onChange={(v) => setPick(v as typeof pick)}
+                    options={[
+                      { value: 'in-scope', label: `In your scope (${num(ctx.negations.filter((n) => n.inScope && n.status !== 'ARCHIVED').length)})` },
+                      { value: 'live', label: `Only the ones blocking now (${num(ctx.negations.filter((n) => n.blockingNow).length)})` },
+                      { value: 'all', label: `All of them (${num(ctx.negations.filter((n) => n.status !== 'ARCHIVED').length)})` },
+                    ]}
+                  />
                 )}
 
                 <label className="h10-ngr-reason">

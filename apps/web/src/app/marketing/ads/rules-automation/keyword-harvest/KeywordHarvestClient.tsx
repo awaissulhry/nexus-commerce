@@ -50,6 +50,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { SegmentedControl } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, ArrowUpRight, Check, Copy, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -605,18 +606,16 @@ export function KeywordHarvestClient() {
       {/* Two questions, one page: which terms have earned a keyword, and did the last batch work.
           A segmented control rather than a tab, because the scope, market and header above it apply
           to both — a tab would imply a different page. */}
-      <div className="h10-hv-viewseg" role="tablist" aria-label="View">
-        {([['candidates', 'Candidates'], ['harvested', 'Harvested']] as const).map(([v, label]) => (
-          <button
-            key={v} type="button" role="tab" aria-selected={view === v}
-            className={`seg ${view === v ? 'on' : ''}`}
-            onClick={() => push({ view: v === 'candidates' ? '' : v })}
-            title={v === 'candidates'
-              ? 'Search terms that have earned their own keyword'
-              : 'What happened to every keyword this account harvested'}
-          >{label}</button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="h10-hv-viewseg"
+        ariaLabel="View"
+        value={view}
+        onChange={(v) => push({ view: v === 'candidates' ? '' : v })}
+        options={[
+          { value: 'candidates', label: <span title="Search terms that have earned their own keyword">Candidates</span> },
+          { value: 'harvested', label: <span title="What happened to every keyword this account harvested">Harvested</span> },
+        ]}
+      />
 
       {view === 'candidates' && <HvThresholds {...slotProps} />}
 

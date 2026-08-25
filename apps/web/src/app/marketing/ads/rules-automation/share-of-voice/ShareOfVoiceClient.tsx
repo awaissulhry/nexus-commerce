@@ -52,7 +52,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, Select } from '@/design-system/primitives'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Info, Search } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
@@ -1123,30 +1123,26 @@ export function ShareOfVoiceClient() {
                     branch. It moves the share columns and says so. */}
                 <span className="h10-sov-weeks">
                   <span className="cap" title="How far back this view may reach for the one week it renders. It moves the SHARE columns only — the ad columns have their own daily control beside this one; one control never moves both grains.">Share weeks</span>
-                  <span className="h10-svt-seg" role="tablist" aria-label="Lookback in weeks">
-                    {WEEKS.map((w) => (
-                      <button
-                        key={w} type="button" role="tab" aria-selected={weeks === w}
-                        className={`seg ${weeks === w ? 'on' : ''}`}
-                        onClick={() => push({ weeks: String(w) })}
-                      >{w}</button>
-                    ))}
-                  </span>
+                  <SegmentedControl
+                    ariaLabel="Lookback in weeks"
+                    size="sm"
+                    value={String(weeks)}
+                    onChange={(v) => push({ weeks: v })}
+                    options={WEEKS.map((w) => ({ value: String(w), label: String(w) }))}
+                  />
                 </span>
 
                 {/* SOV.2 — the AD columns' own window. Daily, ~2 days behind, a different clock
                     from the weekly market columns — which is why it is a second control. */}
                 <span className="h10-sov-weeks">
                   <span className="cap" title="The window for the Ad spend / Ad CPC / Signal columns, in days. It moves the AD columns only.">Ad window</span>
-                  <span className="h10-svt-seg" role="tablist" aria-label="Ad window in days">
-                    {[7, 14, 30].map((w) => (
-                      <button
-                        key={w} type="button" role="tab" aria-selected={adWindow === w}
-                        className={`seg ${adWindow === w ? 'on' : ''}`}
-                        onClick={() => push({ adWindow: String(w) })}
-                      >{w}d</button>
-                    ))}
-                  </span>
+                  <SegmentedControl
+                    ariaLabel="Ad window in days"
+                    size="sm"
+                    value={String(adWindow)}
+                    onChange={(v) => push({ adWindow: v })}
+                    options={[7, 14, 30].map((w) => ({ value: String(w), label: `${w}d` }))}
+                  />
                 </span>
 
                 <button
