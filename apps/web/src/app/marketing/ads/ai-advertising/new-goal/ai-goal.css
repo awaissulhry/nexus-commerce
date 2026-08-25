@@ -73,3 +73,13 @@
    as well as applying this width. */
 .aig-money { width: 220px; min-width: 0; }
 .aig-money.narrow { width: 124px; }
+
+/* The Advanced Targeting slide-over is the DS `Drawer` now, so the two field blocks lost the
+   `.h10-aig-drawer` scope they were written under (ads.css:1402-1408, out of scope, now
+   unreachable). Only the label row and the textarea height are the page's; the border, radius,
+   padding and focus ring are the DS `Textarea`'s. */
+.aig-adv { display: flex; flex-direction: column; gap: 22px; }
+.aig-adv-f .dl { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.aig-adv-f .dl > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #37495b; }
+.aig-adv-f .dl .cnt { font-size: 12px; color: var(--nds-grey-500); }
+.aig-adv-f .nds-textarea { min-height: 120px; }

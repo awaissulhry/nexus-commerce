@@ -29,6 +29,8 @@ import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icon
 import { InfoTip } from '../../campaigns/InfoTip'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
+import { Textarea } from '@/design-system/primitives/Textarea'
+import { Drawer } from '@/design-system/components/Drawer'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
@@ -626,17 +628,23 @@ function AdvancedTargetingDrawer({ productTargets, excludeAsins, onClose, onSave
   const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean)
   const ptN = lines(pt).length, eaN = lines(ea).length
   return (
-    <div className="h10-aig-drawer-back" onClick={onClose}>
-      <aside className="h10-aig-drawer" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Advanced Targeting">
-        <div className="dh"><b>Advanced Targeting</b><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
-        <div className="db">
-          <div className="dfield"><div className="dl"><span>Product Targets <InfoTip tip="Target specific products (ASINs) so your ads show on their detail pages." /></span><span className="cnt">{ptN}/10 Added</span></div>
-            <textarea value={pt} onChange={(e) => setPt(e.target.value)} placeholder="Enter product targets, one per line" /></div>
-          <div className="dfield"><div className="dl"><span>Exclude ASINs <InfoTip tip="Stop your ads from showing on these ASINs." /></span><span className="cnt">{eaN} Added</span></div>
-            <textarea value={ea} onChange={(e) => setEa(e.target.value)} placeholder="Enter product ASINs you do not want to target, one per line" /></div>
+    <Drawer
+      open
+      onClose={onClose}
+      title="Advanced Targeting"
+      width={440}
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!ptN && !eaN} onClick={() => onSave(lines(pt), lines(ea))}>Save</Button></>}
+    >
+      <div className="aig-adv">
+        <div className="aig-adv-f">
+          <div className="dl"><span>Product Targets <InfoTip tip="Target specific products (ASINs) so your ads show on their detail pages." /></span><span className="cnt">{ptN}/10 Added</span></div>
+          <Textarea value={pt} onChange={(e) => setPt(e.target.value)} placeholder="Enter product targets, one per line" />
         </div>
-        <div className="df"><Button onClick={onClose}>Cancel</Button><span className="grow" /><Button variant="primary" disabled={!ptN && !eaN} onClick={() => onSave(lines(pt), lines(ea))}>Save</Button></div>
-      </aside>
-    </div>
+        <div className="aig-adv-f">
+          <div className="dl"><span>Exclude ASINs <InfoTip tip="Stop your ads from showing on these ASINs." /></span><span className="cnt">{eaN} Added</span></div>
+          <Textarea value={ea} onChange={(e) => setEa(e.target.value)} placeholder="Enter product ASINs you do not want to target, one per line" />
+        </div>
+      </div>
+    </Drawer>
   )
 }
