@@ -582,9 +582,9 @@ export function AutomationsClient() {
             <em>{e.what}</em>
           </span>
           {e.warning && <span className="h10-au-badge conf" title={e.warning}><AlertTriangle size={10} aria-hidden /> attention</span>}
-          <button type="button" className="h10-au-open" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }} aria-label={`Open ${e.name}`}>
+          <Button size="xs" className="h10-au-open" onClick={(ev) => { ev.stopPropagation(); setEngineKey(e.key) }} aria-label={`Open ${e.name}`}>
             <Sliders size={11} aria-hidden /> Details
-          </button>
+          </Button>
         </span>
       )
     }
@@ -625,14 +625,14 @@ export function AutomationsClient() {
         {conf && (
           <span className="h10-au-badge conf" title={conf.join(' · ')}><AlertTriangle size={10} aria-hidden /> conflict</span>
         )}
-        <button
-          type="button"
+        <Button
+          size="xs"
           className="h10-au-open"
           onClick={(e) => { e.stopPropagation(); setDetailId(r.id) }}
           aria-label={`Open ${r.name}`}
         >
           <Sliders size={11} aria-hidden /> Details
-        </button>
+        </Button>
       </span>
     )
   }

@@ -61,7 +61,7 @@
  * dailyBudget writers (BSP.6).
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Toggle } from '@/design-system/primitives'
+import { Button, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { useRouter } from 'next/navigation'
 import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
@@ -382,7 +382,7 @@ export function SchedulesSection({ market }: { market?: string }) {
           ? `No budget schedules reach ${scope} — ${total} exist${total === 1 ? 's' : ''} on other markets`
           : 'No budget schedules yet'}
         toolbarRight={<>
-          <button type="button" className="h10-sb-eye" aria-label={chartOpen ? 'Hide hourly chart' : 'Show hourly chart'} aria-pressed={chartOpen} onClick={() => setChartOpen((v) => !v)}>{chartOpen ? <Eye size={17} /> : <EyeOff size={17} />}</button>
+          <ToolbarButton icon={chartOpen ? <Eye size={17} /> : <EyeOff size={17} />} label={chartOpen ? 'Hide hourly chart' : 'Show hourly chart'} active={chartOpen} tooltip={false} onClick={() => setChartOpen((v) => !v)} />
           {/* 🔴 The fix for :120 — the noun on this page is Schedule. */}
      <Button variant="primary" onClick={newSchedule}><Plus size={13} /> Schedule</Button>
         </>}

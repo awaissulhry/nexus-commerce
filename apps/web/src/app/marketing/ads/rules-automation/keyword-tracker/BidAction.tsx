@@ -54,7 +54,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
-import { Checkbox, Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 
 interface PreviewResponse {
   term: string
@@ -384,9 +384,9 @@ export function BidAction({
                   <button type="button" className="yes" onClick={() => void apply()} disabled={loading}>
                     {loading ? 'Writing…' : 'Yes, write it'}
                   </button>
-                  <button type="button" className="no" onClick={() => setApplyConfirm(false)}>
+                  <Button size="xs" onClick={() => setApplyConfirm(false)}>
                     <X size={12} /> Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -419,9 +419,9 @@ export function BidAction({
                 <button type="button" className="yes" onClick={() => void propose()} disabled={loading}>
                   {loading ? 'Raising…' : 'Yes, raise the proposal'}
                 </button>
-                <button type="button" className="no" onClick={() => setConfirming(false)}>
+                <Button size="xs" onClick={() => setConfirming(false)}>
                   <X size={12} /> Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}

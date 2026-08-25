@@ -33,7 +33,7 @@
  * release — never a stale-constant column ([[reference_fleet_stale_constant_class]]).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Toggle } from '@/design-system/primitives'
+import { Button, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Plus, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
@@ -347,13 +347,13 @@ export function HvAdGroupView() {
                     title={x.paused ? 'Paused — this ad group neither feeds this rule nor receives from it. Click to resume.' : 'Active — click to pause just this pathway; the rule and its other ad groups keep running.'}
                     onClick={() => { if (!busy(x.id)) setPathwayPaused(x.id, r, !x.paused) }}
                   />
-                  <button
-                    type="button"
-                    className="h10-hv-detach"
-                    aria-label={`Detach ${x.name} from ${r.adGroup}`}
-                    title={`Detach “${x.name}” from this ad group — the rule keeps running on its other mappings. Re-assigning is one click.`}
+                  <ToolbarButton
+                    tone="danger" size="sm"
+                    icon={<X size={11} aria-hidden />}
+                    label={`Detach ${x.name} from ${r.adGroup}`}
+                    description={`The rule keeps running on its other mappings. Re-assigning is one click.`}
                     onClick={() => { if (!busy(x.id)) detachRule(x.id, r) }}
-                  ><X size={11} aria-hidden /></button>
+                  />
                 </span>
               ))}
               {assignSelect}

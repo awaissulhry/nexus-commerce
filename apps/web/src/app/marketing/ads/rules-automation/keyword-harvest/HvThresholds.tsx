@@ -44,6 +44,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@/design-system/primitives'
 import { AlertTriangle, Check, Info, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps, HarvestCriteria, HvPolicyGrain } from './slot-contract'
@@ -156,11 +157,11 @@ export function HvThresholds({ criteria, attrition, census, scope, push, reload,
         </Field>
 
         {criteria.overridden.length > 0 && (
-          <button
-            type="button" className="h10-hv-clear"
+          <Button
+            size="xs" className="h10-hv-clear"
             onClick={() => push({ minOrders: '', minClicks: '', maxAcos: '', window: '', matched: '' })}
             title="Go back to the criteria this scope's policy supplies"
-          ><RotateCcw size={12} /> Reset to policy</button>
+          ><RotateCcw size={12} /> Reset to policy</Button>
         )}
       </div>
 

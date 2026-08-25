@@ -520,8 +520,7 @@
 .h10-sb-listchart .bd { padding: 8px 18px 18px; }
 .h10-sb-listchart .controls { display: flex; align-items: center; margin-bottom: 14px; }
 .h10-sb-listchart .controls .grow { flex: 1; }
-.h10-sb-eye { border: 0; background: none; color: var(--nds-grey-500); cursor: pointer; padding: 6px; border-radius: var(--nds-radius-md); display: inline-flex; align-items: center; }
-.h10-sb-eye:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); }
+/* DS-ALIGN — `ToolbarButton`; `active` carries the pressed state its `aria-pressed` used to. */
 
 /* SK1 — SOV / Keyword Tracker [Rules | Report] segmented toggle */
 .h10-svt { display: flex; flex-direction: column; }
@@ -1246,7 +1245,9 @@
 .h10-au-badge.ready { background: #e7f5ed; color: var(--nds-success-text); }
 .h10-au-badge.conf { background: #fdeaea; color: #a02c2c; }
 /* Appears on row hover; always focusable so the drawer is reachable from the keyboard. */
-.h10-au-open { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 7px; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-sm); background: var(--nds-white); font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; opacity: 0; transition: opacity .12s; }
+/* DS-ALIGN — the DS `Button` at `xs`. What is left is the reveal-on-row-hover, which belongs
+   to the GRID, not the button. */
+.h10-au-open { flex-shrink: 0; margin-left: auto; opacity: 0; transition: opacity .12s; }
 tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-open:hover { border-color: var(--nds-blue-600); color: var(--nds-blue-600); }
 
@@ -2997,8 +2998,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    nothing and paints nothing. The whole family lives here now, beside the section that still uses
    it, so the next deletion cannot split it in two. */
 .h10-hv-lbl { align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-muted); }
-.h10-hv-clear { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
-.h10-hv-clear:hover { background: var(--nds-blue-100); color: var(--nds-grey-900); }
+/* DS-ALIGN — the DS `Button` at `xs`; only its place in the row is ours. */
+.h10-hv-clear { align-self: center; }
 .h10-hv-field { display: flex; flex-direction: column; gap: 4px; }
 .h10-hv-field .cap { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: var(--nds-text-muted); }
 .h10-hv-field.over .cap { color: var(--nds-info-text); }
@@ -4044,7 +4045,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt6-cbtns { display: flex; gap: 7px; }
 .h10-kt6-cbtns .yes { padding: 7px 12px; font-size: 11.5px; font-weight: 800; color: var(--nds-white); background: #b45309; border: 1px solid #b45309; border-radius: 5px; cursor: pointer; }
 .h10-kt6-cbtns .yes:disabled { opacity: .6; cursor: not-allowed; }
-.h10-kt6-cbtns .no { display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); background: var(--nds-white); border: 1px solid #d8e2ef; border-radius: 5px; cursor: pointer; }
+/* DS-ALIGN — the decline half of each confirm is the DS `Button` at `xs`. The COMMIT half is
+   not: its #b45309 amber fill is a deliberate caution and the DS `warning` variant is a TINT. */
 .h10-kt6-foot { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: var(--nds-grey-600); }
 
 /* ── KT.7 · the apply step and the scoped change log ─────────────────────────────────────────────
@@ -4457,8 +4459,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-limittbl td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--nds-grey-100); color: var(--nds-grey-900); }
 .h10-au-limittbl tr.off td { color: var(--nds-grey-450); }
 .h10-au-limittbl td i { font-style: normal; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
-.h10-au-limitdel { appearance: none; border: none; background: none; color: var(--nds-grey-450); cursor: pointer; padding: 4px; border-radius: var(--nds-radius-sm); display: inline-flex; }
-.h10-au-limitdel:hover { color: #b42318; background: #fef3f2; }
+/* DS-ALIGN — `ToolbarButton tone="danger"`, whose red hover is the cue. */
 .h10-au-limitadd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 /* DS-ALIGN — the daily cap is the DS `Input`; € and /day are its `prefix` and `suffix`, which
    is what those slots exist for. */
@@ -5099,8 +5100,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-hv-pathway .nds-toggle.sm { width: 26px; height: 15px; flex-shrink: 0; }
 .h10-hv-pathway .nds-toggle.sm::after { width: 11px; height: 11px; top: 2px; left: 2px; }
 .h10-hv-pathway .nds-toggle.sm.on::after { transform: translateX(11px); }
-.h10-hv-detach { border: 0; background: none; color: var(--nds-grey-450); cursor: pointer; display: inline-flex; padding: 2px; border-radius: 5px; }
-.h10-hv-detach:hover { color: var(--nds-red-500); background: #fdecec; }
+
 .h10-hv-mt { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: var(--nds-radius-sm); font-size: 11px; font-weight: 800; letter-spacing: .01em; background: var(--nds-blue-100); color: var(--nds-info-text); }
 .h10-hv-mt.neg { background: #fdeceb; color: #a2231d; }
 

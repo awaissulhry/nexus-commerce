@@ -24,7 +24,7 @@
  * an existing bid in. That last fact is the panel's warning, not its secret.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Input } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { AlertTriangle, Check, Ruler, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -155,7 +155,7 @@ export function BidBounds({ options, campaigns, reload }: BidSlotProps) {
                 <td>{GRAIN_WORD[p.grain]}</td>
                 <td>{p.minBidCents != null ? eur(p.minBidCents) : '—'}</td>
                 <td>{p.maxBidCents != null ? eur(p.maxBidCents) : '—'}</td>
-                <td><button type="button" className="h10-au-limitdel" disabled={busy} onClick={() => void removePolicy(p)} aria-label={`Delete the bound for ${p.label}`}><Trash2 size={13} aria-hidden /></button></td>
+                <td><ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} aria-hidden />} label={`Delete the bound for ${p.label}`} tooltip={false} disabled={busy} onClick={() => void removePolicy(p)} /></td>
               </tr>
             ))}
           </tbody>
