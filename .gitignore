@@ -78,3 +78,9 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 .design-sync/ds-pkg/dist/
+
+# design-sync emits a declaration tree beside the DS source (ds-pkg/build.mjs step 1, so the
+# converter can read each component's API). They are BUILD OUTPUT sitting in a source directory:
+# 78 of them, regenerated every sync, and a stale one next to its .tsx invites the reader to trust
+# the wrong file. TypeScript resolves .ts/.tsx first so they do not shadow anything at build time.
+apps/web/src/design-system/**/*.d.ts
