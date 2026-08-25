@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea, TokenChip } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import './sb-sd.css'
@@ -413,9 +413,9 @@ export function SbSdBuilder() {
                   const on = picked.some((x) => x.id === p.id)
                   return (
                     <li key={p.id}>
-                      <button type="button" className={on ? 'on' : ''} onClick={() => setPicked((cur) => on ? cur.filter((x) => x.id !== p.id) : [...cur, p])}>
+                      <Button variant="quiet" block className={on ? 'on' : undefined} onClick={() => setPicked((cur) => on ? cur.filter((x) => x.id !== p.id) : [...cur, p])}>
                         <b>{p.name}</b><span>{p.sku} · {p.asin}</span><i>{on ? 'Remove' : 'Add'}</i>
-                      </button>
+                      </Button>
                     </li>
                   )
                 })}
@@ -429,10 +429,9 @@ export function SbSdBuilder() {
             {picked.length > 0 && (
               <div className="h10-sbsd-chips">
                 {picked.map((p) => (
-                  <span key={p.id} className="chip">
+                  <TokenChip key={p.id} onRemove={() => setPicked((cur) => cur.filter((x) => x.id !== p.id))} removeLabel={`Remove ${p.asin}`}>
                     {p.asin}
-                    <button type="button" onClick={() => setPicked((cur) => cur.filter((x) => x.id !== p.id))} aria-label={`Remove ${p.asin}`}>×</button>
-                  </span>
+                  </TokenChip>
                 ))}
               </div>
             )}

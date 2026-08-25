@@ -103,3 +103,27 @@
 .h10-spw-cset-row .ag .spw-agb .spw-agbfield { width: 100%; }
 .h10-spw-cset-row .ag .spw-agb .sub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--nds-grey-600); margin-top: 7px; }
 .h10-spw-cset-row .ag .spw-agb .sub svg { color: var(--nds-grey-500); flex-shrink: 0; }
+
+/* ── replicate: the fields ─────────────────────────────────────────────────
+   `.h10-rep-search input`, `.h10-rep-reps .row input` and `.h10-rep-scope .item`
+   are ads.css descendant rules; each container is renamed so the DS field, card
+   and leading icon are what actually paint. The search icon rises off #9aa4b1
+   (2.51:1 — under the 3:1 non-text floor) to the DS's own --nds-text-3. */
+.rep-search { flex: 1; min-width: 0; }
+.rep-search .ad.suf { background: none; border-left: 0; padding: 0 6px 0 0; }
+.rep-repsrow { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.rep-repsfield { flex: 1; }
+.rep-repsrow .arr { color: var(--nds-text-3); flex: none; }
+/* The inline money cell (`.h10-rep .inl`) is `Input size="xs" prefix="€"` — the DS's own
+   money field. Only the 54px right-aligned number box is still this table's. */
+.rep-inlfield > input { width: 54px; text-align: right; }
+/* Two "where is this" links in the target table. Both were plain text buttons; `.whrline`
+   was #9aa4b1 — 2.51:1 — and `.whrbtn` grey-600 (5.86:1). The DS link is 6.12:1, so both
+   rise. `inline` keeps them inside the cell's line box. */
+.h10-rep-tbl .rep-whrline { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.h10-rep-tbl .rep-whrbtn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+/* "Accept this conflict" is the DS button outright. Its amber hairline is NOT restated:
+   the note-warn trio has bg/fg/icon and no border token, and #e0d4a8 is exactly the kind
+   of one-off literal this alignment is removing. Filed. The line it sits on is amber
+   already, so the cue is not lost. */
+.h10-rep-tbl .rep-mini { flex: none; }

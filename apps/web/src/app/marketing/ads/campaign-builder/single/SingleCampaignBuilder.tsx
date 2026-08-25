@@ -262,11 +262,11 @@ export function SingleCampaignBuilder() {
       <div className="h10-spw-body">
         {step === 1 && (
           <div className="h10-spw-s1">
-            <aside className="h10-spw-subnav" aria-label="Campaign Setup sections">
+            <aside className="cb-subnav" aria-label="Campaign Setup sections">
               {S1_SECTIONS.map((s) => (
-                <button key={s.id} type="button" className={activeSec === s.id ? 'on' : ''} onClick={() => gotoSec(s.id)}>
+                <Button key={s.id} variant={activeSec === s.id ? 'tonal' : 'quiet'} block onClick={() => gotoSec(s.id)}>
                   {s.label}
-                </button>
+                </Button>
               ))}
             </aside>
             <div className="h10-spw-s1main">

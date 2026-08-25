@@ -14,6 +14,7 @@
 import { type Dispatch, type SetStateAction, Fragment, useEffect, useState } from 'react'
 import { Info, Plus, X } from 'lucide-react'
 import { Button, Checkbox, Input, Textarea, TokenChip, ToolbarButton } from '@/design-system/primitives'
+import '../builder-ds.css'
 import '@/design-system/styles/tokens.css'
 import { Listbox } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'

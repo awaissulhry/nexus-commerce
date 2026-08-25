@@ -27,7 +27,8 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, Layers, Trash2, RotateCcw,
   Search, SlidersHorizontal, Check, X,
 } from 'lucide-react'
-import { Button, FilterChip, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
+import { Button, FilterChip, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
+import '../builder-ds.css'
 import { DataGrid } from '@/design-system/components'
 import { InfoTip } from '../../campaigns/InfoTip'
 import {
@@ -282,11 +283,15 @@ export function ReviewStep({
                 { value: 'flat', label: <>All targets <span className="n">{view.targets.length}</span></>, title: 'Every target in the whole plan in one table, ignoring the structure — the only way to see all of something (all the conflicts, all the negatives) at once.' },
               ]}
             />
-            <div className="h10-rep-search">
-              <Search size={15} aria-hidden />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a keyword, ad group or campaign" aria-label="Filter the plan" />
-              {q && <ToolbarButton size="sm" tooltip={false} icon={<X size={13} />} label="Clear search" title="Clear the search" style={{ position: 'absolute', right: 8 }} onClick={() => setQ('')} />}
-            </div>
+            <Input
+              fieldClassName="rep-search"
+              leadingIcon={<Search size={15} />}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Find a keyword, ad group or campaign"
+              aria-label="Filter the plan"
+              suffix={q ? <ToolbarButton size="sm" tooltip={false} icon={<X size={13} />} label="Clear search" title="Clear the search" onClick={() => setQ('')} /> : undefined}
+            />
             <InfoTip tip="Everything you have changed from the source structure, each item individually reversible. Nothing here has reached Amazon.">
               <Button variant={changes.length ? 'tonal' : 'secondary'} size="sm" className="rep-chg" onClick={() => setChangesOpen(true)}>
                 <SlidersHorizontal size={13} aria-hidden /> {countEdits(edits) || 'No'} change{countEdits(edits) === 1 ? '' : 's'}
@@ -544,11 +549,11 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
             key: 'budget', label: 'Daily budget', align: 'right', width: 120,
             total: <b>€{total.toFixed(2)}/day</b>,
             render: (c) => (
-              <label className="inl">
-                <span>€</span>
-                <input inputMode="decimal" value={String(c.dailyBudget)} aria-label={`Daily budget for ${c.name}`}
-                  onChange={(e) => onBudget(c.id, Number(e.target.value) || 0)} />
-              </label>
+              <Input
+                size="xs" prefix="€" fieldClassName="rep-inlfield"
+                inputMode="decimal" value={String(c.dailyBudget)} aria-label={`Daily budget for ${c.name}`}
+                onChange={(e) => onBudget(c.id, Number(e.target.value) || 0)}
+              />
             ),
           },
           {

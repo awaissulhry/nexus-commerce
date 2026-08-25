@@ -21,6 +21,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Info, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Button, SegmentedControl } from '@/design-system/primitives'
+import '../builder-ds.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'

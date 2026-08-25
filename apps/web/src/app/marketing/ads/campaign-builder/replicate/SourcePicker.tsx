@@ -19,7 +19,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Search, Layers, Loader2 } from 'lucide-react'
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, ToolbarButton } from '@/design-system/primitives'
+import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import '../builder-ds.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
@@ -212,10 +213,14 @@ export function SourcePicker({ market, selected, setSelected, onChange, onPickBl
   return (
     <div className="h10-rep-src">
       <div className="h10-rep-src-top">
-        <div className="h10-rep-search">
-          <Search size={15} aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by campaign or portfolio name" aria-label="Filter sources" />
-        </div>
+        <Input
+          fieldClassName="rep-search"
+          leadingIcon={<Search size={15} />}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter by campaign or portfolio name"
+          aria-label="Filter sources"
+        />
         {selected.size > 0 && (
           <Button variant="link" size="sm" onClick={() => setSelected(new Set())}>Clear selection</Button>
         )}

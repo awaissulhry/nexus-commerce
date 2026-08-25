@@ -15,7 +15,8 @@
  */
 import { useState } from 'react'
 import { AlertTriangle, Trash2, RotateCcw, Check, Pencil } from 'lucide-react'
-import { Input, Select, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'
+import '../builder-ds.css'
 import { DataGrid } from '@/design-system/components'
 import { InfoTip } from '../../campaigns/InfoTip'
 import type { TargetView } from './edit-model'
@@ -101,9 +102,9 @@ export function TargetTable({
               {r.added && <span className="tag new">added</span>}
               {r.touched && !r.added && <span className="tag edited">edited</span>}
               {showWhere && (
-                <button type="button" className="whrline" onClick={() => onGoTo?.(r)} title="Show this ad group">
+                <Button variant="link" inline className="rep-whrline" onClick={() => onGoTo?.(r)} title="Show this ad group">
                   {r.campaignName} › {r.adGroupName}
-                </button>
+                </Button>
               )}
             </span>
           ),
@@ -134,23 +135,24 @@ export function TargetTable({
           render: (r) => (r.isNegative ? (
             <InfoTip tip="A negative keyword has no bid — it excludes traffic rather than buying it."><span className="dash">—</span></InfoTip>
           ) : (
-            <label className="inl" title={r.bidCents == null ? `Inherited from the ad group's default bid. Type a number to give "${r.expression}" its own.` : `This target's own bid, overriding the ad group default.`}>
-              <span>€</span>
-              <input inputMode="decimal" defaultValue={eur(r.effectiveBidCents)} key={`${r.id}:${r.effectiveBidCents}`}
-                aria-label={`Bid for ${r.expression}`}
-                onBlur={(e) => {
-                  const cents = Math.round((Number(e.target.value) || 0) * 100)
-                  if (cents !== r.effectiveBidCents) onBid(r, cents)
-                }} />
-            </label>
+            <Input
+              size="xs" prefix="€" fieldClassName="rep-inlfield"
+              title={r.bidCents == null ? `Inherited from the ad group's default bid. Type a number to give "${r.expression}" its own.` : `This target's own bid, overriding the ad group default.`}
+              inputMode="decimal" defaultValue={eur(r.effectiveBidCents)} key={`${r.id}:${r.effectiveBidCents}`}
+              aria-label={`Bid for ${r.expression}`}
+              onBlur={(e) => {
+                const cents = Math.round((Number(e.target.value) || 0) * 100)
+                if (cents !== r.effectiveBidCents) onBid(r, cents)
+              }}
+            />
           )),
         },
         ...(showWhere ? [{
           key: 'where', label: 'Where', sortable: true, sortValue: (r: TargetView) => `${r.campaignName}${r.adGroupName}`, width: 132,
           render: (r: TargetView) => (
-            <button type="button" className="whrbtn" title={`Show ${r.adGroupName} in the structure view`} onClick={() => onGoTo?.(r)}>
+            <Button variant="link" inline className="rep-whrbtn" title={`Show ${r.adGroupName} in the structure view`} onClick={() => onGoTo?.(r)}>
               {r.campaignName.replace(/^[A-Z]{2}-/, '')}
-            </button>
+            </Button>
           ),
         }] : []),
         {
@@ -174,7 +176,7 @@ export function TargetTable({
                     )
                     : (
                       <InfoTip tip={`Create "${r.expression}" anyway, knowing it bids against ${r.conflict.map((c) => c.campaignName).join(', ')}. You raise your own clearing price and split one pool of demand between two of your products — sometimes worth it, never accidental. Applies to every ad group carrying this keyword.`}>
-                        <button type="button" className="mini" onClick={() => onConflict(r, 'accept')}>Accept</button>
+                        <Button size="xs" className="rep-mini" onClick={() => onConflict(r, 'accept')}>Accept</Button>
                       </InfoTip>
                     )}
                 </span>

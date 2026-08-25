@@ -10,6 +10,8 @@
  * fixed, so it says that too.
  */
 import { AlertTriangle } from 'lucide-react'
+import { CheckboxCard } from '@/design-system/primitives'
+import '../builder-ds.css'
 import { COPY_ITEMS, type CopyScope } from './replicate-types'
 
 export function CopyScopePanel({ scope, setScope }: { scope: CopyScope; setScope: (s: CopyScope) => void }) {
@@ -18,18 +20,16 @@ export function CopyScopePanel({ scope, setScope }: { scope: CopyScope; setScope
     <div className="h10-spw-card h10-rep-scope">
       <div className="grid">
         {COPY_ITEMS.map((i) => (
-          <label className={`item ${scope[i.key] ? 'on' : ''}`} key={i.key}>
-            <input
-              type="checkbox"
-              checked={scope[i.key]}
-              onChange={() => setScope({ ...scope, [i.key]: !scope[i.key] })}
-              aria-label={i.label}
-            />
-            <span className="t">
-              <b>{i.label}</b>
-              <span className="h">{i.hint}</span>
-            </span>
-          </label>
+          <CheckboxCard
+            key={i.key}
+            variant="row"
+            selected={scope[i.key]}
+            checked={scope[i.key]}
+            onChange={() => setScope({ ...scope, [i.key]: !scope[i.key] })}
+            aria-label={i.label}
+            title={i.label}
+            description={i.hint}
+          />
         ))}
       </div>
       {!scope.negatives && (

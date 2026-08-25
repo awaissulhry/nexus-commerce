@@ -87,10 +87,10 @@ export function NamingPanel({
       <div className="h10-rep-reps">
         <span className="lbl">Find and replace</span>
         {naming.replacements.map((r, i) => (
-          <div className="row" key={i}>
-            <input value={r.from} onChange={(e) => setRep(i, { from: e.target.value })} placeholder="find" aria-label={`Find text ${i + 1}`} />
+          <div className="rep-repsrow" key={i}>
+            <Input fieldClassName="rep-repsfield" value={r.from} onChange={(e) => setRep(i, { from: e.target.value })} placeholder="find" aria-label={`Find text ${i + 1}`} />
             <span className="arr" aria-hidden>→</span>
-            <input value={r.to} onChange={(e) => setRep(i, { to: e.target.value })} placeholder="replace with" aria-label={`Replace with ${i + 1}`} />
+            <Input fieldClassName="rep-repsfield" value={r.to} onChange={(e) => setRep(i, { to: e.target.value })} placeholder="replace with" aria-label={`Replace with ${i + 1}`} />
             <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<Trash2 size={13} />} label={`Remove replacement ${i + 1}`} onClick={() => setNaming({ ...naming, replacements: naming.replacements.filter((_, j) => j !== i) })} />
           </div>
         ))}

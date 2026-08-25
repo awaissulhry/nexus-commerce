@@ -10,6 +10,7 @@
 import { type Dispatch, type SetStateAction, Fragment } from 'react'
 import { Atom } from 'lucide-react'
 import { Button, Toggle } from '@/design-system/primitives'
+import '../builder-ds.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import { CustomScheme, type CustomKeywordType, type TargetingKind } from './CustomScheme'
