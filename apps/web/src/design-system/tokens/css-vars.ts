@@ -216,6 +216,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-info-text', value: '#10457f' },
 
   // status pills
+  // FilterChip engaged. Component-level (tier 3) because the ENGAGED state of a filter is not a
+  // tone — it is not success, and naming it so would put a green-shaped word on a blue thing.
+  // blue-900 on blue-50 measures 7.41:1. NOT blue-600, which is 4.36:1 and what `.hl-fchip.on`
+  // shipped: under AA.
+  { section: 'FilterChip', name: '--nds-fchip-on-bg', value: 'var(--nds-blue-50)' },
+  { name: '--nds-fchip-on-border', value: 'var(--nds-blue-200)' },
+  { name: '--nds-fchip-on-fg', value: 'var(--nds-blue-900)' },
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
   { name: '--nds-pill-success-bg', value: pill.ok.bg },
   { name: '--nds-pill-warning-fg', value: 'var(--nds-amber-text)' },

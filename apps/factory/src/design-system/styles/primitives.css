@@ -812,16 +812,16 @@
 }
 /* blue-900 on blue-50 — 7.41:1. NOT blue-600, which is 4.36:1 and under AA. */
 .nds-fchip[aria-pressed='true'] {
-  background: var(--nds-blue-50);
-  border-color: var(--nds-blue-200);
-  color: var(--nds-blue-900);
+  background: var(--nds-fchip-on-bg);
+  border-color: var(--nds-fchip-on-border);
+  color: var(--nds-fchip-on-fg);
 }
 .nds-fchip .c {
   color: var(--nds-text-muted);
   font-variant-numeric: tabular-nums;
 }
 .nds-fchip[aria-pressed='true'] .c {
-  color: var(--nds-blue-900);
+  color: var(--nds-fchip-on-fg);
 }
 .nds-fchip .b {
   padding: 1px 6px;
