@@ -835,3 +835,48 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* Four more variants, each filed by a session with the contrast measured and each RAISING it.
+   All use semantic tone tokens — see Button.tsx for the numbers. */
+.nds-btn.success {
+  background: var(--nds-success-strong);
+  border-color: var(--nds-success-strong);
+  color: var(--nds-text-inverse);
+}
+.nds-btn.success:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+.nds-btn.warning {
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning-border);
+  color: var(--nds-warning-text);
+}
+.nds-btn.warning:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+/* Tonal — the tier-2 tinted treatment, shared with FilterChip's engaged state. */
+.nds-btn.tonal {
+  background: var(--nds-tonal-bg);
+  border-color: var(--nds-tonal-border);
+  color: var(--nds-tonal-fg);
+}
+.nds-btn.tonal:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+/* NOT `danger`: an opaque red fill is a different statement. This is the "Stop everything"
+   button, which must read as serious without reading as the destructive one. */
+.nds-btn.danger-outline {
+  background: var(--nds-surface);
+  border-color: var(--nds-danger-text);
+  color: var(--nds-danger-text);
+}
+.nds-btn.danger-outline:hover:not(:disabled) {
+  background: var(--nds-danger-soft);
+}
+
+/* lg — a wizard's footer CTA. One step up from md (13px / 7px 13px). */
+.nds-btn.lg {
+  font-size: 14px;
+  padding: 9px 18px;
+  gap: 8px;
+}

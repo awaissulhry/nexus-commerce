@@ -129,9 +129,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
 
   // status pills
   // FilterChip engaged — mirrors apps/web. blue-900 on blue-50 = 7.41:1.
+  // Tonal — tier 2, shared by FilterChip's engaged state and Button's tonal variant.
+  { section: 'Tonal', name: '--nds-tonal-bg', value: 'var(--nds-blue-50)' },
+  { name: '--nds-tonal-border', value: 'var(--nds-blue-200)' },
+  { name: '--nds-tonal-fg', value: 'var(--nds-blue-900)' },
   { section: 'FilterChip', name: '--nds-fchip-on-bg', value: 'var(--nds-blue-50)' },
-  { name: '--nds-fchip-on-border', value: 'var(--nds-blue-200)' },
-  { name: '--nds-fchip-on-fg', value: 'var(--nds-blue-900)' },
+  { name: '--nds-fchip-on-border', value: 'var(--nds-tonal-border)' },
+  { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
   { name: '--nds-pill-success-bg', value: pill.ok.bg },
   { name: '--nds-pill-warning-fg', value: 'var(--nds-amber-text)' },

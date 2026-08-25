@@ -1,15 +1,34 @@
-import { forwardRef } from 'react'
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { cloneElement, forwardRef, isValidElement } from 'react'
+import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link' | 'quiet'
-export type ButtonSize = 'md' | 'sm' | 'xs'
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'danger'
+  | 'link'
+  | 'quiet'
+  | 'success'
+  | 'warning'
+  | 'tonal'
+  | 'danger-outline'
+export type ButtonSize = 'lg' | 'md' | 'sm' | 'xs'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** `secondary` (white + border) is the base look; `primary` = blue fill; `ghost` = blue outline;
    *  `danger` = red fill for irreversible/live-write actions (call sites were hand-rolling
    *  `!bg-red-600` overrides, which drifted apart and beat every token);
    *  `quiet` = TEXT-coloured and borderless until hover, which then reveals the border and fill.
-   *  For an inline value-edit trigger, where `link`'s blue reads as navigation. */
+   *  For an inline value-edit trigger, where `link`'s blue reads as navigation.
+   *
+   *  Four more, each filed by a session with the contrast already measured, and each RAISING it:
+   *    `success`        green fill, white text — 5.02:1 (`.acr-btn.go` was 4.96)
+   *    `warning`        amber tint — 5.69:1 (`.bp-btn.warn` was 5.66)
+   *    `tonal`          blue tint, dark blue text — 7.41:1 (`.acr-gg-reset` was 6.62)
+   *    `danger-outline` white fill, red text and border — 7.36:1 (`.acr-btn.stop` was 6.06)
+   *
+   *  `danger-outline` is NOT `danger`: an opaque red fill is a different statement, and the
+   *  button it replaces is a "Stop everything" that must not read as the destructive one. */
   variant?: ButtonVariant
   size?: ButtonSize
   /**
@@ -34,6 +53,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    */
   block?: boolean
   /**
+   * Render the single child element instead of a `<button>`, giving it this Button's classes.
+   *
+   * For a control that must be a link — `<Button asChild><Link href="…">Refresh</Link></Button>`.
+   * Two surfaces had a `Link` and a `<button>` side by side in one row and could only convert
+   * half the row, which left the pair visibly mismatched.
+   */
+  asChild?: boolean
+  /**
    * Engaged/selected — the primary fill, matching the ads console's `.on`.
    *
    * Visual ONLY. It does not emit aria, because the correct attribute depends on what the button
@@ -57,12 +84,19 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', type = 'button', active, inline, block, className, children, ...rest },
+  { variant = 'secondary', size = 'md', type = 'button', active, inline, block, asChild, className, children, ...rest },
   ref,
 ) {
   const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', block ? 'block' : '', inline ? 'inline' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
+  if (asChild && isValidElement(children)) {
+    const child = children as ReactElement<{ className?: string }>
+    return cloneElement(child, {
+      className: [cls, child.props.className].filter(Boolean).join(' '),
+      ...rest,
+    })
+  }
   return (
     <button ref={ref} type={type} className={cls} {...rest}>
       {children}

@@ -109,6 +109,7 @@
   --nds-text-muted: #667080;
   --nds-success-text: #14724d;
   --nds-warning-text: #8a5316;
+  --nds-warning-border: #f0d9a8;
   --nds-stale-text: #6d3f10;
   --nds-note-error-bg: #fdf0ef;
   --nds-note-error-fg: #7a2018;
@@ -119,10 +120,13 @@
   --nds-danger-text: #9c2f2a;
   --nds-info-text: #10457f;
 
-  /* ── FilterChip ── */
-  --nds-fchip-on-bg: var(--nds-blue-50);
-  --nds-fchip-on-border: var(--nds-blue-200);
-  --nds-fchip-on-fg: var(--nds-blue-900);
+  /* ── Tonal ── */
+  --nds-tonal-bg: var(--nds-blue-50);
+  --nds-tonal-border: var(--nds-blue-200);
+  --nds-tonal-fg: var(--nds-blue-900);
+  --nds-fchip-on-bg: var(--nds-tonal-bg);
+  --nds-fchip-on-border: var(--nds-tonal-border);
+  --nds-fchip-on-fg: var(--nds-tonal-fg);
 
   /* ── status pills (tone-named: success/warning/neutral/danger) ── */
   --nds-pill-success-fg: var(--nds-blue-900);

@@ -199,6 +199,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-text-muted', value: '#667080' },
   { name: '--nds-success-text', value: '#14724d' },
   { name: '--nds-warning-text', value: '#8a5316' },
+  // The tone palettes ship soft/text/strong but no BORDER step, so a tinted warning control had
+  // nowhere to land — this is `.bp-btn.warn`'s measured #f0d9a8, tokenised. A tint's hairline is
+  // decorative, so the number does not move; the TEXT is what rose (5.66 -> 5.69).
+  { name: '--nds-warning-border', value: '#f0d9a8' },
   // "Stale" had FIVE browns across the ads console — #8a5316, #6d3f10, #7a4512, #7a5b00 and a
   // red — for one meaning. This is the darkest measured value, so adopting it everywhere only
   // ever RAISES contrast: 5.89 → 8.27 on the stale badge, 7.29 → 8.27 on the feed banner.
@@ -216,13 +220,20 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-info-text', value: '#10457f' },
 
   // status pills
-  // FilterChip engaged. Component-level (tier 3) because the ENGAGED state of a filter is not a
-  // tone — it is not success, and naming it so would put a green-shaped word on a blue thing.
+  // TONAL — a tinted fill with a tinted border and dark tinted text. Tier 2, because two
+  // different components want exactly this treatment: a FilterChip's engaged state and a Button
+  // that is neither primary nor plain (`.acr-gg-reset`). Naming it by tone would be wrong — it is
+  // not "success", it is "selected/secondary emphasis" — so it is named for what it looks like.
   // blue-900 on blue-50 measures 7.41:1. NOT blue-600, which is 4.36:1 and what `.hl-fchip.on`
   // shipped: under AA.
-  { section: 'FilterChip', name: '--nds-fchip-on-bg', value: 'var(--nds-blue-50)' },
-  { name: '--nds-fchip-on-border', value: 'var(--nds-blue-200)' },
-  { name: '--nds-fchip-on-fg', value: 'var(--nds-blue-900)' },
+  { section: 'Tonal', name: '--nds-tonal-bg', value: 'var(--nds-blue-50)' },
+  { name: '--nds-tonal-border', value: 'var(--nds-blue-200)' },
+  { name: '--nds-tonal-fg', value: 'var(--nds-blue-900)' },
+  // FilterChip's engaged state IS the tonal treatment; kept as its own names so the chip can
+  // diverge later without touching every tonal surface.
+  { name: '--nds-fchip-on-bg', value: 'var(--nds-tonal-bg)' },
+  { name: '--nds-fchip-on-border', value: 'var(--nds-tonal-border)' },
+  { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
   { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
   { name: '--nds-pill-success-bg', value: pill.ok.bg },
   { name: '--nds-pill-warning-fg', value: 'var(--nds-amber-text)' },
