@@ -20,7 +20,7 @@
   margin: 0;
   padding: 8px 12px 8px 28px;
   border: 1px solid rgb(var(--border-subtle));
-  border-radius: 6px;
+  border-radius: var(--nds-radius-sm);
   background: rgb(var(--surface-sunken));
   color: rgb(var(--text-secondary));
   font-size: 11px;
@@ -29,7 +29,7 @@
 
 .h10-vt-receipt-body {
   border: 1px solid rgb(var(--border-subtle));
-  border-radius: 6px;
+  border-radius: var(--nds-radius-sm);
   background: rgb(var(--surface-card));
   overflow: hidden;
 }

@@ -5,8 +5,8 @@
 
 /* status dropdown must never sit in row flow (row-height bug fix) */
 .eb-statusrel { position: relative; display: inline-flex; align-items: center; gap: 4px; }
-.eb-statusfix { position: absolute; top: calc(100% + 4px); left: 0; z-index: 70; display: flex; flex-direction: column; min-width: 120px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 8px; box-shadow: 0 10px 28px rgba(20, 28, 38, 0.16); padding: 4px; }
-.eb-statusfix button { border: none; background: none; text-align: left; font-size: 12.5px; color: var(--nds-grey-900); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.eb-statusfix { position: absolute; top: calc(100% + 4px); left: 0; z-index: 70; display: flex; flex-direction: column; min-width: 120px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); box-shadow: 0 10px 28px rgba(20, 28, 38, 0.16); padding: 4px; }
+.eb-statusfix button { border: none; background: none; text-align: left; font-size: 12.5px; color: var(--nds-grey-900); padding: 6px 10px; border-radius: var(--nds-radius-sm); cursor: pointer; }
 .eb-statusfix button:hover { background: var(--nds-blue-50); color: var(--nds-blue-600); }
 
 /* forms inside h10 modals */
@@ -14,19 +14,19 @@
 .eb-form label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #667085; margin-bottom: 4px; }
 .eb-form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 
-.eb-textarea { width: 100%; background: var(--nds-white); color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-family: inherit; resize: vertical; }
+.eb-textarea { width: 100%; background: var(--nds-white); color: var(--nds-grey-900); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 8px 10px; font-size: 12.5px; font-family: inherit; resize: vertical; }
 .eb-textarea:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
 
 /* per-item write results */
 .eb-results { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
-.eb-results li { font-size: 12px; color: var(--nds-grey-800); padding: 5px 9px; border-radius: 6px; background: var(--nds-grey-25); border-left: 3px solid var(--nds-grey-200); }
+.eb-results li { font-size: 12px; color: var(--nds-grey-800); padding: 5px 9px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-25); border-left: 3px solid var(--nds-grey-200); }
 .eb-results li code { font-size: 11px; background: var(--nds-grey-100); padding: 1px 4px; border-radius: 4px; }
 .eb-results li.ok { border-left-color: #2d9d5f; }
 .eb-results li.warn { border-left-color: var(--nds-amber-600); }
 .eb-results li.err, .eb-results li.blocked { border-left-color: var(--nds-red-500); }
 
 /* sandbox banner (light, amber) */
-.eb-sandbox { border: 1px solid #f0d9a8; background: #fdf3d3; color: #9a6700; border-radius: 8px; padding: 8px 12px; font-size: 12px; }
+.eb-sandbox { border: 1px solid #f0d9a8; background: #fdf3d3; color: #9a6700; border-radius: var(--nds-radius-lg); padding: 8px 12px; font-size: 12px; }
 .eb-sandbox code { font-size: 11px; background: rgba(122, 91, 0, 0.08); padding: 1px 4px; border-radius: 4px; }
 
 .eb-be-hint { font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.5; }
@@ -44,11 +44,11 @@
 .eb-difftable td { padding: 6px 8px; border-bottom: 1px solid var(--nds-grey-100); color: var(--nds-grey-800); }
 
 /* input shim for inline grid edits + modal fields (matches h10 fields) */
-.h10-cd-input { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 5px 9px; font-size: 12.5px; color: var(--nds-grey-900); }
+.h10-cd-input { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 5px 9px; font-size: 12.5px; color: var(--nds-grey-900); }
 .h10-cd-input:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
 
 /* digest page (light) */
-.eb-panel { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; padding: 14px 16px; }
+.eb-panel { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px 16px; }
 .eb-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .eb-panel-head h3 { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); margin: 0; }
 .eb-panel-note { font-size: 11.5px; color: var(--nds-grey-500); }
@@ -79,7 +79,7 @@
 
 /* ER3.2 — Rules & Automation hub: posture band (delta 8) */
 .eb-posture-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 14px; }
-.eb-posture-seg { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.eb-posture-seg { background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-2xl); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .eb-posture-seg h4 { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nds-grey-500); margin: 0; }
 .eb-posture-dial { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .eb-posture-hint { font-size: 11.5px; color: var(--nds-grey-600); line-height: 1.45; margin: 0; }
@@ -95,7 +95,7 @@
 .eb-rule-sentence { font-size: 12.5px; color: var(--nds-grey-700); line-height: 1.55; margin: 6px 0 0; }
 .eb-rule-sentence b { color: var(--nds-grey-900); }
 .eb-rule-last { font-size: 11.5px; color: var(--nds-grey-500); margin: 4px 0 0; }
-.eb-rule-confirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #9a3434; background: #fdf5f5; border: 1px solid #f0d4d4; border-radius: 8px; padding: 8px 12px; margin: 8px 0 0; }
+.eb-rule-confirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #9a3434; background: #fdf5f5; border: 1px solid #f0d4d4; border-radius: var(--nds-radius-lg); padding: 8px 12px; margin: 8px 0 0; }
 .eb-rule-menu { position: relative; display: inline-flex; }
 
 /* ER3.2 — suggestions queue (delta 6) */
@@ -117,11 +117,11 @@
 .eb-cond-lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-600); white-space: nowrap; }
 .eb-cond-num { width: 58px; }
 .eb-cond-num.wide { width: 86px; }
-.eb-campaign-picker { margin-top: 10px; max-height: 220px; overflow-y: auto; border: 1px solid var(--nds-grey-100); border-radius: 8px; padding: 6px 10px; }
+.eb-campaign-picker { margin-top: 10px; max-height: 220px; overflow-y: auto; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-lg); padding: 6px 10px; }
 .eb-campaign-opt { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--nds-grey-900); padding: 5px 2px; cursor: pointer; }
 .eb-preview-out { border-left: 3px solid var(--nds-blue-600); }
 .eb-preview-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--nds-grey-700); margin: 4px 0; }
-.eb-editor-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 12px; padding: 10px 16px; margin-top: 14px; box-shadow: 0 -6px 18px rgba(20, 28, 38, 0.06); z-index: 30; }
+.eb-editor-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-2xl); padding: 10px 16px; margin-top: 14px; box-shadow: 0 -6px 18px rgba(20, 28, 38, 0.06); z-index: 30; }
 
 /* ER3.3 — dashboard: sparklines + KPI subtext (delta 7) */
 .eb-spark { display: block; margin-top: 4px; opacity: 0.85; }
@@ -216,7 +216,7 @@
 /* EV2 — listing thumbnails (Products grid) + picker resolution select */
 .eb-nmw-thumb { display: flex; align-items: flex-start; gap: 8px; }
 .eb-nmw-thumb > .body { flex: 1; min-width: 0; display: block; overflow: hidden; }
-.eb-thumb { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--nds-grey-150); overflow: hidden; background: var(--nds-grey-25); display: inline-flex; align-items: center; justify-content: center; }
+.eb-thumb { flex: 0 0 34px; width: 34px; height: 34px; border-radius: var(--nds-radius-sm); border: 1px solid var(--nds-grey-150); overflow: hidden; background: var(--nds-grey-25); display: inline-flex; align-items: center; justify-content: center; }
 .eb-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .eb-thumb .ph { width: 100%; height: 100%; background: linear-gradient(135deg, var(--nds-grey-75), var(--nds-grey-150)); }
 .eb-resolve { width: 132px; font-size: 11.5px; }
@@ -225,7 +225,7 @@
 /* ═══ EV4a — zero native controls ═══ */
 /* Single-date field popover: the console's own .h10-dp-month calendar in a
    fixed-position shell (same border/shadow language as .h10-dp / .h10-dd-pop). */
-.eb-df-pop { position: fixed; z-index: 200; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; box-shadow: 0 16px 40px rgba(20, 28, 38, 0.2); padding: 12px 14px; }
+.eb-df-pop { position: fixed; z-index: 200; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); box-shadow: 0 16px 40px rgba(20, 28, 38, 0.2); padding: 12px 14px; }
 .eb-df-foot { border-top: 1px solid var(--nds-grey-100); margin-top: 8px; padding-top: 8px; display: flex; justify-content: flex-end; }
 
 /* The console type scale as classes — inline font sizes are banned (EV4).
@@ -245,7 +245,7 @@
 .eb-readiness.bad { color: var(--nds-red-500); }
 .eb-editlinks { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--nds-grey-600); align-items: center; }
 .eb-cap-lbl { display: block; margin-bottom: 8px; }
-.eb-pack { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--nds-grey-800); border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 5px 10px; cursor: pointer; background: var(--nds-white); }
+.eb-pack { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--nds-grey-800); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 5px 10px; cursor: pointer; background: var(--nds-white); }
 .eb-pack.on { background: var(--nds-blue-50); }
 .eb-ack { margin-left: 8px; font-size: 11.5px; }
 .eb-willcreate { font-size: 12.5px; color: var(--nds-grey-600); }
@@ -287,10 +287,10 @@
    would leak into Amazon pages (their pager + SearchTermActionModal combine
    the same classes; audited 2026-07-04). */
 .eb-dd { display: contents; }
-.eb-dd .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: 8px; }
-.eb-dd.dense .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: 6px; border-color: var(--nds-grey-200); }
-.eb-dd-self.h10-dd > .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: 8px; }
-.eb-dd-self.h10-dd.dense > .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: 6px; border-color: var(--nds-grey-200); }
+.eb-dd .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: var(--nds-radius-lg); }
+.eb-dd.dense .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: var(--nds-radius-sm); border-color: var(--nds-grey-200); }
+.eb-dd-self.h10-dd > .h10-dd-btn { height: 38px; border-color: #6d839f; font-size: 14px; padding: 0 12px; border-radius: var(--nds-radius-lg); }
+.eb-dd-self.h10-dd.dense > .h10-dd-btn { height: 28px; padding: 2px 9px; font-size: 12.5px; border-radius: var(--nds-radius-sm); border-color: var(--nds-grey-200); }
 /* EV4e.2 — the 16px .h10-cd-field bottom-margin only resets on :last-child,
    so under flex-end every NON-last field in a row rode 16px higher (the
    measured Marketplace-vs-name / Start-vs-End offset). Rows own their gaps. */

@@ -9,7 +9,7 @@
 .fc-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .fc-head-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .fc-head h1 { font-size: 19px; font-weight: 650; color: var(--nds-grey-900); margin: 0; letter-spacing: -0.01em; }
-.fc-back { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #667485; text-decoration: none; border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 4px 9px; background: var(--nds-white); }
+.fc-back { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #667485; text-decoration: none; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 4px 9px; background: var(--nds-white); }
 .fc-back:hover { background: var(--nds-grey-50); }
 .fc-state { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 4px; padding: 2px 7px; }
 .fc-state.enabled { background: #e8f6ef; color: var(--nds-success-text); }
@@ -17,7 +17,7 @@
 .fc-state.archived { background: var(--nds-grey-75); color: #7a869a; }
 .fc-mkt { font-size: 11px; color: #46536a; background: var(--nds-grey-75); border: 1px solid var(--nds-grey-150); border-radius: 4px; padding: 2px 7px; }
 
-.fc-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #46536a; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: 6px; padding: 6px 11px; cursor: pointer; }
+.fc-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #46536a; background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 6px 11px; cursor: pointer; }
 .fc-btn:hover:not(:disabled) { background: var(--nds-grey-50); }
 .fc-btn:disabled { opacity: 0.55; cursor: default; }
 .fc-btn.sm { font-size: 11px; padding: 4px 8px; }
@@ -33,14 +33,14 @@
 .fc-tab { font-size: 13px; font-weight: 550; color: #667485; background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 13px; margin-bottom: -1px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .fc-tab:hover { color: var(--nds-grey-700); }
 .fc-tab.on { color: var(--nds-blue-600); border-bottom-color: var(--nds-blue-600); }
-.fc-tab em { font-style: normal; font-size: 10.5px; font-weight: 700; background: var(--nds-blue-50); color: #2a5399; border-radius: 8px; padding: 1px 7px; }
+.fc-tab em { font-style: normal; font-size: 10.5px; font-weight: 700; background: var(--nds-blue-50); color: #2a5399; border-radius: var(--nds-radius-lg); padding: 1px 7px; }
 
 .fc-sec-head { display: flex; align-items: baseline; gap: 10px; margin: 20px 0 9px; flex-wrap: wrap; }
 .fc-sec-head h2 { font-size: 13px; font-weight: 650; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
 .fc-sec-sub { font-size: 12px; color: var(--nds-grey-500); }
 .fc-bulk { margin-left: auto; display: flex; gap: 6px; }
 
-.fc-banner { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; border-radius: 7px; padding: 10px 13px; margin: 10px 0; line-height: 1.5; }
+.fc-banner { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; border-radius: var(--nds-radius-md); padding: 10px 13px; margin: 10px 0; line-height: 1.5; }
 .fc-banner svg { flex-shrink: 0; margin-top: 1px; }
 .fc-banner.err { background: #fdf2f2; border: 1px solid #e6bcba; color: var(--nds-danger-text); }
 .fc-banner.warn { background: #fff8ec; border: 1px solid #ecd9ae; color: #8a6320; }
@@ -81,7 +81,7 @@
 .fc-deliv.bad { background: #fdf2f2; color: var(--nds-danger-text); }
 
 .fc-products { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 6px; }
-.fc-products li { display: flex; align-items: baseline; gap: 8px; border: 1px solid var(--nds-grey-100); border-radius: 7px; background: var(--nds-white); padding: 7px 11px; font-size: 12px; min-width: 0; }
+.fc-products li { display: flex; align-items: baseline; gap: 8px; border: 1px solid var(--nds-grey-100); border-radius: var(--nds-radius-md); background: var(--nds-white); padding: 7px 11px; font-size: 12px; min-width: 0; }
 .fc-products .sku { font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fc-products .asin { color: var(--nds-grey-500); font-size: 11px; font-family: ui-monospace, monospace; }
 .fc-products .ads { margin-left: auto; color: #667485; font-size: 11px; white-space: nowrap; }

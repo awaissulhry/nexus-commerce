@@ -5,7 +5,7 @@
 .dash-kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
 @media (max-width: 1180px) { .dash-kpis { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 640px) { .dash-kpis { grid-template-columns: repeat(2, 1fr); } }
-.dash-kpi { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 10px; padding: 11px 13px; }
+.dash-kpi { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 11px 13px; }
 .dash-kpi-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); display: flex; align-items: center; gap: 5px; }
 /* ACR.0.5 — a dashed '—' needs to say why. Marks a KPI whose value is absent, not zero. */
 .dash-kpi-why {
@@ -19,7 +19,7 @@
 .dd.up { color: #067d62; } .dd.down { color: var(--nds-red-500); } .dd.flat { color: var(--nds-grey-450); }
 
 /* cards */
-.dash-card { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; padding: 14px 16px; }
+.dash-card { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px 16px; }
 .dash-card-h { font-size: 12px; font-weight: 800; color: var(--nds-grey-900); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
 .dash-chart { width: 100%; }
 .dash-empty { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--nds-grey-500); font-size: 13px; }
@@ -27,7 +27,7 @@
 @media (max-width: 1080px) { .dash-row2 { grid-template-columns: 1fr; } }
 
 /* segmented (momentum tabs) */
-.dash-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: 7px; overflow: hidden; }
+.dash-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; }
 .dash-seg button { border: 0; background: var(--nds-white); padding: 4px 10px; font-size: 10.5px; font-weight: 700; color: var(--nds-grey-600); text-transform: capitalize; cursor: pointer; }
 .dash-seg button.on { background: var(--nds-blue-600); color: var(--nds-white); }
 

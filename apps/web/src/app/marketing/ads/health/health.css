@@ -3,12 +3,12 @@
 
 .hl { display: flex; flex-direction: column; gap: 14px; }
 .hl-toolbar { display: flex; align-items: center; gap: 10px; }
-.hl-win { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: 7px; overflow: hidden; }
+.hl-win { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; }
 .hl-win button { border: 0; background: var(--nds-white); padding: 5px 11px; font-size: 11px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .hl-win button.on { background: var(--nds-blue-600); color: var(--nds-white); }
 
 /* hero score */
-.hl-hero { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 14px; padding: 18px 22px; }
+.hl-hero { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-3xl); padding: 18px 22px; }
 .hl-score { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 148px; }
 .hl-score-num { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
 .hl-score-num small { font-size: 18px; font-weight: 700; color: var(--nds-grey-400); }
@@ -37,7 +37,7 @@
 .hl-tile-sub.danger { color: var(--nds-red-500); } .hl-tile-sub.warn { color: var(--nds-amber-600); } .hl-tile-sub.ok { color: #067d62; } .hl-tile-sub.muted { color: var(--nds-grey-500); }
 
 /* sections */
-.hl-section { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; padding: 14px 16px; }
+.hl-section { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); padding: 14px 16px; }
 .hl-sec-h { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 800; color: var(--nds-grey-900); margin-bottom: 10px; }
 .hl-sec-h .grow { flex: 1; }
 .hl-chip { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--nds-grey-100); color: var(--nds-grey-600); }
@@ -85,18 +85,18 @@
 .hl-pb-t svg.open { transform: rotate(180deg); }
 .hl-pb-lede { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .hl-pb-ctl { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 11px; }
-.hl-pb-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: 7px; overflow: hidden; }
+.hl-pb-seg { display: inline-flex; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-md); overflow: hidden; }
 .hl-pb-seg button { border: 0; border-right: 1px solid var(--nds-grey-100); background: var(--nds-white); padding: 5px 11px; font-size: 11.5px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .hl-pb-seg button:last-child { border-right: 0; }
 .hl-pb-seg button.on { background: var(--nds-blue-600); color: var(--nds-white); }
 .hl-pb-seg button:disabled { opacity: .5; cursor: default; }
-.hl-pb-run { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--nds-blue-600); background: var(--nds-blue-600); color: var(--nds-white); border-radius: 7px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.hl-pb-run { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--nds-blue-600); background: var(--nds-blue-600); color: var(--nds-white); border-radius: var(--nds-radius-md); padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .hl-pb-run:disabled { opacity: .5; cursor: default; }
-.hl-pb-copy { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-600); border-radius: 7px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.hl-pb-copy { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-600); border-radius: var(--nds-radius-md); padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
 .hl-pb-spin { animation: hl-pb-rot .9s linear infinite; }
 @keyframes hl-pb-rot { to { transform: rotate(360deg); } }
-.hl-pb-err { margin-bottom: 11px; padding: 9px 12px; border-radius: 8px; background: #fdeaea; color: #b3261e; font-size: 12px; line-height: 1.55; }
-.hl-pb-err pre { margin: 8px 0 0; padding: 8px; border-radius: 6px; background: #fbdcdc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+.hl-pb-err { margin-bottom: 11px; padding: 9px 12px; border-radius: var(--nds-radius-lg); background: #fdeaea; color: #b3261e; font-size: 12px; line-height: 1.55; }
+.hl-pb-err pre { margin: 8px 0 0; padding: 8px; border-radius: var(--nds-radius-sm); background: #fbdcdc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
 .hl-pb-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 9px; font-size: 11.5px; color: var(--nds-grey-500); }
 .hl-pb-meta b { color: #37495b; }
 .hl-pb-meta b.ok { color: #067d62; } .hl-pb-meta b.bad { color: var(--nds-red-500); }
@@ -119,5 +119,5 @@
 .hl-pb-d > td { padding: 10px 14px 12px 32px; background: var(--nds-grey-25); border-top: 1px solid var(--nds-grey-50); }
 .hl-pb-k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); margin: 8px 0 3px; }
 .hl-pb-k:first-child { margin-top: 0; }
-.hl-pb-d pre { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--nds-grey-75); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }
+.hl-pb-d pre { margin: 0; padding: 8px 10px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }
 .hl-pb-d pre.wrap { white-space: pre-wrap; word-break: break-all; }

@@ -35,7 +35,7 @@
 .bulk-card {
   background: var(--ds-surface, var(--nds-white));
   border: 1px solid var(--ds-border, var(--nds-grey-150));
-  border-radius: 10px;
+  border-radius: var(--nds-radius-xl);
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
@@ -226,7 +226,7 @@
 .bulk-tablewrap {
   overflow-x: auto;
   border: 1px solid var(--ds-border, var(--nds-grey-150));
-  border-radius: 8px;
+  border-radius: var(--nds-radius-lg);
   max-height: 520px;
   overflow-y: auto;
 }
@@ -340,7 +340,7 @@
      that applies live changes. Documented console gotcha. */
   padding: 16px 172px 16px 20px;
   border: 1px solid var(--ds-border, var(--nds-grey-150));
-  border-radius: 10px;
+  border-radius: var(--nds-radius-xl);
   background: var(--ds-surface, var(--nds-white));
   position: sticky;
   bottom: 0;

@@ -7,7 +7,7 @@
   width: 352px; flex-shrink: 0; align-self: flex-start;
   position: sticky; top: 14px; max-height: calc(100vh - 28px);
   display: flex; flex-direction: column;
-  border: 1px solid var(--nds-grey-150); border-radius: 10px; background: var(--nds-white); padding: 13px 0 6px;
+  border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); background: var(--nds-white); padding: 13px 0 6px;
 }
 .adock-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
 .adock-head h2 { font-size: 12.5px; font-weight: 700; color: var(--nds-grey-700); margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -53,7 +53,7 @@
 .adock-list { list-style: none; margin: 0; padding: 4px 6px; overflow-y: auto; flex: 1; }
 .adock-rule {
   display: flex; align-items: flex-start; gap: 2px;
-  border-radius: 7px; padding: 7px 6px 7px 2px; cursor: grab;
+  border-radius: var(--nds-radius-md); padding: 7px 6px 7px 2px; cursor: grab;
   border: 1px solid transparent;
   border-left: 3px solid var(--cat, var(--nds-grey-200));
   margin-bottom: 2px;

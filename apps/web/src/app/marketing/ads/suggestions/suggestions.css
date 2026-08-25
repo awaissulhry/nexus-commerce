@@ -13,7 +13,7 @@
 /* SG.1 — the bulk outcome report. OUTSIDE the selection popover so a partial result survives
    it (a success used to unmount its own refusal list — the W2 lesson). Amber: refusals are
    governed stops, never failures, and must not wear the failure red. */
-.h10-sug-report { margin-top: 12px; padding: 10px 14px; border: 1px solid #f0dcbe; border-radius: 8px; background: #fff6e8; color: var(--nds-warning-text); font-size: 12.5px; }
+.h10-sug-report { margin-top: 12px; padding: 10px 14px; border: 1px solid #f0dcbe; border-radius: var(--nds-radius-lg); background: #fff6e8; color: var(--nds-warning-text); font-size: 12.5px; }
 .h10-sug-report b { display: block; font-weight: 800; margin-bottom: 4px; }
 .h10-sug-report ul { margin: 0 0 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 .h10-sug-report .nm { font-weight: 700; }
@@ -80,7 +80,7 @@
 .h10-sug-acts { display: inline-flex; gap: 8px; justify-content: flex-end; }
 /* Explicit box — an icon inside a padded pill collapses to width 0 in a narrow column
    (the NEG.5 delete-button lesson), so the button owns its geometry outright. */
-.h10-sug-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border: 1px solid var(--nds-border); border-radius: 7px; background: var(--nds-surface); color: var(--nds-text-2); cursor: pointer; }
+.h10-sug-iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); color: var(--nds-text-2); cursor: pointer; }
 .h10-sug-iconbtn:hover { border-color: var(--nds-text-3); color: var(--nds-text); }
 .h10-sug-iconbtn.ok:hover { border-color: var(--nds-success-strong); color: var(--nds-success-strong); background: var(--nds-success-soft); }
 .h10-sug-iconbtn.no:hover { border-color: var(--nds-danger-strong); color: var(--nds-danger-strong); background: var(--nds-danger-soft); }
@@ -102,7 +102,7 @@
 .h10-sug-iconbtn.pz.on { background: var(--nds-text-2); border-color: var(--nds-text-2); color: var(--nds-white); }
 
 /* SG.9 — the REAL pause, rehoused in the drawer. Amber because this one does write. */
-.h10-sug-pausebox { border: 1px solid #f0dcbe; border-radius: 10px; padding: 12px 14px; background: #fff6e8; }
+.h10-sug-pausebox { border: 1px solid #f0dcbe; border-radius: var(--nds-radius-xl); padding: 12px 14px; background: #fff6e8; }
 .h10-sug-pausebox h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--nds-warning-text); }
 .h10-sug-pausebox p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }
 .h10-sug-pausebox p b { color: var(--nds-text); }
@@ -114,12 +114,12 @@
 /* SG.2b — the staging buffer input (H10's per-row editable Current Bid) */
 .h10-sug-buf { display: inline-flex; align-items: center; gap: 4px; }
 .h10-sug-buf .cur { color: var(--nds-text-3); font-size: 12px; }
-.h10-sug-buf input { width: 74px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--nds-text); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: 7px; padding: 4px 8px; }
+.h10-sug-buf input { width: 74px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--nds-text); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); padding: 4px 8px; }
 .h10-sug-buf input:read-only { background: transparent; border-color: transparent; }
 .h10-sug-buf.on input { border-color: var(--nds-blue-600); background: var(--nds-blue-50); }
 .h10-sug-buf.on.edited input { border-color: #c68a2e; background: #fff6e8; }
 .h10-sug-buf input:disabled { color: var(--nds-text-3); background: transparent; border-color: transparent; }
-.h10-sug-buf .rv { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--nds-text-2); cursor: pointer; }
+.h10-sug-buf .rv { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border: 0; border-radius: var(--nds-radius-sm); background: none; color: var(--nds-text-2); cursor: pointer; }
 .h10-sug-buf .rv:hover { background: var(--nds-surface-sunken); color: var(--nds-text); }
 
 /* SG.2b — Suggested Change: new value + colored delta arrow (H10's "$0.52 $0.07 ↓") */
@@ -167,7 +167,7 @@
 
 /* Provenance flow (vertical: Signal → Rule → Action → Target) */
 .h10-sug-flow { display: flex; flex-direction: column; align-items: stretch; }
-.h10-sug-fnode { border: 1px solid var(--nds-border); border-radius: 10px; padding: 10px 12px; background: var(--nds-surface); display: flex; flex-direction: column; gap: 2px; }
+.h10-sug-fnode { border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); padding: 10px 12px; background: var(--nds-surface); display: flex; flex-direction: column; gap: 2px; }
 .h10-sug-fnode .ey { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--nds-text-3); }
 .h10-sug-fnode .ti { font-size: 14px; font-weight: 600; color: var(--nds-text); }
 .h10-sug-fnode .sub { font-size: 12.5px; color: var(--nds-text-2); }
@@ -180,7 +180,7 @@
 .h10-sug-fconn { width: 2px; height: 15px; margin: 2px 0 2px 19px; background: var(--nds-border-strong); }
 
 /* Edit-before-apply */
-.h10-sug-edit { border: 1px solid var(--nds-border-subtle); border-radius: 10px; padding: 14px; background: var(--nds-surface-sunken); }
+.h10-sug-edit { border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); padding: 14px; background: var(--nds-surface-sunken); }
 .h10-sug-edit h4 { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--nds-text); }
 .h10-sug-edit .fld { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .h10-sug-edit .fld > span { color: var(--nds-text-2); font-weight: 600; white-space: nowrap; }
@@ -203,7 +203,7 @@
 .h10-sug-stake .dia { font-size: 10px; line-height: 1; }
 
 /* Drawer: the figure with the sentence that keeps it honest. */
-.h10-sug-stakebox { margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--nds-border); border-radius: 8px; background: var(--nds-surface-sunken); }
+.h10-sug-stakebox { margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-sunken); }
 .h10-sug-stakebox.waste { border-color: var(--nds-red-500); background: var(--nds-danger-soft); }
 .h10-sug-stakebox h4 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--nds-text-2); }
 .h10-sug-stakebox h4 b { font-size: 19px; font-weight: 700; letter-spacing: normal; text-transform: none; font-variant-numeric: tabular-nums; color: var(--nds-text); }
@@ -214,16 +214,16 @@
 /* B4 (2026-08-20) — the truncation notice. Amber and inline with the toolbar, because it
    qualifies every count and tile above it: when the server has more rows than it sent, the
    page is describing a prefix. Not a toast — it is true for as long as the list is capped. */
-.h10-sug-trunc { display: inline-flex; align-items: center; padding: 4px 10px; margin-right: 12px; border-radius: 7px; background: #fff6e8; color: var(--nds-warning-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.h10-sug-trunc { display: inline-flex; align-items: center; padding: 4px 10px; margin-right: 12px; border-radius: var(--nds-radius-md); background: #fff6e8; color: var(--nds-warning-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
 
 /* ── SG.2f — the approve-hover card (H10's "Rule: Add New Keywords" popover). Portaled to
    body (the ✓ lives in a right-pinned sticky cell) and it stays open under the pointer so
    Edit Suggestion is clickable. */
 .h10-sug-ahwrap { display: inline-flex; }
-.h10-sug-ahover { position: fixed; z-index: 320; width: min(720px, calc(100vw - 32px)); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: 12px; box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16); padding: 14px 16px 12px; }
+.h10-sug-ahover { position: fixed; z-index: 320; width: min(720px, calc(100vw - 32px)); background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-2xl); box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16); padding: 14px 16px 12px; }
 .h10-sug-ahover .ti { display: block; font-size: 13.5px; font-weight: 800; color: var(--nds-text); }
 .h10-sug-ahover .sub { margin: 3px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }
-.h10-sug-ahover .tbl { border: 1px solid var(--nds-border-subtle); border-radius: 8px; overflow: hidden; }
+.h10-sug-ahover .tbl { border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); overflow: hidden; }
 .h10-sug-ahover .hd, .h10-sug-ahover .rw { display: grid; grid-template-columns: 130px 70px 1fr 1fr 100px; gap: 10px; align-items: center; padding: 7px 12px; }
 .h10-sug-ahover .hd { background: var(--nds-surface-sunken); font-size: 11px; font-weight: 700; text-transform: none; color: var(--nds-text-3); }
 .h10-sug-ahover .rw { border-top: 1px solid var(--nds-border-subtle); font-size: 12.5px; color: var(--nds-text); }
@@ -269,6 +269,6 @@
 .h10-sug-dl.rf { background: #fff6e8; color: var(--nds-warning-text); }
 .h10-sug-dl.fl { background: #fdeceb; color: var(--nds-danger-strong); }
 .h10-sug-dl.uk { background: transparent; color: var(--nds-text-3); }
-.h10-sug-dlblock { border: 1px solid var(--nds-border-subtle); border-radius: 10px; padding: 12px 14px; background: var(--nds-surface-sunken); }
+.h10-sug-dlblock { border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); padding: 12px 14px; background: var(--nds-surface-sunken); }
 .h10-sug-dlblock h4 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--nds-text-2); }
 .h10-sug-dlblock p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }

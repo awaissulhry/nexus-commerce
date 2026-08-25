@@ -12,13 +12,13 @@
 
 /* summary tiles */
 .pf-tiles { display: flex; flex-wrap: wrap; gap: 10px; }
-.pf-tile { border: 1px solid var(--nds-grey-150); border-radius: 10px; padding: 8px 13px; background: var(--nds-white); min-width: 120px; }
+.pf-tile { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 8px 13px; background: var(--nds-white); min-width: 120px; }
 .pf-tile-k { font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); }
 .pf-tile-v { font-weight: 800; font-size: 18px; color: var(--nds-grey-900); margin-top: 2px; }
 .pf-tile-v.ok { color: #067d62; }
 
 /* table */
-.pf-tablewrap { border: 1px solid var(--nds-grey-150); border-radius: 12px; overflow: hidden; background: var(--nds-white); }
+.pf-tablewrap { border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-2xl); overflow: hidden; background: var(--nds-white); }
 .pf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .pf-table thead th { text-align: left; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 800; color: var(--nds-grey-500); padding: 10px 14px; border-bottom: 1px solid var(--nds-grey-100); background: var(--nds-white); white-space: nowrap; }
 .pf-table thead th.num { text-align: right; }
@@ -39,7 +39,7 @@
 .pf-acos { font-weight: 700; }
 
 /* empty state */
-.pf-empty { border: 1px dashed var(--nds-grey-200); border-radius: 12px; padding: 40px 24px; text-align: center; background: var(--nds-white); }
+.pf-empty { border: 1px dashed var(--nds-grey-200); border-radius: var(--nds-radius-2xl); padding: 40px 24px; text-align: center; background: var(--nds-white); }
 .pf-empty-h { font-size: 15px; font-weight: 800; color: var(--nds-grey-900); }
 .pf-empty-p { font-size: 12px; color: var(--nds-grey-500); max-width: 460px; margin: 6px auto 16px; line-height: 1.5; }
 .pf-empty-acts { display: inline-flex; gap: 8px; }
@@ -59,20 +59,20 @@
 /* row actions */
 .pf-table thead th.pf-actions-h { text-align: right; }
 .pf-table tbody td.pf-actions { text-align: right; white-space: nowrap; }
-.pf-act { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-500); cursor: pointer; margin-left: 4px; }
+.pf-act { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: var(--nds-radius-sm); border: 1px solid var(--nds-grey-150); background: var(--nds-white); color: var(--nds-grey-500); cursor: pointer; margin-left: 4px; }
 .pf-act:hover:not(:disabled) { background: var(--nds-grey-50); color: var(--nds-grey-600); }
 .pf-act:disabled { opacity: 0.5; cursor: default; }
 .pf-table tbody td.pf-nocap { color: var(--nds-grey-400); font-weight: 600; }
 
 /* budget modal */
-.pf-seg { display: inline-flex; border: 1px solid var(--nds-grey-200); border-radius: 8px; overflow: hidden; align-self: flex-start; }
+.pf-seg { display: inline-flex; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); overflow: hidden; align-self: flex-start; }
 .pf-seg button { border: 0; background: var(--nds-white); padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--nds-grey-600); cursor: pointer; }
 .pf-seg button.on { background: var(--nds-blue-600); color: var(--nds-white); }
 .pf-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* OS.6 — portfolio search. Sits at the left of the toolbar so it reads before the sync/create
    actions on the right; the toolbar already uses flex, so it needs no layout change. */
-.pf-search { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-grey-200); border-radius: 8px; padding: 6px 10px; min-width: 240px; color: var(--nds-grey-500); background: var(--nds-white); }
+.pf-search { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 6px 10px; min-width: 240px; color: var(--nds-grey-500); background: var(--nds-white); }
 .pf-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: var(--nds-grey-900); }
 .pf-search input::placeholder { color: var(--nds-grey-400); }
 .pf-search button { border: none; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: var(--nds-grey-500); padding: 0 2px; }

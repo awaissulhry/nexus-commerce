@@ -34,6 +34,6 @@
 .opsn-exp:hover { background: var(--nds-blue-50); }
 .opsn-count {
   height: 16px; min-width: 16px; padding: 0 5px;
-  border-radius: 8px; background: var(--nds-blue-50); color: var(--nds-blue-600); font-size: 9.5px; font-weight: 800;
+  border-radius: var(--nds-radius-lg); background: var(--nds-blue-50); color: var(--nds-blue-600); font-size: 9.5px; font-weight: 800;
   line-height: 16px; text-align: center;
 }

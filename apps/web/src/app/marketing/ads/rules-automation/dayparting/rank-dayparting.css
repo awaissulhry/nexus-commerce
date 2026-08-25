@@ -143,7 +143,7 @@
 }
 
 /* RD.P5 — the CPC ceiling, in aggregate */
-.rd-p5 { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 10px; padding: 14px 16px; }
+.rd-p5 { background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); padding: 14px 16px; }
 .rd-p5 h3 { margin: 0 0 6px; font-size: 13.5px; color: var(--nds-grey-900); display: flex; align-items: center; gap: 6px; }
 .rd-p5-line { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--nds-grey-700); max-width: 860px; }
 .rd-p5-line b.warn { color: #92400e; }
@@ -160,7 +160,7 @@
 .rd-band-tile {
   display: inline-flex; align-items: baseline; gap: 6px;
   padding: 7px 12px; font-size: 12.5px; color: var(--nds-grey-700);
-  background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 8px; cursor: pointer;
+  background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); cursor: pointer;
   font-variant-numeric: tabular-nums;
 }
 .rd-band-tile b { font-size: 14px; font-weight: 700; color: #16202b; }
