@@ -479,6 +479,22 @@ semicolon, so ASI parsed the previous `new Map<…>()` as a *call*. `Array.from(
 identifier and avoids it — and also collapses the `NodeListOf | never[]` union that made `.forEach`
 uncallable.)
 
+**Verified on prod 2026-08-25**, because none of this is provable by `tsc`:
+
+- hover highlight — 101 cells lit, exactly one column (`amazonDelivery`), correctly scoped
+- column drag — armed, swapped `amazonDelivery`/`automation`, persisted, and tore down clean
+  (no stuck `col-dragging`, `user-select` cleared). Saved order then restored to the default.
+- the old global selector is absent from the deployed bundle
+
+🔴 **A method note that nearly produced a false negative.** The browser tool's `left_click_drag`
+reported *no reorder*, which reads exactly like "the change broke the drag". It did not — the
+gesture teleports without intermediate `pointermove` events, and this handler arms on the first
+move past a 5px threshold. A synchronous synthetic `pointerdown → move → move → pointerup` on
+`window` (its real listener target) reordered correctly. **An automated gesture that does nothing
+is indistinguishable from a feature that is broken; confirm the gesture before blaming the code.**
+An earlier attempt at the same probe froze the renderer by `await`ing a frame *inside* the drag,
+which yielded to the handler's own `requestAnimationFrame` loop — drive it synchronously.
+
 **Revised order.** WG.2 cannot start with the CSS:
 
 | | | |
