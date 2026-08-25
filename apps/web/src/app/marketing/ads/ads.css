@@ -326,15 +326,6 @@
 
 @keyframes h10sh { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 
-.h10-am-pager { display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
-.h10-am-pager .grow { flex: 1; }
-.h10-am-pager .pg { display: inline-flex; align-items: center; gap: 4px; }
-.h10-am-pager .pgbtn { min-width: 30px; height: 30px; border: 1px solid var(--nds-grey-150); background: var(--nds-white); border-radius: 7px; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-600); cursor: pointer; }
-.h10-am-pager .pgbtn:hover:not(:disabled) { background: var(--nds-grey-75); }
-.h10-am-pager .pgbtn.on { background: var(--nds-blue-600); border-color: var(--nds-blue-600); color: var(--nds-white); }
-.h10-am-pager .pgbtn:disabled { color: var(--nds-grey-300); cursor: default; }
-.h10-am-pager .rpp { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--nds-grey-600); }
-.h10-am-pager .rpp select { border: 1px solid var(--nds-grey-200); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 12.5px; background: var(--nds-white); cursor: pointer; }
 .h10-am-latest { font-size: 12.5px; color: var(--nds-grey-600); padding: 2px 2px 4px; }
 .h10-am-latest b { color: var(--nds-grey-900); font-weight: 700; }
 .h10-am-latest .lk { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; }
@@ -529,17 +520,9 @@
 .h10-dd-dirty .h10-dd-btn { border-color: var(--nds-blue-600); background: var(--nds-blue-50); box-shadow: 0 0 0 2px rgba(31, 111, 222, 0.12); }
 .h10-bulk-row .ac .h10-dd-btn { height: 34px; font-size: 12.5px; font-weight: 600; }
 
-.h10-hc-anchor { display: inline-flex; align-items: center; }
-.h10-hc { position: fixed; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 9px; box-shadow: 0 10px 28px rgba(20, 28, 38, 0.18); padding: 11px 14px; z-index: 90; font-size: 12.5px; line-height: 1.7; white-space: nowrap; pointer-events: none; }
-.h10-hc.above { transform: translateY(-100%); }
-.h10-hc .r1 { color: var(--nds-grey-700); font-weight: 500; }
-.h10-hc .r .k { color: var(--nds-grey-900); font-weight: 700; }
-.h10-hc .r .v { color: var(--nds-grey-600); font-weight: 400; }
-
 /* ── CBN.2h.8 — bulk modal select-all header checkbox + rows-per-page dropdown ── */
 .h10-bulk-hd .ck { display: flex; align-items: center; }
 .h10-bulk-hd .ck input { width: 17px; height: 17px; margin: 0; accent-color: var(--nds-blue-600); cursor: pointer; }
-.h10-am-pager .rpp .h10-dd-btn { height: 30px; padding: 5px 10px; font-size: 12.5px; font-weight: 600; }
 
 /* Status is now a scrolling settings column: pill + dropdown chevron. */
 .h10-statuscell { display: inline-flex; align-items: center; gap: 5px; }
@@ -1468,15 +1451,6 @@
 /* hover-pencil popover editors (ride AdsDataGrid's .h10-editpop) */
 .h10-rr-select { height: 34px; border: 1px solid var(--nds-grey-300); border-radius: 8px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); min-width: 190px; }
 .h10-rr-mm { display: flex; gap: 8px; }
-
-/* inline 🔍 search next to the toolbar count (AdsDataGrid `searchable`) */
-.h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: var(--nds-text-muted); border-radius: 7px; cursor: pointer; }
-.h10-am-searchbtn:hover { background: var(--nds-grey-100); color: var(--nds-blue-600); }
-.h10-am-searchbox { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--nds-grey-300); border-radius: 8px; background: var(--nds-white); }
-.h10-am-searchbox svg { color: var(--nds-grey-500); flex-shrink: 0; }
-.h10-am-searchbox input { border: none; outline: none; font: inherit; font-size: 13px; color: var(--nds-grey-900); width: 210px; background: transparent; }
-.h10-am-searchbox .x { display: inline-flex; align-items: center; border: none; background: none; color: var(--nds-grey-450); cursor: pointer; padding: 2px; border-radius: 5px; }
-.h10-am-searchbox .x:hover { color: var(--nds-grey-600); background: var(--nds-grey-100); }
 
 /* "coming soon" tab body (9 not-yet-built tabs) */
 .h10-rules-soon { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; padding: 86px 20px; border: 1px solid var(--nds-grey-150); border-radius: 14px; background: var(--nds-white); }
