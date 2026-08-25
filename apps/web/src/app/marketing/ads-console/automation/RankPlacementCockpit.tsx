@@ -24,6 +24,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, DragOverlay, type DragEndEvent, type DragStartEvent, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { GripVertical, Info, ArrowUp, Crosshair, TrendingUp, TrendingDown, Minus, Search, Plus, Loader2, Check, ListPlus, Sparkles, Zap, ShieldCheck, BarChart3, AlertTriangle, Clock, Wallet, RotateCcw, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 import { TimeRankGrid, compileGrid, describeGrid, type Level } from './TimeRankGrid'
 import { DemandHeatmap } from './DemandHeatmap'
 
@@ -745,18 +747,22 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
       {/* ── Campaign-first scope bar (hidden when the shell drives context) ── */}
       {!hideScopeBar && (
       <div className="az-cockpit-bar">
-        <label className="ctl"><span className="lbl">Market</span>
-          <select value={market} onChange={e => setMarket(e.target.value)}>{MARKETS.map(m => <option key={m}>{m}</option>)}</select>
-        </label>
-        <label className="ctl" style={{ flex: 1, minWidth: 220 }}><span className="lbl">Campaign</span>
-          <select value={campaignId} onChange={e => { setCampaignId(e.target.value) }} style={{ maxWidth: 'none', width: '100%' }}>
-            {filtered.length === 0 && <option>No campaigns in {market}</option>}
-            {filtered.map(c => <option key={c.id} value={c.id}>{c.status === 'ENABLED' ? '● ' : '○ '}{c.name}</option>)}
-          </select>
-        </label>
-        <label className="ctl"><span className="lbl">Find</span>
-          <div className="kw-wrap"><Search size={13} /><input value={campaignSearch} onChange={e => setCampaignSearch(e.target.value)} placeholder="Filter campaigns…" /></div>
-        </label>
+        <span className="ctl"><span className="lbl">Market</span>
+          <Listbox ariaLabel="Market" width={150} value={market} onChange={setMarket} options={MARKETS.map(m => ({ value: m, label: m }))} />
+        </span>
+        <span className="ctl" style={{ flex: 1, minWidth: 220 }}><span className="lbl">Campaign</span>
+          <Listbox
+            ariaLabel="Campaign"
+            width="100%"
+            value={campaignId}
+            onChange={setCampaignId}
+            placeholder={`No campaigns in ${market}`}
+            options={filtered.map(c => ({ value: c.id, label: `${c.status === 'ENABLED' ? '● ' : '○ '}${c.name}` }))}
+          />
+        </span>
+        <span className="ctl"><span className="lbl">Find</span>
+          <Input leadingIcon={<Search size={13} />} aria-label="Filter campaigns" value={campaignSearch} onChange={e => setCampaignSearch(e.target.value)} placeholder="Filter campaigns…" style={{ width: 150 }} />
+        </span>
         <span style={{ flex: 1 }} />
         {signalsLoading && <span className="az-cockpit-status">Loading…</span>}
         {!signalsLoading && campaign && <span className="az-cockpit-status ok">{filtered.length} in {market} · {WINDOW_DAYS}d</span>}
@@ -864,9 +870,9 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                   </div>
                 </div>
               )}
-              <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={applying || topManaged || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
+              <Button variant="primary" style={{ marginTop: 8, width: '100%' }} disabled={applying || topManaged || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
                 {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply {dirtyPlacements.length || ''} placement{dirtyPlacements.length === 1 ? '' : 's'}</>}
-              </button>
+              </Button>
               {applyResult && (
                 <div className="az-cockpit-sub" style={{ marginTop: 6, color: applyResult.mode === 'live' ? 'var(--green)' : applyResult.mode === 'error' ? '#cc1100' : 'var(--ink2)' }}>
                   {applyResult.mode === 'error' ? 'Apply failed — check the campaign sync status.'
@@ -882,12 +888,12 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                   <div className="az-hold-head"><ShieldCheck size={13} /> Hold {slotLabel(slot)}</div>
                   <div className="az-hold-sub">Run an autonomous loop that keeps impression share at the target for the least cost — raise while below &amp; ACOS is in budget, ease off otherwise.</div>
                   <div className="az-hold-ctls">
-                    <label>Target IS <input type="number" min={1} max={100} value={holdIS} onChange={e => setHoldIS(Math.max(1, Math.min(100, Number(e.target.value))))} disabled={holding} />%</label>
-                    <label>Max ACOS <input type="number" min={1} max={200} value={holdAcos} onChange={e => setHoldAcos(Math.max(1, Math.min(200, Number(e.target.value))))} disabled={holding} />%</label>
+                    <label>Target IS <Input type="number" min={1} max={100} aria-label="Target impression share" suffix="%" value={holdIS} onChange={e => setHoldIS(Math.max(1, Math.min(100, Number(e.target.value))))} disabled={holding} style={{ width: 50, fontWeight: 700 }} /></label>
+                    <label>Max ACOS <Input type="number" min={1} max={200} aria-label="Maximum ACOS" suffix="%" value={holdAcos} onChange={e => setHoldAcos(Math.max(1, Math.min(200, Number(e.target.value))))} disabled={holding} style={{ width: 50, fontWeight: 700 }} /></label>
                   </div>
-                  <button type="button" className="az-btn" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={holding} onClick={() => void createHold()}>
+                  <Button style={{ marginTop: 8, width: '100%' }} disabled={holding} onClick={() => void createHold()}>
                     {holding ? <><Loader2 size={14} className="az-spin" /> Creating…</> : <><ShieldCheck size={14} /> Hold IS ≥ {holdIS}%</>}
-                  </button>
+                  </Button>
                   {holdMsg === 'created' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Hold rule created (disabled + dry-run). Enable it in Active rules and allowlist this campaign to go live.</div>}
                   {holdMsg === 'error' && <div className="az-cockpit-sub" style={{ marginTop: 6, color: '#cc1100' }}>Could not create the hold rule.</div>}
                 </div>
@@ -903,10 +909,10 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
         <div className="az-rankwarn full" role="region" aria-label="Keyword rank-collision warning">
           <div className="az-rankwarn-msg"><AlertTriangle size={13} /> <b>{visibleConflicts.length} keyword{visibleConflicts.length === 1 ? '' : 's'}</b> you bid on {visibleConflicts.length === 1 ? 'is' : 'are'} also pushed by your other products{visibleConflicts[0]?.contenders.find(x => !x.isMine) ? <> (e.g. <b>{visibleConflicts[0].contenders.find(x => !x.isMine)!.campaignName}</b>)</> : null} — at the top you bid each other up.</div>
           <div className="az-rankwarn-acts">
-            <button type="button" className="az-btn dark" disabled={inlineBusy} onClick={() => void resolveAllTop('champion')}>{inlineBusy ? <><Loader2 size={12} className="az-spin" /> Staging…</> : <><ShieldCheck size={12} /> Let the best own each</>}</button>
-            <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('second')} title="Step this campaign to just below the leader on these keywords — aim for 2nd, not a war for 1st">Take 2nd here</button>
-            <button type="button" className="az-btn" disabled={inlineBusy} onClick={() => void resolveAllTop('rest')} title="Lower this campaign's bid on these keywords so they fall to rest of search">Move me to Rest</button>
-            <button type="button" className="az-btn ghost" disabled={inlineBusy} onClick={() => setInlineHidden(true)}>Ignore</button>
+            <Button variant="primary" disabled={inlineBusy} onClick={() => void resolveAllTop('champion')}>{inlineBusy ? <><Loader2 size={12} className="az-spin" /> Staging…</> : <><ShieldCheck size={12} /> Let the best own each</>}</Button>
+            <Button disabled={inlineBusy} onClick={() => void resolveAllTop('second')} title="Step this campaign to just below the leader on these keywords — aim for 2nd, not a war for 1st">Take 2nd here</Button>
+            <Button disabled={inlineBusy} onClick={() => void resolveAllTop('rest')} title="Lower this campaign's bid on these keywords so they fall to rest of search">Move me to Rest</Button>
+            <Button variant="ghost" disabled={inlineBusy} onClick={() => setInlineHidden(true)}>Ignore</Button>
             {inlineMsg && <span className="az-rankwarn-res" role="status" aria-live="polite">{inlineMsg}</span>}
             <a className="az-rankwarn-link" href="#az-kwx" onClick={() => setKwOpen(true)}>Review each in Keyword overlap ↓</a>
           </div>
@@ -959,10 +965,10 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           </table>
         </div>
         <div className="az-spend-actions">
-          <button type="button" className="az-btn dark" disabled={applying || topManaged || !campaign || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
+          <Button variant="primary" disabled={applying || topManaged || !campaign || dirtyPlacements.length === 0} onClick={() => void applyAll()}>
             {applying ? <><Loader2 size={14} className="az-spin" /> Applying…</> : <><Zap size={14} /> Apply {dirtyPlacements.length || 'all'} placement{dirtyPlacements.length === 1 ? '' : 's'}</>}
-          </button>
-          {dirtyPlacements.length > 0 && <button type="button" className="az-btn" disabled={applying || topManaged} onClick={resetBias}>Reset</button>}
+          </Button>
+          {dirtyPlacements.length > 0 && <Button disabled={applying || topManaged} onClick={resetBias}>Reset</Button>}
           {applyResult && <span className="az-cockpit-sub" style={{ color: applyResult.mode === 'live' ? 'var(--green)' : applyResult.mode === 'error' ? '#cc1100' : 'var(--ink2)' }}>{applyResult.mode === 'error' ? 'Apply failed.' : applyResult.mode === 'live' ? 'Applied live on Amazon.' : `Staged (${applyResult.mode}) — not live; flip the write-gate.`}</span>}
         </div>
         <div className="az-cockpit-note"><Info size={12} /> €/day = window spend ÷ {WINDOW_DAYS}. Projection estimates the CPC effect at the chosen bias % — actual spend also depends on how many more impressions you win in the auction.{dailyBudgetCents != null && totalProjPerDay > dailyBudgetCents ? ' Projected daily spend exceeds the daily budget (Amazon will cap at the budget).' : ''}</div>
@@ -1011,10 +1017,10 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                     })}
                   </div>
                   <div className="az-kwx-act">
-                    <button type="button" className="az-btn dark" disabled={kwBusy === c.keyNorm} onClick={() => void resolveConflict(c, 'champion')}>
+                    <Button variant="primary" disabled={kwBusy === c.keyNorm} onClick={() => void resolveConflict(c, 'champion')}>
                       {kwBusy === c.keyNorm ? <><Loader2 size={13} className="az-spin" /> Staging…</> : <><ShieldCheck size={13} /> Let {champName} own Top</>}
-                    </button>
-                    <button type="button" className="az-btn" disabled={kwBusy === c.keyNorm} onClick={() => dismissConflict(c.keyNorm)}>Ignore</button>
+                    </Button>
+                    <Button disabled={kwBusy === c.keyNorm} onClick={() => dismissConflict(c.keyNorm)}>Ignore</Button>
                     <span className="why">Best: <b>{champName}</b> — {c.championReason}</span>
                     {kwMsg[c.keyNorm] && <span className="msg" role="status" aria-live="polite">{kwMsg[c.keyNorm]}</span>}
                   </div>
@@ -1066,9 +1072,9 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
             {schedMode === 'guided' ? (<>
               <div className="az-guided-row">
                 <span>Maintain</span>
-                <select value={guidedLevel} onChange={e => setGuided(() => setGuidedLevel(e.target.value as Level))}><option value="max">Max</option><option value="strong">Strong</option></select>
+                <Listbox ariaLabel="Peak rank level" width={110} value={guidedLevel} onChange={v => setGuided(() => setGuidedLevel(v as Level))} options={[{ value: 'max', label: 'Max' }, { value: 'strong', label: 'Strong' }]} />
                 <span>rank during each day&apos;s peak, Normal outside.</span>
-                <label className="az-sched-check"><input type="checkbox" checked={guidedPause} onChange={e => setGuided(() => setGuidedPause(e.target.checked))} /> Pause dead overnight</label>
+                <Checkbox className="az-sched-check" checked={guidedPause} onChange={e => setGuided(() => setGuidedPause(e.target.checked))} label="Pause dead overnight" />
               </div>
               <div className="az-guided-peaks">
                 {dayPeaks.map(p => <span key={p.d} className="it"><b>{p.label}</b> {p.range ? `${p.range} · ${p.pct}%` : '—'}</span>)}
@@ -1088,10 +1094,10 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                   <button type="button" role="tab" aria-selected={applyScope === 'family'} className={applyScope === 'family' ? 'on' : ''} onClick={() => setApplyScope('family')}>All {family.campaigns.length}</button>
                 </span>
               )}
-              <button type="button" className="az-btn dark" disabled={gridSaving || !trGrid || scopedCampaigns.length === 0} onClick={() => void applyGrid()}>
+              <Button variant="primary" disabled={gridSaving || !trGrid || scopedCampaigns.length === 0} onClick={() => void applyGrid()}>
                 {gridSaving ? <><Loader2 size={14} className="az-spin" /> Saving…</> : <><Check size={14} /> Apply to {scopedCampaigns.length} campaign{scopedCampaigns.length === 1 ? '' : 's'}</>}
-              </button>
-              {scopedScheds.length > 0 && <label className="az-sched-toggle"><input type="checkbox" checked={scopedScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} /> Enabled ({scopedScheds.filter(s => s.enabled).length}/{scopedScheds.length})</label>}
+              </Button>
+              {scopedScheds.length > 0 && <Checkbox className="az-sched-toggle" checked={scopedScheds.every(s => s.enabled)} disabled={gridSaving} onChange={e => void toggleAll(e.target.checked)} label={`Enabled (${scopedScheds.filter(s => s.enabled).length}/${scopedScheds.length})`} />}
               {gridMsg === 'saved' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}><Check size={12} style={{ verticalAlign: 'text-bottom' }} /> Saved{scopedScheds.length && !scopedScheds.every(s => s.enabled) ? ' — toggle Enabled to run' : ''}</span>}
               {gridMsg === 'error' && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Save failed</span>}
             </div>
@@ -1110,12 +1116,12 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           {/* Automate — hold the rank without re-applying by hand */}
           <div className="az-tr-automate">
             <span className="l">Keep it automatic</span>
-            <button type="button" className="az-btn" disabled={creatingRule || !family.parentProductId} onClick={() => void createRefreshRule()}>
+            <Button disabled={creatingRule || !family.parentProductId} onClick={() => void createRefreshRule()}>
               {creatingRule ? <><Loader2 size={14} className="az-spin" /> …</> : <><Sparkles size={14} /> Auto-maintain weekly</>}
-            </button>
-            <button type="button" className="az-btn" disabled={gridHolding || !family.parentProductId} onClick={() => void createGridHold()}>
+            </Button>
+            <Button disabled={gridHolding || !family.parentProductId} onClick={() => void createGridHold()}>
               {gridHolding ? <><Loader2 size={14} className="az-spin" /> …</> : <><ShieldCheck size={14} /> Defend top rank in push hours</>}
-            </button>
+            </Button>
             {autoMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Auto-maintain rule created.</span>}
             {gridHoldMsg === 'created' && <span className="az-cockpit-sub" style={{ margin: 0, color: 'var(--green)' }}>Defense rule created.</span>}
             {(autoMsg === 'error' || gridHoldMsg === 'error') && <span className="az-cockpit-sub" style={{ margin: 0, color: '#cc1100' }}>Could not create the rule.</span>}
@@ -1133,15 +1139,15 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
           {/* Add — paste → bid-to-win → add */}
           <div className="az-kwmgr-add">
             <div className="az-kwmgr-sublbl">Add in bulk — paste keywords (one per line or comma-separated)</div>
-            <textarea className="az-kwmgr-paste" value={paste} onChange={e => setPaste(e.target.value)} placeholder={'giacca moto pelle\ngiubbotto moto estivo, guanti moto racing'} rows={4} />
+            <Textarea aria-label="Paste keywords" value={paste} onChange={e => setPaste(e.target.value)} placeholder={'giacca moto pelle\ngiubbotto moto estivo, guanti moto racing'} rows={4} style={{ minHeight: 96, fontSize: 12.5 }} />
             <div className="az-kwmgr-row">
-              <label className="az-kwmgr-match">Match
-                <select value={kwMatch} onChange={e => setKwMatch(e.target.value as typeof MATCH_TYPES[number])}>{MATCH_TYPES.map(m => <option key={m}>{m}</option>)}</select>
-              </label>
+              <span className="az-kwmgr-match">Match
+                <Listbox ariaLabel="Match type" width={120} value={kwMatch} onChange={v => setKwMatch(v as typeof MATCH_TYPES[number])} options={MATCH_TYPES.map(m => ({ value: m, label: m }))} />
+              </span>
               <span style={{ flex: 1 }} />
-              <button type="button" className="az-btn" disabled={suggesting || !paste.trim()} onClick={() => void getBids()}>
+              <Button disabled={suggesting || !paste.trim()} onClick={() => void getBids()}>
                 {suggesting ? <><Loader2 size={14} className="az-spin" /> Pricing…</> : <><Sparkles size={14} /> Get bid-to-win</>}
-              </button>
+              </Button>
             </div>
 
             {parsed && parsed.length > 0 && (
@@ -1156,9 +1162,9 @@ export function RankPlacementCockpit({ market: ctxMarket, campaignId: ctxCampaig
                     </>}
                   </div>
                 ))}
-                <button type="button" className="az-btn dark" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={adding || !adGroupId || parsed.filter(p => !p.exists).length === 0} onClick={() => void addKeywords()}>
+                <Button variant="primary" style={{ marginTop: 8, width: '100%' }} disabled={adding || !adGroupId || parsed.filter(p => !p.exists).length === 0} onClick={() => void addKeywords()}>
                   {adding ? <><Loader2 size={14} className="az-spin" /> Adding…</> : <><Plus size={14} /> Add {parsed.filter(p => !p.exists).length} to campaign</>}
-                </button>
+                </Button>
                 {!adGroupId && <div className="az-cockpit-sub" style={{ color: '#cc1100' }}>This campaign has no keyword ad group yet — add keywords via the campaign builder first.</div>}
               </div>
             )}
