@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, Fragment } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, Fragment } from 'react'
 import { ChevronsUpDown, ChevronUp, ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { ToolbarButton } from '../primitives'
 // The pattern FILE, not the `../patterns` barrel — see the note on the Modal
@@ -12,6 +12,15 @@ export interface Column<T> {
   label: ReactNode
   render: (row: T) => ReactNode
   align?: 'left' | 'right' | 'center'
+  /**
+   * A figures column: right-aligned AND `font-variant-numeric: tabular-nums`.
+   *
+   * Not implied by `align: 'right'`, because a right-aligned STATUS is not a number. Measured:
+   * the DS set `font-variant-numeric` on no selector at all, so every converted money column
+   * silently lost the proportional-digit fix its hand-rolled version had — and in a grid,
+   * digits lining up is the whole point.
+   */
+  numeric?: boolean
   sortable?: boolean
   sortValue?: (row: T) => number | string
   /** pin this column to the left (sticky); give a numeric `width` so offsets stack */
@@ -61,6 +70,23 @@ export interface DataGridProps<T> {
   renderExpanded?: (row: T) => ReactNode
   /** Keys of the currently expanded rows. Controlled — the grid keeps no expansion state. */
   expanded?: Set<string>
+  /**
+   * Extra props for each `<tr>` — drag handlers, data-*, title.
+   *
+   * `rowClassName` covers appearance only; a grid whose ROWS are drop targets needs real
+   * handlers. The portfolios list spreads onDragOver/onDragLeave/onDrop onto each row so a rule
+   * can be dragged onto a family, and could not adopt the grid without this.
+   */
+  rowProps?: (row: T) => HTMLAttributes<HTMLTableRowElement>
+  /**
+   * Row density. `md` (default) is 13px with 11px/14px cells; `sm` is 12.5px / 7px 10px; `xs` is
+   * 11.5px / 5px 9px, matching the tier every other control gained.
+   *
+   * Measured against five real tables: 12px/11px 14px, 12.5px/7px 10px, 12.5px/6px 11px,
+   * 11px/6px 10px, 11.5px/5px 9px. At one density the grid added up to 12px per row, which on a
+   * page of six stacked tables is the difference between a page and a scroll.
+   */
+  size?: 'md' | 'sm' | 'xs'
   initialSort?: { key: string; dir: 'asc' | 'desc' }
   /**
    * Controlled sort (NAF.SB.AS-S1R S1.e — additive, opt-in).
@@ -142,7 +168,7 @@ export function DataGrid<T>({
   selectAllHint,
   selectRowHint,
   showTotals,
-  emptyState, renderExpanded, expanded,
+  emptyState, renderExpanded, expanded, rowProps, size = 'md',
   initialSort,
   sort: controlledSort,
   onSortChange,
@@ -334,7 +360,7 @@ export function DataGrid<T>({
 
   const grid = (
     <div className={`nds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
-      <table className="nds-grid">
+      <table className={['nds-grid', size === 'md' ? '' : size].filter(Boolean).join(' ')}>
         <thead>
           <tr>
             {selectable && (
@@ -396,7 +422,7 @@ export function DataGrid<T>({
               const k = rowKey(row)
               const isSel = !!selected?.has(k)
               const main = (
-                <tr key={k} className={[isSel ? 'sel' : '', rowClassName?.(row) ?? ''].filter(Boolean).join(' ') || undefined}>
+                <tr key={k} {...(rowProps?.(row) ?? {})} className={[isSel ? 'sel' : '', rowClassName?.(row) ?? ''].filter(Boolean).join(' ') || undefined}>
                   {selectable && (
                     <td className="ck sticky" style={{ left: 0 }}>
                       {rowSelectable && !rowSelectable(row) ? (
@@ -407,7 +433,7 @@ export function DataGrid<T>({
                     </td>
                   )}
                   {cols.map((c) => (
-                    <td key={c.key} className={[alignClass(c.align), stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
+                    <td key={c.key} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                       {c.render(row)}
                     </td>
                   ))}

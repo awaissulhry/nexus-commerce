@@ -25,6 +25,13 @@ export interface SegmentedOption {
   value: string
   label: ReactNode
   icon?: ReactNode
+  /**
+   * Native tooltip for the whole segment.
+   *
+   * Without it a per-option explanation had to ride inside the `label` node, where it covers the
+   * text rather than the segment — so hovering the words showed nothing.
+   */
+  title?: string
 }
 export interface SegmentedControlProps {
   /**
@@ -77,6 +84,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
             aria-checked={active}
             tabIndex={rovingTabIndex(active, selectedIndex, i)}
             className={`nds-seg-opt ${active ? 'on' : ''}`}
+            title={opt.title}
             disabled={disabled}
             onClick={() => onChange(opt.value)}
           >

@@ -1090,7 +1090,12 @@
   border-bottom: 1px solid var(--nds-border);
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--nds-text-2);
+  /* --nds-text-strong (9.87:1), NOT --nds-text-2 (5.60:1). A column heading is the thing you scan
+     to find a column, and it was sitting two tiers below its own body text (--nds-text, 15.48:1).
+     Still lighter than the body, so the hierarchy holds; it only ever rises. Raised because the
+     ads console's own headers are 18.94:1 and every converted table dropped them by a factor of
+     three. */
+  color: var(--nds-text-strong);
   text-align: left;
   padding: 10px 14px;
   white-space: nowrap;
@@ -1896,4 +1901,30 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   padding: 0;
   background: var(--nds-surface-sunken);
   border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+/* Figures column: digits that line up. The DS set `font-variant-numeric` on no selector at all,
+   so every converted money column silently lost the fix its hand-rolled version had. */
+.nds-grid td.num,
+.nds-grid th.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row density. Measured against five real tables (12/11px14px, 12.5/7px10px, 12.5/6px11px,
+   11/6px10px, 11.5/5px9px); at one density the grid added up to 12px per row, which on a page of
+   six stacked tables is the difference between a page and a scroll. */
+.nds-grid.sm thead th {
+  padding: 7px 10px;
+}
+.nds-grid.sm tbody td {
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+.nds-grid.xs thead th {
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.nds-grid.xs tbody td {
+  padding: 5px 9px;
+  font-size: 11.5px;
 }
