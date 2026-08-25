@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Save, AlertTriangle, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Input } from '@/design-system/primitives'
 import { GuardrailGrid } from './GuardrailGrid'
 import { ProtectedTermsPanel } from '../ProtectedTermsPanel'
 
@@ -96,7 +97,8 @@ export function GuardrailsTab() {
         <div className="acr-fields">
           <label>
             <span className="acr-lbl">Actions per hour</span>
-            <input
+            <Input
+              fieldClassName="acr-field"
               type="number" min={1} inputMode="numeric" value={actions}
               placeholder={`${g.actionsPerHour.default} (default)`}
               onChange={(e) => { setActions(e.target.value); setSaved(false) }}
@@ -108,7 +110,8 @@ export function GuardrailsTab() {
           </label>
           <label>
             <span className="acr-lbl">Spend per hour (€)</span>
-            <input
+            <Input
+              fieldClassName="acr-field"
               type="number" min={1} inputMode="numeric" value={spend}
               placeholder={`${g.spendPerHourCents.default / 100} (default)`}
               onChange={(e) => { setSpend(e.target.value); setSaved(false) }}

@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Search, Pin, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Checkbox, Input, Select } from '@/design-system/primitives'
 
 type Dim = 'placement' | 'bids' | 'budget'
 
@@ -410,31 +411,30 @@ export function GuardrailGrid() {
       </div>
 
       <div className="acr-gg-bar">
-        <label className="acr-gg-search">
-          <Search size={13} />
-          <input
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search campaigns" aria-label="Search campaigns"
-          />
-        </label>
-        <select value={market} onChange={(e) => setMarket(e.target.value)} aria-label="Marketplace">
+        <Input
+          fieldClassName="acr-gg-search"
+          leadingIcon={<Search size={13} />}
+          value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search campaigns" aria-label="Search campaigns"
+        />
+        <Select value={market} onChange={(e) => setMarket(e.target.value)} aria-label="Marketplace">
           <option value="">All markets</option>
           {markets.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <label className="acr-gg-check">
-          <input type="checkbox" checked={managedOnly} onChange={(e) => setManagedOnly(e.target.checked)} />
-          Managed only
-        </label>
+        </Select>
+        <Checkbox
+          className="acr-gg-check" label="Managed only"
+          checked={managedOnly} onChange={(e) => setManagedOnly(e.target.checked)}
+        />
         {/* The grid's actual job, as a filter. Counts are live so the option itself says how
             much work each one represents. */}
-        <select value={gap} onChange={(e) => setGap(e.target.value as typeof gap)} aria-label="Show only campaigns with a gap">
+        <Select value={gap} onChange={(e) => setGap(e.target.value as typeof gap)} aria-label="Show only campaigns with a gap">
           <option value="">Any bounds state</option>
           <option value="no-min">No min bid ({(g?.rows ?? []).filter((r) => r.minBidCents == null).length})</option>
           <option value="no-max">No max bid ({(g?.rows ?? []).filter((r) => r.maxBidCents == null).length})</option>
           <option value="no-bounds">No bounds at all ({(g?.rows ?? []).filter((r) => r.minBidCents == null && r.maxBidCents == null).length})</option>
           <option value="pinned">Pinned ({(g?.rows ?? []).filter((r) => r.pinnedDimensions.length > 0).length})</option>
           <option value="suppressed">Suppressed ({(g?.rows ?? []).filter((r) => r.suppressedAt).length})</option>
-        </select>
+        </Select>
         {/* Filter state is always visible with a way back, per the console's standing rule. */}
         {(search || market || !managedOnly || gap) && (
           <button type="button" className="acr-gg-reset" onClick={() => { setSearch(''); setMarket(''); setManagedOnly(true); setGap('') }}>
@@ -509,8 +509,8 @@ export function GuardrailGrid() {
             <thead>
               <tr>
                 <th className="acr-gg-selh">
-                  <input
-                    type="checkbox" checked={allShownSelected} onChange={toggleAll}
+                  <Checkbox
+                    checked={allShownSelected} onChange={toggleAll}
                     aria-label={allShownSelected ? 'Clear selection' : 'Select every campaign shown'}
                     // Says what it will actually do: it selects the FILTERED rows, not the
                     // account. With "Managed only" on, that is 82 of 216.
@@ -533,8 +533,8 @@ export function GuardrailGrid() {
               {shown.map((r) => (
                 <tr key={r.id} className={`${saving === r.id ? 'saving' : ''} ${sel.has(r.id) ? 'sel' : ''}`.trim() || undefined}>
                   <td className="acr-gg-sel">
-                    <input
-                      type="checkbox" checked={sel.has(r.id)} onChange={() => toggleOne(r.id)}
+                    <Checkbox
+                      checked={sel.has(r.id)} onChange={() => toggleOne(r.id)}
                       aria-label={`Select ${r.name}`}
                     />
                   </td>

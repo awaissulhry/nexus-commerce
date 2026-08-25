@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Check, FlaskConical, History, PlayCircle, RotateCcw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Input, Textarea } from '@/design-system/primitives'
 import { Term } from '../../glossary'
 
 interface Revision {
@@ -145,7 +146,7 @@ export function CharterStudio({
         .
       </p>
 
-      <textarea
+      <Textarea
         className="acr-cs-editor"
         value={draft}
         spellCheck={false}
@@ -193,8 +194,8 @@ export function CharterStudio({
           <FlaskConical size={13} /> {busy === 'evaluate' ? 'Measuring…' : 'Measure against the current charter'}
         </button>
         <span className="acr-cs-notewrap">
-          <input
-            className="acr-cs-note"
+          <Input
+            fieldClassName="acr-cs-note"
             placeholder="one line: what did you change and why?"
             value={note}
             onChange={(e) => setNote(e.target.value)}

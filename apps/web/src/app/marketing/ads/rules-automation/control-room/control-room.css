@@ -145,11 +145,8 @@
 .acr-fields { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
 .acr-fields label { display: flex; flex-direction: column; gap: 5px; min-width: 168px; }
 .acr-lbl { font-size: 11.5px; font-weight: 600; color: #46536a; text-transform: uppercase; letter-spacing: 0.03em; }
-.acr-fields input {
-  font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white);
-  border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 7px 10px; width: 100%;
-}
-.acr-fields input:focus { outline: 2px solid #bcd4f5; outline-offset: -1px; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the fields are the DS `Input`; only their column width is ours. */
+.acr-field { width: 100%; }
 .acr-hint { font-size: 11.5px; color: var(--nds-text-muted); }
 .acr-hint strong { color: var(--nds-grey-700); font-weight: 600; }
 .acr-note { font-size: 12px; color: var(--nds-text-muted); margin: 12px 0 0; line-height: 1.55; max-width: 82ch; }
@@ -565,24 +562,13 @@ a.acr-refresh { text-decoration: none; }
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 10px;
 }
-.acr-gg-search {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); background: var(--nds-white); padding: 0 9px;
-  color: var(--nds-grey-500);
-}
-.acr-gg-search input {
-  border: none; outline: none; background: none;
-  font-size: 12.5px; color: var(--nds-grey-700); padding: 7px 0; width: 190px;
-}
-.acr-gg-search:focus-within { border-color: var(--nds-blue-600); box-shadow: 0 0 0 2px #dbe8fa; }
-.acr-gg-bar select {
-  font-size: 12.5px; color: var(--nds-grey-700); background: var(--nds-white);
-  border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-sm); padding: 7px 9px; cursor: pointer;
-}
-.acr-gg-check {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: #46536a; cursor: pointer; user-select: none;
-}
+/* DS-ALIGN — the search box is the DS `Input` and the two dropdowns are the DS
+   `Select`; both carry the border, the hover and the focus ring, so the rules that
+   hand-rolled them here are gone. What is left is the only thing this bar knows and
+   the primitives cannot: how wide the search field should be, and that dragging
+   across the filter label must not select its text. */
+.acr-gg-search > input { width: 190px; }
+.acr-gg-check { user-select: none; }
 .acr-gg-reset {
   font-size: 12px; color: #2a5399; background: var(--nds-blue-50);
   border: 1px solid #c8d8f5; border-radius: var(--nds-radius-sm); padding: 6px 10px; cursor: pointer;
@@ -656,7 +642,7 @@ a.acr-refresh { text-decoration: none; }
 
 @media (max-width: 900px) {
   .acr-gg-count { margin-left: 0; }
-  .acr-gg-search input { width: 130px; }
+  .acr-gg-search > input { width: 130px; }
 }
 
 /* ── ACR.4.3 · "This week" rollup + ACR.4.2 digest gate ──────────────────── */
@@ -907,7 +893,6 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-lbl { font-size: 11.5px; font-weight: 650; color: var(--nds-grey-600); }
 .acr-dial { display: inline-flex; gap: 4px; }
 .acr-dial .acr-btn.on { background: var(--nds-blue-600); color: var(--nds-white); border-color: var(--nds-blue-600); }
-.acr-fl-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-700); cursor: pointer; }
 .acr-fl-facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--nds-text-muted); margin-bottom: 10px; }
 .acr-fl-degraded { color: var(--nds-danger-text); font-weight: 650; }
 .acr-fl-runs { display: flex; flex-direction: column; gap: 4px; }
@@ -953,11 +938,8 @@ a.acr-refresh { text-decoration: none; }
 .acr-fl-apbody { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--nds-grey-700); min-width: 0; }
 .acr-fl-apactions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .acr-fl-rejectrow { display: inline-flex; align-items: center; gap: 6px; }
-.acr-fl-rejectrow input {
-  font-size: 12px; padding: 4px 8px; border: 1px solid var(--nds-grey-150);
-  border-radius: var(--nds-radius-sm); width: 220px; color: #232c37;
-}
-.acr-fl-rejectrow input:focus { outline: none; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the reason box is the DS `Input`; only its width is ours. */
+.acr-fl-reasonfield { width: 220px; }
 
 /* cost ledger */
 .acr-fl-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; }
@@ -1249,13 +1231,14 @@ a.acr-refresh { text-decoration: none; }
 
 /* ── NAF.AC — Charter Studio ─────────────────────────────────────────── */
 .acr-cs { display: flex; flex-direction: column; gap: 12px; }
+/* DS-ALIGN — the DS `Textarea` carries the border, the focus ring and the resize
+   handle. What stays is the only thing this editor is: a MONOSPACE prompt surface,
+   taller than the primitive's default and sunk into the card so it reads as code. */
 .acr-cs-editor {
-  width: 100%; min-height: 300px; padding: 12px 14px; border-radius: 9px;
-  border: 1px solid var(--nds-grey-150); background: var(--nds-grey-25); color: #232c37;
+  min-height: 300px; background: var(--nds-grey-25);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px; line-height: 1.6; resize: vertical;
+  font-size: 12px; line-height: 1.6;
 }
-.acr-cs-editor:focus { outline: none; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgb(31 111 222 / 0.12); }
 .acr-cs-diff {
   border: 1px solid var(--nds-grey-150); border-radius: 9px; padding: 10px 12px; background: var(--nds-grey-25);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
@@ -1270,11 +1253,8 @@ a.acr-refresh { text-decoration: none; }
 .acr-cs-line.removed { color: var(--nds-danger-text); background: #fdf2f2; }
 .acr-cs-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .acr-cs-notewrap { display: inline-flex; gap: 8px; align-items: center; flex: 1; min-width: 320px; }
-.acr-cs-note {
-  flex: 1; font-size: 12px; padding: 6px 10px; border: 1px solid var(--nds-grey-150);
-  border-radius: var(--nds-radius-lg); color: #232c37;
-}
-.acr-cs-note:focus { outline: none; border-color: var(--nds-blue-600); }
+/* DS-ALIGN — the DS `Input`; only its share of the row is ours. */
+.acr-cs-note { flex: 1; }
 .acr-cs-result {
   padding: 11px 13px; border-radius: 9px; border: 1px solid var(--nds-grey-150); background: var(--nds-grey-25);
   display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: var(--nds-grey-700);

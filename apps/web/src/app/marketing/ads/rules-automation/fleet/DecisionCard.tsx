@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react'
+import { Input } from '@/design-system/primitives'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
 
@@ -378,8 +379,9 @@ export function DecisionCard({
         </button>
         {rejecting ? (
           <span className="acr-fl-rejectrow">
-            <input
+            <Input
               autoFocus
+              fieldClassName="acr-fl-reasonfield"
               placeholder="one-line reason — this teaches the fleet"
               value={reason}
               onChange={(e) => setReason(e.target.value)}

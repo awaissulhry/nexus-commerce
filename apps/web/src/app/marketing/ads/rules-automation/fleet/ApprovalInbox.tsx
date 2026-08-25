@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Clock, GraduationCap, Timer, Undo2, X } from 'lucide-react'
 import { DecisionCard, TOOL_CARDS, toolCardFor } from './DecisionCard'
+import { Checkbox, Input } from '@/design-system/primitives'
 import { Term } from './glossary'
 import type { StoryPlan } from './PlanStory'
 
@@ -450,8 +451,9 @@ export function ApprovalInbox({
               </span>
               {rejectAllFor === charterKey ? (
                 <span className="acr-fl-rejectrow">
-                  <input
+                  <Input
                     autoFocus
+                    fieldClassName="acr-fl-reasonfield"
                     placeholder="one-line reason (required)"
                     value={rejectAllReason}
                     onChange={(e) => setRejectAllReason(e.target.value)}
@@ -496,14 +498,12 @@ export function ApprovalInbox({
                 />
               ) : (
                 <div key={a.id} className="ap-selectrow">
-                  <label className="ap-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(a.id)}
-                      onChange={() => toggle(a.id)}
-                      aria-label={`Select this request from ${nameOf(a.charterKey)}`}
-                    />
-                  </label>
+                  <Checkbox
+                    className="ap-checkbox"
+                    checked={selected.has(a.id)}
+                    onChange={() => toggle(a.id)}
+                    aria-label={`Select this request from ${nameOf(a.charterKey)}`}
+                  />
                   <DecisionCard
                     approval={a}
                     workerName={nameOf(a.charterKey)}

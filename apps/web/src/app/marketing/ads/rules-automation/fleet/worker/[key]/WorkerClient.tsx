@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Checkbox } from '@/design-system/primitives'
 import type { PlanLabels } from '../../PlanStory'
 import { CharterStudio } from './CharterStudio'
 import { ConfirmSpend, PauseDialog, applyPause } from '@/app/fleet/_shared/autonomy'
@@ -414,15 +415,12 @@ export function WorkerClient({ workerKey }: { workerKey: string }) {
               )
             })}
           </div>
-          <label className="acr-fl-toggle">
-            <input
-              type="checkbox"
-              checked={charter.enabled}
-              disabled={busy}
-              onChange={(e) => void patchCharter({ enabled: e.target.checked })}
-            />
-            enabled
-          </label>
+          <Checkbox
+            label="enabled"
+            checked={charter.enabled}
+            disabled={busy}
+            onChange={(e) => void patchCharter({ enabled: e.target.checked })}
+          />
         </div>
         {charter.degraded ? (
           <p className="acr-fl-degraded">
