@@ -880,3 +880,19 @@
   padding: 9px 18px;
   gap: 8px;
 }
+
+/* Checkbox tone. The box is filled with accent-color and the tick is drawn white by the browser,
+   so each of these is a white-on-accent pair: success 5.93:1, warning 6.31:1, danger 7.36:1.
+   `neutral` and the default are the primary blue. */
+.nds-check.info input {
+  accent-color: var(--nds-primary);
+}
+.nds-check.success input {
+  accent-color: var(--nds-success-text);
+}
+.nds-check.warning input {
+  accent-color: var(--nds-warning-text);
+}
+.nds-check.danger input {
+  accent-color: var(--nds-danger-text);
+}

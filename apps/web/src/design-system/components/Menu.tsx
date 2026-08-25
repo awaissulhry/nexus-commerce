@@ -7,10 +7,17 @@ import { usePopoverPosition } from './usePopoverPosition'
 
 export interface MenuItemDef {
   id: string
-  label: ReactNode
+  label?: ReactNode
   icon?: ReactNode
   disabled?: boolean
   onSelect?: () => void
+  /**
+   * Render a rule instead of an item. Everything else on the entry is ignored.
+   *
+   * The SP wizard's Select menu needed a divider between "by campaign kind" and "by match type";
+   * without one the two groups read as one undifferentiated list.
+   */
+  separator?: boolean
 }
 
 export interface MenuProps {
@@ -47,7 +54,10 @@ export function Menu({ label, items, align = 'left', triggerProps, className }: 
       {open && (
         createPortal(
           <div ref={popRef} style={popStyle} className="nds-menu" role="menu">
-            {items.map((it) => (
+            {items.map((it) =>
+              it.separator ? (
+                <div key={it.id} className="nds-menu-sep" role="separator" />
+              ) : (
               <button
                 key={it.id}
                 type="button"
@@ -61,7 +71,8 @@ export function Menu({ label, items, align = 'left', triggerProps, className }: 
                 {it.icon}
                 {it.label}
               </button>
-            ))}
+              ),
+            )}
           </div>,
           document.body,
         )

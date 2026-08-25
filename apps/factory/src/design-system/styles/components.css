@@ -1468,3 +1468,27 @@
   cursor: default;
   opacity: 0.55;
 }
+
+/* Listbox option groups. Exists because the rule builder's action picker is 26 actions across
+   six <optgroup>s and flattening them loses the only structure that makes the list navigable —
+   so that select stayed native rather than adopt the DS. */
+.nds-combo-group + .nds-combo-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-combo-grouphd {
+  padding: 5px 9px 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-muted);
+}
+
+/* A rule between menu groups. Without one, two groups read as a single undifferentiated list. */
+.nds-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--nds-border-subtle);
+}

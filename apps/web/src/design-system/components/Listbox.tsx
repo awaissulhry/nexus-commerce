@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
+import { groupOptions } from '../lib/group-options'
 import { searchOptions } from '../lib/option-search'
 
 export interface ListboxOption {
@@ -14,6 +15,15 @@ export interface ListboxOption {
   /** native tooltip for this option; defaults to the label, which is how a truncated
    *  option stays readable (options are nowrap + ellipsis) */
   title?: string
+  /**
+   * Optional heading this option sits under. Options sharing a group render together, groups in
+   * first-seen order.
+   *
+   * Exists because the rule builder's action picker is 26 actions across six `<optgroup>`s
+   * ("Bids", "Budget", "Pause/resume"…) and flattening them loses the only structure that makes
+   * the list navigable — so that one select stayed native rather than adopt the DS.
+   */
+  group?: string
 }
 
 export interface ListboxProps {
@@ -62,10 +72,22 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
   const selected = options.find((o) => o.value === value)
   // Ranked, separator-aware matching — a raw `includes` fails on names like "GALE | IT | Broad".
   const showSearch = searchable || options.length > SEARCH_THRESHOLD
-  const matches = showSearch ? searchOptions(q, options, (o) => o.label) : options
+  const ranked = showSearch ? searchOptions(q, options, (o) => o.label) : options
+  // Group headings are visual, but they REORDER the list, and keyboard nav indexes a flat array.
+  // `groupOptions` returns both halves together so they cannot drift apart — see its tests.
+  const grouped = groupOptions(ranked)
+  const groups = grouped?.groups ?? null
+  const matches = grouped?.flat ?? ranked
   const hasOwnEmpty = options.some((o) => o.value === '')
   const showClear = emptyLabel != null && !hasOwnEmpty
   const pick = (v: string) => { onChange(v); setOpen(false); setQ(''); setActive(0) }
+  const renderOption = (o: ListboxOption, i: number) => (
+    <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
+      className={[o.value === value ? 'on' : '', showSearch && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined} title={o.title ?? o.label}
+      onClick={() => pick(o.value)}>
+      {o.label}
+    </button>
+  )
 
   return (
     <div className={`nds-listbox${className ? ` ${className}` : ''}`} style={width != null ? { width } : undefined} ref={ref} onKeyDown={(e) => (() => {
@@ -96,13 +118,24 @@ export function Listbox({ options, value, onChange, placeholder = 'Select…', a
               </button>
             )}
             {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
-            {matches.map((o, i) => (
-              <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
-                className={[o.value === value ? 'on' : '', showSearch && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined} title={o.title ?? o.label}
-                onClick={() => pick(o.value)}>
-                {o.label}
-              </button>
-            ))}
+            {groups
+              ? (() => {
+                  let i = -1
+                  return groups.map((g) => (
+                    <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
+                      {g.name !== '' && (
+                        <div className="nds-combo-grouphd" aria-hidden>
+                          {g.name}
+                        </div>
+                      )}
+                      {g.options.map((o) => {
+                        i += 1
+                        return renderOption(o, i)
+                      })}
+                    </div>
+                  ))
+                })()
+              : matches.map((o, i) => renderOption(o, i))}
           </div>,
           document.body,
         )
