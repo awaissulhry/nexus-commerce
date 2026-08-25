@@ -49,7 +49,7 @@
  * and the answer is a new component, not a string.
  *
  * ── Styling ─────────────────────────────────────────────────────────────────────────────────────
- * Every class here (`h10-mmbid`, `h10-editpop`, `h10-bulk-inp`, `h10-menu-back`, `h10-am-link`,
+ * Every class here (`h10-mmbid`, `h10-editpop`, `h10-bulk-inp`, `h10-menu-back`, the DS `nds-btn link`,
  * `h10-am-btn`) is already in `ads.css`, which `marketing/ads/layout.tsx` loads for the whole
  * sub-tree — verified in the deployed DOM from the Apply Rules page, where all six resolve. Moving
  * the components needed no CSS at all.
@@ -192,7 +192,7 @@ export function RangePopover({
         {bad && <p className="e" role="alert">Each end must be at least €{(floorCents / 100).toFixed(2)}, and Min must not exceed Max.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
-          <button type="button" className="h10-am-link" disabled={busy} onClick={onClose}>Cancel</button>
+          <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>
           <Button
  variant="primary" size="sm" disabled={busy || bad}
  onClick={() => onApply(range ? { minCents: minC, maxCents: maxC } : null)}
@@ -251,7 +251,7 @@ export function ValuePopover({
         {bad && <p className="e" role="alert">Enter a number.</p>}
         {error && <p className="e" role="alert">{error}</p>}
         <div className="f">
-          <button type="button" className="h10-am-link" disabled={busy} onClick={onClose}>Cancel</button>
+          <Button variant="link" disabled={busy} onClick={onClose}>Cancel</Button>
           <Button variant="primary" size="sm" disabled={busy || bad} onClick={() => onApply(v)}>{busy ? 'Applying…' : 'Apply'}</Button>
         </div>
       </div>

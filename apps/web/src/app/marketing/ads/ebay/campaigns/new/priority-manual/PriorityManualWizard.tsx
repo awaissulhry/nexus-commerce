@@ -16,6 +16,7 @@ import { ListingsStep } from '../_wizard/steps/ListingsStep'
 import { KeywordsStep } from '../_wizard/steps/KeywordsStep'
 import { BudgetStep } from '../_wizard/steps/BudgetStep'
 import { ReviewStep } from '../_wizard/steps/ReviewStep'
+import { Button } from '@/design-system/primitives'
 
 const CPC_PACKS = ['Keyword bleeder — pause (CPC)', 'Keyword bid-down on thin CTR (CPC)']
 
@@ -51,7 +52,7 @@ export function PriorityManualWizard() {
       nextLabel={w.step === 'review' ? 'Review above' : 'Next'}>
       {w.resume && (
         <div className="eb-sandbox" style={{ marginBottom: 12 }}>
-          <b>Draft resumed</b> — saved {w.resume.savedAt ? new Date(w.resume.savedAt).toLocaleString('en-GB') : 'earlier'}. <button type="button" className="h10-am-link" onClick={w.dismissResume}>ok</button>
+          <b>Draft resumed</b> — saved {w.resume.savedAt ? new Date(w.resume.savedAt).toLocaleString('en-GB') : 'earlier'}. <Button variant="link" onClick={w.dismissResume}>ok</Button>
         </div>
       )}
       {w.dataErr && <div className="h10-cd-error">Couldn&apos;t load listings — {w.dataErr}.</div>}

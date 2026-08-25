@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Button } from '@/design-system/primitives'
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -103,7 +104,7 @@ export function EbDateField({ value, onChange, min, max, placeholder = 'not set'
           </div>
           {clearable && value && (
             <div className="eb-df-foot">
-              <button type="button" className="h10-am-link" onClick={() => { onChange(''); setOpen(false) }}>{clearLabel}</button>
+              <Button variant="link" onClick={() => { onChange(''); setOpen(false) }}>{clearLabel}</Button>
             </div>
           )}
         </div>

@@ -49,12 +49,12 @@ export function BudgetStep({ plan, set, showMaxCpc }: { plan: CampaignPlan; set:
             </div>
             {suggestion && (
               <span className="eb-be-hint">
-                Suggested <b>{money(suggestion.suggestedCents)}</b> <InfoTip tip={`Our formula from your data: ${suggestion.formula}`} /> · <button type="button" className="h10-am-link" onClick={() => set({ budgetEur: (suggestion.suggestedCents / 100).toFixed(2) })}>Use</button>
+                Suggested <b>{money(suggestion.suggestedCents)}</b> <InfoTip tip={`Our formula from your data: ${suggestion.formula}`} /> · <Button variant="link" onClick={() => set({ budgetEur: (suggestion.suggestedCents / 100).toFixed(2) })}>Use</Button>
               </span>
             )}
             {suggestion?.ebaySuggestedCents != null && (
               <span className="eb-be-hint">
-                eBay suggests <b>{money(suggestion.ebaySuggestedCents)}</b> <InfoTip tip="eBay's own suggest_budget for this marketplace and funding model — their estimate, not ours." /> · <button type="button" className="h10-am-link" onClick={() => set({ budgetEur: (suggestion.ebaySuggestedCents! / 100).toFixed(2) })}>Use</button>
+                eBay suggests <b>{money(suggestion.ebaySuggestedCents)}</b> <InfoTip tip="eBay's own suggest_budget for this marketplace and funding model — their estimate, not ours." /> · <Button variant="link" onClick={() => set({ budgetEur: (suggestion.ebaySuggestedCents! / 100).toFixed(2) })}>Use</Button>
               </span>
             )}
           </div>

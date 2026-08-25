@@ -10,7 +10,7 @@
  *
  * New classes are `h10-au-*`, not `h10-am-*`: that prefix is the app-wide Ads Manager grid
  * namespace defined across four stylesheets, and one namespace spanning two files is how source
- * order starts beating specificity. The DS button/link primitives (`h10-am-btn`, `h10-am-link`)
+ * order starts beating specificity. The DS button/link primitives (`nds-btn`, `nds-btn link`)
  * are reused as-is.
  */
 

@@ -57,7 +57,7 @@ export function AppliedTab({ busy, act, bump }: { busy: boolean; act: (fn: () =>
       renderFirst={(p) => (
         <div className="nmw">
           {p.entityRef.campaignId
-            ? <Link className="t h10-am-link" href={`/marketing/ads/ebay/campaigns/${p.entityRef.campaignId}`} title={p.entityRef.campaignName}>{p.entityRef.campaignName ?? '—'}</Link>
+            ? <Link className="t nds-btn link" href={`/marketing/ads/ebay/campaigns/${p.entityRef.campaignId}`} title={p.entityRef.campaignName}>{p.entityRef.campaignName ?? '—'}</Link>
             : <span className="t">{p.entityRef.campaignName ?? '—'}</span>}
           <span className="mk">{p.entityRef.listingId ?? p.entityRef.keywordText ?? ''}</span>
         </div>

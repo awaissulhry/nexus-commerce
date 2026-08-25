@@ -123,7 +123,7 @@ export function DetailsTab({ data, campaignId, strategy, onSaved, say }: {
               </p>
               <div className="eb-headstats" style={{ marginTop: 14 }}>
                 <div><span className="k">Marketplace</span><span className="v txt">{c.marketplace}</span></div>
-                <div><span className="k">Campaign ID</span><span className="v txt"><a className="h10-am-link" href={`https://www.ebay.it/sh/mkt/marketing/campaigns`} target="_blank" rel="noreferrer" title="Open Seller Hub advertising">{c.externalCampaignId}</a></span></div>
+                <div><span className="k">Campaign ID</span><span className="v txt"><a className="nds-btn link" href={`https://www.ebay.it/sh/mkt/marketing/campaigns`} target="_blank" rel="noreferrer" title="Open Seller Hub advertising">{c.externalCampaignId}</a></span></div>
                 <div><span className="k">Managed by</span><span className="v txt">{c.nexusManaged ? 'Nexus' : 'Seller Hub'}</span></div>
                 <div><span className="k">Status</span><span className="v txt">{c.status}</span></div>
               </div>

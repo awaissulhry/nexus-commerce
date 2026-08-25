@@ -70,7 +70,7 @@ export function KeywordsTab({ data, campaignId, reload, say }: { data: CampaignD
     { key: 'match', label: 'Match', metric: false, sortValue: (r) => r.matchType, render: (r) => <Pill tone="neutral">{r.matchType}</Pill> },
     {
       key: 'group', label: 'Ad Group', metric: false, sortValue: (r) => r.adGroupName ?? '',
-      render: (r) => <Link className="h10-am-link" href={`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.adGroupId}`} onClick={(e) => e.stopPropagation()}>{r.adGroupName ?? 'group'}</Link>,
+      render: (r) => <Link className="nds-btn link" href={`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.adGroupId}`} onClick={(e) => e.stopPropagation()}>{r.adGroupName ?? 'group'}</Link>,
     },
     { key: 'bid', label: 'Bid', render: (r) => money(r.bidCents, currency), sortValue: (r) => r.bidCents ?? -1 },
     {

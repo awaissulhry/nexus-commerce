@@ -76,7 +76,7 @@ export function PostureBand({ state, busy, act }: {
         </Button>
         <p className="eb-posture-hint">
           {state?.state.halted ? `Halted — ${state.state.haltReason ?? 'no reason recorded'}` : 'Stops every rule and pending apply instantly.'}
-          {' · '}<Link href="/marketing/ads/ebay/digest" className="h10-am-link">Weekly digest →</Link>
+          {' · '}<Link href="/marketing/ads/ebay/digest" className="nds-btn link">Weekly digest →</Link>
         </p>
       </section>
     </div>

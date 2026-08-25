@@ -164,7 +164,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
       if (!res?.ok) { toast('Could not mute that recommendation', 'danger'); return }
       if (rowParam === r.id) writeUrl({ row: '' })
       setData((d) => (d ? { ...d, recommendations: d.recommendations.filter((x) => x.id !== r.id) } : d))
-      toast(<>Muted — nothing was changed at Amazon; the engines stop raising this one · <button type="button" className="h10-am-link" onClick={() => void unmuteRec(r.id)}>Undo</button></>, 'success', { duration: 8000 })
+      toast(<>Muted — nothing was changed at Amazon; the engines stop raising this one · <Button variant="link" onClick={() => void unmuteRec(r.id)}>Undo</Button></>, 'success', { duration: 8000 })
     } finally { setBusy(null) }
   }, [rowParam, writeUrl, toast]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -204,7 +204,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
   const dismiss = useCallback((r: Recommendation) => {
     setDismissed((s) => new Set(s).add(r.id))
     if (rowParam === r.id) writeUrl({ row: '' })
-    toast(<>Dismissed for this session · <button type="button" className="h10-am-link" onClick={() => setDismissed((s) => { const n = new Set(s); n.delete(r.id); return n })}>Undo</button></>, 'info', { duration: 8000 })
+    toast(<>Dismissed for this session · <Button variant="link" onClick={() => setDismissed((s) => { const n = new Set(s); n.delete(r.id); return n })}>Undo</Button></>, 'info', { duration: 8000 })
   }, [rowParam, writeUrl, toast])
 
   // ── the status cut (client truth: Applied is this browser's memory) ────────

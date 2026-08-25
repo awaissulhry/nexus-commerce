@@ -63,7 +63,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
     try { await postEbayAds('/reconciliation/repair', { campaignId: d.campaignId, kind: d.kind, listingId: d.listingId, action }); say(action === 'reapply' ? 'Nexus value re-applied' : 'eBay value accepted'); load() } catch (e) { say((e as Error).message) } finally { setBusy(false) }
   }
 
-  if (error) return <div className="h10-cd-error">Couldn&apos;t load automation — {error}. <button type="button" className="h10-am-link" onClick={load}>Retry</button></div>
+  if (error) return <div className="h10-cd-error">Couldn&apos;t load automation — {error}. <Button variant="link" onClick={load}>Retry</Button></div>
   if (!data) return <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div>
   const p = data.policy
 
@@ -104,7 +104,7 @@ export function AutomationTab({ campaignId, campaignStatus, say, onPolicyChange 
 
       {/* Rules that apply here */}
       <div className="h10-am-card eb-rowlist">
-        <p className="hd plain">Rules that apply to this campaign — <Link className="h10-am-link" href="/marketing/ads/ebay/automation">manage in Rules &amp; Automation</Link></p>
+        <p className="hd plain">Rules that apply to this campaign — <Link className="nds-btn link" href="/marketing/ads/ebay/automation">manage in Rules &amp; Automation</Link></p>
         {data.rules.length === 0 ? (
           <div className="empty">No rules apply here.</div>
         ) : data.rules.map((r) => (

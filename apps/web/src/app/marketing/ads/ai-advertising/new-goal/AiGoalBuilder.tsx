@@ -329,7 +329,7 @@ export function AiGoalBuilder() {
                                 <span className="aig2-sug">
                                   <span className="rng">{eurC(b.lowCents)} – {eurC(b.highCents)}</span>
                                   <span className="src">{b.hasHistory ? `${b.daysWithSpend}d of ad spend, last ${b.windowDays}d` : 'no ad history — €1 floor'}</span>
-                                  <button type="button" className="h10-am-link aig2-use" onClick={() => setBudget(p.id, (b.lowCents / 100).toFixed(2))}>Use {eurC(b.lowCents)}</button>
+                                  <Button variant="link" className="aig2-use" onClick={() => setBudget(p.id, (b.lowCents / 100).toFixed(2))}>Use {eurC(b.lowCents)}</Button>
                                 </span>
                               ) : '—'}
                             </span>

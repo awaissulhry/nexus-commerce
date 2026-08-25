@@ -25,7 +25,7 @@ export function NegativeKeywordsTab({ data, campaignId, reload }: { data: Campai
     {
       key: 'group', label: 'Ad Group', metric: false, sortValue: (r) => (r.adGroupId ? groupsById.get(r.adGroupId) ?? '' : ''),
       render: (r) => r.adGroupId
-        ? <Link className="h10-am-link" href={`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.adGroupId}`} onClick={(e) => e.stopPropagation()}>{groupsById.get(r.adGroupId) ?? 'group'}</Link>
+        ? <Link className="nds-btn link" href={`/marketing/ads/ebay/campaigns/${campaignId}/ad-groups/${r.adGroupId}`} onClick={(e) => e.stopPropagation()}>{groupsById.get(r.adGroupId) ?? 'group'}</Link>
         : <Pill tone="neutral">campaign</Pill>,
     },
     { key: 'state', label: 'State', metric: false, sortValue: (r) => r.status, render: (r) => { const p = ebayStatusPill(r.status); return <StatusPill label={p.label} cls={p.cls} /> } },

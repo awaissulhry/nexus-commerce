@@ -968,7 +968,7 @@ export function BudgetClient() {
           inbox — Automations' Queue — per the section's one-owner rule. */}
       <p className="h10-bud-foot">
         <a className="nds-btn" href="/marketing/ads/rules-automation/builder/budget"><Plus size={13} /> New budget rule</a>
-        <a className="h10-am-link" href="/marketing/ads/rules-automation/automations?view=queue">Pending budget proposals live in the Queue →</a>
+        <a className="nds-btn link" href="/marketing/ads/rules-automation/automations?view=queue">Pending budget proposals live in the Queue →</a>
       </p>
 
       {transferOpen && (() => {

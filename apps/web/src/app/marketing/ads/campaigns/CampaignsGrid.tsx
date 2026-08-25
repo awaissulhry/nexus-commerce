@@ -750,7 +750,7 @@ function BulkActionsModal({ onSubmit, onClose }: { onSubmit: (c: BulkChanges) =>
       footer={step === 1 ? (
         <><span className="grow" /><Button variant="primary" disabled={!any} onClick={() => setStep(2)}>Apply</Button></>
       ) : (
-        <><button type="button" className="h10-am-link back" onClick={() => setStep(1)}>Back</button><span className="grow" /><Button variant="primary" onClick={() => onSubmit(changes)}>Submit Changes</Button></>
+        <><Button variant="link" className="back" onClick={() => setStep(1)}>Back</Button><span className="grow" /><Button variant="primary" onClick={() => onSubmit(changes)}>Submit Changes</Button></>
       )}
     >
       {step === 1 ? (
@@ -1811,9 +1811,9 @@ export function CampaignsGrid() {
       <div className={`h10-am-fpanel${filtersOpen ? '' : ' is-collapsed'}`}>
         <div className="fphead">
           <h3>Filters</h3>
-          <button type="button" className="h10-am-link tog" onClick={() => setFiltersOpen((v) => !v)}>
+          <Button variant="link" className="tog" onClick={() => setFiltersOpen((v) => !v)}>
             <ChevronDown size={14} className={filtersOpen ? 'up' : ''} />{filtersOpen ? 'Hide Filters' : 'Show Filters'}
-          </button>
+          </Button>
         </div>
         {filtersOpen && (
           <>
@@ -1866,7 +1866,7 @@ export function CampaignsGrid() {
 
             <div className="fft">
               <span className="grow" />
-              <button type="button" className="h10-am-link" onClick={savePreset} disabled={!hasActiveFilters}>{presetMsg || 'Save Filter Preset'}</button>
+              <Button variant="link" onClick={savePreset} disabled={!hasActiveFilters}>{presetMsg || 'Save Filter Preset'}</Button>
               <Button size="sm" onClick={clearFilters}>Clear</Button>
             </div>
           </>

@@ -196,11 +196,11 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
           </span>
         </div>
         <div className="eb-editlinks">
-          <button type="button" className="h10-am-link" onClick={() => goTo('setup')}>edit setup</button>
-          {isRules && <button type="button" className="h10-am-link" onClick={() => goTo('targeting')}>edit rules ({plan.criterion.rules.length}, auto-select {plan.criterion.autoSelectFutureInventory ? 'ON' : 'off'})</button>}
-          {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged)</button>}
-          {isGen && !isRules && <button type="button" className="h10-am-link" onClick={() => goTo('rates')}>{dynKey ? `edit rate strategy (dynamic ≤ ${plan.dynamicCapPct}%)` : 'edit rates'}</button>}
-          {!isGen && <button type="button" className="h10-am-link" onClick={() => goTo('listings')}>edit listings ({included.length} staged{plan.type === 'priority-manual' && included.length > 0 ? ` → ad group “${attachName}”` : ''})</button>}
+          <Button variant="link" onClick={() => goTo('setup')}>edit setup</Button>
+          {isRules && <Button variant="link" onClick={() => goTo('targeting')}>edit rules ({plan.criterion.rules.length}, auto-select {plan.criterion.autoSelectFutureInventory ? 'ON' : 'off'})</Button>}
+          {isGen && !isRules && <Button variant="link" onClick={() => goTo('listings')}>edit listings ({included.length} staged)</Button>}
+          {isGen && !isRules && <Button variant="link" onClick={() => goTo('rates')}>{dynKey ? `edit rate strategy (dynamic ≤ ${plan.dynamicCapPct}%)` : 'edit rates'}</Button>}
+          {!isGen && <Button variant="link" onClick={() => goTo('listings')}>edit listings ({included.length} staged{plan.type === 'priority-manual' && included.length > 0 ? ` → ad group “${attachName}”` : ''})</Button>}
           {plan.type === 'priority-manual' && included.length > 0 && plan.adGroups.length > 1 && (
             <label className="eb-neg-lbl">
               attach staged listings to
@@ -209,8 +209,8 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
                 options={plan.adGroups.map((g) => ({ value: g.name, label: g.name }))} /></span>
             </label>
           )}
-          {plan.type === 'priority-manual' && <button type="button" className="h10-am-link" onClick={() => goTo('keywords')}>edit keywords ({selectedSeeds.length} across {plan.adGroups.length} group(s))</button>}
-          {!isGen && <button type="button" className="h10-am-link" onClick={() => goTo('budget')}>edit budget ({money(Math.round(Number(plan.budgetEur || '0') * 100))}/day{plan.type === 'priority-smart' ? ` · max CPC ${money(Math.round(Number(plan.maxCpcEur || '0') * 100))}` : ''})</button>}
+          {plan.type === 'priority-manual' && <Button variant="link" onClick={() => goTo('keywords')}>edit keywords ({selectedSeeds.length} across {plan.adGroups.length} group(s))</Button>}
+          {!isGen && <Button variant="link" onClick={() => goTo('budget')}>edit budget ({money(Math.round(Number(plan.budgetEur || '0') * 100))}/day{plan.type === 'priority-smart' ? ` · max CPC ${money(Math.round(Number(plan.maxCpcEur || '0') * 100))}` : ''})</Button>}
         </div>
       </div>
 
@@ -266,7 +266,7 @@ export function ReviewStep({ plan, set, listings, activeCampaigns, packOptions, 
       <div className="h10-cd-card pad">
         {gaps.length > 0 && (
           <ul className="eb-results" style={{ marginBottom: advisories.length ? 8 : 0 }}>
-            {gaps.map((g) => <li key={g.text} className="err">{g.text}{g.step && <> — <button type="button" className="h10-am-link" onClick={() => goTo(g.step!)}>fix</button></>}</li>)}
+            {gaps.map((g) => <li key={g.text} className="err">{g.text}{g.step && <> — <Button variant="link" onClick={() => goTo(g.step!)}>fix</Button></>}</li>)}
           </ul>
         )}
         {advisories.length > 0 && (

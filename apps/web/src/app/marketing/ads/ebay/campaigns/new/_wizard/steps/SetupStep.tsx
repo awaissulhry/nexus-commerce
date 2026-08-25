@@ -11,6 +11,7 @@ import { EBAY_MARKETS } from '../../../../_lib'
 import { EbDateField } from '../../../../_lib/EbDateField'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { H10Select } from '../../../../../campaigns/FilterDropdown'
+import { Button } from '@/design-system/primitives'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
@@ -38,9 +39,9 @@ export function SetupStep({ plan, set, suggestedName, onMarketChange }: {
             </div>
           </div>
           {suggestedName && plan.name !== suggestedName && (
-            <button type="button" className="h10-am-link eb-suggest" onClick={() => set({ name: suggestedName })}>
+            <Button variant="link" className="eb-suggest" onClick={() => set({ name: suggestedName })}>
               use suggestion: <code>{suggestedName}</code>
-            </button>
+            </Button>
           )}
         </div>
       </section>

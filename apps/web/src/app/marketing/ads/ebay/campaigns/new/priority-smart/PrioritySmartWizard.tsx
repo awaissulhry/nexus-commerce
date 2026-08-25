@@ -13,6 +13,7 @@ import { SetupStep } from '../_wizard/steps/SetupStep'
 import { ListingsStep } from '../_wizard/steps/ListingsStep'
 import { BudgetStep } from '../_wizard/steps/BudgetStep'
 import { ReviewStep } from '../_wizard/steps/ReviewStep'
+import { Button } from '@/design-system/primitives'
 
 const STEPS: WizardStep[] = [
   { key: 'setup', label: 'Setup' },
@@ -40,7 +41,7 @@ export function PrioritySmartWizard() {
       nextLabel={w.step === 'review' ? 'Review above' : 'Next'}>
       {w.resume && (
         <div className="eb-sandbox" style={{ marginBottom: 12 }}>
-          <b>Draft resumed</b> — saved {w.resume.savedAt ? new Date(w.resume.savedAt).toLocaleString('en-GB') : 'earlier'}. <button type="button" className="h10-am-link" onClick={w.dismissResume}>ok</button>
+          <b>Draft resumed</b> — saved {w.resume.savedAt ? new Date(w.resume.savedAt).toLocaleString('en-GB') : 'earlier'}. <Button variant="link" onClick={w.dismissResume}>ok</Button>
         </div>
       )}
       {w.dataErr && <div className="h10-cd-error">Couldn&apos;t load listings — {w.dataErr}.</div>}

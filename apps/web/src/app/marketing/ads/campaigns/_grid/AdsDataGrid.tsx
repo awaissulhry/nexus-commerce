@@ -788,7 +788,7 @@ export function AdsDataGrid<T>({
  onDoubleClick={() => setPresetRenaming(p.name)}
  >{p.name}</Button>
                         )}
-                        <button type="button" className="h10-am-link" aria-label={`Delete preset ${p.name}`} style={{ fontSize: 11 }} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}>✕</button>
+                        <Button variant="link" aria-label={`Delete preset ${p.name}`} style={{ fontSize: 11 }} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}>✕</Button>
                       </span>
                     ))}
                     {presetSaveOpen ? (
@@ -802,7 +802,7 @@ export function AdsDataGrid<T>({
                         }}
                       />
                     ) : (
-                      <button type="button" className="h10-am-link" style={{ fontSize: 12 }} disabled={!hasActiveFilters} onClick={() => setPresetSaveOpen(true)}>Save preset</button>
+                      <Button variant="link" style={{ fontSize: 12 }} disabled={!hasActiveFilters} onClick={() => setPresetSaveOpen(true)}>Save preset</Button>
                     )}
                   </span>
           ) : undefined}

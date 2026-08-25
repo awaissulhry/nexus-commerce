@@ -36,7 +36,7 @@ export function PacingCard({ pacing }: { pacing: PacingPayload | null }) {
             <p className="eb-pace-proj">
               Yesterday: <b>{eurC(pacing.cpc.ydayFeesCents)}</b>{pacing.cpc.utilizationPct != null && <> · {pacing.cpc.utilizationPct}% of budget</>}
               {pacing.cpc.limitedCount > 0 && (
-                <> · <Link className="h10-am-link" href="/marketing/ads/ebay/campaigns?status=LIMITED">{pacing.cpc.limitedCount} limited by budget →</Link></>
+                <> · <Link className="nds-btn link" href="/marketing/ads/ebay/campaigns?status=LIMITED">{pacing.cpc.limitedCount} limited by budget →</Link></>
               )}
             </p>
           </div>

@@ -199,12 +199,9 @@
 /* footer */
 .h10-am-fpanel .fft { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .h10-am-fpanel .fft .grow { flex: 1; }
-.h10-am-link { background: none; border: none; color: var(--nds-blue-600); font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 8px; }
-.h10-am-link:hover { text-decoration: underline; }
-.h10-am-link:disabled { color: var(--nds-grey-300); cursor: default; text-decoration: none; }
 /* Inside a toast the surface is DARK (--text-primary); brand blue fails contrast there, so the
    one link-verb class adapts to the container: inherit the inverse text, underline for affordance. */
-.nds-toast .h10-am-link { color: inherit; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; }
+.nds-toast .nds-btn.link { color: inherit; padding: 0; font: inherit; font-weight: 700; text-decoration: underline; }
 
 /* saved-filter library popover */
 .h10-libpop { position: absolute; z-index: 45; top: calc(100% + 6px); left: 0; width: 280px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: 12px; box-shadow: 0 14px 34px rgba(20, 28, 38, 0.18); padding: 10px; }
@@ -632,8 +629,6 @@
 .h10-bulk-review .rr .v { font-size: 13px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-rv-pill { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--nds-blue-600); background: var(--nds-blue-100); border-radius: 5px; padding: 3px 10px; }
 .h10-bulk-applyto { padding: 12px 18px 4px; font-size: 12px; color: var(--nds-grey-500); }
-.h10-am-link.back { color: var(--nds-grey-600); }
-.h10-am-link.back:hover { color: var(--nds-grey-900); }
 
 .h10-menu.adjbud { min-width: 236px; padding: 12px; gap: 5px; }
 .h10-menu.adjbud .abh { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); margin-bottom: 4px; }
@@ -836,7 +831,7 @@
    pair for .h10-editpop sits at the end of that one. */
 .h10-mmbid .n, .h10-editpop .n { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--nds-text-muted); }
 .h10-mmbid .e, .h10-editpop .e { margin: 8px 0 0; font-size: 11.5px; line-height: 1.45; color: #a3320f; }
-.h10-mmbid .h10-am-link[disabled], .h10-editpop .h10-am-link[disabled] { opacity: .5; cursor: default; }
+.h10-mmbid .nds-btn.link[disabled], .h10-editpop .nds-btn.link[disabled] { opacity: .5; cursor: default; }
 
 /* ── CBN.2c.P3c — hover-reveal edit pencils (H10: pencil shows on row hover) ──── */
 .h10-edcell { display: inline-flex; align-items: center; gap: 6px; }

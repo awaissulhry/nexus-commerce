@@ -15,6 +15,7 @@ import { ListingsStep } from '../_wizard/steps/ListingsStep'
 import { RatesStep } from '../_wizard/steps/RatesStep'
 import { ReviewStep } from '../_wizard/steps/ReviewStep'
 import { includedListings, effRate } from '../_wizard/plan'
+import { Button } from '@/design-system/primitives'
 
 const CPS_PACKS = ['Fee % creep-down (CPS)', 'Click bleeder — remove ad (CPS)', 'Rate above break-even — repair (CPS)', 'Restock re-promote (CPS)']
 
@@ -60,7 +61,7 @@ export function GeneralWizard() {
       nextLabel={w.step === 'review' ? 'Review above' : 'Next'}>
       {w.resume && (
         <div className="eb-sandbox" style={{ marginBottom: 12 }}>
-          <b>Draft resumed</b> — you left this wizard {w.resume.savedAt ? `at ${new Date(w.resume.savedAt).toLocaleString('en-GB')}` : 'earlier'}. <button type="button" className="h10-am-link" onClick={w.dismissResume}>ok</button>
+          <b>Draft resumed</b> — you left this wizard {w.resume.savedAt ? `at ${new Date(w.resume.savedAt).toLocaleString('en-GB')}` : 'earlier'}. <Button variant="link" onClick={w.dismissResume}>ok</Button>
         </div>
       )}
       {w.dataErr && <div className="h10-cd-error">Couldn&apos;t load listings — {w.dataErr}.</div>}

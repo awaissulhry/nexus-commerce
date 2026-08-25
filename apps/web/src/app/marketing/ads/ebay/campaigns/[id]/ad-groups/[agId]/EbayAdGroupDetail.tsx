@@ -17,6 +17,7 @@ import { AgNegativeKeywordsTab } from './tabs/AgNegativeKeywordsTab'
 import { AgSearchTermsTab } from './tabs/AgSearchTermsTab'
 import { AddKeywordsModal } from '../../modals/AddKeywordsModal'
 import { AddNegativeKeywordsModal } from '../../modals/AddNegativeKeywordsModal'
+import { Button } from '@/design-system/primitives'
 
 const TABS = [
   { key: 'keywords', label: 'Keywords' },
@@ -79,7 +80,7 @@ export function EbayAdGroupDetail({ campaignId, adGroupId }: { campaignId: strin
 
       <div className="h10-cd-body">
         {error ? (
-          <div className="h10-cd-error">Couldn&apos;t load this ad group — {error}. <button type="button" className="h10-am-link" onClick={reload}>Retry</button></div>
+          <div className="h10-cd-error">Couldn&apos;t load this ad group — {error}. <Button variant="link" onClick={reload}>Retry</Button></div>
         ) : loading || !data ? (
           <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-line w70" /><div className="sk-block" /></div>
         ) : (

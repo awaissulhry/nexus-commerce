@@ -1000,7 +1000,7 @@ export function AutomationsClient() {
             <Button variant="danger" disabled={busy === 'bulk'} onClick={() => openBulk({ kind: 'delete' })}>
               <Trash2 size={13} aria-hidden /> Delete
             </Button>
-            <button type="button" className="h10-am-link" onClick={clear}>Clear {ids.length}</button>
+            <Button variant="link" onClick={clear}>Clear {ids.length}</Button>
           </span>
         )}
       />

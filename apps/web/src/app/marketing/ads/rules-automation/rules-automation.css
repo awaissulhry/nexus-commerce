@@ -1210,7 +1210,7 @@
 
    Namespace is `h10-au-*`, deliberately NOT `h10-am-*`: that prefix is the app-wide Ads
    Manager grid namespace and it is already defined across four stylesheets. The DS button and
-   link primitives (`h10-am-btn`, `h10-am-link`) and the modal shell (`h10-ntm-*`) are reused
+   link primitives (now the DS `nds-btn` / `nds-btn link`) and the modal shell (`h10-ntm-*`) are reused
    from this file as-is.
 
    Hard-coded hex throughout, matching the rest of the file: `.h10-shell` pins
@@ -4563,7 +4563,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* BUD.3/BUD.6 — selection acts, the footer, the transfer dialog */
 .h10-bud-selrow { display: inline-flex; gap: 6px; }
 .h10-bud-foot { display: flex; align-items: center; gap: 14px; margin: 14px 0 0; }
-.h10-bud-foot .h10-am-link { color: var(--nds-blue-600); font-size: 12.5px; }
+.h10-bud-foot .nds-btn.link { color: var(--nds-blue-600); font-size: 12.5px; }
 .h10-bud-xferrow { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13px; color: var(--nds-grey-700); }
 .h10-bud-xferrow > span:first-child { width: 60px; }
 .h10-bud-xferto { margin: 0 0 10px 70px; font-size: 13px; color: var(--nds-grey-900); }

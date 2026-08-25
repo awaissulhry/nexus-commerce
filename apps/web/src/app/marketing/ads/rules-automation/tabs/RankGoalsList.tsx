@@ -239,7 +239,7 @@ export function RankGoalsList() {
       tip: 'How many campaigns this schedule binds. Click a count to open those campaigns in the Campaigns view.',
       render: (r) => (
         <a
-          className="h10-am-link" href={`?grain=campaigns&schedule=${r.id}`}
+          className="nds-btn link" href={`?grain=campaigns&schedule=${r.id}`}
           title={`List ${r.campaigns} campaign${r.campaigns === 1 ? '' : 's'} bound to “${r.name}” in the Campaigns view`}
           onClick={(e) => {
             e.stopPropagation(); if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return

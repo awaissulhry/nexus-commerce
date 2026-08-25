@@ -82,7 +82,7 @@ export function EbayChangeLog() {
         markets={['EBAY_IT']} market="EBAY_IT" onMarketChange={() => {}}
         showDataSync={false} showDateRange={false}
       />
-      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={() => load()}>Retry</button></div>}
+      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <Button variant="link" onClick={() => load()}>Retry</Button></div>}
 
       <AdsDataGrid<ActionRow>
         rows={all}
@@ -95,7 +95,7 @@ export function EbayChangeLog() {
           <div className="nmw">
             <span className="t">{new Date(a.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
             {a.campaignId
-              ? <Link className="mk h10-am-link" href={`/marketing/ads/ebay/campaigns/${a.campaignId}`} title={a.campaignName ?? undefined}>{a.campaignName ?? '—'}</Link>
+              ? <Link className="mk nds-btn link" href={`/marketing/ads/ebay/campaigns/${a.campaignId}`} title={a.campaignName ?? undefined}>{a.campaignName ?? '—'}</Link>
               : <span className="mk">{a.campaignName ?? 'account'}</span>}
           </div>
         )}

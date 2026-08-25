@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { money } from '../../../../campaigns/_grid/format'
 import { postEbayAds } from '../../../_lib'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { pillTone } from '../../../../_shared/pillTone'
 
 interface SelectionRule { brands?: string[]; categoryIds?: string[]; categoryScope?: string; listingConditionIds?: string[]; minPrice?: number; maxPrice?: number }
@@ -64,7 +64,7 @@ export function CriterionCard({ criterion, marketplace, onClone }: { criterion: 
       {preview?.note && <p className="eb-be-hint" style={{ marginTop: 8 }}>{preview.note}</p>}
       {previewErr && <p className="eb-be-hint" style={{ marginTop: 8 }}>Preview unavailable: {previewErr}</p>}
       <p className="eb-be-hint" style={{ marginTop: 12 }}>
-        Selection rules are <b>immutable on eBay</b> — to change them, <button type="button" className="h10-am-link" onClick={onClone}>clone this campaign with edited rules</button>.
+        Selection rules are <b>immutable on eBay</b> — to change them, <Button variant="link" onClick={onClone}>clone this campaign with edited rules</Button>.
       </p>
     </div>
   )

@@ -27,7 +27,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_gri
 import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { fmtChangeValue } from '../_shared/changeValue'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 import { pillTone } from '../_shared/pillTone'
 
 interface Origin { kind: string; id: string | null; name: string }
@@ -355,7 +355,7 @@ export function ChangeLogClient() {
 
       {error && (
         <div className="h10-am-latest" role="alert">
-          <b>Load failed:</b> {error} · <button className="h10-am-link" onClick={() => load()}>Retry</button>
+          <b>Load failed:</b> {error} · <Button variant="link" onClick={() => load()}>Retry</Button>
         </div>
       )}
 

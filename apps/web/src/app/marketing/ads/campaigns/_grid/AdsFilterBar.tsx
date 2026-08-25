@@ -106,9 +106,9 @@ export function AdsFilterBar({
             {summary.slice(0, 3).join(' · ')}{summary.length > 3 ? ` · ${summary.length - 3} more` : ''}
           </span>
         )}
-        <button type="button" className="h10-am-link tog" onClick={() => setOpen((v) => !v)}>
+        <Button variant="link" className="tog" onClick={() => setOpen((v) => !v)}>
           <ChevronDown size={14} className={open ? 'up' : ''} />{open ? 'Hide Filters' : 'Show Filters'}
-        </button>
+        </Button>
       </div>
       {open && (
         <>

@@ -32,7 +32,7 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
    footer={<><span style={{ flex: 1 }} /><Button onClick={onClose}>Close</Button></>}>
       <p className="eb-be-hint" style={{ marginBottom: 8 }}>
         Rule: <b>{ruleName ?? r.rule ?? '—'}</b>
-        {campaignId && <> · <Link className="h10-am-link" href={`/marketing/ads/ebay/campaigns/${campaignId}`}>open campaign →</Link></>}
+        {campaignId && <> · <Link className="nds-btn link" href={`/marketing/ads/ebay/campaigns/${campaignId}`}>open campaign →</Link></>}
       </p>
       {rows.length > 0 && (
         <table className="eb-why-table">

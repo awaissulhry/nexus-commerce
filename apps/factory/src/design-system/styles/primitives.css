@@ -69,6 +69,35 @@
   background: var(--nds-wash-primary);
 }
 
+/* A button that reads as a link — no chrome, underline on hover. 67 ads-console call sites used
+   `.h10-am-link` for this: 47 on <button>, 18 on <a>/<Link>. `border: none` rather than a
+   transparent border because the legacy rule had none, and 1px each side would shift every one
+   of them by 2px. */
+.nds-btn.link {
+  background: none;
+  border: none;
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-primary);
+  padding: 6px 8px;
+}
+.nds-btn.link:hover {
+  background: none;
+  text-decoration: underline;
+}
+.nds-btn.link:disabled {
+  color: var(--nds-text-disabled);
+  background: none;
+  cursor: default;
+  text-decoration: none;
+}
+/* the one modifier the legacy class carried: a muted "back" affordance */
+.nds-btn.link.back {
+  color: var(--nds-text-2);
+}
+.nds-btn.link.back:hover {
+  color: var(--nds-text);
+}
+
 .nds-btn.sm {
   padding: 6px 11px;
   font-size: 12.5px;

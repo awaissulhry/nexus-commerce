@@ -123,7 +123,7 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
         )
       },
     },
-    { key: 'why', label: 'Why', metric: false, sortable: false, render: (p) => <button type="button" className="h10-am-link" onClick={() => setWhy(p)}>Why…</button> },
+    { key: 'why', label: 'Why', metric: false, sortable: false, render: (p) => <Button variant="link" onClick={() => setWhy(p)}>Why…</Button> },
     { key: 'age', label: 'Proposed', metric: false, sortValue: (p) => p.createdAt, render: (p) => new Date(p.createdAt).toLocaleDateString('en-GB') },
     {
       key: 'decide', label: '', metric: false, sortable: false, render: (p) => (
@@ -156,7 +156,7 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
         renderFirst={(p) => (
           <div className="nmw">
             {p.entityRef.campaignId
-              ? <Link className="t h10-am-link" href={`/marketing/ads/ebay/campaigns/${p.entityRef.campaignId}`} title={p.entityRef.campaignName}>{p.entityRef.campaignName ?? '—'}</Link>
+              ? <Link className="t nds-btn link" href={`/marketing/ads/ebay/campaigns/${p.entityRef.campaignId}`} title={p.entityRef.campaignName}>{p.entityRef.campaignName ?? '—'}</Link>
               : <span className="t" title={p.entityRef.campaignName}>{p.entityRef.campaignName ?? '—'}</span>}
             <span className="mk">{p.entityRef.listingId ?? p.entityRef.keywordText ?? ''}</span>
           </div>

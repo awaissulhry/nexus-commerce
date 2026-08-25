@@ -25,7 +25,7 @@ import { CloneModal } from './modals/CloneModal'
 import { EndCampaignModal } from './modals/EndCampaignModal'
 import { CreateAdGroupModal } from './modals/CreateAdGroupModal'
 import { PromoteModal } from '../../_modals/PromoteModal'
-import { Pill } from '@/design-system/primitives'
+import { Button, Pill } from '@/design-system/primitives'
 
 const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } }
 
@@ -102,7 +102,7 @@ export function EbayCampaignDetail({ campaignId }: { campaignId: string }) {
 
       <div className="h10-cd-body">
         {error ? (
-          <div className="h10-cd-error">Couldn&apos;t load this campaign — {error}. <button type="button" className="h10-am-link" onClick={reload}>Retry</button></div>
+          <div className="h10-cd-error">Couldn&apos;t load this campaign — {error}. <Button variant="link" onClick={reload}>Retry</Button></div>
         ) : loading || !data || !c ? (
           <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-line w70" /><div className="sk-block" /></div>
         ) : (

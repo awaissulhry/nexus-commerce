@@ -367,9 +367,9 @@ function SuggestionsInner() {
         setTotal((t) => (t == null ? t : Math.max(0, t - 1)))
         setBaselineKey((n) => n + 1)
         void refreshCounts()
-        if (kind === 'dismiss') toast(<>Removed — back when a new suggestion is generated · <button type="button" className="h10-am-link" onClick={() => void restore([id])}>Undo</button></>, 'info', { duration: 8000 })
+        if (kind === 'dismiss') toast(<>Removed — back when a new suggestion is generated · <Button variant="link" onClick={() => void restore([id])}>Undo</Button></>, 'info', { duration: 8000 })
         else if (kind === 'restore') toast('Restored to pending', 'success')
-        else toast(<>Change applied{overrideValue != null ? ' with your edit' : ''}. It may take a few minutes to complete — view it in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
+        else toast(<>Change applied{overrideValue != null ? ' with your edit' : ''}. It may take a few minutes to complete — view it in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
       } else if (res.refused) {
         // SG.0 — a refusal is a governed stop, in the server's words. The row STAYS pending.
         toast(<>Refused — {res.error ?? 'the write gate declined this action'}</>, 'danger')
@@ -445,7 +445,7 @@ function SuggestionsInner() {
       if (r.ok && j?.ok !== false) {
         setItems((cur) => cur.map((x) => (x.id === s.id && x.undo ? { ...x, undo: { ...x.undo, rolledBack: true } } : x)))
         setBaselineKey((n) => n + 1)
-        toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
+        toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
       } else {
         toast(j?.reason ?? j?.error ?? 'The undo was declined', 'danger')
       }
@@ -496,10 +496,10 @@ function SuggestionsInner() {
           // in the Change Log.
           toast(<>
             Applied {appliedOk} {appliedOk === 1 ? 'change' : 'changes'}{removedOk.length ? <> · removed {removedOk.length}</> : null}.
-            Changes may take a few minutes to complete — view them in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.
+            Changes may take a few minutes to complete — view them in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.
           </>, 'success')
         } else if (removedOk.length) {
-          toast(<>Removed {removedOk.length} — back when a new suggestion is generated · <button type="button" className="h10-am-link" onClick={() => void restore(removedOk)}>Undo</button></>, 'info', { duration: 8000 })
+          toast(<>Removed {removedOk.length} — back when a new suggestion is generated · <Button variant="link" onClick={() => void restore(removedOk)}>Undo</Button></>, 'info', { duration: 8000 })
         } else if (restoredOk) {
           toast(`Restored ${restoredOk} to pending`, 'success')
         }
@@ -584,10 +584,10 @@ function SuggestionsInner() {
           ].filter(Boolean)
           toast(<>
             {parts.join(' · ')}.
-            {appliedOk > 0 ? <>{' '}Changes may take a few minutes to complete — view them in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.</> : null}
+            {appliedOk > 0 ? <>{' '}Changes may take a few minutes to complete — view them in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.</> : null}
           </>, 'success')
         } else if (removedOk.length) {
-          toast(<>Removed {removedOk.length} — the plan won’t re-propose {removedOk.length === 1 ? 'it' : 'them'} for 7 days · <button type="button" className="h10-am-link" onClick={() => void aiRestore(removedOk)}>Undo</button></>, 'info', { duration: 8000 })
+          toast(<>Removed {removedOk.length} — the plan won’t re-propose {removedOk.length === 1 ? 'it' : 'them'} for 7 days · <Button variant="link" onClick={() => void aiRestore(removedOk)}>Undo</Button></>, 'info', { duration: 8000 })
         } else if (restoredOk) {
           toast(`Restored ${restoredOk} to proposed`, 'success')
           setReload((n) => n + 1)
@@ -640,7 +640,7 @@ function SuggestionsInner() {
       const j = await r.json().catch(() => null) as { ok?: boolean; reversed?: number; reason?: string; error?: string } | null
       if (r.ok && j?.ok !== false) {
         setAiItems((cur) => (cur ?? []).map((x) => (x.id === d.id && x.undo ? { ...x, undo: { ...x.undo, rolledBack: true } } : x)))
-        toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="h10-am-link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
+        toast(<>Change undone{j?.reversed && j.reversed > 1 ? ` (${j.reversed} grouped rows reversed)` : ''}. The reversal is a change like any other — it is in the <Link className="nds-btn link" href="/marketing/ads/changelog">Change Log</Link>.</>, 'success')
       } else {
         toast(j?.reason ?? j?.error ?? 'The undo was declined', 'danger')
       }
@@ -1255,11 +1255,11 @@ function SuggestionsInner() {
           </ul>
           <span className="h10-sug-repacts">
             {bulkReport.undoIds?.length ? (
-              <button type="button" className="h10-am-link" onClick={() => { void (view === 'ai' ? aiRestore(bulkReport.undoIds!) : restore(bulkReport.undoIds!)); setBulkReport(null) }}>
+              <Button variant="link" onClick={() => { void (view === 'ai' ? aiRestore(bulkReport.undoIds!) : restore(bulkReport.undoIds!)); setBulkReport(null) }}>
                 Undo the {bulkReport.ok}
-              </button>
+              </Button>
             ) : null}
-            <button type="button" className="h10-am-link" onClick={() => setBulkReport(null)}>Dismiss</button>
+            <Button variant="link" onClick={() => setBulkReport(null)}>Dismiss</Button>
           </span>
         </div>
       )}
@@ -1471,9 +1471,9 @@ function SuggestionsInner() {
               /* H10's master pair, the family interaction: stage with the row verbs, commit
                  in ONE batch. Disabled at 0 = self-explaining (the count is the label). */
               <span className="h10-sug-applybar">
-                <button type="button" className="h10-am-link" disabled={aiStaged.size === 0 || bulkBusy} onClick={() => setAiStaged(new Map())}>
+                <Button variant="link" disabled={aiStaged.size === 0 || bulkBusy} onClick={() => setAiStaged(new Map())}>
                   Discard Changes
-                </button>
+                </Button>
                 <Button variant="primary" size="sm" disabled={aiStaged.size === 0 || bulkBusy} onClick={applyAiStaged}>
                   <Check size={13} /> Apply {aiStaged.size} {aiStaged.size === 1 ? 'Change' : 'Changes'}
                 </Button>
@@ -1569,9 +1569,9 @@ function SuggestionsInner() {
                     at 0 — ticking the row verbs is what arms them. */}
                 {status === 'pending' ? (
                   <span className="h10-sug-applybar">
-                    <button type="button" className="h10-am-link" disabled={staged.size === 0 || bulkBusy} onClick={() => setStaged(new Map())}>
+                    <Button variant="link" disabled={staged.size === 0 || bulkBusy} onClick={() => setStaged(new Map())}>
                       Discard Changes
-                    </button>
+                    </Button>
                     <Button variant="primary" size="sm" disabled={staged.size === 0 || bulkBusy} onClick={applyStaged}>
                       <Check size={13} /> Apply {staged.size} {staged.size === 1 ? 'Change' : 'Changes'}
                     </Button>

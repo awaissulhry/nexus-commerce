@@ -160,7 +160,7 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
   return (
     <div className="h10-rules-page eb-rule-editor eb-root">
       <div className="eb-editor-head">
-        <Link href="/marketing/ads/ebay/automation" className="h10-am-link">← Rules &amp; Automation</Link>
+        <Link href="/marketing/ads/ebay/automation" className="nds-btn link">← Rules &amp; Automation</Link>
         <h2>{isEdit ? 'Edit rule' : 'New rule'}</h2>
         {isEdit && enabled != null && <Pill tone={pillTone(enabled ? 'ok' : 'arch')}>{enabled ? 'enabled' : 'disabled'}</Pill>}
         <span className="eb-chip">{trigger.scope === 'CPS_AD' ? 'CPS ads' : 'CPC keywords'}</span>
@@ -330,9 +330,9 @@ export function RuleEditor({ ruleId, template, fromRuleId }: { ruleId?: string; 
       {isEdit && (
         <section className="h10-cd-sec">
           <h3>
-            <button type="button" className="h10-am-link" onClick={() => void loadHistory()}>
+            <Button variant="link" onClick={() => void loadHistory()}>
               History{currentVersion != null ? ` — currently v${currentVersion}` : ''} {historyOpen ? '▾' : '▸'}
-            </button>
+            </Button>
           </h3>
           {historyOpen && (
             history == null ? <div className="h10-cd-skel" aria-busy="true"><div className="sk-line w40" /><div className="sk-block" /></div> : (

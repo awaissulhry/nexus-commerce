@@ -108,7 +108,7 @@
 .h10-sug-pausebox p b { color: var(--nds-text); }
 .h10-sug-armed { border-color: #c68a2e !important; color: var(--nds-warning-text) !important; background: #fdeed5 !important; box-shadow: 0 0 0 2px #f0dcbe; }
 
-/* Discard Changes uses the app-wide `.h10-am-link` idiom (ads.css) — the button-vocabulary
+/* Discard Changes uses the DS `.nds-btn.link` variant — the button-vocabulary
    ratchet is at zero new idioms, and a link-style verb already has one class. */
 
 /* SG.2b — the staging buffer input (H10's per-row editable Current Bid) */

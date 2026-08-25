@@ -96,7 +96,7 @@ export function EbayProductsRollup() {
       key: 'breakeven', label: 'Break-even', tip: 'Max profitable General ad rate = contribution margin ÷ total sale amount. Click "add cost" to enter the unit cost right here — break-even computes immediately.',
       render: (r) => {
         if (r.breakEvenAdRatePct != null) {
-          return <button type="button" className="h10-am-link" title={`Unit cost €${r.costPriceCents != null ? (r.costPriceCents / 100).toFixed(2) : '?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</button>
+          return <Button variant="link" title={`Unit cost €${r.costPriceCents != null ? (r.costPriceCents / 100).toFixed(2) : '?'} — click to edit`} onClick={(e) => { e.stopPropagation(); setCostRow(r) }}>{pct(r.breakEvenAdRatePct / 100)}</Button>
         }
         if (r.economicsStatus === 'MISSING_PRICE') return <Pill tone="neutral">no price</Pill>
         if (r.groupKey === '~unmatched') return <Button size="sm" title="Match the listing to a product first" onClick={(e) => { e.stopPropagation(); setMatchRow(r) }}>match first</Button>
@@ -142,7 +142,7 @@ export function EbayProductsRollup() {
         showDataSync={false} showDateRange={false}
       />
       <SandboxBanner mode={writeMode} />
-      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={reload}>Retry</button></div>}
+      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <Button variant="link" onClick={reload}>Retry</Button></div>}
 
       <AdsDataGrid<Row>
         rows={rows}

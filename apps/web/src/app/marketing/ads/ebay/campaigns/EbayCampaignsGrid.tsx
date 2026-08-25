@@ -141,10 +141,9 @@ export function EbayCampaignsGrid() {
       tip: 'Rules that apply to this campaign + its automation policy. Click through to the campaign\'s Automation tab.',
       render: (c) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <button type="button" className="h10-am-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }} title={`${c.automation?.rules ?? 0} rule(s) apply — open Automation tab`}
-            onClick={(e) => { e.stopPropagation(); router.push(`/marketing/ads/ebay/campaigns/${c.id}?tab=automation`) }}>
+          <Button variant="link" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }} title={`${c.automation?.rules ?? 0} rule(s) apply — open Automation tab`} onClick={(e) => { e.stopPropagation(); router.push(`/marketing/ads/ebay/campaigns/${c.id}?tab=automation`) }}>
             <Cog size={12} /> {c.automation?.rules ?? 0}
-          </button>
+          </Button>
           {c.automation?.protected && <StatusPill label="Protected" cls="warn" title="Excluded from ALL automation" />}
           {c.automation && c.automation.posture !== 'INHERIT' && !c.automation.protected && <StatusPill label={c.automation.posture.toLowerCase()} cls="arch" title="Per-campaign posture override" />}
         </span>
@@ -195,7 +194,7 @@ export function EbayCampaignsGrid() {
         onDataSync={() => void dataSync()} syncing={syncing}
       />
       <SandboxBanner mode={writeMode} />
-      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <button className="h10-am-link" onClick={reload}>Retry</button></div>}
+      {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <Button variant="link" onClick={reload}>Retry</Button></div>}
 
       <AdsDataGrid<CampaignRow>
         rows={rows}

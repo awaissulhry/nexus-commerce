@@ -15,6 +15,7 @@ import { RulesTab } from './tabs/RulesTab'
 import { SuggestionsTab } from './tabs/SuggestionsTab'
 import { AppliedTab } from './tabs/AppliedTab'
 import { DriftTab } from './tabs/DriftTab'
+import { Button } from '@/design-system/primitives'
 
 const TABS = [
   { key: 'rules', label: 'Rules' },
@@ -69,7 +70,7 @@ export function EbayAutomationHub() {
 
       {state?.state.halted && (
         <div className="dash-banner" role="alert">
-          <b>Automation HALTED</b> — {state.state.haltReason ?? 'no reason recorded'} · <button className="h10-am-link" onClick={() => void act(() => postEbayAds('/automation/state', { halted: false }), 'resumed')}>Resume</button>
+          <b>Automation HALTED</b> — {state.state.haltReason ?? 'no reason recorded'} · <Button variant="link" onClick={() => void act(() => postEbayAds('/automation/state', { halted: false }), 'resumed')}>Resume</Button>
         </div>
       )}
 
