@@ -11,14 +11,41 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ban, RefreshCw, Check, Download, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { Button, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { useCampaignMap, campaignHref } from './useCampaignMap'
-import { TableSkel } from './_ui'
+import { GridSkel } from './_ui'
 import { useAmazonLinks, buildAmazonCampaignHref } from './useAmazonLinks'
 import { downloadCsv } from './_csv'
 
 interface Cand { query: string; matchType: string; campaignId: string; adGroupId: string; marketplace: string; totalImpressions: number; totalClicks: number; totalCostUnits: number }
+
+/** A factory, not a constant: the campaign cell needs `campMap`/`profileMap`, which are
+ *  component state. Alignment inverts between `.az-table` and `.nds-grid`; the three counts
+ *  carried no `.l`. The leading checkbox column is gone — `DataGrid` renders selection. */
+const negativeColumns = (
+  campMap: Record<string, { id: string; name: string; marketplace?: string | null }>,
+  profileMap: Record<string, string>,
+  done: Set<string>,
+): Array<Column<Cand>> => [
+  { key: 'term', label: 'Search term', render: (c) => <span style={{ fontWeight: 500 }}>{c.query}</span> },
+  { key: 'match', label: 'Match', render: (c) => <span className="az-badge paused">{(c.matchType || '').replace(/_/g, ' ').toLowerCase()}</span> },
+  { key: 'campaign', label: 'Campaign · market', render: (c) => {
+    const cm = campMap[c.campaignId]
+    const amzHref = buildAmazonCampaignHref(c.campaignId, c.marketplace, profileMap)
+    return (<>
+      <div>{cm ? <a className="cn" href={campaignHref(cm.id)} target="_blank" rel="noopener noreferrer">{cm.name}</a> : <span className="az-cell-sub">{c.campaignId}</span>}</div>
+      <div className="az-cell-sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{c.marketplace} · AG {c.adGroupId}{amzHref && <a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Amazon <ExternalLink size={9} /></a>}</div>
+    </>)
+  } },
+  { key: 'impressions', label: 'Impressions', align: 'right', render: (c) => num(c.totalImpressions) },
+  { key: 'clicks', label: 'Clicks', align: 'right', render: (c) => num(c.totalClicks) },
+  { key: 'wasted', label: 'Wasted spend', align: 'right', render: (c) => eur(c.totalCostUnits) },
+  { key: 'status', label: 'Status', render: (c) => (done.has(`${c.query}:${c.campaignId}:${c.adGroupId}`)
+    ? <span className="az-rowstat ok"><Check size={13} />Negated</span>
+    : <span className="az-cell-sub">candidate</span>) },
+]
 const num = (n: number) => new Intl.NumberFormat('en-US').format(Math.round(n))
 const eur = (u: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(u)
 
@@ -45,12 +72,10 @@ export function NegativeMiningTab() {
     setBusy(true)
     try { const ok = new Set(done); for (const c of targets) { if (await negateOne(c)) ok.add(key(c)) } setDone(ok); setSel(new Set()) } finally { setBusy(false) }
   }
-  const toggle = (c: Cand) => setSel((s) => { const n = new Set(s); const k = key(c); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const [mkt, setMkt] = useState('All')
   const markets = useMemo(() => Array.from(new Set(cands.map((c) => c.marketplace).filter(Boolean))) as string[], [cands])
   const shown = useMemo(() => (mkt === 'All' ? cands : cands.filter((c) => c.marketplace === mkt)), [cands, mkt])
   const wasted = useMemo(() => shown.reduce((s, c) => s + c.totalCostUnits, 0), [shown])
-  const allSel = shown.length > 0 && shown.every((c) => sel.has(key(c)) || done.has(key(c)))
 
   return (
     <div style={{ paddingTop: 4 }}>
@@ -68,28 +93,24 @@ export function NegativeMiningTab() {
         <ToolbarButton variant="boxed" icon={<Download size={15} />} label="Export CSV" onClick={() => downloadCsv('negative-keyword-candidates.csv', shown.map((c) => ({ query: c.query, matchType: c.matchType, campaign: campMap[c.campaignId]?.name ?? c.campaignId, marketplace: c.marketplace ?? '', adGroupId: c.adGroupId, impressions: c.totalImpressions, clicks: c.totalClicks, wastedSpendEur: c.totalCostUnits, status: done.has(key(c)) ? 'negated' : 'candidate' })))} />
         <ToolbarButton variant="boxed" icon={<RefreshCw size={15} className={loading ? 'az-spin' : ''} />} label="Refresh" onClick={load} />
       </div>
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr>
-            <th className="l" style={{ width: 36 }}><Checkbox aria-label="Select all candidates" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.filter((c) => !done.has(key(c))).map(key)) : new Set())} /></th>
-            <th className="l">Search term</th><th className="l">Match</th><th className="l">Campaign · market</th><th>Impressions</th><th>Clicks</th><th>Wasted spend</th><th className="l">Status</th>
-          </tr></thead>
-          <tbody>
-            {loading && <TableSkel cols={8} />}
-            {!loading && shown.length === 0 && <tr><td className="az-empty" colSpan={8}>No wasted-spend terms above this threshold. Clean.</td></tr>}
-            {shown.map((c, i) => { const k = key(c); const isDone = done.has(k); return (
-              <tr key={`${k}-${i}`} className={sel.has(k) ? 'sel' : ''}>
-                <td className="l"><Checkbox aria-label={`Select ${c.query}`} disabled={isDone} checked={sel.has(k) || isDone} onChange={() => toggle(c)} /></td>
-                <td className="l" style={{ fontWeight: 500 }}>{c.query}</td>
-                <td className="l"><span className="az-badge paused">{(c.matchType || '').replace(/_/g, ' ').toLowerCase()}</span></td>
-                <td className="l">{(() => { const cm = campMap[c.campaignId]; const amzHref = buildAmazonCampaignHref(c.campaignId, c.marketplace, profileMap); return (<><div>{cm ? <a className="cn" href={campaignHref(cm.id)} target="_blank" rel="noopener noreferrer">{cm.name}</a> : <span className="sub">{c.campaignId}</span>}</div><div className="sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{c.marketplace} · AG {c.adGroupId}{amzHref && <a href={amzHref} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Amazon <ExternalLink size={9} /></a>}</div></>) })()}</td>
-                <td className="num">{num(c.totalImpressions)}</td><td className="num">{num(c.totalClicks)}</td><td className="num">{eur(c.totalCostUnits)}</td>
-                <td className="l">{isDone ? <span className="az-rowstat ok"><Check size={13} />Negated</span> : <span className="sub">candidate</span>}</td>
-              </tr>
-            ) })}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Cand>
+        rows={loading ? [] : shown}
+        rowKey={key}
+        columns={negativeColumns(campMap, profileMap, done)}
+        selectable
+        /* A negated row USED to show a ticked, disabled box. `DataGrid` hard-codes
+           `checked={false}` for any row `rowSelectable` rejects (DataGrid.tsx:429), so that tick
+           cannot be reproduced — I tried folding `done` into `selected` and it changes nothing.
+           The Status column still reads "Negated" with a check, so the state is still stated;
+           it is stated once instead of twice. */
+        selected={sel}
+        onSelectedChange={setSel}
+        rowSelectable={(c) => !done.has(key(c))}
+        rowSelectableHint="Already negated"
+        selectAllHint="Select every candidate not yet negated"
+        rowClassName={(c) => (sel.has(key(c)) ? 'sel' : undefined)}
+        emptyState={loading ? <GridSkel /> : 'No wasted-spend terms above this threshold. Clean.'}
+      />
       <div style={{ color: 'var(--ink2)', fontSize: 12, padding: '12px 2px' }}>Negatives are added as NEGATIVE_EXACT at the ad-group level (pending). Automate it with the <b>Negate wasted search terms</b> automation in the Library.</div>
     </div>
   )

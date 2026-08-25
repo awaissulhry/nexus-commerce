@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, RefreshCw, Gauge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
+import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
 import { campaignHref } from './useCampaignMap'
 
@@ -27,6 +28,18 @@ const STRATS = [
 ]
 const STRAT_LABEL: Record<string, string> = { AUTO_FOR_SALES: 'Up & down', LEGACY_FOR_SALES: 'Down only', MANUAL: 'Fixed' }
 interface Camp { id: string; name: string; marketplace: string | null; biddingStrategy: string | null; dailyBudget: number | null; acos: number | null; roas: number | null }
+
+/** The leading checkbox column is gone: `DataGrid` renders selection itself from `selectable` +
+ *  `selected` + `onSelectedChange`, which is also where `allSel`/`toggle` went. Alignment
+ *  inverts between the two grids — the three columns with no `.l` are the right-aligned ones. */
+const STRATEGY_COLUMNS: Array<Column<Camp>> = [
+  { key: 'campaign', label: 'Campaign', render: (c) => <span style={{ fontWeight: 500 }}><a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a></span> },
+  { key: 'market', label: 'Market', render: (c) => <span className="az-cell-sub">{c.marketplace ?? '—'}</span> },
+  { key: 'strategy', label: 'Current strategy', render: (c) => <span className="az-badge" style={{ background: 'var(--bg3)', color: 'var(--ink2)' }}>{c.biddingStrategy ? (STRAT_LABEL[c.biddingStrategy] ?? c.biddingStrategy) : 'Default'}</span> },
+  { key: 'budget', label: 'Daily budget', align: 'right', render: (c) => eur(c.dailyBudget) },
+  { key: 'acos', label: 'ACOS', align: 'right', render: (c) => pct(c.acos) },
+  { key: 'roas', label: 'ROAS', align: 'right', render: (c) => (c.roas == null ? '—' : `${c.roas.toFixed(1)}×`) },
+]
 
 const eur = (n: number | null) => (n == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n))
 const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(0)}%`)
@@ -55,8 +68,6 @@ export function RankStrategyMode() {
     const ql = q.trim().toLowerCase()
     return (rows ?? []).filter((c) => (market === 'All' || c.marketplace === market) && (!ql || c.name.toLowerCase().includes(ql)))
   }, [rows, market, q])
-  const allSel = shown.length > 0 && shown.every((c) => sel.has(c.id))
-  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   const apply = async () => {
     const targets = shown.filter((c) => sel.has(c.id))
@@ -98,29 +109,16 @@ export function RankStrategyMode() {
       </div>
       {msg && <div style={{ color: msg.includes('Queued') ? 'var(--green)' : '#cc1100', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{msg}</div>}
 
-      <div className="az-tablewrap">
-        <table className="az-table">
-          <thead><tr>
-            <th className="l" style={{ width: 32 }}><Checkbox aria-label="Select all campaigns" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((c) => c.id)) : new Set())} /></th>
-            <th className="l">Campaign</th><th className="l">Market</th><th className="l">Current strategy</th><th>Daily budget</th><th>ACOS</th><th>ROAS</th>
-          </tr></thead>
-          <tbody>
-            {rows === null && <tr><td className="az-empty" colSpan={7}>Loading campaigns…</td></tr>}
-            {rows !== null && shown.length === 0 && <tr><td className="az-empty" colSpan={7}>No campaigns {market === 'All' ? '' : `in ${market}`} match.</td></tr>}
-            {shown.map((c) => (
-              <tr key={c.id} className={sel.has(c.id) ? 'sel' : ''}>
-                <td className="l"><Checkbox aria-label={`Select ${c.name}`} checked={sel.has(c.id)} onChange={() => toggle(c.id)} /></td>
-                <td className="l" style={{ fontWeight: 500 }}><a className="cn" href={campaignHref(c.id)} target="_blank" rel="noopener noreferrer">{c.name}</a></td>
-                <td className="l"><span className="sub">{c.marketplace ?? '—'}</span></td>
-                <td className="l"><span className="az-badge" style={{ background: 'var(--bg3)', color: 'var(--ink2)' }}>{c.biddingStrategy ? (STRAT_LABEL[c.biddingStrategy] ?? c.biddingStrategy) : 'Default'}</span></td>
-                <td className="num">{eur(c.dailyBudget)}</td>
-                <td className="num">{pct(c.acos)}</td>
-                <td className="num">{c.roas == null ? '—' : `${c.roas.toFixed(1)}×`}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid<Camp>
+        rows={rows === null ? [] : shown}
+        rowKey={(c) => c.id}
+        columns={STRATEGY_COLUMNS}
+        selectable
+        selected={sel}
+        onSelectedChange={setSel}
+        selectAllHint="Select every campaign in this view"
+        emptyState={rows === null ? 'Loading campaigns…' : `No campaigns ${market === 'All' ? '' : `in ${market}`} match.`}
+      />
     </div>
   )
 }
