@@ -35,7 +35,6 @@
 .h10-scb-bidcfg .grp .hd { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-scb-bidcfg .grp > p { font-size: 12.5px; color: var(--nds-grey-600); margin: 3px 0 10px; }
 .h10-scb-bidcfg .mm { display: flex; align-items: center; gap: 12px; }
-.h10-scb-bidcfg .mm > input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--nds-blue-600); cursor: pointer; flex-shrink: 0; }
 .h10-scb-bidcfg .mm-fields { display: flex; gap: 12px; }
 
 /* SB.4 — Product Selection "Sponsored Videos" column (shared ProductSelection right panel). */
@@ -51,9 +50,6 @@
 .h10-scb-budget .fld .lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--nds-grey-700); }
 .h10-scb-budget .fld .lbl .req { color: #e0392b; font-style: normal; }
 .h10-scb-money { width: 200px; }
-.h10-scb-budget .sug { align-self: flex-start; background: none; border: none; padding: 2px 0 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-blue-600); cursor: pointer; }
-.h10-scb-budget .sug:hover { text-decoration: underline; }
-.h10-scb-budget .sug .rg { color: var(--nds-grey-500); font-weight: 500; }
 
 /* SB.5 — Targeting: mode radios + Add Keywords sub-heading. The KeywordTargetingPanel's own
    styles (.h10-scb-tgt-*) moved to _shared/keyword-targeting.css so they load wherever the
@@ -66,8 +62,6 @@
 .h10-scb-rules .rh { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; }
 .h10-scb-rules .rh .cnt { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-scb-rules .addwrap { position: relative; }
-.h10-scb-rules .addbtn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-white); background: var(--nds-blue-600); border: none; border-radius: var(--nds-radius-lg); padding: 8px 14px; cursor: pointer; }
-.h10-scb-rules .addbtn:hover { background: var(--nds-blue-700); }
 .h10-scb-rules .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 232px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); box-shadow: 0 12px 32px rgba(20,30,45,.16); padding: 6px; z-index: 30; }
 .h10-scb-rules .menu > button { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--nds-grey-800); background: none; border: none; border-radius: var(--nds-radius-md); padding: 9px 11px; cursor: pointer; }
 .h10-scb-rules .menu > button:hover { background: var(--nds-grey-75); color: var(--nds-blue-600); }
@@ -90,10 +84,6 @@
 
 /* SB.6 — Keyword & Bid Suggestion Automation toggle */
 .h10-scb-autotoggle { display: inline-flex; align-items: center; gap: 11px; font-size: 13.5px; font-weight: 500; color: var(--nds-grey-900); cursor: pointer; }
-.h10-scb-sw { position: relative; width: 38px; height: 22px; border-radius: var(--nds-radius-full); background: #cfd6df; border: none; padding: 0; cursor: pointer; transition: background .15s; flex-shrink: 0; }
-.h10-scb-sw > span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--nds-white); box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
-.h10-scb-sw.on { background: var(--nds-blue-600); }
-.h10-scb-sw.on > span { transform: translateX(16px); }
 
 /* SB.6 — "Rule Added!" toast */
 .h10-scb-toast { position: fixed; left: 24px; bottom: 24px; z-index: 60; display: inline-flex; align-items: center; gap: 8px; background: var(--nds-white); border: 1px solid #d7f0df; border-left: 3px solid var(--nds-green-600); border-radius: var(--nds-radius-xl); box-shadow: 0 10px 30px rgba(20,30,45,.16); padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--nds-grey-900); }
@@ -109,8 +99,6 @@
 .h10-scb-review-card .rvh { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .h10-scb-review-card .rvh h3 { font-size: 15px; font-weight: 700; color: var(--nds-grey-900); margin: 0; display: inline-flex; align-items: center; gap: 8px; }
 .h10-scb-review-card .rvh h3 .cnt { font-size: 11.5px; font-weight: 700; color: var(--nds-blue-600); background: var(--nds-blue-100); border-radius: 20px; padding: 1px 9px; }
-.h10-scb-review-card .rvh .edit { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; color: var(--nds-blue-600); background: none; border: none; cursor: pointer; padding: 4px 6px; border-radius: var(--nds-radius-sm); }
-.h10-scb-review-card .rvh .edit:hover { background: var(--nds-blue-50); }
 .h10-scb-review-card .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 24px; }
 .h10-scb-review-card .f { display: flex; flex-direction: column; gap: 3px; }
 .h10-scb-review-card .f.wide { grid-column: 1 / -1; }
@@ -130,3 +118,7 @@
 .h10-scb-review-card .chip .mt { font-size: 9px; font-weight: 800; color: var(--nds-blue-600); background: var(--nds-white); border-radius: 4px; padding: 0 4px; }
 .h10-scb-review-card .chip.more { color: var(--nds-grey-600); font-weight: 700; }
 .h10-scb-launcherr { margin-top: 14px; padding: 11px 14px; border: 1px solid #f3c9c5; background: var(--nds-note-error-bg); border-radius: 9px; color: #b42318; font-size: 13px; font-weight: 500; }
+
+/* ── DS alignment (2026-08-25) — the Suggested link is now a DS `Button variant="link"`;
+      only its trailing range keeps a colour of its own. */
+.h10-scb-budget .fld .rg { color: var(--nds-grey-500); font-weight: 500; }

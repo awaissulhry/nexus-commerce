@@ -12,7 +12,6 @@
 .h10-qcb-bidcfg .grp .hd { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-qcb-bidcfg .grp > p { font-size: 12.5px; color: var(--nds-grey-600); margin: 3px 0 10px; }
 .h10-qcb-bidcfg .mm { display: flex; align-items: center; gap: 12px; }
-.h10-qcb-bidcfg .mm > input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--nds-blue-600); cursor: pointer; flex-shrink: 0; }
 .h10-qcb-bidcfg .mm-fields { display: flex; gap: 12px; }
 .h10-qcb-custom-note { font-size: 12.5px; color: var(--nds-grey-600); line-height: 1.5; margin: 0; max-width: 620px; }
 
@@ -28,10 +27,6 @@
 .h10-qcb-rev-row .ag .nm .t { font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-qcb-rev-row .ag .nm .sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-grey-500); }
 .h10-qcb-rev-row .num { display: flex; flex-direction: column; gap: 5px; }
-.h10-qcb-rev-row .num .money { display: inline-flex; align-items: center; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-md); overflow: hidden; height: 34px; width: 150px; background: var(--nds-white); }
-.h10-qcb-rev-row .num .money:focus-within { border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.12); }
-.h10-qcb-rev-row .num .money .pf { padding: 0 8px; color: var(--nds-grey-500); font-size: 13px; background: var(--nds-grey-50); align-self: stretch; display: inline-flex; align-items: center; }
-.h10-qcb-rev-row .num .money input { width: 100%; min-width: 0; border: none; outline: none; font: inherit; font-size: 13.5px; padding: 0 8px; color: var(--nds-grey-900); }
 .h10-qcb-rev-row .num .sug { font-size: 11.5px; color: var(--nds-grey-500); }
 .h10-qcb-rev-row .num .sug b { color: var(--nds-grey-600); font-weight: 600; }
 .h10-qcb-rev-row .algo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--nds-grey-700); }
@@ -41,3 +36,6 @@
 .h10-qcb-autom { display: flex; flex-direction: column; gap: 16px; }
 .h10-qcb-toggle { display: inline-flex; align-items: center; gap: 11px; cursor: pointer; width: fit-content; }
 .h10-qcb-toggle .t { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--nds-grey-900); }
+
+/* ── DS alignment (2026-08-25) — width only; the field's chrome is the DS Input's. */
+.h10-qcb-rev-row .num .h10-qcb-moneyfield { width: 150px; }

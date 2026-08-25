@@ -24,8 +24,8 @@
  */
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Layers, BarChart3, ChevronDown } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Layers, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -42,6 +42,7 @@ import { SponsoredBrandSettings, defaultSbCreative, type SbCreative } from '../.
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import './guided.css'
 
 type StepN = 1 | 2 | 3 | 4
@@ -246,7 +247,7 @@ export function GuidedBuilder() {
         {/* APS.2a — the launch target, always on screen. */}
         <div className="h10-spw-topr">
           <MarketSelect markets={markets} value={market} onChange={setMarket} disabled={!marketReady} brand={<span className="amz">amazon</span>} />
-          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+          <Button onClick={() => router.push(EXIT_TO)}>Exit Builder</Button>
         </div>
       </header>
 
@@ -302,13 +303,13 @@ export function GuidedBuilder() {
                       <div className="grp">
                         <div className="hd"><b>Min/Max Bid</b></div>
                         <p>Set limits to keep your bid within an acceptable range</p>
-                        <label className="mm">
-                          <input type="checkbox" checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
+                        <span className="mm">
+                          <Checkbox checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
                           <span className="mm-fields">
                             <Input inputMode="decimal" value={bidConfig.minBid} onChange={(e) => setBid({ minBid: e.target.value })} prefix={CURRENCY} placeholder="Min" disabled={!minMaxOn} aria-label="Min bid" fieldClassName="h10-spw-bidnum" />
                             <Input inputMode="decimal" value={bidConfig.maxBid} onChange={(e) => setBid({ maxBid: e.target.value })} prefix={CURRENCY} placeholder="Max" disabled={!minMaxOn} aria-label="Max bid" fieldClassName="h10-spw-bidnum" />
                           </span>
-                        </label>
+                        </span>
                       </div>
                     )}
                   </div>
@@ -342,10 +343,12 @@ export function GuidedBuilder() {
               <section className="h10-spw-sec" key={t}>
                 <h2>{AD_PRODUCT_META.find((m) => m.key === t)?.title} Campaign</h2>
                 {t === 'SP' && (
-                  <label className="h10-gcb-incpt">
-                    <input type="checkbox" checked={includePT} onChange={(e) => setIncludePT(e.target.checked)} />
-                    <span>Include Product Target Campaign <InfoTip tip="Adds a Product Targeting campaign that targets competitor / complementary ASINs." /></span>
-                  </label>
+                  <Checkbox
+                    className="h10-gcb-incpt"
+                    checked={includePT}
+                    onChange={(e) => setIncludePT(e.target.checked)}
+                    label={<>Include Product Target Campaign <InfoTip tip="Adds a Product Targeting campaign that targets competitor / complementary ASINs." /></>}
+                  />
                 )}
                 {t === 'SB' && (
                   <div className="h10-spw-card h10-gcb-sb">
@@ -361,11 +364,11 @@ export function GuidedBuilder() {
                         <div className="nm"><span className="t">{c.name}</span><span className="sub"><Layers size={13} /> {c.adGroupName}</span></div>
                       </div>
                       <div className="num">
-                        <div className="money"><span className="pf">{CURRENCY}</span><input inputMode="decimal" value={c.bid} onChange={(e) => updCampaign(c.id, { bid: e.target.value })} aria-label={`Default bid for ${c.name}`} /></div>
+                        <Input inputMode="decimal" prefix={CURRENCY} value={c.bid} onChange={(e) => updCampaign(c.id, { bid: e.target.value })} aria-label={`Default bid for ${c.name}`} fieldClassName="h10-gcb-moneyfield" />
                         <div className="sug">Suggested: <b>{money(c.sugBid)}</b> ({money(c.sugBid * SUG_LOW)} - {money(c.sugBid * SUG_HIGH)})</div>
                       </div>
                       <div className="num">
-                        <div className="money"><span className="pf">{CURRENCY}</span><input inputMode="decimal" value={c.budget} onChange={(e) => updCampaign(c.id, { budget: e.target.value })} aria-label={`Budget for ${c.name}`} /></div>
+                        <Input inputMode="decimal" prefix={CURRENCY} value={c.budget} onChange={(e) => updCampaign(c.id, { budget: e.target.value })} aria-label={`Budget for ${c.name}`} fieldClassName="h10-gcb-moneyfield" />
                         <div className="sug">Suggested: <b>{money(c.sugBudget)}</b> ({money(c.sugBudget * SUG_LOW)} - {money(c.sugBudget * SUG_HIGH)})</div>
                       </div>
                       <div className="algo"><BarChart3 size={15} /> {algoLabel}</div>
@@ -374,13 +377,13 @@ export function GuidedBuilder() {
                 </div>
                 {t === 'SP' && (
                   <>
-                    <button type="button" className="h10-gcb-adv" aria-expanded={namingOpen} onClick={() => setNamingOpen((o) => !o)}><ChevronDown size={15} className={namingOpen ? 'up' : ''} /> Advanced Naming Options</button>
+                    <div className="h10-gcb-advrow"><Button variant="link" aria-expanded={namingOpen} onClick={() => setNamingOpen((o) => !o)}>{namingOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />} Advanced Naming Options</Button></div>
                     {namingOpen && (
                       <div className="h10-spw-card h10-gcb-naming">
                         {typeCampaigns('SP').map((c) => (
                           <label className="row" key={c.id}>
                             <span className="l">{c.role} Name</span>
-                            <input value={c.name} onChange={(e) => updCampaign(c.id, { name: e.target.value, adGroupName: `${e.target.value} Ad Group` })} aria-label={`${c.role} campaign name`} />
+                            <Input value={c.name} onChange={(e) => updCampaign(c.id, { name: e.target.value, adGroupName: `${e.target.value} Ad Group` })} aria-label={`${c.role} campaign name`} fieldClassName="spw-field-full" />
                           </label>
                         ))}
                       </div>
@@ -415,7 +418,7 @@ export function GuidedBuilder() {
                   <div className="f"><span className="l">Bid Strategy</span><span className="v"><BarChart3 size={16} className="bi" /> {stageLabel}</span></div>
                   <div className="f"><span className="l">Bid Algorithm</span><span className="v">{algoLabel}</span></div>
                 </div>
-                <button type="button" className="h10-spw-pgd-port" onClick={() => setPortfolioOpen((o) => !o)}><ChevronDown size={15} className={portfolioOpen ? 'up' : ''} /> Portfolio Association (Optional)</button>
+                <div style={{ marginTop: 18 }}><Button variant="link" aria-expanded={portfolioOpen} onClick={() => setPortfolioOpen((o) => !o)}>{portfolioOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />} Portfolio Association (Optional)</Button></div>
                 {portfolioOpen && <p className="h10-gcb-note">Portfolio association arrives with the SB creative follow-up.</p>}
               </div>
             </section>
@@ -447,13 +450,13 @@ export function GuidedBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {(step > 1 || sub > 0) && <button type="button" className="h10-spw-back" onClick={goBack}>Back</button>}
+        {(step > 1 || sub > 0) && <Button onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
         {step < 4 ? (
-          <button type="button" className="h10-spw-next" onClick={goNext} disabled={nextDisabled}>Next</button>
+          <Button variant="primary" onClick={goNext} disabled={nextDisabled}>Next</Button>
         ) : (
-          <button type="button" className="h10-spw-next" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</button>
+          <Button variant="primary" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>

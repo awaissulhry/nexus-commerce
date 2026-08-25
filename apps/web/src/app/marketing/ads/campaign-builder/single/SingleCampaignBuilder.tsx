@@ -17,7 +17,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Radio, Toggle } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -30,6 +30,7 @@ import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwBid, type NegKw
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import './single.css'
 
 // SB.2 — Campaign Bidding Strategy options (verbatim Amazon copy from the recording).
@@ -227,7 +228,7 @@ export function SingleCampaignBuilder() {
         {/* APS.2a — the launch target, always on screen. */}
         <div className="h10-spw-topr">
           <MarketSelect markets={markets} value={market} onChange={setMarket} disabled={!marketReady} brand={<span className="amz">amazon</span>} />
-          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+          <Button onClick={() => router.push(EXIT_TO)}>Exit Builder</Button>
         </div>
       </header>
 
@@ -293,10 +294,14 @@ export function SingleCampaignBuilder() {
                 <div className="h10-spw-card">
                   <div className="h10-scb-radios">
                     {BIDDING.map((o) => (
-                      <label key={o.key} className={`h10-scb-radio ${biddingStrategy === o.key ? 'on' : ''}`}>
-                        <input type="radio" name="scb-bidding" checked={biddingStrategy === o.key} onChange={() => setBiddingStrategy(o.key)} />
-                        <span className="rb"><b>{o.label}</b><span className="d">{o.desc}</span></span>
-                      </label>
+                      <Radio
+                        key={o.key}
+                        className={`h10-scb-radio ${biddingStrategy === o.key ? 'on' : ''}`}
+                        name="scb-bidding"
+                        checked={biddingStrategy === o.key}
+                        onChange={() => setBiddingStrategy(o.key)}
+                        label={<span className="rb"><b>{o.label}</b><span className="d">{o.desc}</span></span>}
+                      />
                     ))}
                   </div>
                 </div>
@@ -306,10 +311,14 @@ export function SingleCampaignBuilder() {
                 <div className="h10-spw-card">
                   <div className="h10-scb-radios">
                     {SITES.map((o) => (
-                      <label key={o.key} className={`h10-scb-radio ${sites === o.key ? 'on' : ''}`}>
-                        <input type="radio" name="scb-sites" checked={sites === o.key} onChange={() => setSites(o.key)} />
-                        <span className="rb"><b>{o.label}</b><span className="d">{o.desc}</span></span>
-                      </label>
+                      <Radio
+                        key={o.key}
+                        className={`h10-scb-radio ${sites === o.key ? 'on' : ''}`}
+                        name="scb-sites"
+                        checked={sites === o.key}
+                        onChange={() => setSites(o.key)}
+                        label={<span className="rb"><b>{o.label}</b><span className="d">{o.desc}</span></span>}
+                      />
                     ))}
                   </div>
                 </div>
@@ -338,13 +347,13 @@ export function SingleCampaignBuilder() {
                       <div className="grp">
                         <div className="hd"><b>Min/Max Bid</b></div>
                         <p>Set limits to keep your bid within an acceptable range</p>
-                        <label className="mm">
-                          <input type="checkbox" checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
+                        <span className="mm">
+                          <Checkbox checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
                           <span className="mm-fields">
                             <Input inputMode="decimal" value={bidConfig.minBid} onChange={(e) => setBid({ minBid: e.target.value })} prefix="€" placeholder="Min" disabled={!minMaxOn} aria-label="Min bid" fieldClassName="h10-spw-bidnum" />
                             <Input inputMode="decimal" value={bidConfig.maxBid} onChange={(e) => setBid({ maxBid: e.target.value })} prefix="€" placeholder="Max" disabled={!minMaxOn} aria-label="Max bid" fieldClassName="h10-spw-bidnum" />
                           </span>
-                        </label>
+                        </span>
                       </div>
                     </div>
                   )}
@@ -362,12 +371,12 @@ export function SingleCampaignBuilder() {
                     <div className="fld">
                       <span className="lbl">Daily Budget <i className="req">*</i> <InfoTip tip="The most you'll spend per day on this campaign, on average. Some days may run up to 25% over." /></span>
                       <Input inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} prefix="€" aria-label="Daily budget" fieldClassName="h10-scb-money" />
-                      {sugBudget && <button type="button" className="sug" onClick={() => setBudget(sugBudget.val)}>Suggested: €{sugBudget.val} <span className="rg">(€{sugBudget.lo} - €{sugBudget.hi})</span></button>}
+                      {sugBudget && <span><Button variant="link" size="sm" onClick={() => setBudget(sugBudget.val)}>Suggested: €{sugBudget.val} <span className="rg">(€{sugBudget.lo} - €{sugBudget.hi})</span></Button></span>}
                     </div>
                     <div className="fld">
                       <span className="lbl">Default Bid <i className="req">*</i> <InfoTip tip="The starting bid applied to targets that don't have their own bid. You can fine-tune per target later." /></span>
                       <Input inputMode="decimal" value={defaultBid} onChange={(e) => setDefaultBid(e.target.value)} prefix="€" aria-label="Default bid" fieldClassName="h10-scb-money" />
-                      {sugBid && <button type="button" className="sug" onClick={() => setDefaultBid(sugBid.val)}>Suggested: €{sugBid.val} <span className="rg">(€{sugBid.lo} - €{sugBid.hi})</span></button>}
+                      {sugBid && <span><Button variant="link" size="sm" onClick={() => setDefaultBid(sugBid.val)}>Suggested: €{sugBid.val} <span className="rg">(€{sugBid.lo} - €{sugBid.hi})</span></Button></span>}
                     </div>
                   </div>
                 </div>
@@ -375,14 +384,16 @@ export function SingleCampaignBuilder() {
               <section id="scb-targeting" className="h10-spw-sec">
                 <h2>Targeting</h2>
                 <div className="h10-scb-radios h10-scb-tgtmode">
-                  <label className={`h10-scb-radio ${targetMode === 'keyword' ? 'on' : ''}`}>
-                    <input type="radio" name="scb-tgtmode" checked={targetMode === 'keyword'} onChange={() => setTargetMode('keyword')} />
-                    <span className="rb"><b>Keyword Targeting</b></span>
-                  </label>
-                  <label className={`h10-scb-radio ${targetMode === 'product' ? 'on' : ''}`}>
-                    <input type="radio" name="scb-tgtmode" checked={targetMode === 'product'} onChange={() => setTargetMode('product')} />
-                    <span className="rb"><b>Product Targeting</b></span>
-                  </label>
+                  <Radio
+                    className={`h10-scb-radio ${targetMode === 'keyword' ? 'on' : ''}`}
+                    name="scb-tgtmode" checked={targetMode === 'keyword'} onChange={() => setTargetMode('keyword')}
+                    label={<span className="rb"><b>Keyword Targeting</b></span>}
+                  />
+                  <Radio
+                    className={`h10-scb-radio ${targetMode === 'product' ? 'on' : ''}`}
+                    name="scb-tgtmode" checked={targetMode === 'product'} onChange={() => setTargetMode('product')}
+                    label={<span className="rb"><b>Product Targeting</b></span>}
+                  />
                 </div>
                 {targetMode === 'keyword' ? (
                   <>
@@ -404,7 +415,7 @@ export function SingleCampaignBuilder() {
                   <div className="rh">
                     <span className="cnt">{campaignRules.length} Rule{campaignRules.length === 1 ? '' : 's'}</span>
                     <div className="addwrap" ref={addRuleRef}>
-                      <button type="button" className="addbtn" aria-haspopup="menu" aria-expanded={addRuleOpen} onClick={() => { setAddRuleOpen((o) => !o); setPickMode(false) }}><ChevronDown size={15} /> Add Rule</button>
+                      <Button variant="primary" aria-haspopup="menu" aria-expanded={addRuleOpen} onClick={() => { setAddRuleOpen((o) => !o); setPickMode(false) }}><ChevronDown size={15} /> Add Rule</Button>
                       {addRuleOpen && (
                         <div className="menu" role="menu">
                           {!pickMode ? (
@@ -447,10 +458,10 @@ export function SingleCampaignBuilder() {
               <section className="h10-spw-sec">
                 <h2>Keyword and Bid Suggestion Automation</h2>
                 <p className="h10-spw-desc">Automation makes bid adjustments automatically. You can adjust automation for launched campaigns in Rules &amp; Automation.</p>
-                <label className="h10-scb-autotoggle">
-                  <button type="button" className={`h10-scb-sw ${autoBidAdjust ? 'on' : ''}`} role="switch" aria-checked={autoBidAdjust} aria-label="Automatic Bid Adjustment" onClick={() => setAutoBidAdjust((v) => !v)}><span /></button>
+                <span className="h10-scb-autotoggle">
+                  <Toggle checked={autoBidAdjust} onChange={setAutoBidAdjust} aria-label="Automatic Bid Adjustment" />
                   Automatic Bid Adjustment
-                </label>
+                </span>
               </section>
             </div>
           </div>
@@ -470,7 +481,7 @@ export function SingleCampaignBuilder() {
 
             <div className="h10-scb-review-grid">
               <section className="h10-spw-card h10-scb-review-card">
-                <div className="rvh"><h3>{name.trim() || 'Untitled campaign'}</h3><button type="button" className="edit" onClick={() => editSection('details')}><Pencil size={12} /> Edit</button></div>
+                <div className="rvh"><h3>{name.trim() || 'Untitled campaign'}</h3><Button variant="link" size="sm" onClick={() => editSection('details')}><Pencil size={12} /> Edit</Button></div>
                 <div className="grid">
                   <div className="f"><span className="l">Ad Group</span><span className="v">{adGroup.trim() || `${name.trim() || 'Campaign'} Ad Group`}</span></div>
                   <div className="f"><span className="l">Portfolio</span><span className="v">{portfolioId ? 'Selected' : 'None'}</span></div>
@@ -480,7 +491,7 @@ export function SingleCampaignBuilder() {
               </section>
 
               <section className="h10-spw-card h10-scb-review-card">
-                <div className="rvh"><h3>Budget &amp; Bidding</h3><button type="button" className="edit" onClick={() => editSection('budget')}><Pencil size={12} /> Edit</button></div>
+                <div className="rvh"><h3>Budget &amp; Bidding</h3><Button variant="link" size="sm" onClick={() => editSection('budget')}><Pencil size={12} /> Edit</Button></div>
                 <div className="grid">
                   <div className="f"><span className="l">Daily Budget</span><span className="v">{budget ? `€${budget}` : <em className="miss">Not set</em>}</span></div>
                   <div className="f"><span className="l">Default Bid</span><span className="v">{defaultBid ? `€${defaultBid}` : <em className="miss">Not set</em>}</span></div>
@@ -491,7 +502,7 @@ export function SingleCampaignBuilder() {
               </section>
 
               <section className="h10-spw-card h10-scb-review-card">
-                <div className="rvh"><h3>Products <span className="cnt">{products.length}</span></h3><button type="button" className="edit" onClick={() => editSection('product-selection')}><Pencil size={12} /> Edit</button></div>
+                <div className="rvh"><h3>Products <span className="cnt">{products.length}</span></h3><Button variant="link" size="sm" onClick={() => editSection('product-selection')}><Pencil size={12} /> Edit</Button></div>
                 {products.length === 0 ? <p className="empty">No products added yet.</p> : (
                   <>
                     <div className="h10-scb-review-thumbs">
@@ -504,7 +515,7 @@ export function SingleCampaignBuilder() {
               </section>
 
               <section className="h10-spw-card h10-scb-review-card">
-                <div className="rvh"><h3>Targeting</h3><button type="button" className="edit" onClick={() => editSection('targeting')}><Pencil size={12} /> Edit</button></div>
+                <div className="rvh"><h3>Targeting</h3><Button variant="link" size="sm" onClick={() => editSection('targeting')}><Pencil size={12} /> Edit</Button></div>
                 {targetMode === 'keyword' ? (
                   keywords.length === 0 ? <p className="empty">No keywords added yet.</p> : (
                     <>
@@ -519,7 +530,7 @@ export function SingleCampaignBuilder() {
               </section>
 
               <section className="h10-spw-card h10-scb-review-card">
-                <div className="rvh"><h3>Rules &amp; Automation</h3><button type="button" className="edit" onClick={() => editSection('rules')}><Pencil size={12} /> Edit</button></div>
+                <div className="rvh"><h3>Rules &amp; Automation</h3><Button variant="link" size="sm" onClick={() => editSection('rules')}><Pencil size={12} /> Edit</Button></div>
                 <div className="grid">
                   <div className="f"><span className="l">Campaign Rules</span><span className="v">{campaignRules.length ? campaignRules.map((r) => r.type).join(', ') : 'None'}</span></div>
                   <div className="f"><span className="l">Auto Bid Adjustment</span><span className="v">{autoBidAdjust ? 'On' : 'Off'}</span></div>
@@ -532,11 +543,11 @@ export function SingleCampaignBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <button type="button" className="h10-spw-back" onClick={goBack}>Back</button>}
+        {step > 1 && <Button onClick={goBack}>Back</Button>}
         <span className="grow" />
-        <button type="button" className="h10-spw-next" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching}>
+        <Button variant="primary" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching}>
           {step < 2 ? 'Continue' : launching ? 'Launching…' : 'Launch Campaign'}
-        </button>
+        </Button>
       </footer>
 
       {ruleToast && <div className="h10-scb-toast" role="status"><CheckCircle2 size={16} /> Rule Added!</div>}

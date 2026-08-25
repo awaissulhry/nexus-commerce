@@ -22,7 +22,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Layers, BarChart3 } from 'lucide-react'
-import { Input } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Toggle } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -34,6 +34,7 @@ import { pcDefaultGroup } from '../../rules-automation/_shared/PerformanceCriter
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
+import '../builder-ds.css'
 import './quick.css'
 
 type StepN = 1 | 2
@@ -187,7 +188,7 @@ export function QuickBuilder() {
         {/* APS.2a — the launch target, always on screen. */}
         <div className="h10-spw-topr">
           <MarketSelect markets={markets} value={market} onChange={setMarket} disabled={!marketReady} brand={<span className="amz">amazon</span>} />
-          <button type="button" className="h10-spw-exit" onClick={() => router.push(EXIT_TO)}>Exit Builder</button>
+          <Button onClick={() => router.push(EXIT_TO)}>Exit Builder</Button>
         </div>
       </header>
 
@@ -240,13 +241,13 @@ export function QuickBuilder() {
                       <div className="grp">
                         <div className="hd"><b>Min/Max Bid</b></div>
                         <p>Set limits to keep your bid within an acceptable range</p>
-                        <label className="mm">
-                          <input type="checkbox" checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
+                        <span className="mm">
+                          <Checkbox checked={minMaxOn} onChange={(e) => setMinMaxOn(e.target.checked)} aria-label="Set Min/Max bid limits" />
                           <span className="mm-fields">
                             <Input inputMode="decimal" value={bidConfig.minBid} onChange={(e) => setBid({ minBid: e.target.value })} prefix={CURRENCY} placeholder="Min" disabled={!minMaxOn} aria-label="Min bid" fieldClassName="h10-spw-bidnum" />
                             <Input inputMode="decimal" value={bidConfig.maxBid} onChange={(e) => setBid({ maxBid: e.target.value })} prefix={CURRENCY} placeholder="Max" disabled={!minMaxOn} aria-label="Max bid" fieldClassName="h10-spw-bidnum" />
                           </span>
-                        </label>
+                        </span>
                       </div>
                     ) : (
                       <p className="h10-qcb-custom-note">A custom bid rule will be created for this funnel — fine-tune its performance criteria in Rules &amp; Automation after launch.</p>
@@ -280,11 +281,11 @@ export function QuickBuilder() {
                       <div className="nm"><span className="t">{c.name}</span><span className="sub"><Layers size={13} /> {c.adGroupName}</span></div>
                     </div>
                     <div className="num">
-                      <div className="money"><span className="pf">{CURRENCY}</span><input inputMode="decimal" value={c.bid} onChange={(e) => updCampaign(c.id, { bid: e.target.value })} aria-label={`Default bid for ${c.name}`} /></div>
+                      <Input inputMode="decimal" prefix={CURRENCY} value={c.bid} onChange={(e) => updCampaign(c.id, { bid: e.target.value })} aria-label={`Default bid for ${c.name}`} fieldClassName="h10-qcb-moneyfield" />
                       <div className="sug">Suggested: <b>{money(c.sugBid)}</b> ({money(c.sugBid * SUG_LOW)} - {money(c.sugBid * SUG_HIGH)})</div>
                     </div>
                     <div className="num">
-                      <div className="money"><span className="pf">{CURRENCY}</span><input inputMode="decimal" value={c.budget} onChange={(e) => updCampaign(c.id, { budget: e.target.value })} aria-label={`Budget for ${c.name}`} /></div>
+                      <Input inputMode="decimal" prefix={CURRENCY} value={c.budget} onChange={(e) => updCampaign(c.id, { budget: e.target.value })} aria-label={`Budget for ${c.name}`} fieldClassName="h10-qcb-moneyfield" />
                       <div className="sug">Suggested: <b>{money(c.sugBudget)}</b> ({money(c.sugBudget * SUG_LOW)} - {money(c.sugBudget * SUG_HIGH)})</div>
                     </div>
                     <div className="algo"><BarChart3 size={15} /> {algoLabel}</div>
@@ -298,10 +299,10 @@ export function QuickBuilder() {
               <p className="h10-spw-desc">Automation makes bid adjustments automatically. You can adjust automation for launched campaigns in Rules &amp; Automation.</p>
               <div className="h10-spw-card h10-qcb-autom">
                 {AUTOMATION.map((a) => (
-                  <label key={a.key} className="h10-qcb-toggle">
-                    <input type="checkbox" className="h10-spw-sw" checked={toggles[a.key]} onChange={() => toggle(a.key)} aria-label={a.label} />
+                  <span key={a.key} className="h10-qcb-toggle">
+                    <Toggle checked={toggles[a.key]} onChange={() => toggle(a.key)} aria-label={a.label} />
                     <span className="t">{a.label} <InfoTip tip={a.tip} /></span>
-                  </label>
+                  </span>
                 ))}
               </div>
             </section>
@@ -310,13 +311,13 @@ export function QuickBuilder() {
       </div>
 
       <footer className="h10-spw-foot">
-        {step > 1 && <button type="button" className="h10-spw-back" onClick={goBack}>Back</button>}
+        {step > 1 && <Button onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
         {step === 1 ? (
-          <button type="button" className="h10-spw-next" onClick={goNext} disabled={!canNext}>Next</button>
+          <Button variant="primary" onClick={goNext} disabled={!canNext}>Next</Button>
         ) : (
-          <button type="button" className="h10-spw-next" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</button>
+          <Button variant="primary" onClick={() => void launch()} disabled={launching}>{launching ? 'Launching…' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>
