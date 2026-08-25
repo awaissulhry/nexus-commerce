@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { History, Loader2, RotateCcw, Trash2, ExternalLink, Bot, AlertTriangle, FlaskConical } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox } from '@/design-system/primitives'
 
 interface Sched { id: string; campaignId: string; name: string; windows: Array<{ days?: number[]; startHour?: number; endHour?: number; bidMultiplierPct?: number }>; timezone: string; enabled: boolean }
 interface Camp { id: string; name: string; marketplace: string | null; status: string; acos: number | null }
@@ -96,7 +97,7 @@ export function ManagedCampaigns({ market, onJump, onChanged }: { market: string
     <div className="az-mgd">
       <div className="az-mgd-head"><History size={15} /> <b>Managed campaigns</b> <span className="sub">Rank Control in {market} · {running.length} running</span>
         <span style={{ flex: 1 }} />
-        {sel.size > 0 && <button type="button" className="az-btn" disabled={busy === 'bulk'} onClick={() => void revertSelected()}>{busy === 'bulk' ? <><Loader2 size={13} className="az-spin" /> …</> : <><RotateCcw size={13} /> Revert {sel.size} selected</>}</button>}
+        {sel.size > 0 && <Button disabled={busy === 'bulk'} onClick={() => void revertSelected()}>{busy === 'bulk' ? <><Loader2 size={13} className="az-spin" /> …</> : <><RotateCcw size={13} /> Revert {sel.size} selected</>}</Button>}
       </div>
       {msg && <div className="az-mgd-msg" role="status" aria-live="polite">{msg}</div>}
 
@@ -107,7 +108,7 @@ export function ManagedCampaigns({ market, onJump, onChanged }: { market: string
           : <div className="az-mgd-list">
             {rows.map(({ s, c }) => (
               <div key={s.id} className={`az-mgd-row ${s.enabled ? 'on' : 'off'}`}>
-                {s.enabled && <input type="checkbox" checked={sel.has(s.id)} onChange={() => setSel(x => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n })} aria-label={`Select ${c!.name}`} />}
+                {s.enabled && <Checkbox checked={sel.has(s.id)} onChange={() => setSel(x => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n })} aria-label={`Select ${c!.name}`} />}
                 <span className={`st ${s.enabled ? 'live' : 'paused'}`}>{s.enabled ? 'RUNNING' : 'Paused'}</span>
                 <span className="nm">{c!.name}</span>
                 <span className="wd">{windowSummary(s.windows)} · {s.timezone}</span>
@@ -126,8 +127,8 @@ export function ManagedCampaigns({ market, onJump, onChanged }: { market: string
         <div className="az-mgd-subhd"><Bot size={14} /> <b>Automation rules</b> <span className="sub">{marketRules.filter(r => r.enabled).length} enabled in {market}</span>
           <span style={{ flex: 1 }} />
           {pausedIds.length > 0
-            ? <button type="button" className="az-btn" disabled={busy === 'pauseall'} onClick={() => void resumeAll()}>{busy === 'pauseall' ? <><Loader2 size={13} className="az-spin" /> …</> : <>Resume {pausedIds.length}</>}</button>
-            : <button type="button" className="az-btn danger" disabled={busy === 'pauseall' || marketRules.every(r => !r.enabled)} onClick={() => void pauseAll()}>{busy === 'pauseall' ? <><Loader2 size={13} className="az-spin" /> …</> : <><AlertTriangle size={13} /> Pause all rules</>}</button>}
+            ? <Button disabled={busy === 'pauseall'} onClick={() => void resumeAll()}>{busy === 'pauseall' ? <><Loader2 size={13} className="az-spin" /> …</> : <>Resume {pausedIds.length}</>}</Button>
+            : <Button variant="danger" disabled={busy === 'pauseall' || marketRules.every(r => !r.enabled)} onClick={() => void pauseAll()}>{busy === 'pauseall' ? <><Loader2 size={13} className="az-spin" /> …</> : <><AlertTriangle size={13} /> Pause all rules</>}</Button>}
         </div>
         {marketRules.length === 0
           ? <div className="az-cockpit-sub">No automation rules in {market}.</div>

@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Sliders, Loader2, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input } from '@/design-system/primitives'
 
 const STRATS = [
   { k: 'AUTO_FOR_SALES', label: 'Up & down', hint: 'Amazon raises bids up to +100% when a click is likely to convert — most aggressive for rank.' },
@@ -56,12 +57,12 @@ export function StrategyStation({ campaignId, currentStrategy, onChanged }: { ca
         <div className="az-station-body">
           <div className="az-strat-row">
             <span className="lbl">Bidding</span>
-            {STRATS.map(s => <button key={s.k} type="button" title={s.hint} aria-pressed={strat === s.k} className={`az-strat-btn ${strat === s.k ? 'on' : ''}`} onClick={() => setStrat(s.k)}>{s.label}</button>)}
+            {STRATS.map(s => <Button key={s.k} size="sm" title={s.hint} aria-pressed={strat === s.k} active={strat === s.k} onClick={() => setStrat(s.k)}>{s.label}</Button>)}
           </div>
           <div className="az-cockpit-sub" style={{ marginTop: 4 }}>{STRATS.find(s => s.k === strat)?.hint}</div>
-          <label className="az-strat-ceil"><input type="checkbox" checked={ceilOn} onChange={e => setCeilOn(e.target.checked)} /> Cap effective CPC at <input type="number" min={1} max={10} step={0.1} value={ceilMult} disabled={!ceilOn} onChange={e => setCeilMult(Math.max(1, Math.min(10, Number(e.target.value))))} />× the keyword&apos;s historical CPC</label>
+          <span className="az-strat-ceil"><Checkbox checked={ceilOn} onChange={e => setCeilOn(e.target.checked)} label="Cap effective CPC at" /><Input type="number" min={1} max={10} step={0.1} aria-label="CPC ceiling multiple" suffix="×" value={ceilMult} disabled={!ceilOn} onChange={e => setCeilMult(Math.max(1, Math.min(10, Number(e.target.value))))} style={{ width: 54, fontWeight: 700, textAlign: 'right' }} />the keyword&apos;s historical CPC</span>
           <div className="az-sched-actions">
-            <button type="button" className="az-btn dark" disabled={busy} onClick={() => void apply()}>{busy ? <><Loader2 size={14} className="az-spin" /> Staging…</> : <><Check size={14} /> Stage strategy</>}</button>
+            <Button variant="primary" disabled={busy} onClick={() => void apply()}>{busy ? <><Loader2 size={14} className="az-spin" /> Staging…</> : <><Check size={14} /> Stage strategy</>}</Button>
             {msg && <span className="az-cockpit-sub" style={{ margin: 0 }}>{msg}</span>}
           </div>
         </div>

@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Bot, ShieldCheck, Loader2, Check, ChevronDown, ChevronRight, FlaskConical, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input } from '@/design-system/primitives'
 
 interface Rule { id: string; name: string; enabled: boolean; dryRun: boolean; trigger: string; scopeMarketplace: string | null; maxExecutionsPerDay: number | null }
 interface Status { killSwitch: boolean; rules: { total: number; enabled: number; live: number; dryRun: number; disabled: number } }
@@ -83,9 +84,9 @@ export function AutomateStation({ market, onChanged }: { market: string; onChang
           <div className="az-auto-card">
             <div className="az-auto-title"><ShieldCheck size={14} /> Hold Top-of-Search rank ({market})</div>
             <div className="az-auto-row">
-              Keep Top-of-Search share ≥ <input type="number" min={1} max={100} value={targetIS} onChange={e => setTargetIS(Math.max(1, Math.min(100, Number(e.target.value))))} />% while ACOS stays under <input type="number" min={1} max={200} value={maxAcos} onChange={e => setMaxAcos(Math.max(1, Math.min(200, Number(e.target.value))))} />%
+              Keep Top-of-Search share ≥ <Input type="number" min={1} max={100} aria-label="Target top-of-search share" suffix="%" value={targetIS} onChange={e => setTargetIS(Math.max(1, Math.min(100, Number(e.target.value))))} style={{ width: 50 }} /> while ACOS stays under <Input type="number" min={1} max={200} aria-label="Maximum ACOS" suffix="%" value={maxAcos} onChange={e => setMaxAcos(Math.max(1, Math.min(200, Number(e.target.value))))} style={{ width: 50 }} />
               <span style={{ flex: 1 }} />
-              <button type="button" className="az-btn dark" disabled={busy === 'create'} onClick={() => void createDefend()}>{busy === 'create' ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Create rule</>}</button>
+              <Button variant="primary" disabled={busy === 'create'} onClick={() => void createDefend()}>{busy === 'create' ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Create rule</>}</Button>
             </div>
             <div className="az-cockpit-note">Created <b>disabled + dry-run</b> — it won&apos;t touch Amazon until you enable it and take it live. Raises/eases PLACEMENT_TOP ±15%/run to win the slot for the least cost.</div>
           </div>

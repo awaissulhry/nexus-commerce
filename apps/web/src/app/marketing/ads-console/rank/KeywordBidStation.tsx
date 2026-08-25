@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ListChecks, Loader2, Zap, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox, Input, Textarea } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface RawKw { id: string; text: string; kind: string; matchType: string | null; bidCents: number; status: string; adGroupId: string; adGroupName: string; impressions: number; acos: number | null }
 interface Sov { sovPct: number; cpcCents: number }
@@ -102,13 +104,13 @@ export function KeywordBidStation({ campaignId, onChanged }: { campaignId: strin
           {/* ── Add keywords ── */}
           <div className="az-kwb-add">
             <div className="az-kwb-addhd"><Plus size={14} /> Add keywords to this campaign</div>
-            <textarea className="az-cq-ta" value={paste} onChange={e => setPaste(e.target.value)} placeholder={'giacca moto pelle\ngiubbotto moto estivo, guanti moto racing'} rows={3} />
+            <Textarea aria-label="Paste keywords" value={paste} onChange={e => setPaste(e.target.value)} placeholder={'giacca moto pelle\ngiubbotto moto estivo, guanti moto racing'} rows={3} style={{ minHeight: 80, fontSize: 12.5 }} />
             <div className="az-kwb-addrow">
-              <label>Match {MATCHES.map(m => <button key={m} type="button" aria-pressed={match === m} className={`az-strat-btn ${match === m ? 'on' : ''}`} onClick={() => setMatch(m)}>{m[0] + m.slice(1).toLowerCase()}</button>)}</label>
-              <label>Bid €<input type="number" min={0.02} step={0.05} value={addBid} onChange={e => setAddBid(e.target.value)} /></label>
-              {adGroups.length > 0 && <label>Ad group <select value={addGroup} onChange={e => setAddGroup(e.target.value)}>{adGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.n})</option>)}</select></label>}
+              <span>Match {MATCHES.map(m => <Button key={m} size="sm" aria-pressed={match === m} active={match === m} onClick={() => setMatch(m)}>{m[0] + m.slice(1).toLowerCase()}</Button>)}</span>
+              <label>Bid <Input type="number" min={0.02} step={0.05} prefix="€" aria-label="Bid" value={addBid} onChange={e => setAddBid(e.target.value)} style={{ width: 62 }} /></label>
+              {adGroups.length > 0 && <span>Ad group <Listbox ariaLabel="Ad group" width={200} value={addGroup} onChange={setAddGroup} options={adGroups.map(g => ({ value: g.id, label: `${g.name} (${g.n})` }))} /></span>}
               <span style={{ flex: 1 }} />
-              <button type="button" className="az-btn dark" disabled={adding || !addGroup || newKws.length === 0} onClick={() => void addKeywords()}>{adding ? <><Loader2 size={14} className="az-spin" /> …</> : <><Plus size={14} /> Add {newKws.length || ''}</>}</button>
+              <Button variant="primary" disabled={adding || !addGroup || newKws.length === 0} onClick={() => void addKeywords()}>{adding ? <><Loader2 size={14} className="az-spin" /> …</> : <><Plus size={14} /> Add {newKws.length || ''}</>}</Button>
             </div>
             <div className="az-cockpit-note">New keywords are created inside the chosen ad group of this campaign (so they inherit its products + placement settings). Staged until you open the write-gate — then they go live on Amazon. {newKws.length > 0 ? `${newKws.length} new` : 'Paste new keywords above'}.</div>
             {addMsg && <div className="az-cockpit-sub" style={{ margin: '6px 0 0' }} role="status" aria-live="polite">{addMsg}</div>}
@@ -117,23 +119,23 @@ export function KeywordBidStation({ campaignId, onChanged }: { campaignId: strin
           {/* ── Bid existing keywords ── */}
           <div className="az-kwb-push">
             <span className="lbl">Bid</span>
-            {([['win', 'Bid to win'], ['boost', 'Boost %'], ['set', 'Set bid']] as const).map(([k, l]) => <button key={k} type="button" aria-pressed={mode === k} className={`az-strat-btn ${mode === k ? 'on' : ''}`} onClick={() => setMode(k)}>{l}</button>)}
-            {mode === 'boost' && <label>+<input type="number" value={boostPct} onChange={e => setBoostPct(Number(e.target.value))} />% of current</label>}
-            {mode === 'set' && <label>€<input type="number" step="0.05" value={setEur} onChange={e => setSetEur(e.target.value)} />/click</label>}
-            {mode === 'win' && <label>bid <input type="number" value={winMult} onChange={e => setWinMult(Number(e.target.value))} />% of going CPC</label>}
+            {([['win', 'Bid to win'], ['boost', 'Boost %'], ['set', 'Set bid']] as const).map(([k, l]) => <Button key={k} size="sm" aria-pressed={mode === k} active={mode === k} onClick={() => setMode(k)}>{l}</Button>)}
+            {mode === 'boost' && <label><Input type="number" aria-label="Boost percent" prefix="+" suffix="%" value={boostPct} onChange={e => setBoostPct(Number(e.target.value))} style={{ width: 52 }} /> of current</label>}
+            {mode === 'set' && <label><Input type="number" step="0.05" aria-label="Bid per click" prefix="€" value={setEur} onChange={e => setSetEur(e.target.value)} style={{ width: 62 }} /> /click</label>}
+            {mode === 'win' && <label>bid <Input type="number" aria-label="Percent of going CPC" suffix="%" value={winMult} onChange={e => setWinMult(Number(e.target.value))} style={{ width: 56 }} /> of going CPC</label>}
             <span style={{ flex: 1 }} />
-            <button type="button" className="az-btn dark" disabled={busy || sel.size === 0} onClick={() => void applyBids()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Zap size={14} /> Stage {sel.size || ''}</>}</button>
+            <Button variant="primary" disabled={busy || sel.size === 0} onClick={() => void applyBids()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Zap size={14} /> Stage {sel.size || ''}</>}</Button>
           </div>
           {msg && <div className="az-cockpit-sub" style={{ margin: '8px 0 0' }} role="status" aria-live="polite">{msg}</div>}
           <div className="az-kwb-tablewrap">
             <table className="az-kwb-table">
-              <thead><tr><th><input type="checkbox" checked={allSel} onChange={e => setSel(e.target.checked ? new Set(shown.map(t => t.id)) : new Set())} aria-label="Select all keywords" /></th><th className="l">Keyword</th><th className="l">Match · ad group</th><th>Bid</th><th>SoV</th><th>Impr</th><th>ACOS</th><th>New bid</th></tr></thead>
+              <thead><tr><th><Checkbox checked={allSel} onChange={e => setSel(e.target.checked ? new Set(shown.map(t => t.id)) : new Set())} aria-label="Select all keywords" /></th><th className="l">Keyword</th><th className="l">Match · ad group</th><th>Bid</th><th>SoV</th><th>Impr</th><th>ACOS</th><th>New bid</th></tr></thead>
               <tbody>
                 {rows === null && <tr><td colSpan={8} className="e">Loading keywords…</td></tr>}
                 {rows !== null && shown.length === 0 && <tr><td colSpan={8} className="e">No keywords on this campaign yet — add some above.</td></tr>}
                 {shown.map(t => { const nb = targetBid(t); const up = nb > t.bidCents; const s = sov[t.text.toLowerCase()]; return (
                   <tr key={t.id} className={sel.has(t.id) ? 'on' : ''}>
-                    <td><input type="checkbox" checked={sel.has(t.id)} onChange={() => setSel(x => { const n = new Set(x); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n })} aria-label={`Select ${t.text}`} /></td>
+                    <td><Checkbox checked={sel.has(t.id)} onChange={() => setSel(x => { const n = new Set(x); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n })} aria-label={`Select ${t.text}`} /></td>
                     <td className="l">{t.text}</td>
                     <td className="l"><span className="sub2">{(t.matchType ?? '').replace('SEARCH_', '').toLowerCase() || '—'} · {t.adGroupName || 'ad group'}</span></td>
                     <td>{eur(t.bidCents)}</td>

@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Loader2, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Input, Textarea } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Targ { id: string; kind: string; adGroupId: string; adGroupName: string; text: string }
 const isAsin = (s: string) => /^[A-Z0-9]{10}$/.test(s)
@@ -66,13 +68,13 @@ export function ConquestStation({ campaignId, onChanged }: { campaignId: string;
           {adGroups.length === 0
             ? <div className="az-cockpit-sub">No ad groups found for this campaign yet — add a keyword/target in the keyword manager first.</div>
             : (<>
-              {adGroups.length > 1 && <label className="az-cq-ag">Ad group <select value={adGroupId} onChange={e => setAdGroupId(e.target.value)}>{adGroups.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>}
-              <textarea className="az-cq-ta" value={asinsRaw} onChange={e => setAsinsRaw(e.target.value)} placeholder={'Competitor ASINs — one per line or comma-separated\nB0XXXXXXXX, B0YYYYYYYY'} rows={3} />
+              {adGroups.length > 1 && <span className="az-cq-ag">Ad group <Listbox ariaLabel="Ad group" width={220} value={adGroupId} onChange={setAdGroupId} options={adGroups.map(a => ({ value: a.id, label: a.name }))} /></span>}
+              <Textarea aria-label="Competitor ASINs" value={asinsRaw} onChange={e => setAsinsRaw(e.target.value)} placeholder={'Competitor ASINs — one per line or comma-separated\nB0XXXXXXXX, B0YYYYYYYY'} rows={3} style={{ minHeight: 80, fontSize: 12.5 }} />
               <div className="az-cq-row">
-                <label>Bid € <input type="number" min={0.05} step={0.05} value={bid} onChange={e => setBid(e.target.value)} /></label>
+                <label>Bid <Input type="number" min={0.05} step={0.05} prefix="€" aria-label="Bid" value={bid} onChange={e => setBid(e.target.value)} style={{ width: 62 }} /></label>
                 <span className="az-cockpit-sub" style={{ margin: 0 }}>{parsed.valid.length} valid{parsed.invalid.length ? ` · ${parsed.invalid.length} invalid` : ''}{parsed.valid.some(a => existing.has(a)) ? ' · some already targeted' : ''}</span>
                 <span style={{ flex: 1 }} />
-                <button type="button" className="az-btn dark" disabled={busy || !adGroupId || parsed.valid.length === 0} onClick={() => void create()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Target {parsed.valid.length || ''}</>}</button>
+                <Button variant="primary" disabled={busy || !adGroupId || parsed.valid.length === 0} onClick={() => void create()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Target {parsed.valid.length || ''}</>}</Button>
               </div>
               {msg && <div className="az-cockpit-sub" style={{ marginTop: 6 }}>{msg}</div>}
               <div className="az-cockpit-note" style={{ marginTop: 8 }}>How it works: each ASIN becomes a <b>Product target</b> in the chosen ad group, so your ad shows on that competitor&apos;s product page (the Sponsored slot) and you pay per click at the bid above. Staged until you open the write-gate.</div>

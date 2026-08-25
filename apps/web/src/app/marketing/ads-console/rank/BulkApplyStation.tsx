@@ -11,6 +11,8 @@
 import { useCallback, useState } from 'react'
 import { Layers, Loader2, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { Button, Checkbox } from '@/design-system/primitives'
+import { Listbox } from '@/design-system/components/Listbox'
 
 interface Camp { id: string; name: string }
 const PRESETS = [
@@ -58,15 +60,15 @@ export function BulkApplyStation({ campaigns, market, onChanged }: { campaigns: 
       {open && (
         <div className="az-station-body">
           <div className="az-bulk-camps">
-            <label className="all"><input type="checkbox" checked={allSel} onChange={e => setSel(e.target.checked ? new Set(campaigns.map(c => c.id)) : new Set())} /> All {campaigns.length} in {market}</label>
+            <Checkbox className="all" checked={allSel} onChange={e => setSel(e.target.checked ? new Set(campaigns.map(c => c.id)) : new Set())} label={`All ${campaigns.length} in ${market}`} />
             <div className="list">
-              {campaigns.length === 0 ? <span className="az-cockpit-sub">No campaigns in {market}.</span> : campaigns.map(c => <label key={c.id}><input type="checkbox" checked={sel.has(c.id)} onChange={() => setSel(x => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })} /> <span>{c.name}</span></label>)}
+              {campaigns.length === 0 ? <span className="az-cockpit-sub">No campaigns in {market}.</span> : campaigns.map(c => <Checkbox key={c.id} checked={sel.has(c.id)} onChange={() => setSel(x => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n })} label={<span>{c.name}</span>} />)}
             </div>
           </div>
-          <div className="az-bulk-row"><span className="lbl">Top-of-search</span>{PRESETS.map(p => <button key={p.k} type="button" aria-pressed={preset === p.k} className={`az-strat-btn ${preset === p.k ? 'on' : ''}`} onClick={() => setPreset(p.k)}>{p.label}{p.top ? ` +${p.top}%` : ''}</button>)}</div>
-          <div className="az-bulk-row"><span className="lbl">Strategy</span><select value={strat} onChange={e => setStrat(e.target.value)}>{STRATS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+          <div className="az-bulk-row"><span className="lbl">Top-of-search</span>{PRESETS.map(p => <Button key={p.k} size="sm" aria-pressed={preset === p.k} active={preset === p.k} onClick={() => setPreset(p.k)}>{p.label}{p.top ? ` +${p.top}%` : ''}</Button>)}</div>
+          <div className="az-bulk-row"><span className="lbl">Strategy</span><Listbox ariaLabel="Strategy" width={220} value={strat} onChange={setStrat} options={STRATS.map(([k, l]) => ({ value: k, label: l }))} /></div>
           <div className="az-sched-actions">
-            <button type="button" className="az-btn dark" disabled={busy || sel.size === 0} onClick={() => void apply()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Stage to {sel.size || ''} campaign{sel.size === 1 ? '' : 's'}</>}</button>
+            <Button variant="primary" disabled={busy || sel.size === 0} onClick={() => void apply()}>{busy ? <><Loader2 size={14} className="az-spin" /> …</> : <><Check size={14} /> Stage to {sel.size || ''} campaign{sel.size === 1 ? '' : 's'}</>}</Button>
             {msg && <span className="az-cockpit-sub" style={{ margin: 0 }} role="status" aria-live="polite">{msg}</span>}
           </div>
           <div className="az-cockpit-note">Sets the Top-of-search bias (other placements → 0) + optional strategy on every selected campaign. Per-campaign fine-tuning stays in the cockpit above.</div>
