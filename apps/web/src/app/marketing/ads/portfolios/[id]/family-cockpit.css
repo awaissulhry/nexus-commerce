@@ -44,6 +44,20 @@
 .fc-badge.applied { background: #f6fbf8; color: var(--nds-success-text); }
 .fc-badge.observed { background: var(--nds-grey-50); color: #64748b; }
 
+/* Four of the six cockpit tables are the DS `DataGrid` now; `.fc-table` rides on
+   its wrapper and carries only what the grid has no opinion about. `.gap` is the
+   18px this page puts between stacked tables — `DataGrid` takes no `style`.
+   `.fc-tablewrap` still serves the two that could NOT convert: the campaigns
+   table (its rows are rule drop targets) and the coverage-set editor. */
+/* The four converted grids wear `.fc-grid`, NOT `.fc-table`. `.fc-table` is on a
+   raw <table>, so its `th`/`td` rules are descendant selectors — put that class on
+   a DataGrid wrapper and they repaint the grid: right-align every column and take
+   the header back to grey-500 at 3.10:1, undoing the AA fix. Measured, not guessed. */
+.fc-grid.gap { margin-bottom: 18px; }
+.fc-grid .strong { font-weight: 650; color: var(--nds-grey-900); }
+.fc-grid .multi { color: var(--nds-success-text); font-weight: 650; }
+.fc-grid .none { color: #8a6320; font-weight: 600; }
+.fc-grid .mono { font-family: ui-monospace, monospace; font-size: 11.5px; }
 .fc-tablewrap { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); overflow-x: auto; }
 .fc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .fc-table th { text-align: right; padding: 8px 11px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-grey-500); border-bottom: 1px solid var(--nds-grey-150); white-space: nowrap; background: var(--nds-white); }
@@ -51,7 +65,7 @@
 .fc-table td { padding: 6px 11px; text-align: right; border-bottom: 1px solid var(--nds-grey-50); color: var(--nds-grey-700); font-variant-numeric: tabular-nums; }
 .fc-table tbody tr:last-child td { border-bottom: 0; }
 .fc-table tbody tr:hover td { background: var(--nds-grey-25); }
-.fc-table tbody tr.off td { color: var(--nds-grey-450); }
+.fc-table tbody tr.off td, .fc-grid tbody tr.off td { color: var(--nds-grey-450); }
 .fc-table td.l { color: var(--nds-grey-900); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fc-table td.strong { font-weight: 650; color: var(--nds-grey-900); }
 .fc-table td.multi { color: var(--nds-success-text); font-weight: 650; }
@@ -67,8 +81,6 @@
 .fc-status.enabled { color: var(--nds-success-text); }
 .fc-status.paused { color: #8a6320; }
 .fc-status.archived { color: #7a869a; cursor: default; }
-.fc-budget input { width: 64px; font-size: 12px; text-align: right; border: 1px solid transparent; border-radius: 5px; padding: 3px 6px; background: transparent; font-variant-numeric: tabular-nums; }
-.fc-budget input:hover, .fc-budget input:focus { border-color: var(--nds-grey-200); background: var(--nds-white); outline: none; }
 .fc-deliv { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 4px; padding: 2px 6px; }
 .fc-deliv.ok { background: #e8f6ef; color: var(--nds-success-text); }
 .fc-deliv.bad { background: #fdf2f2; color: var(--nds-danger-text); }
@@ -121,9 +133,7 @@
 @media (max-width: 1100px) { .fc--with-dock { flex-direction: column; } .fc--with-dock .adock { position: static; width: 100%; max-height: 420px; } }
 
 /* ── ACR.3 — coverage-set authoring ──────────────────────────────────────── */
-.fc-lead-select {
-  font-size: 11.5px; color: var(--nds-grey-900); background: var(--nds-white);
-  border: 1px solid transparent; border-radius: 5px; padding: 3px 5px; max-width: 150px;
-  font-family: ui-monospace, monospace;
-}
-.fc-lead-select:hover, .fc-lead-select:focus { border-color: var(--nds-grey-200); outline: none; }
+.fc-lead-select { max-width: 150px; font-family: ui-monospace, monospace; }
+
+/* the coverage-set grid’s two numeric editors: DS `Input size="xs"`, width only */
+.fc-numfield { width: 76px; }

@@ -27,7 +27,8 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/design-system/primitives/Button'
-import { Tabs } from '@/design-system/components'
+import { Input, Select } from '@/design-system/primitives'
+import { DataGrid, Tabs } from '@/design-system/components'
 import '@/design-system/styles/components.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -313,18 +314,17 @@ export function FamilyCockpitClient() {
                       </button>
                     </td>
                     <td className="num">
-                      <span className="fc-budget">
-                        <input
-                          value={budgetEdit[c.id] ?? c.dailyBudgetEur.toFixed(2)}
-                          onChange={(e) => setBudgetEdit((m) => ({ ...m, [c.id]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter') return
-                            const v = Number(budgetEdit[c.id])
-                            if (Number.isFinite(v) && v > 0 && v !== c.dailyBudgetEur) void patchCampaign(c.id, { dailyBudget: v })
-                          }}
-                          aria-label={`Daily budget for ${c.name}`}
-                        />
-                      </span>
+                      <Input
+                        size="xs" fieldClassName="fc-numfield"
+                        value={budgetEdit[c.id] ?? c.dailyBudgetEur.toFixed(2)}
+                        onChange={(e) => setBudgetEdit((m) => ({ ...m, [c.id]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          const v = Number(budgetEdit[c.id])
+                          if (Number.isFinite(v) && v > 0 && v !== c.dailyBudgetEur) void patchCampaign(c.id, { dailyBudget: v })
+                        }}
+                        aria-label={`Daily budget for ${c.name}`}
+                      />
                     </td>
                     <td className="num">{eur(c.spend30dCents)}</td>
                     <td className="num">{eur(c.sales30dCents)}</td>
@@ -399,7 +399,8 @@ export function FamilyCockpitClient() {
                 </span></div>
                 <div><span className="k">Terms</span><span className="v">{covSet.terms.filter((t) => t.status === 'ACTIVE').length} active · {covSet.terms.length} total</span></div>
                 <div><span className="k">Daily cap</span><span className="v">
-                  <span className="fc-budget"><input
+                  <Input
+                    size="xs" fieldClassName="fc-numfield"
                     defaultValue={covSet.dailySpendCapCents != null ? (covSet.dailySpendCapCents / 100).toFixed(2) : ''}
                     placeholder="none"
                     aria-label="Family daily spend cap (EUR)"
@@ -407,10 +408,11 @@ export function FamilyCockpitClient() {
                       if (e.key !== 'Enter') return
                       const v = Number((e.target as HTMLInputElement).value)
                       void patchCovSet({ dailySpendCapCents: Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null })
-                    }} /></span>
+                    }} />
                 </span></div>
                 <div><span className="k">ACOS cap %</span><span className="v">
-                  <span className="fc-budget"><input
+                  <Input
+                    size="xs" fieldClassName="fc-numfield"
                     defaultValue={covSet.acosCapPct ?? ''}
                     placeholder="none"
                     aria-label="Family ACOS cap percent"
@@ -418,81 +420,91 @@ export function FamilyCockpitClient() {
                       if (e.key !== 'Enter') return
                       const v = Number((e.target as HTMLInputElement).value)
                       void patchCovSet({ acosCapPct: Number.isFinite(v) && v > 0 ? v : null })
-                    }} /></span>
+                    }} />
                 </span></div>
               </div>
-              <div className="fc-tablewrap" style={{ marginBottom: 18 }}>
-                <table className="fc-table">
-                  <thead><tr>
-                    <th className="l">Term</th><th>Market</th><th>Share</th>
-                    <th className="l" title="The family ASIN that leads this term — highest bid, ToS defense. Others support.">Lead ASIN</th>
-                    <th>Max CPC ¢</th><th>Target share %</th>
-                    <th title="Control terms are held out: the engine never touches them, so week-over-week share moves are attributable to the engine rather than the market.">Control</th>
-                    <th>Status</th>
-                  </tr></thead>
-                  <tbody>
-                    {covSet.terms.filter((t) => t.status !== 'RETIRED').map((t) => (
-                      <tr key={t.id} className={t.status === 'PAUSED' ? 'off' : ''}>
-                        <td className="l">{t.term}</td>
-                        <td className="num">{intl(t.marketImpressions)}</td>
-                        <td className="num strong">{pct(t.share)}</td>
-                        <td className="l">
-                          <select
-                            value={t.leadAsin ?? ''}
-                            disabled={covSetBusy}
-                            aria-label={`Lead ASIN for ${t.term}`}
-                            onChange={(e) => void patchCovTerm(t.id, { leadAsin: e.target.value || null })}
-                            className="fc-lead-select"
-                          >
-                            <option value="">— none —</option>
-                            {[...new Set(ck.products.map((p) => p.asin).filter(Boolean))].map((a) => (
-                              <option key={a as string} value={a as string}>{a}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="num">
-                          <span className="fc-budget"><input
-                            defaultValue={t.maxCpcCents ?? ''}
-                            placeholder="set"
-                            aria-label={`Max CPC for ${t.term}`}
-                            onKeyDown={(e) => {
-                              if (e.key !== 'Enter') return
-                              const v = Number((e.target as HTMLInputElement).value)
-                              void patchCovTerm(t.id, { maxCpcCents: Number.isFinite(v) && v > 0 ? Math.round(v) : null })
-                            }} /></span>
-                        </td>
-                        <td className="num">
-                          <span className="fc-budget"><input
-                            defaultValue={t.targetSharePct ?? ''}
-                            placeholder="—"
-                            aria-label={`Target share for ${t.term}`}
-                            onKeyDown={(e) => {
-                              if (e.key !== 'Enter') return
-                              const v = Number((e.target as HTMLInputElement).value)
-                              void patchCovTerm(t.id, { targetSharePct: Number.isFinite(v) && v > 0 ? v : null })
-                            }} /></span>
-                        </td>
-                        <td>
-                          <button type="button" className={`fc-switch ${t.isControl ? 'on' : ''}`}
-                            disabled={covSetBusy}
-                            title={t.isControl ? 'Held out — the engine never touches this term. Click to hand it to the engine.' : 'Engine-managed. Click to hold it out as a control.'}
-                            onClick={() => void patchCovTerm(t.id, { isControl: !t.isControl })}>
-                            {t.isControl ? 'control' : 'engine'}
-                          </button>
-                        </td>
-                        <td>
-                          <Button variant="quiet" size="xs" className={`fc-status ${t.status === 'ACTIVE' ? 'enabled' : 'paused'}`}
-                            disabled={covSetBusy}
-                            title={t.status === 'ACTIVE' ? 'Pause this term in the set' : 'Reactivate'}
-                            onClick={() => void patchCovTerm(t.id, { status: t.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}>
-                            {t.status === 'ACTIVE' ? 'active' : 'paused'}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataGrid<CoverageSetTerm>
+                className="fc-grid gap"
+                rows={covSet.terms.filter((t) => t.status !== 'RETIRED')}
+                rowKey={(t) => t.id}
+                rowClassName={(t) => (t.status === 'PAUSED' ? 'off' : '')}
+                columns={[
+                  { key: 'term', label: 'Term', render: (t) => t.term },
+                  { key: 'market', label: 'Market', align: 'right', render: (t) => intl(t.marketImpressions) },
+                  { key: 'share', label: 'Share', align: 'right', render: (t) => <span className="strong">{pct(t.share)}</span> },
+                  {
+                    key: 'lead',
+                    label: <span title="The family ASIN that leads this term — highest bid, ToS defense. Others support.">Lead ASIN</span>,
+                    render: (t) => (
+                      <Select
+                        size="xs"
+                        className="fc-lead-select"
+                        value={t.leadAsin ?? ''}
+                        disabled={covSetBusy}
+                        aria-label={`Lead ASIN for ${t.term}`}
+                        onChange={(e) => void patchCovTerm(t.id, { leadAsin: e.target.value || null })}
+                      >
+                        <option value="">— none —</option>
+                        {[...new Set(ck.products.map((pr) => pr.asin).filter(Boolean))].map((a) => (
+                          <option key={a as string} value={a as string}>{a}</option>
+                        ))}
+                      </Select>
+                    ),
+                  },
+                  {
+                    key: 'maxcpc', label: 'Max CPC ¢', align: 'right',
+                    render: (t) => (
+                      <Input
+                        size="xs" fieldClassName="fc-numfield" defaultValue={t.maxCpcCents ?? ''} placeholder="set"
+                        aria-label={`Max CPC for ${t.term}`}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          const v = Number((e.target as HTMLInputElement).value)
+                          void patchCovTerm(t.id, { maxCpcCents: Number.isFinite(v) && v > 0 ? Math.round(v) : null })
+                        }}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'target', label: 'Target share %', align: 'right',
+                    render: (t) => (
+                      <Input
+                        size="xs" fieldClassName="fc-numfield" defaultValue={t.targetSharePct ?? ''} placeholder="—"
+                        aria-label={`Target share for ${t.term}`}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          const v = Number((e.target as HTMLInputElement).value)
+                          void patchCovTerm(t.id, { targetSharePct: Number.isFinite(v) && v > 0 ? v : null })
+                        }}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'control',
+                    label: <span title="Control terms are held out: the engine never touches them, so week-over-week share moves are attributable to the engine rather than the market.">Control</span>,
+                    align: 'right',
+                    render: (t) => (
+                      <button type="button" className={`fc-switch ${t.isControl ? 'on' : ''}`}
+                        disabled={covSetBusy}
+                        title={t.isControl ? 'Held out — the engine never touches this term. Click to hand it to the engine.' : 'Engine-managed. Click to hold it out as a control.'}
+                        onClick={() => void patchCovTerm(t.id, { isControl: !t.isControl })}>
+                        {t.isControl ? 'control' : 'engine'}
+                      </button>
+                    ),
+                  },
+                  {
+                    key: 'status', label: 'Status', align: 'right',
+                    render: (t) => (
+                      <Button variant="quiet" size="xs" className={`fc-status ${t.status === 'ACTIVE' ? 'enabled' : 'paused'}`}
+                        disabled={covSetBusy}
+                        title={t.status === 'ACTIVE' ? 'Pause this term in the set' : 'Reactivate'}
+                        onClick={() => void patchCovTerm(t.id, { status: t.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })}>
+                        {t.status === 'ACTIVE' ? 'active' : 'paused'}
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
 
               {preview && (
                 <>
@@ -506,22 +518,18 @@ export function FamilyCockpitClient() {
                   {preview.decisions.filter((d) => d.action !== 'hold').length === 0 ? (
                     <div className="fc-banner ok"><Check size={15} /> No bid would move — every evaluated term is holding, capped, or awaiting a target.</div>
                   ) : (
-                    <div className="fc-tablewrap" style={{ marginBottom: 18 }}>
-                      <table className="fc-table">
-                        <thead><tr><th className="l">Term</th><th>Move</th><th>Bid</th><th className="l">Why</th><th className="l">Campaign</th></tr></thead>
-                        <tbody>
-                          {preview.decisions.filter((d) => d.action !== 'hold').map((d) => (
-                            <tr key={d.term}>
-                              <td className="l">{d.term}</td>
-                              <td className={`num ${d.action === 'up' ? 'multi' : 'none'}`}>{d.action.toUpperCase()}</td>
-                              <td className="num">{d.currentBidCents}¢ → {d.nextBidCents}¢</td>
-                              <td className="l">{d.reason}</td>
-                              <td className="l">{d.campaignName}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <DataGrid<EnginePreviewDecision>
+                      className="fc-grid gap"
+                      rows={preview.decisions.filter((d) => d.action !== 'hold')}
+                      rowKey={(d) => d.term}
+                      columns={[
+                        { key: 'term', label: 'Term', render: (d) => d.term },
+                        { key: 'move', label: 'Move', align: 'right', render: (d) => <span className={d.action === 'up' ? 'multi' : 'none'}>{d.action.toUpperCase()}</span> },
+                        { key: 'bid', label: 'Bid', align: 'right', render: (d) => `${d.currentBidCents}¢ → ${d.nextBidCents}¢` },
+                        { key: 'why', label: 'Why', render: (d) => d.reason },
+                        { key: 'campaign', label: 'Campaign', render: (d) => d.campaignName },
+                      ]}
+                    />
                   )}
                 </>
               )}
@@ -540,24 +548,20 @@ export function FamilyCockpitClient() {
                   </span>
                 </div>
               ) : (
-                <div className="fc-tablewrap" style={{ marginBottom: 18 }}>
-                  <table className="fc-table">
-                    <thead><tr><th className="l">When</th><th className="l">Term</th><th>Move</th><th>Bid</th><th className="l">Why</th><th className="l">Campaign</th><th>Kind</th></tr></thead>
-                    <tbody>
-                      {engineLog.map((r, i) => (
-                        <tr key={`${r.at}-${i}`}>
-                          <td className="l">{new Date(r.at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                          <td className="l">{r.term ?? '—'}</td>
-                          <td className={`num ${r.action === 'up' ? 'multi' : 'none'}`}>{r.action.toUpperCase()}</td>
-                          <td className="num">{r.fromCents != null && r.toCents != null ? `${r.fromCents}¢ → ${r.toCents}¢` : '—'}</td>
-                          <td className="l">{r.reason ?? '—'}</td>
-                          <td className="l">{r.campaignName ?? '—'}</td>
-                          <td><span className={`fc-badge ${r.kind}`}>{r.kind}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataGrid<EngineLogRow>
+                  className="fc-grid gap"
+                  rows={engineLog}
+                  rowKey={(r) => `${r.at}-${r.term ?? ''}-${r.action}`}
+                  columns={[
+                    { key: 'when', label: 'When', render: (r) => new Date(r.at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) },
+                    { key: 'term', label: 'Term', render: (r) => r.term ?? '—' },
+                    { key: 'move', label: 'Move', align: 'right', render: (r) => <span className={r.action === 'up' ? 'multi' : 'none'}>{r.action.toUpperCase()}</span> },
+                    { key: 'bid', label: 'Bid', align: 'right', render: (r) => (r.fromCents != null && r.toCents != null ? `${r.fromCents}¢ → ${r.toCents}¢` : '—') },
+                    { key: 'why', label: 'Why', render: (r) => r.reason ?? '—' },
+                    { key: 'campaign', label: 'Campaign', render: (r) => r.campaignName ?? '—' },
+                    { key: 'kind', label: 'Kind', align: 'right', render: (r) => <span className={`fc-badge ${r.kind}`}>{r.kind}</span> },
+                  ]}
+                />
               )}
             </>
           )}
@@ -577,27 +581,19 @@ export function FamilyCockpitClient() {
               <div className="fc-sec-head"><h2>Share of page one · week {cov.week}</h2>
                 <span className="fc-sec-sub">market counted once per term · our side is THIS family&rsquo;s ASINs only</span>
               </div>
-              <div className="fc-tablewrap">
-                <table className="fc-table">
-                  <thead><tr>
-                    <th className="l">Search term</th><th>Market</th><th>Ours</th><th>Share</th>
-                    <th title="Family ASINs that took impressions on this page">On page</th>
-                    <th title="Positive keywords THIS family holds on the exact term">Family kws</th>
-                  </tr></thead>
-                  <tbody>
-                    {covRows.map((r) => (
-                      <tr key={r.term}>
-                        <td className="l">{r.term}</td>
-                        <td className="num">{intl(r.marketImpressions)}</td>
-                        <td className="num">{intl(r.ourImpressions)}</td>
-                        <td className="num strong">{pct(r.share)}</td>
-                        <td className={`num ${r.ourAsins > 1 ? 'multi' : ''}`}>{r.ourAsins || '—'}</td>
-                        <td className={`num ${r.targets === 0 ? 'none' : ''}`}>{r.targets || 'none'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataGrid<CoverageRow>
+                className="fc-grid"
+                rows={covRows}
+                rowKey={(r) => r.term}
+                columns={[
+                  { key: 'term', label: 'Search term', render: (r) => r.term },
+                  { key: 'market', label: 'Market', align: 'right', render: (r) => intl(r.marketImpressions) },
+                  { key: 'ours', label: 'Ours', align: 'right', render: (r) => intl(r.ourImpressions) },
+                  { key: 'share', label: 'Share', align: 'right', render: (r) => <span className="strong">{pct(r.share)}</span> },
+                  { key: 'onpage', label: <span title="Family ASINs that took impressions on this page">On page</span>, align: 'right', render: (r) => <span className={r.ourAsins > 1 ? 'multi' : undefined}>{r.ourAsins || '—'}</span> },
+                  { key: 'kws', label: <span title="Positive keywords THIS family holds on the exact term">Family kws</span>, align: 'right', render: (r) => <span className={r.targets === 0 ? 'none' : undefined}>{r.targets || 'none'}</span> },
+                ]}
+              />
               <p className="fc-foot">
                 Account-wide coverage lives on <Link href="/marketing/ads/analytics" className="fc-link">Coverage</Link>.
                 A term with volume and &ldquo;none&rdquo; under Family kws is this family&rsquo;s next keyword.
@@ -673,22 +669,18 @@ export function FamilyCockpitClient() {
           {(ck.proposals?.top.length ?? 0) === 0 ? (
             <div className="fc-banner ok"><Check size={15} /> Nothing pending for this family.</div>
           ) : (
-            <div className="fc-tablewrap">
-              <table className="fc-table">
-                <thead><tr><th className="l">Rule</th><th className="l">Action</th><th className="l">Term / entity</th><th>At stake (30d)</th><th>Sales it made</th></tr></thead>
-                <tbody>
-                  {ck.proposals!.top.map((p) => (
-                    <tr key={p.id}>
-                      <td className="l">{p.ruleName ?? '—'}</td>
-                      <td className="l mono">{p.proposedKey}</td>
-                      <td className="l">{p.recoverable && <span className="fc-diamond" title="This spend produced nothing — pure recovery">♦</span>}{p.entityLabel ?? '—'}</td>
-                      <td className="num">{eur(p.spendAtStakeCents)}</td>
-                      <td className="num">{eur(p.salesAtStakeCents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataGrid<PricedProposal>
+              className="fc-grid"
+              rows={ck.proposals!.top}
+              rowKey={(p) => p.id}
+              columns={[
+                { key: 'rule', label: 'Rule', render: (p) => p.ruleName ?? '—' },
+                { key: 'action', label: 'Action', render: (p) => <span className="mono">{p.proposedKey}</span> },
+                { key: 'entity', label: 'Term / entity', render: (p) => <>{p.recoverable && <span className="fc-diamond" title="This spend produced nothing — pure recovery">♦</span>}{p.entityLabel ?? '—'}</> },
+                { key: 'stake', label: 'At stake (30d)', align: 'right', render: (p) => eur(p.spendAtStakeCents) },
+                { key: 'sales', label: 'Sales it made', align: 'right', render: (p) => eur(p.salesAtStakeCents) },
+              ]}
+            />
           )}
           <p className="fc-foot">
             Approve or dismiss on <Link href="/marketing/ads/suggestions" className="fc-link">Suggestions</Link>.
