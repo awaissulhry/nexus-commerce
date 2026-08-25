@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
+import { Checkbox } from '@/design-system/primitives'
 
 interface LedgerRow {
   id: string
@@ -94,9 +95,10 @@ export function LedgerView() {
           onChange={setActionType}
           ariaLabel="Action type"
         />
-        <label className="h10-au-ledgerchk">
-          <input type="checkbox" checked={onlyUnattributed} onChange={(e) => setOnlyUnattributed(e.target.checked)} /> only writes with no author
-        </label>
+        <Checkbox
+          className="h10-au-ledgerchk" label="only writes with no author"
+          checked={onlyUnattributed} onChange={(e) => setOnlyUnattributed(e.target.checked)}
+        />
       </div>
 
       {data && (

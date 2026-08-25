@@ -47,6 +47,7 @@ import { boostedDays, burnDownSeries, forecastDisclosure, materialiseCalendar, s
 import { CalendarEditor } from './CalendarEditor'
 import { EnforcementPreview } from './EnforcementPreview'
 import type { AdsMode, BudgetManagerResult, BudgetPlanRow, EnforcementResult, WriteOutcome } from './slot-contract'
+import { Checkbox } from '@/design-system/primitives'
 
 const eur = (c: number) => `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const eur0 = (c: number) => `€${Math.round(c / 100).toLocaleString('en-IE')}`
@@ -244,18 +245,18 @@ export function PlanEditor({
 
       {/* ── the two live switches ─────────────────────────────────────────────────────────── */}
       <div className="h10-bsp-arm">
-        <label className="h10-bsp-tog">
-          <input type="checkbox" checked={!!row?.autoPacing} disabled={busy}
-            onChange={(e) => save({ autoPacing: e.target.checked })} />
-          <span>Auto Pacing</span>
-        </label>
+        <Checkbox
+          className="h10-bsp-tog" label="Auto Pacing"
+          checked={!!row?.autoPacing} disabled={busy}
+          onChange={(e) => save({ autoPacing: e.target.checked })}
+        />
         <p className="h10-bsp-armnote">{armSentence('pacing')}</p>
 
-        <label className="h10-bsp-tog">
-          <input type="checkbox" checked={!!row?.stopOverSpend} disabled={busy}
-            onChange={(e) => save({ stopOverSpend: e.target.checked })} />
-          <span>Stop Over Spend</span>
-        </label>
+        <Checkbox
+          className="h10-bsp-tog" label="Stop Over Spend"
+          checked={!!row?.stopOverSpend} disabled={busy}
+          onChange={(e) => save({ stopOverSpend: e.target.checked })}
+        />
         {/* 🔴 Never the word "pause". */}
         <p className="h10-bsp-armnote">{armSentence('stop')}</p>
 

@@ -180,7 +180,6 @@
 .h10-rb-agpop .addall { margin-left: auto; background: var(--nds-blue-600); color: var(--nds-white); border: 0; border-radius: var(--nds-radius-lg); padding: 8px 15px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .h10-rb-agpop .list { display: flex; flex-direction: column; max-height: 230px; overflow: auto; }
 .h10-rb-agpop .row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--nds-grey-75); }
-.h10-rb-agpop .row input { accent-color: var(--nds-blue-600); }
 .h10-rb-agpop .row .nm { flex: 1; font-size: 12.5px; color: var(--nds-grey-800); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-rb-agpop .row .st { font-size: 11px; font-weight: 700; color: #1a7f37; background: #e6f4ea; border-radius: var(--nds-radius-sm); padding: 3px 8px; }
 .h10-rb-agpop .row .add { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--nds-grey-200); background: var(--nds-white); border-radius: var(--nds-radius-md); padding: 5px 9px; font: inherit; font-size: 12px; color: var(--nds-grey-700); cursor: pointer; }
@@ -505,7 +504,6 @@
 .h10-sb-week-h { background: var(--nds-grey-50); font-size: 12.5px; font-weight: 700; color: var(--nds-grey-600); border-bottom: 1px solid var(--nds-grey-150); }
 .h10-sb-week-r { border-bottom: 1px solid var(--nds-grey-75); }
 .h10-sb-week-r:last-child { border-bottom: 0; }
-.h10-sb-week .ck input { accent-color: var(--nds-blue-600); }
 .h10-sb-week-r .day { font-size: 13px; font-weight: 700; color: var(--nds-grey-900); }
 .h10-sb-week-r .time { display: inline-flex; align-items: center; gap: 8px; }
 .h10-sb-week-r .time .dash { color: var(--nds-grey-500); }
@@ -2699,7 +2697,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    and floors real bids. */
 .h10-bsp-arm { display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; background: var(--nds-grey-25); border: 1px solid var(--nds-grey-150); border-radius: 9px; }
 .h10-bsp-tog { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--nds-grey-900); cursor: pointer; }
-.h10-bsp-tog input { width: 15px; height: 15px; accent-color: var(--nds-blue-600); cursor: pointer; }
 .h10-bsp-armnote { margin: 0 0 6px 23px; font-size: 11px; line-height: 1.55; color: var(--nds-grey-600); }
 .h10-bsp-mode { margin: 2px 0 0; padding-top: 7px; border-top: 1px solid var(--nds-grey-100); font-size: 11px; color: var(--nds-grey-600); }
 .h10-bsp-mode b { font-weight: 800; color: var(--nds-grey-900); text-transform: uppercase; letter-spacing: .03em; }
@@ -4778,7 +4775,6 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd3-dangle b { font-weight: 800; color: #7a4512; }
 
 .h10-bd3-toggle { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-600); cursor: pointer; }
-.h10-bd3-toggle input { cursor: pointer; }
 
 /* Evidence, where it exists — 81 of 23,705 rows account-wide. Quiet by construction: absent
    evidence is the normal case and must never look like a missing value. */

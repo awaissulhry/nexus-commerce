@@ -63,6 +63,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { BidSpark, type SparkPoint } from './BidSpark'
 import { resolveBidStates } from './bidState'
 import type { BidTargetRow } from './types'
+import { Checkbox } from '@/design-system/primitives'
 
 /** The subset of `ChangeRow` this drawer reads. Mirrors `ads-changes.service.ts`. */
 interface ChangeRow {
@@ -355,10 +356,11 @@ export function BidTargetDrawer({ targetId, row, loading = false, onClose }: {
                 )}
 
                 {cycleCount > 0 && (
-                  <label className="h10-bd3-toggle">
-                    <input type="checkbox" checked={structuralOnly} onChange={(e) => setStructuralOnly(e.target.checked)} />
-                    Hide the nightly floor/restore cycle ({num(cycleCount)} of {num(writes.length)})
-                  </label>
+                  <Checkbox
+                    className="h10-bd3-toggle"
+                    checked={structuralOnly} onChange={(e) => setStructuralOnly(e.target.checked)}
+                    label={<>Hide the nightly floor/restore cycle ({num(cycleCount)} of {num(writes.length)})</>}
+                  />
                 )}
 
                 <table className="h10-bd3-writes">

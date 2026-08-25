@@ -44,6 +44,7 @@ import { AlertTriangle, ArrowRight, Check, ExternalLink, Info, Layers, Trash2 } 
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps, HarvestRow, DestinationCandidate, HvDestStatus } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
+import { Checkbox } from '@/design-system/primitives'
 
 const num = (n: number) => n.toLocaleString('en-IE')
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
@@ -254,10 +255,11 @@ function DestinationPicker({ row, scope, onClose, reload }: {
               )
             })}
           </ul>
-          <label className="neg">
-            <input type="checkbox" checked={negate} onChange={(e) => setNegate(e.target.checked)} />
-            <span>Also add a negative-exact for this term in <b>{row.adGroup.name}</b> — the ad group that found it. Without this the two compete.</span>
-          </label>
+          <Checkbox
+            className="neg"
+            checked={negate} onChange={(e) => setNegate(e.target.checked)}
+            label={<>Also add a negative-exact for this term in <b>{row.adGroup.name}</b> — the ad group that found it. Without this the two compete.</>}
+          />
           {d.source === 'stored' && (
             <button type="button" className="rm" onClick={() => void write('DELETE')} disabled={saving === 'busy'}>
               <Trash2 size={12} /> Remove the {grain} destination

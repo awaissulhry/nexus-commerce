@@ -21,7 +21,7 @@ import { type Condition, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BI
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { Listbox } from '@/design-system/components'
-import { Textarea } from '@/design-system/primitives'
+import { Checkbox, Textarea } from '@/design-system/primitives'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -2205,7 +2205,7 @@ function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onCl
             <div className="h10-rb-agrows">{groups.map((g) => (
               <div className="agrow" key={g.id}>
                 <span className="nm"><b title={g.name}>{g.name}</b>{g.campaignName && <span className="camp" title={g.campaignName}>{g.campaignName}</span>}</span>
-                <label className="look"><input type="checkbox" checked={g.look} onChange={() => onToggleLook(g.id)} aria-label={`Look for search terms in ${g.name}`} /></label>
+                <Checkbox className="look" checked={g.look} onChange={() => onToggleLook(g.id)} aria-label={`Look for search terms in ${g.name}`} />
               </div>
             ))}</div>
           )}
@@ -2284,7 +2284,7 @@ function AddGroupPopover({ selectedIds, onAdd, onClose }: { selectedIds: Set<str
     const added = selectedIds.has(g.id)
     return (
       <div className="row" key={g.id}>
-        <input type="checkbox" checked={added} onChange={() => onAdd([g])} aria-label={`Add ${g.name}`} disabled={added} />
+        <Checkbox checked={added} onChange={() => onAdd([g])} aria-label={`Add ${g.name}`} disabled={added} />
         <span className="nm" title={g.name}>{g.name}</span>
         {statusPill(g.status)}
         <button type="button" className="add" disabled={added} onClick={() => onAdd([g])}>{added ? <><Check size={12} /> Added</> : <><Plus size={12} /> Add</>}</button>

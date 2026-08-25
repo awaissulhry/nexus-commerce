@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '@/design-system/primitives'
+import { Button, Checkbox } from '@/design-system/primitives'
 // lucide-react 0.263.1 has no ShieldX; Ban reads better for "always negate" anyway.
 import { ShieldCheck, Ban, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -144,10 +144,10 @@ export function ProtectedTermsPanel() {
           onChange={(v) => setMarketplace(v)}
           options={MARKETS.map((m) => ({ value: m, label: m || 'All markets' }))}
         />
-        <label className="h10-pt-ck">
-          <input type="checkbox" checked={isPrefix} onChange={(e) => setIsPrefix(e.target.checked)} />
-          <span>Prefix</span>
-        </label>
+        <Checkbox
+          className="h10-pt-ck" label="Prefix"
+          checked={isPrefix} onChange={(e) => setIsPrefix(e.target.checked)}
+        />
         <input
           className="h10-pt-input reason" value={reason} placeholder="Why (optional)"
           onChange={(e) => setReason(e.target.value)} aria-label="Reason"

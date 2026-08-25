@@ -54,6 +54,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
+import { Checkbox } from '@/design-system/primitives'
 
 interface PreviewResponse {
   term: string
@@ -254,13 +255,14 @@ export function BidAction({
       </div>
       {!bidValid && <p className="h10-kt6-warn">Enter a bid between €0.01 and €100.00.</p>}
 
-      <label className="h10-kt6-check">
-        <input type="checkbox" checked={includeSuppressed} onChange={(e) => { setIncludeSuppressed(e.target.checked); setResult(null) }} />
-        <span>
+      <Checkbox
+        className="h10-kt6-check"
+        checked={includeSuppressed} onChange={(e) => { setIncludeSuppressed(e.target.checked); setResult(null) }}
+        label={<>
           Include suppressed targets.{' '}
           <i>Off by default: a suppressed bid is delivery somebody switched off on purpose, and raising it switches it back on.</i>
-        </span>
-      </label>
+        </>}
+      />
 
       {err && <p className="h10-kt6-blind"><AlertTriangle size={13} /><span>{err}</span></p>}
 

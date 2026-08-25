@@ -23,6 +23,7 @@ import { scheduleConfigFor, GROUP_BY, DAYS_OF_WEEK_FILTER, WEEKDAYS, TIME_OPTION
 import { budgetStarters, starterType, DAY_MOVE_NOTE } from './budgetStarters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
+import { Checkbox } from '@/design-system/primitives'
 
 // Adtomic-style atom mark — shared glyph with the rule builder (re-declared to avoid a
 // cross-import into the concurrently-edited RuleBuilder.tsx).
@@ -560,7 +561,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
               {/* weekly schedule table */}
               <div className="h10-sb-week">
                 <div className="h10-sb-week-h">
-                  <span className="ck"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all days" /></span>
+                  <span className="ck"><Checkbox checked={allSelected} onChange={toggleAll} aria-label="Select all days" /></span>
                   <span className="day">Days</span>
                   <span className="time">Time Period</span>
                   <span className="adj" />
@@ -568,7 +569,7 @@ export function ScheduleBuilder({ slug, modeToggle }: { slug: string; modeToggle
                 </div>
                 {orderedWindows.map(({ w, short }) => (
                   <div className="h10-sb-week-r" key={w.id}>
-                    <span className="ck"><input type="checkbox" checked={selRows.has(w.id)} onChange={() => toggleRow(w.id)} aria-label={`Select ${short || 'row'}`} /></span>
+                    <span className="ck"><Checkbox checked={selRows.has(w.id)} onChange={() => toggleRow(w.id)} aria-label={`Select ${short || 'row'}`} /></span>
                     <span className="day">{short}</span>
                     <span className="time">
                       {/* BSP-P4 — a multiplier row is all-day, so it says so instead of offering

@@ -9,7 +9,7 @@
  */
 import { useState } from 'react'
 import { Save, Layers } from 'lucide-react'
-import { Button, Input, Select } from '@/design-system/primitives'
+import { Button, Checkbox, Input, Select } from '@/design-system/primitives'
 
 export interface BlendLane {
   placement: string
@@ -81,7 +81,7 @@ export function RankBlendEditor({ target, busy, scopeNote, onSave, onClose }: {
         const v = vals[l.placement] || { placement: l.placement, biasPct: null }
         return (
           <div key={l.placement} className={`h10-blend-lane ${on ? 'on' : ''}`}>
-            <label className="h10-blend-en"><input type="checkbox" checked={on} onChange={(e) => toggle(l.placement, e.target.checked, l.def)} /> <b>{l.label}</b></label>
+            <Checkbox className="h10-blend-en" checked={on} onChange={(e) => toggle(l.placement, e.target.checked, l.def)} label={<b>{l.label}</b>} />
             <span className="h10-blend-sig" title="The closed-loop feedback signal available for this placement">{l.signal}</span>
             {on && (
               <span className="h10-blend-fields">
