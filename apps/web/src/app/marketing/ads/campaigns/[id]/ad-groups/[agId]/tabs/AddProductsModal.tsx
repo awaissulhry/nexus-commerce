@@ -107,7 +107,7 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
           {code ? (
             <>
               <span className="asin">{code}</span>
-              <button type="button" className="apm-cp" onClick={() => copy(code)} title={copied === code ? 'Copied' : `Copy ${codeLabel}`} aria-label={`Copy ${codeLabel}`}>{copied === code ? <Check size={11} /> : <Copy size={11} />}</button>
+              <ToolbarButton size="sm" tooltip={false} className="apm-cpbtn" icon={copied === code ? <Check size={11} /> : <Copy size={11} />} label={`Copy ${codeLabel}`} title={copied === code ? 'Copied' : `Copy ${codeLabel}`} onClick={() => copy(code)} />
             </>
           ) : '—'}
           {sub ? <><span className="sep">·</span><span className="sku">{sub}</span></> : null}
@@ -153,7 +153,7 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
                     <div className="apm-item" key={keyOf(p)}>
                       <Thumb p={p} />
                       {Meta(p)}
-                      <button type="button" className={`apm-add ${on ? 'added' : ''}`} disabled={on} onClick={() => add(p)}>{on ? <><Check size={14} /> Added</> : <><PlusCircle size={14} /> Add</>}</button>
+                      <Button variant="link" size="sm" className={`apm-addbtn ${on ? 'added' : ''}`} disabled={on} onClick={() => add(p)}>{on ? <><Check size={14} /> Added</> : <><PlusCircle size={14} /> Add</>}</Button>
                     </div>
                   )
                 })}
@@ -168,7 +168,7 @@ export function AddProductsModal({ adGroupId, onClose, onAdded }: { adGroupId: s
         </div>
 
         <div className="apm-right">
-          <div className="apm-rh"><span>{added.length} Products Added</span><button type="button" className="apm-removeall" disabled={!added.length} onClick={() => setAdded([])}><Trash2 size={14} /> Remove All</button></div>
+          <div className="apm-rh"><span>{added.length} Products Added</span><Button size="sm" disabled={!added.length} onClick={() => setAdded([])}><Trash2 size={14} /> Remove All</Button></div>
           <div className="apm-thead"><span>Product</span><span className="sv">Sponsored Videos <i className="new">New</i></span></div>
           {added.length === 0 ? (
             <div className="apm-rempty">No data</div>

@@ -38,3 +38,38 @@
    repaint a DS tab. The class is dropped; its 14px inset — which lines the bar up
    with the panel below it — is all that is left. */
 .apm-tabsrow { padding: 0 14px; }
+
+/* ── campaign detail: the settings rail ────────────────────────────────────
+   `Button variant="quiet"/"tonal" block` — "a button shaped like a list row".
+   The container is renamed because `.h10-cd-subnav button` (0,1,1) is an ads.css
+   descendant rule and outranks `.nds-btn`. `quiet` inherits its colour, so the
+   resting tone lives HERE: without it the rail takes the page's near-black and
+   every item reads as selected. Engaged rises blue-600 (4.42:1) → tonal (7.41). */
+.cd-subnav { position: sticky; top: 4px; flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; color: var(--nds-text-2); }
+.cd-subnav .nds-btn { font-size: 13.5px; font-weight: 600; padding: 8px 12px; }
+
+/* ── the four "add" modals ─────────────────────────────────────────────────
+   Every rule these controls used is a `.h10-apm`-scoped descendant in ads.css and
+   outranks the DS, so the classes are new and carry only what the DS has no
+   opinion about. Each substitution raises its contrast:
+     copy icon   grey-400 2.36:1  → ToolbarButton's --nds-text-2 5.86:1, and it
+                 gains an accessible name it never had
+     Add         blue-600 4.42:1  → the DS link 6.12:1
+     Added       #1f9d57  3.30:1  → --nds-success-text 5.14:1
+     sort header grey-500 5.01:1  → --nds-text-2 5.86:1 */
+.h10-apm .apm-cpbtn { width: 20px; height: 20px; }
+.h10-apm .apm-addbtn { flex-shrink: 0; font-size: 12.5px; }
+.h10-apm .apm-addbtn.added:disabled { color: var(--nds-success-text); }
+.h10-apm .apm-thead .apm-sortbtn { font-size: 11px; font-weight: 700; color: var(--nds-text-2); text-transform: uppercase; letter-spacing: 0.03em; padding: 0; }
+.h10-apm .apm-thead .apm-sortbtn svg { color: var(--nds-grey-300); }
+.h10-apm .apm-thead .apm-sortbtn.asc svg, .h10-apm .apm-thead .apm-sortbtn.desc svg { color: var(--nds-primary); }
+
+/* ── campaign / ad-group tab bar ───────────────────────────────────────────
+   `Tabs size="lg"` — the DS built that tier FROM `.h10-cd-tab`, and it measures
+   identically: 14.5px/600, `padding: 0 0 11px`, gap 28, the same hairline, the
+   same blue and the same 2.5px indicator. One difference, and it is the reason
+   this rule exists: the DS rests an unselected tab at --nds-text-2 (5.86:1) and
+   this bar rested at --nds-text-strong (10.0:1). A substitution may only ever
+   raise contrast, so the resting tone is held. Specificity is deliberate:
+   `.nds-tabs.lg .nds-tab` is (0,3,0), so (0,4,0) is what it takes to win. */
+.nds-tabs.cd-tabs.lg .nds-tab:not(.on) { color: var(--nds-text-strong); }

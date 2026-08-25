@@ -139,7 +139,7 @@ export function AddKeywordsTargetsModal({ adGroupId, adGroupName, campaignName, 
 
         <div className="apm-right">
           <div className="apm-rh"><span>{n} Target{n === 1 ? '' : 's'} Added</span><Button size="sm" disabled={!n} onClick={() => setStaged([])}><Trash2 size={14} /> Remove All</Button></div>
-          <div className="apm-thead tgt"><button type="button" className={`apm-sort ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by target">Target <ChevronsUpDown size={12} /></button><span>Match Type</span><span>Bid</span><span /></div>
+          <div className="apm-thead tgt"><Button variant="quiet" size="xs" className={`apm-sortbtn ${sortDir ?? ''}`} onClick={toggleSort} aria-label="Sort by target">Target <ChevronsUpDown size={12} /></Button><span>Match Type</span><span>Bid</span><span /></div>
           {n === 0 ? (
             <div className="apm-rempty">No data</div>
           ) : (

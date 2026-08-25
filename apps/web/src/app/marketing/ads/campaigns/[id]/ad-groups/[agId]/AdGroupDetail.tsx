@@ -11,7 +11,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
+import { Tabs } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../../../campaigns-ds.css'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignDetailHeader } from '../../../../_shell/CampaignDetailHeader'
@@ -108,20 +111,14 @@ export function AdGroupDetail({ campaignId, adGroupId }: { campaignId: string; a
         ]}
       />
 
-      <nav className="h10-cd-tabs" role="tablist" aria-label="Ad group sections">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === t.key}
-            className={`h10-cd-tab ${activeTab === t.key ? 'on' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        className="cd-tabs"
+        size="lg"
+        ariaLabel="Ad group sections"
+        active={activeTab}
+        onChange={(id) => setTab(id as TabKey)}
+        tabs={TABS.map((t) => ({ id: t.key, label: t.label }))}
+      />
 
       <div className="h10-cd-body">
         {error

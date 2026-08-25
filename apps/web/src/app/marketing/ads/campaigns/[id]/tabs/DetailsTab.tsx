@@ -21,9 +21,9 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, Checkbox, Input, RadioCard, Toggle, ToolbarButton } from '@/design-system/primitives'
-import { Field } from '@/design-system/components'
+import { Field, Listbox } from '@/design-system/components'
 import { createPortal } from 'react-dom'
-import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Check, Copy, Rocket, BarChart3, Droplet, Settings, Ban } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { InfoTip } from '../../InfoTip'
 import { num } from '../../_grid/format'
@@ -200,9 +200,9 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
   return (
     <div className="h10-cd-details">
       <div className="h10-cd-cols">
-      <nav className="h10-cd-subnav" aria-label="Campaign settings sections">
+      <nav className="cd-subnav" aria-label="Campaign settings sections">
         {SUBNAV.map((s) => (
-          <button key={s.id} type="button" className={active === s.id ? 'on' : ''} onClick={() => goTo(s.id)}>{s.label}</button>
+          <Button key={s.id} variant={active === s.id ? 'tonal' : 'quiet'} block onClick={() => goTo(s.id)}>{s.label}</Button>
         ))}
       </nav>
 
@@ -351,10 +351,8 @@ function AtomMark() {
  *  Opens a menu with "No Portfolio" + each portfolio; selecting sets the campaign's
  *  portfolioId (saved via PATCH; pushed to Amazon when the publish gate is live). */
 function PortfolioSelect({ value, onChange, marketplace }: { value: string; onChange: (v: string) => void; marketplace?: string }) {
-  const [open, setOpen] = useState(false)
   const [portfolios, setPortfolios] = useState<Array<{ portfolioId: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
-  const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let cancel = false
     const qs = marketplace ? `?marketplace=${encodeURIComponent(marketplace)}` : ''
@@ -365,67 +363,42 @@ function PortfolioSelect({ value, onChange, marketplace }: { value: string; onCh
       .finally(() => { if (!cancel) setLoading(false) })
     return () => { cancel = true }
   }, [marketplace])
-  useEffect(() => {
-    if (!open) return
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', h); document.addEventListener('keydown', k)
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k) }
-  }, [open])
-  const selected = portfolios.find((p) => p.portfolioId === value)
-  const label = selected?.name ?? (value || 'Select a Portfolio')
+  // `emptyLabel` is the DS's clear ROW — the difference between a filter select and a form
+  // one — so "No Portfolio" is a real option here rather than a button above the list.
   return (
-    <div className={`h10-cd-pfsel ${open ? 'open' : ''}`} ref={ref}>
-      <button type="button" className={`h10-cd-fakeselect ${value ? 'has' : ''}`} onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className="pl">{label}</span><span className="cv"><ChevronDown size={18} /></span>
-      </button>
-      {open && (
-        <div className="h10-cd-pfmenu" role="listbox">
-          <button type="button" className={`pfopt ${!value ? 'on' : ''}`} onClick={() => { onChange(''); setOpen(false) }}>
-            <span>No Portfolio</span>{!value ? <Check size={14} /> : null}
-          </button>
-          {loading ? (
-            <div className="pfmsg">Loading…</div>
-          ) : portfolios.length === 0 ? (
-            <div className="pfmsg">No portfolios found</div>
-          ) : portfolios.map((p) => (
-            <button type="button" key={p.portfolioId} className={`pfopt ${p.portfolioId === value ? 'on' : ''}`} onClick={() => { onChange(p.portfolioId); setOpen(false) }}>
-              <span>{p.name}</span>{p.portfolioId === value ? <Check size={14} /> : null}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Listbox
+      className="cd-pfsel"
+      width="100%"
+      ariaLabel="Portfolio"
+      value={value}
+      onChange={onChange}
+      emptyLabel="No Portfolio"
+      placeholder={loading ? 'Loading…' : 'Select a Portfolio'}
+      options={portfolios.map((p) => ({ value: p.portfolioId, label: p.name }))}
+    />
   )
 }
 
 /** Bid Rule picker — revealed when the Custom bid algorithm is selected (H10). A searchable
  *  combobox; no custom bid-rule data is wired yet, so it shows the empty "No options" state. */
 function BidRuleSelect() {
-  const [open, setOpen] = useState(false)
-  const [q, setQ] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', h); document.addEventListener('keydown', k)
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k) }
-  }, [open])
   return (
     <div className="h10-cd-field h10-cd-bidrule h10-cd-acosrev">
       <label>Bid Rule <InfoTip tip={TIPS.bidRule} /></label>
-      <div className={`h10-cd-pfsel ${open ? 'open' : ''}`} ref={ref}>
-        <button type="button" className="h10-cd-fakeselect" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
-          <span className="pl">Select a Bid Rule</span><span className="cv">{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
-        </button>
-        {open && (
-          <div className="h10-cd-pfmenu">
-            <div className="h10-cd-pfsearch"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search bid rules" /><Search size={16} /></div>
-            <div className="h10-cd-pfempty">No options</div>
-          </div>
-        )}
-      </div>
+      {/* No custom bid-rule data is wired yet, so the list is deliberately empty: the DS
+          renders its own "No options" state and the in-popover search. */}
+      <Listbox
+        className="cd-pfsel"
+        width="100%"
+        ariaLabel="Bid Rule"
+        value=""
+        onChange={() => {}}
+        searchable
+        searchPlaceholder="Search"
+        placeholder="Select a Bid Rule"
+        emptyIsPlaceholder
+        options={[]}
+      />
     </div>
   )
 }

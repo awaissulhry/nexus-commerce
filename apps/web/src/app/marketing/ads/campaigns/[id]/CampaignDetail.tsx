@@ -10,7 +10,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
+import { Tabs } from '@/design-system/components'
 import '@/design-system/styles/primitives.css'
+import '@/design-system/styles/components.css'
+import '../campaigns-ds.css'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignDetailHeader } from '../../_shell/CampaignDetailHeader'
@@ -130,21 +133,14 @@ export function CampaignDetail({ id }: { id: string }) {
         ]}
       />
 
-      <nav className="h10-cd-tabs" role="tablist" aria-label="Campaign sections">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === t.key}
-            className={`h10-cd-tab ${activeTab === t.key ? 'on' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-            {t.badge ? <span className="h10-cd-new">{t.badge}</span> : null}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        className="cd-tabs"
+        size="lg"
+        ariaLabel="Campaign sections"
+        active={activeTab}
+        onChange={(id) => setTab(id as TabKey)}
+        tabs={TABS.map((t) => ({ id: t.key, label: t.label, badge: t.badge }))}
+      />
 
       <div className="h10-cd-body">
         {error
