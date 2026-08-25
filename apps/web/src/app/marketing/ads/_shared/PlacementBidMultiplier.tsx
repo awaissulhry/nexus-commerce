@@ -10,6 +10,7 @@
  */
 import { useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Search, Plus, Check, X } from 'lucide-react'
+import { ToolbarButton } from '@/design-system/primitives'
 import { InfoTip } from '../campaigns/InfoTip'
 
 export type PlacementBids = { tos: string; pdp: string; ros: string; videoBoost: boolean; abBoost: boolean; abBoostPct: string; audienceMod: boolean }
@@ -147,7 +148,7 @@ function AudiencePicker() {
                 <div className="arn"><b>{a.name}</b><span>Amazon</span></div>
                 <span className="arsize">—</span>
                 <div className="h10-cd-pct sm"><input type="number" min="1" max="900" placeholder="1-900" value={a.pct} onChange={(e) => setPct(a.key, e.target.value)} aria-label={`${a.name} percentage`} /><span className="sf">%</span></div>
-                <button type="button" className="ar-x" onClick={() => remove(a.key)} aria-label={`Remove ${a.name}`}><X size={15} /></button>
+                <ToolbarButton tooltip={false} icon={<X size={15} />} label={`Remove ${a.name}`} onClick={() => remove(a.key)} />
               </div>
             ))}
           </div>
